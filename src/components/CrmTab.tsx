@@ -194,7 +194,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const hasCrmSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetCrm', companyInfo));
 
   const handleRefreshCrmClick = async () => {
-    if (effectiveRefreshing || !hasCrmSpreadsheet) return;
+    if (effectiveRefreshing) return;
     setIsLocalRefreshing(true);
     try {
       if (onRefreshData) {

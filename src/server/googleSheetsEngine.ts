@@ -3287,10 +3287,45 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     const resolvedRef = String(merged.reference || merged.id || `#${100000 + rowIndexZeroBased}`).trim();
     merged.id = String(merged.id || resolvedRef).trim();
     merged.reference = resolvedRef;
-    merged.categorie = merged.categorie || merged.crmCategory || 'Sans Catégorie';
-    merged.crmCategory = merged.crmCategory || merged.categorie;
-    merged.situation = merged.situation || (merged.status === 'Résolu' ? 'Terminé' : merged.status) || 'Nouveau';
-    merged.status = merged.status || (merged.situation === 'Terminé' ? 'Résolu' : merged.situation) || 'Nouveau';
+    const rawCat = String(merged.categorie || merged.crmCategory || '').trim();
+    const rawCatLower = rawCat.toLowerCase();
+    const hasCommercialData = Boolean(
+      merged.referenceDevis ||
+      merged.totalAffaireHT !== undefined ||
+      merged.montantEstime !== undefined ||
+      merged.dateDevis ||
+      merged.categorieDevis ||
+      merged.dateProchaineRelance ||
+      merged.situationDevis
+    );
+    const normalizedCat =
+      rawCatLower.includes('commercial') || rawCatLower.includes('devis')
+        ? 'Commercial'
+        : rawCatLower.includes('tech') || rawCatLower.includes('sav') || rawCatLower.includes('assistance')
+        ? 'Technique'
+        : rawCatLower.includes('reclam') || rawCatLower.includes('réclam') || rawCatLower.includes('litige')
+        ? 'Réclamation'
+        : rawCatLower.includes('sans')
+        ? 'Sans Catégorie'
+        : rawCat
+        ? rawCat
+        : hasCommercialData
+        ? 'Commercial'
+        : 'Sans Catégorie';
+    merged.categorie = normalizedCat;
+    merged.crmCategory = merged.crmCategory || normalizedCat;
+    const rawSit = String(merged.situation || merged.status || '').trim();
+    const rawSitLower = rawSit.toLowerCase();
+    const normalizedSit =
+      rawSitLower === 'résolu' || rawSitLower === 'resolu' || rawSitLower === 'terminé' || rawSitLower === 'termine' || rawSitLower === 'clôturé' || rawSitLower === 'cloture'
+        ? 'Terminé'
+        : rawSitLower === 'en cours' || rawSitLower === 'encours'
+        ? 'En cours'
+        : rawSitLower === 'nouveau' || !rawSit
+        ? 'Nouveau'
+        : rawSit;
+    merged.situation = normalizedSit;
+    merged.status = normalizedSit === 'Terminé' ? 'Résolu' : normalizedSit;
     merged.criticite = merged.criticite || 'Non renseigné';
     merged.objet = merged.objet || '';
     merged.description = merged.description || merged.message || '';
@@ -5714,6 +5749,19 @@ export async function fetchTenantSheetCollection(
             }
           }
         }
+      } else if (!rawMatrix) {
+        // If remote fetch failed/timed out (e.g. during forceRefresh), preserve existing cached/disk rows before merging overlay
+        const fallbackCached = sheetMemoryCache.get(cacheKey) || loadDiskSnapshot(cacheKey);
+        if (fallbackCached && Array.isArray(fallbackCached.items) && fallbackCached.items.length > 0) {
+          for (const item of fallbackCached.items) {
+            if (!item || typeof item !== 'object') continue;
+            if (deletedSet.size > 0) {
+              const keys = getRecordLookupKeys(item, tabType);
+              if (keys.some(k => deletedSet.has(k))) continue;
+            }
+            baseItems.push({ ...item });
+          }
+        }
       }
 
       const isSettingsTab =
@@ -5723,12 +5771,14 @@ export async function fetchTenantSheetCollection(
         tabType === 'communicationPortailClient' ||
         tabType === 'membresEnvironnement';
 
-      // Merge upserted records from overlay only if rawMatrix failed (offline fallback) or overlay was written very recently (< 2 min ago)
+      // Merge upserted records from overlay if rawMatrix failed (offline fallback), or overlay was written recently (< 2 min ago),
+      // or for any record in overlay that has not yet appeared in rawMatrix (e.g. if sheet is read-only / pending write)
       const upsertedEntries = Object.values(overlay.upsertedById || {});
       const isOverlayFreshOrOffline =
         !rawMatrix || (!isSettingsTab && !forceRefresh && overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - 120000);
-      if (upsertedEntries.length > 0 && isOverlayFreshOrOffline) {
-        for (const upItem of upsertedEntries) {
+      if (upsertedEntries.length > 0) {
+        const remainingUpsertedById: Record<string, any> = {};
+        for (const [upKey, upItem] of Object.entries(overlay.upsertedById || {})) {
           if (!upItem || typeof upItem !== 'object') continue;
           if (
             String(upItem.id || '').startsWith('sheet_df_') ||
@@ -5751,20 +5801,23 @@ export async function fetchTenantSheetCollection(
           });
 
           if (existingIdx >= 0) {
-            const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
-            if (tabType === 'clients' && isPlaceholderClientValue(cleanUp.id)) {
-              delete cleanUp.id;
+            if (isOverlayFreshOrOffline) {
+              const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
+              if (tabType === 'clients' && isPlaceholderClientValue(cleanUp.id)) {
+                delete cleanUp.id;
+              }
+              if (tabType === 'defibrillateurs') {
+                if (isPlaceholderClientValue(cleanUp.clientId)) cleanUp.clientId = '';
+                if (isPlaceholderClientValue(cleanUp.clientIdField)) cleanUp.clientIdField = '';
+              }
+              baseItems[existingIdx] = {
+                ...baseItems[existingIdx],
+                ...cleanUp,
+                _sheetRowNumber: baseItems[existingIdx]._sheetRowNumber || upItem._sheetRowNumber,
+              };
+              remainingUpsertedById[upKey] = upItem;
             }
-            if (tabType === 'defibrillateurs') {
-              if (isPlaceholderClientValue(cleanUp.clientId)) cleanUp.clientId = '';
-              if (isPlaceholderClientValue(cleanUp.clientIdField)) cleanUp.clientIdField = '';
-            }
-            baseItems[existingIdx] = {
-              ...baseItems[existingIdx],
-              ...cleanUp,
-              _sheetRowNumber: baseItems[existingIdx]._sheetRowNumber || upItem._sheetRowNumber,
-            };
-          } else {
+          } else if (!isSettingsTab) {
             const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
             if (tabType === 'clients' && isPlaceholderClientValue(cleanUp.id)) {
               const slug = String(cleanUp.denomination || '')
@@ -5776,11 +5829,13 @@ export async function fetchTenantSheetCollection(
               cleanUp.id = slug ? `cli_${slug}` : `cli_up_${baseItems.length + 1}`;
             }
             baseItems.push(cleanUp);
+            remainingUpsertedById[upKey] = upItem;
           }
         }
-      } else if (rawMatrix && upsertedEntries.length > 0 && !isOverlayFreshOrOffline) {
-        overlay.upsertedById = {};
-        saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
+        if (rawMatrix && !isOverlayFreshOrOffline && Object.keys(remainingUpsertedById).length !== Object.keys(overlay.upsertedById || {}).length) {
+          overlay.upsertedById = remainingUpsertedById;
+          saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
+        }
       }
 
       // Also merge any in-memory recent upserts that occurred during or shortly before this fetch

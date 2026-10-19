@@ -4606,6 +4606,9 @@ async function warmupDefibrillateursStore() {
     }
   }
 
+  const firestoreDocCheckCacheMs = new Map<string, number>();
+  const firestoreDocCheckInFlight = new Map<string, Promise<any>>();
+
   async function resolveTenantSpreadsheetUrl(tenantId: string, tabType: SheetTabType, explicitUrl?: string): Promise<string> {
     const isInvalidPlaceholderUrl = (u?: string) => !u || u.includes('1tB1e41') || u.includes('2mX5O6r9hD0i3Z9m');
     if (explicitUrl && explicitUrl.trim() && !isInvalidPlaceholderUrl(explicitUrl) && extractSpreadsheetIdAndGid(explicitUrl.trim())) {
@@ -4631,14 +4634,37 @@ async function warmupDefibrillateursStore() {
         ...(numOnly ? [`D${numOnly}`, `d${numOnly}`] : []),
         ...Array.from(tAliases).filter(a => /^d\d+$/i.test(a)).flatMap(a => [a.toUpperCase(), a.toLowerCase()]),
       ]));
+      const now = Date.now();
       for (const cand of candidates) {
         for (const suffix of ['tenantDatabases', 'companyInfo', 'company_info']) {
           const docKey = cand === 'demo' ? suffix : `${cand}_${suffix}`;
-          const restRes = await fetchFirestoreDocumentRest(docKey, 1500);
-          const obj = restRes.data?.value || restRes.data;
+          const lastCheck = firestoreDocCheckCacheMs.get(docKey) || 0;
+          let obj: any = null;
+          if (now - lastCheck < 30000) {
+            obj = serverMemoryStore.get(docKey) || null;
+          } else {
+            let p = firestoreDocCheckInFlight.get(docKey);
+            if (!p) {
+              p = fetchFirestoreDocumentRest(docKey, 1500)
+                .then(restRes => {
+                  firestoreDocCheckCacheMs.set(docKey, Date.now());
+                  const resolvedObj = restRes.data?.value || restRes.data;
+                  if (resolvedObj && typeof resolvedObj === 'object' && !Array.isArray(resolvedObj)) {
+                    serverMemoryStore.set(docKey, resolvedObj);
+                    persistSingleCollectionToDisk(docKey, resolvedObj);
+                    return resolvedObj;
+                  }
+                  return serverMemoryStore.get(docKey) || null;
+                })
+                .catch(() => serverMemoryStore.get(docKey) || null)
+                .finally(() => {
+                  firestoreDocCheckInFlight.delete(docKey);
+                });
+              firestoreDocCheckInFlight.set(docKey, p);
+            }
+            obj = await p;
+          }
           if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-            serverMemoryStore.set(docKey, obj);
-            persistSingleCollectionToDisk(docKey, obj);
             for (const f of fields) {
               if (obj[f] && typeof obj[f] === 'string' && extractSpreadsheetIdAndGid(obj[f].trim())) {
                 const foundUrl = obj[f].trim();

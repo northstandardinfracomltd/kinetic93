@@ -1092,6 +1092,7 @@ export default function App() {
   };
 
   const [distributedStocks, setDistributedStocks] = useState<DistributedStockLocation[]>([]);
+  const companyInfoRef = useRef<any>(null);
 
   const syncCompartmentToGoogleSheets = useCallback(
     (
@@ -1114,48 +1115,48 @@ export default function App() {
         autresMateriels: 'spreadsheetAutresMateriels',
         clients: 'spreadsheetClients',
         ged: 'spreadsheetGed',
-        pointages: 'spreadsheetPointagesHeures',
-        temps: 'spreadsheetPointagesHeures',
+        pointages: 'spreadsheetTemps',
+        temps: 'spreadsheetTemps',
         achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
         releveConcurrentiel: 'spreadsheetReleveConcurrentiel',
-        ticketsCaisse: 'spreadsheetNotesDeFrais',
-        stocksCentrale: 'spreadsheetStockGlobal',
-        stocksGlobaux: 'spreadsheetStockGlobal',
-        stocksDistribues: 'spreadsheetStockDistribue',
-        historiqueNotifications: 'spreadsheetHistoriqueNotifications',
-        crm: 'spreadsheetTicketsAssistance',
-        satisfaction: 'spreadsheetAvisSatisfaction',
-        commandes: 'spreadsheetDevisFactures',
-        devisFactures: 'spreadsheetDevisFactures',
-        formations: 'spreadsheetSessionsFormation',
+        ticketsCaisse: 'spreadsheetTicketsCaisse',
+        stocksCentrale: 'spreadsheetStocks',
+        stocksGlobaux: 'spreadsheetStocks',
+        stocksDistribues: 'spreadsheetStocksDistribues',
+        historiqueNotifications: 'spreadsheetStocks',
+        crm: 'spreadsheetCrm',
+        satisfaction: 'spreadsheetSatisfaction',
+        commandes: 'spreadsheetCommandes',
+        devisFactures: 'spreadsheetCommandes',
+        formations: 'spreadsheetFormations',
         stagiaires: 'spreadsheetStagiaires',
         emargements: 'spreadsheetEmargements',
         variables: 'spreadsheetVariables',
         variablesRapports: 'spreadsheetVariables',
-        interventionsAValider: 'spreadsheetInterventionsAValider',
+        interventionsAValider: 'spreadsheetRapportsPdf',
         rapportsArchive: 'spreadsheetRapportsPdf',
         rapportsPdf: 'spreadsheetRapportsPdf',
         missionsTerrain: 'spreadsheetMissionsTournees',
         missionsTournees: 'spreadsheetMissionsTournees',
         tourneesTech: 'spreadsheetTournees',
         tournees: 'spreadsheetTournees',
-        canalMessages: 'spreadsheetMessagerieInterne',
-        messagesInternes: 'spreadsheetMessagerieInterne',
+        canalMessages: 'spreadsheetMessagesInternes',
+        messagesInternes: 'spreadsheetMessagesInternes',
         identiteEntreprise: 'spreadsheetReglages',
         reglages: 'spreadsheetReglages',
-        membresEquipe: 'spreadsheetMembresEquipes',
-        membresEnvironnement: 'spreadsheetMembresEquipes',
+        membresEquipe: 'spreadsheetMembresEnvironnement',
+        membresEnvironnement: 'spreadsheetMembresEnvironnement',
         groupesTravail: 'spreadsheetGroupesTravail',
         intituleEmplacements: 'spreadsheetIntituleEmplacements',
         connecteurs: 'spreadsheetConnecteurs',
         apparenceRapportsPdf: 'spreadsheetApparenceRapportsPdf',
         communicationPortailClient: 'spreadsheetCommunicationPortailClient',
-        observateurActionsSuspectes: 'spreadsheetJournauxSecurite',
-        journauxSecurite: 'spreadsheetJournauxSecurite',
+        observateurActionsSuspectes: 'spreadsheetObservateurActionsSuspectes',
+        journauxSecurite: 'spreadsheetObservateurActionsSuspectes',
         exportations: 'spreadsheetExportations',
       };
       const fieldKey = tabToFieldKey[tabType];
-      const resolvedSpreadsheetUrl = fieldKey ? getTenantSpreadsheetUrl(fieldKey) : '';
+      const resolvedSpreadsheetUrl = fieldKey ? getTenantSpreadsheetUrl(fieldKey, companyInfoRef.current) : '';
 
       const extractKeys = (item: any): string[] => {
         if (!item || typeof item !== 'object') return [];
@@ -1303,6 +1304,27 @@ export default function App() {
                 });
                 if (mutated) {
                   safeSetLocalStorage(`defib_${effectiveTid}_variables`, JSON.stringify(updated));
+                }
+                return mutated ? updated : prev;
+              });
+            } else if (tabType === 'crm' && data && Array.isArray(data.records) && data.records.length > 0) {
+              setTickets(prev => {
+                let mutated = false;
+                const updated = prev.map(t => {
+                  const matched = data.records.find(
+                    (r: any) =>
+                      r &&
+                      ((r.id && t.id && String(r.id) === String(t.id)) ||
+                        (r.reference && t.reference && String(r.reference) === String(t.reference)))
+                  );
+                  if (matched && typeof matched._sheetRowNumber === 'number' && (t as any)._sheetRowNumber !== matched._sheetRowNumber) {
+                    mutated = true;
+                    return { ...t, _sheetRowNumber: matched._sheetRowNumber };
+                  }
+                  return t;
+                });
+                if (mutated) {
+                  safeSetLocalStorage(`defib_${effectiveTid}_support_tickets`, JSON.stringify(updated));
                 }
                 return mutated ? updated : prev;
               });
@@ -2921,9 +2943,122 @@ export default function App() {
     };
   }, [tenantId]);
 
+  companyInfoRef.current = companyInfo;
+  useEffect(() => {
+    companyInfoRef.current = companyInfo;
+  }, [companyInfo]);
+
+  const getTenantTourPrefix = useCallback((tid?: string): string => {
+    const clean = (tid || tenantId || '').trim();
+    if (!clean || clean.toLowerCase() === 'demo') {
+      return 'D18';
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const cachedRaw = localStorage.getItem('fs_cache_registered_tenants');
+        if (cachedRaw) {
+          const cachedTenants = JSON.parse(cachedRaw);
+          if (Array.isArray(cachedTenants)) {
+            const matchedCached = findTenantInList(cachedTenants, clean) as any;
+            if (matchedCached?.shortEnvId) {
+              return String(matchedCached.shortEnvId).trim().toUpperCase();
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    const matchedKnown = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], clean) as any;
+    if (matchedKnown?.shortEnvId) {
+      return String(matchedKnown.shortEnvId).trim().toUpperCase();
+    }
+    if (!tid || clean.toLowerCase() === (tenantId || '').trim().toLowerCase()) {
+      const storedShort = (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || shortEnvId;
+      if (storedShort && storedShort.trim()) {
+        return storedShort.trim().toUpperCase();
+      }
+    }
+    return 'D18';
+  }, [tenantId, shortEnvId]);
+
+  const ensureFsmTourIdentifiers = useCallback((toursList: any[], activeTid?: string): { tours: any[]; changed: boolean } => {
+    if (!Array.isArray(toursList) || toursList.length === 0) {
+      return { tours: toursList || [], changed: false };
+    }
+    const prefix = getTenantTourPrefix(activeTid || tenantId);
+    const seqRegex = new RegExp(`^(?:([A-Z0-9_-]+)-)?TOUR-(\\d{1,})$`, 'i');
+    let maxSeq = 0;
+    try {
+      const savedSeq = parseInt(localStorage.getItem(`defib_${prefix}_tour_last_seq`) || '0', 10);
+      if (!isNaN(savedSeq) && savedSeq > maxSeq) maxSeq = savedSeq;
+    } catch (_) {}
+
+    let prefixUpdated = false;
+    const normalizedList = toursList.map((t) => {
+      if (!t || t.id === 'a-trier') return t;
+      const existingId = String(t.tourIdentifiant || t.identifiant || '').trim();
+      const match = existingId.match(seqRegex);
+      if (match) {
+        const num = parseInt(match[2], 10);
+        if (!isNaN(num) && num > maxSeq) maxSeq = num;
+        const paddedNum = String(num).padStart(4, '0');
+        const targetId = `${prefix}-TOUR-${paddedNum}`;
+        if (!match[1] || match[1].toUpperCase() !== prefix.toUpperCase() || t.tourIdentifiant !== targetId) {
+          prefixUpdated = true;
+          return {
+            ...t,
+            tourIdentifiant: targetId
+          };
+        }
+      }
+      return t;
+    });
+
+    // Assign missing identifiers from oldest to newest (bottom to top since new tours are prepended)
+    const indicesNeedingId: number[] = [];
+    normalizedList.forEach((t, idx) => {
+      if (!t || t.id === 'a-trier') return;
+      const existingId = String(t.tourIdentifiant || '').trim();
+      if (!seqRegex.test(existingId)) {
+        indicesNeedingId.push(idx);
+      }
+    });
+
+    if (indicesNeedingId.length === 0) {
+      return { tours: normalizedList, changed: prefixUpdated };
+    }
+
+    const updated = [...normalizedList];
+    for (let i = indicesNeedingId.length - 1; i >= 0; i--) {
+      const idx = indicesNeedingId[i];
+      maxSeq += 1;
+      const frozenId = `${prefix}-TOUR-${String(maxSeq).padStart(4, '0')}`;
+      updated[idx] = {
+        ...updated[idx],
+        tourIdentifiant: frozenId
+      };
+    }
+
+    try {
+      localStorage.setItem(`defib_${prefix}_tour_last_seq`, String(maxSeq));
+    } catch (_) {}
+
+    return { tours: updated, changed: true };
+  }, [getTenantTourPrefix, tenantId]);
+
   const refreshGenericSheetCompartment = useCallback(
-    async (tabType: string, forceRefresh = false) => {
-      const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+    async (
+      tabType: string,
+      forceRefresh = false,
+      tenantIdOverride?: string,
+      spreadsheetUrlOverride?: string
+    ) => {
+      const activeTid =
+        tenantIdOverride ||
+        tenantId ||
+        localStorage.getItem('defib_tenant_id') ||
+        'demo';
+      const currentCompanyInfo = companyInfoRef.current;
+
       const tabToFieldKeyMap: Record<string, any> = {
         tournees: 'spreadsheetTournees',
         missionsTournees: 'spreadsheetMissionsTournees',
@@ -2951,6 +3086,27 @@ export default function App() {
         apparenceRapportsPdf: 'spreadsheetApparenceRapportsPdf',
         communicationPortailClient: 'spreadsheetCommunicationPortailClient',
         observateurActionsSuspectes: 'spreadsheetObservateurActionsSuspectes',
+      };
+
+      const persistSecondarySpreadsheetUrl = (fieldKey: string, resolvedUrl?: string) => {
+        const clean = resolvedUrl ? String(resolvedUrl).trim() : '';
+        if (!clean || clean.includes('1tB1e41') || clean.includes('2mX5O6r9hD0i3Z9m')) return;
+        const def = EXTRA_SPREADSHEET_FIELDS.find(f => f.key === fieldKey || f.urlKey === fieldKey);
+        if (def) {
+          for (const k of [activeTid, activeTid.toUpperCase(), activeTid.toLowerCase()]) {
+            safeSetLocalStorage(`defib_${k}_${def.storageSuffix}`, clean);
+          }
+        }
+        setCompanyInfo(prev => {
+          if ((prev as any)?.[fieldKey] === clean) return prev;
+          const updated = {
+            ...prev,
+            [fieldKey]: clean,
+            [`${fieldKey}Url`]: clean,
+          };
+          safeSetLocalStorage(`defib_${activeTid}_company_info`, JSON.stringify(updated));
+          return updated;
+        });
       };
 
       const clearCompartmentState = (tt: string) => {
@@ -3040,8 +3196,12 @@ export default function App() {
 
       try {
         if (tabType === 'tournees' || tabType === 'missionsTournees') {
-          const tourneesUrl = getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo);
-          const missionsUrl = getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo);
+          const tourneesUrl =
+            (tabType === 'tournees' && spreadsheetUrlOverride) ||
+            getTenantSpreadsheetUrl('spreadsheetTournees', currentCompanyInfo);
+          const missionsUrl =
+            (tabType === 'missionsTournees' && spreadsheetUrlOverride) ||
+            getTenantSpreadsheetUrl('spreadsheetMissionsTournees', currentCompanyInfo);
           const [resTours, resMissions] = await Promise.all([
             fetch(
               `/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=tournees&refresh=${forceRefresh}${
@@ -3057,22 +3217,36 @@ export default function App() {
           const dataTours = resTours && resTours.ok ? await resTours.json().catch(() => null) : null;
           const dataMissions = resMissions && resMissions.ok ? await resMissions.json().catch(() => null) : null;
 
+          // If both network requests failed transiently, maintain current state instead of wiping
+          if (!dataTours && !dataMissions) {
+            return;
+          }
+
+          if (dataTours?.spreadsheetUrl) {
+            persistSecondarySpreadsheetUrl('spreadsheetTournees', dataTours.spreadsheetUrl);
+          }
+          if (dataMissions?.spreadsheetUrl) {
+            persistSecondarySpreadsheetUrl('spreadsheetMissionsTournees', dataMissions.spreadsheetUrl);
+          }
+
           const hasToursFromSheet = Boolean(dataTours?.fromSpreadsheet && Array.isArray(dataTours.items));
           const hasMissionsFromSheet = Boolean(dataMissions?.fromSpreadsheet && Array.isArray(dataMissions.items));
           if (!hasToursFromSheet && !hasMissionsFromSheet) {
-            clearCompartmentState('tournees');
+            if (
+              dataTours?.status === 'no_spreadsheet' &&
+              dataMissions?.status === 'no_spreadsheet' &&
+              !tourneesUrl &&
+              !missionsUrl
+            ) {
+              clearCompartmentState('tournees');
+            }
             return;
           }
 
           const sheetTours: any[] = hasToursFromSheet ? dataTours.items : [];
           const sheetMissions: any[] = hasMissionsFromSheet ? dataMissions.items : [];
 
-          if (sheetTours.length === 0 && sheetMissions.length === 0) {
-            clearCompartmentState('tournees');
-            return;
-          }
-
-          const baseTours: any[] = [
+          const rawBaseTours: any[] = [
             {
               id: 'a-trier',
               name: 'Missions à trier',
@@ -3102,19 +3276,32 @@ export default function App() {
             })),
           ];
 
+          const { tours: baseTours } = ensureFsmTourIdentifiers(rawBaseTours, activeTid);
+
           if (sheetMissions.length > 0) {
             const byTourKey = new Map<string, any[]>();
+            const extractTourNum = (s: string) => {
+              const m = String(s || '').match(/TOUR-(\d+)$/i);
+              return m ? parseInt(m[1], 10) : null;
+            };
             for (const sm of sheetMissions) {
               if (!sm || typeof sm !== 'object') continue;
               const tid = String(sm.tourIdentifiant || sm.tourId || '').trim();
+              const tidLower = tid.toLowerCase();
+              const tidNum = extractTourNum(tid);
               const matchedTour = tid
-                ? baseTours.find(
-                    (bt: any) =>
-                      bt.id !== 'a-trier' &&
-                      (String(bt.tourIdentifiant || '').trim().toLowerCase() === tid.toLowerCase() ||
-                        String(bt.id || '').trim().toLowerCase() === tid.toLowerCase() ||
-                        String(bt.title || bt.name || '').trim().toLowerCase() === tid.toLowerCase())
-                  )
+                ? baseTours.find((bt: any) => {
+                    if (bt.id === 'a-trier') return false;
+                    const btIdent = String(bt.tourIdentifiant || '').trim().toLowerCase();
+                    const btId = String(bt.id || '').trim().toLowerCase();
+                    const btTitle = String(bt.title || bt.name || '').trim().toLowerCase();
+                    if (btIdent === tidLower || btId === tidLower || btTitle === tidLower) return true;
+                    if (tidNum !== null) {
+                      const btNum = extractTourNum(btIdent) ?? extractTourNum(btId);
+                      if (btNum !== null && btNum === tidNum) return true;
+                    }
+                    return false;
+                  })
                 : null;
               const targetTourId = matchedTour ? matchedTour.id : 'a-trier';
               const list = byTourKey.get(targetTourId) || [];
@@ -3138,25 +3325,40 @@ export default function App() {
             return;
           }
 
+          if (sheetTours.length === 0 && sheetMissions.length === 0) {
+            setFsmTours(prev => (prev.length === 0 ? [] : baseTours));
+            safeSetLocalStorage(`defib_${activeTid}_fsm_tours`, JSON.stringify(baseTours));
+            return;
+          }
+
           setFsmTours(baseTours);
           safeSetLocalStorage(`defib_${activeTid}_fsm_tours`, JSON.stringify(baseTours));
           return;
         }
 
         const fieldKey = tabToFieldKeyMap[tabType];
-        const clientSheetUrl = fieldKey ? getTenantSpreadsheetUrl(fieldKey, companyInfo) : '';
+        const clientSheetUrl =
+          spreadsheetUrlOverride ||
+          (fieldKey ? getTenantSpreadsheetUrl(fieldKey, currentCompanyInfo) : '');
         const res = await fetch(
           `/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=${encodeURIComponent(tabType)}&refresh=${forceRefresh}${
             clientSheetUrl ? `&spreadsheetUrl=${encodeURIComponent(clientSheetUrl)}` : ''
           }`
         ).catch(() => null);
         if (!res || !res.ok) {
-          if (!clientSheetUrl) clearCompartmentState(tabType);
           return;
         }
         const data = await res.json().catch(() => null);
+        if (!data) {
+          return;
+        }
+        if (data.spreadsheetUrl && fieldKey) {
+          persistSecondarySpreadsheetUrl(fieldKey, data.spreadsheetUrl);
+        }
         if (!data?.fromSpreadsheet || !Array.isArray(data.items)) {
-          clearCompartmentState(tabType);
+          if (data?.status === 'no_spreadsheet' && !clientSheetUrl) {
+            clearCompartmentState(tabType);
+          }
           return;
         }
 
@@ -3172,14 +3374,14 @@ export default function App() {
                 )
               );
               const hasToursSheet = Boolean(
-                getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo) ||
-                  getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo)
+                getTenantSpreadsheetUrl('spreadsheetTournees', currentCompanyInfo) ||
+                  getTenantSpreadsheetUrl('spreadsheetMissionsTournees', currentCompanyInfo)
               );
               const preservedUpcoming = hasToursSheet
                 ? (Array.isArray(prev) ? prev : []).filter(
                     (r: any) =>
                       r &&
-                      r.isUpcoming &&
+                      (r.isUpcoming || r.status === 'À venir') &&
                       !sheetIds.has(String(r.id || '').trim().toLowerCase()) &&
                       !sheetIds.has(String(r.interventionReference || '').trim().toLowerCase())
                   )
@@ -3281,7 +3483,7 @@ export default function App() {
                 }
               }
             }
-            setCustomLocationNames(nextLocs);
+            setLocationNames(nextLocs);
             safeSetLocalStorage(`defib_${activeTid}_custom_location_names`, JSON.stringify(nextLocs));
             break;
           }
@@ -3331,6 +3533,7 @@ export default function App() {
               const cleanPatch: Record<string, any> = {};
               for (const [k, v] of Object.entries(firstRow)) {
                 if (!k.startsWith('_') && k !== 'id' && v !== undefined) {
+                  if (k.startsWith('spreadsheet') && (!v || String(v).trim() === '')) continue;
                   cleanPatch[k] = v;
                 }
               }
@@ -3340,6 +3543,14 @@ export default function App() {
                   safeSetLocalStorage(`defib_${activeTid}_enable_other_equipments`, cleanPatch.enableOtherEquipments);
                 }
                 setCompanyInfo((prev) => {
+                  let hasDiff = false;
+                  for (const [pk, pv] of Object.entries(cleanPatch)) {
+                    if ((prev as any)?.[pk] !== pv) {
+                      hasDiff = true;
+                      break;
+                    }
+                  }
+                  if (!hasDiff) return prev;
                   const next = { ...prev, ...cleanPatch };
                   safeSetLocalStorage(`defib_${activeTid}_company_info`, JSON.stringify(next));
                   return next;
@@ -3354,10 +3565,13 @@ export default function App() {
               ? String(firstRow.communicationPortailClient ?? firstRow.message ?? '')
               : '';
             safeSetLocalStorage(`defib_${activeTid}_communication_portail_client`, nextMsg);
-            setCompanyInfo((prev) => ({
-              ...prev,
-              communicationPortailClient: nextMsg,
-            }));
+            setCompanyInfo((prev) => {
+              if (prev.communicationPortailClient === nextMsg) return prev;
+              return {
+                ...prev,
+                communicationPortailClient: nextMsg,
+              };
+            });
             break;
           }
           case 'observateurActionsSuspectes': {
@@ -3372,7 +3586,7 @@ export default function App() {
         console.warn(`Error refreshing generic sheet compartment (${tabType}):`, err);
       }
     },
-    [tenantId, companyInfo, loggedUser?.email, loggedUser?.name]
+    [tenantId, loggedUser?.email, loggedUser?.name, ensureFsmTourIdentifiers]
   );
 
   // Listen to manual refresh events from TableSubHeaderButtons or SettingsModal
@@ -3487,6 +3701,39 @@ export default function App() {
     } finally {
       setTimeout(() => {
         setIsRefreshingCrm(false);
+      }, 500);
+    }
+  };
+
+  const [isRefreshingFsm, setIsRefreshingFsm] = useState<boolean>(false);
+  const handleManualRefreshFsm = async () => {
+    if (isRefreshingFsm) return;
+    setIsRefreshingFsm(true);
+    try {
+      await refreshGenericSheetCompartment('tournees', true);
+    } catch (err) {
+      console.warn('Manual refresh error in Tournées & Missions:', err);
+    } finally {
+      setTimeout(() => {
+        setIsRefreshingFsm(false);
+      }, 500);
+    }
+  };
+
+  const [isRefreshingRapportsPdf, setIsRefreshingRapportsPdf] = useState<boolean>(false);
+  const handleManualRefreshRapportsPdf = async () => {
+    if (isRefreshingRapportsPdf) return;
+    setIsRefreshingRapportsPdf(true);
+    try {
+      await Promise.all([
+        refreshGenericSheetCompartment('rapportsPdf', true),
+        refreshGenericSheetCompartment('tournees', true),
+      ]);
+    } catch (err) {
+      console.warn('Manual refresh error in Rapports PDF:', err);
+    } finally {
+      setTimeout(() => {
+        setIsRefreshingRapportsPdf(false);
       }, 500);
     }
   };
@@ -3612,101 +3859,6 @@ export default function App() {
 
   const [fsmTours, setFsmTours] = useState<any[]>([]);
 
-  const getTenantTourPrefix = useCallback((tid?: string): string => {
-    const clean = (tid || tenantId || '').trim();
-    if (!clean || clean.toLowerCase() === 'demo') {
-      return 'D18';
-    }
-    if (typeof window !== 'undefined') {
-      try {
-        const cachedRaw = localStorage.getItem('fs_cache_registered_tenants');
-        if (cachedRaw) {
-          const cachedTenants = JSON.parse(cachedRaw);
-          if (Array.isArray(cachedTenants)) {
-            const matchedCached = findTenantInList(cachedTenants, clean) as any;
-            if (matchedCached?.shortEnvId) {
-              return String(matchedCached.shortEnvId).trim().toUpperCase();
-            }
-          }
-        }
-      } catch (_) {}
-    }
-    const matchedKnown = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], clean) as any;
-    if (matchedKnown?.shortEnvId) {
-      return String(matchedKnown.shortEnvId).trim().toUpperCase();
-    }
-    if (!tid || clean.toLowerCase() === (tenantId || '').trim().toLowerCase()) {
-      const storedShort = (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || shortEnvId;
-      if (storedShort && storedShort.trim()) {
-        return storedShort.trim().toUpperCase();
-      }
-    }
-    return 'D18';
-  }, [tenantId, shortEnvId]);
-
-  const ensureFsmTourIdentifiers = useCallback((toursList: any[], activeTid?: string): { tours: any[]; changed: boolean } => {
-    if (!Array.isArray(toursList) || toursList.length === 0) {
-      return { tours: toursList || [], changed: false };
-    }
-    const prefix = getTenantTourPrefix(activeTid || tenantId);
-    const seqRegex = new RegExp(`^([A-Z0-9_-]+)-TOUR-(\\d{4,})$`, 'i');
-    let maxSeq = 0;
-    try {
-      const savedSeq = parseInt(localStorage.getItem(`defib_${prefix}_tour_last_seq`) || '0', 10);
-      if (!isNaN(savedSeq) && savedSeq > maxSeq) maxSeq = savedSeq;
-    } catch (_) {}
-
-    let prefixUpdated = false;
-    const normalizedList = toursList.map((t) => {
-      if (!t || t.id === 'a-trier') return t;
-      const existingId = String(t.tourIdentifiant || t.identifiant || '').trim();
-      const match = existingId.match(seqRegex);
-      if (match) {
-        const num = parseInt(match[2], 10);
-        if (!isNaN(num) && num > maxSeq) maxSeq = num;
-        if (match[1].toUpperCase() !== prefix.toUpperCase() || t.tourIdentifiant !== `${prefix}-TOUR-${match[2]}`) {
-          prefixUpdated = true;
-          return {
-            ...t,
-            tourIdentifiant: `${prefix}-TOUR-${match[2]}`
-          };
-        }
-      }
-      return t;
-    });
-
-    // Assign missing identifiers from oldest to newest (bottom to top since new tours are prepended)
-    const indicesNeedingId: number[] = [];
-    normalizedList.forEach((t, idx) => {
-      if (!t || t.id === 'a-trier') return;
-      const existingId = String(t.tourIdentifiant || '').trim();
-      if (!seqRegex.test(existingId)) {
-        indicesNeedingId.push(idx);
-      }
-    });
-
-    if (indicesNeedingId.length === 0) {
-      return { tours: normalizedList, changed: prefixUpdated };
-    }
-
-    const updated = [...normalizedList];
-    for (let i = indicesNeedingId.length - 1; i >= 0; i--) {
-      const idx = indicesNeedingId[i];
-      maxSeq += 1;
-      const frozenId = `${prefix}-TOUR-${String(maxSeq).padStart(4, '0')}`;
-      updated[idx] = {
-        ...updated[idx],
-        tourIdentifiant: frozenId
-      };
-    }
-
-    try {
-      localStorage.setItem(`defib_${prefix}_tour_last_seq`, String(maxSeq));
-    } catch (_) {}
-
-    return { tours: updated, changed: true };
-  }, [getTenantTourPrefix, tenantId]);
-
   const saveFsmTours = (updated: any[]) => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
@@ -3759,16 +3911,14 @@ export default function App() {
   // Synchronize tour missions with pending report lines in GMAO "Rapports PDF"
   useEffect(() => {
     const rapportsSheetUrl = getTenantSpreadsheetUrl('spreadsheetRapportsPdf', companyInfo);
-    if (!rapportsSheetUrl) {
-      if (generatedReports.length > 0) {
-        setGeneratedReports([]);
-      }
+    const hasToursSheet = Boolean(
+      getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo) ||
+        getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo)
+    );
+    if (!rapportsSheetUrl && !hasToursSheet) {
       return;
     }
     if (!fsmTours || fsmTours.length === 0) {
-      if (generatedReports.some((r: any) => r && (r.isUpcoming || r.status === 'À venir'))) {
-        setGeneratedReports(prev => prev.filter((r: any) => r && !r.isUpcoming && r.status !== 'À venir'));
-      }
       return;
     }
 
@@ -3795,7 +3945,8 @@ export default function App() {
     });
 
     if (toursUpdated) {
-      saveFsmTours(verifiedTours);
+      setFsmTours(verifiedTours);
+      safeSetLocalStorage(`defib_${tenantId}_fsm_tours`, JSON.stringify(verifiedTours));
       return;
     }
 
@@ -3932,9 +4083,10 @@ export default function App() {
     });
 
     if (reportsChanged) {
-      saveReports(updatedReports);
+      setGeneratedReports(updatedReports);
+      safeSetLocalStorage(`defib_${tenantId}_generated_reports`, JSON.stringify(updatedReports));
     }
-  }, [fsmTours, generatedReports, companyInfo]);
+  }, [fsmTours, generatedReports, companyInfo, tenantId, ensureFsmTourIdentifiers]);
 
   // Helper to parse dates and timestamps in various standard and French formats
   const parseTimestampHelper = (str: any): Date | null => {
@@ -7395,33 +7547,51 @@ export default function App() {
           })
           .catch(() => {});
 
-        // Spreadsheet-backed tabs start empty and are populated exclusively by refreshGenericSheetCompartment if a spreadsheet is configured
-        setTickets([]);
+        // Maintain cached data on reload/refresh for spreadsheet-backed tabs (like DefibTab) to avoid display flickering
+        const isSwitchingTenant = Boolean(loadedTenantIdState && loadedTenantIdState !== activeRunTenantId);
+        const cachedTickets = getLocalTenantValue<SupportTicket[]>('support_tickets', []);
+        setTickets(prev => (isSwitchingTenant ? cachedTickets : (prev.length > 0 ? prev : cachedTickets)));
         const baseMemos = getLocalTenantValue<any[]>('memos', []);
         setMemos(baseMemos);
-        setCommercialDocs([]);
-        setGedDocs([]);
-        setStocks([]);
-        setDistributedStocks([]);
-        setCustomerReviews([]);
-        setGeneratedReports([]);
-        setFsmTours([]);
+        const cachedCommercialDocs = getLocalTenantValue<any[]>('commercial_docs', []);
+        setCommercialDocs(prev => (isSwitchingTenant ? cachedCommercialDocs : (prev.length > 0 ? prev : cachedCommercialDocs)));
+        const cachedGedDocs = getLocalTenantValue<any[]>('ged_docs', []);
+        setGedDocs(prev => (isSwitchingTenant ? cachedGedDocs : (prev.length > 0 ? prev : cachedGedDocs)));
+        const cachedStocks = getLocalTenantValue<any[]>('stocks', []);
+        setStocks(prev => (isSwitchingTenant ? cachedStocks : (prev.length > 0 ? prev : cachedStocks)));
+        const cachedDistStocks = getLocalTenantValue<any[]>('distributed_stocks', []);
+        setDistributedStocks(prev => (isSwitchingTenant ? cachedDistStocks : (prev.length > 0 ? prev : cachedDistStocks)));
+        const cachedReviews = getLocalTenantValue<any[]>('customer_reviews', []);
+        setCustomerReviews(prev => (isSwitchingTenant ? cachedReviews : (prev.length > 0 ? prev : cachedReviews)));
+        const cachedReports = getLocalTenantValue<any[]>('generated_reports', []);
+        setGeneratedReports(prev => (isSwitchingTenant ? cachedReports : (prev.length > 0 ? prev : cachedReports)));
+        const cachedTours = getLocalTenantValue<any[]>('fsm_tours', []);
+        setFsmTours(prev => (isSwitchingTenant ? cachedTours : (prev.length > 0 ? prev : cachedTours)));
         const baseCo2History = getLocalTenantValue<any[]>('fsm_co2_history', []);
         setFsmCo2History(baseCo2History);
         const baseMissionCounts = getLocalTenantValue<any[]>('fsm_mission_counts', []);
         setFsmMissionCounts(baseMissionCounts);
-        setExpenses([]);
-        setOtherEquipments([]);
-        setPointages([]);
+        const cachedExpenses = getLocalTenantValue<any[]>('expenses', []);
+        setExpenses(prev => (isSwitchingTenant ? cachedExpenses : (prev.length > 0 ? prev : cachedExpenses)));
+        setOtherEquipments(prev => (isSwitchingTenant ? [] : prev));
+        const cachedPointages = getLocalTenantValue<any[]>('pointages_history', []);
+        setPointages(prev => (isSwitchingTenant ? cachedPointages : (prev.length > 0 ? prev : cachedPointages)));
         const basePointagesAuto = getLocalTenantValue<PointageAutoVigilance[]>('pointages_auto_vigilance', []);
         setPointagesAutoVigilance(basePointagesAuto);
-        setAchatsFournisseurs([]);
-        setVeilles([]);
-        setFormations([]);
-        setStagiaires([]);
-        setEmargements([]);
-        setTenantMessages([]);
-        setLogisticsNotifications([]);
+        const cachedAchats = getLocalTenantValue<any[]>('achats_fournisseurs', []);
+        setAchatsFournisseurs(prev => (isSwitchingTenant ? cachedAchats : (prev.length > 0 ? prev : cachedAchats)));
+        const cachedVeilles = getLocalTenantValue<any[]>('veilles', []);
+        setVeilles(prev => (isSwitchingTenant ? cachedVeilles : (prev.length > 0 ? prev : cachedVeilles)));
+        const cachedFormations = getLocalTenantValue<any[]>('formations', []);
+        setFormations(prev => (isSwitchingTenant ? cachedFormations : (prev.length > 0 ? prev : cachedFormations)));
+        const cachedStagiaires = getLocalTenantValue<any[]>('stagiaires', []);
+        setStagiaires(prev => (isSwitchingTenant ? cachedStagiaires : (prev.length > 0 ? prev : cachedStagiaires)));
+        const cachedEmargements = getLocalTenantValue<any[]>('emargements', []);
+        setEmargements(prev => (isSwitchingTenant ? cachedEmargements : (prev.length > 0 ? prev : cachedEmargements)));
+        const cachedTenantMsgs = getLocalTenantValue<any[]>('tenant_messages', []);
+        setTenantMessages(prev => (isSwitchingTenant ? cachedTenantMsgs : (prev.length > 0 ? prev : cachedTenantMsgs)));
+        const cachedLogNotifs = getLocalTenantValue<any[]>('logistics_notifications', []);
+        setLogisticsNotifications(prev => (isSwitchingTenant ? cachedLogNotifs : (prev.length > 0 ? prev : cachedLogNotifs)));
 
         let cleanedNotifications: AppNotification[] = [];
         const rawNotifs = getLocalTenantValue<AppNotification[]>('notifications', []);
@@ -12951,14 +13121,13 @@ export default function App() {
                     <button
                       type="button"
                       id="btn-refresh-data-fsm"
-                      onClick={() => {
-                        refreshGenericSheetCompartment('tournees', true);
-                      }}
+                      onClick={handleManualRefreshFsm}
+                      disabled={isRefreshingFsm}
                       style={{
                         fontSize: '9px',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         fontWeight: 100,
-                        cursor: 'pointer',
+                        cursor: isRefreshingFsm ? 'wait' : 'pointer',
                         background: 'transparent',
                         border: 'none',
                         padding: '2px 4px',
@@ -12972,8 +13141,8 @@ export default function App() {
                       className="hover:opacity-80 transition-all select-none cursor-pointer"
                       title={translate("Actualiser les données")}
                     >
-                      <RefreshCw size={10} className="shrink-0 text-black" color="#000000" />
-                      <span style={{ color: '#000000' }}>{translate("Actualiser les données")}</span>
+                      <RefreshCw size={10} className={`shrink-0 text-black ${isRefreshingFsm ? 'animate-spin' : ''}`} color="#000000" />
+                      <span style={{ color: '#000000' }}>{isRefreshingFsm ? translate("Actualisation...") : translate("Actualiser les données")}</span>
                     </button>
 
                     {(() => {
@@ -17690,14 +17859,13 @@ export default function App() {
                   <button
                     type="button"
                     id="btn-refresh-data-rapports-pdf"
-                    onClick={() => {
-                      refreshGenericSheetCompartment('rapportsPdf', true);
-                    }}
+                    onClick={handleManualRefreshRapportsPdf}
+                    disabled={isRefreshingRapportsPdf}
                     style={{
                       fontSize: '9px',
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                       fontWeight: 100,
-                      cursor: 'pointer',
+                      cursor: isRefreshingRapportsPdf ? 'wait' : 'pointer',
                       background: 'transparent',
                       border: 'none',
                       padding: '2px 4px',
@@ -17711,8 +17879,8 @@ export default function App() {
                     className="hover:opacity-80 transition-all select-none cursor-pointer"
                     title={t("Actualiser les données")}
                   >
-                    <RefreshCw size={10} className="shrink-0 text-black" color="#000000" />
-                    <span style={{ color: '#000000' }}>{t("Actualiser les données")}</span>
+                    <RefreshCw size={10} className={`shrink-0 text-black ${isRefreshingRapportsPdf ? 'animate-spin' : ''}`} color="#000000" />
+                    <span style={{ color: '#000000' }}>{isRefreshingRapportsPdf ? t("Actualisation...") : t("Actualiser les données")}</span>
                   </button>
 
                   {(() => {

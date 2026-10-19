@@ -20,7 +20,9 @@ import {
   Download,
   ShieldAlert,
   Activity,
-  FileSpreadsheet
+  FileSpreadsheet,
+  RefreshCw,
+  Check
 } from 'lucide-react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, EXTRA_SPREADSHEET_FIELDS, SpreadsheetFieldKey, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { uploadMediaToFirebase } from '../firebase';
@@ -1511,7 +1513,7 @@ export default function SettingsModal({
   ];
 
   const persistApiDefibeoConnectorState = async (active: boolean, apiKey: string, secretKey: string) => {
-    const tId = activeTenantId || 'demo';
+    const tId = propTenantId || myTenantId || 'demo';
     try {
       const existingRaw = await fetchCollectionFromFirestore<any>('api_connectors', tId);
       const existing = (Array.isArray(existingRaw) ? existingRaw[0] : existingRaw) || {};
@@ -3085,7 +3087,7 @@ export default function SettingsModal({
 
     try {
       // 1. Réglages (spreadsheetReglages)
-      if (!activeSection || activeSection === 'reglages' || activeSection === 'bases') {
+      if (!activeSection || activeSection === 'reglages' || activeSection === 'bases_de_donnees') {
         promises.push(
           fetch('/api/sheets/upsert', {
             method: 'POST',
@@ -3101,7 +3103,7 @@ export default function SettingsModal({
                 enableAutoEmails,
                 enableSatisfactionAvis,
                 enableDevisFactures,
-                enableOtherEquipments: localEnableOtherEquipments,
+                enableOtherEquipments,
                 disableHelpsAndTutorials,
               },
             }),
@@ -3110,7 +3112,7 @@ export default function SettingsModal({
       }
 
       // 2. Apparence des rapports PDF (spreadsheetApparenceRapportsPdf)
-      if (!activeSection || activeSection === 'pdf' || activeSection === 'bases') {
+      if (!activeSection || activeSection === 'pdf' || activeSection === 'bases_de_donnees') {
         promises.push(
           fetch('/api/sheets/upsert', {
             method: 'POST',
@@ -3129,7 +3131,7 @@ export default function SettingsModal({
       }
 
       // 3. Communication portail client (spreadsheetCommunicationPortailClient)
-      if (!activeSection || activeSection === 'communication' || activeSection === 'bases') {
+      if (!activeSection || activeSection === 'communication' || activeSection === 'bases_de_donnees') {
         promises.push(
           fetch('/api/sheets/upsert', {
             method: 'POST',
@@ -3149,7 +3151,7 @@ export default function SettingsModal({
       }
 
       // 4. Intitulé des emplacements (spreadsheetIntituleEmplacements)
-      if (!activeSection || activeSection === 'emplacements' || activeSection === 'bases') {
+      if (!activeSection || activeSection === 'emplacements' || activeSection === 'bases_de_donnees') {
         promises.push(
           fetch('/api/sheets/upsert', {
             method: 'POST',
