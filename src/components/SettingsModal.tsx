@@ -913,7 +913,7 @@ export default function SettingsModal({
       }
       if (cleanPatch.enableOtherEquipments === 'Oui' || cleanPatch.enableOtherEquipments === 'Non') {
         setEnableOtherEquipments(cleanPatch.enableOtherEquipments);
-        if (onUpdateEnableOtherEquipments) onUpdateEnableOtherEquipments(cleanPatch.enableOtherEquipments);
+        if (onUpdateOtherEquipments) onUpdateOtherEquipments(cleanPatch.enableOtherEquipments);
       }
       if (cleanPatch.disableHelpsAndTutorials === 'Oui' || cleanPatch.disableHelpsAndTutorials === 'Non') {
         setDisableHelpsAndTutorials(cleanPatch.disableHelpsAndTutorials);
@@ -1014,7 +1014,7 @@ export default function SettingsModal({
       onUpdateMembers(mixed);
       localStorage.setItem(`defib_${activeTid}_members`, JSON.stringify(mixed));
     }
-  }, [members, mergeFirebaseAndSpreadsheetMembers, onUpdateEnableOtherEquipments, onUpdateLocationNames, onUpdateMembers]);
+  }, [members, mergeFirebaseAndSpreadsheetMembers, onUpdateOtherEquipments, onUpdateLocationNames, onUpdateMembers]);
 
   // Force GET from dedicated Google Spreadsheets for the 5 settings compartments
   const fetchSettingsCompartmentsFromSheets = React.useCallback(async (compOverride?: any, onlySection?: SettingsSectionKey | null) => {
