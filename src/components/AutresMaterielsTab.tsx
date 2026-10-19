@@ -936,7 +936,7 @@ export default function AutresMaterielsTab({
     const targetTour = fsmTours.find(t => t.id === targetTourId);
     if (!targetTour) return;
 
-    if ((targetTour.status || 'Brouillon') !== 'Brouillon') {
+    if (['À faire', 'En cours', 'Effectué'].includes(targetTour.status)) {
       alert("Erreur : vous ne pouvez ajouter des missions qu'à une tournée en situation Brouillon.");
       return;
     }
@@ -1274,6 +1274,13 @@ export default function AutresMaterielsTab({
                     disabled={!hasFsmSpreadsheet}
                     onClick={() => {
                       if (!hasFsmSpreadsheet) return;
+                      if (!isTourDropdownOpen) {
+                        window.dispatchEvent(
+                          new CustomEvent('defib-manual-refresh-spreadsheet', {
+                            detail: { tabType: 'tournees' },
+                          })
+                        );
+                      }
                       setIsTourDropdownOpen(!isTourDropdownOpen);
                     }}
                     style={{
@@ -1358,7 +1365,9 @@ export default function AutresMaterielsTab({
                       )}
                       
                       {(() => {
-                        const drafts = (fsmTours || []).filter(t => (t.status || 'Brouillon') === 'Brouillon' && t.id !== 'a-trier');
+                        const drafts = (fsmTours || []).filter(
+                          t => t && t.id !== 'a-trier' && (!t.status || !['À faire', 'En cours', 'Effectué'].includes(t.status))
+                        );
                         if (drafts.length === 0) {
                           return (
                             <div className="px-4 py-2 text-black font-sans text-center font-normal" style={{ fontSize: '15px' }}>
@@ -1368,7 +1377,7 @@ export default function AutresMaterielsTab({
                         }
                         return drafts.map(t => {
                           const isSelected = selectedDraftId === t.id;
-                          const tourTitle = t.title || 'Nouvelle Tournée';
+                          const tourTitle = t.title || t.name || t.tourIdentifiant || 'Nouvelle Tournée';
                           const displayTitle = tourTitle.length > 25 ? tourTitle.substring(0, 25) + '(...)' : tourTitle;
                           return (
                             <button

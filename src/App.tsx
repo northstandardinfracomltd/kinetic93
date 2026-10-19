@@ -3261,19 +3261,38 @@ export default function App() {
               co2Saved: '-',
               missions: [],
             },
-            ...sheetTours.map((st: any, idx: number) => ({
-              ...st,
-              id: st.id || st.tourIdentifiant || `tour-${idx + 1}`,
-              tourIdentifiant: st.tourIdentifiant || st.id || `TOUR-${String(idx + 1).padStart(4, '0')}`,
-              title: st.title || st.name || 'Tournée',
-              name: st.name || st.title || 'Tournée',
-              startDate: st.startDate || st.date || '',
-              date: st.date || st.startDate || '',
-              techName: st.techName || 'Non assigné',
-              vehicule: st.vehicule || '-',
-              status: st.status || 'Brouillon',
-              missions: Array.isArray(st.missions) ? [...st.missions] : [],
-            })),
+            ...sheetTours.map((st: any, idx: number) => {
+              const rawSt = String(st.status || st.statut || st.situation || 'Brouillon')
+                .trim()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase();
+              const normStatus =
+                rawSt === 'a faire' || rawSt === 'afaire'
+                  ? 'À faire'
+                  : rawSt === 'en cours' || rawSt === 'encours'
+                  ? 'En cours'
+                  : rawSt === 'termine' || rawSt === 'terminee'
+                  ? 'Terminé'
+                  : rawSt === 'effectue' || rawSt === 'effectuee'
+                  ? 'Effectué'
+                  : 'Brouillon';
+              return {
+                ...st,
+                id: st.id || st.tourIdentifiant || `tour-${idx + 1}`,
+                tourIdentifiant: st.tourIdentifiant || st.id || `TOUR-${String(idx + 1).padStart(4, '0')}`,
+                title: st.title || st.name || 'Tournée',
+                name: st.name || st.title || 'Tournée',
+                startDate: st.startDate || st.date || '',
+                date: st.date || st.startDate || '',
+                techName: st.techName || 'Non assigné',
+                plannerName: st.plannerName || st.planificateur || '',
+                region: st.region || st.departement || '',
+                vehicule: st.vehicule || '-',
+                status: normStatus,
+                missions: Array.isArray(st.missions) ? [...st.missions] : [],
+              };
+            }),
           ];
 
           const { tours: baseTours } = ensureFsmTourIdentifiers(rawBaseTours, activeTid);
@@ -3710,7 +3729,14 @@ export default function App() {
     if (isRefreshingFsm) return;
     setIsRefreshingFsm(true);
     try {
-      await refreshGenericSheetCompartment('tournees', true);
+      await Promise.all([
+        refreshGenericSheetCompartment('tournees', true),
+        refreshGenericSheetCompartment('stocksGlobaux', true),
+        refreshGenericSheetCompartment('stocksDistribues', true),
+        refreshGenericSheetCompartment('variables', true),
+        refreshGenericSheetCompartment('membresEnvironnement', true),
+        refreshGenericSheetCompartment('commandes', true),
+      ]);
     } catch (err) {
       console.warn('Manual refresh error in Tournées & Missions:', err);
     } finally {
@@ -4937,11 +4963,67 @@ export default function App() {
 
   const isTechnicianMember = (m: any): boolean => {
     if (!m) return false;
-    const roleLower = String(m.role || '').trim().toLowerCase();
-    if (roleLower === 'administrateur' || roleLower.includes('admin') || roleLower === 'propriétaire / admin' || roleLower === 'super-administrateur') {
-      return false;
+    const rawRole = String(
+      (m.role && m.role !== 'Collaborateur' ? m.role : '') ||
+      m.categorie ||
+      m.category ||
+      m['Catégorie.'] ||
+      m['Catégorie'] ||
+      m.adminSubRole ||
+      m.metier ||
+      m['Métier.'] ||
+      m['Métier'] ||
+      m.role ||
+      ''
+    ).trim().toLowerCase();
+    const subRole = String(m.adminSubRole || m.categorie || m.category || m['Catégorie.'] || m['Catégorie'] || '').trim().toLowerCase();
+    if (rawRole.includes('tech') || rawRole === 'maintenance terrain' || subRole.includes('tech') || subRole === 'maintenance terrain') {
+      return true;
     }
-    return roleLower === 'technicien' || roleLower === 'technician' || roleLower === 'maintenance terrain' || roleLower.includes('tech');
+    return false;
+  };
+
+  const isDraftTour = (tour: any): boolean => {
+    if (!tour || tour.id === 'a-trier') return false;
+    const draftOverride = fsmTourDrafts[tour.id]?.status;
+    const raw = String(draftOverride !== undefined ? draftOverride : (tour.status || 'Brouillon'))
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    return raw === 'brouillon' || raw === 'planifiee' || raw === 'planifie' || raw === 'en attente' || raw === '';
+  };
+
+  const isRaisonPrestationVariable = (v: any): boolean => {
+    if (!v) return false;
+    const cat = String(v.category || v.categorie || v['Catégorie.'] || v['Catégorie'] || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+    return cat === 'modeleraisonprestation' || cat.includes('raisonprestation') || (cat.includes('raison') && !cat.includes('livraison'));
+  };
+
+  const resolveStockPieceVariable = (s: any) => {
+    if (!s) return undefined;
+    const rawRef = String(s.denominationPieceId || s.denominationPieceNom || s.designation || s.denom || s.nom || '').trim();
+    if (!rawRef) return undefined;
+    const refLower = rawRef.toLowerCase();
+    return (variables || []).find(
+      (v: any) =>
+        v &&
+        ((v.id && String(v.id).trim().toLowerCase() === refLower) ||
+          (v.identifiant && String(v.identifiant).trim().toLowerCase() === refLower) ||
+          (v.nom && String(v.nom).trim().toLowerCase() === refLower))
+    );
+  };
+
+  const resolveStockPieceName = (s: any, vObj?: any): string => {
+    if (vObj?.nom) return vObj.nom;
+    const rawRef = String(s?.denominationPieceNom || s?.designation || s?.denominationPieceId || s?.denom || s?.nom || '').trim();
+    if (rawRef && !rawRef.startsWith('v_')) return rawRef;
+    if (s?.ugs) return `UGS ${s.ugs}`;
+    return rawRef || 'Pièce en stock';
   };
 
   const isMissionEstimatedDateFilled = (m: any): boolean => {
@@ -7513,8 +7595,9 @@ export default function App() {
           setClients([]);
         }
 
-        const baseVariables: Variable[] = [];
-        setVariables([]);
+        const isSwitchingTenant = Boolean(loadedTenantIdState && loadedTenantIdState !== activeRunTenantId);
+        const baseVariables = getLocalTenantValue<Variable[]>('variables', []);
+        setVariables(prev => (isSwitchingTenant ? baseVariables : (prev.length > 0 ? prev : baseVariables)));
 
         let baseDefibrillateurs: Defibrillateur[] = [];
         setDefibrillateurs(prev => (loadedTenantIdState && loadedTenantIdState !== activeRunTenantId ? [] : prev));
@@ -7548,7 +7631,6 @@ export default function App() {
           .catch(() => {});
 
         // Maintain cached data on reload/refresh for spreadsheet-backed tabs (like DefibTab) to avoid display flickering
-        const isSwitchingTenant = Boolean(loadedTenantIdState && loadedTenantIdState !== activeRunTenantId);
         const cachedTickets = getLocalTenantValue<SupportTicket[]>('support_tickets', []);
         setTickets(prev => (isSwitchingTenant ? cachedTickets : (prev.length > 0 ? prev : cachedTickets)));
         const baseMemos = getLocalTenantValue<any[]>('memos', []);
@@ -7565,7 +7647,21 @@ export default function App() {
         setCustomerReviews(prev => (isSwitchingTenant ? cachedReviews : (prev.length > 0 ? prev : cachedReviews)));
         const cachedReports = getLocalTenantValue<any[]>('generated_reports', []);
         setGeneratedReports(prev => (isSwitchingTenant ? cachedReports : (prev.length > 0 ? prev : cachedReports)));
-        const cachedTours = getLocalTenantValue<any[]>('fsm_tours', []);
+        const cachedTours = (getLocalTenantValue<any[]>('fsm_tours', []) || []).map((t: any) => {
+          if (!t || t.id === 'a-trier') return t;
+          const rawSt = String(t.status || 'Brouillon').trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+          const normStatus =
+            rawSt === 'a faire' || rawSt === 'afaire'
+              ? 'À faire'
+              : rawSt === 'en cours' || rawSt === 'encours'
+              ? 'En cours'
+              : rawSt === 'termine' || rawSt === 'terminee'
+              ? 'Terminé'
+              : rawSt === 'effectue' || rawSt === 'effectuee'
+              ? 'Effectué'
+              : 'Brouillon';
+          return { ...t, status: normStatus };
+        });
         setFsmTours(prev => (isSwitchingTenant ? cachedTours : (prev.length > 0 ? prev : cachedTours)));
         const baseCo2History = getLocalTenantValue<any[]>('fsm_co2_history', []);
         setFsmCo2History(baseCo2History);
@@ -7853,18 +7949,43 @@ export default function App() {
           if (merged.spreadsheetClients) {
             safeSetLocalStorage(`defib_${tenantId}_spreadsheet_clients`, merged.spreadsheetClients);
           }
-          const settingsSheetsToRefresh: Array<{ key: string; storageSuffix: string; tabType: string }> = [
+          companyInfoRef.current = merged;
+          const allSheetsToRefresh: Array<{ key: string; storageSuffix: string; tabType: string }> = [
             { key: 'spreadsheetReglages', storageSuffix: 'spreadsheet_reglages', tabType: 'reglages' },
             { key: 'spreadsheetApparenceRapportsPdf', storageSuffix: 'spreadsheet_apparence_rapports_pdf', tabType: 'apparenceRapportsPdf' },
             { key: 'spreadsheetIntituleEmplacements', storageSuffix: 'spreadsheet_intitule_emplacements', tabType: 'intituleEmplacements' },
             { key: 'spreadsheetCommunicationPortailClient', storageSuffix: 'spreadsheet_communication_portail_client', tabType: 'communicationPortailClient' },
             { key: 'spreadsheetMembresEnvironnement', storageSuffix: 'spreadsheet_membres_environnement', tabType: 'membresEnvironnement' },
+            { key: 'spreadsheetVariables', storageSuffix: 'spreadsheet_variables', tabType: 'variables' },
+            { key: 'spreadsheetTournees', storageSuffix: 'spreadsheet_tournees', tabType: 'tournees' },
+            { key: 'spreadsheetMissionsTournees', storageSuffix: 'spreadsheet_missions_tournees', tabType: 'tournees' },
+            { key: 'spreadsheetStocks', storageSuffix: 'spreadsheet_stocks', tabType: 'stocksGlobaux' },
+            { key: 'spreadsheetStocksDistribues', storageSuffix: 'spreadsheet_stocks_distribues', tabType: 'stocksDistribues' },
+            { key: 'spreadsheetCommandes', storageSuffix: 'spreadsheet_commandes', tabType: 'commandes' },
+            { key: 'spreadsheetFormations', storageSuffix: 'spreadsheet_formations', tabType: 'formations' },
+            { key: 'spreadsheetStagiaires', storageSuffix: 'spreadsheet_stagiaires', tabType: 'stagiaires' },
+            { key: 'spreadsheetEmargements', storageSuffix: 'spreadsheet_emargements', tabType: 'emargements' },
+            { key: 'spreadsheetRapportsPdf', storageSuffix: 'spreadsheet_rapports_pdf', tabType: 'rapportsPdf' },
+            { key: 'spreadsheetCrm', storageSuffix: 'spreadsheet_crm', tabType: 'crm' },
+            { key: 'spreadsheetSatisfaction', storageSuffix: 'spreadsheet_satisfaction', tabType: 'satisfaction' },
+            { key: 'spreadsheetAchatsFournisseurs', storageSuffix: 'spreadsheet_achats_fournisseurs', tabType: 'achatsFournisseurs' },
+            { key: 'spreadsheetTemps', storageSuffix: 'spreadsheet_temps', tabType: 'temps' },
+            { key: 'spreadsheetTicketsCaisse', storageSuffix: 'spreadsheet_tickets_caisse', tabType: 'ticketsCaisse' },
+            { key: 'spreadsheetReleveConcurrentiel', storageSuffix: 'spreadsheet_releve_concurrentiel', tabType: 'releveConcurrentiel' },
+            { key: 'spreadsheetMessagesInternes', storageSuffix: 'spreadsheet_messages_internes', tabType: 'messagesInternes' },
+            { key: 'spreadsheetGed', storageSuffix: 'spreadsheet_ged', tabType: 'ged' },
+            { key: 'spreadsheetHistoriqueNotifications', storageSuffix: 'spreadsheet_historique_notifications', tabType: 'historiqueNotifications' },
+            { key: 'spreadsheetObservateurActionsSuspectes', storageSuffix: 'spreadsheet_observateur_actions_suspectes', tabType: 'observateurActionsSuspectes' },
           ];
-          for (const st of settingsSheetsToRefresh) {
+          const refreshedTabTypes = new Set<string>();
+          for (const st of allSheetsToRefresh) {
             const sUrl = String((merged as any)[st.key] || '').trim();
             if (sUrl) {
               safeSetLocalStorage(`defib_${tenantId}_${st.storageSuffix}`, sUrl);
-              refreshGenericSheetCompartment(st.tabType, true, activeRunTenantId, sUrl).catch(() => {});
+              if (!refreshedTabTypes.has(st.tabType)) {
+                refreshedTabTypes.add(st.tabType);
+                refreshGenericSheetCompartment(st.tabType, false, activeRunTenantId, st.tabType === 'tournees' ? undefined : sUrl).catch(() => {});
+              }
             }
           }
           return merged;
@@ -7872,6 +7993,10 @@ export default function App() {
 
         syncTasks.push(syncBackground<Member[]>('members', 'members', (nextMems) => {
           setMembers((prevMembers) => {
+            const hasMembresSheet = Boolean(getTenantSpreadsheetUrl('spreadsheetMembresEnvironnement', companyInfoRef.current));
+            if (hasMembresSheet && Array.isArray(prevMembers) && prevMembers.length > 0) {
+              return prevMembers;
+            }
             const fbList = Array.isArray(nextMems) ? nextMems : [];
             const curList = Array.isArray(prevMembers) ? prevMembers : [];
             const curEmails = new Set(curList.map((m: any) => String(m.email || '').trim().toLowerCase()).filter(Boolean));
@@ -12147,12 +12272,12 @@ export default function App() {
                                 Tournées existantes
                               </div>
                               <div className="max-h-48 overflow-y-auto px-2 space-y-1">
-                                {fsmTours.filter(t => t.id !== 'a-trier').length === 0 ? (
+                                {fsmTours.filter(t => isDraftTour(t)).length === 0 ? (
                                   <div className="px-3 py-2 text-xs text-neutral-400 text-center">
-                                    Aucune tournée disponible
+                                    Aucune tournée en brouillon disponible
                                   </div>
                                 ) : (
-                                  fsmTours.filter(t => t.id !== 'a-trier').map(t => (
+                                  fsmTours.filter(t => isDraftTour(t)).map(t => (
                                     <button
                                       key={t.id}
                                       type="button"
@@ -14121,7 +14246,7 @@ export default function App() {
                                                         const nextReasons = [...current, val];
                                                         let totalDuree = 0;
                                                         for (const r of nextReasons) {
-                                                          const match = variables.find((v: any) => v.category === "Modèle Raison Prestation" && v.nom === r);
+                                                          const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
                                                           if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
                                                         }
                                                         updateFsmMission(t.id, m.id, {
@@ -14146,7 +14271,7 @@ export default function App() {
                                                 >
                                                   <option value="">-- Sélectionner une raison / prestation --</option>
                                                   {variables
-                                                    .filter((v: any) => v.category === "Modèle Raison Prestation")
+                                                    .filter((v: any) => isRaisonPrestationVariable(v))
                                                     .map((v: any) => {
                                                       const current: string[] = Array.isArray(m.reasons)
                                                         ? m.reasons
@@ -14172,7 +14297,7 @@ export default function App() {
                                                     <div className="flex flex-wrap gap-1.5 min-h-[42px] items-center bg-transparent">
                                                       {currentReasons.length > 0 ? (
                                                         currentReasons.map((reasonStr: string) => {
-                                                          const matchVar = variables.find((v: any) => v.category === "Modèle Raison Prestation" && v.nom === reasonStr);
+                                                          const matchVar = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === reasonStr);
                                                           return (
                                                             <span
                                                               key={reasonStr}
@@ -14180,7 +14305,7 @@ export default function App() {
                                                                 const nextReasons = currentReasons.filter(r => r !== reasonStr);
                                                                 let totalDuree = 0;
                                                                 for (const r of nextReasons) {
-                                                                  const match = variables.find((v: any) => v.category === "Modèle Raison Prestation" && v.nom === r);
+                                                                  const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
                                                                   if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
                                                                 }
                                                                 updateFsmMission(t.id, m.id, {
@@ -14277,49 +14402,58 @@ export default function App() {
 
                                             // 1. Traceable items and central items from stocks
                                             (stocks || []).forEach(s => {
-                                              const vObj = variables.find(v => v.id === s.denominationPieceId);
+                                              const vObj = resolveStockPieceVariable(s);
                                               if (vObj && (vObj.category === 'Modèle Service' || vObj.category === 'Modèle Contrat' || vObj.category === 'Fournisseur')) return;
-                                              const name = vObj ? vObj.nom : (s.denom || `Pièce indéfinie`);
+                                              const name = resolveStockPieceName(s, vObj);
 
                                               if (s.traceabilityEnabled && Array.isArray(s.traceabilities) && s.traceabilities.length > 0) {
+                                                let addedAnyTrace = false;
                                                 s.traceabilities.forEach((trace: any) => {
-                                                  if (trace.situation === 'Disponible' && Number(trace.volume) === 1) {
+                                                  const sitLower = String(trace.situation || 'Disponible').trim().toLowerCase();
+                                                  if ((sitLower === 'disponible' || sitLower === 'en stock') && Number(trace.volume ?? 1) > 0) {
                                                     const traceLoc = getTraceabilityLocation(trace, s);
                                                     if (isLocationMatchingTechOrCentral(traceLoc)) {
                                                       const numLot = trace.lotOrSerial || '-';
                                                       const datePer = trace.expirationDate || '-';
-                                                      const vol = trace.volume;
+                                                      const vol = trace.volume ?? 1;
                                                       const label = `${name}, ${numLot}, ${datePer}, ${vol}`;
                                                       if (!addedLabels.has(label)) {
                                                         stockItems.push({ id: `tr_${trace.id}`, name, label, matchedStock: s });
                                                         addedLabels.add(label);
+                                                        addedAnyTrace = true;
                                                       }
                                                     }
                                                   }
                                                 });
-                                              } else {
-                                                if (Number(s.quantite) > 0) {
+                                                if (!addedAnyTrace) {
                                                   const ugs = s.ugs ? ` - UGS: ${s.ugs}` : '';
-                                                  const label = `${name} (Stock Central - Qté: ${s.quantite}${ugs})`;
+                                                  const label = `${name} (Stock Central - Qté: ${Number(s.quantite) || 0}${ugs})`;
                                                   if (!addedLabels.has(label)) {
                                                     stockItems.push({ id: `st_${s.id}`, name, label, matchedStock: s });
                                                     addedLabels.add(label);
                                                   }
+                                                }
+                                              } else {
+                                                const ugs = s.ugs ? ` - UGS: ${s.ugs}` : '';
+                                                const label = `${name} (Stock Central - Qté: ${Number(s.quantite) || 0}${ugs})`;
+                                                if (!addedLabels.has(label)) {
+                                                  stockItems.push({ id: `st_${s.id}`, name, label, matchedStock: s });
+                                                  addedLabels.add(label);
                                                 }
                                               }
                                             });
 
                                             // 2. Non-traceable items from Distributed Stocks
                                             (distributedStocks || []).forEach(ds => {
-                                              const vObj = variables.find(v => v.id === ds.denominationPieceId);
+                                              const vObj = resolveStockPieceVariable(ds);
                                               if (vObj && (vObj.category === 'Modèle Service' || vObj.category === 'Modèle Contrat' || vObj.category === 'Fournisseur')) return;
                                               if (Number(ds.volumeDisponible) <= 0) return;
 
                                               if (isLocationMatchingTechOrCentral(ds.locationName)) {
-                                                const name = vObj ? vObj.nom : (ds.denom || `Pièce indéfinie`);
+                                                const name = resolveStockPieceName(ds, vObj);
                                                 const matchedStock = stocks.find(s => s.id === ds.stockId || s.denominationPieceId === ds.denominationPieceId);
                                                 if (!matchedStock?.traceabilityEnabled) {
-                                                  const ugs = matchedStock?.ugs || '';
+                                                  const ugs = matchedStock?.ugs || ds.ugs || '';
                                                   const ugsString = ugs ? ` - UGS: ${ugs}` : '';
                                                   const label = `${name} (${getLocationCustomName(ds.locationName)} - Dispo: ${ds.volumeDisponible}${ugsString})`;
                                                   if (!addedLabels.has(label)) {
@@ -14493,10 +14627,10 @@ export default function App() {
                                                 >
                                                   <option value="">Sélection tournée brouillon.</option>
                                                   {fsmTours
-                                                    .filter(tour => tour.id !== 'a-trier' && (tour.status || 'Brouillon') === 'Brouillon')
+                                                    .filter(tour => isDraftTour(tour))
                                                     .map(tour => (
                                                       <option key={tour.id} value={tour.id}>
-                                                        {tour.title} ({tour.startDate || 'Sans date'})
+                                                        {tour.title || `Tournée ${tour.id}`} ({tour.startDate || 'Sans date'})
                                                       </option>
                                                     ))
                                                   }
@@ -14513,7 +14647,7 @@ export default function App() {
                                                     }
                                                     
                                                     const targetTour = fsmTours.find(tour => tour.id === targetId);
-                                                    if (targetTour && (targetTour.status || 'Brouillon') !== 'Brouillon') {
+                                                    if (targetTour && !isDraftTour(targetTour)) {
                                                       alert("Erreur : vous ne pouvez transférer des missions qu'à une tournée en situation Brouillon.");
                                                       return;
                                                     }
@@ -14973,9 +15107,12 @@ export default function App() {
                                         (g.regions || []).some(r => r.trim().toLowerCase() === currentRegion.toLowerCase())
                                       );
                                       const availableTechsForRegion = matchingGroups.flatMap(g => g.technicians || []);
-                                      techOptions = techOptions.filter(tName =>
+                                      const regionFiltered = techOptions.filter(tName =>
                                         availableTechsForRegion.some(at => at.trim().toLowerCase() === tName.trim().toLowerCase())
                                       );
+                                      if (regionFiltered.length > 0) {
+                                        techOptions = regionFiltered;
+                                      }
                                     }
                                   }
 
@@ -15119,10 +15256,9 @@ export default function App() {
                               >
                                 <option value="">Sélectionnez un planificateur.</option>
                                 {(() => {
-                                  const nonTechMembers = members.filter(m => {
-                                    const roleLower = (m.role || '').toLowerCase();
-                                    return !(m.role === 'Technicien' || m.role === 'Maintenance Terrain' || roleLower.includes('tech'));
-                                  }).map(m => m.name);
+                                  const nonTechMembers = members
+                                    .filter(m => !isTechnicianMember(m))
+                                    .map(m => m.name);
                                   const plannerOptions = Array.from(new Set([
                                     ...nonTechMembers,
                                     tourPlannerName
@@ -16387,18 +16523,19 @@ export default function App() {
 
                                     // 1. Traceable items and central items from stocks
                                     (stocks || []).forEach(s => {
-                                      const vObj = variables.find(v => v.id === s.denominationPieceId);
+                                      const vObj = resolveStockPieceVariable(s);
                                       if (vObj && (vObj.category === 'Modèle Service' || vObj.category === 'Modèle Contrat' || vObj.category === 'Fournisseur')) return;
-                                      const name = vObj ? vObj.nom : (s.denom || `Pièce indéfinie`);
+                                      const name = resolveStockPieceName(s, vObj);
 
                                       if (s.traceabilityEnabled && Array.isArray(s.traceabilities) && s.traceabilities.length > 0) {
                                         s.traceabilities.forEach((trace: any) => {
-                                          if (trace.situation === 'Disponible' && Number(trace.volume) === 1) {
+                                          const sitLower = String(trace.situation || 'Disponible').trim().toLowerCase();
+                                          if ((sitLower === 'disponible' || sitLower === 'en stock') && Number(trace.volume ?? 1) > 0) {
                                             const traceLoc = getTraceabilityLocation(trace, s);
                                             if (isLocationMatchingTechOrCentral(traceLoc)) {
                                               const numLot = trace.lotOrSerial || '-';
                                               const datePer = trace.expirationDate || '-';
-                                              const vol = trace.volume;
+                                              const vol = trace.volume ?? 1;
                                               const label = `${name}, ${numLot}, ${datePer}, ${vol}`;
                                               if (!addedLabels.has(label)) {
                                                 stockItems.push({ id: `tr_${trace.id}`, name, label, matchedStock: s });
@@ -16422,15 +16559,15 @@ export default function App() {
 
                                     // 2. Non-traceable items from Distributed Stocks for the tech location or central stock
                                     (distributedStocks || []).forEach(ds => {
-                                      const vObj = variables.find(v => v.id === ds.denominationPieceId);
+                                      const vObj = resolveStockPieceVariable(ds);
                                       if (vObj && (vObj.category === 'Modèle Service' || vObj.category === 'Modèle Contrat' || vObj.category === 'Fournisseur')) return;
                                       if (Number(ds.volumeDisponible) <= 0) return;
 
                                       if (isLocationMatchingTechOrCentral(ds.locationName)) {
-                                        const name = vObj ? vObj.nom : (ds.denom || `Pièce indéfinie`);
+                                        const name = resolveStockPieceName(ds, vObj);
                                         const matchedStock = stocks.find(s => s.id === ds.stockId || s.denominationPieceId === ds.denominationPieceId);
                                         if (!matchedStock?.traceabilityEnabled) {
-                                          const ugs = matchedStock?.ugs || '';
+                                          const ugs = matchedStock?.ugs || ds.ugs || '';
                                           const ugsString = ugs ? ` - UGS: ${ugs}` : '';
                                           const label = `${name} (${getLocationCustomName(ds.locationName)} - Dispo: ${ds.volumeDisponible}${ugsString})`;
                                           if (!addedLabels.has(label)) {
@@ -16441,13 +16578,13 @@ export default function App() {
                                       }
                                     });
 
-                                    // 2. Items from Central Stocks
+                                    // 3. Items from Central Stocks
                                     (stocks || []).forEach(s => {
-                                      const vObj = variables.find(v => v.id === s.denominationPieceId);
+                                      const vObj = resolveStockPieceVariable(s);
                                       if (vObj && (vObj.category === 'Modèle Service' || vObj.category === 'Modèle Contrat' || vObj.category === 'Fournisseur')) return;
-                                      const name = vObj ? vObj.nom : (s.denom || `Pièce indéfinie`);
+                                      const name = resolveStockPieceName(s, vObj);
                                       const ugs = s.ugs ? ` - UGS: ${s.ugs}` : '';
-                                      const label = `${name} (Stock Central - Qté: ${s.quantite}${ugs})`;
+                                      const label = `${name} (Stock Central - Qté: ${Number(s.quantite) || 0}${ugs})`;
                                       if (!addedLabels.has(label)) {
                                         stockItems.push({ id: `st_${s.id}`, name, label, matchedStock: s });
                                         addedLabels.add(label);
@@ -16829,7 +16966,7 @@ export default function App() {
                   onClose={() => setActiveMissionReasonSidePane(null)}
                   paneId="fsm-mission-reason-search-side-pane"
                   items={(variables || [])
-                    .filter((v: any) => v.category === "Modèle Raison Prestation")
+                    .filter((v: any) => isRaisonPrestationVariable(v))
                     .map((v: any) => ({
                       id: v.id,
                       label: v.nom,
@@ -16849,7 +16986,7 @@ export default function App() {
                       const nextReasons = [...currentReasons, item.label];
                       let totalDuree = 0;
                       for (const r of nextReasons) {
-                        const match = variables.find((v: any) => v.category === "Modèle Raison Prestation" && v.nom === r);
+                        const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
                         if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
                       }
                       updateFsmMission(tourId, missionId, {

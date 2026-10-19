@@ -953,48 +953,7 @@ export function ensureTenantMembersClient(rawMembers: any[], activeTenantId: str
     });
   }
 
-  // Also check fsmTours for any technicians belonging to this tenant
-  let tours = Array.isArray(extraTours) ? extraTours : [];
-  if (tours.length === 0 && typeof window !== 'undefined' && window.localStorage) {
-    try {
-      const rawTours =
-        localStorage.getItem(`defib_${cleanTid}_fsm_tours`) ||
-        localStorage.getItem(`defib_${effTenantId}_fsm_tours`) ||
-        localStorage.getItem(`fs_cache_${cleanTid}_fsmTours`) ||
-        localStorage.getItem(`fs_cache_${effTenantId}_fsmTours`);
-      if (rawTours) {
-        const parsed = JSON.parse(rawTours);
-        if (Array.isArray(parsed)) tours = parsed;
-      }
-    } catch (_) {}
-  }
-
   const vehiclePool = ['Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E'];
-  if (Array.isArray(tours) && tours.length > 0) {
-    for (const tour of tours) {
-      const tName = String(tour?.techName || '').trim();
-      if (!tName || tName === 'Non assigné' || tName === 'Jakub Démo') continue;
-      const alreadyExists = list.some((m: any) => String(m?.name || '').trim().toLowerCase() === tName.toLowerCase());
-      if (!alreadyExists) {
-        const usedLocs = new Set(list.map((m: any) => m?.locationLink).filter(Boolean));
-        const availLoc = vehiclePool.find(v => !usedLocs.has(v)) || 'Véhicule A';
-        const slug = tName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
-        const domain = adminEmail.includes('@') ? adminEmail.split('@')[1] : 'civilprom.com';
-        list.push({
-          id: `mem-tech-${effTenantId}-${slug}`,
-          name: tName,
-          email: `${slug}@${domain}`,
-          role: 'Technicien',
-          status: 'Actif',
-          lastActive: 'En ligne',
-          pin: '1234',
-          locationLink: availLoc,
-          envId: effTenantId,
-          tenantId: effTenantId
-        });
-      }
-    }
-  }
 
   const usedLocations = new Set(list.map((m: any) => m?.locationLink).filter(Boolean));
   return list.map((m: any, idx: number) => {

@@ -1268,7 +1268,9 @@ export default function MapModal({
                   )}
                   
                   {(() => {
-                    const drafts = (fsmTours || []).filter(t => (t.status || 'Brouillon') === 'Brouillon' && t.id !== 'a-trier');
+                    const drafts = (fsmTours || []).filter(
+                      t => t && t.id !== 'a-trier' && (!t.status || !['À faire', 'En cours', 'Effectué'].includes(t.status))
+                    );
                     if (drafts.length === 0) {
                       return (
                         <div className="px-4 py-2 text-black font-sans text-center" style={{ fontSize: '15px' }}>
@@ -1278,7 +1280,7 @@ export default function MapModal({
                     }
                     return drafts.map(t => {
                       const isSelected = selectedDraftId === t.id;
-                      const tourTitle = t.title || 'Nouvelle Tournée';
+                      const tourTitle = t.title || t.name || t.tourIdentifiant || 'Nouvelle Tournée';
                       const displayTitle = tourTitle.length > 25 ? tourTitle.substring(0, 25) + '(...)' : tourTitle;
                       return (
                         <button

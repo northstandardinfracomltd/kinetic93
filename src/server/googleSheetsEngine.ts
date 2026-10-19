@@ -1282,9 +1282,11 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Identifiant de la tournée', field: 'tourIdentifiant', aliases: ['identifiantdelatournee', 'identifianttournee', 'idtournee', 'touridentifiant', 'tourcode', 'codetournee', 'identifiant', 'id', 'reference', 'referencetournee'] },
     { header: 'Titre de la tournée', field: 'title', aliases: ['titredelatournee', 'titretournee', 'nomdelatournee', 'nomtournee', 'titre', 'title', 'name', 'nom', 'intitule'] },
     { header: 'Technicien assigné', field: 'techName', aliases: ['technicienassigne', 'technicien', 'techname', 'collaborateur', 'intervenant', 'membre', 'agent', 'nomtechnicien'] },
-    { header: 'Date de la tournée', field: 'startDate', aliases: ['datedelatournee', 'datetournee', 'datededebut', 'datedebut', 'startdate', 'date', 'jour', 'echeance'], type: 'date' },
+    { header: 'Planificateur', field: 'plannerName', aliases: ['planificateur', 'planificateurassigne', 'plannername', 'planner', 'responsableplanification', 'nomplanificateur'] },
+    { header: 'Date de la tournée', field: 'startDate', aliases: ['datedelatournee', 'datetournee', 'datededebut', 'datedebut', 'startdate', 'date', 'jour', 'echeance', 'dateperiode', 'periode'], type: 'date' },
     { header: 'Date de fin', field: 'endDate', aliases: ['datedefin', 'datefin', 'enddate', 'fin'], type: 'date' },
-    { header: 'Statut', field: 'status', aliases: ['statut', 'status', 'etat', 'statutdelatournee', 'avancement'] },
+    { header: 'Région', field: 'region', aliases: ['region', 'departement', 'secteur', 'zone'] },
+    { header: 'Statut', field: 'status', aliases: ['statut', 'status', 'etat', 'statutdelatournee', 'avancement', 'situation', 'situationdelatournee'] },
     { header: 'Véhicule / Emplacement', field: 'vehicule', aliases: ['vehiculeemplacement', 'vehicule', 'emplacement', 'locationlink', 'emplacementattribue'] },
     { header: 'Adresse de départ', field: 'startAddress', aliases: ['adressededepart', 'adressedepart', 'startaddress', 'lieudedepart', 'depart'] },
     { header: 'Distance totale (km)', field: 'totalDistance', aliases: ['distancetotalekm', 'distancetotale', 'distancekm', 'distance', 'kilometrage', 'km', 'totaldistance'] },
@@ -1469,7 +1471,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
   membresEnvironnement: [
     { header: 'Nom et prénom', field: 'name', aliases: ['nometprenom', 'nomprenom', 'nom', 'name', 'collaborateur', 'membre', 'utilisateur', 'prenometnom', 'nomcomplet'] },
     { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'adresseemail', 'identifiant', 'adressemail', 'emailutilisateur', 'emailmembre', 'login'] },
-    { header: 'Rôle', field: 'role', aliases: ['role', 'profil', 'typeutilisateur', 'statutrole', 'typedecompte', 'typecompte'] },
+    { header: 'Rôle', field: 'role', aliases: ['role', 'profil', 'typeutilisateur', 'statutrole', 'typedecompte', 'typecompte', 'categorie', 'categoriedumembre', 'categoriemembre'] },
     { header: 'PIN d’accès / Mot de passe', field: 'pin', aliases: ['pindaccesmotdepasse', 'pindacces', 'pinacces', 'motdepasse', 'pin', 'codepin', 'code', 'password', 'motdepassepindacces', 'motdepassepin', 'cledacces', 'cleacces', 'codedacces', 'codeacces', 'mdp'] },
     { header: 'Métier / Type de rôle', field: 'adminSubRole', aliases: ['metiertypederole', 'metier', 'typederole', 'typerole', 'adminsubrole', 'fonction', 'service', 'sousrole', 'poste'] },
     { header: 'Emplacement attribué', field: 'locationLink', aliases: ['emplacementattribue', 'emplacement', 'locationlink', 'vehicule', 'entrepot', 'emplacementstock', 'affectation'] },
@@ -2864,14 +2866,42 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
 
   // Compartment-specific post-processing so UI components receive exact expected properties
   if (tabType === 'tournees') {
+    const rawKeys = Object.keys(rawByHeader);
+    if (rawKeys.length > 0) {
+      const fallbackColMap = resolveGenericColumnFieldMap(rawKeys, 'tournees');
+      for (const [kIdx, def] of fallbackColMap.entries()) {
+        const rk = rawKeys[kIdx];
+        const rv = rk ? rawByHeader[rk] : '';
+        if (rv !== undefined && rv !== '' && (merged[def.field] === undefined || merged[def.field] === '')) {
+          merged[def.field] = rv;
+        }
+      }
+    }
     merged.tourIdentifiant = String(merged.tourIdentifiant || merged.identifiant || merged.tourCode || merged.id || '').trim();
     merged.id = merged.id || merged.tourIdentifiant || `sheet_tour_${tenantId}_${rowIndexZeroBased + 2}`;
-    merged.title = merged.title || merged.name || '';
+    merged.title = merged.title || merged.name || merged.tourIdentifiant || 'Nouvelle tournée';
     merged.name = merged.name || merged.title || '';
     merged.techName = merged.techName || merged.technicien || 'Non assigné';
+    merged.plannerName = String(merged.plannerName || merged.planificateur || '').trim();
+    merged.region = String(merged.region || merged.departement || '').trim();
     merged.startDate = normalizeDateStr(merged.startDate || merged.date || '');
     merged.date = merged.date || merged.startDate || '';
-    merged.status = merged.status || 'Planifiée';
+    const rawTourStatus = String(merged.status || merged.statut || merged.situation || '').trim();
+    const normTourStatus = rawTourStatus
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    if (normTourStatus === 'a faire' || normTourStatus === 'afaire') {
+      merged.status = 'À faire';
+    } else if (normTourStatus === 'en cours' || normTourStatus === 'encours') {
+      merged.status = 'En cours';
+    } else if (normTourStatus === 'termine' || normTourStatus === 'terminee') {
+      merged.status = 'Terminé';
+    } else if (normTourStatus === 'effectue' || normTourStatus === 'effectuee') {
+      merged.status = 'Effectué';
+    } else {
+      merged.status = 'Brouillon';
+    }
     if (!Array.isArray(merged.missions)) {
       merged.missions = [];
     }
@@ -3458,17 +3488,41 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.fileName = merged.fileName || merged.title || 'document.pdf';
     merged.fileSize = merged.fileSize || '';
   } else if (tabType === 'membresEnvironnement') {
+    const rawKeys = Object.keys(rawByHeader);
+    if (rawKeys.length > 0) {
+      const fallbackColMap = resolveGenericColumnFieldMap(rawKeys, 'membresEnvironnement');
+      for (const [kIdx, def] of fallbackColMap.entries()) {
+        const rk = rawKeys[kIdx];
+        const rv = rk ? rawByHeader[rk] : '';
+        if (rv !== undefined && rv !== '' && (merged[def.field] === undefined || merged[def.field] === '')) {
+          merged[def.field] = rv;
+        }
+      }
+    }
     merged.id = merged.id || merged.email || merged.name || `mem_${rowIndexZeroBased + 2}`;
-    merged.name = String(merged.name || '').trim();
-    merged.email = String(merged.email || '').trim();
-    const rawRole = String(merged.role || '').trim();
+    merged.name = String(merged.name || merged.nom || merged['Nom et prénom.'] || merged['Nom et prénom'] || merged['Nom complet'] || '').trim();
+    merged.email = String(merged.email || merged['Email.'] || merged['Email'] || '').trim();
+    const rawRole = String(
+      (merged.role && merged.role !== 'Collaborateur' ? merged.role : '') ||
+      merged.categorie ||
+      merged.category ||
+      merged['Catégorie.'] ||
+      merged['Catégorie'] ||
+      merged['Rôle.'] ||
+      merged['Rôle'] ||
+      merged.profil ||
+      merged.role ||
+      ''
+    ).trim();
+    const rawSubRole = String(merged.adminSubRole || merged.metier || merged['Métier.'] || merged['Métier'] || '').trim();
     const normRole = rawRole.toLowerCase();
-    if (!rawRole) {
+    const normSubRole = rawSubRole.toLowerCase();
+    if (normRole.includes('tech') || normRole.includes('maintenance') || normRole.includes('intervenant') || normSubRole.includes('tech') || normSubRole.includes('maintenance')) {
+      merged.role = 'Technicien';
+    } else if (!rawRole) {
       merged.role = 'Administrateur';
     } else if (normRole.includes('super') || normRole.includes('propriétaire') || normRole.includes('proprietaire')) {
       merged.role = 'Super-Administrateur';
-    } else if (normRole.includes('tech') || normRole.includes('maintenance') || normRole.includes('intervenant')) {
-      merged.role = 'Technicien';
     } else if (
       ['administration', 'planification', 'logistique', 'comptabilité', 'comptabilite', 'contrôleur', 'controleur', 'administrateur & contrôleur', 'développeur', 'developpeur'].includes(normRole)
     ) {
@@ -3861,6 +3915,17 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       }));
     }
   } else if (tabType === 'stocksGlobaux' || tabType === 'stocks') {
+    const rawKeys = Object.keys(rawByHeader);
+    if (rawKeys.length > 0) {
+      const fallbackColMap = resolveGenericColumnFieldMap(rawKeys, 'stocksGlobaux');
+      for (const [kIdx, def] of fallbackColMap.entries()) {
+        const rk = rawKeys[kIdx];
+        const rv = rk ? rawByHeader[rk] : '';
+        if (rv !== undefined && rv !== '' && (merged[def.field] === undefined || merged[def.field] === '')) {
+          merged[def.field] = rv;
+        }
+      }
+    }
     const parseNum = (v: any, def = 0): number => {
       if (v === undefined || v === null || v === '') return def;
       if (typeof v === 'number') return isNaN(v) ? def : v;
@@ -3868,8 +3933,19 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       return isNaN(n) ? def : n;
     };
 
-    const rawUgs = String(merged.ugs || '').trim();
-    const rawDenom = String(merged.denominationPieceId || merged.nom || merged.piece || '').trim();
+    const rawUgs = String(merged.ugs || merged['UGS.'] || merged['UGS'] || '').trim();
+    const rawDenom = String(
+      merged.denominationPieceId ||
+        merged.denominationPieceNom ||
+        merged.designation ||
+        merged['Pièce ou service.'] ||
+        merged['Pièce ou service'] ||
+        merged['Dénomination'] ||
+        merged.modeleId ||
+        merged.nom ||
+        merged.piece ||
+        ''
+    ).trim();
     const rawId = String(merged.id || merged.identifiant || '').trim();
 
     if (rawDenom || rawUgs || rawId) {
@@ -3882,6 +3958,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     }
 
     merged.denominationPieceId = rawDenom;
+    merged.designation = rawDenom || merged.designation || merged.ugs || merged.id || '';
     if (Array.isArray(merged.usageRecommandeIds)) {
       merged.usageRecommandeIds = merged.usageRecommandeIds.map((x: any) => String(x || '').trim()).filter(Boolean);
     } else if (typeof merged.usageRecommandeIds === 'string' && merged.usageRecommandeIds.trim()) {
@@ -4108,7 +4185,11 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       { label: 'Modèle Filtre Purificateur', keys: ['modelefiltrepurificateur', 'modelefiltre', 'filtrepurificateur'] },
       { label: 'Formation', keys: ['formation', 'formations', 'modeleformation'] },
     ];
-    const matchedCat = canonicalCategories.find(c => c.keys.includes(normCat));
+    const matchedCat =
+      canonicalCategories.find(c => c.keys.includes(normCat)) ||
+      (normCat.includes('raison') && !normCat.includes('livraison')
+        ? { label: 'Modèle Raison Prestation', keys: [] }
+        : undefined);
     merged.category = matchedCat ? matchedCat.label : (rawCat || 'Modèle Défibrillateur');
 
     merged.nom = String(merged.nom || merged['Titre de la variable.'] || merged['Titre de la variable'] || merged.titre || merged.intitule || merged.denomination || '').trim();
@@ -4206,7 +4287,9 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
   if (tabType === 'tournees') {
     enriched.tourIdentifiant = enriched.tourIdentifiant || enriched.identifiant || enriched.tourCode || enriched.id || '';
     enriched.title = enriched.title || enriched.name || '';
+    enriched.plannerName = enriched.plannerName || enriched.planificateur || '';
     enriched.startDate = enriched.startDate || enriched.date || '';
+    enriched.status = enriched.status || 'Brouillon';
   } else if (tabType === 'missionsTournees') {
     const rawTid = String(enriched.tourIdentifiant ?? enriched.tourId ?? '').trim();
     enriched.tourIdentifiant = rawTid === 'a-trier' ? '' : rawTid;
