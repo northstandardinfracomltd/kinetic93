@@ -4751,7 +4751,7 @@ async function warmupDefibrillateursStore() {
           if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
             const defibData = await fetchTenantSheetCollection(defibSheetUrl, tenantId, 'defibrillateurs', false);
             const volMap = defibData.stats?.clientVolumes || {};
-            effectiveStats = {
+            effectiveStats = defibData.stats || {
               ...data.stats,
               clientVolumes: volMap,
             };

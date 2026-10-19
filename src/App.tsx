@@ -2176,7 +2176,7 @@ export default function App() {
     spreadsheetUrl: string,
     forceRefresh: boolean,
     onFirstBatch: (json: any, firstItems: any[]) => void,
-    onBatchAppended: (allAccumulatedItems: any[], loadedCount: number, totalCount: number) => void,
+    onBatchAppended: (allAccumulatedItems: any[], loadedCount: number, totalCount: number, json?: any) => void,
     isCancelledFn?: () => boolean
   ) => {
     const FIRST_CHUNK_SIZE = 5000;
@@ -2214,7 +2214,7 @@ export default function App() {
       if (isFirst) {
         onFirstBatch(json, [...accumulated]);
       } else {
-        onBatchAppended([...accumulated], accumulated.length, json.totalCount || accumulated.length);
+        onBatchAppended([...accumulated], accumulated.length, json.totalCount || accumulated.length, json);
       }
 
       if (json.hasMore && batchItems.length > 0 && typeof json.nextOffset === 'number' && json.nextOffset > offset) {
@@ -2319,11 +2319,11 @@ export default function App() {
           });
           setIsDefibLoading(false);
         },
-        (allItems, _loadedCount, totalCount) => {
+        (allItems, _loadedCount, totalCount, batchJson) => {
           const filtered = allItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
           if (filtered.length > 0) {
             setDefibrillateurs(filtered);
-            persistDefibCache(activeTenant, filtered);
+            persistDefibCache(activeTenant, filtered, batchJson?.stats);
           }
           setDefibLoadingProgress({
             current: filtered.length,
@@ -2723,11 +2723,11 @@ export default function App() {
                 });
                 setIsDefibLoading(false);
               },
-              (allItems, loadedCount, totalCount) => {
+              (allItems, loadedCount, totalCount, batchJson) => {
                 const filtered = allItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
                 if (filtered.length > 0) {
                   setDefibrillateurs(filtered);
-                  persistDefibCache(activeTid, filtered);
+                  persistDefibCache(activeTid, filtered, batchJson?.stats);
                 }
                 const tot = totalCount || filtered.length;
                 setDefibLoadingProgress({
@@ -2826,7 +2826,13 @@ export default function App() {
                   persistResolvedUrl('spreadsheetClients', 'spreadsheet_clients', json.spreadsheetUrl, !json.hasMore);
                 }
                 if (json.stats?.clientVolumes) {
-                  setDefibSheetStats(prev => (prev ? { ...prev, clientVolumes: json.stats.clientVolumes } : json.stats));
+                  setDefibSheetStats(prev =>
+                    prev && typeof prev.totalMainNon === 'number'
+                      ? { ...prev, clientVolumes: json.stats.clientVolumes }
+                      : json.stats.totalMainNon > 0
+                        ? json.stats
+                        : { clientVolumes: json.stats.clientVolumes }
+                  );
                 }
                 const filtered = firstItems.filter(
                   (cl: any) =>

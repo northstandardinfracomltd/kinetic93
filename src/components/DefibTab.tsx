@@ -580,6 +580,34 @@ export default function DefibTab({
   const [fallbackSheetDefibs, setFallbackSheetDefibs] = useState<Defibrillateur[]>([]);
   const [remoteFilteredTotal, setRemoteFilteredTotal] = useState<number | null>(null);
   const [fallbackSheetClients, setFallbackSheetClients] = useState<Client[]>([]);
+  const [localSheetStats, setLocalSheetStats] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw =
+          localStorage.getItem(`defib_${activeTenantId}_defib_sheet_stats`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_defib_sheet_stats`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_defib_sheet_stats`);
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
+    }
+    return null;
+  });
+
+  const effectiveSheetStats = useMemo(() => {
+    const isValidDefibStats = (s: any) =>
+      s &&
+      typeof s.totalCount === 'number' &&
+      s.totalCount > 0 &&
+      typeof s.totalMainOui === 'number' &&
+      typeof s.totalMainNon === 'number' &&
+      typeof s.conformeEtAJourCount === 'number';
+    if (isValidDefibStats(localSheetStats) && isValidDefibStats(sheetStats)) {
+      return localSheetStats.totalCount >= sheetStats.totalCount ? localSheetStats : sheetStats;
+    }
+    if (isValidDefibStats(localSheetStats)) return localSheetStats;
+    if (isValidDefibStats(sheetStats)) return sheetStats;
+    return sheetStats || localSheetStats || null;
+  }, [localSheetStats, sheetStats]);
 
   // Manual Refresh State
   const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
@@ -685,6 +713,14 @@ export default function DefibTab({
           if (cancelled) break;
           if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
             break;
+          }
+          if (json.stats && typeof json.stats.totalCount === 'number') {
+            setLocalSheetStats(json.stats);
+            try {
+              for (const k of [activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase()]) {
+                localStorage.setItem(`defib_${k}_defib_sheet_stats`, JSON.stringify(json.stats));
+              }
+            } catch (_) {}
           }
           const items = Array.isArray(json.items) ? json.items : [];
           acc.push(...items);
@@ -2549,21 +2585,21 @@ export default function DefibTab({
   }, [activeDefibrillateurs]);
 
   const effectiveTotalDefibsCount = useMemo(() => {
-    if (!resolvedSpreadsheetUrl) return 0;
     const localLen = activeDefibrillateurs.length;
-    const remoteLen = sheetStats?.totalCount || 0;
+    const remoteLen = effectiveSheetStats?.totalCount || 0;
+    if (!resolvedSpreadsheetUrl && localLen === 0 && remoteLen === 0) return 0;
     return Math.max(localLen, remoteLen);
-  }, [activeDefibrillateurs.length, sheetStats?.totalCount, resolvedSpreadsheetUrl]);
+  }, [activeDefibrillateurs.length, effectiveSheetStats?.totalCount, resolvedSpreadsheetUrl]);
 
-  // Sum-counts pour Maintenance autorisée (Oui / Non) sur les défibrillateurs actifs
+  // Sum-counts pour Maintenance autorisée (Oui / Non) sur 100% des lignes du Spreadsheet Défibrillateurs
   const { totalMainOui, totalMainNon } = useMemo(() => {
-    if (!resolvedSpreadsheetUrl) {
+    if (!resolvedSpreadsheetUrl && activeDefibrillateurs.length === 0 && !effectiveSheetStats) {
       return { totalMainOui: 0, totalMainNon: 0 };
     }
-    if (sheetStats && (sheetStats.totalCount || 0) > activeDefibrillateurs.length) {
+    if (effectiveSheetStats && (effectiveSheetStats.totalCount || 0) > activeDefibrillateurs.length) {
       return {
-        totalMainOui: sheetStats.totalMainOui ?? 0,
-        totalMainNon: sheetStats.totalMainNon ?? 0,
+        totalMainOui: effectiveSheetStats.totalMainOui ?? 0,
+        totalMainNon: effectiveSheetStats.totalMainNon ?? 0,
       };
     }
     let oui = 0;
@@ -2578,7 +2614,7 @@ export default function DefibTab({
       }
     }
     return { totalMainOui: oui, totalMainNon: non };
-  }, [activeDefibrillateurs, sheetStats, resolvedSpreadsheetUrl]);
+  }, [activeDefibrillateurs, effectiveSheetStats, resolvedSpreadsheetUrl]);
 
   // List search & filters computation - highly optimized for datasets of 18,000+ items across all browsers
   const filteredDefibs = useMemo(() => {
@@ -2893,11 +2929,21 @@ export default function DefibTab({
         });
         if (!res.ok || cancelled) return;
         const json = await res.json();
-        if (!cancelled && Array.isArray(json.items)) {
-          if (json.items.length > 0 || (json.fromSpreadsheet && (json.totalCount || 0) > 0)) {
-            setRemoteQueriedDefibs(json.items);
-            if (typeof json.totalFilteredCount === 'number') {
-              setRemoteFilteredTotal(json.totalFilteredCount);
+        if (!cancelled) {
+          if (json.stats && typeof json.stats.totalCount === 'number') {
+            setLocalSheetStats(json.stats);
+            try {
+              for (const k of [activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase()]) {
+                localStorage.setItem(`defib_${k}_defib_sheet_stats`, JSON.stringify(json.stats));
+              }
+            } catch (_) {}
+          }
+          if (Array.isArray(json.items)) {
+            if (json.items.length > 0 || (json.fromSpreadsheet && (json.totalCount || 0) > 0)) {
+              setRemoteQueriedDefibs(json.items);
+              if (typeof json.totalFilteredCount === 'number') {
+                setRemoteFilteredTotal(json.totalFilteredCount);
+              }
             }
           }
         }
@@ -2950,32 +2996,9 @@ export default function DefibTab({
     return filteredDefibs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredDefibs, currentPage]);
 
-  // Indicateur "Conforme et à jour"
+  // Indicateur "Conforme et à jour" — Toujours calculé sur 100% des lignes du Spreadsheet Défibrillateurs ayant "Maintenance Autorisée = Oui"
   const { conformeEtAJourCount, compliancePercent, projectedCompliancePercent, totalDefibsCount } = useMemo(() => {
-    if (!resolvedSpreadsheetUrl) {
-      return { conformeEtAJourCount: 0, compliancePercent: 0, projectedCompliancePercent: 0, totalDefibsCount: 0 };
-    }
-    if (sheetStats && (sheetStats.totalCount || 0) > activeDefibrillateurs.length) {
-      const total = sheetStats.eligibleMainOuiCount || sheetStats.totalMainOui || 0;
-      const compliant = sheetStats.conformeEtAJourCount || 0;
-      const pct = sheetStats.compliancePercent ?? (total > 0 ? Math.round((compliant / total) * 100) : 0);
-      return {
-        conformeEtAJourCount: compliant,
-        compliancePercent: pct,
-        projectedCompliancePercent: pct,
-        totalDefibsCount: total,
-      };
-    }
-
-    // Ne prendre en considération que les défibrillateurs "Maintenance Autorisée = Oui"
-    const eligibleDefibs = activeDefibrillateurs.filter(df => {
-      const anyDf = df as any;
-      const rawFsm = (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
-      return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || (!rawFsm && (df.fsmAutorise || 'Oui') === 'Oui');
-    });
-
-    const total = eligibleDefibs.length;
-    if (total === 0) {
+    if (!resolvedSpreadsheetUrl && activeDefibrillateurs.length === 0 && !effectiveSheetStats) {
       return { conformeEtAJourCount: 0, compliancePercent: 0, projectedCompliancePercent: 0, totalDefibsCount: 0 };
     }
 
@@ -3006,6 +3029,51 @@ export default function DefibTab({
           }
         }
       }
+    }
+
+    // Si toutes les lignes du Spreadsheet ne sont pas encore chargées en mémoire côté navigateur,
+    // utiliser directement le calcul serveur effectué sur 100% des lignes du Spreadsheet ("Maintenance Autorisée = Oui")
+    if (effectiveSheetStats && (effectiveSheetStats.totalCount || 0) > activeDefibrillateurs.length) {
+      const total = effectiveSheetStats.eligibleMainOuiCount ?? effectiveSheetStats.totalMainOui ?? 0;
+      const compliant = effectiveSheetStats.conformeEtAJourCount ?? 0;
+      const pct = effectiveSheetStats.compliancePercent ?? (total > 0 ? Math.round((compliant / total) * 100) : 0);
+      let extraInTours = 0;
+      if (inTourDefibKeys.size > 0 && activeDefibrillateurs.length > 0) {
+        for (const df of activeDefibrillateurs) {
+          const anyDf = df as any;
+          const rawFsm = (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
+          const isMainOui = rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || (!rawFsm && (df.fsmAutorise || 'Oui') === 'Oui');
+          if (!isMainOui) continue;
+          const isCompliant = df.conforme !== 'Non' && getSafetyStatus(df).colorClass !== 'bg-[#ef4444]';
+          if (!isCompliant) {
+            const identKey = df.identifiant ? String(df.identifiant).trim().toLowerCase() : '';
+            const idKey = df.id ? String(df.id).trim().toLowerCase() : '';
+            if ((identKey && inTourDefibKeys.has(identKey)) || (idKey && inTourDefibKeys.has(idKey))) {
+              extraInTours++;
+            }
+          }
+        }
+      }
+      const projPct = total > 0 ? Math.max(pct, Math.min(100, Math.round(((compliant + extraInTours) / total) * 100))) : pct;
+      return {
+        conformeEtAJourCount: compliant,
+        compliancePercent: pct,
+        projectedCompliancePercent: projPct,
+        totalDefibsCount: total,
+      };
+    }
+
+    // Une fois 100% des lignes du Spreadsheet chargées dans activeDefibrillateurs (indépendamment des filtres / pagination de la table-view),
+    // calculer sur l'intégralité des lignes ayant "Maintenance Autorisée = Oui"
+    const eligibleDefibs = activeDefibrillateurs.filter(df => {
+      const anyDf = df as any;
+      const rawFsm = (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
+      return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || (!rawFsm && (df.fsmAutorise || 'Oui') === 'Oui');
+    });
+
+    const total = eligibleDefibs.length;
+    if (total === 0) {
+      return { conformeEtAJourCount: 0, compliancePercent: 0, projectedCompliancePercent: 0, totalDefibsCount: 0 };
     }
 
     let compliantCount = 0;
@@ -3047,7 +3115,7 @@ export default function DefibTab({
       projectedCompliancePercent: safeProjected,
       totalDefibsCount: total
     };
-  }, [activeDefibrillateurs, fsmTours, sheetStats]);
+  }, [activeDefibrillateurs, fsmTours, effectiveSheetStats, resolvedSpreadsheetUrl]);
 
   // Synchronization components for top and bottom horizontal scrollbars
   const topScrollRef = React.useRef<HTMLDivElement>(null);

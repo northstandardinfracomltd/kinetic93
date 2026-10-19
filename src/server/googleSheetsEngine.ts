@@ -5447,10 +5447,7 @@ export async function fetchTenantSheetCollection(
         tabType === 'variables' &&
         diskSnap.items.some(hasUnmappedVariableKeys);
       if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap)) {
-        if (
-          tabType === 'defibrillateurs' &&
-          (!diskSnap.stats?.clientVolumes || Object.keys(diskSnap.stats.clientVolumes).length === 0)
-        ) {
+        if (tabType === 'defibrillateurs') {
           diskSnap.stats = computeSheetCollectionStats(diskSnap.items, 'defibrillateurs');
           saveDiskSnapshotAsync(cacheKey, diskSnap);
         }
@@ -5465,12 +5462,8 @@ export async function fetchTenantSheetCollection(
       tabType === 'variables' &&
       cached.items.some(hasUnmappedVariableKeys);
     if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached)) {
-      if (
-        tabType === 'defibrillateurs' &&
-        (!cached.stats?.clientVolumes || Object.keys(cached.stats.clientVolumes).length === 0)
-      ) {
+      if (tabType === 'defibrillateurs') {
         cached.stats = computeSheetCollectionStats(cached.items, 'defibrillateurs');
-        saveDiskSnapshotAsync(cacheKey, cached);
       }
       if (Date.now() - cached.fetchedAt > 300000 && !inFlightSheetFetches.has(cacheKey)) {
         setImmediate(() => {
@@ -6842,10 +6835,11 @@ export async function upsertRecordsToTenantSheet(
     if (warmCached) {
       warmCached.fetchedAt = Date.now();
       warmCached.headers = headers;
-      // Recompute collection stats and save disk snapshot asynchronously in background
+      try {
+        warmCached.stats = computeSheetCollectionStats(warmCached.items, tabType);
+      } catch (_) {}
       setImmediate(() => {
         try {
-          warmCached.stats = computeSheetCollectionStats(warmCached.items, tabType);
           saveDiskSnapshotAsync(cacheKey, warmCached);
         } catch (_) {}
       });
