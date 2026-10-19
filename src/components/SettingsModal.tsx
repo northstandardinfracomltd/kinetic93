@@ -914,11 +914,37 @@ export default function SettingsModal({
           } catch (e) {}
         }
       }
-      const ensuredMems = ensureTenantMembersClient(initialMems, activeTid);
+      const configuredMembersSheetUrl = (
+        comp?.spreadsheetMembresEnvironnement ||
+        comp?.spreadsheetMembresEnvironnementUrl ||
+        localStorage.getItem(`defib_${activeTid}_spreadsheet_membres_environnement`) ||
+        ''
+      ).trim();
+
+      const ensuredMems = configuredMembersSheetUrl
+        ? initialMems
+        : ensureTenantMembersClient(initialMems, activeTid);
       setLocalMembers(ensuredMems);
 
-      if (activeTid && activeTid !== 'demo') {
+      if (configuredMembersSheetUrl) {
+        const qUrl = `&spreadsheetUrl=${encodeURIComponent(configuredMembersSheetUrl)}`;
+        fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=membresEnvironnement&refresh=true${qUrl}`)
+          .then(res => (res.ok ? res.json() : null))
+          .then(data => {
+            if (data?.fromSpreadsheet && Array.isArray(data.items)) {
+              const validMembers = data.items.filter((m: any) => m && (m.name || m.email));
+              setLocalMembers(validMembers);
+              onUpdateMembers(validMembers);
+              localStorage.setItem(`defib_${activeTid}_members`, JSON.stringify(validMembers));
+            }
+          })
+          .catch(() => {});
+      } else if (activeTid && activeTid !== 'demo') {
         fetchCollectionFromFirestore<Member[]>('members', activeTid).then(remoteMembers => {
+          const currentSheetUrl = (
+            localStorage.getItem(`defib_${activeTid}_spreadsheet_membres_environnement`) || ''
+          ).trim();
+          if (currentSheetUrl) return;
           const ensuredRemote = ensureTenantMembersClient(Array.isArray(remoteMembers) ? remoteMembers : ensuredMems, activeTid);
           if (ensuredRemote.length > 0) {
             setLocalMembers(ensuredRemote);
@@ -2099,7 +2125,17 @@ export default function SettingsModal({
 
   const handlePinChange = (index: number, pinVal: string) => {
     if (!canEditMember(index)) return;
-    const cleaned = pinVal.replace(/[^0-9]/g, '').slice(0, 4);
+    const m = localMembers[index];
+    const isTech = m?.role === 'Technicien' || m?.role === 'Maintenance Terrain' || m?.role?.toLowerCase().includes('tech');
+    const hasMembersSheet = Boolean(
+      (localCompany.spreadsheetMembresEnvironnement ||
+        localCompany.spreadsheetMembresEnvironnementUrl ||
+        companyInfo?.spreadsheetMembresEnvironnement ||
+        '').trim()
+    );
+    const cleaned = (!hasMembersSheet && isTech)
+      ? pinVal.replace(/[^0-9]/g, '').slice(0, 4)
+      : pinVal;
     setLocalMembers(prev => {
       const updated = [...prev];
       updated[index] = { ...updated[index], pin: cleaned };
@@ -2667,6 +2703,12 @@ export default function SettingsModal({
       console.warn("Error updating local storage cache for members/company:", cacheErr);
     }
 
+    const hasLinkedMembersSpreadsheet = Boolean(
+      (companyToSave.spreadsheetMembresEnvironnement ||
+        companyToSave.spreadsheetMembresEnvironnementUrl ||
+        '').trim()
+    );
+
     if (effectiveTenantId && effectiveTenantId !== 'demo') {
       promises.push(syncSpreadsheetUrlsEverywhere(companyToSave, effectiveTenantId).catch(() => {}));
       promises.push(
@@ -2674,11 +2716,13 @@ export default function SettingsModal({
           console.error('Error saving company info directly to Firestore:', err)
         )
       );
-      promises.push(
-        saveCollectionToFirestore('members', membersToSave, effectiveTenantId).catch(err =>
-          console.error('Error saving members directly to Firestore:', err)
-        )
-      );
+      if (!hasLinkedMembersSpreadsheet) {
+        promises.push(
+          saveCollectionToFirestore('members', membersToSave, effectiveTenantId).catch(err =>
+            console.error('Error saving members directly to Firestore:', err)
+          )
+        );
+      }
 
       let saveUserEmail = '';
       if (currentUser && currentUser.email) {
@@ -2867,42 +2911,68 @@ export default function SettingsModal({
       );
 
       // 5. Membres de l'environnement (spreadsheetMembresEnvironnement)
-      const currentEmailsLower = new Set(
-        membersToSave.map(m => (m.email || '').trim().toLowerCase()).filter(Boolean)
-      );
-      const removedKeys: string[] = [];
-      for (const oldM of members || []) {
-        const oldEmail = (oldM.email || '').trim().toLowerCase();
-        if (oldEmail && !currentEmailsLower.has(oldEmail)) {
-          if (oldM.email) removedKeys.push(oldM.email);
-          if (oldM.name) removedKeys.push(oldM.name);
-          if ((oldM as any).id) removedKeys.push((oldM as any).id);
-        }
-      }
-      if (removedKeys.length > 0) {
-        promises.push(
-          fetch('/api/sheets/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tenantId: targetSheetTenant,
-              type: 'membresEnvironnement',
-              keys: removedKeys,
-            }),
-          }).catch(() => {})
+      const linkedMembersUrl = String(
+        companyToSave.spreadsheetMembresEnvironnement ||
+        companyToSave.spreadsheetMembresEnvironnementUrl ||
+        ''
+      ).trim();
+
+      if (activeSection === 'membres') {
+        const currentEmailsLower = new Set(
+          membersToSave.map(m => (m.email || '').trim().toLowerCase()).filter(Boolean)
         );
-      }
-      if (membersToSave.length > 0) {
+        const removedKeys: string[] = [];
+        for (const oldM of members || []) {
+          const oldEmail = (oldM.email || '').trim().toLowerCase();
+          if (oldEmail && !currentEmailsLower.has(oldEmail)) {
+            if (oldM.email) removedKeys.push(oldM.email);
+            if (oldM.name) removedKeys.push(oldM.name);
+            if ((oldM as any).id) removedKeys.push((oldM as any).id);
+          }
+        }
+        if (removedKeys.length > 0) {
+          promises.push(
+            fetch('/api/sheets/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tenantId: targetSheetTenant,
+                type: 'membresEnvironnement',
+                keys: removedKeys,
+              }),
+            }).catch(() => {})
+          );
+        }
+        if (membersToSave.length > 0) {
+          promises.push(
+            fetch('/api/sheets/upsert', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tenantId: targetSheetTenant,
+                type: 'membresEnvironnement',
+                records: membersToSave,
+              }),
+            }).catch(() => {})
+          );
+        }
+      } else if (linkedMembersUrl) {
+        // When saving from Bases de données (or another section) with a linked members spreadsheet,
+        // pull the members from the spreadsheet so the UI displays ONLY the spreadsheet data
         promises.push(
-          fetch('/api/sheets/upsert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              tenantId: targetSheetTenant,
-              type: 'membresEnvironnement',
-              records: membersToSave,
-            }),
-          }).catch(() => {})
+          fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(targetSheetTenant)}&type=membresEnvironnement&refresh=true&spreadsheetUrl=${encodeURIComponent(linkedMembersUrl)}`)
+            .then(r => (r.ok ? r.json() : null))
+            .then(data => {
+              if (data?.fromSpreadsheet && Array.isArray(data.items)) {
+                const validMembers = data.items.filter((m: any) => m && (m.name || m.email));
+                setLocalMembers(validMembers);
+                onUpdateMembers(validMembers);
+                const mJson = JSON.stringify(validMembers);
+                localStorage.setItem(`defib_${effectiveTenantId}_members`, mJson);
+                localStorage.setItem(`fs_cache_${effectiveTenantId}_members`, mJson);
+              }
+            })
+            .catch(() => {})
         );
       }
     } catch (sheetSyncErr) {
@@ -2915,33 +2985,36 @@ export default function SettingsModal({
         updateTenantLanguage(myTenantId, selectedLang).catch(e => console.error("Error updating tenant lang:", e))
       );
 
-      // Find if super-admin member email was updated
-      const superAdminMember = membersToSave.find(m => 
-        m.role === 'Super-Administrateur' || 
-        m.role === 'Propriétaire / Admin' || 
-        m.role?.toLowerCase().includes('super') || 
-        m.role?.toLowerCase().includes('propriétaire')
-      );
-      if (superAdminMember && superAdminMember.email) {
-        const newAdminEmail = superAdminMember.email.trim();
-        const newAdminName = superAdminMember.name?.trim();
-        promises.push(
-          updateTenantAdminProfile(myTenantId, newAdminEmail, newAdminName).catch(e => 
-            console.error("Error updating tenant super-admin profile in registered_tenants:", e)
-          )
+      // Only update Firebase's master registered_tenants admin profile if no members spreadsheet is linked
+      // so Firebase credentials remain intact in complement when a spreadsheet is linked
+      if (!hasLinkedMembersSpreadsheet) {
+        const superAdminMember = membersToSave.find(m => 
+          m.role === 'Super-Administrateur' || 
+          m.role === 'Propriétaire / Admin' || 
+          m.role?.toLowerCase().includes('super') || 
+          m.role?.toLowerCase().includes('propriétaire')
         );
+        if (superAdminMember && superAdminMember.email) {
+          const newAdminEmail = superAdminMember.email.trim();
+          const newAdminName = superAdminMember.name?.trim();
+          promises.push(
+            updateTenantAdminProfile(myTenantId, newAdminEmail, newAdminName).catch(e => 
+              console.error("Error updating tenant super-admin profile in registered_tenants:", e)
+            )
+          );
 
-        // If the current logged-in user is this super-admin, update their local session storage
-        try {
-          const savedUser = localStorage.getItem('defib_admin_logged_user');
-          if (savedUser) {
-            const parsed = JSON.parse(savedUser);
-            parsed.email = newAdminEmail;
-            if (newAdminName) parsed.name = newAdminName;
-            localStorage.setItem('defib_admin_logged_user', JSON.stringify(parsed));
+          // If the current logged-in user is this super-admin, update their local session storage
+          try {
+            const savedUser = localStorage.getItem('defib_admin_logged_user');
+            if (savedUser) {
+              const parsed = JSON.parse(savedUser);
+              parsed.email = newAdminEmail;
+              if (newAdminName) parsed.name = newAdminName;
+              localStorage.setItem('defib_admin_logged_user', JSON.stringify(parsed));
+            }
+          } catch (err) {
+            console.warn("Error updating defib_admin_logged_user:", err);
           }
-        } catch (err) {
-          console.warn("Error updating defib_admin_logged_user:", err);
         }
       }
     }
@@ -4460,8 +4533,8 @@ export default function SettingsModal({
                               />
                             </div>
 
-                            {/* Rôle & PIN side-by-side */}
-                            {!isSuperAdmin && (
+                            {/* Rôle & PIN / Mot de passe */}
+                            {!isSuperAdmin ? (
                               <div className="grid grid-cols-2 gap-3 items-end w-full">
                                 <div className="space-y-1">
                                   <span className="text-[16px] font-bold text-black block font-sans" style={{ fontSize: '16px', textTransform: 'none', color: '#000000' }}>{t("Rôle")}.</span>
@@ -4483,7 +4556,6 @@ export default function SettingsModal({
                                   </span>
                                   <input
                                     type="text"
-                                    maxLength={4}
                                     value={m.pin || ''}
                                     disabled={!canEditThisMember}
                                     onChange={(e) => handlePinChange(idx, e.target.value)}
@@ -4493,6 +4565,23 @@ export default function SettingsModal({
                                   />
                                 </div>
                               </div>
+                            ) : (
+                              Boolean((localCompany.spreadsheetMembresEnvironnement || localCompany.spreadsheetMembresEnvironnementUrl || companyInfo?.spreadsheetMembresEnvironnement || '').trim() || m.pin) && (
+                                <div className="space-y-1 w-full">
+                                  <span className="text-[16px] font-bold text-black block font-sans text-left" style={{ fontSize: '16px', textTransform: 'none', color: '#000000' }}>
+                                    {`${t("Mot de passe")}.`}
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={m.pin || ''}
+                                    disabled={!canEditThisMember}
+                                    onChange={(e) => handlePinChange(idx, e.target.value)}
+                                    placeholder={t("Entrez un code.")}
+                                    className="w-full text-left font-mono font-bold text-xs bg-white text-black disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
+                                    style={{ height: '36px', padding: '6px 10px' }}
+                                  />
+                                </div>
+                              )
                             )}
 
                             {/* Emplacement attribué (exclusive dropdown for Technicians) */}
@@ -6317,12 +6406,9 @@ export default function SettingsModal({
                         if (onUpdateLocationNames) onUpdateLocationNames(nextLocs);
                       } else if (activeSection === 'membres') {
                         const validMembers = data.items.filter((m: any) => m && (m.name || m.email));
-                        if (validMembers.length > 0) {
-                          const ensured = ensureTenantMembersClient(validMembers, targetTenant, currentUser?.email, currentUser?.name);
-                          setLocalMembers(ensured);
-                          onUpdateMembers(ensured);
-                          localStorage.setItem(`defib_${targetTenant}_members`, JSON.stringify(ensured));
-                        }
+                        setLocalMembers(validMembers);
+                        onUpdateMembers(validMembers);
+                        localStorage.setItem(`defib_${targetTenant}_members`, JSON.stringify(validMembers));
                       } else if (activeSection === 'reglages' || activeSection === 'pdf') {
                         const firstRow = data.items[0];
                         if (firstRow && typeof firstRow === 'object') {

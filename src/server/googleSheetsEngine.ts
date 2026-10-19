@@ -1137,9 +1137,14 @@ export interface GenericColumnDef {
 }
 
 function normalizeHeaderKeyStripSubSection(rawHeader: string): string {
-  return String(rawHeader || '')
-    .replace(/^Section\s*\d+\s*[—–\-:]?\s*/i, '')
-    .replace(/^[^:]{1,40}:\s*/i, '')
+  let s = String(rawHeader || '').replace(/^Section\s*\d+\s*[—–\-:]?\s*/i, '');
+  if (s.includes(':')) {
+    s = s.replace(/^[^:]{1,120}:\s*/i, '');
+  } else if (/\s+[—–\-]\s+/.test(s)) {
+    s = s.split(/\s+[—–\-]\s+/).pop() || s;
+  }
+  s = s.replace(/\(\s*(?:optionnel|facultatif)\s*\)/gi, '');
+  return s
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
@@ -1336,12 +1341,13 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Intitulé', field: 'intitule', aliases: ['intitule', 'intitulepersonnalise', 'nompersonnalise', 'nom', 'valeur'] },
   ],
   membresEnvironnement: [
-    { header: 'Nom et prénom', field: 'name', aliases: ['nometprenom', 'nomprenom', 'nom', 'name', 'collaborateur', 'membre', 'utilisateur'] },
-    { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'adresseemail', 'identifiant'] },
-    { header: 'Rôle', field: 'role', aliases: ['role', 'profil', 'typeutilisateur', 'statutrole'] },
-    { header: 'PIN d’accès / Mot de passe', field: 'pin', aliases: ['pindaccesmotdepasse', 'pindacces', 'pinacces', 'motdepasse', 'pin', 'codepin', 'code', 'password'] },
-    { header: 'Métier / Type de rôle', field: 'adminSubRole', aliases: ['metiertypederole', 'metier', 'typederole', 'typerole', 'adminsubrole', 'fonction', 'service', 'sousrole'] },
-    { header: 'Emplacement attribué', field: 'locationLink', aliases: ['emplacementattribue', 'emplacement', 'locationlink', 'vehicule', 'entrepot'] },
+    { header: 'Nom et prénom', field: 'name', aliases: ['nometprenom', 'nomprenom', 'nom', 'name', 'collaborateur', 'membre', 'utilisateur', 'prenometnom', 'nomcomplet'] },
+    { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'adresseemail', 'identifiant', 'adressemail', 'emailutilisateur', 'emailmembre', 'login'] },
+    { header: 'Rôle', field: 'role', aliases: ['role', 'profil', 'typeutilisateur', 'statutrole', 'typedecompte', 'typecompte'] },
+    { header: 'PIN d’accès / Mot de passe', field: 'pin', aliases: ['pindaccesmotdepasse', 'pindacces', 'pinacces', 'motdepasse', 'pin', 'codepin', 'code', 'password', 'motdepassepindacces', 'motdepassepin', 'cledacces', 'cleacces', 'codedacces', 'codeacces', 'mdp'] },
+    { header: 'Métier / Type de rôle', field: 'adminSubRole', aliases: ['metiertypederole', 'metier', 'typederole', 'typerole', 'adminsubrole', 'fonction', 'service', 'sousrole', 'poste'] },
+    { header: 'Emplacement attribué', field: 'locationLink', aliases: ['emplacementattribue', 'emplacement', 'locationlink', 'vehicule', 'entrepot', 'emplacementstock', 'affectation'] },
+    { header: 'Compétences', field: 'competences', aliases: ['competences', 'competence', 'qualifications', 'habilitations'], type: 'array' },
     { header: 'Numéro et voie', field: 'startAddressStreet', aliases: ['numeroetvoie', 'numerovoie', 'numvoie', 'rue', 'startaddressstreet', 'adressededepart', 'adresse'] },
     { header: 'Ville', field: 'startAddressCity', aliases: ['ville', 'commune', 'startaddresscity', 'villedepart'] },
     { header: 'Code postal', field: 'startAddressZip', aliases: ['codepostal', 'cp', 'zip', 'startaddresszip'] },
@@ -2061,6 +2067,162 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Sortant 7 à 30 jours', field: 'sortant30Jours', aliases: ['sortant7a30jours', 'sortant7a30j', 'sortant30jours', 'totalacommander'], type: 'number' },
     { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentaireinterne', 'commentaires', 'notes', 'note', 'observation'] },
   ],
+  variables: [
+    {
+      header: 'Catégorie.',
+      field: 'category',
+      aliases: [
+        'categorie',
+        'categoriedelavariable',
+        'categorievariable',
+        'category',
+        'typedevariable',
+        'typevariable',
+      ],
+    },
+    {
+      header: 'Titre de la variable.',
+      field: 'nom',
+      aliases: [
+        'titredelavariable',
+        'titrevariable',
+        'nomdelavariable',
+        'nomvariable',
+        'intituledelavariable',
+        'intitulevariable',
+        'nomintitule',
+        'nometintitule',
+        'nom',
+        'titre',
+        'intitule',
+        'denomination',
+        'libelle',
+        'designation',
+      ],
+    },
+    {
+      header: 'Identifiant.',
+      field: 'identifiant',
+      aliases: [
+        'identifiant',
+        'identifiantoptionnel',
+        'identifiantdelavariable',
+        'identifiantvariable',
+        'ugs',
+        'codeugs',
+        'sku',
+        'reference',
+        'ref',
+        'codearticle',
+        'code',
+      ],
+    },
+    {
+      header: 'Commentaire sur la variable.',
+      field: 'description',
+      aliases: [
+        'commentairesurlavariable',
+        'commentairevariable',
+        'commentairedelavariable',
+        'commentaire',
+        'commentaires',
+        'description',
+        'descriptionoptionnel',
+        'descriptiondelavariable',
+        'descriptionvariable',
+        'noteinterne',
+        'notes',
+        'details',
+      ],
+    },
+    {
+      header: 'Image URL',
+      field: 'imageUrl',
+      aliases: [
+        'imageurl',
+        'urlimage',
+        'urldelimage',
+        'liensourcedelimage',
+        'urldelaminiature',
+        'urldelaminiatureoptionnel',
+        'urlminiature',
+        'miniatureurl',
+        'miniature',
+        'image',
+        'photo',
+        'photourl',
+        'logo',
+      ],
+    },
+    {
+      header: "Type d'alerte / rappel.",
+      field: 'rappelAlerteOption',
+      aliases: [
+        'typedalerterappel',
+        'typealerterappel',
+        'typederappelalerte',
+        'typerappelalerte',
+        'typedalerteouderappel',
+        'typedalerte',
+        'typederappel',
+        'rappeloualerte',
+        'rappelalerte',
+        'rappelalerteoption',
+        'rappeloualerteoption',
+        'selectionduneoption',
+        'optionrappelalerte',
+      ],
+    },
+    {
+      header: 'Date de début.',
+      field: 'rappelDateDebut',
+      aliases: [
+        'datededebut',
+        'datedebut',
+        'rappeldatedebut',
+        'datededebutrappel',
+        'datedebutrappel',
+        'datededebutdelalerte',
+        'datededebutdurappel',
+        'debutrappel',
+        'debutalerte',
+      ],
+      type: 'date',
+    },
+    {
+      header: 'Date de fin.',
+      field: 'rappelDateFin',
+      aliases: [
+        'datedefin',
+        'datefin',
+        'rappeldatefin',
+        'datedefinrappel',
+        'datefinrappel',
+        'datedefindelalerte',
+        'datedefindurappel',
+        'finrappel',
+        'finalerte',
+      ],
+      type: 'date',
+    },
+    {
+      header: 'Observation sur le rappel ou l’alerte.',
+      field: 'rappelObservation',
+      aliases: [
+        'observationsurlerappeloulalerte',
+        'observationsurlalerteoulerappel',
+        'observationsurlerappelalerte',
+        'observationrappeloualerte',
+        'observationrappelalerte',
+        'observationsrappeloualerte',
+        'rappelobservation',
+        'observation',
+        'observations',
+        'observationinstructions',
+        'instructions',
+      ],
+    },
+  ],
 };
 GENERIC_CANONICAL_HEADERS.devisFactures = GENERIC_CANONICAL_HEADERS.commandes;
 GENERIC_CANONICAL_HEADERS.stocks = GENERIC_CANONICAL_HEADERS.stocksGlobaux;
@@ -2077,7 +2239,8 @@ function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = 
       tabType === 'emargements' ||
       tabType === 'stocksGlobaux' ||
       tabType === 'stocks' ||
-      tabType === 'stocksDistribues'
+      tabType === 'stocksDistribues' ||
+      tabType === 'variables'
     ) {
       if (tabType === 'stocksGlobaux' || tabType === 'stocks') {
         return canonical
@@ -2091,16 +2254,14 @@ function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = 
           })
           .map(c => c.header);
       }
-      if (tabType === 'stocksDistribues') {
+      if (tabType === 'stocksDistribues' || tabType === 'variables') {
         return canonical.filter(c => !c.field.startsWith('_')).map(c => c.header);
       }
       return canonical.map(c => c.header);
     }
     return canonical.filter(c => !c.field.startsWith('_')).map(c => c.header);
   }
-  const presets: Partial<Record<SheetTabType, string[]>> = {
-    variables: ['id', 'category', 'nom', 'marque', 'description', 'envId', 'tenantId'],
-  };
+  const presets: Partial<Record<SheetTabType, string[]>> = {};
   const base = presets[tabType] ? [...presets[tabType]!] : ['id', 'identifiant', 'nom', 'date', 'statut', 'envId', 'tenantId'];
   const seen = new Set(base.map(h => h.toLowerCase()));
   for (const rec of sampleRecords) {
@@ -2456,6 +2617,7 @@ function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType):
     const allAliases = new Set([
       normalizeHeaderKey(def.header),
       normalizeHeaderKey(def.field),
+      ...def.aliases.map(a => normalizeHeaderKey(a)),
       ...def.aliases,
     ]);
     for (let i = 0; i < normFullHeaders.length; i++) {
@@ -2474,7 +2636,9 @@ function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType):
     if (Array.from(colToDef.values()).some(d => d.field === def.field)) continue;
     const allAliases = new Set([
       normalizeHeaderKey(def.header),
+      normalizeHeaderKeyStripSubSection(def.header),
       normalizeHeaderKey(def.field),
+      ...def.aliases.map(a => normalizeHeaderKey(a)),
       ...def.aliases,
     ]);
     for (let i = 0; i < normStrippedHeaders.length; i++) {
@@ -3134,10 +3298,35 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.fileSize = merged.fileSize || '';
   } else if (tabType === 'membresEnvironnement') {
     merged.id = merged.id || merged.email || merged.name || `mem_${rowIndexZeroBased + 2}`;
-    merged.name = merged.name || '';
-    merged.email = merged.email || '';
-    merged.role = merged.role || 'Administrateur';
-    merged.pin = String(merged.pin || '1234');
+    merged.name = String(merged.name || '').trim();
+    merged.email = String(merged.email || '').trim();
+    const rawRole = String(merged.role || '').trim();
+    const normRole = rawRole.toLowerCase();
+    if (!rawRole) {
+      merged.role = 'Administrateur';
+    } else if (normRole.includes('super') || normRole.includes('propriétaire') || normRole.includes('proprietaire')) {
+      merged.role = 'Super-Administrateur';
+    } else if (normRole.includes('tech') || normRole.includes('maintenance') || normRole.includes('intervenant')) {
+      merged.role = 'Technicien';
+    } else if (
+      ['administration', 'planification', 'logistique', 'comptabilité', 'comptabilite', 'contrôleur', 'controleur', 'administrateur & contrôleur', 'développeur', 'developpeur'].includes(normRole)
+    ) {
+      if (!merged.adminSubRole) merged.adminSubRole = rawRole;
+      merged.role = 'Administrateur';
+    } else if (normRole.includes('admin')) {
+      merged.role = 'Administrateur';
+    } else {
+      merged.role = rawRole;
+    }
+    merged.pin = merged.pin !== undefined && merged.pin !== null ? String(merged.pin).trim() : '';
+    merged.status = merged.status || 'Actif';
+    merged.lastActive = merged.lastActive || 'En ligne';
+    if (merged.competences && !Array.isArray(merged.competences)) {
+      merged.competences = String(merged.competences)
+        .split(/[,;/|]/)
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+    }
     // Reconstruct semaineTypique from flat columns if not already provided as JSON array
     if (!Array.isArray(merged.semaineTypique)) {
       const schedules: any[] = [];
@@ -3718,6 +3907,110 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.userIp = merged.userIp || 'Non renseignée';
     merged.actionType = merged.actionType || 'CONNEXION';
     merged.message = merged.message || '';
+  } else if (tabType === 'variables') {
+    // Always recover any fields from rawByHeader or legacy unmapped properties on merged
+    const rawKeys = Object.keys(rawByHeader);
+    if (rawKeys.length > 0) {
+      const fallbackColMap = resolveGenericColumnFieldMap(rawKeys, 'variables');
+      for (const [kIdx, def] of fallbackColMap.entries()) {
+        const rk = rawKeys[kIdx];
+        const rv = rk ? rawByHeader[rk] : '';
+        if (rv !== undefined && rv !== '' && (merged[def.field] === undefined || merged[def.field] === '')) {
+          merged[def.field] = rv;
+        }
+      }
+    }
+
+    const rawCat = String(merged.category || merged['Catégorie.'] || merged['Catégorie'] || merged.categorie || '').trim();
+    const normCat = rawCat
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+    const canonicalCategories: Array<{ label: string; keys: string[] }> = [
+      { label: 'Modèle Défibrillateur', keys: ['modeledefibrillateur', 'defibrillateur', 'defibrillateurs', 'modeledae', 'dae'] },
+      { label: 'Modèle Coffret', keys: ['modelecoffret', 'coffret', 'coffrets', 'armoire', 'boitier', 'support'] },
+      { label: 'Modèle Électrode', keys: ['modeleelectrode', 'modeleelectrodes', 'electrode', 'electrodes', 'padpak'] },
+      { label: 'Modèle Batterie', keys: ['modelebatterie', 'modelebatteries', 'batterie', 'batteries', 'pile', 'piles'] },
+      { label: 'Modèle Signalétique', keys: ['modelesignaletique', 'signaletique', 'signaletiques', 'panneau', 'affichage'] },
+      { label: 'Modèle Scellé', keys: ['modelescelle', 'modelescelles', 'scelle', 'scelles'] },
+      { label: 'Modèle Autocollant', keys: ['modeleautocollant', 'modeleautocollants', 'autocollant', 'autocollants', 'sticker', 'etiquette'] },
+      { label: 'Modèle Kit de secours', keys: ['modelekitdesecours', 'modelekitsecours', 'kitdesecours', 'kitsecours', 'troussedesecours', 'trousse'] },
+      { label: 'Modèle Pièce Autre', keys: ['modelepieceautre', 'pieceautre', 'autrepiece', 'accessoire', 'consommable', 'autre'] },
+      { label: 'Modèle Contrat', keys: ['modelecontrat', 'contrat', 'contrats', 'typecontrat'] },
+      { label: 'Modèle Service', keys: ['modeleservice', 'service', 'services', 'prestationservice'] },
+      { label: 'Drapeau post-intervention', keys: ['drapeaupostintervention', 'drapeauxpostintervention', 'flagpostintervention'] },
+      { label: 'Fournisseur', keys: ['fournisseur', 'fournisseurs', 'distributeur'] },
+      { label: 'Modèle Raison Prestation', keys: ['modeleraisonprestation', 'raisonprestation', 'motifprestation', 'motifintervention', 'raisonintervention'] },
+      { label: 'Drapeau GMAO', keys: ['drapeaugmao', 'drapeauxgmao', 'flaggmao', 'drapeau'] },
+      { label: 'Type Filtre Purificateur', keys: ['typefiltrepurificateur', 'typefiltre'] },
+      { label: 'Modèle Filtre Purificateur', keys: ['modelefiltrepurificateur', 'modelefiltre', 'filtrepurificateur'] },
+      { label: 'Formation', keys: ['formation', 'formations', 'modeleformation'] },
+    ];
+    const matchedCat = canonicalCategories.find(c => c.keys.includes(normCat));
+    merged.category = matchedCat ? matchedCat.label : (rawCat || 'Modèle Défibrillateur');
+
+    merged.nom = String(merged.nom || merged['Titre de la variable.'] || merged['Titre de la variable'] || merged.titre || merged.intitule || merged.denomination || '').trim();
+    merged.marque = String(merged.marque || merged.fabricant || merged.fournisseur || 'Standard').trim() || 'Standard';
+    merged.description = String(merged.description || merged['Commentaire sur la variable.'] || merged['Commentaire sur la variable'] || merged.commentaire || '').trim();
+    merged.identifiant = String(merged.identifiant || merged['Identifiant.'] || merged['Identifiant'] || merged.ugs || '').trim();
+    if (
+      !merged.identifiant &&
+      merged.id &&
+      !String(merged.id).startsWith('v_') &&
+      !String(merged.id).startsWith('sheet_')
+    ) {
+      merged.identifiant = String(merged.id).trim();
+    }
+    merged.imageUrl = String(merged.imageUrl || merged['Image URL'] || merged['Image URL.'] || '').trim();
+
+    const rawRappelOpt = String(
+      merged.rappelAlerteOption ||
+        merged["Type d'alerte / rappel."] ||
+        merged['Type d’alerte / rappel.'] ||
+        merged["Type d'alerte / rappel"] ||
+        ''
+    ).trim();
+    const normRappelOpt = rawRappelOpt
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+    if (!normRappelOpt || normRappelOpt.includes('aucun') || ['non', 'ras', 'sans'].includes(normRappelOpt)) {
+      merged.rappelAlerteOption = '';
+    } else if (normRappelOpt.includes('miseajourlogicielle')) {
+      merged.rappelAlerteOption = 'Mise à jour logicielle — Orange';
+    } else if (normRappelOpt.includes('rappelatelier')) {
+      merged.rappelAlerteOption = 'Rappel atelier — Rouge';
+    } else if (normRappelOpt.includes('modificationnotice')) {
+      merged.rappelAlerteOption = "Modification notice d'utilisation — Orange";
+    } else if (normRappelOpt.includes('retraitdumarche')) {
+      merged.rappelAlerteOption = 'Retrait du marché — Rouge';
+    } else if (normRappelOpt.includes('observationcourante')) {
+      merged.rappelAlerteOption = 'Observation courante — Orange';
+    } else if (normRappelOpt.includes('observationgrave')) {
+      merged.rappelAlerteOption = 'Observation grave — Rouge';
+    } else {
+      merged.rappelAlerteOption = rawRappelOpt;
+    }
+
+    merged.rappelDateDebut = normalizeDateStr(merged.rappelDateDebut || merged['Date de début.'] || merged['Date de début'] || '');
+    merged.rappelDateFin = normalizeDateStr(merged.rappelDateFin || merged['Date de fin.'] || merged['Date de fin'] || '');
+    merged.rappelObservation = String(
+      merged.rappelObservation ||
+        merged['Observation sur le rappel ou l’alerte.'] ||
+        merged["Observation sur le rappel ou l'alerte."] ||
+        merged['Observation sur le rappel ou l’alerte'] ||
+        merged["Observation sur le rappel ou l'alerte"] ||
+        ''
+    ).trim();
+
+    if (!merged.id || String(merged.id).startsWith('sheet_gen_')) {
+      merged.id =
+        merged.identifiant ||
+        merged.nom ||
+        `sheet_gen_variables_${tenantId}_${rowIndexZeroBased + 2}`;
+    }
   }
 
   if (!merged.id) {
@@ -3732,6 +4025,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       merged.ugs ||
       merged.tourCode ||
       merged.reference ||
+      merged.nom ||
       merged.email ||
       `sheet_gen_${tabType}_${tenantId}_${rowIndexZeroBased + 2}`;
   }
@@ -4305,6 +4599,9 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.content = enriched.content || enriched.text || '';
     enriched.dateStr = enriched.dateStr || enriched.time || '';
   } else if (tabType === 'membresEnvironnement') {
+    if (Array.isArray(enriched.competences)) {
+      enriched.competences = enriched.competences.join(', ');
+    }
     const stList = Array.isArray(enriched.semaineTypique) ? enriched.semaineTypique.slice(0, 2) : [];
     stList.forEach((st: any, i: number) => {
       const p = `_st${i + 1}_`;
@@ -4330,6 +4627,64 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     if (Array.isArray(enriched.hiddenTabs)) {
       enriched.hiddenTabs = enriched.hiddenTabs.join(', ');
     }
+  } else if (tabType === 'variables') {
+    enriched.category = enriched.category || enriched.categorie || 'Modèle Défibrillateur';
+    enriched.nom = enriched.nom || enriched.titre || '';
+    enriched.marque = enriched.marque || enriched.fabricant || 'Standard';
+    enriched.typeDefibrillateur =
+      enriched.category === 'Modèle Défibrillateur'
+        ? (enriched.typeDefibrillateur || 'Non renseigné')
+        : (enriched.typeDefibrillateur || '');
+    enriched.couleurHex = enriched.couleurHex ?? '';
+    enriched.dureePrestation =
+      enriched.dureePrestation !== undefined && enriched.dureePrestation !== null && String(enriched.dureePrestation).trim() !== ''
+        ? String(enriched.dureePrestation)
+        : '';
+    enriched.identifiant = enriched.identifiant ?? enriched.ugs ?? '';
+    enriched.imageUrl = enriched.imageUrl ?? '';
+    enriched.description = enriched.description ?? '';
+    enriched.rappelAlerteOption = enriched.rappelAlerteOption ?? '';
+    enriched.rappelDateDebut = enriched.rappelDateDebut ?? '';
+    enriched.rappelDateFin = enriched.rappelDateFin ?? '';
+    enriched.rappelObservation = enriched.rappelObservation ?? '';
+    const visFields = [
+      'visibiliteNumeroAtlasante',
+      'visibiliteVersionLogiciel',
+      'visibiliteFactureBrouillon',
+      'visibilitePadPakAdulte',
+      'visibiliteLotPadPakA',
+      'visibilitePeremptionPadPakA',
+      'visibiliteLotP',
+      'visibilitePadPakPediatrique',
+      'visibiliteLotPadPakP',
+      'visibilitePeremptionPadPakP',
+      'visibiliteFabricationBatterie',
+      'visibiliteInsertionBatterie',
+      'visibilitePeremptionBatterie',
+      'visibilitePourcentageBatterie',
+      'visibiliteGantsPresents',
+      'visibilitePeremptionServiettes',
+      'visibiliteServiettesPresentes',
+      'visibilitePeremptionMasque',
+      'visibiliteMasquePresent',
+      'visibiliteCiseauxPresents',
+      'visibilitePeremptionTrousse',
+      'visibiliteRasoir',
+      'visibiliteBranchementElectrodes',
+      'visibiliteGuidesVocaux',
+      'visibiliteMessageNumeriqueConforme',
+      'visibiliteEquipeMessageNumerique',
+      'visibiliteVoyantConforme',
+      'visibiliteNettoyage',
+      'visibilitePiecesJointes',
+    ];
+    for (const vf of visFields) {
+      enriched[vf] =
+        enriched.category === 'Modèle Défibrillateur'
+          ? normalizeYesNo(enriched[vf], 'Oui')
+          : (enriched[vf] ? normalizeYesNo(enriched[vf], 'Oui') : '');
+    }
+    enriched.infosTechnicien = enriched.infosTechnicien ?? '';
   }
 
   // 1. Map via canonical definitions if tabType is known
@@ -4479,8 +4834,32 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
+  if (tabType === 'variables') {
+    const cat = String(item.category || '').trim().toLowerCase();
+    const nom = String(item.nom || '').trim().toLowerCase();
+    const prevNom = String(item._previousNom || '').trim().toLowerCase();
+    const compositeKeys: string[] = [];
+    if (cat && nom) compositeKeys.push(`${cat}@@${nom}`);
+    if (cat && prevNom) compositeKeys.push(`${cat}@@${prevNom}`);
+    return Array.from(
+      new Set(
+        [
+          item.id,
+          item._previousId,
+          item.identifiant,
+          item._previousIdentifiant,
+          item.ugs,
+          ...compositeKeys,
+          item.nom,
+          item._previousNom,
+        ]
+          .filter(Boolean)
+          .map(s => String(s).trim().toLowerCase())
+      )
+    );
+  }
   if (tabType !== 'defibrillateurs') {
-    return [item.id, item.identifiant, item.interventionReference, item.tourIdentifiant, item.reportId, item.numeroPiece, item.ref, item.numeroCommande, item.ugs, item.tourCode, item.reference, item.orderRef]
+    return [item.id, item.identifiant, item.interventionReference, item.tourIdentifiant, item.reportId, item.numeroPiece, item.ref, item.numeroCommande, item.ugs, item.tourCode, item.reference, item.orderRef, item.nom]
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
@@ -4877,16 +5256,37 @@ export async function fetchTenantSheetCollection(
   }
 
   const cacheKey = getSheetCacheKey(tabType, extracted.spreadsheetId, extracted.gid);
+  const hasUnmappedVariableKeys = (it: any): boolean => {
+    if (!it || typeof it !== 'object') return true;
+    if (!it.nom && !it.identifiant) return true;
+    if (
+      (it['Commentaire sur la variable.'] && !it.description) ||
+      (it["Type d'alerte / rappel."] && !it.rappelAlerteOption) ||
+      (it['Observation sur le rappel ou l’alerte.'] && !it.rappelObservation) ||
+      (it["Observation sur le rappel ou l'alerte."] && !it.rappelObservation)
+    ) {
+      return true;
+    }
+    return false;
+  };
   if (!sheetMemoryCache.has(cacheKey)) {
     const diskSnap = loadDiskSnapshot(cacheKey);
     if (diskSnap && Array.isArray(diskSnap.items) && diskSnap.items.length > 0) {
-      sheetMemoryCache.set(cacheKey, diskSnap);
+      const isStaleVariablesSnap =
+        tabType === 'variables' &&
+        diskSnap.items.some(hasUnmappedVariableKeys);
+      if (!isStaleVariablesSnap) {
+        sheetMemoryCache.set(cacheKey, diskSnap);
+      }
     }
   }
 
   if (!forceRefresh && sheetMemoryCache.has(cacheKey)) {
     const cached = sheetMemoryCache.get(cacheKey)!;
-    if (cached.items.length > 0) {
+    const isStaleVariablesCache =
+      tabType === 'variables' &&
+      cached.items.some(hasUnmappedVariableKeys);
+    if (cached.items.length > 0 && !isStaleVariablesCache) {
       if (Date.now() - cached.fetchedAt > 300000 && !inFlightSheetFetches.has(cacheKey)) {
         setImmediate(() => {
           fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true).catch(() => {});
@@ -5019,6 +5419,9 @@ export async function fetchTenantSheetCollection(
           } else if (tabType === 'stocksDistribues') {
             const hasRealDistIdentity = Boolean(mapped.denominationPieceId) || Boolean(mapped.ugs) || Boolean(mapped.stockId);
             if (!hasRealDistIdentity) continue;
+          } else if (tabType === 'variables') {
+            const hasRealVariableIdentity = Boolean(mapped.nom) || Boolean(mapped.identifiant);
+            if (!hasRealVariableIdentity) continue;
           }
 
           if (deletedSet.size > 0) {
@@ -5140,6 +5543,21 @@ export async function fetchTenantSheetCollection(
           }
           seenClientIds.add(cid);
           item.id = cid;
+        }
+      } else if (tabType === 'variables') {
+        const seenVarIds = new Set<string>();
+        for (let i = 0; i < baseItems.length; i++) {
+          const item = baseItems[i];
+          if (!item) continue;
+          let vid = String(item.id || item.identifiant || item.nom || '').trim();
+          if (!vid) {
+            vid = `sheet_gen_variables_${tenantId}_${item._sheetRowNumber || i + 2}`;
+          }
+          if (seenVarIds.has(vid.toLowerCase())) {
+            vid = `${vid}_r${item._sheetRowNumber || i + 2}`;
+          }
+          seenVarIds.add(vid.toLowerCase());
+          item.id = vid;
         }
       }
 
@@ -6156,10 +6574,19 @@ export async function deleteRecordsFromTenantSheet(
 
     const rowNumbersToClearSet = new Set<number>();
 
-    // Also parse explicit row numbers from any synthetic sheet_df_ / sheet_am_ / sheet_cli_ / sheet_gen_ keys
+    // Also parse explicit row numbers from any synthetic sheet_df_ / sheet_am_ / sheet_cli_ / sheet_gen_ keys or row:N targets
     for (const tk of targetKeys) {
       if (!tk) continue;
-      const m = String(tk).trim().match(/^sheet_(?:df|am|cli|gen_[a-z0-9]+)_[^_]+_(\d+)$/i);
+      const trimmedTk = String(tk).trim();
+      const rowDirect = trimmedTk.match(/^row:(\d+)$/i);
+      if (rowDirect && rowDirect[1]) {
+        const rn = parseInt(rowDirect[1], 10);
+        if (!isNaN(rn) && rn >= 2) {
+          rowNumbersToClearSet.add(rn);
+        }
+        continue;
+      }
+      const m = trimmedTk.match(/^sheet_(?:df|am|cli|gen_[a-z0-9]+)_[^_]+_(\d+)$/i);
       if (m && m[1]) {
         const rn = parseInt(m[1], 10);
         if (!isNaN(rn) && rn >= 2) {
@@ -6184,8 +6611,21 @@ export async function deleteRecordsFromTenantSheet(
 
     for (const [upKey, upVal] of Object.entries(overlay.upsertedById)) {
       const uKeys = getRecordLookupKeys(upVal, tabType);
-      if (normTargets.has(upKey.toLowerCase()) || uKeys.some(k => normTargets.has(k))) {
+      const isUpRowTargeted = (upVal as any)?._sheetRowNumber && rowNumbersToClearSet.has((upVal as any)._sheetRowNumber);
+      if (isUpRowTargeted || normTargets.has(upKey.toLowerCase()) || uKeys.some(k => normTargets.has(k))) {
         delete overlay.upsertedById[upKey];
+      }
+    }
+
+    const recentMap = recentSheetUpserts.get(cacheKey);
+    if (recentMap && recentMap.size > 0) {
+      for (const [rk, entry] of recentMap.entries()) {
+        if (!entry || !entry.item) continue;
+        const rKeys = getRecordLookupKeys(entry.item, tabType);
+        const isRecRowTargeted = entry.item._sheetRowNumber && rowNumbersToClearSet.has(entry.item._sheetRowNumber);
+        if (isRecRowTargeted || normTargets.has(rk.toLowerCase()) || rKeys.some(k => normTargets.has(k))) {
+          recentMap.delete(rk);
+        }
       }
     }
 

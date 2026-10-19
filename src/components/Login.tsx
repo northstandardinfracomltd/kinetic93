@@ -840,12 +840,49 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             targetEmail: tenant.adminEmail
           });
           return;
-        } else {
-          // Check for sub-account "Administrateur" members across all tenants in parallel
-          const tenants = await getRegisteredTenants();
-          let matchedAdmin: any = null;
-          let matchedTenantId = 'demo';
+        }
 
+        // Check in complement: backend /api/auth/verify-tenant-member (checks both Firebase AND linked Google Spreadsheet membresEnvironnement)
+        // plus direct Firestore sub-account check across all tenants in parallel
+        const tenants = await getRegisteredTenants();
+        let matchedAdmin: any = null;
+        let matchedTenantId = 'demo';
+
+        try {
+          const verifyRes = await fetch('/api/auth/verify-tenant-member', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: emailLower,
+              password: pass,
+              role: 'admin',
+              tenants: tenants.map(tnt => ({
+                id: tnt.id,
+                adminEmail: tnt.adminEmail,
+                adminPassword: tnt.adminPassword,
+                adminName: tnt.adminName,
+                disabled: tnt.disabled,
+                spreadsheetMembresEnvironnement: (tnt as any).spreadsheetMembresEnvironnement || (tnt as any).spreadsheetMembresEnvironnementUrl || '',
+              })),
+            }),
+          });
+          if (verifyRes.ok) {
+            const verifyData = await verifyRes.json();
+            if (verifyData?.matched && verifyData.member) {
+              if (verifyData.disabled) {
+                setError("Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
+                setIsLoading(false);
+                return;
+              }
+              matchedAdmin = verifyData.member;
+              matchedTenantId = verifyData.tenantId || 'demo';
+            }
+          }
+        } catch (verifyErr) {
+          console.warn('Error calling /api/auth/verify-tenant-member for admin:', verifyErr);
+        }
+
+        if (!matchedAdmin) {
           const results = await Promise.all(
             tenants.map(async (tnt) => {
               const tenantId = tnt.id;
@@ -856,8 +893,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   const found = fetchedMembers.find(
                     (m: any) =>
                       m.email && m.email.trim().toLowerCase() === emailLower &&
-                      m.pin && m.pin.trim() === pass &&
-                      (m.role?.toLowerCase().includes('admin') || m.role?.toLowerCase().includes('propriétaire'))
+                      String(m.pin ?? m.motDePasse ?? m.password ?? '').trim() === pass &&
+                      (!String(m.role || '').toLowerCase().includes('tech') && !String(m.role || '').toLowerCase().includes('maintenance'))
                   );
                   if (found) {
                     return { found, tenantId };
@@ -875,29 +912,28 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             matchedAdmin = matchedAdminResult.found;
             matchedTenantId = matchedAdminResult.tenantId;
           }
+        }
 
-          if (matchedAdmin) {
-            // Check if this tenant is suspended
-            const matchedTenant = tenants.find(t => t.id === matchedTenantId);
-            if (matchedTenant && matchedTenant.disabled) {
-              setError("Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
-              setIsLoading(false);
-              return;
-            }
-            const roleToPass = matchedAdmin.adminSubRole === 'Développeur' ? 'developpeur' : 'admin';
-            const targetEmail = (matchedAdmin.email && matchedAdmin.email.trim()) || emailLower;
-            await sendAuthCodeAndPrompt({
-              email: matchedAdmin.email || emailLower,
-              name: matchedAdmin.name || 'Admin',
-              tenantId: matchedTenantId,
-              role: roleToPass,
-              targetEmail
-            });
-          } else {
-            setError(t.errorAdmin);
+        if (matchedAdmin) {
+          const matchedTenant = tenants.find(t => t.id === matchedTenantId);
+          if (matchedTenant && matchedTenant.disabled) {
+            setError("Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
             setIsLoading(false);
-            handleFailedAttempt();
+            return;
           }
+          const roleToPass = matchedAdmin.adminSubRole === 'Développeur' ? 'developpeur' : 'admin';
+          const targetEmail = (matchedAdmin.email && matchedAdmin.email.trim()) || emailLower;
+          await sendAuthCodeAndPrompt({
+            email: matchedAdmin.email || emailLower,
+            name: matchedAdmin.name || 'Admin',
+            tenantId: matchedTenantId,
+            role: roleToPass,
+            targetEmail
+          });
+        } else {
+          setError(t.errorAdmin);
+          setIsLoading(false);
+          handleFailedAttempt();
         }
       } else if (loginRole === 'client') {
         // Authenticate client globally
@@ -985,36 +1021,70 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         let matchedMember: any = null;
         let matchedTenantId = 'demo';
 
-        // Search for this member in each tenant's members list in parallel
-        const results = await Promise.all(
-          tenants.map(async (tnt) => {
-            const tenantId = tnt.id;
-            const key = tenantId === 'demo' ? 'members' : `${tenantId}_members`;
-            try {
-              const fetchedMembers = await fetchRawCollectionFromFirestore<any[]>(key, 6000);
-              if (fetchedMembers && Array.isArray(fetchedMembers)) {
-                const found = fetchedMembers.find(
-                  (m: any) =>
-                    ((m.email && m.email.trim().toLowerCase() === emailLower) ||
-                     (m.name && m.name.trim().toLowerCase() === emailLower)) &&
-                    m.pin && m.pin.trim() === pass &&
-                    (m.role?.toLowerCase().includes('tech') || m.role?.toLowerCase().includes('technicien') || m.role?.toLowerCase().includes('maintenance'))
-                );
-                if (found) {
-                  return { found, tenantId };
-                }
+        // 1. Check backend /api/auth/verify-tenant-member (checks both Firebase AND linked Google Spreadsheet membresEnvironnement)
+        try {
+          const verifyRes = await fetch('/api/auth/verify-tenant-member', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: emailLower,
+              password: pass,
+              role: 'technicien',
+              tenants: tenants.map(tnt => ({
+                id: tnt.id,
+                disabled: tnt.disabled,
+                spreadsheetMembresEnvironnement: (tnt as any).spreadsheetMembresEnvironnement || (tnt as any).spreadsheetMembresEnvironnementUrl || '',
+              })),
+            }),
+          });
+          if (verifyRes.ok) {
+            const verifyData = await verifyRes.json();
+            if (verifyData?.matched && verifyData.member) {
+              if (verifyData.disabled) {
+                setError("Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
+                setIsLoading(false);
+                return;
               }
-            } catch (err) {
-              console.warn(`Error checking tech in tenant ${tenantId}:`, err);
+              matchedMember = verifyData.member;
+              matchedTenantId = verifyData.tenantId || 'demo';
             }
-            return null;
-          })
-        );
+          }
+        } catch (verifyErr) {
+          console.warn('Error calling /api/auth/verify-tenant-member for technicien:', verifyErr);
+        }
 
-        const matchedMemberResult = results.find(r => r !== null);
-        if (matchedMemberResult) {
-          matchedMember = matchedMemberResult.found;
-          matchedTenantId = matchedMemberResult.tenantId;
+        // 2. Fallback / complement check directly against Firestore members collection across all tenants
+        if (!matchedMember) {
+          const results = await Promise.all(
+            tenants.map(async (tnt) => {
+              const tenantId = tnt.id;
+              const key = tenantId === 'demo' ? 'members' : `${tenantId}_members`;
+              try {
+                const fetchedMembers = await fetchRawCollectionFromFirestore<any[]>(key, 6000);
+                if (fetchedMembers && Array.isArray(fetchedMembers)) {
+                  const found = fetchedMembers.find(
+                    (m: any) =>
+                      ((m.email && m.email.trim().toLowerCase() === emailLower) ||
+                       (m.name && m.name.trim().toLowerCase() === emailLower)) &&
+                      String(m.pin ?? m.motDePasse ?? m.password ?? '').trim() === pass &&
+                      (m.role?.toLowerCase().includes('tech') || m.role?.toLowerCase().includes('technicien') || m.role?.toLowerCase().includes('maintenance'))
+                  );
+                  if (found) {
+                    return { found, tenantId };
+                  }
+                }
+              } catch (err) {
+                console.warn(`Error checking tech in tenant ${tenantId}:`, err);
+              }
+              return null;
+            })
+          );
+
+          const matchedMemberResult = results.find(r => r !== null);
+          if (matchedMemberResult) {
+            matchedMember = matchedMemberResult.found;
+            matchedTenantId = matchedMemberResult.tenantId;
+          }
         }
 
         if (matchedMember) {

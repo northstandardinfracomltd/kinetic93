@@ -195,8 +195,8 @@ export default function VariableTab({
     const inStocks = (stocks || []).some(s => 
       (s as any).denominationPieceId === id ||
       (s as any).variableId === id ||
-      ((s as any).denom && (s as any).denom.trim().toLowerCase() === nomLower) ||
-      ((s as any).denom && identLower && (s as any).denom.trim().toLowerCase() === identLower)
+      (nomLower && (s as any).denom && (s as any).denom.trim().toLowerCase() === nomLower) ||
+      (identLower && (s as any).denom && (s as any).denom.trim().toLowerCase() === identLower)
     );
     if (inStocks) return true;
 
@@ -204,8 +204,8 @@ export default function VariableTab({
     const inDistrib = (distributedStocks || []).some(ds => 
       (ds as any).denominationPieceId === id ||
       (ds as any).variableId === id ||
-      ((ds as any).denom && (ds as any).denom.trim().toLowerCase() === nomLower) ||
-      ((ds as any).denom && identLower && (ds as any).denom.trim().toLowerCase() === identLower)
+      (nomLower && (ds as any).denom && (ds as any).denom.trim().toLowerCase() === nomLower) ||
+      (identLower && (ds as any).denom && (ds as any).denom.trim().toLowerCase() === identLower)
     );
     if (inDistrib) return true;
 
@@ -213,14 +213,14 @@ export default function VariableTab({
     const inOther = (otherEquipments || []).some(oe => 
       (oe as any).variableId === id ||
       (oe as any).modele === id ||
-      ((oe as any).modele && (oe as any).modele.trim().toLowerCase() === nomLower)
+      (nomLower && (oe as any).modele && (oe as any).modele.trim().toLowerCase() === nomLower)
     );
     if (inOther) return true;
 
     // 5. Achats fournisseurs
     const inAchats = ((achatsFournisseurs as any) || []).some((af: any) => 
       af.variableId === id ||
-      (af.denom && af.denom.trim().toLowerCase() === nomLower)
+      (nomLower && af.denom && af.denom.trim().toLowerCase() === nomLower)
     );
     if (inAchats) return true;
 
@@ -231,7 +231,7 @@ export default function VariableTab({
           if (Array.isArray(m.requiredParts)) {
             return m.requiredParts.some((p: any) => 
               p === id || 
-              (typeof p === 'string' && (p.toLowerCase() === nomLower || (identLower && p.toLowerCase() === identLower)))
+              (typeof p === 'string' && ((nomLower && p.toLowerCase() === nomLower) || (identLower && p.toLowerCase() === identLower)))
             );
           }
           return false;
@@ -476,50 +476,102 @@ export default function VariableTab({
   };
 
   const openEditModal = (v: Variable) => {
+    const rawV = v as any;
+    const toInputDate = (raw?: string): string => {
+      if (!raw) return '';
+      const s = String(raw).trim();
+      const fr = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (fr) {
+        return `${fr[3]}-${fr[2].padStart(2, '0')}-${fr[1].padStart(2, '0')}`;
+      }
+      return s;
+    };
+    const normalizeRappelOpt = (raw?: string): string => {
+      if (!raw) return '';
+      const s = String(raw).trim();
+      const norm = s
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+      if (!norm || norm.includes('aucun') || norm === 'non' || norm === 'ras') return '';
+      if (norm.includes('miseajourlogicielle')) return 'Mise à jour logicielle — Orange';
+      if (norm.includes('rappelatelier')) return 'Rappel atelier — Rouge';
+      if (norm.includes('modificationnotice')) return "Modification notice d'utilisation — Orange";
+      if (norm.includes('retraitdumarche')) return 'Retrait du marché — Rouge';
+      if (norm.includes('observationcourante')) return 'Observation courante — Orange';
+      if (norm.includes('observationgrave')) return 'Observation grave — Rouge';
+      return s;
+    };
+    const toYesNo = (val?: string): 'Oui' | 'Non' => {
+      if (!val) return 'Oui';
+      const low = String(val).trim().toLowerCase();
+      if (low === 'non' || low === 'no' || low === 'false' || low === '0') return 'Non';
+      return 'Oui';
+    };
+
     setEditingVariable(v);
-    setCategory(v.category);
-    setNom(v.nom);
+    setCategory(v.category || rawV['Catégorie.'] || rawV['Catégorie'] || 'Modèle Défibrillateur');
+    setNom(v.nom || rawV['Titre de la variable.'] || rawV['Titre de la variable'] || '');
     setHideSuggestions(false);
     setMarque(v.marque || 'Standard');
-    setDescription(v.description);
-    setImageUrl(v.imageUrl || '');
+    setDescription(v.description || rawV['Commentaire sur la variable.'] || rawV['Commentaire sur la variable'] || '');
+    setImageUrl(v.imageUrl || rawV['Image URL'] || rawV['Image URL.'] || '');
     setCouleurHex(v.couleurHex || '');
-    setDureePrestation(v.dureePrestation !== undefined && v.dureePrestation !== null ? String(v.dureePrestation) : '');
-    setIdentifiant(v.identifiant || '');
-    setTypeDefibrillateur(v.typeDefibrillateur || 'Non renseigné');
-    setRappelAlerteOption(v.rappelAlerteOption || '');
-    setRappelDateDebut(v.rappelDateDebut || '');
-    setRappelDateFin(v.rappelDateFin || '');
-    setRappelObservation(v.rappelObservation || '');
-    setVisibiliteNumeroAtlasante(v.visibiliteNumeroAtlasante || 'Oui');
-    setVisibiliteVersionLogiciel(v.visibiliteVersionLogiciel || 'Oui');
-    setVisibiliteFactureBrouillon(v.visibiliteFactureBrouillon || 'Oui');
-    setVisibilitePadPakAdulte(v.visibilitePadPakAdulte || 'Oui');
-    setVisibiliteLotPadPakA(v.visibiliteLotPadPakA || 'Oui');
-    setVisibilitePeremptionPadPakA(v.visibilitePeremptionPadPakA || 'Oui');
-    setVisibiliteLotP(v.visibiliteLotP || 'Oui');
-    setVisibilitePadPakPediatrique(v.visibilitePadPakPediatrique || 'Oui');
-    setVisibiliteLotPadPakP(v.visibiliteLotPadPakP || 'Oui');
-    setVisibilitePeremptionPadPakP(v.visibilitePeremptionPadPakP || 'Oui');
-    setVisibiliteFabricationBatterie(v.visibiliteFabricationBatterie || 'Oui');
-    setVisibiliteInsertionBatterie(v.visibiliteInsertionBatterie || 'Oui');
-    setVisibilitePeremptionBatterie(v.visibilitePeremptionBatterie || 'Oui');
-    setVisibilitePourcentageBatterie(v.visibilitePourcentageBatterie || 'Oui');
-    setVisibiliteGantsPresents(v.visibiliteGantsPresents || 'Oui');
-    setVisibilitePeremptionServiettes(v.visibilitePeremptionServiettes || 'Oui');
-    setVisibiliteServiettesPresentes(v.visibiliteServiettesPresentes || 'Oui');
-    setVisibilitePeremptionMasque(v.visibilitePeremptionMasque || 'Oui');
-    setVisibiliteMasquePresent(v.visibiliteMasquePresent || 'Oui');
-    setVisibiliteCiseauxPresents(v.visibiliteCiseauxPresents || 'Oui');
-    setVisibilitePeremptionTrousse(v.visibilitePeremptionTrousse || 'Oui');
-    setVisibiliteRasoir(v.visibiliteRasoir || 'Oui');
-    setVisibiliteBranchementElectrodes(v.visibiliteBranchementElectrodes || 'Oui');
-    setVisibiliteGuidesVocaux(v.visibiliteGuidesVocaux || 'Oui');
-    setVisibiliteMessageNumeriqueConforme(v.visibiliteMessageNumeriqueConforme || 'Oui');
-    setVisibiliteEquipeMessageNumerique(v.visibiliteEquipeMessageNumerique || 'Oui');
-    setVisibiliteVoyantConforme(v.visibiliteVoyantConforme || 'Oui');
-    setVisibiliteNettoyage(v.visibiliteNettoyage || 'Oui');
-    setVisibilitePiecesJointes(v.visibilitePiecesJointes || 'Oui');
+    setDureePrestation(v.dureePrestation !== undefined && v.dureePrestation !== null && String(v.dureePrestation) !== '' ? String(v.dureePrestation) : '');
+    setIdentifiant(v.identifiant || rawV['Identifiant.'] || rawV['Identifiant'] || '');
+    setTypeDefibrillateur(
+      v.typeDefibrillateur === 'DSA' || v.typeDefibrillateur === 'DEA'
+        ? v.typeDefibrillateur
+        : 'Non renseigné'
+    );
+    setRappelAlerteOption(
+      normalizeRappelOpt(
+        v.rappelAlerteOption ||
+          rawV["Type d'alerte / rappel."] ||
+          rawV['Type d’alerte / rappel.'] ||
+          rawV["Type d'alerte / rappel"]
+      )
+    );
+    setRappelDateDebut(toInputDate(v.rappelDateDebut || rawV['Date de début.'] || rawV['Date de début']));
+    setRappelDateFin(toInputDate(v.rappelDateFin || rawV['Date de fin.'] || rawV['Date de fin']));
+    setRappelObservation(
+      v.rappelObservation ||
+        rawV['Observation sur le rappel ou l’alerte.'] ||
+        rawV["Observation sur le rappel ou l'alerte."] ||
+        rawV['Observation sur le rappel ou l’alerte'] ||
+        rawV["Observation sur le rappel ou l'alerte"] ||
+        ''
+    );
+    setVisibiliteNumeroAtlasante(toYesNo(v.visibiliteNumeroAtlasante));
+    setVisibiliteVersionLogiciel(toYesNo(v.visibiliteVersionLogiciel));
+    setVisibiliteFactureBrouillon(toYesNo(v.visibiliteFactureBrouillon));
+    setVisibilitePadPakAdulte(toYesNo(v.visibilitePadPakAdulte));
+    setVisibiliteLotPadPakA(toYesNo(v.visibiliteLotPadPakA));
+    setVisibilitePeremptionPadPakA(toYesNo(v.visibilitePeremptionPadPakA));
+    setVisibiliteLotP(toYesNo(v.visibiliteLotP));
+    setVisibilitePadPakPediatrique(toYesNo(v.visibilitePadPakPediatrique));
+    setVisibiliteLotPadPakP(toYesNo(v.visibiliteLotPadPakP));
+    setVisibilitePeremptionPadPakP(toYesNo(v.visibilitePeremptionPadPakP));
+    setVisibiliteFabricationBatterie(toYesNo(v.visibiliteFabricationBatterie));
+    setVisibiliteInsertionBatterie(toYesNo(v.visibiliteInsertionBatterie));
+    setVisibilitePeremptionBatterie(toYesNo(v.visibilitePeremptionBatterie));
+    setVisibilitePourcentageBatterie(toYesNo(v.visibilitePourcentageBatterie));
+    setVisibiliteGantsPresents(toYesNo(v.visibiliteGantsPresents));
+    setVisibilitePeremptionServiettes(toYesNo(v.visibilitePeremptionServiettes));
+    setVisibiliteServiettesPresentes(toYesNo(v.visibiliteServiettesPresentes));
+    setVisibilitePeremptionMasque(toYesNo(v.visibilitePeremptionMasque));
+    setVisibiliteMasquePresent(toYesNo(v.visibiliteMasquePresent));
+    setVisibiliteCiseauxPresents(toYesNo(v.visibiliteCiseauxPresents));
+    setVisibilitePeremptionTrousse(toYesNo(v.visibilitePeremptionTrousse));
+    setVisibiliteRasoir(toYesNo(v.visibiliteRasoir));
+    setVisibiliteBranchementElectrodes(toYesNo(v.visibiliteBranchementElectrodes));
+    setVisibiliteGuidesVocaux(toYesNo(v.visibiliteGuidesVocaux));
+    setVisibiliteMessageNumeriqueConforme(toYesNo(v.visibiliteMessageNumeriqueConforme));
+    setVisibiliteEquipeMessageNumerique(toYesNo(v.visibiliteEquipeMessageNumerique));
+    setVisibiliteVoyantConforme(toYesNo(v.visibiliteVoyantConforme));
+    setVisibiliteNettoyage(toYesNo(v.visibiliteNettoyage));
+    setVisibilitePiecesJointes(toYesNo(v.visibilitePiecesJointes));
     setInfosTechnicien(v.infosTechnicien || '');
     setError('');
     setIsModalOpen(true);
@@ -553,19 +605,21 @@ export default function VariableTab({
 
     const allowsImage = category === 'Modèle Défibrillateur' || category === 'Modèle Coffret' || category === 'Modèle Électrode' || category === 'Modèle Batterie' || category === 'Modèle Filtre Purificateur' || category === 'Modèle Signalétique' || category === 'Modèle Scellé' || category === 'Modèle Autocollant' || category === 'Modèle Kit de secours' || category === 'Modèle Pièce Autre';
 
+    const parsedDuree = category === 'Modèle Raison Prestation' && dureePrestation.trim() !== '' ? parseInt(dureePrestation.trim(), 10) : null;
+
     const payload: any = {
       category: category as VariableCategory,
       nom: nom.trim(),
       marque: marque.trim() || 'Standard',
       description: description.trim(),
-      imageUrl: allowsImage ? imageUrl.trim() : undefined,
-      couleurHex: (category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Modèle Contrat') ? (formattedHex || undefined) : undefined,
-      dureePrestation: category === 'Modèle Raison Prestation' && dureePrestation !== '' ? parseInt(dureePrestation, 10) : undefined,
-      identifiant: identifiant.trim() || undefined,
-      rappelAlerteOption: hideRappelAlerte ? undefined : (rappelAlerteOption || undefined),
-      rappelDateDebut: hideRappelAlerte ? undefined : (rappelDateDebut || undefined),
-      rappelDateFin: hideRappelAlerte ? undefined : (rappelDateFin || undefined),
-      rappelObservation: hideRappelAlerte ? undefined : (rappelObservation || undefined),
+      imageUrl: allowsImage ? imageUrl.trim() : '',
+      couleurHex: (category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Modèle Contrat') ? formattedHex : '',
+      dureePrestation: parsedDuree !== null && !isNaN(parsedDuree) ? parsedDuree : (editingVariable ? null : undefined),
+      identifiant: identifiant.trim(),
+      rappelAlerteOption: hideRappelAlerte ? '' : rappelAlerteOption,
+      rappelDateDebut: hideRappelAlerte ? '' : rappelDateDebut,
+      rappelDateFin: hideRappelAlerte ? '' : rappelDateFin,
+      rappelObservation: hideRappelAlerte ? '' : rappelObservation.trim(),
     };
 
     if (category === 'Modèle Défibrillateur') {
@@ -604,8 +658,10 @@ export default function VariableTab({
 
     if (editingVariable) {
       onUpdateVariable({
-        id: editingVariable.id,
+        ...editingVariable,
         ...payload,
+        id: editingVariable.id,
+        ...((editingVariable as any)._sheetRowNumber ? { _sheetRowNumber: (editingVariable as any)._sheetRowNumber } : {}),
       });
     } else {
       onAddVariable(payload);
@@ -1384,11 +1440,10 @@ export default function VariableTab({
                             Modifier
                           </button>
                           <button
+                            type="button"
                             onClick={() => {
                               if (!used) {
-                                if (window.confirm(`Voulez-vous vraiment supprimer la variable "${v.nom}" ?`)) {
-                                  onDeleteVariable(v.id);
-                                }
+                                onDeleteVariable(v.id);
                               }
                             }}
                             disabled={used}

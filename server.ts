@@ -4790,6 +4790,257 @@ async function warmupDefibrillateursStore() {
     }
   });
 
+  app.post("/api/auth/verify-tenant-member", async (req, res) => {
+    try {
+      const body = req.body || {};
+      const emailLower = String(body.email || '').trim().toLowerCase();
+      const pass = String(body.password || '').trim();
+      const loginRole = String(body.role || 'admin').trim().toLowerCase();
+
+      if (!emailLower || !pass) {
+        return res.json({ matched: false });
+      }
+
+      // Gather all known tenants and candidate tenant IDs
+      const tenantMap = new Map<string, any>();
+      const addTenantRecord = (t: any) => {
+        if (!t || typeof t !== 'object') return;
+        const id = String(t.id || t.tenantId || '').trim();
+        if (!id) return;
+        const existing = tenantMap.get(id.toLowerCase()) || {};
+        tenantMap.set(id.toLowerCase(), { ...existing, ...t, id: existing.id || id });
+      };
+
+      const memTenants = serverMemoryStore.get('registered_tenants');
+      if (Array.isArray(memTenants)) memTenants.forEach(addTenantRecord);
+
+      const diskTenantsFile = path.join(COLLECTIONS_DIR, 'registered_tenants.json');
+      if (fs.existsSync(diskTenantsFile)) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(diskTenantsFile, 'utf-8'));
+          if (Array.isArray(parsed)) parsed.forEach(addTenantRecord);
+        } catch (_) {}
+      }
+
+      try {
+        const files = fs.existsSync(COLLECTIONS_DIR) ? fs.readdirSync(COLLECTIONS_DIR) : [];
+        for (const f of files) {
+          const m = f.match(/^([a-zA-Z0-9_-]+)_(tenantDatabases|companyInfo|company_info|members)\.json$/);
+          if (m && m[1]) {
+            const tid = m[1];
+            if (!tenantMap.has(tid.toLowerCase())) {
+              tenantMap.set(tid.toLowerCase(), { id: tid });
+            }
+          }
+        }
+      } catch (_) {}
+
+      for (const k of serverMemoryStore.keys()) {
+        const m = k.match(/^([a-zA-Z0-9_-]+)_(tenantDatabases|companyInfo|company_info|members)$/);
+        if (m && m[1]) {
+          const tid = m[1];
+          if (!tenantMap.has(tid.toLowerCase())) {
+            tenantMap.set(tid.toLowerCase(), { id: tid });
+          }
+        }
+      }
+
+      if (!tenantMap.has('demo')) {
+        tenantMap.set('demo', { id: 'demo' });
+      }
+
+      const isRoleMatch = (memberRoleRaw: any, targetLoginRole: string) => {
+        const r = String(memberRoleRaw || '').trim().toLowerCase();
+        if (targetLoginRole === 'technicien') {
+          return r.includes('tech') || r.includes('maintenance') || r.includes('intervenant');
+        }
+        if (targetLoginRole === 'admin') {
+          if (!r) return true;
+          if (r.includes('tech') || r.includes('client')) return false;
+          return true;
+        }
+        return false;
+      };
+
+      const candidateTenants = Array.from(tenantMap.values());
+
+      for (const tnt of candidateTenants) {
+        const tid = String(tnt.id || 'demo').trim();
+        let firebaseMatchedMember: any = null;
+        let sheetMatchedMember: any = null;
+        let sheetProfileForEmail: any = null;
+
+        if (loginRole === 'client') {
+          // 1. Check Firebase / Server clients collection
+          const clientKey = tid === 'demo' ? 'clients' : `${tid}_clients`;
+          let fbClients = serverMemoryStore.get(clientKey);
+          if (!Array.isArray(fbClients)) {
+            const dFile = path.join(COLLECTIONS_DIR, `${clientKey}.json`);
+            if (fs.existsSync(dFile)) {
+              try { fbClients = JSON.parse(fs.readFileSync(dFile, 'utf-8')); } catch (_) {}
+            }
+          }
+          if (Array.isArray(fbClients)) {
+            firebaseMatchedMember = fbClients.find(
+              (c: any) =>
+                c &&
+                ((c.email && String(c.email).trim().toLowerCase() === emailLower) ||
+                  (c.denomination && String(c.denomination).trim().toLowerCase() === emailLower)) &&
+                c.accessKey &&
+                String(c.accessKey).trim() === pass
+            );
+          }
+
+          // 2. Check linked Clients Google Spreadsheet
+          const clientsSheetUrl = await resolveTenantSpreadsheetUrl(tid, 'clients');
+          if (clientsSheetUrl && extractSpreadsheetIdAndGid(clientsSheetUrl)) {
+            let sData = await fetchTenantSheetCollection(clientsSheetUrl, tid, 'clients', false).catch(() => null);
+            const findClientInSheet = (items: any[]) =>
+              items.find(
+                (c: any) =>
+                  c &&
+                  ((c.email && String(c.email).trim().toLowerCase() === emailLower) ||
+                    (c.denomination && String(c.denomination).trim().toLowerCase() === emailLower)) &&
+                  c.accessKey &&
+                  String(c.accessKey).trim() === pass
+              );
+            if (sData && Array.isArray(sData.items)) {
+              sheetMatchedMember = findClientInSheet(sData.items);
+              if (!sheetMatchedMember) {
+                sData = await fetchTenantSheetCollection(clientsSheetUrl, tid, 'clients', true).catch(() => null);
+                if (sData && Array.isArray(sData.items)) {
+                  sheetMatchedMember = findClientInSheet(sData.items);
+                }
+              }
+              if (sData && Array.isArray(sData.items)) {
+                sheetProfileForEmail = sData.items.find(
+                  (c: any) =>
+                    c &&
+                    ((c.email && String(c.email).trim().toLowerCase() === emailLower) ||
+                      (c.denomination && String(c.denomination).trim().toLowerCase() === emailLower))
+                );
+              }
+            }
+          }
+
+          if (firebaseMatchedMember || sheetMatchedMember) {
+            const chosen = sheetMatchedMember || sheetProfileForEmail || firebaseMatchedMember;
+            return res.json({
+              matched: true,
+              tenantId: tid,
+              disabled: Boolean(tnt.disabled),
+              user: {
+                email: chosen.email || emailLower,
+                name: chosen.denomination || chosen.name || emailLower,
+                role: 'client',
+              },
+            });
+          }
+          continue;
+        }
+
+        // Admin or Technicien:
+        // 1. Check Firebase tenant primary admin credentials (if admin role)
+        if (loginRole === 'admin') {
+          const tAdminEmail = String(tnt.adminEmail || '').trim().toLowerCase();
+          const tAdminPass = String(tnt.adminPasswordHexOrPlain || tnt.adminPassword || '').trim();
+          if (tAdminEmail && tAdminPass && tAdminEmail === emailLower && tAdminPass === pass) {
+            firebaseMatchedMember = {
+              email: tnt.adminEmail,
+              name: tnt.adminName || 'Administrateur',
+              role: 'Super-Administrateur',
+            };
+          }
+        }
+
+        // 2. Check Firebase / Server members collection
+        if (!firebaseMatchedMember) {
+          const memKey = tid === 'demo' ? 'members' : `${tid}_members`;
+          let fbMembers = serverMemoryStore.get(memKey);
+          if (!Array.isArray(fbMembers)) {
+            const dFile = path.join(COLLECTIONS_DIR, `${memKey}.json`);
+            if (fs.existsSync(dFile)) {
+              try { fbMembers = JSON.parse(fs.readFileSync(dFile, 'utf-8')); } catch (_) {}
+            }
+          }
+          if (Array.isArray(fbMembers)) {
+            firebaseMatchedMember = fbMembers.find((m: any) => {
+              if (!m || typeof m !== 'object') return false;
+              const mEmail = String(m.email || '').trim().toLowerCase();
+              const mName = String(m.name || '').trim().toLowerCase();
+              const mPin = String(m.pin ?? m.motDePasse ?? m.password ?? '').trim();
+              const identityMatch =
+                mEmail === emailLower || (loginRole === 'technicien' && mName === emailLower);
+              return identityMatch && mPin === pass && isRoleMatch(m.role, loginRole);
+            });
+          }
+        }
+
+        // 3. Check linked Membres de l'environnement Google Spreadsheet
+        const membresSheetUrl = await resolveTenantSpreadsheetUrl(tid, 'membresEnvironnement');
+        if (membresSheetUrl && extractSpreadsheetIdAndGid(membresSheetUrl)) {
+          let sData = await fetchTenantSheetCollection(membresSheetUrl, tid, 'membresEnvironnement', false).catch(() => null);
+          const findMemberInSheet = (items: any[]) =>
+            items.find((m: any) => {
+              if (!m || typeof m !== 'object') return false;
+              const mEmail = String(m.email || '').trim().toLowerCase();
+              const mName = String(m.name || '').trim().toLowerCase();
+              const mPin = String(m.pin ?? m.motDePasse ?? m.password ?? '').trim();
+              const identityMatch =
+                mEmail === emailLower || (loginRole === 'technicien' && mName === emailLower);
+              return identityMatch && mPin === pass && isRoleMatch(m.role, loginRole);
+            });
+
+          if (sData && Array.isArray(sData.items)) {
+            sheetMatchedMember = findMemberInSheet(sData.items);
+            if (!sheetMatchedMember && !firebaseMatchedMember) {
+              // Refresh once from Google Sheets in case credentials were just added/updated in the sheet
+              sData = await fetchTenantSheetCollection(membresSheetUrl, tid, 'membresEnvironnement', true).catch(() => null);
+              if (sData && Array.isArray(sData.items)) {
+                sheetMatchedMember = findMemberInSheet(sData.items);
+              }
+            }
+            if (sData && Array.isArray(sData.items)) {
+              sheetProfileForEmail = sData.items.find((m: any) => {
+                if (!m || typeof m !== 'object') return false;
+                const mEmail = String(m.email || '').trim().toLowerCase();
+                const mName = String(m.name || '').trim().toLowerCase();
+                return mEmail === emailLower || (loginRole === 'technicien' && mName === emailLower);
+              });
+            }
+          }
+        }
+
+        if (firebaseMatchedMember || sheetMatchedMember) {
+          // Prioritize spreadsheet profile data if this user is present in the linked spreadsheet
+          const profileSource = sheetMatchedMember || sheetProfileForEmail || firebaseMatchedMember;
+          const resolvedRole =
+            loginRole === 'technicien'
+              ? 'technicien'
+              : profileSource?.adminSubRole === 'Développeur' || profileSource?.role === 'Développeur'
+              ? 'developpeur'
+              : 'admin';
+          return res.json({
+            matched: true,
+            tenantId: tid,
+            disabled: Boolean(tnt.disabled),
+            source: sheetMatchedMember ? 'spreadsheet' : 'firebase',
+            user: {
+              email: profileSource?.email || emailLower,
+              name: profileSource?.name || (loginRole === 'technicien' ? 'Technicien' : 'Admin'),
+              role: resolvedRole,
+              memberRecord: profileSource,
+            },
+          });
+        }
+      }
+
+      return res.json({ matched: false });
+    } catch (err: any) {
+      return res.status(500).json({ matched: false, error: err.message });
+    }
+  });
+
   app.post("/api/sheets/query", async (req, res) => {
     try {
       const body = req.body || {};

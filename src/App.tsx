@@ -1046,32 +1046,49 @@ export default function App() {
 
       const tabToFieldKey: Record<string, any> = {
         defibs: 'spreadsheetDefibrillateurs',
+        defibrillateurs: 'spreadsheetDefibrillateurs',
         autres: 'spreadsheetAutresMateriels',
+        autresMateriels: 'spreadsheetAutresMateriels',
         clients: 'spreadsheetClients',
         ged: 'spreadsheetGed',
-        pointages: 'spreadsheetPointages',
+        pointages: 'spreadsheetPointagesHeures',
+        temps: 'spreadsheetPointagesHeures',
         achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
         releveConcurrentiel: 'spreadsheetReleveConcurrentiel',
-        ticketsCaisse: 'spreadsheetTicketsCaisse',
-        stocksCentrale: 'spreadsheetStocksCentrale',
-        stocksDistribues: 'spreadsheetStocksDistribues',
-        crm: 'spreadsheetCrm',
-        formations: 'spreadsheetFormations',
+        ticketsCaisse: 'spreadsheetNotesDeFrais',
+        stocksCentrale: 'spreadsheetStockGlobal',
+        stocksGlobaux: 'spreadsheetStockGlobal',
+        stocksDistribues: 'spreadsheetStockDistribue',
+        historiqueNotifications: 'spreadsheetHistoriqueNotifications',
+        crm: 'spreadsheetTicketsAssistance',
+        satisfaction: 'spreadsheetAvisSatisfaction',
+        commandes: 'spreadsheetDevisFactures',
+        devisFactures: 'spreadsheetDevisFactures',
+        formations: 'spreadsheetSessionsFormation',
         stagiaires: 'spreadsheetStagiaires',
         emargements: 'spreadsheetEmargements',
-        variablesRapports: 'spreadsheetVariablesRapports',
+        variables: 'spreadsheetVariables',
+        variablesRapports: 'spreadsheetVariables',
         interventionsAValider: 'spreadsheetInterventionsAValider',
-        rapportsArchive: 'spreadsheetRapportsArchive',
-        missionsTerrain: 'spreadsheetMissionsTerrain',
-        tourneesTech: 'spreadsheetTourneesTech',
-        canalMessages: 'spreadsheetCanalMessages',
-        identiteEntreprise: 'spreadsheetIdentiteEntreprise',
-        membresEquipe: 'spreadsheetMembresEquipe',
+        rapportsArchive: 'spreadsheetRapportsPdf',
+        rapportsPdf: 'spreadsheetRapportsPdf',
+        missionsTerrain: 'spreadsheetMissionsTournees',
+        missionsTournees: 'spreadsheetMissionsTournees',
+        tourneesTech: 'spreadsheetTournees',
+        tournees: 'spreadsheetTournees',
+        canalMessages: 'spreadsheetMessagerieInterne',
+        messagesInternes: 'spreadsheetMessagerieInterne',
+        identiteEntreprise: 'spreadsheetReglages',
+        reglages: 'spreadsheetReglages',
+        membresEquipe: 'spreadsheetMembresEquipes',
+        membresEnvironnement: 'spreadsheetMembresEquipes',
         groupesTravail: 'spreadsheetGroupesTravail',
+        intituleEmplacements: 'spreadsheetIntituleEmplacements',
         connecteurs: 'spreadsheetConnecteurs',
         apparenceRapportsPdf: 'spreadsheetApparenceRapportsPdf',
         communicationPortailClient: 'spreadsheetCommunicationPortailClient',
-        observateurActionsSuspectes: 'spreadsheetObservateurActionsSuspectes',
+        observateurActionsSuspectes: 'spreadsheetJournauxSecurite',
+        journauxSecurite: 'spreadsheetJournauxSecurite',
         exportations: 'spreadsheetExportations',
       };
       const fieldKey = tabToFieldKey[tabType];
@@ -1089,6 +1106,9 @@ export default function App() {
         if (item.id && !out.includes(String(item.id).trim())) {
           out.push(String(item.id).trim());
         }
+        if (item.identifiant && !out.includes(String(item.identifiant).trim())) {
+          out.push(String(item.identifiant).trim());
+        }
         return out;
       };
 
@@ -1096,17 +1116,35 @@ export default function App() {
       const safeNew = Array.isArray(newItems) ? newItems : [];
 
       const newKeySet = new Set<string>();
+      const newIdSet = new Set<string>();
       for (const ni of safeNew) {
+        if (ni && ni.id !== undefined && ni.id !== null && String(ni.id).trim() !== '') {
+          newIdSet.add(String(ni.id).trim().toLowerCase());
+        }
         for (const k of extractKeys(ni)) {
           newKeySet.add(k.toLowerCase());
         }
       }
 
       const deletedKeys: string[] = [];
+      const deletedRowNums: number[] = [];
       for (const oi of safeOld) {
+        if (!oi || typeof oi !== 'object') continue;
+        const oiId = oi.id !== undefined && oi.id !== null ? String(oi.id).trim().toLowerCase() : '';
         const oKeys = extractKeys(oi);
-        if (oKeys.length > 0 && !oKeys.some(k => newKeySet.has(k.toLowerCase()))) {
-          deletedKeys.push(...oKeys);
+        const wasDeleted = oiId
+          ? !newIdSet.has(oiId)
+          : oKeys.length > 0 && !oKeys.some(k => newKeySet.has(k.toLowerCase()));
+        if (wasDeleted) {
+          if (typeof oi._sheetRowNumber === 'number' && oi._sheetRowNumber >= 2) {
+            deletedKeys.push(`row:${oi._sheetRowNumber}`);
+            deletedRowNums.push(oi._sheetRowNumber);
+          }
+          for (const k of oKeys) {
+            if (!newKeySet.has(k.toLowerCase())) {
+              deletedKeys.push(k);
+            }
+          }
         }
       }
 
@@ -1120,23 +1158,56 @@ export default function App() {
             spreadsheetUrl: resolvedSpreadsheetUrl || undefined,
             keys: Array.from(new Set(deletedKeys)),
           }),
-        }).catch(() => {});
+        })
+          .then(res => (res.ok ? res.json() : null))
+          .then(() => {
+            if (tabType === 'variables' && deletedRowNums.length > 0) {
+              const sortedDesc = Array.from(new Set(deletedRowNums)).sort((a, b) => b - a);
+              setVariables(prev => {
+                const updated = prev.map(v => {
+                  let rn = (v as any)._sheetRowNumber;
+                  if (typeof rn === 'number' && rn >= 2) {
+                    for (const delRn of sortedDesc) {
+                      if (rn > delRn) rn -= 1;
+                    }
+                    return { ...v, _sheetRowNumber: rn } as Variable;
+                  }
+                  return v;
+                });
+                safeSetLocalStorage(`defib_${effectiveTid}_variables`, JSON.stringify(updated));
+                return updated;
+              });
+            }
+          })
+          .catch(() => {});
       }
 
       const oldMap = new Map<string, any>();
+      const oldById = new Map<string, any>();
       for (const oi of safeOld) {
+        if (!oi || typeof oi !== 'object') continue;
+        if (oi.id !== undefined && oi.id !== null && String(oi.id).trim() !== '') {
+          oldById.set(String(oi.id).trim().toLowerCase(), oi);
+        }
         const pk = extractKeys(oi)[0];
         if (pk) oldMap.set(pk.toLowerCase(), oi);
       }
 
-      const changedRecords = safeNew.filter(ni => {
-        if (!ni || typeof ni !== 'object') return false;
+      const changedRecords: any[] = [];
+      for (const ni of safeNew) {
+        if (!ni || typeof ni !== 'object') continue;
+        const niId = ni.id !== undefined && ni.id !== null ? String(ni.id).trim().toLowerCase() : '';
         const pk = extractKeys(ni)[0];
-        if (!pk) return true;
-        const prev = oldMap.get(pk.toLowerCase());
-        if (!prev) return true;
-        return JSON.stringify(prev) !== JSON.stringify(ni);
-      });
+        const prev = (niId ? oldById.get(niId) : undefined) || (pk ? oldMap.get(pk.toLowerCase()) : undefined);
+        if (!prev) {
+          changedRecords.push(ni);
+        } else if (JSON.stringify(prev) !== JSON.stringify(ni)) {
+          changedRecords.push({
+            ...ni,
+            ...(prev._sheetRowNumber && !ni._sheetRowNumber ? { _sheetRowNumber: prev._sheetRowNumber } : {}),
+          });
+        }
+      }
 
       if (changedRecords.length > 0) {
         fetch('/api/sheets/upsert', {
@@ -1148,7 +1219,33 @@ export default function App() {
             spreadsheetUrl: resolvedSpreadsheetUrl || undefined,
             records: changedRecords,
           }),
-        }).catch(() => {});
+        })
+          .then(res => (res.ok ? res.json() : null))
+          .then(data => {
+            if (tabType === 'variables' && data && Array.isArray(data.records) && data.records.length > 0) {
+              setVariables(prev => {
+                let mutated = false;
+                const updated = prev.map(v => {
+                  const matched = data.records.find(
+                    (r: any) =>
+                      r &&
+                      ((r.id && v.id && String(r.id) === String(v.id)) ||
+                        (r.nom && v.nom && String(r.nom).trim().toLowerCase() === String(v.nom).trim().toLowerCase() && r.category === v.category))
+                  );
+                  if (matched && typeof matched._sheetRowNumber === 'number' && (v as any)._sheetRowNumber !== matched._sheetRowNumber) {
+                    mutated = true;
+                    return { ...v, _sheetRowNumber: matched._sheetRowNumber } as Variable;
+                  }
+                  return v;
+                });
+                if (mutated) {
+                  safeSetLocalStorage(`defib_${effectiveTid}_variables`, JSON.stringify(updated));
+                }
+                return mutated ? updated : prev;
+              });
+            }
+          })
+          .catch(() => {});
       }
     },
     [tenantId]
@@ -3007,11 +3104,10 @@ export default function App() {
           }
           case 'membresEnvironnement': {
             const validMembers = items.filter((m: any) => m && (m.name || m.email));
-            if (validMembers.length > 0) {
-              const ensured = ensureTenantMembersClient(validMembers, activeTid, loggedUser?.email, loggedUser?.name);
-              setMembers(ensured);
-              safeSetLocalStorage(`defib_${activeTid}_members`, JSON.stringify(ensured));
-            }
+            // When a spreadsheet is linked for Membres de l'environnement, display ONLY the spreadsheet data in the frontend
+            setMembers(validMembers);
+            loadedDataRef.current.members = JSON.stringify(validMembers);
+            safeSetLocalStorage(`defib_${activeTid}_members`, JSON.stringify(validMembers));
             break;
           }
           case 'reglages':
@@ -7364,10 +7460,22 @@ export default function App() {
           if (merged.spreadsheetClients) {
             safeSetLocalStorage(`defib_${tenantId}_spreadsheet_clients`, merged.spreadsheetClients);
           }
+          if ((merged as any).spreadsheetMembresEnvironnement) {
+            const sheetMemsUrl = String((merged as any).spreadsheetMembresEnvironnement).trim();
+            safeSetLocalStorage(`defib_${tenantId}_spreadsheet_membres_environnement`, sheetMemsUrl);
+            refreshGenericSheetCompartment('membresEnvironnement', true, activeRunTenantId, sheetMemsUrl).catch(() => {});
+          }
           return merged;
         }));
 
-        syncTasks.push(syncBackground<Member[]>('members', 'members', setMembers, (rawMems) => {
+        syncTasks.push(syncBackground<Member[]>('members', 'members', (nextMems) => {
+          const hasMembersSheet = Boolean(
+            (localStorage.getItem(`defib_${tenantId}_spreadsheet_membres_environnement`) || '').trim()
+          );
+          if (!hasMembersSheet) {
+            setMembers(nextMems);
+          }
+        }, (rawMems) => {
           const mems = ensureTenantMembersClient(Array.isArray(rawMems) ? rawMems : [], activeRunTenantId);
           const uEmail = loggedUser?.email?.trim().toLowerCase();
           if (uEmail && Array.isArray(mems)) {
@@ -7700,11 +7808,19 @@ export default function App() {
     if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
       const str = JSON.stringify(members);
       if (loadedDataRef.current.members === str) return;
-      saveCollectionToFirestore('members', members, tenantId);
+      const hasMembersSheet = Boolean(
+        (companyInfo?.spreadsheetMembresEnvironnement ||
+          companyInfo?.spreadsheetMembresEnvironnementUrl ||
+          localStorage.getItem(`defib_${tenantId}_spreadsheet_membres_environnement`) ||
+          '').trim()
+      );
+      if (!hasMembersSheet) {
+        saveCollectionToFirestore('members', members, tenantId);
+      }
       safeSetLocalStorage(`defib_${tenantId}_members`, str);
       loadedDataRef.current.members = str;
     }
-  }, [members, isFirebaseLoaded, tenantId, loadedTenantIdState]);
+  }, [members, isFirebaseLoaded, tenantId, loadedTenantIdState, companyInfo?.spreadsheetMembresEnvironnement, companyInfo?.spreadsheetMembresEnvironnementUrl]);
 
   useEffect(() => {
     if (isFirebaseLoaded && tenantId === loadedTenantIdState) {
@@ -9442,7 +9558,19 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
-    saveVariables(variables.map((v) => (v.id === updated.id ? updated : v)));
+    saveVariables(
+      variables.map((v) =>
+        v.id === updated.id
+          ? ({
+              ...v,
+              ...updated,
+              ...((v as any)._sheetRowNumber && !(updated as any)._sheetRowNumber
+                ? { _sheetRowNumber: (v as any)._sheetRowNumber }
+                : {}),
+            } as Variable)
+          : v
+      )
+    );
   };
 
   const handleDeleteVariable = (id: string) => {
