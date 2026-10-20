@@ -3324,10 +3324,19 @@ export default function App() {
                 : null;
               const targetTourId = matchedTour ? matchedTour.id : 'a-trier';
               const list = byTourKey.get(targetTourId) || [];
+              const rawRef = String(sm.interventionReference || '').trim();
+              const cleanRef =
+                rawRef && !rawRef.startsWith('fsm-m-')
+                  ? rawRef
+                  : `INT-2026-${String(rawRef || sm.id || Date.now()).replace(/\D/g, '').slice(-5).padStart(5, '0')}`;
+              const cleanDefibId = String(
+                sm.defibIdentifiant || (!String(sm.identifiant || '').startsWith('fsm-m-') ? sm.identifiant : '') || ''
+              ).trim();
               list.push({
                 ...sm,
-                id: sm.id || sm.interventionReference || `fsm-m-${Date.now()}-${list.length}`,
-                interventionReference: sm.interventionReference || sm.id,
+                id: sm.id || cleanRef || `fsm-m-${Date.now()}-${list.length}`,
+                interventionReference: cleanRef,
+                defibIdentifiant: cleanDefibId || sm.defibIdentifiant || '',
               });
               byTourKey.set(targetTourId, list);
             }
@@ -3890,7 +3899,31 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
-    const { tours: withIds } = ensureFsmTourIdentifiers(updated, tenantId);
+    const { tours: rawWithIds } = ensureFsmTourIdentifiers(updated, tenantId);
+    const withIds = (rawWithIds || []).map((tour: any) => {
+      if (!tour || !Array.isArray(tour.missions)) return tour;
+      return {
+        ...tour,
+        missions: tour.missions.map((m: any, mIdx: number) => {
+          if (!m || String(m.id || '').startsWith('log-')) return m;
+          const rawRef = String(m.interventionReference || '').trim();
+          const cleanRef =
+            rawRef && !rawRef.startsWith('fsm-m-')
+              ? rawRef
+              : `INT-2026-${String(rawRef || m.id || Date.now() + mIdx).replace(/\D/g, '').slice(-5).padStart(5, '0')}`;
+          const eqIdent = String(
+            m.defibIdentifiant || (!String(m.identifiant || '').startsWith('fsm-m-') ? m.identifiant : '') || ''
+          ).trim();
+          return {
+            ...m,
+            status: m.status || 'Brouillon',
+            interventionReference: cleanRef,
+            defibIdentifiant: eqIdent || m.defibIdentifiant || '',
+            identifiant: eqIdent || m.defibIdentifiant || '',
+          };
+        }),
+      };
+    });
 
     // Synchronize Tournées (excluding 'a-trier') and Missions des tournées (all real missions) to Google Spreadsheets
     try {
@@ -3905,10 +3938,42 @@ export default function App() {
           const tourIdent = t.id === 'a-trier' ? '' : (t.tourIdentifiant || t.id || '');
           for (const m of t.missions) {
             if (!m || String(m.id || '').startsWith('log-')) continue;
+            const eqIdent = String(
+              m.defibIdentifiant || (!String(m.identifiant || '').startsWith('fsm-m-') ? m.identifiant : '') || ''
+            ).trim();
+            const matchedDefib = eqIdent ? defibrillateurs.find((d: any) => d.identifiant === eqIdent) : null;
+            const other = !matchedDefib && eqIdent ? otherEquipments.find((o: any) => o.identifiant === eqIdent) : null;
+            const clientObj = clients?.find(
+              (c: any) => c.id === (m.clientId || matchedDefib?.clientId || other?.clientId)
+            );
+            const resolvedClientName = clientObj ? clientObj.denomination : (m.clientName || '');
+            const resolvedSiteName =
+              m.siteName ||
+              (matchedDefib ? matchedDefib.nomSite || '' : other ? other.nomPrenomSite || '' : '');
+            const ville = m.ville || (matchedDefib ? matchedDefib.ville : other ? other.ville : '') || '';
+            const cp =
+              m.cp ||
+              (matchedDefib ? matchedDefib.codePostal || matchedDefib.cp || '' : other ? other.codePostal || other.cp || '' : '') ||
+              '';
+            const resolvedAddress =
+              m.clientAddress || m.location || (ville && cp ? `${ville}, ${cp}` : ville || cp || '');
+            const rawRef = String(m.interventionReference || '').trim();
+            const cleanRef =
+              rawRef && !rawRef.startsWith('fsm-m-')
+                ? rawRef
+                : `INT-2026-${String(rawRef || m.id || Date.now()).replace(/\D/g, '').slice(-5).padStart(5, '0')}`;
             list.push({
               ...m,
               tourIdentifiant: tourIdent,
               tourId: t.id === 'a-trier' ? '' : t.id,
+              defibIdentifiant: eqIdent,
+              identifiant: eqIdent,
+              interventionReference: cleanRef,
+              clientName: resolvedClientName,
+              siteName: resolvedSiteName,
+              ville,
+              cp,
+              clientAddress: resolvedAddress,
               techName: m.techName || (t.id !== 'a-trier' ? t.techName : ''),
             });
           }
@@ -3918,7 +3983,11 @@ export default function App() {
 
       const oldFlatMissions = extractFlatMissions(fsmTours || []);
       const newFlatMissions = extractFlatMissions(withIds || []);
-      syncCompartmentToGoogleSheets('missionsTournees', oldFlatMissions, newFlatMissions, ['interventionReference', 'id']);
+      syncCompartmentToGoogleSheets('missionsTournees', oldFlatMissions, newFlatMissions, [
+        'interventionReference',
+        'id',
+        'defibIdentifiant',
+      ]);
     } catch (sheetErr) {
       console.warn('Error syncing tours/missions to Google Sheets:', sheetErr);
     }
@@ -3954,10 +4023,11 @@ export default function App() {
     const verifiedTours = toursWithIds.map((tour) => {
       let tourMissionsUpdated = false;
       const verifiedMissions = (tour.missions || []).map((m: any) => {
-        if (!m.interventionReference) {
+        const rawRef = String(m.interventionReference || '').trim();
+        if (!rawRef || rawRef.startsWith('fsm-m-')) {
           tourMissionsUpdated = true;
-          const cleanId = String(m.id || Date.now()).replace('fsm-m-', '');
-          const ref = `INT-2026-${cleanId.slice(-5)}`;
+          const digits = String(rawRef || m.id || Date.now()).replace(/\D/g, '');
+          const ref = `INT-2026-${digits.slice(-5).padStart(5, '0')}`;
           return { ...m, status: m.status || 'Brouillon', interventionReference: ref };
         }
         return { ...m, status: m.status || 'Brouillon' };
@@ -16363,7 +16433,7 @@ export default function App() {
                                                     const nextReasons = [...current, val];
                                                     let totalDuree = 0;
                                                         for (const r of nextReasons) {
-                                                          const match = variables.find((v: any) => v.category === "Modèle Raison Prestation" && v.nom === r);
+                                                          const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
                                                           if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
                                                         }
                                                         updateFsmMission(t.id, m.id, {
@@ -16388,7 +16458,7 @@ export default function App() {
                                             >
                                               <option value="">-- Sélectionner une raison / prestation --</option>
                                               {variables
-                                                .filter((v: any) => v.category === "Modèle Raison Prestation")
+                                                .filter((v: any) => isRaisonPrestationVariable(v))
                                                 .map((v: any) => {
                                                   const current: string[] = Array.isArray(m.reasons)
                                                     ? m.reasons
@@ -16414,7 +16484,7 @@ export default function App() {
                                                 <div className="flex flex-wrap gap-1.5 min-h-[42px] items-center bg-transparent">
                                                   {currentReasons.length > 0 ? (
                                                     currentReasons.map((reasonStr: string) => {
-                                                          const matchVar = variables.find((v: any) => v.category === "Modèle Raison Prestation" && v.nom === reasonStr);
+                                                          const matchVar = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === reasonStr);
                                                           return (
                                                             <span
                                                               key={reasonStr}
@@ -16422,7 +16492,7 @@ export default function App() {
                                                                 const nextReasons = currentReasons.filter(r => r !== reasonStr);
                                                                 let totalDuree = 0;
                                                                 for (const r of nextReasons) {
-                                                                  const match = variables.find((v: any) => v.category === "Modèle Raison Prestation" && v.nom === r);
+                                                                  const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
                                                                   if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
                                                                 }
                                                                 updateFsmMission(t.id, m.id, {

@@ -1297,22 +1297,23 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
   ],
   missionsTournees: [
     { header: 'Identifiant de la tournée', field: 'tourIdentifiant', aliases: ['identifiantdelatournee', 'identifianttournee', 'idtournee', 'touridentifiant', 'tourid', 'tourcode', 'codetournee', 'tournee', 'tourneeliee', 'rattachementtournee'] },
-    { header: 'Référence mission', field: 'interventionReference', aliases: ['referencemission', 'referenceintervention', 'interventionreference', 'identifiantmission', 'idmission', 'reference', 'ref', 'identifiant', 'id', 'numeromission'] },
+    { header: 'Référence intervention', field: 'interventionReference', aliases: ['referencemission', 'referenceintervention', 'interventionreference', 'identifiantmission', 'idmission', 'reference', 'ref', 'numeromission', 'numintervention'] },
     { header: 'Autre référence', field: 'autreReference', aliases: ['autrereference', 'referenceexterne', 'refexterne', 'referenceclient'] },
     { header: 'Bon de commande', field: 'bonCommandeId', aliases: ['bondecommande', 'numerobondecommande', 'refbondecommande', 'boncommandeid', 'customboncommande', 'bdc', 'commande'] },
-    { header: 'Statut de la mission', field: 'status', aliases: ['statutdelamission', 'statutmission', 'statut', 'status', 'etat', 'avancement'] },
+    { header: 'Statut de la mission', field: 'status', aliases: ['statutdelamission', 'statutmission', 'statut', 'status', 'situation', 'situationmission', 'situationdelamission', 'etat', 'avancement'] },
     { header: 'Type d’équipement', field: 'equipmentType', aliases: ['typedequipement', 'typeequipement', 'categorieequipement', 'categorie', 'equipmenttype', 'equipement', 'materiel', 'typemateriel'] },
-    { header: 'Identifiant équipement', field: 'defibIdentifiant', aliases: ['identifiantequipement', 'identifiantdefibrillateur', 'identifiantdae', 'identifiantmateriel', 'defibidentifiant', 'defibid', 'equipementlie', 'daelie'] },
+    { header: 'Identifiant.', field: 'defibIdentifiant', aliases: ['identifiant', 'identifiantequipement', 'identifiantdefibrillateur', 'identifiantdae', 'identifiantmateriel', 'defibidentifiant', 'defibid', 'equipementlie', 'daelie', 'idmateriel', 'iddefib', 'idequipement'] },
     { header: 'Numéro de série', field: 'defibNumeroSerie', aliases: ['numerodeserie', 'numeroserie', 'numserie', 'serie', 'sn', 'serialnumber', 'defibnumeroserie', 'defibserialnumber'] },
     { header: 'Modèle', field: 'modele', aliases: ['modele', 'modeleequipement', 'modeledae', 'marquemodele'] },
-    { header: 'Client / Site', field: 'clientName', aliases: ['clientsite', 'client', 'clientname', 'nomclient', 'denominationclient', 'entreprise', 'site', 'nomsite', 'nomdusite', 'etablissement', 'denomination'] },
+    { header: 'Client / Site', field: 'clientName', aliases: ['clientsite', 'client', 'clientname', 'nomclient', 'denominationclient', 'entreprise', 'etablissement', 'denomination'] },
+    { header: 'Site', field: 'siteName', aliases: ['site', 'nomsite', 'nomdusite', 'nomprenomsite'] },
     { header: 'Client ID', field: 'clientId', aliases: ['clientid', 'idclient', 'identifiantclient', 'codeclient'] },
     { header: 'Motif de la mission', field: 'reason', aliases: ['motifdelamission', 'motifmission', 'motif', 'raison', 'raisondelaprestation', 'raisonprestation', 'reason', 'reasons', 'prestation', 'typeintervention', 'objet', 'motifs'] },
     { header: 'Pièces requises', field: 'requiredParts', aliases: ['piecesrequises', 'pieces', 'consommables', 'equipementsrequis', 'requiredparts', 'materielrequis', 'stocksrequis'] },
-    { header: 'Pièces envoyées au client', field: 'sentToClientParts', aliases: ['piecesenvoyeesauclient', 'piecesenvoyees', 'senttoclientparts', 'envoipieces'] },
+    { header: 'Pièces envoyées au client', field: 'sentToClientParts', aliases: ['piecesenvoyeesauclient', 'piecesenvoyees', 'senttoclientparts', 'envoipieces', 'envoyeeauclient'] },
     { header: 'Priorité', field: 'priority', aliases: ['priorite', 'priority', 'urgence', 'criticite'] },
     { header: 'Date prévue', field: 'estimatedDate', aliases: ['dateprevue', 'dateestimee', 'dateintervention', 'datemission', 'estimateddate', 'scheduleddate', 'date', 'echeance'], type: 'date' },
-    { header: 'Créneau horaire', field: 'estimatedSlot', aliases: ['creneauhoraire', 'creneau', 'heure', 'horaire', 'estimatedslot', 'time', 'plagehoraire'] },
+    { header: 'Créneau horaire', field: 'estimatedSlot', aliases: ['creneauhoraire', 'creneau', 'creneauestime', 'heure', 'horaire', 'estimatedslot', 'time', 'plagehoraire'] },
     { header: 'Durée prévue (min)', field: 'dureePrestation', aliases: ['dureeprevuemin', 'dureeprevue', 'dureeprestation', 'duree', 'tempsprevu', 'dureemin'] },
     { header: 'Adresse', field: 'clientAddress', aliases: ['adresse', 'clientaddress', 'address', 'numeroetvoie', 'numvoie', 'numerovoie', 'rue', 'lieu', 'localisation'] },
     { header: 'Code postal', field: 'cp', aliases: ['codepostal', 'cp', 'zip'] },
@@ -1320,7 +1321,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Pays', field: 'pays', aliases: ['pays', 'country'] },
     { header: 'Latitude', field: 'latitude', aliases: ['latitude', 'lat'] },
     { header: 'Longitude', field: 'longitude', aliases: ['longitude', 'lng', 'lon'] },
-    { header: 'Contact sur site', field: 'contact', aliases: ['contactsursite', 'contact', 'nomcontact', 'interlocuteur', 'nometprenom', 'nomprenomsite'] },
+    { header: 'Contact sur site', field: 'contact', aliases: ['contactsursite', 'contact', 'nomcontact', 'interlocuteur', 'nometprenom'] },
     { header: 'Téléphone', field: 'telephone', aliases: ['telephone', 'tel', 'telephonesursite', 'telephonesite', 'phone', 'portable'] },
     { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'emailsursite', 'emailsite'] },
     { header: 'Technicien', field: 'techName', aliases: ['technicien', 'techname', 'technicienassigne', 'collaborateur', 'intervenant'] },
@@ -2906,6 +2907,18 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       merged.missions = [];
     }
   } else if (tabType === 'missionsTournees') {
+    const rawKeys = Object.keys(rawByHeader);
+    if (rawKeys.length > 0) {
+      const fallbackColMap = resolveGenericColumnFieldMap(rawKeys, 'missionsTournees');
+      for (const [kIdx, def] of fallbackColMap.entries()) {
+        const rawVal = rawByHeader[rawKeys[kIdx]];
+        if (rawVal !== undefined && rawVal !== '') {
+          if (merged[def.field] === undefined || merged[def.field] === '') {
+            merged[def.field] = rawVal;
+          }
+        }
+      }
+    }
     const rawTourId = String(merged.tourIdentifiant || merged.tourId || merged.tourCode || '').trim();
     const isNullOrATrier =
       !rawTourId ||
@@ -2914,8 +2927,21 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       );
     merged.tourIdentifiant = isNullOrATrier ? '' : rawTourId;
     merged.tourId = merged.tourIdentifiant || 'a-trier';
-    merged.interventionReference = String(merged.interventionReference || merged.id || `INT-2026-${String(rowIndexZeroBased + 2).padStart(5, '0')}`).trim();
-    merged.id = merged.id || merged.interventionReference;
+    const rawDefibId = String(merged.defibIdentifiant || merged.identifiant || '').trim();
+    if (rawDefibId && !rawDefibId.startsWith('fsm-m-')) {
+      merged.defibIdentifiant = rawDefibId;
+    }
+    const rawRef = String(merged.interventionReference || '').trim();
+    if (!rawRef || rawRef.startsWith('fsm-m-')) {
+      const digits = String(rawRef || merged.id || '').replace(/\D/g, '');
+      merged.interventionReference = digits
+        ? `INT-2026-${digits.slice(-5).padStart(5, '0')}`
+        : `INT-2026-${String(rowIndexZeroBased + 2).padStart(5, '0')}`;
+    } else {
+      merged.interventionReference = rawRef;
+    }
+    merged.id = merged.id || merged.interventionReference || merged.defibIdentifiant;
+    merged.clientName = merged.clientName || merged.siteName || '';
     merged.status = merged.status || 'Brouillon';
     merged.equipmentType = merged.equipmentType || merged.categorie || 'Défibrillateur';
     if (merged.reason && !Array.isArray(merged.reasons)) {
@@ -4293,7 +4319,22 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
   } else if (tabType === 'missionsTournees') {
     const rawTid = String(enriched.tourIdentifiant ?? enriched.tourId ?? '').trim();
     enriched.tourIdentifiant = rawTid === 'a-trier' ? '' : rawTid;
-    enriched.interventionReference = enriched.interventionReference || enriched.id || '';
+    const cleanDefibId = String(
+      enriched.defibIdentifiant ||
+        (!String(enriched.identifiant || '').startsWith('fsm-m-') ? enriched.identifiant : '') ||
+        ''
+    ).trim();
+    enriched.defibIdentifiant = cleanDefibId;
+    enriched.identifiant = cleanDefibId;
+    const rawRef = String(enriched.interventionReference || '').trim();
+    if (!rawRef || rawRef.startsWith('fsm-m-')) {
+      const digits = String(rawRef || enriched.id || Date.now()).replace(/\D/g, '');
+      enriched.interventionReference = `INT-2026-${digits.slice(-5).padStart(5, '0')}`;
+    } else {
+      enriched.interventionReference = rawRef;
+    }
+    enriched.siteName = enriched.siteName || enriched.nomSite || '';
+    enriched.clientAddress = enriched.clientAddress || enriched.location || enriched.address || '';
     if (Array.isArray(enriched.reasons) && !enriched.reason) {
       enriched.reason = enriched.reasons.join(', ');
     }
@@ -5026,7 +5067,7 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
       .map(s => String(s).trim().toLowerCase());
   }
   if (tabType === 'missionsTournees') {
-    return [item.interventionReference, item.id]
+    return [item.interventionReference, item.id, item.defibIdentifiant]
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
@@ -5558,13 +5599,22 @@ export async function fetchTenantSheetCollection(
     }
     return false;
   };
+  const isStaleMissionsSnap = (snap: CachedSheetResult | null | undefined): boolean => {
+    if (!snap || tabType !== 'missionsTournees' || !Array.isArray(snap.items)) return false;
+    return snap.items.some((it: any) => {
+      if (!it || typeof it !== 'object') return false;
+      if (String(it.interventionReference || '').startsWith('fsm-m-')) return true;
+      if (!it.defibIdentifiant && (it._rawSheetRow?.['Identifiant.'] || it._rawSheetRow?.['Identifiant'])) return true;
+      return false;
+    });
+  };
   if (!sheetMemoryCache.has(cacheKey)) {
     const diskSnap = loadDiskSnapshot(cacheKey);
     if (diskSnap && Array.isArray(diskSnap.items) && diskSnap.items.length > 0) {
       const isStaleVariablesSnap =
         tabType === 'variables' &&
         diskSnap.items.some(hasUnmappedVariableKeys);
-      if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap)) {
+      if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap) && !isStaleMissionsSnap(diskSnap)) {
         if (tabType === 'defibrillateurs') {
           diskSnap.stats = computeSheetCollectionStats(diskSnap.items, 'defibrillateurs');
           saveDiskSnapshotAsync(cacheKey, diskSnap);
@@ -5579,7 +5629,7 @@ export async function fetchTenantSheetCollection(
     const isStaleVariablesCache =
       tabType === 'variables' &&
       cached.items.some(hasUnmappedVariableKeys);
-    if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached)) {
+    if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached) && !isStaleMissionsSnap(cached)) {
       if (tabType === 'defibrillateurs') {
         cached.stats = computeSheetCollectionStats(cached.items, 'defibrillateurs');
       }

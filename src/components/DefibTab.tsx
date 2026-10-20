@@ -1620,25 +1620,42 @@ export default function DefibTab({
     }
   };
 
+  const buildMissionFromDefibId = (id: string, index: number) => {
+    const defib = mergedDefibByIdMap.get(id) || defibrillateurs.find(d => d.id === id);
+    const client = clients.find(c => c.id === defib?.clientId);
+    const clientName = client ? client.denomination : (defib?.nomSite || defib?.nomPrenomSite || 'Nom du Site');
+    const siteName = defib?.nomSite || defib?.nomPrenomSite || '';
+    const eqIdent = defib?.identifiant || 'PAR-101';
+    const ts = Date.now() + index;
+    const ref = `INT-2026-${String(ts).slice(-5).padStart(5, '0')}`;
+    const cp = defib?.codePostal || '';
+    const ville = defib?.ville || '';
+    const clientAddress = [defib?.numeroVoie, cp, ville].filter(Boolean).join(', ');
+    return {
+      id: `fsm-m-auto-${ts}-${index}`,
+      interventionReference: ref,
+      clientName,
+      siteName,
+      clientId: defib?.clientId || '',
+      defibIdentifiant: eqIdent,
+      identifiant: eqIdent,
+      defibNumeroSerie: defib?.numeroSerie || '',
+      cp,
+      ville,
+      clientAddress,
+      equipmentType: 'Défibrillateur',
+      reason: '',
+      reasons: [],
+      requiredParts: [],
+      status: 'Brouillon',
+      priority: 'Normale',
+      time: '14:00'
+    };
+  };
+
   const executeNouvelleTournee = () => {
     if (!onUpdateFsmTours) return;
-    const missions = selectedIds.map((id, index) => {
-      const defib = mergedDefibByIdMap.get(id) || defibrillateurs.find(d => d.id === id);
-      const client = clients.find(c => c.id === defib?.clientId);
-      const clientName = defib?.nomSite || defib?.nomPrenomSite || (client ? client.denomination : 'Nom du Site');
-      return {
-        id: 'fsm-m-auto-' + Date.now() + '-' + index,
-        clientName,
-        defibIdentifiant: defib?.identifiant || 'PAR-101',
-        equipmentType: 'Défibrillateur',
-        reason: '',
-        reasons: [],
-        requiredParts: [],
-        status: 'Brouillon',
-        priority: 'Normale',
-        time: '14:00'
-      };
-    });
+    const missions = selectedIds.map((id, index) => buildMissionFromDefibId(id, index));
 
     const newTour = {
       id: 'fsm-tour-auto-' + Date.now(),
@@ -1663,23 +1680,7 @@ export default function DefibTab({
 
   const executeAddToTrier = () => {
     if (!onUpdateFsmTours) return;
-    const missionsToAdd = selectedIds.map((id, index) => {
-      const defib = mergedDefibByIdMap.get(id) || defibrillateurs.find(d => d.id === id);
-      const client = clients.find(c => c.id === defib?.clientId);
-      const clientName = defib?.nomSite || defib?.nomPrenomSite || (client ? client.denomination : 'Nom du Site');
-      return {
-        id: 'fsm-m-auto-' + Date.now() + '-' + index,
-        clientName,
-        defibIdentifiant: defib?.identifiant || 'PAR-101',
-        equipmentType: 'Défibrillateur',
-        reason: '',
-        reasons: [],
-        requiredParts: [],
-        status: 'Brouillon',
-        priority: 'Normale',
-        time: '14:00'
-      };
-    });
+    const missionsToAdd = selectedIds.map((id, index) => buildMissionFromDefibId(id, index));
 
     let existingTrierTour = fsmTours.find(t => t.id === 'a-trier');
     let updated;
@@ -1721,30 +1722,14 @@ export default function DefibTab({
     const targetTour = fsmTours.find(t => t.id === targetTourId);
     if (!targetTour) return;
 
-    if (['À faire', 'En cours', 'Effectué'].includes(targetTour.status)) {
+    if (['À faire', 'En cours', 'Effectué', 'Terminé'].includes(targetTour.status)) {
       alert("Erreur : vous ne pouvez ajouter des missions qu'à une tournée en situation Brouillon.");
       return;
     }
 
     const updated = fsmTours.map(t => {
       if (t.id === targetTourId) {
-        const addedMissions = selectedIds.map((id, index) => {
-          const defib = mergedDefibByIdMap.get(id) || defibrillateurs.find(d => d.id === id);
-          const client = clients.find(c => c.id === defib?.clientId);
-          const clientName = defib?.nomSite || defib?.nomPrenomSite || (client ? client.denomination : 'Nom du Site');
-          return {
-            id: 'fsm-m-auto-' + Date.now() + '-' + index,
-            clientName,
-            defibIdentifiant: defib?.identifiant || 'PAR-101',
-            equipmentType: 'Défibrillateur',
-            reason: '',
-            reasons: [],
-            requiredParts: [],
-            status: 'Brouillon',
-            priority: 'Normale',
-            time: '14:00'
-          };
-        });
+        const addedMissions = selectedIds.map((id, index) => buildMissionFromDefibId(id, index));
         return {
           ...t,
           missions: [...t.missions, ...addedMissions]
