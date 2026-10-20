@@ -1986,6 +1986,9 @@ export default function App() {
   // Canal Messages state & unread tracker
   const [tenantMessages, setTenantMessages] = useState<TenantMessage[]>([]);
   const [isCanalMessagesOpen, setIsCanalMessagesOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarMoreOpen, setIsSidebarMoreOpen] = useState(false);
+  const [hoveredSidebarItem, setHoveredSidebarItem] = useState<string | null>(null);
   const [lastSeenMessageTime, setLastSeenMessageTime] = useState<number>(() => {
     try {
       const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
@@ -11124,7 +11127,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50 font-sans" id="app-root-container">
+    <div className="flex min-h-screen bg-white font-sans" id="app-root-container">
       {/* Google Material-style 3.5px Top Bar Progress when switching tabs */}
       <TopBarProgress triggerKey={activeTab} duration={3000} height={3.5} zIndex={99999} />
 
@@ -11148,343 +11151,362 @@ export default function App() {
       )}
       {/* LEFT SIDE BAR PANE */}
       <aside 
-        className="w-64 text-slate-100 flex flex-col h-screen sticky top-0 shrink-0 shadow-xl z-30" 
+        className={`${isSidebarCollapsed ? 'w-[84px]' : 'w-[280px]'} flex flex-col h-screen sticky top-0 shrink-0 z-30 select-none transition-all duration-200`} 
         style={{ 
-          background: currentSidebarTheme.color,
-          borderRight: '1px solid rgba(255, 255, 255, 0.1)'
+          backgroundColor: '#f5f7fa',
         }} 
         id="app-sidebar"
       >
-        {/* Brand Header */}
-        <div 
-          className="py-1 px-4" 
-          style={{ 
-            background: currentSidebarTheme.color, 
-            borderBottom: '1px solid rgb(255 255 255 / 27%)' 
-          }}
-        >
-          <div className="flex justify-center items-center">
-            <img 
-              src="https://civilprom.s3.eu-north-1.amazonaws.com/DefibeoLogo.svg" 
-              alt="Défibeo Logo" 
-              style={{ width: '155px' }}
-              className="h-auto object-contain"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-        </div>
-
         {/* Scrollable Navigation Items */}
         <div 
-          className="flex-1 overflow-y-auto p-3.5 space-y-2.5 scrollbar-none"
-          style={{ background: currentSidebarTheme.color }}
+          className="flex-1 overflow-y-auto py-6 flex flex-col justify-between scrollbar-none"
+          style={{ backgroundColor: '#f5f7fa' }}
         >
           {(() => {
-            const rawTabs = [
-              { id: 'defibrillateurs', label: t('Défibrillateurs'), icon: Heart },
-              ...(enableOtherEquipments === "Oui" ? [{ id: 'autres-materiels', label: t('Autres matériels'), icon: Layers }] : []),
-              { id: 'clients', label: t('Clients'), icon: User },
-              { id: 'fsm', label: t('Tournées & Missions'), icon: Flame },
-              { id: 'gmao', label: t('Rapports PDF'), icon: Wrench },
-              { id: 'crm', label: t('CRM'), icon: FolderSync },
-              { id: 'satisfaction', label: t('Satisfaction'), icon: ThumbsUp },
-              { id: 'devis', label: t('Commandes'), icon: FileSpreadsheet },
-              { id: 'stocks', label: t('Centrale des stocks'), icon: Inbox },
-              { id: 'stocks-distribues', label: t('Stocks distribués'), icon: Layers },
-              { id: 'achats-fournisseurs', label: t('Achats fournisseurs'), icon: ShoppingBag },
-              { id: 'temps', label: t('Temps'), icon: Clock },
-              { id: 'localisations', label: t('Localisations'), icon: MapPin },
-              { id: 'tickets', label: t('Tickets Caisse'), icon: Ticket },
-              { id: 'veilles', label: t('Relevé Concurrentiel'), icon: ClipboardList },
-              { id: 'formations', label: t('Formations'), icon: Layers },
-              { id: 'stagiaires', label: t('Stagiaires'), icon: User },
-              { id: 'emargements', label: t('Émargements'), icon: ClipboardList },
-              { id: 'variables', label: t('Variables'), icon: Layers },
-              { id: 'import-export', label: t('Exportations'), icon: Download },
-              { id: 'ged', label: t('GED'), icon: ClipboardList },
+            const tenantDisplayName = companyInfo?.name?.trim() || (tenantId === 'demo' ? 'Défibeo Solutions' : 'Défibeo');
+            const userDisplayName =
+              loggedUser?.name?.trim() ||
+              members.find(m => m.email && loggedUser?.email && m.email.toLowerCase() === loggedUser.email.toLowerCase())?.name ||
+              companyInfo?.adminName?.trim() ||
+              loggedUser?.email ||
+              'Utilisateur';
+
+            const mainNavItems: Array<{
+              id: string;
+              label: string;
+              iconGris: string;
+              iconNoir: string;
+              isActive: boolean;
+              onClick: () => void;
+            }> = [
+              {
+                id: 'materiels',
+                label: t('Matériels'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/materielsgris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/materielsnoir.svg',
+                isActive: (activeTab === 'defibrillateurs' || activeTab === 'autres-materiels') && !isCanalMessagesOpen,
+                onClick: () => {
+                  setIsCanalMessagesOpen(false);
+                  setIsSidebarMoreOpen(false);
+                  setActiveTab('defibrillateurs');
+                },
+              },
+              {
+                id: 'clients',
+                label: t('Clients'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/clientsgris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/clientsnoir.svg',
+                isActive: activeTab === 'clients' && !isCanalMessagesOpen,
+                onClick: () => {
+                  setIsCanalMessagesOpen(false);
+                  setIsSidebarMoreOpen(false);
+                  setActiveTab('clients');
+                },
+              },
+              {
+                id: 'fsm',
+                label: t('Tournées & Missions'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/tourneesgris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/tourneesnoir.svg',
+                isActive: activeTab === 'fsm' && !isCanalMessagesOpen,
+                onClick: () => {
+                  setIsCanalMessagesOpen(false);
+                  setIsSidebarMoreOpen(false);
+                  setActiveTab('fsm');
+                },
+              },
+              {
+                id: 'gmao',
+                label: t('Rapports PDF'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/rapportsgris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/rapportsnoir.svg',
+                isActive: activeTab === 'gmao' && !isCanalMessagesOpen,
+                onClick: () => {
+                  setIsCanalMessagesOpen(false);
+                  setIsSidebarMoreOpen(false);
+                  setActiveTab('gmao');
+                },
+              },
+              {
+                id: 'crm',
+                label: t('CRM'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/crmgris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/crmnoir.svg',
+                isActive: activeTab === 'crm' && !isCanalMessagesOpen,
+                onClick: () => {
+                  setIsCanalMessagesOpen(false);
+                  setIsSidebarMoreOpen(false);
+                  setActiveTab('crm');
+                },
+              },
+              {
+                id: 'satisfaction',
+                label: t('Satisfaction'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/satisfactiongris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/satisfactionnoir.svg',
+                isActive: activeTab === 'satisfaction' && !isCanalMessagesOpen,
+                onClick: () => {
+                  setIsCanalMessagesOpen(false);
+                  setIsSidebarMoreOpen(false);
+                  setActiveTab('satisfaction');
+                },
+              },
+              {
+                id: 'stocks',
+                label: t('Stocks'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/stocksgris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/stocksnoir.svg',
+                isActive: (activeTab === 'stocks' || activeTab === 'stocks-distribues') && !isCanalMessagesOpen,
+                onClick: () => {
+                  setIsCanalMessagesOpen(false);
+                  setIsSidebarMoreOpen(false);
+                  setActiveTab('stocks');
+                },
+              },
+              {
+                id: 'temps',
+                label: t('Temps'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/tempsgris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/tempsnoir.svg',
+                isActive: activeTab === 'temps' && !isCanalMessagesOpen,
+                onClick: () => {
+                  setIsCanalMessagesOpen(false);
+                  setIsSidebarMoreOpen(false);
+                  setActiveTab('temps');
+                },
+              },
+              {
+                id: 'variables',
+                label: t('Variables'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/variablesgris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/variablesnoir.svg',
+                isActive: activeTab === 'variables' && !isCanalMessagesOpen,
+                onClick: () => {
+                  setIsCanalMessagesOpen(false);
+                  setIsSidebarMoreOpen(false);
+                  setActiveTab('variables');
+                },
+              },
+              {
+                id: 'parametres',
+                label: t('Paramètres'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/parametresgris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/parametresnoir.svg',
+                isActive: activeTab === 'parametres' && !isCanalMessagesOpen,
+                onClick: () => {
+                  setIsCanalMessagesOpen(false);
+                  setIsSidebarMoreOpen(false);
+                  setActiveTab('parametres');
+                },
+              },
+              {
+                id: 'messagerie',
+                label: t('Messagerie'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/messageriegris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/messagerienoir.svg',
+                isActive: isCanalMessagesOpen,
+                onClick: () => {
+                  setIsSidebarMoreOpen(false);
+                  setIsCanalMessagesOpen(true);
+                  handleMessagesRead();
+                },
+              },
+              {
+                id: 'reduire',
+                label: t('Réduire Navigation'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/reduiregris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/reduirenoir.svg',
+                isActive: false,
+                onClick: () => {
+                  setIsSidebarMoreOpen(false);
+                  setIsSidebarCollapsed(prev => !prev);
+                },
+              },
             ];
 
-            const filteredTabs = rawTabs.filter(tab => {
-              if (!companyInfo?.hiddenTabs) return true;
-              const tabToLabelMap: Record<string, string> = {
-                fsm: "Tournées & Missions",
-                gmao: "Rapports PDF",
-                stocks: "Centrale des stocks",
-                "stocks-distribues": "Stocks distribués",
-                "achats-fournisseurs": "Achats fournisseurs",
-                devis: "Commandes",
-                crm: "CRM",
-                ged: "GED",
-                temps: "Temps",
-                localisations: "Localisations",
-                tickets: "Tickets Caisse",
-                variables: "Variables",
-                "import-export": "Exportations",
-                satisfaction: "Satisfaction",
-                veilles: "Relevé Concurrentiel",
-                formations: "Formations",
-                stagiaires: "Stagiaires",
-                emargements: "Émargements"
-              };
-              const label = tabToLabelMap[tab.id];
-              const isHiddenByNewName = label ? companyInfo.hiddenTabs.includes(label) : false;
-              const isHiddenByOldName = (tab.id === 'fsm' && companyInfo.hiddenTabs.includes("FSM (Tournées)")) ||
-                                        (tab.id === 'gmao' && companyInfo.hiddenTabs.includes("GMAO (Rapports)")) ||
-                                        (tab.id === 'import-export' && companyInfo.hiddenTabs.includes("Importer Exporter"));
+            const dropdownItems: Array<{ id: AppTab; label: string }> = [
+              { id: 'devis', label: t('Commandes') },
+              { id: 'achats-fournisseurs', label: t('Achats Fournisseurs') },
+              { id: 'localisations', label: t('Localisations') },
+              { id: 'tickets', label: t('Tickets Caisse') },
+              { id: 'veilles', label: t('Relevé Concurrentiel') },
+              { id: 'formations', label: t('Formations') },
+              { id: 'stagiaires', label: t('Stagiaires') },
+              { id: 'emargements', label: t('Émargements') },
+              { id: 'import-export', label: t('Exportations') },
+              { id: 'ged', label: t('GED') },
+            ];
 
-              const isFormationHidden = companyInfo.hiddenTabs.includes("Formations");
-              const isStagiairesHidden = companyInfo.hiddenTabs.includes("Stagiaires");
-              const isEmargementsHidden = companyInfo.hiddenTabs.includes("Émargements");
+            const isDropdownTabActive = !isCanalMessagesOpen && dropdownItems.some(item => item.id === activeTab);
+            const isMoreActiveOrHovered = isDropdownTabActive || isSidebarMoreOpen || hoveredSidebarItem === 'more-3dots';
 
-              if (tab.id === 'formations' && (isFormationHidden || isStagiairesHidden)) return false;
-              if (tab.id === 'stagiaires' && (isFormationHidden || isStagiairesHidden)) return false;
-              if (tab.id === 'emargements' && (isFormationHidden || isStagiairesHidden || isEmargementsHidden)) return false;
+            return (
+              <div className="flex flex-col">
+                {/* Tenant Commercial Name & Username */}
+                {!isSidebarCollapsed && (
+                  <div className="px-7 pt-2 pb-6 text-left">
+                    <div
+                      className="truncate font-normal leading-snug"
+                      style={{ fontSize: '13px', color: '#50617a' }}
+                      title={tenantDisplayName}
+                    >
+                      {tenantDisplayName}
+                    </div>
+                    <div
+                      className="truncate font-normal leading-snug mt-0.5"
+                      style={{ fontSize: '18px', color: '#50617a' }}
+                      title={userDisplayName}
+                    >
+                      {userDisplayName}
+                    </div>
+                  </div>
+                )}
 
-              return !isHiddenByNewName && !isHiddenByOldName;
-            });
+                {/* Navigation List */}
+                <div className={`flex flex-col ${isSidebarCollapsed ? 'mt-4 space-y-2' : 'space-y-1'}`}>
+                  {mainNavItems.map((item) => {
+                    const isHovered = hoveredSidebarItem === item.id;
+                    const useBlackIcon = item.isActive || isHovered;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        id={`tab-selector-${item.id}`}
+                        onClick={item.onClick}
+                        onMouseEnter={() => setHoveredSidebarItem(item.id)}
+                        onMouseLeave={() => setHoveredSidebarItem(prev => (prev === item.id ? null : prev))}
+                        title={isSidebarCollapsed ? item.label : undefined}
+                        className={`sidebar-nav-item-bounce relative w-full flex items-center ${
+                          isSidebarCollapsed ? 'justify-center px-0 py-3.5' : 'gap-4 px-7 py-3'
+                        } bg-transparent border-0 cursor-pointer text-left focus:outline-hidden`}
+                      >
+                        {item.isActive && (
+                          <div
+                            className="absolute left-0 top-0 bottom-0"
+                            style={{ width: '6px', backgroundColor: '#3ddc84' }}
+                          />
+                        )}
+                        <div className="sidebar-nav-item-inner flex items-center gap-4 min-w-0">
+                          <img
+                            src={useBlackIcon ? item.iconNoir : item.iconGris}
+                            alt={item.label}
+                            className="w-[26px] h-[26px] object-contain shrink-0"
+                            referrerPolicy="no-referrer"
+                          />
+                          {!isSidebarCollapsed && (
+                            <span
+                              className="truncate whitespace-nowrap"
+                              style={{
+                                fontSize: '18px',
+                                color: '#50617a',
+                                fontWeight: 400,
+                                fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                              }}
+                            >
+                              {item.label}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
 
-            const equipGroupIds = ['defibrillateurs', 'autres-materiels', 'clients'];
-            const devisGroupIds = ['devis'];
-            const fsmGroupIds = ['fsm', 'gmao'];
-            const stockGroupIds = ['stocks', 'stocks-distribues', 'achats-fournisseurs'];
-            const crmGroupIds = ['crm', 'satisfaction'];
-            const newGroupIds = ['temps', 'localisations', 'tickets', 'veilles'];
-            const formationGroupIds = ['formations', 'stagiaires', 'emargements'];
+                  {/* 3-dots Dropdown Trigger & Menu */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      id="sidebar-btn-more-dropdown"
+                      onClick={() => setIsSidebarMoreOpen(prev => !prev)}
+                      onMouseEnter={() => setHoveredSidebarItem('more-3dots')}
+                      onMouseLeave={() => setHoveredSidebarItem(prev => (prev === 'more-3dots' ? null : prev))}
+                      title={t('Plus')}
+                      className={`sidebar-nav-item-bounce relative w-full flex items-center ${
+                        isSidebarCollapsed ? 'justify-center px-0 py-3.5' : 'px-7 py-3'
+                      } bg-transparent border-0 cursor-pointer text-left focus:outline-hidden`}
+                    >
+                      {isDropdownTabActive && (
+                        <div
+                          className="absolute left-0 top-0 bottom-0"
+                          style={{ width: '6px', backgroundColor: '#3ddc84' }}
+                        />
+                      )}
+                      <div className="sidebar-nav-item-inner flex items-center">
+                        <img
+                          src={
+                            isMoreActiveOrHovered
+                              ? 'https://civilprom.s3.eu-north-1.amazonaws.com/3dotsnoir.svg'
+                              : 'https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg'
+                          }
+                          alt="Plus"
+                          className="w-[22px] h-[22px] object-contain shrink-0"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    </button>
 
-            const renderSectionTitle = (title: string) => (
-              <div
-                className="text-left select-none font-gochi"
-                style={{
-                  fontSize: '18px',
-                  color: 'rgb(255 255 255 / 59%)',
-                  fontFamily: 'Gochi, cursive, sans-serif',
-                  padding: '15px 10px 5px 15px',
-                }}
-              >
-                {title}
+                    {isSidebarMoreOpen && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-40"
+                          onClick={() => setIsSidebarMoreOpen(false)}
+                        />
+                        <div
+                          className="fixed z-50 bg-white py-2 shadow-xl border border-[#dadada]"
+                          style={{
+                            left: isSidebarCollapsed ? '90px' : '28px',
+                            bottom: '24px',
+                            minWidth: '235px',
+                            borderRadius: '15px',
+                          }}
+                          id="sidebar-more-dropdown-menu"
+                        >
+                          {dropdownItems.map((dItem) => {
+                            const isSelected = activeTab === dItem.id && !isCanalMessagesOpen;
+                            return (
+                              <button
+                                key={dItem.id}
+                                type="button"
+                                id={`tab-selector-${dItem.id}`}
+                                onClick={() => {
+                                  setIsCanalMessagesOpen(false);
+                                  setIsSidebarMoreOpen(false);
+                                  setActiveTab(dItem.id);
+                                }}
+                                className="sidebar-nav-item-bounce relative w-full flex items-center px-5 py-2.5 text-left bg-transparent hover:bg-[#f5f7fa] border-0 cursor-pointer transition-colors"
+                              >
+                                {isSelected && (
+                                  <div
+                                    className="absolute left-0 top-0 bottom-0"
+                                    style={{ width: '5px', backgroundColor: '#3ddc84' }}
+                                  />
+                                )}
+                                <span
+                                  className="sidebar-nav-item-inner truncate whitespace-nowrap"
+                                  style={{
+                                    fontSize: '18px',
+                                    color: '#50617a',
+                                    fontWeight: isSelected ? 600 : 400,
+                                    fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                                  }}
+                                >
+                                  {dItem.label}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             );
-
-            const renderButton = (tab: { id: string; label: string }) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as AppTab)}
-                id={`tab-selector-${tab.id}`}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all focus:outline-hidden cursor-pointer text-left border-0 ${
-                  activeTab === tab.id
-                    ? 'text-white'
-                    : 'text-white hover:bg-white/8 hover:text-white'
-                }`}
-                style={activeTab === tab.id ? {
-                  boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
-                  background: '#3556ec',
-                  fontSize: '18px',
-                  textTransform: 'none',
-                  letterSpacing: 'normal',
-                  fontWeight: 'bold',
-                  fontFamily: "DefibeoMain, Civilprom, sans-serif"
-                } : {
-                  fontSize: '18px',
-                  textTransform: 'none',
-                  letterSpacing: 'normal',
-                  fontWeight: 'bold'
-                }}
-              >
-                <span className="truncate">{tab.label}</span>
-              </button>
-            );
-
-            const elements: React.ReactNode[] = [];
-            let i = 0;
-            while (i < filteredTabs.length) {
-              const tab = filteredTabs[i];
-              if (equipGroupIds.includes(tab.id)) {
-                const equipGroup: typeof rawTabs = [];
-                while (i < filteredTabs.length && equipGroupIds.includes(filteredTabs[i].id)) {
-                  equipGroup.push(filteredTabs[i]);
-                  i++;
-                }
-                elements.push(
-                  <div
-                    key="equip-group-container"
-                    className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
-                  >
-                    {renderSectionTitle(t('Exploitation'))}
-                    {equipGroup.map(gt => renderButton(gt))}
-                  </div>
-                );
-              } else if (fsmGroupIds.includes(tab.id)) {
-                const fsmGroup: typeof rawTabs = [];
-                while (i < filteredTabs.length && fsmGroupIds.includes(filteredTabs[i].id)) {
-                  fsmGroup.push(filteredTabs[i]);
-                  i++;
-                }
-                elements.push(
-                  <div
-                    key="fsm-group-container"
-                    className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
-                  >
-                    {renderSectionTitle(t('FSM & GMAO'))}
-                    {fsmGroup.map(gt => renderButton(gt))}
-                  </div>
-                );
-              } else if (crmGroupIds.includes(tab.id)) {
-                const crmGroup: typeof rawTabs = [];
-                while (i < filteredTabs.length && crmGroupIds.includes(filteredTabs[i].id)) {
-                  crmGroup.push(filteredTabs[i]);
-                  i++;
-                }
-                elements.push(
-                  <div
-                    key="crm-group-container"
-                    className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
-                  >
-                    {renderSectionTitle(t('Données Clients'))}
-                    {crmGroup.map(gt => renderButton(gt))}
-                  </div>
-                );
-              } else if (devisGroupIds.includes(tab.id)) {
-                const devisGroup: typeof rawTabs = [];
-                while (i < filteredTabs.length && devisGroupIds.includes(filteredTabs[i].id)) {
-                  devisGroup.push(filteredTabs[i]);
-                  i++;
-                }
-                elements.push(
-                  <div
-                    key="devis-group-container"
-                    className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
-                  >
-                    {renderSectionTitle(t('Ventes'))}
-                    {devisGroup.map(gt => renderButton(gt))}
-                  </div>
-                );
-              } else if (stockGroupIds.includes(tab.id)) {
-                const stockGroup: typeof rawTabs = [];
-                while (i < filteredTabs.length && stockGroupIds.includes(filteredTabs[i].id)) {
-                  stockGroup.push(filteredTabs[i]);
-                  i++;
-                }
-                elements.push(
-                  <div
-                    key="stock-group-container"
-                    className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
-                  >
-                    {renderSectionTitle(t('Gestion des stocks'))}
-                    {stockGroup.map(gt => renderButton(gt))}
-                  </div>
-                );
-              } else if (newGroupIds.includes(tab.id)) {
-                const newGroup: typeof rawTabs = [];
-                while (i < filteredTabs.length && newGroupIds.includes(filteredTabs[i].id)) {
-                  newGroup.push(filteredTabs[i]);
-                  i++;
-                }
-                elements.push(
-                  <div
-                    key="new-group-container"
-                    className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
-                  >
-                    {renderSectionTitle(t('Données Techniciens'))}
-                    {newGroup.map(gt => renderButton(gt))}
-                  </div>
-                );
-              } else if (formationGroupIds.includes(tab.id)) {
-                const formationGroup: typeof rawTabs = [];
-                while (i < filteredTabs.length && formationGroupIds.includes(filteredTabs[i].id)) {
-                  formationGroup.push(filteredTabs[i]);
-                  i++;
-                }
-                elements.push(
-                  <div
-                    key="formation-group-container"
-                    className="p-2 space-y-2 rounded-2xl"
-                    style={{ border: '1px solid rgb(255 255 255 / 27%)' }}
-                  >
-                    {renderSectionTitle(t('Module Formations'))}
-                    {formationGroup.map(gt => renderButton(gt))}
-                  </div>
-                );
-              } else {
-                elements.push(renderButton(tab));
-                i++;
-              }
-            }
-
-            return elements;
           })()}
-        </div>
-
-        {/* Sticky bottom Parametres button inside pane (full-width) */}
-        <div 
-          className="p-3.5" 
-          style={{ 
-            background: currentSidebarTheme.color, 
-            borderTop: '1px solid rgb(255 255 255 / 27%)' 
-          }}
-        >
-          <button
-            onClick={() => setActiveTab('parametres')}
-            id="sidebar-btn-settings"
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl transition-all border-0 cursor-pointer text-white hover:brightness-110 active:scale-[0.98]"
-            style={{
-              boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
-              background: '#3556ec',
-              fontSize: '18px',
-              textTransform: 'none',
-              letterSpacing: 'normal',
-              fontWeight: 'bold',
-              fontFamily: "DefibeoMain, Civilprom, sans-serif"
-            }}
-          >
-            <span>{t('Paramètres')}</span>
-          </button>
-
-          <button
-            onClick={() => {
-              setIsCanalMessagesOpen(true);
-              handleMessagesRead();
-            }}
-            id="sidebar-btn-canal-messages"
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl transition-all border-0 cursor-pointer text-white hover:brightness-110 active:scale-[0.98] mt-2.5 relative"
-            style={{
-              boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
-              background: '#3556ec',
-              fontSize: '18px',
-              textTransform: 'none',
-              letterSpacing: 'normal',
-              fontWeight: 'bold',
-              fontFamily: "DefibeoMain, Civilprom, sans-serif"
-            }}
-          >
-            <span>{t('Messages internes')}</span>
-            <span
-              className="inline-flex items-center justify-center rounded-full shrink-0 font-bold"
-              style={{
-                backgroundColor: 'transparent',
-                border: '1px solid #ffffff38',
-                color: 'rgb(255 255 255)',
-                marginLeft: '-2px',
-                fontSize: recentMessagesDisplay === '9+' ? '12px' : '14px',
-                width: '25px',
-                height: '25px',
-                padding: '3.5px',
-                lineHeight: 1,
-              }}
-            >
-              {recentMessagesDisplay}
-            </span>
-          </button>
         </div>
       </aside>
 
       {/* RIGHT SIDE CONTAINER */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-screen bg-[#f6f6f6]">
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen bg-white">
         {isSubscriptionInactive && (
           <div 
             className="sticky top-0 z-[100] w-full bg-[#F9383C] text-white py-3.5 px-6 flex items-center justify-between font-sans shadow-md"
@@ -11514,9 +11536,9 @@ export default function App() {
           </div>
         )}
         {/* Dashboard Workspace Viewports wrapper */}
-        <main className="flex-1 w-full" id="main-content">
+        <main className="flex-1 w-full bg-white" id="main-content">
           {/* Sub-component Active tab wrapper */}
-          <section className={`${activeTab === 'parametres' ? 'bg-white' : 'pb-16'} p-0`} id="active-tab-content-wrapper">
+          <section className="bg-white pb-16 p-0" id="active-tab-content-wrapper">
           {activeTab === 'defibrillateurs' && (
             <DefibTab
               currentLang={currentLang}
@@ -21083,6 +21105,7 @@ export default function App() {
                 setStockSearchQuery(ugs);
                 setActiveTab('stocks');
               }}
+              setActiveTab={setActiveTab}
               companyInfo={companyInfo}
             />
           )}

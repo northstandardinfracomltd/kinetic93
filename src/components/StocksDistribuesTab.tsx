@@ -111,6 +111,7 @@ interface StocksDistribuesTabProps {
   searchQuery?: string;
   setSearchQuery?: (q: string) => void;
   onNavigateToCentraleStocks?: (ugs: string) => void;
+  setActiveTab?: (tab: any) => void;
   companyInfo?: Partial<CompanyInfo> | null;
 }
 
@@ -125,6 +126,7 @@ export default function StocksDistribuesTab({
   searchQuery: externalSearchQuery,
   setSearchQuery: externalSetSearchQuery,
   onNavigateToCentraleStocks,
+  setActiveTab,
   companyInfo,
 }: StocksDistribuesTabProps) {
   const [showForm, setShowForm] = useState(false);
@@ -826,7 +828,57 @@ export default function StocksDistribuesTab({
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
               <div>
-                <h2 className="text-2xl font-bold tracking-tight font-gochi bg-white" style={{ color: '#000000', cursor: 'default' }} id="stocks-distribues-tab-title">Stocks distribués</h2>
+                <div 
+                  className="flex items-center p-1 bg-white select-none" 
+                  id="stocks-distribues-nav-toggle"
+                  style={{ 
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    borderRadius: '15px',
+                    border: '1px solid #dadada',
+                    backgroundColor: '#ffffff',
+                  }}
+                >
+                  <button
+                    type="button"
+                    id="toggle-nav-centrale-stocks-from-distribues"
+                    onClick={() => {
+                      if (setActiveTab) {
+                        setActiveTab('stocks');
+                      } else if (onNavigateToCentraleStocks) {
+                        onNavigateToCentraleStocks('');
+                      }
+                    }}
+                    style={{
+                      fontSize: '18px',
+                      borderRadius: '13px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: 'transparent',
+                      color: '#000000',
+                      transition: 'none',
+                    }}
+                    className="px-4 py-1.5 font-bold"
+                  >
+                    {t("Centrale des stocks")}
+                  </button>
+                  <button
+                    type="button"
+                    id="toggle-nav-stocks-distribues-active"
+                    onClick={() => setActiveTab && setActiveTab('stocks-distribues')}
+                    style={{
+                      fontSize: '18px',
+                      borderRadius: '13px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: '#fe4eba',
+                      color: '#ffffff',
+                      transition: 'none',
+                    }}
+                    className="px-4 py-1.5 font-bold shadow-sm"
+                  >
+                    {t("Stocks Distribués")}
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3 bg-white">

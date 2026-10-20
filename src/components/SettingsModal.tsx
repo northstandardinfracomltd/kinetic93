@@ -4115,58 +4115,6 @@ export default function SettingsModal({
               </button>
             </div>
           </div>
-
-          {/* CUSTOM TAB VISIBILITY ONGLETS */}
-          <div className="space-y-3 mt-6">
-            <label className="block text-[16px] font-bold text-black font-sans leading-tight">
-              {t("Personnaliser la visibilité des onglets.")}
-            </label>
-            <div className="flex flex-wrap gap-2 pt-1">
-              {[
-                "Commandes",
-                "Tournées & Missions",
-                "Rapports PDF",
-                "Centrale des stocks",
-                "Stocks distribués",
-                "Achats fournisseurs",
-                "Variables",
-                "CRM",
-                "GED",
-                "Satisfaction",
-                "Temps",
-                "Temps (Webapp)",
-                "Localisations",
-                "Localisation (Webapp)",
-                "Tickets Caisse",
-                "Relevé Concurrentiel",
-                "Relevé Concurrentiel (Webapp)",
-                "Frais (Webapp)",
-                "Exportations",
-                "Formations",
-                "Stagiaires",
-                "Émargements"
-              ].map((pillLabel) => {
-                const isHidden = localCompany?.hiddenTabs?.includes(pillLabel) || (pillLabel === "Exportations" && localCompany?.hiddenTabs?.includes("Importer Exporter"));
-                return (
-                  <button
-                    key={pillLabel}
-                    type="button"
-                    disabled={!isCurrentUserSuperAdmin}
-                    onClick={() => {
-                      if (!isCurrentUserSuperAdmin) return;
-                      handleToggleTabVisibility(pillLabel);
-                    }}
-                    className="px-3.5 py-2 rounded-full text-[16px] font-semibold cursor-pointer select-none transition-all duration-200 border-0 text-white hover:brightness-110 active:scale-[0.97] disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{
-                      backgroundColor: isHidden ? "#FA383D" : "#000000",
-                    }}
-                  >
-                    {t(pillLabel)}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         </div>
       )}
 

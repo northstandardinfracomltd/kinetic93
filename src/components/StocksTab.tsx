@@ -1446,7 +1446,51 @@ export default function StocksTab({
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
               <div>
-                <h2 className="text-2xl font-bold tracking-tight font-gochi bg-white" style={{ color: '#000000', cursor: 'default' }} id="stocks-tab-title">Centrale des stocks</h2>
+                <div 
+                  className="flex items-center p-1 bg-white select-none" 
+                  id="stocks-nav-toggle"
+                  style={{ 
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    borderRadius: '15px',
+                    border: '1px solid #dadada',
+                    backgroundColor: '#ffffff',
+                  }}
+                >
+                  <button
+                    type="button"
+                    id="toggle-nav-centrale-stocks"
+                    onClick={() => setActiveTab && setActiveTab('stocks')}
+                    style={{
+                      fontSize: '18px',
+                      borderRadius: '13px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: '#fe4eba',
+                      color: '#ffffff',
+                      transition: 'none',
+                    }}
+                    className="px-4 py-1.5 font-bold shadow-sm"
+                  >
+                    {t("Centrale des Stocks")}
+                  </button>
+                  <button
+                    type="button"
+                    id="toggle-nav-stocks-distribues"
+                    onClick={() => setActiveTab && setActiveTab('stocks-distribues')}
+                    style={{
+                      fontSize: '18px',
+                      borderRadius: '13px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: 'transparent',
+                      color: '#000000',
+                      transition: 'none',
+                    }}
+                    className="px-4 py-1.5 font-bold"
+                  >
+                    {t("Stocks Distribués")}
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3 bg-white">

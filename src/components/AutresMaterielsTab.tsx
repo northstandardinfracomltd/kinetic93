@@ -1118,7 +1118,51 @@ export default function AutresMaterielsTab({
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
               <div>
-                <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }}>Autres Matériels</h2>
+                <div 
+                  className="flex items-center p-1 bg-white select-none" 
+                  id="autres-materiels-nav-toggle"
+                  style={{ 
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    borderRadius: '15px',
+                    border: '1px solid #dadada',
+                    backgroundColor: '#ffffff',
+                  }}
+                >
+                  <button
+                    type="button"
+                    id="toggle-nav-defibrillateurs-from-autres"
+                    onClick={() => setActiveTab && setActiveTab('defibrillateurs')}
+                    style={{
+                      fontSize: '18px',
+                      borderRadius: '13px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: 'transparent',
+                      color: '#000000',
+                      transition: 'none',
+                    }}
+                    className="px-4 py-1.5 font-bold"
+                  >
+                    {t("Défibrillateurs")}
+                  </button>
+                  <button
+                    type="button"
+                    id="toggle-nav-autres-materiels-active"
+                    onClick={() => setActiveTab && setActiveTab('autres-materiels')}
+                    style={{
+                      fontSize: '18px',
+                      borderRadius: '13px',
+                      border: 'none',
+                      cursor: 'pointer',
+                      backgroundColor: '#fe4eba',
+                      color: '#ffffff',
+                      transition: 'none',
+                    }}
+                    className="px-4 py-1.5 font-bold shadow-sm"
+                  >
+                    {t("Autres Matériels")}
+                  </button>
+                </div>
               </div>
 
               {/* Both search and buttons are placed directly next to the title */}
