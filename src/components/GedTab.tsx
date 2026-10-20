@@ -271,7 +271,7 @@ export default function GedTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: isSearchHovered || isSearchFocused ? '2.5px solid #fa53d5' : 'none',
+    outline: isSearchHovered || isSearchFocused ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: isSearchHovered || isSearchFocused ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -312,7 +312,7 @@ export default function GedTab({
         #ged-tab-container-harmonized textarea:focus:not(:disabled),
         #ged-tab-container-harmonized #search-ged-input:hover,
         #ged-tab-container-harmonized #search-ged-input:focus {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
@@ -351,25 +351,16 @@ export default function GedTab({
           <div
             className="bg-white space-y-4"
             style={{
-              border: '1px solid #dadada',
-              borderTop: 'none',
-              borderRadius: '0px 0px 18px 18px',
+              borderRadius: '0px',
               maxWidth: '98%',
               margin: 'auto',
-              padding: '20px',
-              backgroundColor: '#ffffff',
+              padding: '10px 0px',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
             }}
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-              <div>
-                <h2
-                  className="text-2xl font-bold tracking-tight font-gochi bg-white"
-                  style={{ color: '#000000', cursor: 'default' }}
-                  id="ged-tab-title"
-                >
-                  {t('GED')}
-                </h2>
-              </div>
+              <div />
 
               <div className="flex flex-wrap items-center gap-3 bg-white">
                 {/* Search Bar Input */}
@@ -578,21 +569,17 @@ export default function GedTab({
           <div
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
             style={{
-              border: '1px solid #dadada',
-              borderTop: 'none',
-              borderRadius: '0px 0px 18px 18px',
+              borderRadius: '0px',
               width: '98%',
               maxWidth: '98%',
               margin: 'auto',
-              padding: '20px',
+              padding: '10px 0px',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
             }}
             id="ged-form-header-box"
           >
-            <div>
-              <h3 className="text-2xl font-bold font-gochi" id="form-modal-title" style={{ color: '#00', cursor: 'default' }}>
-                {t('Nouveau fichier')}
-              </h3>
-            </div>
+            <div />
 
             <div className="flex items-center gap-3">
               <button
@@ -614,10 +601,10 @@ export default function GedTab({
                 disabled={isUploading}
                 style={{
                   ...rowActionButton18Style,
-                  backgroundColor: 'rgb(53, 86, 236)',
+                  backgroundColor: '#0023c1',
                   color: '#ffffff',
                   boxShadow:
-                    'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                    'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                   opacity: isUploading ? 0.7 : 1,
                   cursor: isUploading ? 'not-allowed' : 'pointer',
                 }}

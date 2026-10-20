@@ -749,7 +749,7 @@ export default function StocksDistribuesTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -780,7 +780,7 @@ export default function StocksDistribuesTab({
         #stocks-distribues-tab-container-harmonized textarea:focus:not(:disabled),
         #stocks-distribues-tab-container-harmonized #search-distributed-input:hover,
         #stocks-distribues-tab-container-harmonized #search-distributed-input:focus {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
@@ -824,7 +824,7 @@ export default function StocksDistribuesTab({
           {/* Header Section */}
           <div 
             className="bg-white space-y-4"
-            style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+            style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
               <div>
@@ -870,7 +870,7 @@ export default function StocksDistribuesTab({
                       borderRadius: '13px',
                       border: 'none',
                       cursor: 'pointer',
-                      backgroundColor: '#fe4eba',
+                      backgroundColor: '#2e54ff',
                       color: '#ffffff',
                       transition: 'none',
                     }}
@@ -905,7 +905,7 @@ export default function StocksDistribuesTab({
                   onClick={() => setAttentionFilterActive(!attentionFilterActive)}
                   style={{
                     ...customButtonStyle,
-                    backgroundColor: attentionFilterActive ? '#fa53d5' : '#000000',
+                    backgroundColor: attentionFilterActive ? '#2e54ff' : '#000000',
                     color: '#ffffff',
                     border: 'none',
                   }}
@@ -974,9 +974,9 @@ export default function StocksDistribuesTab({
                     fontWeight: 100,
                     cursor: 'pointer',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: isSelected ? '#fa53d5' : '#ffffff',
+                    backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
                     color: isSelected ? '#ffffff' : '#000000',
-                    border: isSelected ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
+                    border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
                     boxShadow: 'none',
                     transition: 'all 0.15s ease'
                   }}
@@ -1209,14 +1209,10 @@ export default function StocksDistribuesTab({
           {/* Header Box styled exactly like DefibTab Form Header */}
           <div 
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
-            style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '20px' }}
+            style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
             id="distributed-form-header-box"
           >
-            <div>
-              <h3 className="text-2xl font-bold font-gochi" id="distributed-form-title" style={{ color: '#000', cursor: 'default' }}>
-                {editingId ? t("Modification Stock Distribué") : t("Nouveau Stock Distribué")}
-              </h3>
-            </div>
+            <div />
             
             <div className="flex items-center gap-3">
               <button
@@ -1236,9 +1232,9 @@ export default function StocksDistribuesTab({
                 form="distributed-stock-form"
                 style={{
                   ...rowActionButton18Style,
-                  backgroundColor: 'rgb(53, 86, 236)',
+                  backgroundColor: '#0023c1',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                 }}
                 className="transition-all cursor-pointer"
               >
@@ -1526,7 +1522,7 @@ export default function StocksDistribuesTab({
                                 <span 
                                   className="inline-flex items-center justify-center font-bold font-sans"
                                   style={{ 
-                                    color: '#fa53d5',
+                                    color: '#2e54ff',
                                     fontSize: '18px',
                                     lineHeight: '1',
                                     cursor: 'default'
@@ -1566,7 +1562,7 @@ export default function StocksDistribuesTab({
                                     href={mv.trackingLink.startsWith('http') ? mv.trackingLink : `https://${mv.trackingLink}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-[#fa53d5] hover:underline font-bold font-sans"
+                                    className="text-[#2e54ff] hover:underline font-bold font-sans"
                                     style={{ cursor: 'pointer' }}
                                     title="Suivre le colis"
                                   >
@@ -1754,14 +1750,14 @@ export default function StocksDistribuesTab({
                                         <div
                                           className="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all bg-white"
                                           style={{
-                                            borderColor: checkedTraceabilityIds[trace.id] ? "#fe4eba" : "#cbd5e1",
+                                            borderColor: checkedTraceabilityIds[trace.id] ? "#2e54ff" : "#cbd5e1",
                                             borderWidth: "2px",
                                           }}
                                         >
                                           {checkedTraceabilityIds[trace.id] && (
                                             <div
                                               className="w-3 h-3 rounded-full"
-                                              style={{ backgroundColor: "#fe4eba" }}
+                                              style={{ backgroundColor: "#2e54ff" }}
                                             />
                                           )}
                                         </div>

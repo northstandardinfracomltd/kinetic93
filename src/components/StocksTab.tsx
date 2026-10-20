@@ -1305,7 +1305,7 @@ export default function StocksTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -1375,7 +1375,7 @@ export default function StocksTab({
         #stocks-tab-container-harmonized textarea:focus:not(:disabled),
         #stocks-tab-container-harmonized #search-stock-input:hover,
         #stocks-tab-container-harmonized #search-stock-input:focus {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
@@ -1442,7 +1442,7 @@ export default function StocksTab({
           {/* Header Section */}
           <div 
             className="bg-white space-y-4"
-            style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+            style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
               <div>
@@ -1465,7 +1465,7 @@ export default function StocksTab({
                       borderRadius: '13px',
                       border: 'none',
                       cursor: 'pointer',
-                      backgroundColor: '#fe4eba',
+                      backgroundColor: '#2e54ff',
                       color: '#ffffff',
                       transition: 'none',
                     }}
@@ -1607,9 +1607,9 @@ export default function StocksTab({
                     fontWeight: 100,
                     cursor: 'pointer',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: isSelected ? '#fa53d5' : '#ffffff',
+                    backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
                     color: isSelected ? '#ffffff' : '#000000',
-                    border: isSelected ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
+                    border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
                     boxShadow: 'none',
                     transition: 'all 0.15s ease'
                   }}
@@ -1865,14 +1865,10 @@ export default function StocksTab({
           {/* Header Box styled exactly like DefibTab Form Header */}
           <div 
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
-            style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '20px' }}
+            style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
             id="stocks-form-header-box"
           >
-            <div>
-              <h3 className="text-2xl font-bold font-gochi" id="form-modal-title" style={{ color: '#000', cursor: 'default' }}>
-                {editingStockId ? 'Modification du stock de la centrale' : 'Nouveau stock de la centrale'}
-              </h3>
-            </div>
+            <div />
             
             <div className="flex items-center gap-3">
               <button
@@ -1897,9 +1893,9 @@ export default function StocksTab({
                 id="btn-submit-stock-form"
                 style={{
                   ...rowActionButton18Style,
-                  backgroundColor: 'rgb(53, 86, 236)',
+                  backgroundColor: '#0023c1',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                 }}
                 className="transition-all cursor-pointer"
               >
@@ -2355,12 +2351,12 @@ export default function StocksTab({
                       type="submit"
                       form="equipement-stock-form"
                       style={{
-                        backgroundColor: 'rgb(53, 86, 236)',
+                        backgroundColor: '#0023c1',
                         color: '#ffffff',
                         padding: '10px 20px',
                         fontSize: '18px',
                         borderRadius: '13px',
-                        boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                        boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                       }}
                       className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0 text-white"
                     >
@@ -2677,7 +2673,7 @@ export default function StocksTab({
                                 <span 
                                   className="inline-flex items-center justify-center font-bold font-sans"
                                   style={{ 
-                                    color: '#fa53d5',
+                                    color: '#2e54ff',
                                     fontSize: '18px',
                                     lineHeight: '1',
                                     cursor: 'default'
@@ -3092,7 +3088,7 @@ export default function StocksTab({
                                   type="button"
                                   onClick={handleSelectedDistributionSubmit}
                                   style={{
-                                    backgroundColor: '#fe4eba',
+                                    backgroundColor: '#2e54ff',
                                     color: '#ffffff',
                                     padding: '10px 20px',
                                     fontSize: '18px',
@@ -3125,16 +3121,16 @@ export default function StocksTab({
                                           setSelectedTraceIds(prev => Array.from(new Set([...prev, ...visibleIds])));
                                         }
                                       }}
-                                      className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                                      className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                                         filteredTraceabilities.length > 0 && filteredTraceabilities.every(t => selectedTraceIds.includes(t.id))
-                                          ? 'border-[#fe4eba] bg-transparent'
-                                          : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                          ? 'border-[#2e54ff] bg-transparent'
+                                          : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                                       }`}
                                       style={{ borderWidth: '2.5px' }}
                                       title="Tout sélectionner / désélectionner"
                                     >
                                       {filteredTraceabilities.length > 0 && filteredTraceabilities.every(t => selectedTraceIds.includes(t.id)) && (
-                                        <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                                       )}
                                     </button>
                                   </th>
@@ -3200,16 +3196,16 @@ export default function StocksTab({
                                                     setSelectedTraceIds([...selectedTraceIds, trace.id]);
                                                   }
                                                 }}
-                                                className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                                                className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                                                   selectedTraceIds.includes(trace.id)
-                                                    ? 'border-[#fe4eba] bg-transparent'
-                                                    : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                                    ? 'border-[#2e54ff] bg-transparent'
+                                                    : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                                                 }`}
                                                 style={{ borderWidth: '2.5px' }}
                                                 title="Sélectionner cet article"
                                               >
                                                 {selectedTraceIds.includes(trace.id) && (
-                                                  <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                                  <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                                                 )}
                                               </button>
                                             </td>
@@ -3457,8 +3453,8 @@ export default function StocksTab({
                     className="flex items-center gap-2 font-sans font-bold cursor-pointer select-none border-0 bg-transparent text-black"
                     style={{ fontSize: '18px' }}
                   >
-                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${traceabilityEnabled === true ? 'border-[#fe4eba]' : 'border-slate-300'}`}>
-                      {traceabilityEnabled === true && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${traceabilityEnabled === true ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
+                      {traceabilityEnabled === true && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                     </span>
                     Oui
                   </button>
@@ -3475,8 +3471,8 @@ export default function StocksTab({
                     className={`flex items-center gap-2 font-sans font-bold select-none border-0 bg-transparent text-black ${traceabilities.length > 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                     style={{ fontSize: '18px' }}
                   >
-                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${traceabilityEnabled === false ? 'border-[#fe4eba]' : 'border-slate-300'}`}>
-                      {traceabilityEnabled === false && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${traceabilityEnabled === false ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
+                      {traceabilityEnabled === false && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                     </span>
                     Non
                   </button>

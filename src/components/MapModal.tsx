@@ -304,7 +304,7 @@ const createCustomIcon = (colorHex: string, activeFocused: boolean, isChecked: b
           height: 20px;
           border-radius: 50%;
           background-color: #ffffff;
-          border: 2.5px solid #fe4eba;
+          border: 2.5px solid #2e54ff;
           box-shadow: 0 2px 6px rgba(254, 78, 186, 0.4);
           display: flex;
           align-items: center;
@@ -313,7 +313,7 @@ const createCustomIcon = (colorHex: string, activeFocused: boolean, isChecked: b
           transition: all 0.2s ease-in-out;
           cursor: pointer;
         ">
-          <div style="width: 9px; height: 9px; border-radius: 50%; background-color: #fe4eba;"></div>
+          <div style="width: 9px; height: 9px; border-radius: 50%; background-color: #2e54ff;"></div>
         </div>
       `,
       className: 'custom-leaflet-icon',
@@ -462,7 +462,7 @@ function PopupContent({
         style={{
           fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
           fontSize: '16px',
-          color: 'rgb(53, 86, 236)',
+          color: '#0023c1',
           background: 'none',
           border: 'none',
           padding: 0,
@@ -552,7 +552,7 @@ export default function MapModal({
   };
 
   const applyFiltersButtonStyle: React.CSSProperties = {
-    backgroundColor: 'rgb(53, 86, 236)',
+    backgroundColor: '#0023c1',
     borderRadius: '12px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -561,7 +561,7 @@ export default function MapModal({
     border: 'none',
     cursor: 'pointer',
     width: '100%',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
   };
 
@@ -1164,7 +1164,7 @@ export default function MapModal({
               >
                 <span
                   style={{
-                    backgroundColor: '#fe4eba',
+                    backgroundColor: '#2e54ff',
                     color: '#ffffff',
                     borderRadius: '9999px',
                     padding: '2px 8px',
@@ -1248,7 +1248,7 @@ export default function MapModal({
                           onClose();
                         }}
                         style={{
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           borderRadius: '12px',
                           fontSize: '18px',
                           padding: '9px 19px',
@@ -1292,7 +1292,7 @@ export default function MapModal({
                           className="w-full text-left px-4 py-2 font-semibold truncate cursor-pointer border-0 bg-transparent hover:bg-transparent"
                           style={{ 
                             fontSize: '16px',
-                            color: isSelected ? 'rgb(254, 78, 186)' : '#000000',
+                            color: isSelected ? '#2e54ff' : '#000000',
                             textDecoration: isSelected ? 'underline' : 'none'
                           }}
                         >
@@ -1335,7 +1335,7 @@ export default function MapModal({
             {activeFiltersCount > 0 && (
               <span
                 style={{
-                  backgroundColor: '#fe4eba',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   borderRadius: '9999px',
                   padding: '2px 8px',
@@ -1355,8 +1355,8 @@ export default function MapModal({
             onClick={onClose}
             id="btn-map-close"
             style={{
-              backgroundColor: 'rgb(53, 86, 236)',
-              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+              backgroundColor: '#0023c1',
+              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
               borderRadius: '12px',
               fontSize: '18px',
               padding: '9px 19px',
@@ -1406,7 +1406,7 @@ export default function MapModal({
                       onChange={(e) => setDraftFilters({ ...draftFilters, includeAutresMateriels: e.target.checked })}
                       className="sr-only peer"
                     />
-                    <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                    <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" />
                   </div>
                 </label>
               </div>
@@ -1480,9 +1480,9 @@ export default function MapModal({
                 }}
                 style={{
                   ...applyFiltersButtonStyle,
-                  backgroundColor: 'rgb(53, 86, 236)',
+                  backgroundColor: '#0023c1',
                   color: 'rgb(255, 255, 255)',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                   fontSize: '18px',
                 }}
                 className="flex-1 text-center font-sans cursor-pointer animate-none"

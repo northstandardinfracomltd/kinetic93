@@ -219,9 +219,9 @@ const rowActionButton18Style: React.CSSProperties = {
 
 const registerButtonStyle: React.CSSProperties = {
   ...rowActionButton18Style,
-  backgroundColor: 'rgb(53, 86, 236)',
+  backgroundColor: '#0023c1',
   color: '#ffffff',
-  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
 };
 
 // Custom Radio Component with exact design styling (representing white gap, rose border and pink dot)
@@ -247,7 +247,7 @@ function FormRadio({
       <span 
         className="rounded-full relative transition-all bg-white"
         style={{
-          border: checked ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+          border: checked ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
           width: '20px',
           height: '20px',
           minWidth: '20px',
@@ -257,7 +257,7 @@ function FormRadio({
       >
         {checked && (
           <span 
-            className="rounded-full bg-[#fe4eba] absolute" 
+            className="rounded-full bg-[#2e54ff] absolute" 
             style={{ 
               width: '9px', 
               height: '9px',
@@ -2540,7 +2540,7 @@ export default function GmaoCorrectionForm({
         <div 
           className="fixed top-0 right-0 z-[60] flex items-center px-3.5 py-1.5 text-white font-sans pointer-events-auto select-none shadow-sm"
           style={{
-            backgroundColor: '#5c1b62',
+            backgroundColor: '#2e54ff',
             border: 'none',
             boxShadow: 'none',
             borderBottomLeftRadius: '13px',
@@ -2707,7 +2707,7 @@ export default function GmaoCorrectionForm({
           #gmao-correction-form select:focus,
           #gmao-correction-form textarea:hover,
           #gmao-correction-form textarea:focus {
-            outline: 2.5px solid #fa53d5 !important;
+            outline: 2.5px solid #2e54ff !important;
             outline-offset: 2px !important;
             transition: all 0s !important;
           }
@@ -2799,11 +2799,11 @@ export default function GmaoCorrectionForm({
             margin-right: 6px !important;
           }
           #gmao-correction-form input[type="radio"]:hover {
-            border-color: oklch(0.44 0.16 324.65) !important;
+            border-color: #2e54ff !important;
           }
           #gmao-correction-form input[type="radio"]:checked {
-            border-color: oklch(0.44 0.16 324.65) !important;
-            background-color: oklch(0.44 0.16 324.65) !important;
+            border-color: #2e54ff !important;
+            background-color: #2e54ff !important;
           }
           #gmao-correction-form input[type="radio"]:checked::after {
             content: "" !important;
@@ -2835,11 +2835,11 @@ export default function GmaoCorrectionForm({
             margin-right: 6px !important;
           }
           #gmao-correction-form input[type="checkbox"]:hover {
-            border-color: oklch(0.44 0.16 324.65) !important;
+            border-color: #2e54ff !important;
           }
           #gmao-correction-form input[type="checkbox"]:checked {
-            border-color: oklch(0.44 0.16 324.65) !important;
-            background-color: oklch(0.44 0.16 324.65) !important;
+            border-color: #2e54ff !important;
+            background-color: #2e54ff !important;
           }
           #gmao-correction-form input[type="checkbox"]:checked::after {
             content: "✓" !important;
@@ -2878,7 +2878,7 @@ export default function GmaoCorrectionForm({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: '#5C1B62',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -3160,7 +3160,7 @@ export default function GmaoCorrectionForm({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: '#5C1B62',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -3649,7 +3649,7 @@ export default function GmaoCorrectionForm({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: '#5C1B62',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -3897,7 +3897,7 @@ export default function GmaoCorrectionForm({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: '#5C1B62',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -4078,7 +4078,7 @@ export default function GmaoCorrectionForm({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: '#5C1B62',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -4229,7 +4229,7 @@ export default function GmaoCorrectionForm({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: '#5C1B62',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -4297,7 +4297,7 @@ export default function GmaoCorrectionForm({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: '#5C1B62',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -4679,7 +4679,7 @@ export default function GmaoCorrectionForm({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: '#5C1B62',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -5063,7 +5063,7 @@ export default function GmaoCorrectionForm({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: '#5C1B62',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -5338,7 +5338,7 @@ export default function GmaoCorrectionForm({
                 <span 
                   className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                   style={{
-                    backgroundColor: '#5C1B62',
+                    backgroundColor: '#2e54ff',
                     borderRadius: '1000px',
                     cursor: 'default',
                     fontWeight: 100,
@@ -5486,7 +5486,7 @@ export default function GmaoCorrectionForm({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: '#5C1B62',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -5713,7 +5713,7 @@ export default function GmaoCorrectionForm({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: '#5C1B62',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -5895,7 +5895,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: mesPhotosValides ? '#3556EC' : '#e5e5ea',
+                    backgroundColor: mesPhotosValides ? '#0023c1' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -5952,7 +5952,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: etiquetteObligatoireConforme ? '#3556EC' : '#e5e5ea',
+                    backgroundColor: etiquetteObligatoireConforme ? '#0023c1' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -6009,7 +6009,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: signaletiqueConforme === 'Oui' ? '#3556EC' : '#e5e5ea',
+                    backgroundColor: signaletiqueConforme === 'Oui' ? '#0023c1' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -6066,7 +6066,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: scelleConforme ? '#3556EC' : '#e5e5ea',
+                    backgroundColor: scelleConforme ? '#0023c1' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -6123,7 +6123,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: stickerEntrepriseApplique ? '#3556EC' : '#e5e5ea',
+                    backgroundColor: stickerEntrepriseApplique ? '#0023c1' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -6180,7 +6180,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: demandeDevis ? '#3556EC' : '#e5e5ea',
+                    backgroundColor: demandeDevis ? '#0023c1' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -6465,7 +6465,7 @@ export default function GmaoCorrectionForm({
                   onClick={() => scrollToSection(sec.id)}
                   className="px-4 py-1.5 text-[14px] rounded-full font-medium transition-all duration-200 shrink-0 select-none cursor-pointer"
                   style={{
-                    backgroundColor: isActive ? '#3B5BEE' : '#5C1B62',
+                    backgroundColor: isActive ? '#3B5BEE' : '#2e54ff',
                     color: '#FFFFFF',
                     border: 'none',
                     transform: isActive ? 'scale(1.03)' : 'scale(1)',

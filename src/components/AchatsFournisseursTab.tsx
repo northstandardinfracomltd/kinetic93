@@ -232,7 +232,7 @@ export default function AchatsFournisseursTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: isSearchHovered || isSearchFocused ? '2.5px solid #fa53d5' : 'none',
+    outline: isSearchHovered || isSearchFocused ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: isSearchHovered || isSearchFocused ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -266,9 +266,9 @@ export default function AchatsFournisseursTab({
 
   const smallBlueButtonStyle: React.CSSProperties = {
     ...smallBlackButtonStyle,
-    backgroundColor: 'rgb(53, 86, 236)',
+    backgroundColor: '#0023c1',
     color: '#ffffff',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
   };
 
   const cellStyle: React.CSSProperties = {
@@ -305,7 +305,7 @@ export default function AchatsFournisseursTab({
         #achats-tab-container-harmonized textarea:focus:not(:disabled),
         #achats-tab-container-harmonized #search-achats-input:hover,
         #achats-tab-container-harmonized #search-achats-input:focus {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
@@ -349,24 +349,16 @@ export default function AchatsFournisseursTab({
           <div
             className="bg-white space-y-4"
             style={{
-              border: '1px solid #dadada',
-              borderTop: 'none',
-              borderRadius: '0px 0px 18px 18px',
+              borderRadius: '0px',
               maxWidth: '98%',
               margin: 'auto',
-              padding: '20px',
-              backgroundColor: '#ffffff',
+              padding: '10px 0px',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
             }}
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-              <div>
-                <h2
-                  className="text-2xl font-bold tracking-tight font-gochi bg-white"
-                  style={{ color: '#000000', cursor: 'default', fontFamily: 'Gochi, sans-serif' }}
-                >
-                  {t("Achats fournisseurs")}
-                </h2>
-              </div>
+              <div />
 
               <div className="flex flex-wrap items-center gap-3 bg-white">
                 {/* Search query */}
@@ -552,21 +544,17 @@ export default function AchatsFournisseursTab({
           <div
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
             style={{
-              border: '1px solid #dadada',
-              borderTop: 'none',
-              borderRadius: '0px 0px 18px 18px',
+              borderRadius: '0px',
               width: '98%',
               maxWidth: '98%',
               margin: 'auto',
-              padding: '20px',
+              padding: '10px 0px',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
             }}
             id="achats-form-header-box"
           >
-            <div>
-              <h3 className="text-2xl font-bold font-gochi" style={{ fontFamily: 'Gochi, sans-serif', color: '#000', cursor: 'default' }}>
-                {editingAchatId ? t("Modifier l’achat fournisseur") : t("Nouvel achat fournisseur")}
-              </h3>
-            </div>
+            <div />
 
             <div className="flex items-center gap-3">
               <button
@@ -687,7 +675,7 @@ export default function AchatsFournisseursTab({
                 className={`border border-solid border-[#D5D5D5] transition-colors rounded-2xl p-6 text-center relative ${
                   !googleDriveActive || isUploadingFile
                     ? 'bg-slate-100 opacity-60 cursor-not-allowed'
-                    : 'hover:border-[#fa53d5]/50 cursor-pointer bg-white'
+                    : 'hover:border-[#2e54ff]/50 cursor-pointer bg-white'
                 }`}
               >
                 <input

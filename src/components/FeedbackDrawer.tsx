@@ -86,7 +86,7 @@ ${description}`;
         className="fixed bottom-0 right-0 z-[9999] text-white font-semibold transition-all flex items-center justify-center cursor-pointer select-none shadow-md hover:opacity-90 font-sans"
         style={{
           borderRadius: '13px 0px 0px',
-          background: '#6c2972',
+          background: '#2e54ff',
           fontSize: '13px',
           padding: '7px 9px 4px 12px',
         }}
@@ -252,7 +252,7 @@ ${description}`;
                     fontSize: '18px',
                     borderRadius: '13px',
                   }}
-                  className="w-full py-3 bg-[#3556ec] hover:bg-blue-700 text-white font-bold transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full py-3 bg-[#0023c1] hover:bg-blue-700 text-white font-bold transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {isSending ? 'Envoi en cours...' : 'Envoyer'}
                 </button>

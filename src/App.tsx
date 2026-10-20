@@ -11135,7 +11135,7 @@ export default function App() {
         <div 
           className="fixed inset-0 z-[99999] flex flex-col items-center justify-center text-center font-sans gap-4" 
           style={{ 
-            background: currentSidebarTheme.color,
+            backgroundColor: '#2e54ff',
             fontSize: '18px',
             color: '#ffffff'
           }}
@@ -11343,7 +11343,7 @@ export default function App() {
             return (
               <div className="flex flex-col">
                 {/* Sidebar Header with SVG background & Tenant Pill / Initial Circle */}
-                <div className="relative w-full overflow-hidden shrink-0 mb-4" id="sidebar-tenant-header">
+                <div className="relative w-full overflow-hidden shrink-0 mb-8" id="sidebar-tenant-header">
                   <img
                     src="https://civilprom.s3.eu-north-1.amazonaws.com/svgentete.svg"
                     alt=""
@@ -11361,10 +11361,13 @@ export default function App() {
                         fontFamily: "DefibeoMain, Civilprom, sans-serif",
                         maxWidth: 'calc(100% - 20px)',
                         lineHeight: 1.2,
+                        textTransform: 'capitalize',
                       }}
                       title={tenantDisplayName}
                     >
-                      <span className="truncate">{tenantDisplayName}</span>
+                      <span id="sidebar-tenant-pill-text" className="truncate">
+                        {tenantDisplayName.toLowerCase()}
+                      </span>
                     </div>
                   ) : (
                     <div
@@ -11454,7 +11457,7 @@ export default function App() {
 
                   {/* 3-dots Native System Dropdown */}
                   <div
-                    className={`sidebar-nav-item-bounce relative w-full flex items-center ${
+                    className={`relative w-full flex items-center ${
                       isSidebarCollapsed ? 'justify-center px-0' : 'px-7'
                     }`}
                     style={{ height: `${ITEM_HEIGHT}px` }}
@@ -11479,7 +11482,7 @@ export default function App() {
                             : 'https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg'
                         }
                         alt="Plus"
-                        className="sidebar-nav-icon-bounce w-[22px] h-[22px] object-contain shrink-0"
+                        className="w-[22px] h-[22px] object-contain shrink-0"
                         referrerPolicy="no-referrer"
                       />
                     </div>
@@ -11699,8 +11702,8 @@ export default function App() {
 
             const blueButtonStyle: React.CSSProperties = {
               ...customButtonStyle,
-              backgroundColor: 'rgb(53, 86, 236)',
-              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+              backgroundColor: '#0023c1',
+              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
             };
 
             const rowActionButtonStyle: React.CSSProperties = {
@@ -12014,7 +12017,7 @@ export default function App() {
                   #fsm-tab-container textarea:focus:not(:disabled),
                   #fsm-tab-container #search-fsm-input:hover,
                   #fsm-tab-container #search-fsm-input:focus {
-                    outline: 2.5px solid #fa53d5 !important;
+                    outline: 2.5px solid #2e54ff !important;
                     outline-offset: 2px !important;
                     transition: all 0s !important;
                   }
@@ -12042,7 +12045,7 @@ export default function App() {
                   #fsm-tab-container select#select-fsm-tour-manage:hover:not(:disabled),
                   #fsm-tab-container select#select-fsm-tour-manage:focus:not(:disabled) {
                     outline: none !important;
-                    border-color: #fa53d5 !important;
+                    border-color: #2e54ff !important;
                     box-shadow: 0 0 0 2.5px rgba(250, 83, 213, 0.35) !important;
                   }
                   #fsm-stats-wrapper {
@@ -12107,12 +12110,10 @@ export default function App() {
                 {/* Upper Action Block & Search metrics */}
                 <div 
                   className="bg-white space-y-4"
-                  style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+                  style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
                 >
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
-                    <div>
-                      <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }} id="fsm-tab-title">FSM</h2>
-                    </div>
+                    <div />
 
                     <div className="flex flex-wrap items-center gap-2.5">
                       {/* Field recherche (Search input) */}
@@ -12197,7 +12198,7 @@ export default function App() {
                                     minWidth: '22px',
                                     height: '22px',
                                     borderRadius: '9999px',
-                                    backgroundColor: '#fe4eba',
+                                    backgroundColor: '#2e54ff',
                                     color: '#ffffff',
                                     fontSize: '12px',
                                     fontWeight: 'bold',
@@ -12281,7 +12282,7 @@ export default function App() {
                       <div className="flex items-center gap-2">
                         <span 
                           className="w-6 h-6 text-white rounded-full flex items-center justify-center text-xs font-bold font-sans shrink-0"
-                          style={{ backgroundColor: '#fe4eba' }}
+                          style={{ backgroundColor: '#2e54ff' }}
                         >
                           {selectedFsmMissionIds.length}
                         </span>
@@ -12973,7 +12974,7 @@ export default function App() {
                                 onClick={handleSaveTeamWorkGroup}
                                 style={{
                                   ...blueButtonStyle,
-                                  backgroundColor: 'rgb(53, 86, 236)',
+                                  backgroundColor: '#0023c1',
                                   color: '#ffffff',
                                   borderRadius: '12px',
                                   padding: '12px 24px',
@@ -13092,7 +13093,7 @@ export default function App() {
                             }}
                             style={{
                               width: '100%',
-                              backgroundColor: '#3556ec',
+                              backgroundColor: '#0023c1',
                               color: '#ffffff',
                               fontSize: '18px',
                               fontWeight: '600',
@@ -13466,7 +13467,7 @@ export default function App() {
                     style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                   >
                     <div className="flex items-center gap-2.5">
-                      <Info className="w-5 h-5 text-[#3556ec] shrink-0" />
+                      <Info className="w-5 h-5 text-[#0023c1] shrink-0" />
                       <span className="text-[15px] font-semibold text-black">
                         {fsmSystemInfoMessage}
                       </span>
@@ -13550,9 +13551,9 @@ export default function App() {
                               fontWeight: 500,
                               cursor: 'pointer',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              backgroundColor: activeDateFilter === 'A trier' ? '#fa53d5' : '#ffffff',
+                              backgroundColor: activeDateFilter === 'A trier' ? '#2e54ff' : '#ffffff',
                               color: activeDateFilter === 'A trier' ? '#ffffff' : '#000000',
-                              border: activeDateFilter === 'A trier' ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
+                              border: activeDateFilter === 'A trier' ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
                               transition: 'all 0.15s ease',
                               whiteSpace: 'nowrap',
                               flexShrink: 0
@@ -13792,8 +13793,8 @@ export default function App() {
                                           id={`radio-check-select-all-${t.id}`}
                                           className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
                                             isAllTourMissionsSelected
-                                              ? 'border-[#fe4eba] bg-transparent'
-                                              : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                              ? 'border-[#2e54ff] bg-transparent'
+                                              : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                                           }`}
                                           style={{ borderWidth: '2.5px' }}
                                           role="checkbox"
@@ -13801,7 +13802,7 @@ export default function App() {
                                           title="Sélectionner toutes les missions"
                                         >
                                           {isAllTourMissionsSelected && (
-                                            <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                            <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                                           )}
                                         </button>
                                         <span
@@ -13834,8 +13835,8 @@ export default function App() {
                                             id={`radio-check-mission-${m.id}`}
                                             className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
                                               selectedFsmMissionIds.includes(m.id)
-                                                ? 'border-[#fe4eba] bg-transparent'
-                                                : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                                ? 'border-[#2e54ff] bg-transparent'
+                                                : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                                             }`}
                                             style={{ borderWidth: '2.5px' }}
                                             role="checkbox"
@@ -13843,7 +13844,7 @@ export default function App() {
                                             title="Sélectionner la mission"
                                           >
                                             {selectedFsmMissionIds.includes(m.id) && (
-                                              <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                              <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                                             )}
                                           </button>
                                           <span
@@ -14199,7 +14200,7 @@ export default function App() {
                                                   className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
                                                   title="Forcer la date et le créneau"
                                                 >
-                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#fe4eba' : '#64748b' }}>
+                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#64748b' }}>
                                                     Forcer
                                                   </span>
                                                   <div
@@ -14207,7 +14208,7 @@ export default function App() {
                                                       width: '34px',
                                                       height: '18px',
                                                       borderRadius: '9999px',
-                                                      backgroundColor: isMissionForced ? '#fe4eba' : '#cbd5e1',
+                                                      backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
                                                       position: 'relative',
                                                       transition: 'background-color 0.2s ease',
                                                       padding: '2px'
@@ -14256,7 +14257,7 @@ export default function App() {
                                                   className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
                                                   title="Forcer la date et le créneau"
                                                 >
-                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#fe4eba' : '#64748b' }}>
+                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#64748b' }}>
                                                     Forcer
                                                   </span>
                                                   <div
@@ -14264,7 +14265,7 @@ export default function App() {
                                                       width: '34px',
                                                       height: '18px',
                                                       borderRadius: '9999px',
-                                                      backgroundColor: isMissionForced ? '#fe4eba' : '#cbd5e1',
+                                                      backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
                                                       position: 'relative',
                                                       transition: 'background-color 0.2s ease',
                                                       padding: '2px'
@@ -14620,7 +14621,7 @@ export default function App() {
                                                             className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none shrink-0"
                                                             title="Envoyée au client"
                                                           >
-                                                            <span style={{ fontSize: '13px', fontWeight: 600, color: isSent ? '#fe4eba' : '#64748b' }}>
+                                                            <span style={{ fontSize: '13px', fontWeight: 600, color: isSent ? '#2e54ff' : '#64748b' }}>
                                                               Envoyée au client
                                                             </span>
                                                             <div
@@ -14628,7 +14629,7 @@ export default function App() {
                                                                 width: '34px',
                                                                 height: '18px',
                                                                 borderRadius: '9999px',
-                                                                backgroundColor: isSent ? '#fe4eba' : '#cbd5e1',
+                                                                backgroundColor: isSent ? '#2e54ff' : '#cbd5e1',
                                                                 position: 'relative',
                                                                 transition: 'background-color 0.2s ease',
                                                                 padding: '2px'
@@ -14818,8 +14819,8 @@ export default function App() {
                                                 onClick={() => deleteFsmMission(t.id, m.id)}
                                                 style={{
                                                   color: '#fff',
-                                                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                                  background: 'rgb(96, 28, 104)',
+                                                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                                  background: '#2e54ff',
                                                   borderRadius: '13px',
                                                   border: 'none',
                                                   fontSize: '18px',
@@ -15518,7 +15519,7 @@ export default function App() {
                                 style={{
                                   backgroundColor: "rgb(255, 232, 247)",
                                   borderRadius: "13px",
-                                  color: "#fd4ebb",
+                                  color: "#2e54ff",
                                   fontSize: "16px",
                                   cursor: "not-allowed",
                                 }}
@@ -15647,7 +15648,7 @@ export default function App() {
                                       zIndex: 1
                                     }}
                                   />
-                                  {/* Layer 1 : bleu (#3556ec) avec pourcentage */}
+                                  {/* Layer 1 : bleu (#0023c1) avec pourcentage */}
                                   <div 
                                     style={{ 
                                       position: 'absolute',
@@ -15655,7 +15656,7 @@ export default function App() {
                                       left: 0,
                                       height: '100%',
                                       width: `${planifL1Percent}%`, 
-                                      backgroundColor: '#3556ec', 
+                                      backgroundColor: '#0023c1', 
                                       borderRadius: '11px',
                                       transition: 'width 0.4s ease-in-out',
                                       zIndex: 2
@@ -15716,7 +15717,7 @@ export default function App() {
                                       zIndex: 1
                                     }}
                                   />
-                                  {/* Layer 1 : rose (#fe4eba) avec pourcentage */}
+                                  {/* Layer 1 : rose (#2e54ff) avec pourcentage */}
                                   <div 
                                     style={{ 
                                       position: 'absolute',
@@ -15724,7 +15725,7 @@ export default function App() {
                                       left: 0,
                                       height: '100%',
                                       width: `${compL1Percent}%`, 
-                                      backgroundColor: '#fe4eba', 
+                                      backgroundColor: '#2e54ff', 
                                       borderRadius: '11px',
                                       transition: 'width 0.4s ease-in-out',
                                       zIndex: 2
@@ -15778,8 +15779,8 @@ export default function App() {
                                       id={`radio-check-select-all-${t.id}`}
                                       className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
                                         isAllTourMissionsSelected
-                                          ? 'border-[#fe4eba] bg-transparent'
-                                          : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                          ? 'border-[#2e54ff] bg-transparent'
+                                          : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                                       }`}
                                       style={{ borderWidth: '2.5px' }}
                                       role="checkbox"
@@ -15787,7 +15788,7 @@ export default function App() {
                                       title="Sélectionner toutes les missions"
                                     >
                                       {isAllTourMissionsSelected && (
-                                        <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                                       )}
                                     </button>
                                     <span
@@ -15829,8 +15830,8 @@ export default function App() {
                                           id={`radio-check-mission-${m.id}`}
                                           className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
                                             selectedFsmMissionIds.includes(m.id)
-                                              ? 'border-[#fe4eba] bg-transparent'
-                                              : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                              ? 'border-[#2e54ff] bg-transparent'
+                                              : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                                           }`}
                                           style={{ borderWidth: '2.5px' }}
                                           role="checkbox"
@@ -15838,7 +15839,7 @@ export default function App() {
                                           title="Sélectionner la mission"
                                         >
                                           {selectedFsmMissionIds.includes(m.id) && (
-                                            <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                            <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                                           )}
                                         </button>
 
@@ -15885,7 +15886,7 @@ export default function App() {
                                         })()}
                                         <div
                                           style={{
-                                            backgroundColor: '#fa53d5',
+                                            backgroundColor: '#2e54ff',
                                             color: '#ffffff',
                                             fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                             fontWeight: 610,
@@ -16297,7 +16298,7 @@ export default function App() {
                                                     className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
                                                     title="Forcer la date et le créneau"
                                                   >
-                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#fe4eba' : '#64748b' }}>
+                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#64748b' }}>
                                                       Forcer
                                                     </span>
                                                     <div
@@ -16305,7 +16306,7 @@ export default function App() {
                                                         width: '34px',
                                                         height: '18px',
                                                         borderRadius: '9999px',
-                                                        backgroundColor: isMissionForced ? '#fe4eba' : '#cbd5e1',
+                                                        backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
                                                         position: 'relative',
                                                         transition: 'background-color 0.2s ease',
                                                         padding: '2px'
@@ -16354,7 +16355,7 @@ export default function App() {
                                                     className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
                                                     title="Forcer la date et le créneau"
                                                   >
-                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#fe4eba' : '#64748b' }}>
+                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#64748b' }}>
                                                       Forcer
                                                     </span>
                                                     <div
@@ -16362,7 +16363,7 @@ export default function App() {
                                                         width: '34px',
                                                         height: '18px',
                                                         borderRadius: '9999px',
-                                                        backgroundColor: isMissionForced ? '#fe4eba' : '#cbd5e1',
+                                                        backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
                                                         position: 'relative',
                                                         transition: 'background-color 0.2s ease',
                                                         padding: '2px'
@@ -16757,7 +16758,7 @@ export default function App() {
                                                     className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none shrink-0"
                                                     title="Envoyée au client"
                                                   >
-                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isSent ? '#fe4eba' : '#64748b' }}>
+                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isSent ? '#2e54ff' : '#64748b' }}>
                                                       Envoyée au client
                                                     </span>
                                                     <div
@@ -16765,7 +16766,7 @@ export default function App() {
                                                         width: '34px',
                                                         height: '18px',
                                                         borderRadius: '9999px',
-                                                        backgroundColor: isSent ? '#fe4eba' : '#cbd5e1',
+                                                        backgroundColor: isSent ? '#2e54ff' : '#cbd5e1',
                                                         position: 'relative',
                                                         transition: 'background-color 0.2s ease',
                                                         padding: '2px'
@@ -16963,8 +16964,8 @@ export default function App() {
                                             onClick={() => handleSoumettreAuClient(m, t)}
                                             style={{
                                               color: '#fff',
-                                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                              background: 'rgb(96, 28, 104)',
+                                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                              background: '#2e54ff',
                                               borderRadius: '13px',
                                               border: 'none',
                                               fontSize: '18px',
@@ -16992,8 +16993,8 @@ export default function App() {
                                         onClick={() => deleteFsmMission(t.id, m.id)}
                                         style={{
                                           color: '#fff',
-                                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                          background: 'rgb(96, 28, 104)',
+                                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                          background: '#2e54ff',
                                           borderRadius: '13px',
                                           border: 'none',
                                           fontSize: '18px',
@@ -17729,7 +17730,7 @@ export default function App() {
                   #gmao-tab-container textarea:focus:not(:disabled),
                   #gmao-tab-container #search-gmao-input:hover,
                   #gmao-tab-container #search-gmao-input:focus {
-                    outline: 2.5px solid #fa53d5 !important;
+                    outline: 2.5px solid #2e54ff !important;
                     outline-offset: 2px !important;
                     transition: all 0s !important;
                   }
@@ -17803,12 +17804,10 @@ export default function App() {
                 {/* Upper Action Block & Search metrics */}
                 <div 
                   className="bg-white space-y-4"
-                  style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+                  style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
                 >
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
-                    <div>
-                      <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }} id="gmao-tab-title">GMAO</h2>
-                    </div>
+                    <div />
 
                     <div className="flex flex-wrap items-center gap-3">
                       {/* Field recherche (Search input) */}
@@ -17853,7 +17852,7 @@ export default function App() {
                             borderRadius: '13px',
                             border: 'none',
                             cursor: 'pointer',
-                            backgroundColor: gmaoFilter === 'upcoming' ? '#fe4eba' : 'transparent',
+                            backgroundColor: gmaoFilter === 'upcoming' ? '#2e54ff' : 'transparent',
                             color: gmaoFilter === 'upcoming' ? '#ffffff' : '#000000',
                             transition: 'none',
                           }}
@@ -17871,7 +17870,7 @@ export default function App() {
                             borderRadius: '13px',
                             border: 'none',
                             cursor: 'pointer',
-                            backgroundColor: gmaoFilter === 'moderation' ? '#fe4eba' : 'transparent',
+                            backgroundColor: gmaoFilter === 'moderation' ? '#2e54ff' : 'transparent',
                             color: gmaoFilter === 'moderation' ? '#ffffff' : '#000000',
                             transition: 'none',
                           }}
@@ -17889,7 +17888,7 @@ export default function App() {
                             borderRadius: '13px',
                             border: 'none',
                             cursor: 'pointer',
-                            backgroundColor: gmaoFilter === 'validated' ? '#fe4eba' : 'transparent',
+                            backgroundColor: gmaoFilter === 'validated' ? '#2e54ff' : 'transparent',
                             color: gmaoFilter === 'validated' ? '#ffffff' : '#000000',
                             transition: 'none',
                           }}
@@ -17926,7 +17925,7 @@ export default function App() {
                             onChange={(e) => setGmaoIncludeAutresMateriels(e.target.checked)}
                             className="sr-only peer"
                           />
-                          <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                          <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" />
                         </div>
                       </label>
 
@@ -17944,7 +17943,7 @@ export default function App() {
                         >
                           <span>{t('Filtres')}</span>
                           {activeGmaoFiltersCount > 0 && (
-                            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#fe4eba] rounded-full ml-0.5">
+                            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#2e54ff] rounded-full ml-0.5">
                               {activeGmaoFiltersCount}
                             </span>
                           )}
@@ -17958,7 +17957,7 @@ export default function App() {
                           className="flex items-center gap-1.5 cursor-pointer"
                         >
                           <span>{t('Dem. Devis')}</span>
-                          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#fe4eba] rounded-full ml-0.5">
+                          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#2e54ff] rounded-full ml-0.5">
                             {pendingDevisCount}
                           </span>
                         </button>
@@ -18258,9 +18257,9 @@ export default function App() {
                               ...rowActionButtonStyle,
                               opacity: isDisabled ? 0.35 : 1,
                               cursor: isDisabled ? 'not-allowed' : 'pointer',
-                              backgroundColor: isDisabled ? '#cbd5e1' : '#3556ec',
+                              backgroundColor: isDisabled ? '#cbd5e1' : '#0023c1',
                               color: isDisabled ? '#64748b' : '#ffffff',
-                              boxShadow: isDisabled ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                              boxShadow: isDisabled ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                               border: 'none',
                             });
                             
@@ -19140,7 +19139,7 @@ export default function App() {
                               }}
                               className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none shrink-0"
                               style={{
-                                backgroundColor: managingReport.disableClientEmail ? '#fe4eba' : '#cbd5e1',
+                                backgroundColor: managingReport.disableClientEmail ? '#2e54ff' : '#cbd5e1',
                                 cursor: 'pointer',
                                 border: 'none',
                               }}
@@ -19181,7 +19180,7 @@ export default function App() {
                               setManagingReportId(null);
                             }}
                             style={{
-                              backgroundColor: '#3556ec',
+                              backgroundColor: '#0023c1',
                               color: '#ffffff',
                               fontSize: '18px',
                               fontWeight: '600',
@@ -19557,9 +19556,9 @@ export default function App() {
                           setGmaoCurrentPage(1);
                         }}
                         style={{
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           color: 'rgb(255, 255, 255)',
-                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                           fontSize: '18px',
                           fontWeight: 'bold',
                           borderRadius: '13px',
@@ -19660,7 +19659,7 @@ export default function App() {
                         type="button"
                         onClick={handleExportDevisCSV}
                         style={{
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           color: '#ffffff',
                           fontSize: '18px',
                           fontWeight: 'bold',
@@ -19670,7 +19669,7 @@ export default function App() {
                           border: 'none',
                           cursor: 'pointer',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                         }}
                         className="text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
                       >
@@ -19825,9 +19824,9 @@ export default function App() {
                                     type="button"
                                     onClick={() => handleMarkDevisTermine(r.id)}
                                     style={{
-                                      backgroundColor: 'rgb(53, 86, 236)',
+                                      backgroundColor: '#0023c1',
                                       color: '#ffffff',
-                                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                                       borderRadius: '12px',
                                       fontSize: '18px',
                                       padding: '8px 18px',
@@ -19892,7 +19891,7 @@ export default function App() {
                                   disabled={isTicketCrmCreated}
                                   onClick={() => handleCreateTicketFromDevis(r)}
                                   style={{
-                                    backgroundColor: isTicketCrmCreated ? '#e2e8f0' : 'rgb(53, 86, 236)',
+                                    backgroundColor: isTicketCrmCreated ? '#e2e8f0' : '#0023c1',
                                     color: isTicketCrmCreated ? '#94a3b8' : '#ffffff',
                                     borderRadius: '12px',
                                     fontSize: '18px',
@@ -19903,7 +19902,7 @@ export default function App() {
                                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                     boxShadow: isTicketCrmCreated
                                       ? 'none'
-                                      : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                      : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                                   }}
                                   className={isTicketCrmCreated ? 'opacity-60 select-none' : 'cursor-pointer hover:opacity-90 active:scale-95 transition-all'}
                                   title={isTicketCrmCreated ? "Ticket CRM Commercial déjà créé" : "Créer un ticket CRM Commercial"}
@@ -20108,7 +20107,7 @@ export default function App() {
                   #devis-tab-container-harmonized textarea:focus:not(:disabled),
                   #devis-tab-container-harmonized #search-devis-input:hover,
                   #devis-tab-container-harmonized #search-devis-input:focus {
-                    outline: 2.5px solid #fa53d5 !important;
+                    outline: 2.5px solid #2e54ff !important;
                     outline-offset: 2px !important;
                     transition: all 0s !important;
                   }
@@ -20148,12 +20147,12 @@ export default function App() {
                     margin-right: 6px !important;
                   }
                   #devis-tab-container-harmonized input[type="radio"]:hover {
-                    border-color: oklch(0.44 0.16 324.65) !important;
+                    border-color: #2e54ff !important;
                     outline: none !important;
                   }
                   #devis-tab-container-harmonized input[type="radio"]:checked {
-                    border-color: oklch(0.44 0.16 324.65) !important;
-                    background-color: oklch(0.44 0.16 324.65) !important;
+                    border-color: #2e54ff !important;
+                    background-color: #2e54ff !important;
                     outline: none !important;
                   }
                   #devis-tab-container-harmonized input[type="radio"]:checked::after {
@@ -20190,12 +20189,10 @@ export default function App() {
                     {/* Dashboard List Header */}
                     <div 
                       className="bg-white space-y-4"
-                      style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+                      style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
                     >
                       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-                        <div>
-                          <h2 className="text-2xl font-bold tracking-tight font-gochi bg-white" style={{ color: '#000000', cursor: 'default' }} id="devis-tab-title">{t("Commandes")}</h2>
-                        </div>
+                        <div />
 
                         <div className="flex flex-wrap items-center gap-3 bg-white">
                           {/* Field recherche (Search input) */}
@@ -20317,9 +20314,9 @@ export default function App() {
                               fontWeight: 100,
                               cursor: 'pointer',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              backgroundColor: docTypeFilter === filterOpt ? '#fa53d5' : '#ffffff',
+                              backgroundColor: docTypeFilter === filterOpt ? '#2e54ff' : '#ffffff',
                               color: docTypeFilter === filterOpt ? '#ffffff' : '#000000',
-                              border: docTypeFilter === filterOpt ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
+                              border: docTypeFilter === filterOpt ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
                               boxShadow: 'none',
                               transition: 'all 0.15s ease'
                             }}
@@ -20528,14 +20525,10 @@ export default function App() {
                     {/* Header Box styled exactly like DefibTab Form Header */}
                     <div 
                       className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
-                      style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '20px' }}
+                      style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
                       id="devis-form-header-box"
                     >
-                      <div>
-                        <h3 className="text-2xl font-bold font-gochi" id="devis-form-modal-title" style={{ color: '#000', cursor: 'default' }}>
-                          {editingDocId ? t('Modification pièce comptable') : t('Nouvelle pièce comptable')}
-                        </h3>
-                      </div>
+                      <div />
                       
                       <div className="flex items-center gap-3">
                         <button
@@ -20563,9 +20556,9 @@ export default function App() {
                             ...rowActionButtonStyle,
                             fontSize: '18px',
                             padding: '9px 19px',
-                            backgroundColor: 'rgb(53, 86, 236)',
+                            backgroundColor: '#0023c1',
                             color: '#ffffff',
-                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                           }}
                           className="transition-all cursor-pointer font-sans"
                         >
@@ -20984,8 +20977,8 @@ export default function App() {
                                 className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
                                 style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
                               >
-                                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docHasBonCommande === true ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                  {docHasBonCommande === true && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docHasBonCommande === true ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                                  {docHasBonCommande === true && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                                 </span>
                                 {t("Oui")}
                               </button>
@@ -20995,8 +20988,8 @@ export default function App() {
                                 className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
                                 style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
                               >
-                                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docHasBonCommande === false ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                  {docHasBonCommande === false && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docHasBonCommande === false ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                                  {docHasBonCommande === false && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                                 </span>
                                 {t("Non")}
                               </button>
@@ -21039,8 +21032,8 @@ export default function App() {
                                     className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
                                     style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
                                   >
-                                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docBonCommandeLivraison === 'Intervention' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                      {docBonCommandeLivraison === 'Intervention' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docBonCommandeLivraison === 'Intervention' ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                                      {docBonCommandeLivraison === 'Intervention' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                                     </span>
                                     {t("Intervention")}
                                   </button>
@@ -21050,8 +21043,8 @@ export default function App() {
                                     className="inline-flex items-center cursor-pointer gap-2 select-none font-sans bg-transparent"
                                     style={{ fontSize: '16px', color: '#000000', border: 'none', padding: 0 }}
                                   >
-                                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docBonCommandeLivraison === 'Transporteur' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                      {docBonCommandeLivraison === 'Transporteur' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${docBonCommandeLivraison === 'Transporteur' ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                                      {docBonCommandeLivraison === 'Transporteur' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                                     </span>
                                     {t("Transporteur")}
                                   </button>
@@ -21375,8 +21368,8 @@ export default function App() {
                 style={{
                   padding: '9px 22px',
                   color: '#fff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                  background: 'rgb(96, 28, 104)',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  background: '#2e54ff',
                   border: 'none',
                   borderRadius: '13px',
                 }}
@@ -21390,8 +21383,8 @@ export default function App() {
                 style={{
                   padding: '9px 22px',
                   color: '#fff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                  background: 'rgb(96, 28, 104)',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  background: '#2e54ff',
                   border: 'none',
                   borderRadius: '13px',
                 }}

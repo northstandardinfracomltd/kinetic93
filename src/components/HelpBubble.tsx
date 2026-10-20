@@ -125,7 +125,7 @@ export default function HelpBubble({ cacheKey, text, children, style, imageSrc, 
           fontSize: '18px',
           borderRadius: '13px',
           padding: '10px 20px',
-          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset',
+          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset',
         }}
       >
         {t("J'ai compris")}

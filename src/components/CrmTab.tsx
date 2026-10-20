@@ -1582,7 +1582,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   const customButtonStyle: React.CSSProperties = {
-    backgroundColor: 'rgb(53, 86, 236)',
+    backgroundColor: '#0023c1',
     color: '#ffffff',
     borderRadius: '13px',
     fontSize: '18px',
@@ -1593,7 +1593,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     justifyContent: 'center',
     cursor: 'pointer',
     border: 'none',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
     transition: 'background-color 0.15s ease',
   };
 
@@ -1704,7 +1704,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       <textarea name="message" required rows="4" style="width: 100%; padding: 12px 16px; border: 1px solid #cbd5e0; border-radius: 13px; font-size: 16px; color: #000000; box-sizing: border-box; outline: none; transition: border-color 0.2s; resize: vertical;" placeholder="Entrez votre message, veuillez détailler votre demande et mentionner votre nom et votre entreprise."></textarea>
     </div>
     
-    <button type="submit" id="defibeo-submit-btn" style="background-color: #3556ec; color: #ffffff; padding: 14px 20px; border: none; border-radius: 13px; font-size: 16px; font-weight: normal; cursor: pointer; transition: background-color 0.2s; display: block; width: 100%; text-align: center; margin-top: 8px;">Envoyer</button>
+    <button type="submit" id="defibeo-submit-btn" style="background-color: #0023c1; color: #ffffff; padding: 14px 20px; border: none; border-radius: 13px; font-size: 16px; font-weight: normal; cursor: pointer; transition: background-color 0.2s; display: block; width: 100%; text-align: center; margin-top: 8px;">Envoyer</button>
     
     <div id="defibeo-response-msg" style="display: none; font-size: 14px; text-align: left; margin-top: 10px;"></div>
   </form>
@@ -1853,7 +1853,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         #crm-tab-container textarea:not(#crm-embed-textarea):focus:not(:disabled),
         #crm-tab-container #search-crm-input:hover,
         #crm-tab-container #search-crm-input:focus {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
         }
         #crm-tab-container input:disabled,
@@ -1877,14 +1877,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       {/* Header section with Title and Action buttons */}
       <div 
         className="bg-white space-y-4"
-        style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+        style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
       >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }} id="crm-tab-title">
-              CRM
-            </h2>
-          </div>
+          <div />
 
           <div className="flex items-center gap-2">
             {/* Search Input */}
@@ -1958,7 +1954,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     minWidth: '22px',
                     height: '22px',
                     borderRadius: '9999px',
-                    backgroundColor: '#fe4eba',
+                    backgroundColor: '#2e54ff',
                     color: '#ffffff',
                     fontSize: '12px',
                     fontWeight: 'bold',
@@ -2249,7 +2245,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           <div className="flex items-center gap-2">
             <span 
               className="w-6 h-6 text-white rounded-full flex items-center justify-center text-xs font-bold font-sans shrink-0"
-              style={{ backgroundColor: '#fe4eba' }}
+              style={{ backgroundColor: '#2e54ff' }}
             >
               {selectedTicketIds.length}
             </span>
@@ -2279,7 +2275,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               disabled={!isRelanceEnabled}
               style={{
                 ...rowActionButtonStyle,
-                backgroundColor: isRelanceEnabled ? '#3556ec' : '#cbd5e1',
+                backgroundColor: isRelanceEnabled ? '#0023c1' : '#cbd5e1',
                 color: isRelanceEnabled ? '#ffffff' : '#64748b',
                 cursor: isRelanceEnabled ? (isSendingRelance ? 'wait' : 'pointer') : 'not-allowed',
                 opacity: isRelanceEnabled ? 1 : 0.65,
@@ -2365,8 +2361,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       id="crm-select-all-checkbox"
                       className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer mx-auto ${
                         isAllFilteredSelected
-                          ? 'border-[#fe4eba] bg-transparent'
-                          : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                          ? 'border-[#2e54ff] bg-transparent'
+                          : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                       }`}
                       style={{ borderWidth: '2.5px' }}
                       role="checkbox"
@@ -2374,7 +2370,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       title={isAllFilteredSelected ? "Tout désélectionner" : "Tout sélectionner"}
                     >
                       {isAllFilteredSelected && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
                       )}
                     </button>
                   </th>
@@ -2480,15 +2476,15 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           }}
                           className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer mx-auto ${
                             isChecked
-                              ? 'border-[#fe4eba] bg-transparent'
-                              : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                              ? 'border-[#2e54ff] bg-transparent'
+                              : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                           }`}
                           style={{ borderWidth: '2.5px' }}
                           role="checkbox"
                           aria-checked={isChecked}
                         >
                           {isChecked && (
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
                           )}
                         </button>
                       </td>
@@ -2718,7 +2714,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             }}
                             style={{
                               ...rowActionButtonStyle,
-                              backgroundColor: '#3556ec',
+                              backgroundColor: '#0023c1',
                               color: '#ffffff',
                               border: 'none',
                             }}
@@ -3067,7 +3063,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 <span 
                                   className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
                                   style={{
-                                    border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                    border: isSelected ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                                     width: '18px',
                                     height: '18px',
                                     minWidth: '18px',
@@ -3076,7 +3072,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                   }}
                                 >
                                   {isSelected && (
-                                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
+                                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '8px', height: '8px' }} />
                                   )}
                                 </span>
                                 <span className="text-[18px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px' }}>
@@ -3109,7 +3105,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 <span 
                                   className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
                                   style={{
-                                    border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                    border: isSelected ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                                     width: '18px',
                                     height: '18px',
                                     minWidth: '18px',
@@ -3118,7 +3114,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                   }}
                                 >
                                   {isSelected && (
-                                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
+                                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '8px', height: '8px' }} />
                                   )}
                                 </span>
                                 <span className="text-[18px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px' }}>
@@ -3234,7 +3230,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                   <span 
                                     className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
                                     style={{
-                                      border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                      border: isSelected ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                                       width: '18px',
                                       height: '18px',
                                       minWidth: '18px',
@@ -3243,7 +3239,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     }}
                                   >
                                     {isSelected && (
-                                      <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
+                                      <span className="rounded-full bg-[#2e54ff]" style={{ width: '8px', height: '8px' }} />
                                     )}
                                   </span>
                                   <span className="text-[18px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px' }}>
@@ -3271,7 +3267,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                   <span 
                                     className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
                                     style={{
-                                      border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                      border: isSelected ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                                       width: '18px',
                                       height: '18px',
                                       minWidth: '18px',
@@ -3280,7 +3276,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     }}
                                   >
                                     {isSelected && (
-                                      <span className="rounded-full bg-[#fe4eba]" style={{ width: '8px', height: '8px' }} />
+                                      <span className="rounded-full bg-[#2e54ff]" style={{ width: '8px', height: '8px' }} />
                                     )}
                                   </span>
                                   <span className="text-[18px] font-medium text-slate-900 cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px' }}>
@@ -3386,7 +3382,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             disabled={!googleDriveActive || isUploadingFile}
                             onClick={() => fileInputRef.current?.click()}
                             style={{
-                              backgroundColor: !googleDriveActive ? '#94a3b8' : '#3556ec',
+                              backgroundColor: !googleDriveActive ? '#94a3b8' : '#0023c1',
                               color: '#ffffff',
                               borderRadius: '12px',
                               fontSize: '16px',
@@ -3779,7 +3775,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               onClick={handleSendSupportMessage}
                               disabled={isSendingSupportMessage || !newMessageObjet.trim() || !newMessageBody.trim()}
                               style={{
-                                backgroundColor: isSendingSupportMessage ? '#94a3b8' : '#3556ec',
+                                backgroundColor: isSendingSupportMessage ? '#94a3b8' : '#0023c1',
                                 color: '#ffffff',
                                 borderRadius: '12px',
                                 padding: '8px 22px',
@@ -3836,7 +3832,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <button
                     type="submit"
                     style={{
-                      backgroundColor: '#3556ec',
+                      backgroundColor: '#0023c1',
                       color: '#ffffff',
                       borderRadius: '13px',
                       padding: '14px',
@@ -4082,7 +4078,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   }}
                   style={{
                     flex: 1,
-                    backgroundColor: '#3556ec',
+                    backgroundColor: '#0023c1',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',
@@ -4191,7 +4187,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           disabled={isExportDisabled}
                           onClick={handleExportPerformanceCSV}
                           style={{
-                            backgroundColor: isExportDisabled ? '#9ca3af' : '#3556ec',
+                            backgroundColor: isExportDisabled ? '#9ca3af' : '#0023c1',
                             color: '#ffffff',
                             fontSize: '18px',
                             fontWeight: 'normal',
@@ -4513,7 +4509,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     onClick={handleSaveRelanceSettings}
                     disabled={isSavingRelance}
                     style={{
-                      backgroundColor: '#3556ec',
+                      backgroundColor: '#0023c1',
                       color: '#ffffff',
                       fontSize: '18px',
                       fontWeight: 'normal',
@@ -4634,7 +4630,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     onClick={handleSaveSupportSettings}
                     disabled={isSavingSupport}
                     style={{
-                      backgroundColor: '#3556ec',
+                      backgroundColor: '#0023c1',
                       color: '#ffffff',
                       fontSize: '18px',
                       fontWeight: 'normal',
@@ -4888,7 +4884,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   setIsColumnVisibilityPaneOpen(false);
                 }}
                 style={{
-                  backgroundColor: 'rgb(53, 86, 236)',
+                  backgroundColor: '#0023c1',
                   color: '#ffffff',
                   fontSize: '18px',
                   fontWeight: 'bold',
@@ -4897,7 +4893,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   border: 'none',
                   cursor: 'pointer',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                 }}
                 className="flex-1 text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
               >

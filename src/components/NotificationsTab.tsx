@@ -26,7 +26,7 @@ export default function NotificationsTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -105,14 +105,10 @@ export default function NotificationsTab({
       {/* Header Panel */}
       <div 
         className="bg-white space-y-4"
-        style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+        style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
       >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight font-gochi bg-white" style={{ color: '#000000', cursor: 'default', fontFamily: 'Gochi, sans-serif' }} id="notifications-tab-title">
-              {t("Notifications")}
-            </h2>
-          </div>
+          <div />
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
             <div className="relative w-full sm:w-80 bg-white">

@@ -208,8 +208,8 @@ const CustomPinkRadio = ({ value, currentValue, onChange, label }: { value: stri
       className="inline-flex items-center cursor-pointer gap-2 select-none"
       style={{ fontSize: '16px', color: '#000' }}
     >
-      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${isChecked ? 'border-[#fe4eba]' : 'border-slate-300'}`}>
-        {isChecked && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${isChecked ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
+        {isChecked && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
       </span>
       {label}
     </button>
@@ -1061,7 +1061,7 @@ export default function AutresMaterielsTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -1114,7 +1114,7 @@ export default function AutresMaterielsTab({
           {/* Top action block & Search metrics */}
           <div 
             className="bg-white space-y-4"
-            style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+            style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
               <div>
@@ -1154,7 +1154,7 @@ export default function AutresMaterielsTab({
                       borderRadius: '13px',
                       border: 'none',
                       cursor: 'pointer',
-                      backgroundColor: '#fe4eba',
+                      backgroundColor: '#2e54ff',
                       color: '#ffffff',
                       transition: 'none',
                     }}
@@ -1202,8 +1202,8 @@ export default function AutresMaterielsTab({
                     id="btn-add-materiel"
                     style={{
                       ...customButtonStyle,
-                      backgroundColor: 'rgb(53, 86, 236)',
-                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                      backgroundColor: '#0023c1',
+                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                       opacity: !resolvedSpreadsheetUrl ? 0.45 : 1,
                       cursor: !resolvedSpreadsheetUrl ? 'not-allowed' : 'pointer',
                     }}
@@ -1243,9 +1243,9 @@ export default function AutresMaterielsTab({
                     fontWeight: 100,
                     cursor: 'pointer',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: isActive ? '#fe4eba' : '#ffffff',
+                    backgroundColor: isActive ? '#2e54ff' : '#ffffff',
                     color: isActive ? '#ffffff' : '#000000',
-                    border: isActive ? '1px solid #fe4eba' : '1px solid rgb(218, 218, 218)',
+                    border: isActive ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
                     boxShadow: 'none',
                     transition: 'all 0.15s ease'
                   }}
@@ -1273,7 +1273,7 @@ export default function AutresMaterielsTab({
               <div className="flex items-center gap-2">
                 <span 
                   className="w-6 h-6 text-white rounded-full flex items-center justify-center text-xs font-bold font-sans shrink-0"
-                  style={{ backgroundColor: '#fe4eba' }}
+                  style={{ backgroundColor: '#2e54ff' }}
                 >
                   {selectedIds.length}
                 </span>
@@ -1383,8 +1383,8 @@ export default function AutresMaterielsTab({
                             style={{
                               ...rowActionButton18Style,
                               width: '100%',
-                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                              background: 'rgb(53, 86, 236)'
+                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                              background: '#0023c1'
                             }}
                             className="w-full text-center transition-colors cursor-pointer"
                           >
@@ -1418,7 +1418,7 @@ export default function AutresMaterielsTab({
                               className="w-full text-left px-4 py-2 font-semibold truncate cursor-pointer border-0 bg-transparent hover:bg-transparent"
                               style={{ 
                                 fontSize: '16px',
-                                color: isSelected ? 'rgb(254, 78, 186)' : '#000000',
+                                color: isSelected ? '#2e54ff' : '#000000',
                                 textDecoration: isSelected ? 'underline' : 'none'
                               }}
                             >
@@ -1518,17 +1518,17 @@ export default function AutresMaterielsTab({
                           }
                         }}
                         id="select-all-radio-checkbox"
-                        className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                        className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                           (filteredList.length > 0 && selectedIds.length === filteredList.length)
-                            ? 'border-[#fe4eba] bg-transparent'
-                            : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                            ? 'border-[#2e54ff] bg-transparent'
+                            : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                         }`}
                         style={{ borderWidth: '2.5px' }}
                         role="checkbox"
                         aria-checked={filteredList.length > 0 && selectedIds.length === filteredList.length}
                       >
                         {(filteredList.length > 0 && selectedIds.length === filteredList.length) && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                         )}
                       </button>
                     </th>
@@ -1559,31 +1559,31 @@ export default function AutresMaterielsTab({
                           key={item.id} 
                           onClick={() => handleOpenEditForm(item)}
                           className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
-                          style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #3556ec' } : undefined}
+                          style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #0023c1' } : undefined}
                         >
                           {/* Checkbox column */}
                           <td className="px-4 py-5 text-center relative" onClick={(e) => e.stopPropagation()}>
                             {isPinned && (
                               <div 
                                 className="absolute left-0 top-0 bottom-0 pointer-events-none" 
-                                style={{ width: '3px', backgroundColor: '#3556ec', zIndex: 2 }} 
+                                style={{ width: '3px', backgroundColor: '#0023c1', zIndex: 2 }} 
                               />
                             )}
                             <button
                               type="button"
                               onClick={(e) => handleSelectRow(item.id, e)}
                               id={`radio-checkbox-row-${item.id}`}
-                              className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                              className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                                 isRowChecked
-                                  ? 'border-[#fe4eba] bg-transparent'
-                                  : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                  ? 'border-[#2e54ff] bg-transparent'
+                                  : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                               }`}
                               style={{ borderWidth: '2.5px' }}
                               role="checkbox"
                               aria-checked={isRowChecked}
                             >
                               {isRowChecked && (
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                               )}
                             </button>
                           </td>
@@ -1694,14 +1694,10 @@ export default function AutresMaterielsTab({
           {/* Header */}
           <div 
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
-            style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px' }}
+            style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
             id="materiel-form-header-box"
           >
-            <div>
-              <h3 className="text-2xl font-bold font-gochi" id="form-modal-title" style={{ color: '#000000', cursor: 'default' }}>
-                {editingItem ? 'Modification Matériel' : 'Nouveau Matériel'}
-              </h3>
-            </div>
+            <div />
             
             <div className="flex items-center gap-3">
               <button
@@ -1720,9 +1716,9 @@ export default function AutresMaterielsTab({
                 id="btn-submit-materiel-form"
                 style={{
                   ...rowActionButton18Style,
-                  backgroundColor: 'rgb(53, 86, 236)',
+                  backgroundColor: '#0023c1',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                 }}
                 className="transition-all cursor-pointer border-0"
               >
@@ -1759,7 +1755,7 @@ export default function AutresMaterielsTab({
               #materiel-core-form select:focus,
               #materiel-core-form textarea:hover,
               #materiel-core-form textarea:focus {
-                outline: 2.5px solid #fa53d5 !important;
+                outline: 2.5px solid #2e54ff !important;
                 outline-offset: 2px !important;
                 transition: all 0s !important;
               }
@@ -1833,7 +1829,7 @@ export default function AutresMaterielsTab({
                   <span 
                     className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                     style={{
-                      backgroundColor: 'oklch(0.44 0.16 324.65)',
+                      backgroundColor: '#2e54ff',
                       borderRadius: '1000px',
                       cursor: 'default',
                       fontWeight: 100,
@@ -1916,7 +1912,7 @@ export default function AutresMaterielsTab({
                   <span 
                     className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                     style={{
-                      backgroundColor: 'oklch(0.44 0.16 324.65)',
+                      backgroundColor: '#2e54ff',
                       borderRadius: '1000px',
                       cursor: 'default',
                       fontWeight: 100,
@@ -2139,7 +2135,7 @@ export default function AutresMaterielsTab({
                   <span 
                     className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                     style={{
-                      backgroundColor: 'oklch(0.44 0.16 324.65)',
+                      backgroundColor: '#2e54ff',
                       borderRadius: '1000px',
                       cursor: 'default',
                       fontWeight: 100,
@@ -2314,8 +2310,8 @@ export default function AutresMaterielsTab({
                           onClick={() => handleUpdateScheduleField(schIdx, 'fermetureMidi', !sch.fermetureMidi)}
                           className="inline-flex items-center gap-2 cursor-pointer select-none"
                         >
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sch.fermetureMidi ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                            {sch.fermetureMidi && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sch.fermetureMidi ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                            {sch.fermetureMidi && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                           </span>
                           <span className="font-semibold text-black font-sans" style={{ fontSize: '16px' }}>
                             Fermeture le midi (4 plages horaires)
@@ -2458,7 +2454,7 @@ export default function AutresMaterielsTab({
                   <span 
                     className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                     style={{
-                      backgroundColor: 'oklch(0.44 0.16 324.65)',
+                      backgroundColor: '#2e54ff',
                       borderRadius: '1000px',
                       cursor: 'default',
                       fontWeight: 100,
@@ -2518,7 +2514,7 @@ export default function AutresMaterielsTab({
                   <span 
                     className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                     style={{
-                      backgroundColor: 'oklch(0.44 0.16 324.65)',
+                      backgroundColor: '#2e54ff',
                       borderRadius: '1000px',
                       cursor: 'default',
                       fontWeight: 100,

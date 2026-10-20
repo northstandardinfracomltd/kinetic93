@@ -411,8 +411,8 @@ export default function FormationsTab({
 
   const blueButtonStyle: React.CSSProperties = {
     ...rowActionButton18Style,
-    backgroundColor: 'rgb(53, 86, 236)',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    backgroundColor: '#0023c1',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
   };
 
   const triggerFormShakeAndScroll = () => {
@@ -437,7 +437,7 @@ export default function FormationsTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -463,21 +463,16 @@ export default function FormationsTab({
           <div
             className="bg-white space-y-4"
             style={{
-              border: '1px solid #dadada',
-              borderTop: 'none',
-              borderRadius: '0px 0px 18px 18px',
+              borderRadius: '0px',
               maxWidth: '98%',
-              margin: '0 auto 24px auto',
-              padding: '20px',
-              backgroundColor: '#ffffff',
+              margin: 'auto',
+              padding: '10px 0px',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
             }}
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }}>
-                  Formations
-                </h2>
-              </div>
+              <div />
 
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative w-full sm:w-64">
@@ -580,8 +575,8 @@ export default function FormationsTab({
                               style={{
                                 ...rowActionButton18Style,
                                 width: '100%',
-                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                background: 'rgb(53, 86, 236)'
+                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                background: '#0023c1'
                               }}
                               className="w-full text-center transition-colors cursor-pointer"
                             >
@@ -613,7 +608,7 @@ export default function FormationsTab({
                                 className="w-full text-left px-4 py-2 font-semibold truncate cursor-pointer border-0 bg-transparent hover:bg-transparent"
                                 style={{ 
                                   fontSize: '16px',
-                                  color: isSelected ? 'rgb(254, 78, 186)' : '#000000',
+                                  color: isSelected ? '#2e54ff' : '#000000',
                                   textDecoration: isSelected ? 'underline' : 'none'
                                 }}
                               >
@@ -674,17 +669,17 @@ export default function FormationsTab({
                           }
                         }}
                         id="select-all-radio-checkbox"
-                        className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                        className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                           selectedIds.length === filteredFormations.length && filteredFormations.length > 0
-                            ? 'border-[#fe4eba] bg-transparent'
-                            : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                            ? 'border-[#2e54ff] bg-transparent'
+                            : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                         }`}
                         style={{ borderWidth: '2.5px' }}
                         role="checkbox"
                         aria-checked={selectedIds.length === filteredFormations.length && filteredFormations.length > 0}
                       >
                         {selectedIds.length === filteredFormations.length && filteredFormations.length > 0 && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                         )}
                       </button>
                     </th>
@@ -750,17 +745,17 @@ export default function FormationsTab({
                                 }
                               }}
                               id={`radio-checkbox-row-${f.id}`}
-                              className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                              className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                                 isRowSelected
-                                  ? 'border-[#fe4eba] bg-transparent'
-                                  : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                                  ? 'border-[#2e54ff] bg-transparent'
+                                  : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                               }`}
                               style={{ borderWidth: '2.5px' }}
                               role="checkbox"
                               aria-checked={isRowSelected}
                             >
                               {isRowSelected && (
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                                <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                               )}
                             </button>
                           </td>
@@ -863,22 +858,17 @@ export default function FormationsTab({
           <div
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
             style={{
-              border: '1px solid #dadada',
-              borderTop: 'none',
-              borderRadius: '0px 0px 18px 18px',
+              borderRadius: '0px',
               maxWidth: '98%',
-              margin: '0 auto',
-              marginTop: '0px',
-              padding: '20px',
+              margin: 'auto',
+              padding: '10px 0px',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
             }}
             id="formation-form-header-box"
             onClick={(e) => e.stopPropagation()}
           >
-            <div>
-              <h3 className="text-2xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
-                {editingId ? 'Modification Formation' : 'Nouvelle Formation'}
-              </h3>
-            </div>
+            <div />
 
             <div className="flex items-center gap-3">
               <button
@@ -928,7 +918,7 @@ export default function FormationsTab({
               #formation-core-form select:focus,
               #formation-core-form textarea:hover,
               #formation-core-form textarea:focus {
-                outline: 2.5px solid #fa53d5 !important;
+                outline: 2.5px solid #2e54ff !important;
                 outline-offset: 2px !important;
                 transition: all 0s !important;
               }
@@ -974,7 +964,7 @@ export default function FormationsTab({
                     <span
                       className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                       style={{
-                        backgroundColor: 'oklch(0.44 0.16 324.65)',
+                        backgroundColor: '#2e54ff',
                         borderRadius: '1000px',
                         cursor: 'default',
                         fontWeight: 100,
@@ -1082,8 +1072,8 @@ export default function FormationsTab({
                           className="inline-flex items-center cursor-pointer gap-2 select-none"
                           style={{ fontSize: '16px', color: '#000' }}
                         >
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${statut === 'Brouillon' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                            {statut === 'Brouillon' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${statut === 'Brouillon' ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                            {statut === 'Brouillon' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                           </span>
                           Brouillon
                         </button>
@@ -1094,8 +1084,8 @@ export default function FormationsTab({
                           className="inline-flex items-center cursor-pointer gap-2 select-none"
                           style={{ fontSize: '16px', color: '#000' }}
                         >
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${statut === 'Terminé' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                            {statut === 'Terminé' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${statut === 'Terminé' ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                            {statut === 'Terminé' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                           </span>
                           Terminé
                         </button>
@@ -1191,7 +1181,7 @@ export default function FormationsTab({
                     <span
                       className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                       style={{
-                        backgroundColor: 'oklch(0.44 0.16 324.65)',
+                        backgroundColor: '#2e54ff',
                         borderRadius: '1000px',
                         cursor: 'default',
                         fontWeight: 100,

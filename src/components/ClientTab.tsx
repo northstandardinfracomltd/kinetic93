@@ -745,7 +745,7 @@ export default function ClientTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -1304,14 +1304,10 @@ export default function ClientTab({
         {/* Form Header */}
         <div 
           className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
-          style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px' }}
+          style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
           id="client-form-header-box"
         >
-          <div>
-            <h3 className="text-2xl font-bold font-gochi" id="client-modal-title" style={{ color: '#000000', cursor: 'default' }}>
-              {editingClient ? 'Modification Client' : 'Nouveau Client'}
-            </h3>
-          </div>
+          <div />
           
           <div className="flex items-center gap-3">
             <button
@@ -1330,9 +1326,9 @@ export default function ClientTab({
               id="btn-submit-client-form"
               style={{
                 ...rowActionButton18Style,
-                backgroundColor: 'rgb(53, 86, 236)',
+                backgroundColor: '#0023c1',
                 color: '#ffffff',
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
               }}
               className="transition-all cursor-pointer"
             >
@@ -1370,7 +1366,7 @@ export default function ClientTab({
              #client-form select:focus,
              #client-form textarea:hover,
              #client-form textarea:focus {
-               outline: 2.5px solid #fa53d5 !important;
+               outline: 2.5px solid #2e54ff !important;
                outline-offset: 2px !important;
                transition: all 0s !important;
              }
@@ -1443,11 +1439,11 @@ export default function ClientTab({
                margin-right: 6px !important;
              }
              #client-form input[type="radio"]:hover {
-               border-color: oklch(0.44 0.16 324.65) !important;
+               border-color: #2e54ff !important;
              }
              #client-form input[type="radio"]:checked {
-               border-color: oklch(0.44 0.16 324.65) !important;
-               background-color: oklch(0.44 0.16 324.65) !important;
+               border-color: #2e54ff !important;
+               background-color: #2e54ff !important;
              }
              #client-form input[type="radio"]:checked::after {
                content: "" !important;
@@ -1474,11 +1470,11 @@ export default function ClientTab({
                margin-right: 6px !important;
              }
              #client-form input[type="checkbox"]:hover {
-               border-color: oklch(0.44 0.16 324.65) !important;
+               border-color: #2e54ff !important;
              }
              #client-form input[type="checkbox"]:checked {
-               border-color: oklch(0.44 0.16 324.65) !important;
-               background-color: oklch(0.44 0.16 324.65) !important;
+               border-color: #2e54ff !important;
+               background-color: #2e54ff !important;
              }
              #client-form input[type="checkbox"]:checked::after {
                content: "✓" !important;
@@ -1513,7 +1509,7 @@ export default function ClientTab({
                   <span 
                     className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                     style={{
-                      backgroundColor: 'oklch(0.44 0.16 324.65)',
+                      backgroundColor: '#2e54ff',
                       borderRadius: '1000px',
                       cursor: 'default',
                       fontWeight: 100,
@@ -1683,7 +1679,7 @@ export default function ClientTab({
                   <span 
                     className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                     style={{
-                      backgroundColor: 'oklch(0.44 0.16 324.65)',
+                      backgroundColor: '#2e54ff',
                       borderRadius: '1000px',
                       cursor: 'default',
                       fontWeight: 100,
@@ -2104,7 +2100,7 @@ export default function ClientTab({
                   <span 
                     className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                     style={{
-                      backgroundColor: 'oklch(0.44 0.16 324.65)',
+                      backgroundColor: '#2e54ff',
                       borderRadius: '1000px',
                       cursor: 'default',
                       fontWeight: 100,
@@ -2482,12 +2478,10 @@ export default function ClientTab({
       {/* Upper Action Block & Search metrics */}
       <div 
         className="bg-white space-y-4"
-        style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+        style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
       >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight font-gochi" id="client-tab-title" style={{ color: '#000000', cursor: 'default' }}>Clients</h2>
-          </div>
+          <div />
 
           {/* Both search and buttons are placed directly next to the title */}
           <div className="flex flex-wrap items-center gap-3">
@@ -2519,8 +2513,8 @@ export default function ClientTab({
                 id="btn-add-client"
                 style={{
                   ...customButtonStyle,
-                  backgroundColor: 'rgb(53, 86, 236)',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  backgroundColor: '#0023c1',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                   opacity: !resolvedSpreadsheetUrl ? 0.45 : 1,
                   cursor: !resolvedSpreadsheetUrl ? 'not-allowed' : 'pointer',
                 }}
@@ -2658,7 +2652,7 @@ export default function ClientTab({
                       {(() => {
                         const count = getClientDefibVolume(client);
                         return (
-                          <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1 text-[11px] font-black text-white bg-[#fe4eba] rounded-full font-sans">
+                          <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1 text-[11px] font-black text-white bg-[#2e54ff] rounded-full font-sans">
                             {count}
                           </span>
                         );

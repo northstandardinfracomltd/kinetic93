@@ -1481,7 +1481,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: isSearchHovered || isSearchFocused ? '2.5px solid #fa53d5' : 'none',
+    outline: isSearchHovered || isSearchFocused ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: isSearchHovered || isSearchFocused ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -1526,7 +1526,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
         #temps-settings-pane input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled),
         #temps-settings-pane select:hover:not(:disabled),
         #temps-settings-pane select:focus:not(:disabled) {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
         }
       `}</style>
@@ -1535,25 +1535,16 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
       <div
         className="bg-white space-y-4"
         style={{
-          border: '1px solid #dadada',
-          borderTop: 'none',
-          borderRadius: '0px 0px 18px 18px',
+          borderRadius: '0px',
           maxWidth: '98%',
           margin: 'auto',
-          padding: '20px',
-          backgroundColor: '#ffffff',
+          padding: '10px 0px',
+          border: 'none',
+          backgroundColor: 'rgb(255, 255, 255)',
         }}
       >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-          <div>
-            <h2
-              className="text-2xl font-bold tracking-tight font-gochi bg-white"
-              style={{ color: '#000000', cursor: 'default' }}
-              id="temps-tab-title"
-            >
-              {t("Temps")}
-            </h2>
-          </div>
+          <div />
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
             {/* Search Bar Input */}
@@ -1602,9 +1593,9 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                 fontWeight: 100,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: selectedTechFilter === filterOpt ? '#fa53d5' : '#ffffff',
+                backgroundColor: selectedTechFilter === filterOpt ? '#2e54ff' : '#ffffff',
                 color: selectedTechFilter === filterOpt ? '#ffffff' : '#000000',
-                border: selectedTechFilter === filterOpt ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
+                border: selectedTechFilter === filterOpt ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
                 boxShadow: 'none',
                 transition: 'all 0.15s ease',
               }}
@@ -1779,7 +1770,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                         }}
                         className="sr-only peer"
                       />
-                      <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                      <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" />
                     </label>
                   </div>
 
@@ -1882,7 +1873,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                         }}
                         className="sr-only peer"
                       />
-                      <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                      <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" />
                     </label>
                   </div>
 
@@ -1985,7 +1976,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                         }}
                         className="sr-only peer"
                       />
-                      <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                      <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" />
                     </label>
                   </div>
 
@@ -2224,7 +2215,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                               }}
                               className="sr-only peer"
                             />
-                            <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                            <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" />
                           </label>
                         </div>
 
@@ -2262,7 +2253,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                               }}
                               className="sr-only peer"
                             />
-                            <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" />
+                            <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" />
                           </label>
                         </div>
                       </div>
@@ -2367,7 +2358,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   onClick={handleSaveSettings}
                   disabled={draftConflicts.length > 0}
                   style={{
-                    backgroundColor: draftConflicts.length > 0 ? '#94a3b8' : '#3556ec',
+                    backgroundColor: draftConflicts.length > 0 ? '#94a3b8' : '#0023c1',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',

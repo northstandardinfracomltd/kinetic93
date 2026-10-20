@@ -28,7 +28,7 @@ function FormRadio({
       <span 
         className="rounded-full relative transition-all bg-white"
         style={{
-          border: checked ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+          border: checked ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
           width: '20px',
           height: '20px',
           minWidth: '20px',
@@ -38,7 +38,7 @@ function FormRadio({
       >
         {checked && (
           <span 
-            className="rounded-full bg-[#fe4eba] absolute" 
+            className="rounded-full bg-[#2e54ff] absolute" 
             style={{ 
               width: '9px', 
               height: '9px',
@@ -259,7 +259,7 @@ export default function VariableTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -679,14 +679,10 @@ export default function VariableTab({
         {/* Form Header */}
         <div 
           className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
-          style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px' }}
+          style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
           id="variable-form-header-box"
         >
-          <div>
-            <h3 className="text-2xl font-bold font-gochi" id="variable-modal-title" style={{ color: '#000000', cursor: 'default' }}>
-              {editingVariable ? 'Modification Variable' : 'Nouvelle Variable'}
-            </h3>
-          </div>
+          <div />
           
           <div className="flex items-center gap-3">
             <button
@@ -705,9 +701,9 @@ export default function VariableTab({
               id="btn-submit-variable-form"
               style={{
                 ...rowActionButton18Style,
-                backgroundColor: 'rgb(53, 86, 236)',
+                backgroundColor: '#0023c1',
                 color: '#ffffff',
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
               }}
               className="transition-all cursor-pointer"
             >
@@ -745,7 +741,7 @@ export default function VariableTab({
              #variable-form select:focus,
              #variable-form textarea:hover,
              #variable-form textarea:focus {
-               outline: 2.5px solid #fa53d5 !important;
+               outline: 2.5px solid #2e54ff !important;
                outline-offset: 2px !important;
                transition: all 0s !important;
              }
@@ -902,8 +898,8 @@ export default function VariableTab({
                                 borderRadius: '13px',
                                 padding: '10px 20px',
                                 marginRight: '15px',
-                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                background: 'rgb(53, 86, 236)',
+                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                background: '#0023c1',
                                 color: '#fff',
                                 fontSize: '18px'
                               }}
@@ -978,7 +974,7 @@ export default function VariableTab({
                       id="input-variable-couleur-hex"
                       value={couleurHex}
                       onChange={(e) => setCouleurHex(e.target.value)}
-                      placeholder="#3556EC"
+                      placeholder="#0023c1"
                       className="w-full"
                     />
                   </div>
@@ -1249,12 +1245,10 @@ export default function VariableTab({
       {/* Upper Action Block & Search metrics */}
       <div 
         className="bg-white space-y-4"
-        style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+        style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
       >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight font-gochi bg-white" id="variable-tab-title" style={{ color: '#000000', cursor: 'default' }}>Variables</h2>
-          </div>
+          <div />
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
             {/* Field recherche (Search input) */}
@@ -1285,8 +1279,8 @@ export default function VariableTab({
               className="font-sans"
               style={{
                 ...customButtonStyle,
-                backgroundColor: 'rgb(53, 86, 236)',
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                backgroundColor: '#0023c1',
+                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                 opacity: !hasVariablesSpreadsheet ? 0.45 : 1,
                 cursor: !hasVariablesSpreadsheet ? 'not-allowed' : 'pointer',
               }}
@@ -1321,9 +1315,9 @@ export default function VariableTab({
                 fontWeight: 100,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: isSelected ? '#fa53d5' : '#ffffff',
+                backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
                 color: isSelected ? '#ffffff' : '#000000',
-                border: isSelected ? '1px solid #fa53d5' : '1px solid rgb(218, 218, 218)',
+                border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
                 transition: 'all 0.15s ease'
               }}
               className="transition-all"

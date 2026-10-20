@@ -49,7 +49,7 @@ export default function LocalisationsTab({ members }: LocalisationsTabProps) {
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -95,7 +95,7 @@ export default function LocalisationsTab({ members }: LocalisationsTabProps) {
         #localisations-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-localisations-input),
         #localisations-tab-container-harmonized #search-localisations-input:hover,
         #localisations-tab-container-harmonized #search-localisations-input:focus {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
@@ -112,12 +112,10 @@ export default function LocalisationsTab({ members }: LocalisationsTabProps) {
       {/* Header Box aligned with other modules */}
       <div 
         className="bg-white space-y-4 animate-fadeIn"
-        style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+        style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
       >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight font-gochi bg-white" style={{ color: '#000000', cursor: 'default' }} id="localisations-tab-title">Localisations</h2>
-          </div>
+          <div />
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
             {/* Search Bar Input */}

@@ -49,19 +49,19 @@ export const TopBarProgress: React.FC<TopBarProgressProps> = ({
           height: `${height}px`,
         }}
       />
-      {/* Material Design Indeterminate Sliding Bar 2 (#FD4EBB) */}
+      {/* Material Design Indeterminate Sliding Bar 2 (#2e54ff) */}
       <div
         className="absolute top-0 bottom-0 mat-bar-2"
         style={{
-          backgroundColor: '#FD4EBB',
+          backgroundColor: '#2e54ff',
           height: `${height}px`,
         }}
       />
-      {/* Material Design Indeterminate Sliding Bar 3 (#5C1B62) */}
+      {/* Material Design Indeterminate Sliding Bar 3 (#2e54ff) */}
       <div
         className="absolute top-0 bottom-0 mat-bar-3"
         style={{
-          backgroundColor: '#5C1B62',
+          backgroundColor: '#2e54ff',
           height: `${height}px`,
         }}
       />

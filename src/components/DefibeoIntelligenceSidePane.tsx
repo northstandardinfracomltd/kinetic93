@@ -447,9 +447,9 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
                 id="btn-submit-defibeo-intelligence"
                 className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center"
                 style={{
-                  backgroundColor: '#3556ec',
+                  backgroundColor: '#0023c1',
                   boxShadow:
-                    'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
+                    'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #0023c1, inset 0 6px 12px #ffffff1f',
                   fontSize: '18px',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   opacity: !inputQuestion.trim() || isLoading || quota.exceeded ? 0.45 : 1,

@@ -712,7 +712,7 @@ export default function SettingsModal({
       <span 
         className="text-white px-3 py-1 text-[13px] inline-block font-sans"
         style={{
-          backgroundColor: 'oklch(0.44 0.16 324.65)',
+          backgroundColor: '#2e54ff',
           borderRadius: '1000px',
           cursor: 'default',
           fontWeight: 100,
@@ -3296,7 +3296,7 @@ export default function SettingsModal({
         <span
           className="text-white px-3 py-1 text-[13px] inline-block font-sans"
           style={{
-            backgroundColor: 'oklch(0.44 0.16 324.65)',
+            backgroundColor: '#2e54ff',
             borderRadius: '1000px',
             cursor: 'default',
             fontWeight: 100,
@@ -3444,7 +3444,7 @@ export default function SettingsModal({
         #settings-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled),
         #settings-tab-container-harmonized select:hover:not(:disabled),
         #settings-tab-container-harmonized select:focus:not(:disabled) {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
@@ -3485,7 +3485,7 @@ export default function SettingsModal({
                 disabled={isSaving}
                 onClick={handleSaveAll}
                 style={{
-                  backgroundColor: 'rgb(53, 86, 236)',
+                  backgroundColor: '#0023c1',
                   color: '#ffffff',
                   boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
                   borderRadius: '0.75rem',
@@ -3743,7 +3743,7 @@ export default function SettingsModal({
                   <span 
                     className="rounded-full flex items-center justify-center transition-all bg-white"
                     style={{
-                      border: enableSatisfactionAvis === "Oui" ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                      border: enableSatisfactionAvis === "Oui" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                       width: '20px',
                       height: '20px',
                       minWidth: '20px',
@@ -3752,7 +3752,7 @@ export default function SettingsModal({
                     }}
                   >
                     {enableSatisfactionAvis === "Oui" && (
-                      <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                      <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                     )}
                   </span>
                   <span className="text-[15px] font-semibold text-black">{t("Oui")}</span>
@@ -3770,7 +3770,7 @@ export default function SettingsModal({
                   <span 
                     className="rounded-full flex items-center justify-center transition-all bg-white"
                     style={{
-                      border: enableSatisfactionAvis === "Non" ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                      border: enableSatisfactionAvis === "Non" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                       width: '20px',
                       height: '20px',
                       minWidth: '20px',
@@ -3779,7 +3779,7 @@ export default function SettingsModal({
                     }}
                   >
                     {enableSatisfactionAvis === "Non" && (
-                      <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                      <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                     )}
                   </span>
                   <span className="text-[15px] font-semibold text-black">{t("Non")}</span>
@@ -3808,7 +3808,7 @@ export default function SettingsModal({
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
                   style={{
-                    border: enableOtherEquipments === "Oui" ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                    border: enableOtherEquipments === "Oui" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                     width: '20px',
                     height: '20px',
                     minWidth: '20px',
@@ -3817,7 +3817,7 @@ export default function SettingsModal({
                   }}
                 >
                   {enableOtherEquipments === "Oui" && (
-                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                   )}
                 </span>
                 <span className="text-[15px] font-semibold text-black">Oui</span>
@@ -3842,7 +3842,7 @@ export default function SettingsModal({
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
                   style={{
-                    border: enableOtherEquipments === "Non" ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                    border: enableOtherEquipments === "Non" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                     width: '20px',
                     height: '20px',
                     minWidth: '20px',
@@ -3851,7 +3851,7 @@ export default function SettingsModal({
                   }}
                 >
                   {enableOtherEquipments === "Non" && (
-                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                   )}
                 </span>
                 <span className="text-[15px] font-semibold text-black">Non</span>
@@ -3947,7 +3947,7 @@ export default function SettingsModal({
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
                   style={{
-                    border: enableAutoEmails === "Oui" ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                    border: enableAutoEmails === "Oui" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                     width: '20px',
                     height: '20px',
                     minWidth: '20px',
@@ -3956,7 +3956,7 @@ export default function SettingsModal({
                   }}
                 >
                   {enableAutoEmails === "Oui" && (
-                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                   )}
                 </span>
                 <span className="text-[15px] font-semibold text-black">Oui</span>
@@ -3974,7 +3974,7 @@ export default function SettingsModal({
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
                   style={{
-                    border: enableAutoEmails === "Non" ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                    border: enableAutoEmails === "Non" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                     width: '20px',
                     height: '20px',
                     minWidth: '20px',
@@ -3983,7 +3983,7 @@ export default function SettingsModal({
                   }}
                 >
                   {enableAutoEmails === "Non" && (
-                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                   )}
                 </span>
                 <span className="text-[15px] font-semibold text-black">Non</span>
@@ -4009,7 +4009,7 @@ export default function SettingsModal({
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
                   style={{
-                    border: enableDevisFactures === "Oui" ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                    border: enableDevisFactures === "Oui" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                     width: '20px',
                     height: '20px',
                     minWidth: '20px',
@@ -4018,7 +4018,7 @@ export default function SettingsModal({
                   }}
                 >
                   {enableDevisFactures === "Oui" && (
-                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                   )}
                 </span>
                 <span className="text-[15px] font-semibold text-black">{t("Oui")}</span>
@@ -4036,7 +4036,7 @@ export default function SettingsModal({
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
                   style={{
-                    border: enableDevisFactures === "Non" ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                    border: enableDevisFactures === "Non" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                     width: '20px',
                     height: '20px',
                     minWidth: '20px',
@@ -4045,7 +4045,7 @@ export default function SettingsModal({
                   }}
                 >
                   {enableDevisFactures === "Non" && (
-                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                   )}
                 </span>
                 <span className="text-[15px] font-semibold text-black">{t("Non")}</span>
@@ -4071,7 +4071,7 @@ export default function SettingsModal({
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
                   style={{
-                    border: disableHelpsAndTutorials === "Oui" ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                    border: disableHelpsAndTutorials === "Oui" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                     width: '20px',
                     height: '20px',
                     minWidth: '20px',
@@ -4080,7 +4080,7 @@ export default function SettingsModal({
                   }}
                 >
                   {disableHelpsAndTutorials === "Oui" && (
-                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                   )}
                 </span>
                 <span className="text-[15px] font-semibold text-black">{t("Oui")}</span>
@@ -4098,7 +4098,7 @@ export default function SettingsModal({
                 <span 
                   className="rounded-full flex items-center justify-center transition-all bg-white"
                   style={{
-                    border: disableHelpsAndTutorials === "Non" ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                    border: disableHelpsAndTutorials === "Non" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                     width: '20px',
                     height: '20px',
                     minWidth: '20px',
@@ -4107,7 +4107,7 @@ export default function SettingsModal({
                   }}
                 >
                   {disableHelpsAndTutorials === "Non" && (
-                    <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                   )}
                 </span>
                 <span className="text-[15px] font-semibold text-black">{t("Non")}</span>
@@ -4329,7 +4329,7 @@ export default function SettingsModal({
                           <span 
                             className="rounded-full flex items-center justify-center transition-all bg-white"
                             style={{
-                              border: currentValue === 'Oui' ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                              border: currentValue === 'Oui' ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                               width: '20px',
                               height: '20px',
                               minWidth: '20px',
@@ -4338,7 +4338,7 @@ export default function SettingsModal({
                             }}
                           >
                             {currentValue === 'Oui' && (
-                              <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                              <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                             )}
                           </span>
                           <span className="text-[15px] font-semibold text-black">Oui</span>
@@ -4356,7 +4356,7 @@ export default function SettingsModal({
                           <span 
                             className="rounded-full flex items-center justify-center transition-all bg-white"
                             style={{
-                              border: currentValue === 'Non' ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                              border: currentValue === 'Non' ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                               width: '20px',
                               height: '20px',
                               minWidth: '20px',
@@ -4365,7 +4365,7 @@ export default function SettingsModal({
                             }}
                           >
                             {currentValue === 'Non' && (
-                              <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                              <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                             )}
                           </span>
                           <span className="text-[15px] font-semibold text-black">Non</span>
@@ -5014,7 +5014,7 @@ export default function SettingsModal({
                                         <span 
                                           className="rounded-full flex items-center justify-center transition-all bg-white"
                                           style={{
-                                            border: hasComp ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
+                                            border: hasComp ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
                                             width: '20px',
                                             height: '20px',
                                             minWidth: '20px',
@@ -5023,7 +5023,7 @@ export default function SettingsModal({
                                           }}
                                         >
                                           {hasComp && (
-                                            <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
+                                            <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
                                           )}
                                         </span>
                                         <span className="font-medium leading-tight select-none" style={{ fontSize: '16px', color: '#000000' }}>{t(comp)}</span>
@@ -5091,8 +5091,8 @@ export default function SettingsModal({
                                           onClick={() => handleUpdateMemberScheduleField(idx, schIdx, 'fermetureMidi', !sch.fermetureMidi)}
                                           className="inline-flex items-center gap-2 cursor-pointer select-none disabled:opacity-50"
                                         >
-                                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${sch.fermetureMidi ? 'border-[#fe4eba]' : 'border-slate-300'}`}>
-                                            {sch.fermetureMidi && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${sch.fermetureMidi ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
+                                            {sch.fermetureMidi && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                                           </span>
                                           <span className="font-semibold text-black font-sans" style={{ fontSize: '16px' }}>
                                             {t("Fermeture le midi (4 plages)")}
@@ -5398,7 +5398,7 @@ export default function SettingsModal({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: 'oklch(0.44 0.16 324.65)',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -5412,7 +5412,7 @@ export default function SettingsModal({
                 disabled={connectorsSaveStatus === 'saving'}
                 onClick={handleSaveConnectors}
                 style={{
-                  backgroundColor: 'rgb(53, 86, 236)',
+                  backgroundColor: '#0023c1',
                   color: '#ffffff',
                   boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
                   borderRadius: '0.75rem',
@@ -5447,7 +5447,7 @@ export default function SettingsModal({
                         <div className="select-none font-sans flex items-center mt-1">
                           <span
                             style={{
-                              backgroundColor: '#fe4eba',
+                              backgroundColor: '#2e54ff',
                               color: '#ffffff',
                               fontSize: '16px',
                               borderRadius: '100px',
@@ -5470,7 +5470,7 @@ export default function SettingsModal({
                           disabled
                           className="sr-only peer"
                         />
-                        <div className="w-9 h-5 bg-[#fe4eba] rounded-full cursor-not-allowed peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all" style={{ cursor: 'not-allowed' }}></div>
+                        <div className="w-9 h-5 bg-[#2e54ff] rounded-full cursor-not-allowed peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all" style={{ cursor: 'not-allowed' }}></div>
                       </label>
                     </div>
                   </div>
@@ -5510,7 +5510,7 @@ export default function SettingsModal({
                           disabled
                           className="sr-only peer"
                         />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-not-allowed peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'not-allowed' }}></div>
+                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-not-allowed peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" style={{ cursor: 'not-allowed' }}></div>
                       </label>
                     </div>
                   </div>
@@ -5621,8 +5621,8 @@ export default function SettingsModal({
                           onClick={generateApiDefibeoKeys}
                           style={{
                             color: 'rgb(255, 255, 255)',
-                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                            background: 'rgb(96, 28, 104)',
+                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                            background: '#2e54ff',
                             borderRadius: '13px',
                             padding: '9px',
                             fontSize: '18px',
@@ -5643,8 +5643,8 @@ export default function SettingsModal({
                           onClick={() => setIsApiDocOpen(true)}
                           style={{
                             color: 'rgb(255, 255, 255)',
-                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                            background: 'rgb(96, 28, 104)',
+                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                            background: '#2e54ff',
                             borderRadius: '13px',
                             padding: '9px',
                             fontSize: '18px',
@@ -5675,7 +5675,7 @@ export default function SettingsModal({
                         <div className="select-none font-sans flex items-center mt-1">
                           <span
                             style={{
-                              backgroundColor: dropboxActive ? '#fe4eba' : 'rgb(57, 169, 143)',
+                              backgroundColor: dropboxActive ? '#2e54ff' : 'rgb(57, 169, 143)',
                               boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
                               color: '#ffffff',
                               fontSize: '16px',
@@ -5700,7 +5700,7 @@ export default function SettingsModal({
                           }}
                           className="sr-only peer"
                         />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'pointer' }}></div>
+                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" style={{ cursor: 'pointer' }}></div>
                       </label>
                     </div>
                   </div>
@@ -5806,7 +5806,7 @@ export default function SettingsModal({
                           }}
                           className="sr-only peer"
                         />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'pointer' }}></div>
+                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" style={{ cursor: 'pointer' }}></div>
                       </label>
                     </div>
                   </div>
@@ -5855,7 +5855,7 @@ export default function SettingsModal({
                           <span
                             style={{
                               backgroundColor: selectedLang === 'Français, France' 
-                                ? (atlasanteActive ? '#fe4eba' : 'rgb(57, 169, 143)')
+                                ? (atlasanteActive ? '#2e54ff' : 'rgb(57, 169, 143)')
                                 : 'rgb(185, 28, 28)',
                               boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
                               color: '#ffffff',
@@ -5889,7 +5889,7 @@ export default function SettingsModal({
                           }}
                           className="sr-only peer"
                         />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]"></div>
+                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]"></div>
                       </label>
                     </div>
                   </div>
@@ -5939,7 +5939,7 @@ export default function SettingsModal({
                         <div className="select-none font-sans flex items-center mt-1">
                           <span
                             style={{
-                              backgroundColor: googleDriveActive ? '#fe4eba' : 'rgb(57, 169, 143)',
+                              backgroundColor: googleDriveActive ? '#2e54ff' : 'rgb(57, 169, 143)',
                               boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
                               color: '#ffffff',
                               fontSize: '16px',
@@ -5966,7 +5966,7 @@ export default function SettingsModal({
                           }}
                           className="sr-only peer"
                         />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#fe4eba]" style={{ cursor: 'pointer' }}></div>
+                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" style={{ cursor: 'pointer' }}></div>
                       </label>
                     </div>
                   </div>
@@ -6005,7 +6005,7 @@ export default function SettingsModal({
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                 style={{
-                  backgroundColor: 'oklch(0.44 0.16 324.65)',
+                  backgroundColor: '#2e54ff',
                   borderRadius: '1000px',
                   cursor: 'default',
                   fontWeight: 100,
@@ -6019,7 +6019,7 @@ export default function SettingsModal({
                 disabled={databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin}
                 onClick={handleSaveDatabases}
                 style={{
-                  backgroundColor: 'rgb(53, 86, 236)',
+                  backgroundColor: '#0023c1',
                   color: '#ffffff',
                   boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
                   borderRadius: '0.75rem',
@@ -6144,7 +6144,7 @@ export default function SettingsModal({
               type="button"
               onClick={() => setIsShopDrawerOpen(true)}
               style={{
-                backgroundColor: 'rgb(53, 86, 236)',
+                backgroundColor: '#0023c1',
                 color: '#ffffff',
                 boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
                 borderRadius: '0.75rem',
@@ -6195,7 +6195,7 @@ export default function SettingsModal({
                         rel="noopener noreferrer"
                         className="inline-flex items-center justify-center font-bold px-5 py-2.5 text-[18px] text-white hover:opacity-90 active:scale-95 transition-all w-full"
                         style={{
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           borderRadius: '0.75rem',
                           fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                           fontWeight: '100',
@@ -6272,7 +6272,7 @@ export default function SettingsModal({
                     href="https://defibeo.com/school/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: 'rgb(53, 86, 236)', color: '#fff' }}
+                    style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#0023c1', color: '#fff' }}
                     className="text-center cursor-pointer"
                   >
                     {t("Centre de connaissances")}
@@ -6826,7 +6826,7 @@ const { defibrillateurs } = await res.json();`}
                       .map((field) => (
                         <div
                           key={`${field.entity}-${field.slug}`}
-                          className="bg-white p-3 flex items-center justify-between flex-wrap gap-2 hover:border-[#3556ec] transition-all"
+                          className="bg-white p-3 flex items-center justify-between flex-wrap gap-2 hover:border-[#0023c1] transition-all"
                           style={{
                             fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                             border: '1px solid #e4e1e1',
@@ -7908,7 +7908,7 @@ const data = await res.json();`}
                     type="button"
                     onClick={() => setIsApiDocOpen(false)}
                     style={{
-                      backgroundColor: '#3556ec',
+                      backgroundColor: '#0023c1',
                       color: '#ffffff',
                       borderRadius: '13px',
                       padding: '14px 20px',
@@ -7976,7 +7976,7 @@ const data = await res.json();`}
                         rel="noopener noreferrer"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8008,7 +8008,7 @@ const data = await res.json();`}
                         href="mailto:support@defibeo.com"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8040,7 +8040,7 @@ const data = await res.json();`}
                         href="mailto:support@defibeo.com"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8072,7 +8072,7 @@ const data = await res.json();`}
                         href="mailto:support@defibeo.com"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8106,7 +8106,7 @@ const data = await res.json();`}
                         rel="noopener noreferrer"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8140,7 +8140,7 @@ const data = await res.json();`}
                         rel="noopener noreferrer"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8174,7 +8174,7 @@ const data = await res.json();`}
                         rel="noopener noreferrer"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8208,7 +8208,7 @@ const data = await res.json();`}
                         rel="noopener noreferrer"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: 'rgb(53, 86, 236)',
+                          backgroundColor: '#0023c1',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8228,7 +8228,7 @@ const data = await res.json();`}
                     type="button"
                     onClick={() => setIsShopDrawerOpen(false)}
                     style={{
-                      backgroundColor: '#3556ec',
+                      backgroundColor: '#0023c1',
                       color: '#ffffff',
                       borderRadius: '13px',
                       padding: '14px 20px',

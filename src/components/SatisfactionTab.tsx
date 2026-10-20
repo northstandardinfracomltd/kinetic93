@@ -414,7 +414,7 @@ export default function SatisfactionTab({
     width: '30px',
     height: '30px',
     borderRadius: '50%',
-    backgroundColor: '#3556ec',
+    backgroundColor: '#0023c1',
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: '11px',
@@ -464,7 +464,7 @@ export default function SatisfactionTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -705,7 +705,7 @@ export default function SatisfactionTab({
         }
         #satisfaction-tab-container-harmonized #search-satisfaction-input:hover,
         #satisfaction-tab-container-harmonized #search-satisfaction-input:focus {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
@@ -714,12 +714,10 @@ export default function SatisfactionTab({
       {/* Header Box aligned with other modules */}
       <div 
         className="bg-white space-y-4 animate-fadeIn"
-        style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '98%', margin: 'auto', padding: '20px', backgroundColor: '#ffffff' }}
+        style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
       >
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight font-gochi bg-white" style={{ color: '#000000', cursor: 'default' }} id="satisfaction-tab-title">{t("Satisfaction")}</h2>
-          </div>
+          <div />
 
           <div className="flex flex-wrap items-center gap-3 bg-white">
             {/* Search Bar Input (reduced width) */}
@@ -846,7 +844,7 @@ export default function SatisfactionTab({
             fontSize: '18px',
             borderRadius: '13px',
             padding: '10px 20px',
-            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset',
+            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset',
             textDecoration: 'none',
           }}
         >
@@ -950,17 +948,17 @@ export default function SatisfactionTab({
                     type="button"
                     onClick={handleToggleSelectAll}
                     id="select-all-radio-checkbox"
-                    className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                    className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                       isAllSelected
-                        ? 'border-[#fe4eba] bg-transparent'
-                        : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                        ? 'border-[#2e54ff] bg-transparent'
+                        : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                     }`}
                     style={{ borderWidth: '2.5px' }}
                     role="checkbox"
                     aria-checked={isAllSelected}
                   >
                     {isAllSelected && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                     )}
                   </button>
                 </th>
@@ -1103,17 +1101,17 @@ export default function SatisfactionTab({
                             handleToggleSelectRow(rev.id);
                           }}
                           id={`radio-checkbox-row-${rev.id}`}
-                          className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#fe4eba]/20 cursor-pointer mx-auto ${
+                          className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                             isChecked
-                              ? 'border-[#fe4eba] bg-transparent'
-                              : 'border-slate-400 bg-white hover:border-[#fe4eba]'
+                              ? 'border-[#2e54ff] bg-transparent'
+                              : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                           }`}
                           style={{ borderWidth: '2.5px' }}
                           role="checkbox"
                           aria-checked={isChecked}
                         >
                           {isChecked && (
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] transition-all scale-100" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                           )}
                         </button>
                       </td>
@@ -1318,7 +1316,7 @@ export default function SatisfactionTab({
                         outline: 'none',
                         width: '100%',
                       }}
-                      className="hover:border-slate-400 focus:border-[#fa53d5] transition-colors"
+                      className="hover:border-slate-400 focus:border-[#2e54ff] transition-colors"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1352,7 +1350,7 @@ export default function SatisfactionTab({
                         outline: 'none',
                         width: '100%',
                       }}
-                      className="hover:border-slate-400 focus:border-[#fa53d5] transition-colors"
+                      className="hover:border-slate-400 focus:border-[#2e54ff] transition-colors"
                     />
                   </div>
                 </div>
@@ -1383,7 +1381,7 @@ export default function SatisfactionTab({
                           ...roundBadgeStyle,
                           width: '30px',
                           height: '30px',
-                          backgroundColor: '#3556ec',
+                          backgroundColor: '#0023c1',
                         }}
                       >
                         {perfSatisfaction.scoreValue}
@@ -1485,7 +1483,7 @@ export default function SatisfactionTab({
                         outline: 'none',
                         width: '100%',
                       }}
-                      className="hover:border-slate-400 focus:border-[#fa53d5] transition-colors"
+                      className="hover:border-slate-400 focus:border-[#2e54ff] transition-colors"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1519,7 +1517,7 @@ export default function SatisfactionTab({
                         outline: 'none',
                         width: '100%',
                       }}
-                      className="hover:border-slate-400 focus:border-[#fa53d5] transition-colors"
+                      className="hover:border-slate-400 focus:border-[#2e54ff] transition-colors"
                     />
                   </div>
                 </div>

@@ -303,7 +303,7 @@ export default function EmargementsTab({
       flex: 1;
       width: 100%;
       height: 100%;
-      border: 3px solid #FD4EBB;
+      border: 3px solid #2e54ff;
       border-radius: 12px;
       padding: 24px 36px;
       display: flex;
@@ -707,14 +707,14 @@ export default function EmargementsTab({
 
   const blueButtonStyle: React.CSSProperties = {
     ...rowActionButton18Style,
-    backgroundColor: 'rgb(53, 86, 236)',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    backgroundColor: '#0023c1',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
   };
 
   const purpleButtonStyle: React.CSSProperties = {
     ...rowActionButton18Style,
-    background: 'rgb(96, 28, 104)',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    background: '#2e54ff',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
     borderRadius: '13px',
   };
 
@@ -740,7 +740,7 @@ export default function EmargementsTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -766,21 +766,16 @@ export default function EmargementsTab({
           <div
             className="bg-white space-y-4"
             style={{
-              border: '1px solid #dadada',
-              borderTop: 'none',
-              borderRadius: '0px 0px 18px 18px',
+              borderRadius: '0px',
               maxWidth: '98%',
-              margin: '0 auto 24px auto',
-              padding: '20px',
-              backgroundColor: '#ffffff',
+              margin: 'auto',
+              padding: '10px 0px',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
             }}
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }}>
-                  Émargements
-                </h2>
-              </div>
+              <div />
 
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative w-full sm:w-64">
@@ -952,22 +947,17 @@ export default function EmargementsTab({
           <div
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
             style={{
-              border: '1px solid #dadada',
-              borderTop: 'none',
-              borderRadius: '0px 0px 18px 18px',
+              borderRadius: '0px',
               maxWidth: '98%',
-              margin: '0 auto',
-              marginTop: '0px',
-              padding: '20px',
+              margin: 'auto',
+              padding: '10px 0px',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
             }}
             id="emargement-form-header-box"
             onClick={(e) => e.stopPropagation()}
           >
-            <div>
-              <h3 className="text-2xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
-                {editingId ? 'Modification Émargement' : 'Nouveau Émargement'}
-              </h3>
-            </div>
+            <div />
 
             <div className="flex items-center gap-3">
               <button
@@ -1020,7 +1010,7 @@ export default function EmargementsTab({
               #emargement-core-form select:focus,
               #emargement-core-form textarea:hover,
               #emargement-core-form textarea:focus {
-                outline: 2.5px solid #fa53d5 !important;
+                outline: 2.5px solid #2e54ff !important;
                 outline-offset: 2px !important;
                 transition: all 0s !important;
               }
@@ -1058,7 +1048,7 @@ export default function EmargementsTab({
                     <span
                       className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                       style={{
-                        backgroundColor: 'oklch(0.44 0.16 324.65)',
+                        backgroundColor: '#2e54ff',
                         borderRadius: '1000px',
                         cursor: 'default',
                         fontWeight: 100,
@@ -1118,7 +1108,7 @@ export default function EmargementsTab({
                     <span
                       className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                       style={{
-                        backgroundColor: 'oklch(0.44 0.16 324.65)',
+                        backgroundColor: '#2e54ff',
                         borderRadius: '1000px',
                         cursor: 'default',
                         fontWeight: 100,
@@ -1212,8 +1202,8 @@ export default function EmargementsTab({
                                   className="inline-flex items-center cursor-pointer gap-2 select-none"
                                   style={{ fontSize: '16px', color: '#000' }}
                                 >
-                                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.present === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                    {stItem.present === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.present === 'Oui' ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                                    {stItem.present === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                                   </span>
                                   Oui
                                 </button>
@@ -1224,8 +1214,8 @@ export default function EmargementsTab({
                                   className="inline-flex items-center cursor-pointer gap-2 select-none"
                                   style={{ fontSize: '16px', color: '#000' }}
                                 >
-                                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.present === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                    {stItem.present === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.present === 'Non' ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                                    {stItem.present === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                                   </span>
                                   Non
                                 </button>
@@ -1266,8 +1256,8 @@ export default function EmargementsTab({
                                       className="inline-flex items-center cursor-pointer gap-2 select-none"
                                       style={{ fontSize: '16px', color: '#000' }}
                                     >
-                                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.validation === 'Oui' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                        {stItem.validation === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.validation === 'Oui' ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                                        {stItem.validation === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                                       </span>
                                       Oui
                                     </button>
@@ -1278,8 +1268,8 @@ export default function EmargementsTab({
                                       className="inline-flex items-center cursor-pointer gap-2 select-none"
                                       style={{ fontSize: '16px', color: '#000' }}
                                     >
-                                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.validation === 'Non' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                                        {stItem.validation === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stItem.validation === 'Non' ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                                        {stItem.validation === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                                       </span>
                                       Non
                                     </button>

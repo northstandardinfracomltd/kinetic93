@@ -192,10 +192,10 @@ const CustomPinkRadio = ({ value, currentValue, onChange, label }: { value: stri
       className="inline-flex items-center cursor-pointer gap-2 select-none"
       style={{ fontSize: '16px', color: '#000' }}
     >
-      <span className={`w-5 h-5 rounded-full border-2 relative transition-all bg-white col-span-1 shrink-0 ${isChecked ? 'border-[#fe4eba]' : 'border-slate-300'}`}>
+      <span className={`w-5 h-5 rounded-full border-2 relative transition-all bg-white col-span-1 shrink-0 ${isChecked ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
         {isChecked && (
           <span 
-            className="w-2.5 h-2.5 rounded-full bg-[#fe4eba] absolute" 
+            className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] absolute" 
             style={{
               left: '50%',
               top: '50%',
@@ -714,7 +714,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
         <div 
           className="fixed top-0 right-0 z-[60] flex items-center px-3.5 py-1.5 text-white font-sans pointer-events-auto select-none shadow-sm"
           style={{
-            backgroundColor: '#5c1b62',
+            backgroundColor: '#2e54ff',
             border: 'none',
             boxShadow: 'none',
             borderBottomLeftRadius: '13px',
@@ -774,13 +774,9 @@ export default function GmaoOtherEquipmentCorrectionForm({
       {/* Header */}
       <div 
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
-        style={{ border: '1px solid #dadada', borderTop: 'none', borderRadius: '0px 0px 18px 18px', maxWidth: '100%', margin: 'auto', padding: '20px' }}
+        style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
       >
-        <div>
-          <h3 className="text-2xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
-            RAPPORT AUTRE MATÉRIEL
-          </h3>
-        </div>
+        <div />
         
         <div className="flex items-center gap-3">
           <button
@@ -804,9 +800,9 @@ export default function GmaoOtherEquipmentCorrectionForm({
             onClick={() => playTechSound3()}
             style={{
               ...rowActionButton18Style,
-              backgroundColor: 'rgb(53, 86, 236)',
+              backgroundColor: '#0023c1',
               color: '#ffffff',
-              border: '1px solid rgb(53, 86, 236)',
+              border: '1px solid #0023c1',
               opacity: saving ? 0.5 : 1,
             }}
             className="transition-all cursor-pointer font-semibold"
@@ -837,7 +833,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
           #other-eq-core-form select:focus,
           #other-eq-core-form textarea:hover,
           #other-eq-core-form textarea:focus {
-            outline: 2.5px solid #fa53d5 !important;
+            outline: 2.5px solid #2e54ff !important;
             outline-offset: 2px !important;
           }
           #other-eq-core-form label {
@@ -859,7 +855,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
                 <span 
                   className="text-white px-3 py-1 text-[13px] inline-block font-semibold" 
                   style={{ 
-                    backgroundColor: 'oklch(0.44 0.16 324.65)', 
+                    backgroundColor: '#2e54ff', 
                     borderRadius: '1000px',
                     fontFamily: 'Inter, sans-serif',
                     fontWeight: 100,
@@ -951,7 +947,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
           {/* SECTION 1 - CATÉGORIE ET IDENTIFIANT */}
           <div className="bg-white p-5 space-y-3" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px' }}>
             <div className="mb-2">
-              <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: 'oklch(0.44 0.16 324.65)', borderRadius: '1000px' }}>
+              <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: '#2e54ff', borderRadius: '1000px' }}>
                 1 — Catégorie et identifiant
               </span>
             </div>
@@ -977,7 +973,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
           {/* SECTION 2 - CLIENT */}
           <div className="bg-white p-5 space-y-3" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px' }}>
             <div className="mb-2">
-              <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: 'oklch(0.44 0.16 324.65)', borderRadius: '1000px' }}>
+              <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: '#2e54ff', borderRadius: '1000px' }}>
                 2 — Client
               </span>
             </div>
@@ -1071,7 +1067,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
           {/* SECTION 3 - LOCALISATION */}
           <div className="bg-white p-5 space-y-3" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px' }}>
             <div className="mb-2">
-              <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: 'oklch(0.44 0.16 324.65)', borderRadius: '1000px' }}>
+              <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: '#2e54ff', borderRadius: '1000px' }}>
                 3 — Localisation
               </span>
             </div>
@@ -1161,7 +1157,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
           {/* SECTION 4 - DATES */}
           <div className="bg-white p-5 space-y-3" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px' }}>
             <div className="mb-2">
-              <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: 'oklch(0.44 0.16 324.65)', borderRadius: '1000px' }}>
+              <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: '#2e54ff', borderRadius: '1000px' }}>
                 4 — Dates
               </span>
             </div>
@@ -1200,7 +1196,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
           {/* SECTION 5 - CHAMPS SPÉCIFIQUES */}
           <div className="bg-white p-5 space-y-3 font-sans text-black text-[15px]" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px' }}>
             <div className="mb-2">
-              <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: 'oklch(0.44 0.16 324.65)', borderRadius: '1000px' }}>
+              <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: '#2e54ff', borderRadius: '1000px' }}>
                 5 — Caractéristiques Techniques : {categorie}
               </span>
             </div>
@@ -1779,7 +1775,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
           
           {/* Photo Cliché */}
           <div className="bg-white p-5 space-y-4 shadow-sm" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px' }}>
-            <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold mb-2" style={{ backgroundColor: 'oklch(0.44 0.16 324.65)', borderRadius: '1000px' }}>
+            <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold mb-2" style={{ backgroundColor: '#2e54ff', borderRadius: '1000px' }}>
               6 — Preuve Visuelle
             </span>
             <div className="space-y-1">
@@ -1824,7 +1820,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
                       }}
                       style={{
                         ...rowActionButton18Style,
-                        backgroundColor: 'rgb(53, 86, 236)',
+                        backgroundColor: '#0023c1',
                       }}
                       className="transition-colors cursor-pointer font-sans hover:bg-blue-700"
                     >
@@ -1843,7 +1839,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
 
           {/* SECTION 7: SIGNATURE */}
           <div className="bg-white p-5 space-y-4 shadow-sm" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px' }}>
-            <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: 'oklch(0.44 0.16 324.65)', borderRadius: '1000px' }}>
+            <span className="text-white px-3 py-1 text-[13px] inline-block font-semibold" style={{ backgroundColor: '#2e54ff', borderRadius: '1000px' }}>
               7 — Clôture & Signature
             </span>
 

@@ -2130,7 +2130,7 @@ export default function ImportExportTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -2180,7 +2180,7 @@ export default function ImportExportTab({
         #import-export-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled),
         #import-export-tab-container-harmonized select:hover:not(:disabled),
         #import-export-tab-container-harmonized select:focus:not(:disabled) {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
@@ -2210,19 +2210,16 @@ export default function ImportExportTab({
           <div 
             className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
             style={{
-              border: '1px solid #dadada',
-              borderTop: 'none',
-              borderRadius: '0px 0px 18px 18px',
+              borderRadius: '0px',
               maxWidth: '98%',
               margin: 'auto',
-              padding: '20px',
-              backgroundColor: '#ffffff',
+              padding: '10px 0px',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
               width: '100%'
             }}
           >
-            <div className="flex items-center gap-2">
-              <h3 className="text-2xl font-bold text-black font-gochi cursor-default" style={{ cursor: 'default' }}>{t("Exportations")}</h3>
-            </div>
+            <div />
 
             <div className="flex flex-wrap items-center gap-3">
               {/* Search Input block */}
@@ -2252,9 +2249,9 @@ export default function ImportExportTab({
                 }}
                 style={{
                   ...roundedButton18Style,
-                  backgroundColor: 'rgb(53, 86, 236)',
+                  backgroundColor: '#0023c1',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                   opacity: !hasExportationsSpreadsheet ? 0.45 : 1,
                   cursor: !hasExportationsSpreadsheet ? 'not-allowed' : 'pointer',
                 }}
@@ -2310,20 +2307,16 @@ export default function ImportExportTab({
             <div 
               className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
               style={{ 
-                border: '1px solid #dadada', 
-                borderTop: 'none', 
-                borderRadius: '0px 0px 18px 18px', 
+                borderRadius: '0px', 
                 maxWidth: '98%', 
                 margin: 'auto', 
-                padding: '20px' 
+                padding: '10px 0px',
+                border: 'none',
+                backgroundColor: 'rgb(255, 255, 255)'
               }}
               id="import-export-form-header-box"
             >
-              <div>
-                <h3 className="text-2xl font-bold font-gochi" id="form-modal-title" style={{ color: '#000000', cursor: 'default' }}>
-                  Nouveau Transfert
-                </h3>
-              </div>
+              <div />
               
               <div className="flex items-center gap-3">
                 <button
@@ -2341,11 +2334,11 @@ export default function ImportExportTab({
                   form="import-export-creation-form"
                   style={{
                     ...roundedButton18Style,
-                    backgroundColor: (isSaving || !googleDriveActive) ? '#6b7280' : 'rgb(53, 86, 236)',
+                    backgroundColor: (isSaving || !googleDriveActive) ? '#6b7280' : '#0023c1',
                     color: '#ffffff',
                     opacity: (isSaving || !googleDriveActive) ? 0.6 : 1,
                     cursor: (isSaving || !googleDriveActive) ? 'not-allowed' : 'pointer',
-                    boxShadow: (isSaving || !googleDriveActive) ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                    boxShadow: (isSaving || !googleDriveActive) ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                   }}
                   className="transition-all"
                   disabled={isSaving || !googleDriveActive}
@@ -2377,7 +2370,7 @@ export default function ImportExportTab({
                     <span 
                       className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                       style={{
-                        backgroundColor: 'oklch(0.44 0.16 324.65)',
+                        backgroundColor: '#2e54ff',
                         borderRadius: '1000px',
                         cursor: 'default',
                         fontWeight: 100,

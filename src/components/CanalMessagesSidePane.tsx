@@ -422,7 +422,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               tabIndex={-1}
               className="px-4 sm:px-5 py-2 rounded-full font-bold shrink-0 transition-all text-white flex items-center justify-center text-[15px] sm:text-[18px] pointer-events-none"
               style={{
-                backgroundColor: '#3556ec',
+                backgroundColor: '#0023c1',
                 color: '#ffffff',
                 border: 'none',
                 boxShadow: 'none',
@@ -591,9 +591,9 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               id="btn-send-canal-message"
               className="inline-flex items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center text-[15px] sm:text-[18px]"
               style={{
-                backgroundColor: '#3556ec',
+                backgroundColor: '#0023c1',
                 boxShadow:
-                  'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
+                  'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #0023c1, inset 0 6px 12px #ffffff1f',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 opacity: (!messageInput.trim() || !hasMessagesSpreadsheet) ? 0.45 : 1,
                 cursor: (!messageInput.trim() || !hasMessagesSpreadsheet) ? 'not-allowed' : 'pointer',

@@ -1165,13 +1165,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans relative" id="login-viewport-wrapper">
+    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans relative" style={{ backgroundColor: '#2e54ff' }} id="login-viewport-wrapper">
       {/* Top Bar Progress Animation for Tab & Role Switching */}
       <TopBarProgress triggerKey={`${activeTab}-${loginRole}`} duration={3000} height={3.5} zIndex={99999} />
 
       <style>{`
         body {
-          background: radial-gradient(#7e2e86, #36093a) !important;
+          background: #2e54ff !important;
         }
         #connexion-lang-picker select {
           width: auto !important;

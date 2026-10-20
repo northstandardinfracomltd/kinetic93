@@ -136,7 +136,7 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
               }}
               className={`p-3.5 rounded-xl cursor-pointer transition-all border ${
                 emptySelected
-                  ? 'bg-[#ffecf8] border-[#fe4eba]'
+                  ? 'bg-[#ffecf8] border-[#2e54ff]'
                   : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
               }`}
             >
@@ -174,7 +174,7 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
                   }}
                   className={`p-3.5 rounded-xl cursor-pointer transition-all border flex items-center justify-between gap-3 ${
                     isSelected
-                      ? 'bg-[#ffecf8] border-[#fe4eba]'
+                      ? 'bg-[#ffecf8] border-[#2e54ff]'
                       : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >

@@ -721,7 +721,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <span className="text-neutral-800 font-semibold">Événement spontané</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-3.5 h-1.5 rounded-full bg-[#fe4eba] inline-block shrink-0" />
+          <span className="w-3.5 h-1.5 rounded-full bg-[#2e54ff] inline-block shrink-0" />
           <span className="text-neutral-800 font-semibold">Période de tournée</span>
         </div>
       </div>
@@ -762,14 +762,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                     id={d.isToday ? "extended-planning-today-col" : undefined}
                     className={`relative border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none w-[200px] min-w-[200px] max-w-[200px] ${
                       d.isToday
-                        ? 'bg-pink-100/80 text-[#FD4EBB] border-b-2 border-b-[#FD4EBB]'
+                        ? 'bg-pink-100/80 text-[#2e54ff] border-b-2 border-b-[#2e54ff]'
                         : d.isWeekend
                         ? 'bg-neutral-100/60 text-neutral-400'
                         : 'bg-white text-neutral-700'
                     }`}
                   >
                     <div className="text-[11px] uppercase tracking-wider">{d.dayShort}</div>
-                    <div className={`text-sm font-bold ${d.isToday ? 'text-[#FD4EBB]' : 'text-neutral-900'}`}>
+                    <div className={`text-sm font-bold ${d.isToday ? 'text-[#2e54ff]' : 'text-neutral-900'}`}>
                       {d.day}
                     </div>
 
@@ -883,7 +883,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                 {/* Tournée pink barrette: ALWAYS visible if within tour, regardless of missions count */}
                                 {isWithinTour && (
                                   <div
-                                    className="h-2 w-full rounded-full bg-[#fe4eba]/80 hover:bg-[#fe4eba] transition-colors mb-1.5 cursor-default shrink-0"
+                                    className="h-2 w-full rounded-full bg-[#2e54ff]/80 hover:bg-[#2e54ff] transition-colors mb-1.5 cursor-default shrink-0"
                                     title={tItem.title}
                                   />
                                 )}

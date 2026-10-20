@@ -158,8 +158,8 @@ export default function StagiairesTab({
 
   const blueButtonStyle: React.CSSProperties = {
     ...rowActionButton18Style,
-    backgroundColor: 'rgb(53, 86, 236)',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    backgroundColor: '#0023c1',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
   };
 
   const triggerFormShakeAndScroll = () => {
@@ -184,7 +184,7 @@ export default function StagiairesTab({
     color: '#000000',
     backgroundColor: '#ffffff',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #fa53d5' : 'none',
+    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
   };
@@ -210,21 +210,16 @@ export default function StagiairesTab({
           <div
             className="bg-white space-y-4"
             style={{
-              border: '1px solid #dadada',
-              borderTop: 'none',
-              borderRadius: '0px 0px 18px 18px',
+              borderRadius: '0px',
               maxWidth: '98%',
-              margin: '0 auto 24px auto',
-              padding: '20px',
-              backgroundColor: '#ffffff',
+              margin: 'auto',
+              padding: '10px 0px',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
             }}
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight font-gochi" style={{ color: '#000000', cursor: 'default' }}>
-                  Stagiaires
-                </h2>
-              </div>
+              <div />
 
               <div className="flex flex-wrap items-center gap-3">
                 <div className="relative w-full sm:w-64">
@@ -380,22 +375,17 @@ export default function StagiairesTab({
           <div
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
             style={{
-              border: '1px solid #dadada',
-              borderTop: 'none',
-              borderRadius: '0px 0px 18px 18px',
+              borderRadius: '0px',
               maxWidth: '98%',
-              margin: '0 auto',
-              marginTop: '0px',
-              padding: '20px',
+              margin: 'auto',
+              padding: '10px 0px',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
             }}
             id="stagiaire-form-header-box"
             onClick={(e) => e.stopPropagation()}
           >
-            <div>
-              <h3 className="text-2xl font-bold font-gochi" style={{ color: '#000000', cursor: 'default' }}>
-                {editingId ? 'Modification Stagiaire' : 'Nouveau Stagiaire'}
-              </h3>
-            </div>
+            <div />
 
             <div className="flex items-center gap-3">
               <button
@@ -445,7 +435,7 @@ export default function StagiairesTab({
               #stagiaire-core-form select:focus,
               #stagiaire-core-form textarea:hover,
               #stagiaire-core-form textarea:focus {
-                outline: 2.5px solid #fa53d5 !important;
+                outline: 2.5px solid #2e54ff !important;
                 outline-offset: 2px !important;
                 transition: all 0s !important;
               }
@@ -490,7 +480,7 @@ export default function StagiairesTab({
                     <span
                       className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                       style={{
-                        backgroundColor: 'oklch(0.44 0.16 324.65)',
+                        backgroundColor: '#2e54ff',
                         borderRadius: '1000px',
                         cursor: 'default',
                         fontWeight: 100,
@@ -565,8 +555,8 @@ export default function StagiairesTab({
                         className="inline-flex items-center cursor-pointer gap-2 select-none"
                         style={{ fontSize: '16px', color: '#000' }}
                       >
-                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sexe === 'Homme' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                          {sexe === 'Homme' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sexe === 'Homme' ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                          {sexe === 'Homme' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                         </span>
                         Homme
                       </button>
@@ -577,8 +567,8 @@ export default function StagiairesTab({
                         className="inline-flex items-center cursor-pointer gap-2 select-none"
                         style={{ fontSize: '16px', color: '#000' }}
                       >
-                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sexe === 'Femme' ? 'border-[#fe4eba]' : 'border-slate-300 bg-white'}`}>
-                          {sexe === 'Femme' && <span className="w-2.5 h-2.5 rounded-full bg-[#fe4eba]" />}
+                        <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sexe === 'Femme' ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                          {sexe === 'Femme' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                         </span>
                         Femme
                       </button>
@@ -599,7 +589,7 @@ export default function StagiairesTab({
                     <span
                       className="text-white px-3 py-1 text-[13px] inline-block font-sans"
                       style={{
-                        backgroundColor: 'oklch(0.44 0.16 324.65)',
+                        backgroundColor: '#2e54ff',
                         borderRadius: '1000px',
                         cursor: 'default',
                         fontWeight: 100,
