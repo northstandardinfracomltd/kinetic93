@@ -1988,7 +1988,7 @@ export default function App() {
   const [isCanalMessagesOpen, setIsCanalMessagesOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isSidebarMoreOpen, setIsSidebarMoreOpen] = useState(false);
-  const [hoveredSidebarItem, setHoveredSidebarItem] = useState<string | null>(null);
+  const [hoveredSidebarItem, setHoveredSidebarItem] = useState<{ id: string; label: string; centerY: number } | null>(null);
   const [lastSeenMessageTime, setLastSeenMessageTime] = useState<number>(() => {
     try {
       const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
@@ -11338,7 +11338,12 @@ export default function App() {
             ];
 
             const isDropdownTabActive = !isCanalMessagesOpen && dropdownItems.some(item => item.id === activeTab);
-            const isMoreActiveOrHovered = isDropdownTabActive || isSidebarMoreOpen || hoveredSidebarItem === 'more-3dots';
+            const isMoreActive = isDropdownTabActive || isSidebarMoreOpen;
+
+            const activeItemIndex = mainNavItems.findIndex(item => item.isActive);
+            const resolvedActiveIndex = activeItemIndex !== -1 ? activeItemIndex : (isDropdownTabActive ? mainNavItems.length : -1);
+            const ITEM_HEIGHT = 48;
+            const ITEM_GAP = 4;
 
             return (
               <div className="flex flex-col">
@@ -11363,34 +11368,51 @@ export default function App() {
                 )}
 
                 {/* Navigation List */}
-                <div className={`flex flex-col ${isSidebarCollapsed ? 'mt-4 space-y-2' : 'space-y-1'}`}>
+                <div
+                  className={`relative flex flex-col ${isSidebarCollapsed ? 'mt-4' : ''}`}
+                  style={{ gap: `${ITEM_GAP}px` }}
+                >
+                  {/* Sliding Green Active Bar */}
+                  {resolvedActiveIndex !== -1 && (
+                    <div
+                      className="absolute left-0 top-0 pointer-events-none z-10"
+                      style={{
+                        width: '6px',
+                        height: `${ITEM_HEIGHT}px`,
+                        backgroundColor: '#3ddc84',
+                        borderRadius: '0px 8px 8px 0px',
+                        transform: `translateY(${resolvedActiveIndex * (ITEM_HEIGHT + ITEM_GAP)}px)`,
+                        transition: 'transform 0.28s cubic-bezier(0.22, 1, 0.36, 1)',
+                      }}
+                    />
+                  )}
+
                   {mainNavItems.map((item) => {
-                    const isHovered = hoveredSidebarItem === item.id;
-                    const useBlackIcon = item.isActive || isHovered;
                     return (
                       <button
                         key={item.id}
                         type="button"
                         id={`tab-selector-${item.id}`}
                         onClick={item.onClick}
-                        onMouseEnter={() => setHoveredSidebarItem(item.id)}
-                        onMouseLeave={() => setHoveredSidebarItem(prev => (prev === item.id ? null : prev))}
-                        title={isSidebarCollapsed ? item.label : undefined}
+                        onMouseEnter={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setHoveredSidebarItem({
+                            id: item.id,
+                            label: item.label,
+                            centerY: rect.top + rect.height / 2,
+                          });
+                        }}
+                        onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === item.id ? null : prev))}
+                        style={{ height: `${ITEM_HEIGHT}px` }}
                         className={`sidebar-nav-item-bounce relative w-full flex items-center ${
-                          isSidebarCollapsed ? 'justify-center px-0 py-3.5' : 'gap-4 px-7 py-3'
+                          isSidebarCollapsed ? 'justify-center px-0' : 'gap-4 px-7'
                         } bg-transparent border-0 cursor-pointer text-left focus:outline-hidden`}
                       >
-                        {item.isActive && (
-                          <div
-                            className="absolute left-0 top-0 bottom-0"
-                            style={{ width: '6px', backgroundColor: '#3ddc84' }}
-                          />
-                        )}
-                        <div className="sidebar-nav-item-inner flex items-center gap-4 min-w-0">
+                        <div className="flex items-center gap-4 min-w-0">
                           <img
-                            src={useBlackIcon ? item.iconNoir : item.iconGris}
+                            src={item.isActive ? item.iconNoir : item.iconGris}
                             alt={item.label}
-                            className="w-[26px] h-[26px] object-contain shrink-0"
+                            className="sidebar-nav-icon-bounce w-[26px] h-[26px] object-contain shrink-0"
                             referrerPolicy="no-referrer"
                           />
                           {!isSidebarCollapsed && (
@@ -11398,7 +11420,7 @@ export default function App() {
                               className="truncate whitespace-nowrap"
                               style={{
                                 fontSize: '18px',
-                                color: '#50617a',
+                                color: item.isActive ? '#000000' : '#50617a',
                                 fontWeight: 400,
                                 fontFamily: "DefibeoMain, Civilprom, sans-serif",
                               }}
@@ -11412,33 +11434,34 @@ export default function App() {
                   })}
 
                   {/* 3-dots Dropdown Trigger & Menu */}
-                  <div className="relative">
+                  <div className="relative" style={{ height: `${ITEM_HEIGHT}px` }}>
                     <button
                       type="button"
                       id="sidebar-btn-more-dropdown"
                       onClick={() => setIsSidebarMoreOpen(prev => !prev)}
-                      onMouseEnter={() => setHoveredSidebarItem('more-3dots')}
-                      onMouseLeave={() => setHoveredSidebarItem(prev => (prev === 'more-3dots' ? null : prev))}
-                      title={t('Plus')}
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setHoveredSidebarItem({
+                          id: 'more-3dots',
+                          label: t('Plus'),
+                          centerY: rect.top + rect.height / 2,
+                        });
+                      }}
+                      onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'more-3dots' ? null : prev))}
+                      style={{ height: `${ITEM_HEIGHT}px` }}
                       className={`sidebar-nav-item-bounce relative w-full flex items-center ${
-                        isSidebarCollapsed ? 'justify-center px-0 py-3.5' : 'px-7 py-3'
+                        isSidebarCollapsed ? 'justify-center px-0' : 'px-7'
                       } bg-transparent border-0 cursor-pointer text-left focus:outline-hidden`}
                     >
-                      {isDropdownTabActive && (
-                        <div
-                          className="absolute left-0 top-0 bottom-0"
-                          style={{ width: '6px', backgroundColor: '#3ddc84' }}
-                        />
-                      )}
-                      <div className="sidebar-nav-item-inner flex items-center">
+                      <div className="flex items-center">
                         <img
                           src={
-                            isMoreActiveOrHovered
+                            isMoreActive
                               ? 'https://civilprom.s3.eu-north-1.amazonaws.com/3dotsnoir.svg'
                               : 'https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg'
                           }
                           alt="Plus"
-                          className="w-[22px] h-[22px] object-contain shrink-0"
+                          className="sidebar-nav-icon-bounce w-[22px] h-[22px] object-contain shrink-0"
                           referrerPolicy="no-referrer"
                         />
                       </div>
@@ -11472,20 +11495,24 @@ export default function App() {
                                   setIsSidebarMoreOpen(false);
                                   setActiveTab(dItem.id);
                                 }}
-                                className="sidebar-nav-item-bounce relative w-full flex items-center px-5 py-2.5 text-left bg-transparent hover:bg-[#f5f7fa] border-0 cursor-pointer transition-colors"
+                                className="relative w-full flex items-center px-5 py-2.5 text-left bg-transparent hover:bg-[#f5f7fa] border-0 cursor-pointer transition-colors"
                               >
                                 {isSelected && (
                                   <div
                                     className="absolute left-0 top-0 bottom-0"
-                                    style={{ width: '5px', backgroundColor: '#3ddc84' }}
+                                    style={{
+                                      width: '5px',
+                                      backgroundColor: '#3ddc84',
+                                      borderRadius: '0px 8px 8px 0px',
+                                    }}
                                   />
                                 )}
                                 <span
-                                  className="sidebar-nav-item-inner truncate whitespace-nowrap"
+                                  className="truncate whitespace-nowrap"
                                   style={{
                                     fontSize: '18px',
-                                    color: '#50617a',
-                                    fontWeight: isSelected ? 600 : 400,
+                                    color: isSelected ? '#000000' : '#50617a',
+                                    fontWeight: 400,
                                     fontFamily: "DefibeoMain, Civilprom, sans-serif",
                                   }}
                                 >
@@ -11499,6 +11526,28 @@ export default function App() {
                     )}
                   </div>
                 </div>
+
+                {/* Floating black pill label when sidebar is collapsed and an item is hovered */}
+                {isSidebarCollapsed && hoveredSidebarItem && !isSidebarMoreOpen && (
+                  <div
+                    className="fixed z-[9999] pointer-events-none select-none shadow-md"
+                    style={{
+                      left: '92px',
+                      top: `${hoveredSidebarItem.centerY}px`,
+                      transform: 'translateY(-50%)',
+                      backgroundColor: '#000000',
+                      color: '#ffffff',
+                      borderRadius: '9999px',
+                      padding: '6px 16px',
+                      fontSize: '16px',
+                      fontWeight: 400,
+                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {hoveredSidebarItem.label}
+                  </div>
+                )}
               </div>
             );
           })()}

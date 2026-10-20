@@ -397,21 +397,21 @@ html.is-edge [style*="font-weight:100"] {
   opacity: 1 !important;
 }
 
-@keyframes sidebarGentleBounce {
+@keyframes sidebarIconZoomBounce {
   0% {
-    transform: translateY(0);
+    transform: scale(1);
   }
-  45% {
-    transform: translateY(-3px);
+  40% {
+    transform: scale(1.18);
   }
   75% {
-    transform: translateY(1px);
+    transform: scale(0.94);
   }
   100% {
-    transform: translateY(0);
+    transform: scale(1);
   }
 }
 
-.sidebar-nav-item-bounce:hover .sidebar-nav-item-inner {
-  animation: sidebarGentleBounce 0.36s cubic-bezier(0.34, 1.56, 0.64, 1);
+.sidebar-nav-item-bounce:hover .sidebar-nav-icon-bounce {
+  animation: sidebarIconZoomBounce 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
