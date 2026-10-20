@@ -1326,9 +1326,9 @@ export default function ClientTab({
               id="btn-submit-client-form"
               style={{
                 ...rowActionButton18Style,
-                backgroundColor: '#0023c1',
+                backgroundColor: '#2e54ff',
                 color: '#ffffff',
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
               }}
               className="transition-all cursor-pointer"
             >
@@ -2513,8 +2513,8 @@ export default function ClientTab({
                 id="btn-add-client"
                 style={{
                   ...customButtonStyle,
-                  backgroundColor: '#0023c1',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  backgroundColor: '#2e54ff',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                   opacity: !resolvedSpreadsheetUrl ? 0.45 : 1,
                   cursor: !resolvedSpreadsheetUrl ? 'not-allowed' : 'pointer',
                 }}
@@ -2645,7 +2645,7 @@ export default function ClientTab({
                     key={client.id}
                     id={`client-row-${client.id}`}
                     onClick={() => openEditModal(client)}
-                    className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
+                    className="group hover:bg-[#ecefff] transition-all cursor-pointer"
                   >
                     {/* Defib count pill */}
                     <td className="px-4 py-5 text-center whitespace-nowrap">

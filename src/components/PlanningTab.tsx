@@ -1325,7 +1325,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 type="button"
                                 onClick={() => handleDeleteSpontaneousEvent(evt.id)}
                                 style={{
-                                  boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.29) 0px 6px 12px inset",
+                                  boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.29) 0px 6px 12px inset",
                                   color: "rgb(255, 255, 255)",
                                   background: "rgb(212 10 10)",
                                   borderRadius: "13px",
@@ -1583,7 +1583,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                     color: "rgb(255, 255, 255)",
                                     background: isConsultEnabled ? "rgb(20, 87, 236)" : "rgb(156, 163, 175)",
                                     boxShadow: isConsultEnabled
-                                      ? "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset"
+                                      ? "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset"
                                       : "none",
                                     padding: "10px 20px",
                                     fontSize: "18px",
@@ -1607,7 +1607,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                   style={{
                                     color: "rgb(255, 255, 255)",
                                     background: "rgb(20, 87, 236)",
-                                    boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
+                                    boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
                                     padding: "10px 20px",
                                     fontSize: "18px",
                                     border: "none",
@@ -1668,7 +1668,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             className="text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none hover:opacity-95 active:scale-95"
             style={{
               backgroundColor: "rgb(20 87 236)",
-              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
+              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
               borderRadius: "13px",
               padding: "10px 20px",
               fontSize: "18px",

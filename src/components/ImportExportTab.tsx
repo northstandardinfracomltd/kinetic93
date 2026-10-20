@@ -2249,9 +2249,9 @@ export default function ImportExportTab({
                 }}
                 style={{
                   ...roundedButton18Style,
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                   opacity: !hasExportationsSpreadsheet ? 0.45 : 1,
                   cursor: !hasExportationsSpreadsheet ? 'not-allowed' : 'pointer',
                 }}
@@ -2334,11 +2334,11 @@ export default function ImportExportTab({
                   form="import-export-creation-form"
                   style={{
                     ...roundedButton18Style,
-                    backgroundColor: (isSaving || !googleDriveActive) ? '#6b7280' : '#0023c1',
+                    backgroundColor: (isSaving || !googleDriveActive) ? '#6b7280' : '#2e54ff',
                     color: '#ffffff',
                     opacity: (isSaving || !googleDriveActive) ? 0.6 : 1,
                     cursor: (isSaving || !googleDriveActive) ? 'not-allowed' : 'pointer',
-                    boxShadow: (isSaving || !googleDriveActive) ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                    boxShadow: (isSaving || !googleDriveActive) ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                   }}
                   className="transition-all"
                   disabled={isSaving || !googleDriveActive}
@@ -2517,7 +2517,7 @@ export default function ImportExportTab({
                             reader.readAsText(file, 'utf-8');
                           }}
                           onClick={() => fileInputRef.current?.click()}
-                          className="p-8 text-center space-y-4 hover:bg-[#ffecf8]/20 transition-all cursor-pointer"
+                          className="p-8 text-center space-y-4 hover:bg-[#ecefff]/20 transition-all cursor-pointer"
                           style={{ borderRadius: '13px', border: 'none', backgroundColor: '#fdecff' }}
                         >
                           <input
@@ -2659,7 +2659,7 @@ export default function ImportExportTab({
                     {filteredRecords.map((r) => (
                       <tr 
                         key={r.id} 
-                        className="hover:bg-[#ffecf8] transition-all cursor-default"
+                        className="hover:bg-[#ecefff] transition-all cursor-default"
                       >
                         {/* Date column (exactly mimicking text styling from DefibTab) */}
                         <td 

@@ -701,9 +701,9 @@ export default function VariableTab({
               id="btn-submit-variable-form"
               style={{
                 ...rowActionButton18Style,
-                backgroundColor: '#0023c1',
+                backgroundColor: '#2e54ff',
                 color: '#ffffff',
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
               }}
               className="transition-all cursor-pointer"
             >
@@ -898,8 +898,8 @@ export default function VariableTab({
                                 borderRadius: '13px',
                                 padding: '10px 20px',
                                 marginRight: '15px',
-                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                background: '#0023c1',
+                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                background: '#2e54ff',
                                 color: '#fff',
                                 fontSize: '18px'
                               }}
@@ -974,7 +974,7 @@ export default function VariableTab({
                       id="input-variable-couleur-hex"
                       value={couleurHex}
                       onChange={(e) => setCouleurHex(e.target.value)}
-                      placeholder="#0023c1"
+                      placeholder="#2e54ff"
                       className="w-full"
                     />
                   </div>
@@ -1279,8 +1279,8 @@ export default function VariableTab({
               className="font-sans"
               style={{
                 ...customButtonStyle,
-                backgroundColor: '#0023c1',
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                backgroundColor: '#2e54ff',
+                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                 opacity: !hasVariablesSpreadsheet ? 0.45 : 1,
                 cursor: !hasVariablesSpreadsheet ? 'not-allowed' : 'pointer',
               }}
@@ -1361,7 +1361,7 @@ export default function VariableTab({
                         if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
                         openEditModal(v);
                       }}
-                      className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
+                      className="group hover:bg-[#ecefff] transition-all cursor-pointer"
                     >
                       {/* Visual box column */}
                       <td className="px-4 py-3.5">

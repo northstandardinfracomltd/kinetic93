@@ -397,7 +397,7 @@ export default function TicketsCaisseTab({
                   </thead>
                   <tbody className="text-slate-700 text-xs">
                     {filteredExpenses.map((exp) => (
-                      <tr key={exp.id} className="group hover:bg-[#ffecf8] transition-all cursor-pointer">
+                      <tr key={exp.id} className="group hover:bg-[#ecefff] transition-all cursor-pointer">
                         
                         {/* Employé */}
                         <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
@@ -502,9 +502,9 @@ export default function TicketsCaisseTab({
                 id="btn-submit-tickets-form"
                 style={{
                   ...rowActionButton18Style,
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                 }}
                 className="transition-all cursor-pointer"
               >
@@ -638,7 +638,7 @@ export default function TicketsCaisseTab({
                     setPhotoUrl(file.name);
                   }}
                   onClick={() => document.getElementById('ticket-photo-upload-input')?.click()}
-                  className="p-8 text-center space-y-4 hover:bg-[#ffecf8]/20 transition-all cursor-pointer"
+                  className="p-8 text-center space-y-4 hover:bg-[#ecefff]/20 transition-all cursor-pointer"
                   style={{ borderRadius: '13px', border: 'none', backgroundColor: '#fdecff' }}
                 >
                   <input

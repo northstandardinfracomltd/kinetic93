@@ -800,9 +800,9 @@ export default function GmaoOtherEquipmentCorrectionForm({
             onClick={() => playTechSound3()}
             style={{
               ...rowActionButton18Style,
-              backgroundColor: '#0023c1',
+              backgroundColor: '#2e54ff',
               color: '#ffffff',
-              border: '1px solid #0023c1',
+              border: '1px solid #2e54ff',
               opacity: saving ? 0.5 : 1,
             }}
             className="transition-all cursor-pointer font-semibold"
@@ -1006,7 +1006,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
                              key={c.id}
                              type="button"
                              onMouseDown={() => handleClientSelect(c.id)}
-                             className="w-full text-left px-3 py-2 text-sm text-slate-800 hover:bg-[#ffecf8] transition-colors font-semibold border-0 cursor-pointer"
+                             className="w-full text-left px-3 py-2 text-sm text-slate-800 hover:bg-[#ecefff] transition-colors font-semibold border-0 cursor-pointer"
                            >
                              {labelStr}
                            </button>
@@ -1820,7 +1820,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
                       }}
                       style={{
                         ...rowActionButton18Style,
-                        backgroundColor: '#0023c1',
+                        backgroundColor: '#2e54ff',
                       }}
                       className="transition-colors cursor-pointer font-sans hover:bg-blue-700"
                     >

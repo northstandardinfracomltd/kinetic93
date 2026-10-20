@@ -134,7 +134,7 @@ export default function VeillesTab({ veilles, onDeleteVeille }: VeillesTabProps)
               </thead>
               <tbody className="text-slate-700 text-xs">
                 {filteredVeilles.map((v) => (
-                  <tr key={v.id} className="group hover:bg-[#ffecf8] transition-all cursor-pointer border-b border-slate-100">
+                  <tr key={v.id} className="group hover:bg-[#ecefff] transition-all cursor-pointer border-b border-slate-100">
                     <td className="px-4 py-5 whitespace-nowrap" style={tdStyle}>
                       <div className="font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif"' }}>{v.commune}</div>
                     </td>

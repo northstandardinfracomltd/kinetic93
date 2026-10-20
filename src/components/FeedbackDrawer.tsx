@@ -252,7 +252,7 @@ ${description}`;
                     fontSize: '18px',
                     borderRadius: '13px',
                   }}
-                  className="w-full py-3 bg-[#0023c1] hover:bg-blue-700 text-white font-bold transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full py-3 bg-[#2e54ff] hover:bg-blue-700 text-white font-bold transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {isSending ? 'Envoi en cours...' : 'Envoyer'}
                 </button>

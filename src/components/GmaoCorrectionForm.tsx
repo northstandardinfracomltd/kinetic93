@@ -219,9 +219,9 @@ const rowActionButton18Style: React.CSSProperties = {
 
 const registerButtonStyle: React.CSSProperties = {
   ...rowActionButton18Style,
-  backgroundColor: '#0023c1',
+  backgroundColor: '#2e54ff',
   color: '#ffffff',
-  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
 };
 
 // Custom Radio Component with exact design styling (representing white gap, rose border and pink dot)
@@ -5895,7 +5895,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: mesPhotosValides ? '#0023c1' : '#e5e5ea',
+                    backgroundColor: mesPhotosValides ? '#2e54ff' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -5952,7 +5952,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: etiquetteObligatoireConforme ? '#0023c1' : '#e5e5ea',
+                    backgroundColor: etiquetteObligatoireConforme ? '#2e54ff' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -6009,7 +6009,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: signaletiqueConforme === 'Oui' ? '#0023c1' : '#e5e5ea',
+                    backgroundColor: signaletiqueConforme === 'Oui' ? '#2e54ff' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -6066,7 +6066,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: scelleConforme ? '#0023c1' : '#e5e5ea',
+                    backgroundColor: scelleConforme ? '#2e54ff' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -6123,7 +6123,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: stickerEntrepriseApplique ? '#0023c1' : '#e5e5ea',
+                    backgroundColor: stickerEntrepriseApplique ? '#2e54ff' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -6180,7 +6180,7 @@ export default function GmaoCorrectionForm({
                     width: '46px',
                     height: '24px',
                     borderRadius: '9999px',
-                    backgroundColor: demandeDevis ? '#0023c1' : '#e5e5ea',
+                    backgroundColor: demandeDevis ? '#2e54ff' : '#e5e5ea',
                     transition: 'background-color 0.25s ease',
                     position: 'relative',
                     cursor: 'pointer',
@@ -6292,7 +6292,7 @@ export default function GmaoCorrectionForm({
                               toggleDevisArticle('Autre');
                             }}
                             className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${
-                              devisArticlesSelectionnes.includes('Autre') ? 'bg-[#ffecf8]/30' : 'hover:bg-slate-50'
+                              devisArticlesSelectionnes.includes('Autre') ? 'bg-[#ecefff]/30' : 'hover:bg-slate-50'
                             }`}
                           >
                             <input
@@ -6321,7 +6321,7 @@ export default function GmaoCorrectionForm({
                                     toggleDevisArticle(v.nom);
                                   }}
                                   className={`flex items-center gap-2.5 px-3 py-2 cursor-pointer transition-colors ${
-                                    isChecked ? 'bg-[#ffecf8]/30' : 'hover:bg-slate-50'
+                                    isChecked ? 'bg-[#ecefff]/30' : 'hover:bg-slate-50'
                                   }`}
                                 >
                                   <input

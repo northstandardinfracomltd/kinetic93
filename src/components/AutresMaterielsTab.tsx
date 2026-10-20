@@ -1202,8 +1202,8 @@ export default function AutresMaterielsTab({
                     id="btn-add-materiel"
                     style={{
                       ...customButtonStyle,
-                      backgroundColor: '#0023c1',
-                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                      backgroundColor: '#2e54ff',
+                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                       opacity: !resolvedSpreadsheetUrl ? 0.45 : 1,
                       cursor: !resolvedSpreadsheetUrl ? 'not-allowed' : 'pointer',
                     }}
@@ -1383,8 +1383,8 @@ export default function AutresMaterielsTab({
                             style={{
                               ...rowActionButton18Style,
                               width: '100%',
-                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                              background: '#0023c1'
+                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                              background: '#2e54ff'
                             }}
                             className="w-full text-center transition-colors cursor-pointer"
                           >
@@ -1558,15 +1558,15 @@ export default function AutresMaterielsTab({
                         <tr 
                           key={item.id} 
                           onClick={() => handleOpenEditForm(item)}
-                          className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
-                          style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #0023c1' } : undefined}
+                          className="group hover:bg-[#ecefff] transition-all cursor-pointer"
+                          style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #2e54ff' } : undefined}
                         >
                           {/* Checkbox column */}
                           <td className="px-4 py-5 text-center relative" onClick={(e) => e.stopPropagation()}>
                             {isPinned && (
                               <div 
                                 className="absolute left-0 top-0 bottom-0 pointer-events-none" 
-                                style={{ width: '3px', backgroundColor: '#0023c1', zIndex: 2 }} 
+                                style={{ width: '3px', backgroundColor: '#2e54ff', zIndex: 2 }} 
                               />
                             )}
                             <button
@@ -1716,9 +1716,9 @@ export default function AutresMaterielsTab({
                 id="btn-submit-materiel-form"
                 style={{
                   ...rowActionButton18Style,
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                 }}
                 className="transition-all cursor-pointer border-0"
               >
@@ -1988,7 +1988,7 @@ export default function AutresMaterielsTab({
                                 onMouseDown={() => {
                                   handleClientSelect(c.id);
                                 }}
-                                className="w-full text-left px-3 py-2 text-sm text-slate-800 hover:bg-[#ffecf8] transition-colors font-semibold border-0 cursor-pointer"
+                                className="w-full text-left px-3 py-2 text-sm text-slate-800 hover:bg-[#ecefff] transition-colors font-semibold border-0 cursor-pointer"
                               >
                                 {labelStr}
                               </button>

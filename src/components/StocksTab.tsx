@@ -1674,7 +1674,7 @@ export default function StocksTab({
                       return (
                         <tr
                           key={st.id}
-                          className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
+                          className="group hover:bg-[#ecefff] transition-all cursor-pointer"
                           onClick={(e) => {
                             if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
                             setEditingStockId(st.id);
@@ -1893,9 +1893,9 @@ export default function StocksTab({
                 id="btn-submit-stock-form"
                 style={{
                   ...rowActionButton18Style,
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                 }}
                 className="transition-all cursor-pointer"
               >
@@ -2351,12 +2351,12 @@ export default function StocksTab({
                       type="submit"
                       form="equipement-stock-form"
                       style={{
-                        backgroundColor: '#0023c1',
+                        backgroundColor: '#2e54ff',
                         color: '#ffffff',
                         padding: '10px 20px',
                         fontSize: '18px',
                         borderRadius: '13px',
-                        boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                        boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                       }}
                       className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0 text-white"
                     >

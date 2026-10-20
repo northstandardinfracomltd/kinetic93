@@ -444,7 +444,7 @@ export default function GedTab({
                   <tbody className="text-slate-700 text-xs">
                     {filteredDocs.map((doc) => {
                       return (
-                        <tr key={doc.id} className="group hover:bg-[#ffecf8] transition-all cursor-pointer">
+                        <tr key={doc.id} className="group hover:bg-[#ecefff] transition-all cursor-pointer">
                           {/* Titre */}
                           <td
                             className="px-4 py-5 font-sans"
@@ -601,10 +601,10 @@ export default function GedTab({
                 disabled={isUploading}
                 style={{
                   ...rowActionButton18Style,
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   boxShadow:
-                    'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                    'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                   opacity: isUploading ? 0.7 : 1,
                   cursor: isUploading ? 'not-allowed' : 'pointer',
                 }}
@@ -811,7 +811,7 @@ export default function GedTab({
                   className={`p-8 text-center space-y-4 transition-all border border-dashed border-[#df92d4] ${
                     !googleDriveActive || isUploading
                       ? 'opacity-60 cursor-not-allowed'
-                      : 'hover:bg-[#ffecf8]/20 cursor-pointer'
+                      : 'hover:bg-[#ecefff]/20 cursor-pointer'
                   }`}
                   style={{
                     borderRadius: '13px',

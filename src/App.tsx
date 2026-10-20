@@ -11308,12 +11308,13 @@ export default function App() {
               },
               {
                 id: 'reduire',
-                label: t('Réduire Navigation'),
+                label: isSidebarCollapsed ? t('Agrandir Navigation') : t('Réduire Navigation'),
                 iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/reduiregris.svg',
                 iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/reduirenoir.svg',
                 isActive: false,
                 onClick: () => {
                   setIsSidebarMoreOpen(false);
+                  setHoveredSidebarItem(null);
                   setIsSidebarCollapsed(prev => !prev);
                 },
               },
@@ -11473,7 +11474,7 @@ export default function App() {
                   >
                     <div
                       className="flex items-center pointer-events-none"
-                      style={{ marginLeft: '-8px' }}
+                      style={{ marginLeft: isSidebarCollapsed ? '0px' : '-8px' }}
                     >
                       <img
                         src={
@@ -11530,7 +11531,9 @@ export default function App() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {hoveredSidebarItem.label}
+                    {hoveredSidebarItem.id === 'reduire'
+                      ? (isSidebarCollapsed ? t('Agrandir Navigation') : t('Réduire Navigation'))
+                      : hoveredSidebarItem.label}
                   </div>
                 )}
               </div>
@@ -11702,8 +11705,8 @@ export default function App() {
 
             const blueButtonStyle: React.CSSProperties = {
               ...customButtonStyle,
-              backgroundColor: '#0023c1',
-              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+              backgroundColor: '#2e54ff',
+              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
             };
 
             const rowActionButtonStyle: React.CSSProperties = {
@@ -12974,7 +12977,7 @@ export default function App() {
                                 onClick={handleSaveTeamWorkGroup}
                                 style={{
                                   ...blueButtonStyle,
-                                  backgroundColor: '#0023c1',
+                                  backgroundColor: '#2e54ff',
                                   color: '#ffffff',
                                   borderRadius: '12px',
                                   padding: '12px 24px',
@@ -13093,7 +13096,7 @@ export default function App() {
                             }}
                             style={{
                               width: '100%',
-                              backgroundColor: '#0023c1',
+                              backgroundColor: '#2e54ff',
                               color: '#ffffff',
                               fontSize: '18px',
                               fontWeight: '600',
@@ -13467,7 +13470,7 @@ export default function App() {
                     style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                   >
                     <div className="flex items-center gap-2.5">
-                      <Info className="w-5 h-5 text-[#0023c1] shrink-0" />
+                      <Info className="w-5 h-5 text-[#2e54ff] shrink-0" />
                       <span className="text-[15px] font-semibold text-black">
                         {fsmSystemInfoMessage}
                       </span>
@@ -15648,7 +15651,7 @@ export default function App() {
                                       zIndex: 1
                                     }}
                                   />
-                                  {/* Layer 1 : bleu (#0023c1) avec pourcentage */}
+                                  {/* Layer 1 : bleu (#2e54ff) avec pourcentage */}
                                   <div 
                                     style={{ 
                                       position: 'absolute',
@@ -15656,7 +15659,7 @@ export default function App() {
                                       left: 0,
                                       height: '100%',
                                       width: `${planifL1Percent}%`, 
-                                      backgroundColor: '#0023c1', 
+                                      backgroundColor: '#2e54ff', 
                                       borderRadius: '11px',
                                       transition: 'width 0.4s ease-in-out',
                                       zIndex: 2
@@ -18257,9 +18260,9 @@ export default function App() {
                               ...rowActionButtonStyle,
                               opacity: isDisabled ? 0.35 : 1,
                               cursor: isDisabled ? 'not-allowed' : 'pointer',
-                              backgroundColor: isDisabled ? '#cbd5e1' : '#0023c1',
+                              backgroundColor: isDisabled ? '#cbd5e1' : '#2e54ff',
                               color: isDisabled ? '#64748b' : '#ffffff',
-                              boxShadow: isDisabled ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                              boxShadow: isDisabled ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                               border: 'none',
                             });
                             
@@ -18284,7 +18287,7 @@ export default function App() {
                                     setManagingReportId(rep.id);
                                   }
                                 }}
-                                className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
+                                className="group hover:bg-[#ecefff] transition-all cursor-pointer"
                               >
                                 {/* Conforme Status Dot Banner column & Flag Voyants */}
                                 <td className="px-3 py-5 text-center whitespace-nowrap" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
@@ -19180,7 +19183,7 @@ export default function App() {
                               setManagingReportId(null);
                             }}
                             style={{
-                              backgroundColor: '#0023c1',
+                              backgroundColor: '#2e54ff',
                               color: '#ffffff',
                               fontSize: '18px',
                               fontWeight: '600',
@@ -19556,9 +19559,9 @@ export default function App() {
                           setGmaoCurrentPage(1);
                         }}
                         style={{
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           color: 'rgb(255, 255, 255)',
-                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                           fontSize: '18px',
                           fontWeight: 'bold',
                           borderRadius: '13px',
@@ -19659,7 +19662,7 @@ export default function App() {
                         type="button"
                         onClick={handleExportDevisCSV}
                         style={{
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           color: '#ffffff',
                           fontSize: '18px',
                           fontWeight: 'bold',
@@ -19669,7 +19672,7 @@ export default function App() {
                           border: 'none',
                           cursor: 'pointer',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                         }}
                         className="text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
                       >
@@ -19824,9 +19827,9 @@ export default function App() {
                                     type="button"
                                     onClick={() => handleMarkDevisTermine(r.id)}
                                     style={{
-                                      backgroundColor: '#0023c1',
+                                      backgroundColor: '#2e54ff',
                                       color: '#ffffff',
-                                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                                       borderRadius: '12px',
                                       fontSize: '18px',
                                       padding: '8px 18px',
@@ -19891,7 +19894,7 @@ export default function App() {
                                   disabled={isTicketCrmCreated}
                                   onClick={() => handleCreateTicketFromDevis(r)}
                                   style={{
-                                    backgroundColor: isTicketCrmCreated ? '#e2e8f0' : '#0023c1',
+                                    backgroundColor: isTicketCrmCreated ? '#e2e8f0' : '#2e54ff',
                                     color: isTicketCrmCreated ? '#94a3b8' : '#ffffff',
                                     borderRadius: '12px',
                                     fontSize: '18px',
@@ -19902,7 +19905,7 @@ export default function App() {
                                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                     boxShadow: isTicketCrmCreated
                                       ? 'none'
-                                      : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                      : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                                   }}
                                   className={isTicketCrmCreated ? 'opacity-60 select-none' : 'cursor-pointer hover:opacity-90 active:scale-95 transition-all'}
                                   title={isTicketCrmCreated ? "Ticket CRM Commercial déjà créé" : "Créer un ticket CRM Commercial"}
@@ -20372,7 +20375,7 @@ export default function App() {
                                 return (
                                   <tr
                                     key={doc.id}
-                                    className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
+                                    className="group hover:bg-[#ecefff] transition-all cursor-pointer"
                                     onClick={(e) => {
                                       if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
                                       startEditDoc(doc);
@@ -20556,9 +20559,9 @@ export default function App() {
                             ...rowActionButtonStyle,
                             fontSize: '18px',
                             padding: '9px 19px',
-                            backgroundColor: '#0023c1',
+                            backgroundColor: '#2e54ff',
                             color: '#ffffff',
-                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                           }}
                           className="transition-all cursor-pointer font-sans"
                         >

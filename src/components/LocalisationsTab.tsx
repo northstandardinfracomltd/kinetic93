@@ -165,7 +165,7 @@ export default function LocalisationsTab({ members }: LocalisationsTabProps) {
                   const locationLink = m.gpsSharingLink || localStorage.getItem(`defib_tech_location_link_${m.name}`) || "";
 
                   return (
-                    <tr key={m.name} className="group hover:bg-[#ffecf8] transition-all cursor-pointer">
+                    <tr key={m.name} className="group hover:bg-[#ecefff] transition-all cursor-pointer">
                       
                       {/* Name only (no email, no role, no address) */}
                       <td className="px-5 py-5 font-sans" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>

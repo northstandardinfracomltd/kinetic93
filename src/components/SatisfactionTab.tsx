@@ -414,7 +414,7 @@ export default function SatisfactionTab({
     width: '30px',
     height: '30px',
     borderRadius: '50%',
-    backgroundColor: '#0023c1',
+    backgroundColor: '#2e54ff',
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: '11px',
@@ -844,7 +844,7 @@ export default function SatisfactionTab({
             fontSize: '18px',
             borderRadius: '13px',
             padding: '10px 20px',
-            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset',
+            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset',
             textDecoration: 'none',
           }}
         >
@@ -1090,7 +1090,7 @@ export default function SatisfactionTab({
                   return (
                     <tr 
                       key={rev.id} 
-                      className={`group hover:bg-[#ffecf8] transition-all cursor-pointer ${isChecked ? 'bg-[#fff5fa]' : ''}`}
+                      className={`group hover:bg-[#ecefff] transition-all cursor-pointer ${isChecked ? 'bg-[#ecefff]' : ''}`}
                     >
                       {/* Radio selection column */}
                       <td className="px-4 py-3.5 w-12 text-center select-none" onClick={(e) => e.stopPropagation()}>
@@ -1381,7 +1381,7 @@ export default function SatisfactionTab({
                           ...roundBadgeStyle,
                           width: '30px',
                           height: '30px',
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                         }}
                       >
                         {perfSatisfaction.scoreValue}

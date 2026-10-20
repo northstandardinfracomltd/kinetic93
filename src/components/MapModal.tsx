@@ -462,7 +462,7 @@ function PopupContent({
         style={{
           fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
           fontSize: '16px',
-          color: '#0023c1',
+          color: '#2e54ff',
           background: 'none',
           border: 'none',
           padding: 0,
@@ -552,7 +552,7 @@ export default function MapModal({
   };
 
   const applyFiltersButtonStyle: React.CSSProperties = {
-    backgroundColor: '#0023c1',
+    backgroundColor: '#2e54ff',
     borderRadius: '12px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -561,7 +561,7 @@ export default function MapModal({
     border: 'none',
     cursor: 'pointer',
     width: '100%',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
   };
 
@@ -1248,7 +1248,7 @@ export default function MapModal({
                           onClose();
                         }}
                         style={{
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           borderRadius: '12px',
                           fontSize: '18px',
                           padding: '9px 19px',
@@ -1355,8 +1355,8 @@ export default function MapModal({
             onClick={onClose}
             id="btn-map-close"
             style={{
-              backgroundColor: '#0023c1',
-              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+              backgroundColor: '#2e54ff',
+              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
               borderRadius: '12px',
               fontSize: '18px',
               padding: '9px 19px',
@@ -1480,9 +1480,9 @@ export default function MapModal({
                 }}
                 style={{
                   ...applyFiltersButtonStyle,
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: 'rgb(255, 255, 255)',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                   fontSize: '18px',
                 }}
                 className="flex-1 text-center font-sans cursor-pointer animate-none"

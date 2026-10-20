@@ -8034,7 +8034,7 @@ export default function PublicPortal({
                     : "cursor-pointer hover:opacity-95 active:scale-[0.99]"
                 }`}
                 style={{
-                  background: "linear-gradient(90deg, #2e54ff, #0023c1, #2e54ff)",
+                  background: "linear-gradient(90deg, #2e54ff, #2e54ff, #2e54ff)",
                   color: "#ffffff",
                   fontSize: "14px",
                   padding: "12px 0px",

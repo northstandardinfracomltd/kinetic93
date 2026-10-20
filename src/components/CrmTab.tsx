@@ -1582,7 +1582,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   const customButtonStyle: React.CSSProperties = {
-    backgroundColor: '#0023c1',
+    backgroundColor: '#2e54ff',
     color: '#ffffff',
     borderRadius: '13px',
     fontSize: '18px',
@@ -1593,7 +1593,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     justifyContent: 'center',
     cursor: 'pointer',
     border: 'none',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
     transition: 'background-color 0.15s ease',
   };
 
@@ -1704,7 +1704,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       <textarea name="message" required rows="4" style="width: 100%; padding: 12px 16px; border: 1px solid #cbd5e0; border-radius: 13px; font-size: 16px; color: #000000; box-sizing: border-box; outline: none; transition: border-color 0.2s; resize: vertical;" placeholder="Entrez votre message, veuillez détailler votre demande et mentionner votre nom et votre entreprise."></textarea>
     </div>
     
-    <button type="submit" id="defibeo-submit-btn" style="background-color: #0023c1; color: #ffffff; padding: 14px 20px; border: none; border-radius: 13px; font-size: 16px; font-weight: normal; cursor: pointer; transition: background-color 0.2s; display: block; width: 100%; text-align: center; margin-top: 8px;">Envoyer</button>
+    <button type="submit" id="defibeo-submit-btn" style="background-color: #2e54ff; color: #ffffff; padding: 14px 20px; border: none; border-radius: 13px; font-size: 16px; font-weight: normal; cursor: pointer; transition: background-color 0.2s; display: block; width: 100%; text-align: center; margin-top: 8px;">Envoyer</button>
     
     <div id="defibeo-response-msg" style="display: none; font-size: 14px; text-align: left; margin-top: 10px;"></div>
   </form>
@@ -2275,7 +2275,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               disabled={!isRelanceEnabled}
               style={{
                 ...rowActionButtonStyle,
-                backgroundColor: isRelanceEnabled ? '#0023c1' : '#cbd5e1',
+                backgroundColor: isRelanceEnabled ? '#2e54ff' : '#cbd5e1',
                 color: isRelanceEnabled ? '#ffffff' : '#64748b',
                 cursor: isRelanceEnabled ? (isSendingRelance ? 'wait' : 'pointer') : 'not-allowed',
                 opacity: isRelanceEnabled ? 1 : 0.65,
@@ -2461,7 +2461,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <tr 
                       key={t.id} 
                       onClick={() => openEditTicketPane(t)}
-                      className={`group hover:bg-[#ffecf8] transition-all cursor-pointer ${isChecked ? 'bg-[#ffecf8]/60' : ''}`}
+                      className={`group hover:bg-[#ecefff] transition-all cursor-pointer ${isChecked ? 'bg-[#ecefff]/60' : ''}`}
                     >
                       {/* Row selection Radio Check */}
                       <td 
@@ -2714,7 +2714,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             }}
                             style={{
                               ...rowActionButtonStyle,
-                              backgroundColor: '#0023c1',
+                              backgroundColor: '#2e54ff',
                               color: '#ffffff',
                               border: 'none',
                             }}
@@ -3382,7 +3382,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             disabled={!googleDriveActive || isUploadingFile}
                             onClick={() => fileInputRef.current?.click()}
                             style={{
-                              backgroundColor: !googleDriveActive ? '#94a3b8' : '#0023c1',
+                              backgroundColor: !googleDriveActive ? '#94a3b8' : '#2e54ff',
                               color: '#ffffff',
                               borderRadius: '12px',
                               fontSize: '16px',
@@ -3775,7 +3775,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               onClick={handleSendSupportMessage}
                               disabled={isSendingSupportMessage || !newMessageObjet.trim() || !newMessageBody.trim()}
                               style={{
-                                backgroundColor: isSendingSupportMessage ? '#94a3b8' : '#0023c1',
+                                backgroundColor: isSendingSupportMessage ? '#94a3b8' : '#2e54ff',
                                 color: '#ffffff',
                                 borderRadius: '12px',
                                 padding: '8px 22px',
@@ -3832,7 +3832,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <button
                     type="submit"
                     style={{
-                      backgroundColor: '#0023c1',
+                      backgroundColor: '#2e54ff',
                       color: '#ffffff',
                       borderRadius: '13px',
                       padding: '14px',
@@ -4078,7 +4078,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   }}
                   style={{
                     flex: 1,
-                    backgroundColor: '#0023c1',
+                    backgroundColor: '#2e54ff',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',
@@ -4187,7 +4187,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           disabled={isExportDisabled}
                           onClick={handleExportPerformanceCSV}
                           style={{
-                            backgroundColor: isExportDisabled ? '#9ca3af' : '#0023c1',
+                            backgroundColor: isExportDisabled ? '#9ca3af' : '#2e54ff',
                             color: '#ffffff',
                             fontSize: '18px',
                             fontWeight: 'normal',
@@ -4509,7 +4509,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     onClick={handleSaveRelanceSettings}
                     disabled={isSavingRelance}
                     style={{
-                      backgroundColor: '#0023c1',
+                      backgroundColor: '#2e54ff',
                       color: '#ffffff',
                       fontSize: '18px',
                       fontWeight: 'normal',
@@ -4630,7 +4630,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     onClick={handleSaveSupportSettings}
                     disabled={isSavingSupport}
                     style={{
-                      backgroundColor: '#0023c1',
+                      backgroundColor: '#2e54ff',
                       color: '#ffffff',
                       fontSize: '18px',
                       fontWeight: 'normal',
@@ -4884,7 +4884,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   setIsColumnVisibilityPaneOpen(false);
                 }}
                 style={{
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   fontSize: '18px',
                   fontWeight: 'bold',
@@ -4893,7 +4893,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   border: 'none',
                   cursor: 'pointer',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                 }}
                 className="flex-1 text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
               >

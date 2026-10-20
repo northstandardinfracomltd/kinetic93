@@ -114,7 +114,7 @@ html.is-edge [style*="font-weight:100"] {
 }
 
 .btn-custom-cta {
-  background-color: #0023c1 !important;
+  background-color: #2e54ff !important;
   color: #fff !important;
   box-shadow: inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f !important;
   border-radius: 12px !important;
@@ -247,9 +247,9 @@ html.is-edge [style*="font-weight:100"] {
   background: linear-gradient(
     90deg,
     #2e54ff 0%,
-    #0023c1 25%,
+    #2e54ff 25%,
     rgba(147, 197, 253, 0.85) 50%,
-    #0023c1 75%,
+    #2e54ff 75%,
     #2e54ff 100%
   ) !important;
   background-size: 200% 100% !important;

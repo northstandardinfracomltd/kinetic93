@@ -139,7 +139,7 @@ function Code39Barcode({ value }: { value: string }) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center w-full bg-white max-w-full p-2">
+    <div className="flex flex-col items-center justify-center w-full max-w-full p-2" style={{ backgroundColor: '#f5f7fa' }}>
       <style>{`
         /* Supprimer l'icône horloge native dans les inputs de type time */
         .no-clock-icon::-webkit-calendar-picker-indicator {
@@ -151,10 +151,10 @@ function Code39Barcode({ value }: { value: string }) {
       <svg
         viewBox={`0 0 ${totalWidth} 74`}
         className="max-h-16 mb-2"
-        style={{ display: 'block', width: '100%', maxWidth: `${totalWidth}px` }}
+        style={{ display: 'block', width: '100%', maxWidth: `${totalWidth}px`, backgroundColor: '#f5f7fa' }}
         shapeRendering="crispEdges"
       >
-        <rect width={totalWidth} height={74} fill="white" />
+        <rect width={totalWidth} height={74} fill="#f5f7fa" />
         {rects}
         <text
           x={totalWidth / 2}
@@ -973,7 +973,8 @@ export default function DefibTab({
     top: 0,
     backgroundColor: '#ffffff',
     zIndex: 10,
-    borderBottom: '1px solid rgb(218, 218, 218)',
+    borderTop: '0px solid transparent',
+    borderBottom: '0px solid transparent',
   };
 
   // Active applied filters (1 to 10 filters)
@@ -4651,8 +4652,8 @@ export default function DefibTab({
                   id="btn-add-defib"
                   style={{
                     ...customButtonStyle,
-                    backgroundColor: '#0023c1',
-                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                    backgroundColor: '#2e54ff',
+                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                     opacity: !resolvedSpreadsheetUrl ? 0.45 : 1,
                     cursor: !resolvedSpreadsheetUrl ? 'not-allowed' : 'pointer',
                   }}
@@ -4811,8 +4812,8 @@ export default function DefibTab({
                               style={{
                                 ...rowActionButton18Style,
                                 width: '100%',
-                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                background: '#0023c1'
+                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                background: '#2e54ff'
                               }}
                               className="w-full text-center transition-colors cursor-pointer"
                             >
@@ -4973,7 +4974,7 @@ export default function DefibTab({
                 height: '22px', 
                 backgroundColor: '#e5e7eb', 
                 borderRadius: '11px',
-                boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.06)'
+                boxShadow: 'none'
               }}
             >
               {/* Layer bleu semi-opaque: ce qui va devenir conforme et à jour (conformes + tournées actives) */}
@@ -5006,14 +5007,16 @@ export default function DefibTab({
                 }}
               />
               <div 
-                className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
+                className="absolute inset-0 flex items-center justify-start pl-3 pointer-events-none select-none"
                 style={{ 
                   zIndex: 3,
                   fontSize: '13px', 
                   fontWeight: 700, 
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  color: compliancePercent >= 50 ? '#ffffff' : '#0f172a',
-                  textShadow: compliancePercent >= 50 ? '0 1px 2px rgba(0,0,0,0.25)' : 'none'
+                  color: compliancePercent > 5 ? '#ffffff' : '#0f172a',
+                  textShadow: 'none',
+                  boxShadow: 'none',
+                  textAlign: 'left'
                 }}
               >
                 {compliancePercent}%
@@ -5037,9 +5040,9 @@ export default function DefibTab({
                 fontWeight: 100,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: sortFilter === 'recent' ? '#2e54ff' : '#ffffff',
-                color: sortFilter === 'recent' ? '#ffffff' : '#000000',
-                border: sortFilter === 'recent' ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
+                backgroundColor: sortFilter === 'recent' ? '#2e54ff' : '#eaeeff',
+                color: sortFilter === 'recent' ? '#ffffff' : '#2e54ff',
+                border: 'none',
                 boxShadow: 'none',
                 transition: 'all 0.15s ease'
               }}
@@ -5058,9 +5061,9 @@ export default function DefibTab({
                 fontWeight: 100,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: sortFilter === 'closest_maintenance' ? '#2e54ff' : '#ffffff',
-                color: sortFilter === 'closest_maintenance' ? '#ffffff' : '#000000',
-                border: sortFilter === 'closest_maintenance' ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
+                backgroundColor: sortFilter === 'closest_maintenance' ? '#2e54ff' : '#eaeeff',
+                color: sortFilter === 'closest_maintenance' ? '#ffffff' : '#2e54ff',
+                border: 'none',
                 boxShadow: 'none',
                 transition: 'all 0.15s ease'
               }}
@@ -5084,7 +5087,7 @@ export default function DefibTab({
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
-                  border: '1px solid #2e54ff',
+                  border: 'none',
                   boxShadow: 'none',
                   outline: 'none',
                   textAlign: 'center',
@@ -5124,9 +5127,9 @@ export default function DefibTab({
                     fontWeight: 100,
                     cursor: 'pointer',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: '#ffffff',
-                    color: '#000000',
-                    border: '1px solid rgb(218, 218, 218)',
+                    backgroundColor: '#eaeeff',
+                    color: '#2e54ff',
+                    border: 'none',
                     boxShadow: 'none',
                     outline: 'none',
                     appearance: 'none',
@@ -5158,7 +5161,7 @@ export default function DefibTab({
 
           {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard + Gérer la visibilité des colonnes */}
           <div 
-            className="flex items-center justify-start gap-4 flex-wrap"
+            className="flex items-center justify-start gap-2.5 flex-wrap"
             style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
           >
             <button
@@ -5166,29 +5169,24 @@ export default function DefibTab({
               id="btn-toggle-fit-view"
               onClick={toggleTableFitView}
               style={{
-                fontSize: '9px',
+                color: 'rgb(80 97 122)',
+                background: '#f5f7fa',
+                borderRadius: '14px',
+                fontSize: '12px',
+                padding: '5px 10px',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 fontWeight: 100,
                 cursor: 'pointer',
-                background: 'transparent',
                 border: 'none',
-                padding: '2px 4px',
-                color: '#000000',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
                 textDecoration: 'none',
                 transition: 'all 0.15s ease'
               }}
               className="hover:opacity-80 transition-all select-none cursor-pointer"
               title={isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
             >
-              {isTableFitView ? (
-                <Maximize2 size={10} className="shrink-0 text-black" color="#000000" />
-              ) : (
-                <Minimize2 size={10} className="shrink-0 text-black" color="#000000" />
-              )}
-              <span style={{ color: '#000000' }}>{isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
+              <span>{isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
             </button>
 
             <button
@@ -5199,25 +5197,24 @@ export default function DefibTab({
                 setIsColumnVisibilityPaneOpen(true);
               }}
               style={{
-                fontSize: '9px',
+                color: 'rgb(80 97 122)',
+                background: '#f5f7fa',
+                borderRadius: '14px',
+                fontSize: '12px',
+                padding: '5px 10px',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 fontWeight: 100,
                 cursor: 'pointer',
-                background: 'transparent',
                 border: 'none',
-                padding: '2px 4px',
-                color: '#000000',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
                 textDecoration: 'none',
                 transition: 'all 0.15s ease'
               }}
               className="hover:opacity-80 transition-all select-none cursor-pointer"
               title={t("Gérer la visibilité des colonnes")}
             >
-              <Eye size={10} className="shrink-0 text-black" color="#000000" />
-              <span style={{ color: '#000000' }}>{t("Gérer la visibilité des colonnes")}</span>
+              <span>{t("Gérer la visibilité des colonnes")}</span>
             </button>
 
             <button
@@ -5225,25 +5222,24 @@ export default function DefibTab({
               id="btn-defibeo-intelligence-ai"
               onClick={() => setIsDefibeoIntelligenceOpen(true)}
               style={{
-                fontSize: '9px',
+                color: 'rgb(80 97 122)',
+                background: '#f5f7fa',
+                borderRadius: '14px',
+                fontSize: '12px',
+                padding: '5px 10px',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 fontWeight: 100,
                 cursor: 'pointer',
-                background: 'transparent',
                 border: 'none',
-                padding: '2px 4px',
-                color: '#000000',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
                 textDecoration: 'none',
                 transition: 'all 0.15s ease'
               }}
               className="hover:opacity-80 transition-all select-none cursor-pointer"
               title={t("Interroger l’IA Defibeo Intelligence")}
             >
-              <Sparkles size={10} className="shrink-0 text-black" color="#000000" />
-              <span style={{ color: '#000000' }}>{t("Interroger l’IA Defibeo Intelligence")}</span>
+              <span>{t("Interroger l’IA Defibeo Intelligence")}</span>
             </button>
 
             <button
@@ -5252,25 +5248,24 @@ export default function DefibTab({
               onClick={handleRefreshClick}
               disabled={effectiveRefreshing}
               style={{
-                fontSize: '9px',
+                color: 'rgb(80 97 122)',
+                background: '#f5f7fa',
+                borderRadius: '14px',
+                fontSize: '12px',
+                padding: '5px 10px',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 fontWeight: 100,
                 cursor: 'pointer',
-                background: 'transparent',
                 border: 'none',
-                padding: '2px 4px',
-                color: '#000000',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
                 textDecoration: 'none',
                 transition: 'all 0.15s ease'
               }}
               className="hover:opacity-80 transition-all select-none cursor-pointer"
               title={t("Actualiser les données")}
             >
-              <RefreshCw size={10} className={`shrink-0 text-black ${effectiveRefreshing ? 'animate-spin' : ''}`} color="#000000" />
-              <span style={{ color: '#000000' }}>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
+              <span>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
             </button>
 
             <button
@@ -5279,26 +5274,25 @@ export default function DefibTab({
               onClick={handleOpenSpreadsheetEditor}
               disabled={!resolvedSpreadsheetUrl}
               style={{
-                fontSize: '9px',
+                color: 'rgb(80 97 122)',
+                background: '#f5f7fa',
+                borderRadius: '14px',
+                fontSize: '12px',
+                padding: '5px 10px',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 fontWeight: 100,
                 cursor: resolvedSpreadsheetUrl ? 'pointer' : 'not-allowed',
                 opacity: resolvedSpreadsheetUrl ? 1 : 0.4,
-                background: 'transparent',
                 border: 'none',
-                padding: '2px 4px',
-                color: '#000000',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
                 textDecoration: 'none',
                 transition: 'all 0.15s ease'
               }}
               className={resolvedSpreadsheetUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
               title={t("Ouvrir l'éditeur SpreadSheets")}
             >
-              <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
-              <span style={{ color: '#000000' }}>{t("Ouvrir l'éditeur SpreadSheets")}</span>
+              <span>{t("Ouvrir l'éditeur SpreadSheets")}</span>
             </button>
           </div>
 
@@ -5309,8 +5303,8 @@ export default function DefibTab({
           <div 
             ref={topScrollRef} 
             onScroll={handleTopScroll} 
-            className="overflow-x-auto overflow-y-hidden bg-slate-50 border-b border-slate-100" 
-            style={{ height: '14px' }}
+            className="overflow-x-auto overflow-y-hidden bg-white" 
+            style={{ height: '14px', backgroundColor: '#ffffff', border: 'none' }}
           >
             <div style={{ width: `${tableScrollWidth}px`, height: '1px' }}></div>
           </div>
@@ -5348,8 +5342,8 @@ export default function DefibTab({
               className="w-full text-left font-sans border-collapse text-xs" 
               id="records-table" 
               style={{ 
-                borderTop: '1px solid rgb(218, 218, 218)', 
-                borderBottom: '1px solid rgb(218, 218, 218)',
+                borderTop: '0px solid transparent', 
+                borderBottom: '0px solid transparent',
                 ...(isTableFitView ? {
                   zoom: tableFitScale,
                   width: `${naturalTableWidthRef.current || 1700}px`,
@@ -5361,8 +5355,8 @@ export default function DefibTab({
               }}
             >
               <thead ref={theadRef}>
-                <tr className="bg-transparent">
-                  <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default', position: 'relative', top: 0, backgroundColor: '#ffffff', zIndex: 10, borderBottom: '1px solid rgb(218, 218, 218)' }}>
+                <tr className="bg-transparent" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
+                  <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default', position: 'relative', top: 0, backgroundColor: '#ffffff', zIndex: 10, borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
                     <button
                       type="button"
                       onClick={() => {
@@ -5462,17 +5456,17 @@ export default function DefibTab({
                       key={df.id}
                       id={`defib-row-${df.id}`}
                       onClick={(e) => openEditForm(df, e)}
-                      className={`group hover:bg-[#ffecf8] transition-all cursor-pointer ${
-                        isChecked ? 'bg-[#ffecf8]/60' : ''
+                      className={`group hover:bg-[#ecefff] transition-all cursor-pointer ${
+                        isChecked ? 'bg-[#ecefff]/60' : ''
                       }`}
-                      style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #0023c1' } : undefined}
+                      style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #2e54ff' } : undefined}
                     >
                       {/* Checkbox column */}
                       <td className="px-4 py-5 text-center relative" onClick={(e) => e.stopPropagation()}>
                         {isPinned && (
                           <div 
                             className="absolute left-0 top-0 bottom-0 pointer-events-none" 
-                            style={{ width: '3px', backgroundColor: '#0023c1', zIndex: 2 }} 
+                            style={{ width: '3px', backgroundColor: '#2e54ff', zIndex: 2 }} 
                           />
                         )}
                         <button
@@ -5964,11 +5958,11 @@ export default function DefibTab({
                 disabled={isSubmitChecking}
                 style={{
                   ...rowActionButton18Style,
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   opacity: isSubmitChecking ? 0.5 : 1,
                   cursor: isSubmitChecking ? 'not-allowed' : 'pointer',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                 }}
                 className="transition-all"
               >
@@ -5992,7 +5986,7 @@ export default function DefibTab({
               #defibrillateur-core-form select,
               #defibrillateur-core-form textarea {
                 padding: 12px !important;
-                border: 1px solid #dedede !important;
+                border: 1px solid #d8dee8 !important;
                 border-radius: 13px !important;
                 font-size: 16px !important;
                 font-weight: 100 !important;
@@ -6076,7 +6070,7 @@ export default function DefibTab({
                 -webkit-appearance: none !important;
                 width: 18px !important;
                 height: 18px !important;
-                border: 2px solid #cbd5e1 !important;
+                border: 2px solid #d8dee8 !important;
                 border-radius: 50% !important;
                 background-color: #ffffff !important;
                 outline: none !important;
@@ -6107,7 +6101,7 @@ export default function DefibTab({
                 -webkit-appearance: none !important;
                 width: 18px !important;
                 height: 18px !important;
-                border: 2px solid #cbd5e1 !important;
+                border: 2px solid #d8dee8 !important;
                 border-radius: 4px !important;
                 background-color: #ffffff !important;
                 outline: none !important;
@@ -6148,9 +6142,10 @@ export default function DefibTab({
 
                   {/* Section 1 - Défibrillateur */}
                   <div 
-                    className="bg-white p-5 relative space-y-3"
+                    className="p-5 relative space-y-3"
                     style={{
-                      border: '1px solid rgb(218, 218, 218)',
+                      backgroundColor: '#f5f7fa',
+                      border: 'none',
                       borderRadius: '18px 18px 0px 0px',
                     }}
                   >
@@ -6170,7 +6165,7 @@ export default function DefibTab({
                     </div>
 
                     {identifiant && (
-                      <div className="mb-4">
+                      <div className="mb-4" style={{ backgroundColor: '#f5f7fa' }}>
                         <Code39Barcode value={identifiant} />
                       </div>
                     )}
@@ -6390,10 +6385,10 @@ export default function DefibTab({
 
                   {/* Section 2 - Client (Auto-Populate Source) */}
                   <div 
-                    className="bg-white p-5 relative space-y-3"
+                    className="p-5 relative space-y-3"
                     style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      borderTop: 'none',
+                      backgroundColor: '#f5f7fa',
+                      border: 'none',
                       borderRadius: '0px',
                     }}
                   >
@@ -6605,10 +6600,10 @@ export default function DefibTab({
 
                   {/* Section 3 - Coffret */}
                   <div 
-                    className="bg-white p-5 relative space-y-3"
+                    className="p-5 relative space-y-3"
                     style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      borderTop: 'none',
+                      backgroundColor: '#f5f7fa',
+                      border: 'none',
                       borderRadius: '0px',
                     }}
                   >
@@ -6737,9 +6732,10 @@ export default function DefibTab({
 
                     {/* Trousse de secours / Kit container */}
                     <div 
-                      className="p-4 space-y-3 bg-white mt-3"
+                      className="p-4 space-y-3 mt-3"
                       style={{
-                        border: '1px solid #dedede',
+                        backgroundColor: '#f5f7fa',
+                        border: 'none',
                         borderRadius: '13px',
                       }}
                     >
@@ -6966,10 +6962,10 @@ export default function DefibTab({
 
                   {/* Section 4 - Accès */}
                   <div 
-                    className="bg-white p-5 relative space-y-3"
+                    className="p-5 relative space-y-3"
                     style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      borderTop: 'none',
+                      backgroundColor: '#f5f7fa',
+                      border: 'none',
                       borderRadius: '0px',
                     }}
                   >
@@ -7143,7 +7139,7 @@ export default function DefibTab({
                       </div>
 
                       {schedules.map((sch, schIdx) => (
-                        <div key={schIdx} style={{ borderRadius: '13px', border: '1px solid #d7d7d7' }} className="p-3 bg-white relative space-y-3">
+                        <div key={schIdx} style={{ borderRadius: '13px', border: 'none', backgroundColor: '#f5f7fa' }} className="p-3 relative space-y-3">
                           {schedules.length > 1 && (
                             <button
                               type="button"
@@ -7261,7 +7257,7 @@ export default function DefibTab({
                                     style={{ 
                                       borderRadius: '100px', 
                                       fontSize: '16px',
-                                      borderColor: isChecked ? '#000000' : isDayTakenElsewhere ? '#e2e8f0' : '#d7d7d7' 
+                                      borderColor: isChecked ? '#000000' : isDayTakenElsewhere ? '#e2e8f0' : '#d8dee8' 
                                     }}
                                     className={`px-4 py-1.5 font-semibold border transition-all select-none font-sans ${
                                       isChecked
@@ -7316,10 +7312,10 @@ export default function DefibTab({
 
                   {/* Section 5 - Dates */}
                   <div 
-                    className="bg-white p-5 relative space-y-3"
+                    className="p-5 relative space-y-3"
                     style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      borderTop: 'none',
+                      backgroundColor: '#f5f7fa',
+                      border: 'none',
                       borderRadius: '0px',
                     }}
                   >
@@ -7429,10 +7425,10 @@ export default function DefibTab({
                     </div>
                   </div>
                   <div 
-                    className="bg-white p-5 relative space-y-3"
+                    className="p-5 relative space-y-3"
                     style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      borderTop: 'none',
+                      backgroundColor: '#f5f7fa',
+                      border: 'none',
                       borderRadius: '0px',
                     }}
                   >
@@ -7603,7 +7599,7 @@ export default function DefibTab({
 
                     {hasElectrodeASecours === 'Oui' && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="space-y-1 bg-white">
+                        <div className="space-y-1">
                           <label htmlFor="form-elec-a-sec-lookup" className="block text-[10px] font-bold text-slate-400 uppercase">Modèle d'électrode de secours.</label>
                           <select
                             id="form-elec-a-sec-lookup"
@@ -7624,7 +7620,7 @@ export default function DefibTab({
                         </div>
 
                         {isVisibleLotPadPakA && (
-                          <div className="space-y-1 bg-white">
+                          <div className="space-y-1">
                             <label htmlFor="form-elec-a-sec-lot" className="block text-[10px] font-bold text-slate-400 uppercase">Lot de l’électrode de secours.</label>
                             <input
                               type="text"
@@ -7638,7 +7634,7 @@ export default function DefibTab({
                         )}
 
                         {isVisiblePeremptionPadPakA && (
-                          <div className="space-y-1 bg-white">
+                          <div className="space-y-1">
                             <label htmlFor="form-elec-a-sec" className="block text-[10px] font-bold text-slate-400 uppercase">Péremption de l’électrode de secours.</label>
                             <SafeDateInput
                               id="form-elec-a-sec"
@@ -7652,7 +7648,7 @@ export default function DefibTab({
                     )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1 bg-white">
+                      <div className="space-y-1">
                         <label htmlFor="form-elec-a-sit" className="block text-[10px] font-bold text-slate-400 uppercase">Statut.</label>
                         <select
                           id="form-elec-a-sit"
@@ -7668,7 +7664,7 @@ export default function DefibTab({
                         </select>
                       </div>
 
-                      <div className="space-y-1 bg-white">
+                      <div className="space-y-1">
                         <label htmlFor="form-elec-a-com" className="block text-[11px] font-bold text-slate-500 uppercase font-sans">Commentaire.</label>
                         <input
                           type="text"
@@ -7683,7 +7679,7 @@ export default function DefibTab({
 
                     {/* PadPak radio button */}
                     {isVisiblePadPakAdulte && (
-                      <div className="space-y-1 bg-white">
+                      <div className="space-y-1">
                         <span className="block text-[11px] font-bold text-slate-500 uppercase font-sans">PadPak.</span>
                         <div className="flex gap-4 py-1">
                           <button
@@ -7714,9 +7710,9 @@ export default function DefibTab({
 
                     {/* Lot PadPak A & Péremption PadPak A */}
                     {hasPadpakA === 'Oui' && isVisiblePadPakAdulte && (isVisibleLotPadPakA || isVisiblePeremptionPadPakA) && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 bg-white">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                         {isVisibleLotPadPakA && (
-                          <div className="space-y-1 bg-white">
+                          <div className="space-y-1">
                             <label htmlFor="form-lot-padpak-a" className="block text-[11px] font-bold text-slate-500 uppercase font-sans">
                               {t("Lot PadPak A.")}
                             </label>
@@ -7731,7 +7727,7 @@ export default function DefibTab({
                           </div>
                         )}
                         {isVisiblePeremptionPadPakA && (
-                          <div className="space-y-1 bg-white">
+                          <div className="space-y-1">
                             <label htmlFor="form-per-padpak-a" className="block text-[11px] font-bold text-slate-500 uppercase font-sans">
                               {t("Péremption PadPak A.")}
                             </label>
@@ -7749,10 +7745,10 @@ export default function DefibTab({
 
                   {/* Section 7 - Électrode Pédiatrique (P) */}
                   <div 
-                    className="bg-white p-5 relative space-y-3"
+                    className="p-5 relative space-y-3"
                     style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      borderTop: 'none',
+                      backgroundColor: '#f5f7fa',
+                      border: 'none',
                       borderRadius: '0px',
                     }}
                   >
@@ -7923,7 +7919,7 @@ export default function DefibTab({
 
                     {hasElectrodePSecours === 'Oui' && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="space-y-1 bg-white">
+                        <div className="space-y-1">
                           <label htmlFor="form-elec-p-sec-lookup" className="block text-[10px] font-bold text-slate-400 uppercase">Modèle d'électrode de secours.</label>
                           <select
                             id="form-elec-p-sec-lookup"
@@ -7944,7 +7940,7 @@ export default function DefibTab({
                         </div>
 
                         {isVisibleLotP && (
-                          <div className="space-y-1 bg-white">
+                          <div className="space-y-1">
                             <label htmlFor="form-elec-p-sec-lot" className="block text-[10px] font-bold text-slate-400 uppercase">Lot de l’électrode de secours.</label>
                             <input
                               type="text"
@@ -7958,7 +7954,7 @@ export default function DefibTab({
                         )}
 
                         {isVisiblePeremptionPadPakP && (
-                          <div className="space-y-1 bg-white">
+                          <div className="space-y-1">
                             <label htmlFor="form-elec-p-sec" className="block text-[10px] font-bold text-slate-400 uppercase">Péremption de l’électrode de secours.</label>
                             <SafeDateInput
                               id="form-elec-p-sec"
@@ -7972,7 +7968,7 @@ export default function DefibTab({
                     )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="space-y-1 bg-white">
+                      <div className="space-y-1">
                         <label htmlFor="form-elec-p-sit" className="block text-[10px] font-bold text-slate-400 uppercase">Statut.</label>
                         <select
                           id="form-elec-p-sit"
@@ -7988,7 +7984,7 @@ export default function DefibTab({
                         </select>
                       </div>
 
-                      <div className="space-y-1 bg-white">
+                      <div className="space-y-1">
                         <label htmlFor="form-elec-p-com" className="block text-[11px] font-bold text-slate-500 uppercase font-sans">Commentaire.</label>
                         <input
                           type="text"
@@ -8003,7 +7999,7 @@ export default function DefibTab({
 
                     {/* PadPak radio button */}
                     {isVisiblePadPakPediatrique && (
-                      <div className="space-y-1 bg-white">
+                      <div className="space-y-1">
                         <span className="block text-[11px] font-bold text-slate-500 uppercase font-sans">PadPak.</span>
                         <div className="flex gap-4 py-1">
                           <button
@@ -8034,9 +8030,9 @@ export default function DefibTab({
 
                     {/* Lot PadPak P & Péremption PadPak P */}
                     {hasPadpakP === 'Oui' && isVisiblePadPakPediatrique && (isVisibleLotPadPakP || isVisiblePeremptionPadPakP) && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 bg-white">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                         {isVisibleLotPadPakP && (
-                          <div className="space-y-1 bg-white">
+                          <div className="space-y-1">
                             <label htmlFor="form-lot-padpak-p" className="block text-[11px] font-bold text-slate-500 uppercase font-sans">
                               {t("Lot PadPak P.")}
                             </label>
@@ -8051,7 +8047,7 @@ export default function DefibTab({
                           </div>
                         )}
                         {isVisiblePeremptionPadPakP && (
-                          <div className="space-y-1 bg-white">
+                          <div className="space-y-1">
                             <label htmlFor="form-per-padpak-p" className="block text-[11px] font-bold text-slate-500 uppercase font-sans">
                               {t("Péremption PadPak P.")}
                             </label>
@@ -8069,10 +8065,10 @@ export default function DefibTab({
 
                   {/* Section 8 - Batterie (B) */}
                   <div 
-                    className="bg-white p-5 relative space-y-3"
+                    className="p-5 relative space-y-3"
                     style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      borderTop: 'none',
+                      backgroundColor: '#f5f7fa',
+                      border: 'none',
                       borderRadius: '0px',
                     }}
                   >
@@ -8252,7 +8248,7 @@ export default function DefibTab({
 
                     {hasBatterieSecours === 'Oui' && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="space-y-1 bg-white">
+                        <div className="space-y-1">
                           <label htmlFor="form-bat-sec-lookup" className="block text-[10px] font-bold text-slate-400 uppercase">Modèle de batterie de secours.</label>
                           <select
                             id="form-bat-sec-lookup"
@@ -8273,7 +8269,7 @@ export default function DefibTab({
                         </div>
 
                         {isVisiblePeremptionBatterie && (
-                          <div className="space-y-1 bg-white">
+                          <div className="space-y-1">
                             <label htmlFor="form-bat-sec-lot" className="block text-[10px] font-bold text-slate-400 uppercase">Lot de la batterie de secours.</label>
                             <input
                               type="text"
@@ -8287,7 +8283,7 @@ export default function DefibTab({
                         )}
 
                         {isVisiblePeremptionBatterie && (
-                          <div className="space-y-1 bg-white">
+                          <div className="space-y-1">
                             <label htmlFor="form-bat-sec-per" className="block text-[10px] font-bold text-slate-400 uppercase">Péremption de la batterie de secours.</label>
                             <SafeDateInput
                               id="form-bat-sec-per"
@@ -8345,10 +8341,10 @@ export default function DefibTab({
 
                   {/* Section 9 - Catégories (Toggles) */}
                   <div 
-                    className="bg-white p-5 relative space-y-3"
+                    className="p-5 relative space-y-3"
                     style={{
-                      border: '1px solid rgb(218, 218, 218)',
-                      borderTop: 'none',
+                      backgroundColor: '#f5f7fa',
+                      border: 'none',
                       borderRadius: '0px 0px 18px 18px',
                     }}
                   >
@@ -9474,7 +9470,7 @@ export default function DefibTab({
                       background: "none",
                       border: "none",
                       padding: "4px 0",
-                      color: "#0023c1",
+                      color: "#2e54ff",
                       fontSize: "18px",
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                       fontWeight: 500,
@@ -9521,9 +9517,9 @@ export default function DefibTab({
                   id="btn-apply-bulk-edit"
                   style={{
                     ...rowActionButton18Style,
-                    backgroundColor: "#0023c1",
+                    backgroundColor: "#2e54ff",
                     color: "#ffffff",
-                    boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                    boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
                     opacity: isBulkSubmitting ? 0.5 : 1,
                     cursor: isBulkSubmitting ? "not-allowed" : "pointer",
                   }}
@@ -9584,8 +9580,8 @@ export default function DefibTab({
                 {/* Circle Preloader */}
                 <div className="relative w-16 h-16 flex items-center justify-center">
                   <div 
-                    className="w-16 h-16 rounded-full border-4 border-slate-200 border-t-[#0023c1] animate-spin"
-                    style={{ borderTopColor: '#0023c1' }}
+                    className="w-16 h-16 rounded-full border-4 border-slate-200 border-t-[#2e54ff] animate-spin"
+                    style={{ borderTopColor: '#2e54ff' }}
                   />
                 </div>
                 <div 
@@ -9601,7 +9597,7 @@ export default function DefibTab({
               <div className="flex flex-col items-center justify-center animate-fadeIn">
                 <div 
                   className="w-16 h-16 rounded-full flex items-center justify-center mb-6 shadow-sm"
-                  style={{ backgroundColor: '#eef2ff', color: '#0023c1' }}
+                  style={{ backgroundColor: '#eef2ff', color: '#2e54ff' }}
                 >
                   <Check className="w-9 h-9 stroke-[3]" />
                 </div>
@@ -10301,9 +10297,9 @@ export default function DefibTab({
                 setIsFilterPaneOpen(false);
               }}
               style={{
-                backgroundColor: '#0023c1',
+                backgroundColor: '#2e54ff',
                 color: 'rgb(255, 255, 255)',
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                 fontSize: '18px',
                 fontWeight: 'bold',
                 borderRadius: '13px',
@@ -10396,7 +10392,7 @@ export default function DefibTab({
                   }}
                   className={`p-3.5 rounded-xl cursor-pointer transition-all border ${
                     draftFilters.clientId === 'Tous' 
-                      ? 'bg-[#ffecf8] border-[#2e54ff]' 
+                      ? 'bg-[#ecefff] border-[#2e54ff]' 
                       : 'bg-slate-50 border-slate-200 hover:border-slate-300'
                   }`}
                 >
@@ -10439,7 +10435,7 @@ export default function DefibTab({
                       }}
                       className={`p-3.5 rounded-xl cursor-pointer transition-all border ${
                         isSelected 
-                          ? 'bg-[#ffecf8] border-[#2e54ff]' 
+                          ? 'bg-[#ecefff] border-[#2e54ff]' 
                           : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
@@ -10559,7 +10555,7 @@ export default function DefibTab({
                   }}
                   className={`p-3.5 rounded-xl cursor-pointer transition-all border ${
                     !activeVariableSidePane.selectedValue
-                      ? 'bg-[#ffecf8] border-[#2e54ff]'
+                      ? 'bg-[#ecefff] border-[#2e54ff]'
                       : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
@@ -10597,7 +10593,7 @@ export default function DefibTab({
                       }}
                       className={`p-3.5 rounded-xl cursor-pointer transition-all border flex items-center gap-3 ${
                         isSelected 
-                          ? 'bg-[#ffecf8] border-[#2e54ff]' 
+                          ? 'bg-[#ecefff] border-[#2e54ff]' 
                           : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                       }`}
                     >
@@ -10742,7 +10738,7 @@ export default function DefibTab({
                   setIsColumnVisibilityPaneOpen(false);
                 }}
                 style={{
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   fontSize: '18px',
                   fontWeight: 'bold',
@@ -10751,7 +10747,7 @@ export default function DefibTab({
                   border: 'none',
                   cursor: 'pointer',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                 }}
                 className="flex-1 text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
               >
@@ -10815,7 +10811,7 @@ export default function DefibTab({
                     onChange={(e) => handleToggleMaintenirSelectionCsv(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0023c1]" style={{ cursor: 'pointer' }}></div>
+                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2e54ff]" style={{ cursor: 'pointer' }}></div>
                 </label>
               </div>
 
@@ -10845,7 +10841,7 @@ export default function DefibTab({
                     onChange={(e) => handleToggleSupprimerMentionSections(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0023c1]" style={{ cursor: 'pointer' }}></div>
+                  <div className="w-11 h-6 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#2e54ff]" style={{ cursor: 'pointer' }}></div>
                 </label>
               </div>
             </div>
@@ -10907,7 +10903,7 @@ export default function DefibTab({
                 type="button"
                 onClick={handleDownloadCustomCsv}
                 style={{
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   fontSize: '18px',
                   fontWeight: 'bold',
@@ -10916,7 +10912,7 @@ export default function DefibTab({
                   border: 'none',
                   cursor: 'pointer',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
                 }}
                 className="flex-1 text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
               >

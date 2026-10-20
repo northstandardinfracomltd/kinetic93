@@ -1650,7 +1650,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                 {filteredRows.map((row) => (
                   <tr
                     key={row.id}
-                    className="group hover:bg-[#ffecf8] transition-all border-b border-slate-100"
+                    className="group hover:bg-[#ecefff] transition-all border-b border-slate-100"
                   >
                     {/* Technicien */}
                     <td
@@ -2358,7 +2358,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   onClick={handleSaveSettings}
                   disabled={draftConflicts.length > 0}
                   style={{
-                    backgroundColor: draftConflicts.length > 0 ? '#94a3b8' : '#0023c1',
+                    backgroundColor: draftConflicts.length > 0 ? '#94a3b8' : '#2e54ff',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',

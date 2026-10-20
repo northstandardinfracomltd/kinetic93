@@ -152,7 +152,7 @@ export default function NotificationsTab({
               <tbody className="text-slate-700 text-xs">
                 {filtered.map((notif) => {
                   return (
-                    <tr key={notif.id} className="group hover:bg-[#ffecf8] transition-all border-b border-slate-100 last:border-b-0">
+                    <tr key={notif.id} className="group hover:bg-[#ecefff] transition-all border-b border-slate-100 last:border-b-0">
                       
                       {/* Catégorie */}
                       <td className="px-4 py-4 font-sans whitespace-nowrap text-left" style={{ cursor: 'default' }}>

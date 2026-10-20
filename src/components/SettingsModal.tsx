@@ -3485,7 +3485,7 @@ export default function SettingsModal({
                 disabled={isSaving}
                 onClick={handleSaveAll}
                 style={{
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
                   borderRadius: '0.75rem',
@@ -5412,7 +5412,7 @@ export default function SettingsModal({
                 disabled={connectorsSaveStatus === 'saving'}
                 onClick={handleSaveConnectors}
                 style={{
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
                   borderRadius: '0.75rem',
@@ -6019,7 +6019,7 @@ export default function SettingsModal({
                 disabled={databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin}
                 onClick={handleSaveDatabases}
                 style={{
-                  backgroundColor: '#0023c1',
+                  backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
                   borderRadius: '0.75rem',
@@ -6144,7 +6144,7 @@ export default function SettingsModal({
               type="button"
               onClick={() => setIsShopDrawerOpen(true)}
               style={{
-                backgroundColor: '#0023c1',
+                backgroundColor: '#2e54ff',
                 color: '#ffffff',
                 boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
                 borderRadius: '0.75rem',
@@ -6195,7 +6195,7 @@ export default function SettingsModal({
                         rel="noopener noreferrer"
                         className="inline-flex items-center justify-center font-bold px-5 py-2.5 text-[18px] text-white hover:opacity-90 active:scale-95 transition-all w-full"
                         style={{
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           borderRadius: '0.75rem',
                           fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                           fontWeight: '100',
@@ -6272,7 +6272,7 @@ export default function SettingsModal({
                     href="https://defibeo.com/school/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#0023c1', color: '#fff' }}
+                    style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#2e54ff', color: '#fff' }}
                     className="text-center cursor-pointer"
                   >
                     {t("Centre de connaissances")}
@@ -6826,7 +6826,7 @@ const { defibrillateurs } = await res.json();`}
                       .map((field) => (
                         <div
                           key={`${field.entity}-${field.slug}`}
-                          className="bg-white p-3 flex items-center justify-between flex-wrap gap-2 hover:border-[#0023c1] transition-all"
+                          className="bg-white p-3 flex items-center justify-between flex-wrap gap-2 hover:border-[#2e54ff] transition-all"
                           style={{
                             fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                             border: '1px solid #e4e1e1',
@@ -7908,7 +7908,7 @@ const data = await res.json();`}
                     type="button"
                     onClick={() => setIsApiDocOpen(false)}
                     style={{
-                      backgroundColor: '#0023c1',
+                      backgroundColor: '#2e54ff',
                       color: '#ffffff',
                       borderRadius: '13px',
                       padding: '14px 20px',
@@ -7976,7 +7976,7 @@ const data = await res.json();`}
                         rel="noopener noreferrer"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8008,7 +8008,7 @@ const data = await res.json();`}
                         href="mailto:support@defibeo.com"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8040,7 +8040,7 @@ const data = await res.json();`}
                         href="mailto:support@defibeo.com"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8072,7 +8072,7 @@ const data = await res.json();`}
                         href="mailto:support@defibeo.com"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8106,7 +8106,7 @@ const data = await res.json();`}
                         rel="noopener noreferrer"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8140,7 +8140,7 @@ const data = await res.json();`}
                         rel="noopener noreferrer"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8174,7 +8174,7 @@ const data = await res.json();`}
                         rel="noopener noreferrer"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8208,7 +8208,7 @@ const data = await res.json();`}
                         rel="noopener noreferrer"
                         style={{
                           ...rowActionButtonStyle,
-                          backgroundColor: '#0023c1',
+                          backgroundColor: '#2e54ff',
                           color: '#ffffff',
                           fontSize: '18px',
                           padding: '10px 22px',
@@ -8228,7 +8228,7 @@ const data = await res.json();`}
                     type="button"
                     onClick={() => setIsShopDrawerOpen(false)}
                     style={{
-                      backgroundColor: '#0023c1',
+                      backgroundColor: '#2e54ff',
                       color: '#ffffff',
                       borderRadius: '13px',
                       padding: '14px 20px',

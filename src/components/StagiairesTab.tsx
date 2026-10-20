@@ -158,8 +158,8 @@ export default function StagiairesTab({
 
   const blueButtonStyle: React.CSSProperties = {
     ...rowActionButton18Style,
-    backgroundColor: '#0023c1',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    backgroundColor: '#2e54ff',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
   };
 
   const triggerFormShakeAndScroll = () => {
@@ -295,7 +295,7 @@ export default function StagiairesTab({
                         <tr
                           key={s.id}
                           onClick={() => startEditStagiaire(s)}
-                          className="group hover:bg-[#ffecf8] transition-all cursor-pointer"
+                          className="group hover:bg-[#ecefff] transition-all cursor-pointer"
                         >
                           <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             <span

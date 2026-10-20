@@ -411,8 +411,8 @@ export default function FormationsTab({
 
   const blueButtonStyle: React.CSSProperties = {
     ...rowActionButton18Style,
-    backgroundColor: '#0023c1',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    backgroundColor: '#2e54ff',
+    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
   };
 
   const triggerFormShakeAndScroll = () => {
@@ -575,8 +575,8 @@ export default function FormationsTab({
                               style={{
                                 ...rowActionButton18Style,
                                 width: '100%',
-                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #0023c1 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                background: '#0023c1'
+                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                background: '#2e54ff'
                               }}
                               className="w-full text-center transition-colors cursor-pointer"
                             >
@@ -729,8 +729,8 @@ export default function FormationsTab({
                         <tr
                           key={f.id}
                           onClick={() => startEditFormation(f)}
-                          className={`group hover:bg-[#ffecf8] transition-all cursor-pointer ${
-                            isRowSelected ? 'bg-[#ffecf8]/60' : ''
+                          className={`group hover:bg-[#ecefff] transition-all cursor-pointer ${
+                            isRowSelected ? 'bg-[#ecefff]/60' : ''
                           }`}
                         >
                           <td className="px-4 py-5 text-center" onClick={(e) => e.stopPropagation()}>
