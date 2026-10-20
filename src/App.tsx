@@ -11159,17 +11159,12 @@ export default function App() {
       >
         {/* Scrollable Navigation Items */}
         <div 
-          className="flex-1 overflow-y-auto py-6 flex flex-col justify-between scrollbar-none"
+          className="flex-1 overflow-y-auto pt-0 pb-6 flex flex-col justify-between scrollbar-none"
           style={{ backgroundColor: '#f5f7fa' }}
         >
           {(() => {
             const tenantDisplayName = companyInfo?.name?.trim() || (tenantId === 'demo' ? 'Défibeo Solutions' : 'Défibeo');
-            const userDisplayName =
-              loggedUser?.name?.trim() ||
-              members.find(m => m.email && loggedUser?.email && m.email.toLowerCase() === loggedUser.email.toLowerCase())?.name ||
-              companyInfo?.adminName?.trim() ||
-              loggedUser?.email ||
-              'Utilisateur';
+            const tenantInitial = (tenantDisplayName.charAt(0) || 'D').toUpperCase();
 
             const mainNavItems: Array<{
               id: string;
@@ -11343,33 +11338,57 @@ export default function App() {
             const activeItemIndex = mainNavItems.findIndex(item => item.isActive);
             const resolvedActiveIndex = activeItemIndex !== -1 ? activeItemIndex : (isDropdownTabActive ? mainNavItems.length : -1);
             const ITEM_HEIGHT = 48;
-            const ITEM_GAP = 4;
+            const ITEM_GAP = 10;
 
             return (
               <div className="flex flex-col">
-                {/* Tenant Commercial Name & Username */}
-                {!isSidebarCollapsed && (
-                  <div className="px-7 pt-2 pb-6 text-left">
+                {/* Sidebar Header with SVG background & Tenant Pill / Initial Circle */}
+                <div className="relative w-full overflow-hidden shrink-0 mb-4" id="sidebar-tenant-header">
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/svgentete.svg"
+                    alt=""
+                    className="w-[280px] max-w-none h-auto block select-none pointer-events-none"
+                    referrerPolicy="no-referrer"
+                  />
+                  {!isSidebarCollapsed ? (
                     <div
-                      className="truncate font-normal leading-snug"
-                      style={{ fontSize: '13px', color: '#50617a' }}
+                      className="absolute bottom-2.5 right-2.5 flex items-center justify-center px-4 py-1.5 rounded-full truncate"
+                      style={{
+                        backgroundColor: '#3ddc84',
+                        color: '#136437',
+                        fontSize: '18px',
+                        fontWeight: 400,
+                        fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                        maxWidth: 'calc(100% - 20px)',
+                        lineHeight: 1.2,
+                      }}
                       title={tenantDisplayName}
                     >
-                      {tenantDisplayName}
+                      <span className="truncate">{tenantDisplayName}</span>
                     </div>
+                  ) : (
                     <div
-                      className="truncate font-normal leading-snug mt-0.5"
-                      style={{ fontSize: '18px', color: '#50617a' }}
-                      title={userDisplayName}
+                      className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center justify-center rounded-full"
+                      style={{
+                        width: '38px',
+                        height: '38px',
+                        backgroundColor: '#3ddc84',
+                        color: '#136437',
+                        fontSize: '18px',
+                        fontWeight: 400,
+                        fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                        lineHeight: 1,
+                      }}
+                      title={tenantDisplayName}
                     >
-                      {userDisplayName}
+                      {tenantInitial}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {/* Navigation List */}
                 <div
-                  className={`relative flex flex-col ${isSidebarCollapsed ? 'mt-4' : ''}`}
+                  className="relative flex flex-col"
                   style={{ gap: `${ITEM_GAP}px` }}
                 >
                   {/* Sliding Green Active Bar */}
@@ -11433,97 +11452,60 @@ export default function App() {
                     );
                   })}
 
-                  {/* 3-dots Dropdown Trigger & Menu */}
-                  <div className="relative" style={{ height: `${ITEM_HEIGHT}px` }}>
-                    <button
-                      type="button"
-                      id="sidebar-btn-more-dropdown"
-                      onClick={() => setIsSidebarMoreOpen(prev => !prev)}
-                      onMouseEnter={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setHoveredSidebarItem({
-                          id: 'more-3dots',
-                          label: t('Plus'),
-                          centerY: rect.top + rect.height / 2,
-                        });
-                      }}
-                      onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'more-3dots' ? null : prev))}
-                      style={{ height: `${ITEM_HEIGHT}px` }}
-                      className={`sidebar-nav-item-bounce relative w-full flex items-center ${
-                        isSidebarCollapsed ? 'justify-center px-0' : 'px-7'
-                      } bg-transparent border-0 cursor-pointer text-left focus:outline-hidden`}
+                  {/* 3-dots Native System Dropdown */}
+                  <div
+                    className={`sidebar-nav-item-bounce relative w-full flex items-center ${
+                      isSidebarCollapsed ? 'justify-center px-0' : 'px-7'
+                    }`}
+                    style={{ height: `${ITEM_HEIGHT}px` }}
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setHoveredSidebarItem({
+                        id: 'more-3dots',
+                        label: t('Plus'),
+                        centerY: rect.top + rect.height / 2,
+                      });
+                    }}
+                    onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'more-3dots' ? null : prev))}
+                  >
+                    <div
+                      className="flex items-center pointer-events-none"
+                      style={{ marginLeft: '-8px' }}
                     >
-                      <div className="flex items-center">
-                        <img
-                          src={
-                            isMoreActive
-                              ? 'https://civilprom.s3.eu-north-1.amazonaws.com/3dotsnoir.svg'
-                              : 'https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg'
-                          }
-                          alt="Plus"
-                          className="sidebar-nav-icon-bounce w-[22px] h-[22px] object-contain shrink-0"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    </button>
-
-                    {isSidebarMoreOpen && (
-                      <>
-                        <div
-                          className="fixed inset-0 z-40"
-                          onClick={() => setIsSidebarMoreOpen(false)}
-                        />
-                        <div
-                          className="fixed z-50 bg-white py-2 shadow-xl border border-[#dadada]"
-                          style={{
-                            left: isSidebarCollapsed ? '90px' : '28px',
-                            bottom: '24px',
-                            minWidth: '235px',
-                            borderRadius: '15px',
-                          }}
-                          id="sidebar-more-dropdown-menu"
-                        >
-                          {dropdownItems.map((dItem) => {
-                            const isSelected = activeTab === dItem.id && !isCanalMessagesOpen;
-                            return (
-                              <button
-                                key={dItem.id}
-                                type="button"
-                                id={`tab-selector-${dItem.id}`}
-                                onClick={() => {
-                                  setIsCanalMessagesOpen(false);
-                                  setIsSidebarMoreOpen(false);
-                                  setActiveTab(dItem.id);
-                                }}
-                                className="relative w-full flex items-center px-5 py-2.5 text-left bg-transparent hover:bg-[#f5f7fa] border-0 cursor-pointer transition-colors"
-                              >
-                                {isSelected && (
-                                  <div
-                                    className="absolute left-0 top-0 bottom-0"
-                                    style={{
-                                      width: '5px',
-                                      backgroundColor: '#3ddc84',
-                                      borderRadius: '0px 8px 8px 0px',
-                                    }}
-                                  />
-                                )}
-                                <span
-                                  className="truncate whitespace-nowrap"
-                                  style={{
-                                    fontSize: '18px',
-                                    color: isSelected ? '#000000' : '#50617a',
-                                    fontWeight: 400,
-                                    fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                                  }}
-                                >
-                                  {dItem.label}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </>
-                    )}
+                      <img
+                        src={
+                          isDropdownTabActive
+                            ? 'https://civilprom.s3.eu-north-1.amazonaws.com/3dotsnoir.svg'
+                            : 'https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg'
+                        }
+                        alt="Plus"
+                        className="sidebar-nav-icon-bounce w-[22px] h-[22px] object-contain shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                    <select
+                      id="sidebar-btn-more-dropdown"
+                      aria-label={t('Plus')}
+                      value={isDropdownTabActive ? activeTab : ''}
+                      onChange={(e) => {
+                        const val = e.target.value as AppTab;
+                        if (val) {
+                          setIsCanalMessagesOpen(false);
+                          setIsSidebarMoreOpen(false);
+                          setActiveTab(val);
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                    >
+                      <option value="" disabled>
+                        —
+                      </option>
+                      {dropdownItems.map((dItem) => (
+                        <option key={dItem.id} value={dItem.id}>
+                          {dItem.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

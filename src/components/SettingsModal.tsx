@@ -278,7 +278,6 @@ export default function SettingsModal({
   const SETTINGS_SECTIONS: { key: SettingsSectionKey; label: string }[] = [
     { key: 'reglages', label: 'Réglages' },
     { key: 'pdf', label: 'Apparence des rapports PDF' },
-    { key: 'apparence', label: 'Apparence du logiciel pour votre session' },
     { key: 'emplacements', label: 'Intitulés des emplacements' },
     { key: 'connecteurs', label: 'Connecteurs' },
     { key: 'bases_de_donnees', label: 'Bases de données' },
@@ -4379,106 +4378,6 @@ export default function SettingsModal({
             </div>
           </div>
         )}
-
-        {/* SECTION 3: APPARENCE DU LOGICIEL POUR VOTRE SESSION (DIV DÉDIÉE INDÉPENDANTE, Y COMPRIS LE FAVICON) */}
-        {activeSection === 'apparence' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-6 text-left animate-fadeIn" id="settings-section-appearance">
-            {renderSectionHeader(t("Apparence du logiciel pour votre session"))}
-
-            <div className="space-y-3">
-              <label className="block text-[16px] font-bold text-black font-sans">
-                {t("Thème du logiciel (conforme accessibilité ISO/IEC 40500).")}
-              </label>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {APP_THEMES.map((theme) => {
-                  const isSelected = selectedTheme === theme.id;
-                  return (
-                    <div
-                      key={theme.id}
-                      onClick={() => handleThemeSelect(theme.id)}
-                      className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 cursor-pointer select-none bg-white"
-                      id={`theme-card-${theme.id}`}
-                    >
-                      <span 
-                        className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                        style={{
-                          border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
-                          width: '20px',
-                          height: '20px',
-                          minWidth: '20px',
-                          minHeight: '20px',
-                          backgroundColor: '#ffffff'
-                        }}
-                      >
-                        {isSelected && (
-                          <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
-                        )}
-                      </span>
-                      <span
-                        className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans"
-                      >
-                        {t(theme.name)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* CHOIX DU FAVICON DU LOGICIEL (INCLUS DANS LA SECTION APPARENCE) */}
-            <div className="pt-6 mt-6 border-t border-slate-100 space-y-4" id="settings-section-software-favicon">
-              {renderSectionHeader(t("Choix du favicon du logiciel"))}
-
-              <div className="space-y-3">
-              <label className="block text-[16px] font-bold text-black font-sans">
-                {t("Il s’agit de l’icône montré dans l’onglet de votre navigateur.")}
-              </label>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                {APP_FAVICONS.map((fav) => {
-                  const isSelected = selectedFavicon === fav.id;
-                  return (
-                    <div
-                      key={fav.id}
-                      onClick={() => handleFaviconSelect(fav.id)}
-                      className="flex items-center gap-3 p-3.5 rounded-xl border border-slate-200 cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
-                      id={`favicon-card-${fav.id}`}
-                    >
-                      <span 
-                        className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                        style={{
-                          border: isSelected ? '2.5px solid #fe4eba' : '2.5px solid #cbd5e1',
-                          width: '20px',
-                          height: '20px',
-                          minWidth: '20px',
-                          minHeight: '20px',
-                          backgroundColor: '#ffffff'
-                        }}
-                      >
-                        {isSelected && (
-                          <span className="rounded-full bg-[#fe4eba]" style={{ width: '9px', height: '9px' }} />
-                        )}
-                      </span>
-                      <img
-                        src={fav.url}
-                        alt={fav.name}
-                        className="w-5 h-5 object-contain shrink-0"
-                        referrerPolicy="no-referrer"
-                      />
-                      <span
-                        className="text-[16px] font-medium text-slate-900 cursor-pointer select-none font-sans"
-                      >
-                        {t(fav.name)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* SECTION 4: INTITULÉS DES EMPLACEMENTS */}
       {activeSection === 'emplacements' && (
