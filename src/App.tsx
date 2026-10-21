@@ -11436,12 +11436,7 @@ export default function App() {
                           isSidebarCollapsed ? 'justify-center px-0' : 'gap-4 px-7'
                         } bg-transparent border-0 cursor-pointer text-left focus:outline-hidden`}
                       >
-                        <div
-                          key={isClickedWave ? clickedSidebarItem.key : 'idle'}
-                          className={`relative flex items-center gap-4 min-w-0 overflow-hidden ${
-                            isClickedWave ? 'sidebar-nav-click-shrink-wave' : ''
-                          }`}
-                        >
+                        <div className="flex items-center gap-4 min-w-0">
                           <img
                             src={item.isActive ? item.iconNoir : item.iconGris}
                             alt={item.label}
@@ -11450,7 +11445,10 @@ export default function App() {
                           />
                           {!isSidebarCollapsed && (
                             <span
-                              className="sidebar-nav-text-wave truncate whitespace-nowrap"
+                              key={isClickedWave ? clickedSidebarItem.key : 'idle'}
+                              className={`relative overflow-hidden truncate whitespace-nowrap ${
+                                isClickedWave ? 'sidebar-nav-click-shrink-wave' : ''
+                              }`}
                               style={{
                                 fontSize: '18px',
                                 color: item.isActive ? '#000000' : '#50617a',
