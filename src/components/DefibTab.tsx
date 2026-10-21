@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Defibrillateur, Client, Variable, CompanyInfo, OtherEquipment } from '../types';
+import { Defibrillateur, Client, Variable, CompanyInfo, OtherEquipment, getTenantSpreadsheetUrl } from '../types';
 import { t } from '../utils/translate';
 import MapModal from './MapModal';
 import HelpBubble from './HelpBubble';
@@ -622,6 +622,7 @@ export default function DefibTab({
 
   const resolvedSpreadsheetUrl = useMemo(() => {
     const raw =
+      getTenantSpreadsheetUrl(activeTenantId, 'defibrillateurs', companyInfo) ||
       companyInfo?.spreadsheetDefibrillateurs ||
       companyInfo?.spreadsheetDefibrillateursUrl ||
       (typeof window !== 'undefined'
@@ -632,10 +633,11 @@ export default function DefibTab({
       '';
     const trimmed = String(raw).trim();
     return (trimmed.includes('1tB1e41') || trimmed.includes('2mX5O6r9hD0i3Z9m')) ? '' : trimmed;
-  }, [companyInfo?.spreadsheetDefibrillateurs, companyInfo?.spreadsheetDefibrillateursUrl, activeTenantId]);
+  }, [companyInfo, activeTenantId]);
 
   const resolvedClientsSpreadsheetUrl = useMemo(() => {
     const raw =
+      getTenantSpreadsheetUrl(activeTenantId, 'clients', companyInfo) ||
       companyInfo?.spreadsheetClients ||
       companyInfo?.spreadsheetClientsUrl ||
       (typeof window !== 'undefined'
@@ -646,7 +648,7 @@ export default function DefibTab({
       '';
     const trimmed = String(raw).trim();
     return (trimmed.includes('1tB1e41') || trimmed.includes('2mX5O6r9hD0i3Z9m')) ? '' : trimmed;
-  }, [companyInfo?.spreadsheetClients, companyInfo?.spreadsheetClientsUrl, activeTenantId]);
+  }, [companyInfo, activeTenantId]);
 
   const hasFsmSpreadsheet = useMemo(() => {
     const raw =
@@ -4186,7 +4188,7 @@ export default function DefibTab({
               stableDefibsRef.current.totalCount += 1;
             }
           }
-          setRemoteTotalCount(prev => (typeof prev === 'number' ? prev + 1 : prev));
+          setRemoteFilteredTotal(prev => (typeof prev === 'number' ? prev + 1 : prev));
           recordRecentDefibChange([newRecordPayload.id, payload.identifiant, payload.numeroSerie]);
         }
       }
