@@ -10,7 +10,7 @@ import {
   purgeAllLocalEnvironmentCaches,
   saveCollectionToFirestore
 } from '../firebase';
-import { triggerEmail1Inscription, triggerEmail4Signalement, triggerAuthCodeEmail } from '../utils/emailService';
+import { triggerEmail1Inscription, triggerEmail4Signalement, triggerAuthCodeEmail, getAppsScriptUrl } from '../utils/emailService';
 import { updateLoginSessionSlug } from '../utils/sessionSlug';
 import TopBarProgress from './TopBarProgress';
 import { setCurrentIp, logUserLogin } from '../services/suspiciousActivityService';
@@ -737,6 +737,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setIsSendingCode(true);
     setError('');
     try {
+      const scriptUrl = await getAppsScriptUrl().catch(() => '');
       const res = await fetch('/api/auth/verify-tenant-member', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -744,6 +745,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           email: pendingUser.loginIdentifier,
           role: loginRole,
           resend: true,
+          scriptUrl,
         }),
       });
       if (res.ok) {
@@ -843,12 +845,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     const emailLower = email.trim().toLowerCase();
 
     try {
+      const scriptUrl = await getAppsScriptUrl().catch(() => '');
       const verifyRes = await fetch('/api/auth/verify-tenant-member', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: emailLower,
           role: loginRole,
+          scriptUrl,
         }),
       });
 

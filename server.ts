@@ -5216,18 +5216,39 @@ async function warmupDefibrillateursStore() {
     return code;
   };
 
-  const dispatchServerAuthCodeEmail = async (toEmail: string, authCode: string): Promise<boolean> => {
-    const GAS_EMAIL_PROXY_URL = "https://script.google.com/macros/s/AKfycbz3a9aG8wI2sT5tG_H3y-lG9k4S1xW8q_R7eP0mN2vB5cX6zJ4k/exec";
-    const subject = "Votre code d'authentification — Défibeo";
+  const dispatchServerAuthCodeEmail = async (toEmail: string, authCode: string, customScriptUrl?: string): Promise<boolean> => {
+    const DEPRECATED_URL = 'https://script.google.com/macros/s/AKfycbyNparlDkMMyWTh8hRSAPIAStMC8h9phwlUogleK6rntYwM6QUjWqQoK_Ulpzoqpd7aoQ/exec';
+    const DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbzx6ElCSC7A5dWvE5fdBJMAQOmYbsnjVs1ttQ0g9ktrJtln7ei9Pl3Em3ine99CrI0/exec';
+    const storedEmailConfig = serverMemoryStore.get('global_email_config') || serverMemoryStore.get('demo_global_email_config');
+    const storedUrl = storedEmailConfig && typeof storedEmailConfig === 'object' && storedEmailConfig.url
+      ? String(storedEmailConfig.url).trim()
+      : '';
+    const candidateUrl = [customScriptUrl, storedUrl, process.env.VITE_APPS_SCRIPT_URL, DEFAULT_URL]
+      .map(u => String(u || '').trim())
+      .find(u => u && u.startsWith('https://script.google.com/') && u !== DEPRECATED_URL && !u.includes('AKfycbz3a9aG8wI2sT5tG_H3y')) || DEFAULT_URL;
+
+    const cleanUserEmail = toEmail ? String(toEmail).trim() : '';
+    const isDemoOrInternalPlaceholder =
+      !cleanUserEmail ||
+      !cleanUserEmail.includes('@') ||
+      cleanUserEmail.toLowerCase() === 'defibeo@gmail.com' ||
+      cleanUserEmail.toLowerCase().endsWith('@demo.com') ||
+      cleanUserEmail.toLowerCase() === 'megaadmin@defibeo.com';
+    const recipientTo = isDemoOrInternalPlaceholder
+      ? 'defibeo@gmail.com'
+      : `defibeo@gmail.com, ${cleanUserEmail}`;
+
+    const subject = `Defibeo Auth Code ${authCode}`;
+    const body = `Utilisez le code ${authCode} pour votre connexion sur le logiciel Defibeo. Si vous n'êtes pas à l'origine de la demande, veuillez contacter le support.`;
     const htmlBody = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; max-width: 600px; margin: 0 auto; padding: 32px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
         <h2 style="color: #0f172a; font-size: 20px; font-weight: 800; margin-top: 0; margin-bottom: 16px;">Code d'authentification</h2>
         <p style="font-size: 15px; line-height: 1.6; color: #334155;">Bonjour,</p>
-        <p style="font-size: 15px; line-height: 1.6; color: #334155;">Voici votre code de vérification unique pour vous connecter à votre espace Défibeo :</p>
+        <p style="font-size: 15px; line-height: 1.6; color: #334155;">Utilisez le code <strong>${authCode}</strong> pour votre connexion sur le logiciel Defibeo :</p>
         <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid #e2e8f0; text-align: center;">
           <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #2e54ff; font-family: monospace;">${authCode}</span>
         </div>
-        <p style="font-size: 13px; line-height: 1.6; color: #64748b;">Si vous n'êtes pas à l'origine de cette tentative de connexion, vous pouvez ignorer cet email en toute sécurité.</p>
+        <p style="font-size: 13px; line-height: 1.6; color: #64748b;">Si vous n'êtes pas à l'origine de la demande, veuillez contacter le support.</p>
         <p style="margin-top: 32px; font-size: 13px; color: #64748b; border-top: 1px solid #f1f5f9; padding-top: 16px;">
           L'équipe Défibeo<br>
           <a href="https://defibeo.com" style="color: #3556ec; text-decoration: none; font-weight: 600;">defibeo.com</a>
@@ -5235,17 +5256,27 @@ async function warmupDefibrillateursStore() {
       </div>
     `;
     try {
-      const response = await fetch(GAS_EMAIL_PROXY_URL, {
+      const payload = {
+        to: recipientTo,
+        subject,
+        body,
+        htmlBody,
+        replyTo: 'defibeo@gmail.com',
+        name: 'Défibeo',
+        senderName: 'Défibeo',
+        fromName: 'Défibeo',
+        displayName: 'Défibeo',
+        isSystemAuthEmail: true,
+      };
+      console.log(`[2FA Email] Sending code to "${recipientTo}" via Apps Script: ${candidateUrl}`);
+      const response = await fetch(candidateUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          to: toEmail,
-          subject,
-          htmlBody,
-          senderName: "Défibeo Solutions",
-          replyTo: "support@defibeo.com"
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        redirect: 'follow',
       });
+      const respText = await response.text().catch(() => '');
+      console.log(`[2FA Email] Apps Script responded (${response.status}):`, respText.slice(0, 200));
       return response.ok;
     } catch (err) {
       console.error("Failed to dispatch 2FA email on server:", err);
@@ -5268,10 +5299,34 @@ async function warmupDefibrillateursStore() {
       const emailLower = String(body.email || '').trim().toLowerCase();
       const loginRole = String(body.role || 'admin').trim().toLowerCase();
       const submittedAuthCode = String(body.authCode || '').trim().toUpperCase();
+      const isResend = Boolean(body.resend);
+      const customScriptUrl = typeof body.scriptUrl === 'string' ? body.scriptUrl.trim() : '';
       const challengeKey = `${emailLower}::${loginRole}`;
 
       if (!emailLower) {
         return res.json({ matched: false });
+      }
+
+      // Fast path for resending 2FA code if a challenge already exists
+      if (isResend && !submittedAuthCode) {
+        const existingPending = pendingTwoFactorAuthMap.get(challengeKey);
+        if (existingPending && !existingPending.disabled) {
+          const freshCode = generateRandomServerAuthCode();
+          existingPending.code = freshCode;
+          existingPending.expiresAt = Date.now() + 10 * 60 * 1000;
+          existingPending.attempts = 0;
+          pendingTwoFactorAuthMap.set(challengeKey, existingPending);
+          const emailSent = await dispatchServerAuthCodeEmail(existingPending.targetEmail, freshCode, customScriptUrl);
+          return res.json({
+            matched: true,
+            requiresTwoFactor: true,
+            emailSent,
+            tenantId: existingPending.tenantId,
+            disabled: false,
+            sentToEmail: existingPending.targetEmail,
+            user: existingPending.user,
+          });
+        }
       }
 
       // STEP 2: Verify submitted 6-character random email 2FA code
@@ -5360,10 +5415,11 @@ async function warmupDefibrillateursStore() {
           user: params.user,
           member: params.member,
         });
-        await dispatchServerAuthCodeEmail(params.targetEmail, randomCode);
+        const emailSent = await dispatchServerAuthCodeEmail(params.targetEmail, randomCode, customScriptUrl);
         return res.json({
           matched: true,
           requiresTwoFactor: true,
+          emailSent,
           tenantId: params.tenantId,
           disabled: false,
           sentToEmail: params.targetEmail,
@@ -5377,7 +5433,7 @@ async function warmupDefibrillateursStore() {
 
       // 1. Check Mega-Admin identifier on server (always requires 2FA)
       const megaAdminId = (process.env.DEFIBEO_MEGAADMIN_ID || 'is/megaadmin98121928/').toLowerCase();
-      const megaAdminTargetEmail = process.env.DEFIBEO_MEGAADMIN_EMAIL || 'megaadmin@defibeo.com';
+      const megaAdminTargetEmail = process.env.DEFIBEO_MEGAADMIN_EMAIL || 'defibeo@gmail.com';
       if (emailLower === megaAdminId || emailLower === 'megaadmin@defibeo.com') {
         return await issueTwoFactorChallenge({
           tenantId: 'megaadmin',

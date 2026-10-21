@@ -28,6 +28,17 @@ import {
 } from './utils';
 import { Member, Client, Defibrillateur } from './types';
 
+export function hasValidClientSession(): boolean {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return false;
+    const token = window.localStorage.getItem('defib_session_token');
+    const loggedIn = window.localStorage.getItem('defib_admin_logged_in') === 'true';
+    return Boolean(token && token.trim() && loggedIn);
+  } catch (_) {
+    return false;
+  }
+}
+
 // Automatically attach the signed session token (X-Defibeo-Session / Authorization) to all /api/* requests
 try {
   if (typeof window !== 'undefined' && typeof window.fetch === 'function' && !(window as any).__defibeoAuthFetchInstalled) {
@@ -841,6 +852,7 @@ export function getTenantAliases(targetTenantId: string): Set<string> {
  * Fetches globally deleted defib keys from backend to guarantee cross-session consistency
  */
 export async function fetchRemoteDeletedDefibKeys(tenantId: string): Promise<string[]> {
+  if (!hasValidClientSession()) return [];
   try {
     const res = await fetch(`/api/deleted-defib-keys?tenantId=${encodeURIComponent(tenantId)}`, {
       signal: AbortSignal.timeout(6000)
@@ -1170,6 +1182,10 @@ export async function fetchCollectionFromFirestore<T>(
   };
   const sheetInfo = sheetTabMap[collectionName];
   if (sheetInfo) {
+    if (!hasValidClientSession()) {
+      onProgress?.(0, 0, 'Terminé.');
+      return [] as unknown as T;
+    }
     try {
       let localSheetUrl = '';
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -1449,7 +1465,7 @@ export async function fetchCollectionFromFirestore<T>(
   }
 
   // 2. Secondary Strategy: High-availability backend server relay (/api/sync-collection)
-  if (typeof fetch !== 'undefined') {
+  if (typeof fetch !== 'undefined' && hasValidClientSession()) {
     const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
 
     // For massive defibrillateurs collection (17,800+ items), use high-speed chunked static delivery ONLY if tenant has chunks
@@ -1890,7 +1906,7 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
 
   // Server sync relay with chunking support and failure protection (stops on 503 / network failure)
   try {
-    if (typeof fetch !== 'undefined') {
+    if (typeof fetch !== 'undefined' && hasValidClientSession()) {
       if (Array.isArray(finalCleanValue) && finalCleanValue.length > 1000) {
         const CHUNK_SIZE = 1500;
         const items = finalCleanValue;
@@ -2005,7 +2021,7 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
   }
   // 1. Primary strategy: fetch registered_tenants from fast server relay if available
   try {
-    if (typeof fetch !== 'undefined') {
+    if (typeof fetch !== 'undefined' && hasValidClientSession()) {
       const resp = await fetch('/api/sync-collection?collectionName=registered_tenants&tenantId=demo', {
         signal: AbortSignal.timeout(6000)
       });
@@ -2076,7 +2092,7 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
  * Fetches a raw collection key from Firestore bypassing the default prefix.
  */
 export async function fetchRawCollectionFromFirestore<T>(rawKey: string, timeoutMs: number = 8000): Promise<T | null> {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+  if ((typeof navigator !== 'undefined' && !navigator.onLine) || !hasValidClientSession()) {
     return getFromLocalCache<T>(rawKey);
   }
   try {

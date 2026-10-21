@@ -2587,7 +2587,7 @@ export default function App() {
 
   // Automatic Google Spreadsheets sync for Défibrillateurs, Autres Matériels, and Clients whenever URLs are configured or updated
   useEffect(() => {
-    if (!tenantId) return;
+    if (!isLoggedIn || !tenantId) return;
 
     const sanitizeSheetUrl = (u?: string | null): string => {
       if (!u || typeof u !== 'string') return '';
@@ -2913,6 +2913,7 @@ export default function App() {
       window.removeEventListener('defib-tenant-spreadsheets-updated', handleUpdatedEvent);
     };
   }, [
+    isLoggedIn,
     tenantId,
     companyInfo?.spreadsheetDefibrillateurs,
     companyInfo?.spreadsheetAutresMateriels,
@@ -2921,7 +2922,7 @@ export default function App() {
 
   // High-availability deleted-keys sync across multi-PC sessions (never wipes or reloads table display)
   useEffect(() => {
-    if (!tenantId) return;
+    if (!isLoggedIn || !tenantId) return;
     const tAliases = getTenantAliases(tenantId);
     const isChunkedTenant = tAliases.has('d27') || tAliases.has('d58');
     if (!isChunkedTenant) return;
@@ -3678,7 +3679,7 @@ export default function App() {
 
   // Also load any configured secondary Google Spreadsheets for the active tenant on startup and whenever spreadsheet URLs change
   useEffect(() => {
-    if (!tenantId) return;
+    if (!isLoggedIn || !tenantId) return;
     const secondaryTabTypes = [
       'tournees',
       'rapportsPdf',
@@ -3721,7 +3722,7 @@ export default function App() {
       clearTimeout(timer);
       window.removeEventListener('defib-tenant-spreadsheets-updated', handleSheetsUpdated);
     };
-  }, [tenantId, isFirebaseLoaded, refreshGenericSheetCompartment]);
+  }, [isLoggedIn, tenantId, isFirebaseLoaded, refreshGenericSheetCompartment]);
 
   const [isRefreshingCrm, setIsRefreshingCrm] = useState<boolean>(false);
   const handleManualRefreshCrm = async () => {
@@ -7566,6 +7567,7 @@ export default function App() {
 
   // Load from Firebase on startup, fallback to LocalStorage/Seed Defaults
   useEffect(() => {
+    if (!isLoggedIn) return;
     let minTimer: any = null;
     const loadStartMs = Date.now();
     setMinEnvLoading(true);
@@ -8210,11 +8212,11 @@ export default function App() {
     return () => {
       if (minTimer) clearTimeout(minTimer);
     };
-  }, [tenantId, envReloadTrigger]);
+  }, [isLoggedIn, tenantId, envReloadTrigger]);
 
   // Real-time tab/webapp focus sync to instantly apply changes without refresh/delay
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !isLoggedIn) return;
     const handleFocusSync = () => {
       if (tenantId && tenantId !== 'demo' && isFirebaseLoaded) {
         fetchCollectionFromFirestore<CompanyInfo>('companyInfo', tenantId).then((data) => {
@@ -8314,9 +8316,10 @@ export default function App() {
       window.removeEventListener('focus', handleFocusSync);
       window.removeEventListener('defib_refresh_webapp_data', handleWebappRefresh);
     };
-  }, [tenantId, isFirebaseLoaded]);
+  }, [isLoggedIn, tenantId, isFirebaseLoaded]);
 
   const loadApiConnectors = React.useCallback(() => {
+    if (!isLoggedIn) return;
     fetchCollectionFromFirestore<any>('api_connectors', tenantId).then(data => {
       if (data) {
         if (data.pennylaneActive !== undefined) setPennylaneActive(data.pennylaneActive);
@@ -8346,11 +8349,12 @@ export default function App() {
       setDropboxActive(false);
       setDropboxAccessToken('');
     });
-  }, [tenantId]);
+  }, [isLoggedIn, tenantId]);
 
   useEffect(() => {
+    if (!isLoggedIn) return;
     loadApiConnectors();
-  }, [activeTab, isFirebaseLoaded, loadApiConnectors]);
+  }, [isLoggedIn, activeTab, isFirebaseLoaded, loadApiConnectors]);
 
   // Save state changes back to Firebase
   useEffect(() => {
