@@ -78,6 +78,14 @@ try {
     }
     // Force one-time & session purge of legacy Firebase defibrillateurs, clients, and other_equipments caches
     // and remove any unprefixed cross-tenant localStorage keys
+    try {
+      for (const rtKey of ['registered_tenants', 'defib_cache_registered_tenants']) {
+        const rawRt = localStorage.getItem(rtKey);
+        if (rawRt && rawRt.includes('adminPasswordHexOrPlain') && !rawRt.includes('••••••••')) {
+          localStorage.removeItem(rtKey);
+        }
+      }
+    } catch (_) {}
     const purgeLegacyFirebaseTabCaches = () => {
       const unprefixedCrossTenantKeys = new Set([
         'defib_company_info',
@@ -349,36 +357,7 @@ export function getCollectionKey(collectionName: string, tenantId: string = curr
 }
 
 export const KNOWN_TENANTS_REGISTRY: Array<Partial<Tenant> & { id: string; shortEnvId: string; companyName: string }> = [
-  { id: 'demo', shortEnvId: 'D10', companyName: 'Défibeo Solutions', companyEmail: 'contact@defibeo-solutions.com', companyPhone: '+33 1 47 20 00 01', adminName: 'Admin Démo', adminEmail: 'account@demo.com', adminPasswordHexOrPlain: '123456', lang: 'Français' },
-  { id: 'tenant_pvzvub57h_1781513640995', shortEnvId: 'D71', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv@civilprom.com', companyPhone: '0651517065', adminName: 'Jean-Luc Degont', adminEmail: 'udplv@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France' },
-  { id: 'D1', shortEnvId: 'D38', companyName: 'DemoTest', companyEmail: 'demottest@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'demottest@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
-  { id: 'D2', shortEnvId: 'D90', companyName: 'Test', companyEmail: 'test@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'test@civilprom.com', adminPasswordHexOrPlain: '95162testdemo', lang: 'Français' },
-  { id: 'D3', shortEnvId: 'D63', companyName: 'DEROESCH', companyEmail: 'deroesch@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'deroesch@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
-  { id: 'D4', shortEnvId: 'D64', companyName: 'DemoTest', companyEmail: 'demotest@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'demotest@civilprom.com', adminPasswordHexOrPlain: '951demo360', lang: 'Français' },
-  { id: 'D5', shortEnvId: 'D52', companyName: 'MATEO', companyEmail: 'mateo@civilprom.com', companyPhone: '0651516087', adminName: 'Alban test', adminEmail: 'mateo@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
-  { id: 'D6', shortEnvId: 'D53', companyName: 'cozy', companyEmail: 'cozy@civilprom.com', companyPhone: '0909090909', adminName: 'test mind', adminEmail: 'cozy@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
-  { id: 'D7', shortEnvId: 'D28', companyName: 'JPM973', companyEmail: 'jpm973@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Pedro Maignan', adminEmail: 'jpm973@civilprom.com', adminPasswordHexOrPlain: '862379OHL-GENZX', lang: 'Français, France', nomLogiciel: 'JPM973' },
-  { id: 'D8', shortEnvId: 'D21', companyName: 'SAS Restenvie', companyEmail: 'restenvie@civilprom.com', companyPhone: '0600000000', adminName: 'Laurent Muller', adminEmail: 'restenvie@civilprom.com', adminPasswordHexOrPlain: 'R3S73NV1E-GENZX', lang: 'Français', nomLogiciel: 'Restenvie' },
-  { id: 'D9', shortEnvId: 'D11', companyName: 'DL France Defib', companyEmail: 'dlfrancedefib@civilprom.com', companyPhone: '0600000000', adminName: 'Denis Lamarche', adminEmail: 'dlfrancedefib@civilprom.com', adminPasswordHexOrPlain: 'D1FR4NC3D3F18-GENZL', lang: 'Français', nomLogiciel: 'DLFRANCEDEFIB' },
-  { id: 'D10', shortEnvId: 'D88', companyName: 'CardioPro', companyEmail: 'cardiopro@civilprom.com', companyPhone: '0600000000', adminName: 'Anthony Monaldi', adminEmail: 'cardiopro@civilprom.com', adminPasswordHexOrPlain: 'C4RD10PR0-GENWL', lang: 'Français', nomLogiciel: 'CardioPro' },
-  { id: 'D11', shortEnvId: 'D39', companyName: 'CardiaPulse', companyEmail: 'cardiapulse@civilprom.com', companyPhone: '0600000000', adminName: 'Georges Lanzi', adminEmail: 'cardiapulse@civilprom.com', adminPasswordHexOrPlain: 'C4RD14PU7S3-GENYL', lang: 'Français, France', nomLogiciel: 'CardiaPulse' },
-  { id: 'D12', shortEnvId: 'D22', companyName: 'CardiacSafe', companyEmail: 'cardiacsafe@civilprom.com', companyPhone: '0600000000', adminName: 'Ludovic Desvaux', adminEmail: 'cardiacsafe@civilprom.com', adminPasswordHexOrPlain: 'C4RD14C84F3-GENZV', lang: 'Français', nomLogiciel: 'CardiacSafe' },
-  { id: 'D13', shortEnvId: 'D31', companyName: 'Urgence Secours Équipements', companyEmail: 'use@civilprom.com', companyPhone: '0600000000', adminName: 'Arthur Sallé', adminEmail: 'use@civilprom.com', adminPasswordHexOrPlain: 'U5G3NC3S3C0U4R8-GENZH', lang: 'Français', nomLogiciel: 'USE' },
-  { id: 'D14', shortEnvId: 'D30', companyName: 'ExtraLife', companyEmail: 'extralife@civilprom.com', companyPhone: '0600000000', adminName: 'Thomas Christophe', adminEmail: 'extralife@civilprom.com', adminPasswordHexOrPlain: '3X7R4L163-GENZT', lang: 'Français', nomLogiciel: 'ExtraLife' },
-  { id: 'D15', shortEnvId: 'D62', companyName: 'Serenicoeur', companyEmail: 'serenicoeur@civilprom.com', companyPhone: '0600000000', adminName: 'Hubert Duverdier', adminEmail: 'serenicoeur@civilprom.com', adminPasswordHexOrPlain: 'S3R3N1C03U5-GENEL', lang: 'Français, France', nomLogiciel: 'Serenicoeur' },
-  { id: 'D16', shortEnvId: 'D85', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv.copilot@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Luc Degont', adminEmail: 'udplv.copilot@civilprom.com', adminPasswordHexOrPlain: 'UND3F1P0U5L4V13-GENZR', lang: 'Français', nomLogiciel: 'Copilot' },
-  { id: 'D17', shortEnvId: 'D56', companyName: 'DLFranceDefib', companyEmail: 'dlfrancedefib2@civilprom.com', companyPhone: '0651517065', adminName: 'Demarche Denis', adminEmail: 'dlfrancedefib2@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'DFranceDefib' },
-  { id: 'D18', shortEnvId: 'D83', companyName: 'DSECURITE GROUPE', companyEmail: 'dsecurite.test@civilprom.com', companyPhone: '0612345678', adminName: 'Jean Dupont', adminEmail: 'dsecurite.test@civilprom.com', adminPasswordHexOrPlain: 'DS3CUR1T3*%', lang: 'Français, France', nomLogiciel: 'DSECURITE' },
-  { id: 'D19', shortEnvId: 'D66', companyName: 'LION', companyEmail: 'lion@civilprom.com', companyPhone: '0651517065', adminName: 'Roesch Ronan', adminEmail: 'lion@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'LION123' },
-  { id: 'D20', shortEnvId: 'D74', companyName: 'Moraira', companyEmail: 'moraira@civilprom.com', companyPhone: '0612345678', adminName: 'Roesch Ronan', adminEmail: 'moraira@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français', nomLogiciel: 'MorairaGo' },
-  { id: 'D21', shortEnvId: 'D86', companyName: 'Denia', companyEmail: 'denia@civilprom.com', companyPhone: '0787878787', adminName: 'Roesch Ronan', adminEmail: 'denia@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Denia123' },
-  { id: 'D22', shortEnvId: 'D13', companyName: 'Xabia', companyEmail: 'xabia@civilprom.com', companyPhone: '0909090909', adminName: 'Axel Ronan', adminEmail: 'xabia@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Xabia123' },
-  { id: 'D23', shortEnvId: 'D73', companyName: 'Tolede', companyEmail: 'tolede@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch RonanPDF', adminEmail: 'tolede@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'ToledePDF' },
-  { id: 'D24', shortEnvId: 'D20', companyName: 'Hendaye', companyEmail: 'hendaye@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch Ronan', adminEmail: 'hendaye@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Hendaye123' },
-  { id: 'D25', shortEnvId: 'D24', companyName: 'Test DSG', companyEmail: 'test.dsg@civilprom.com', companyPhone: '0612345678', adminName: 'Jérôme Sommet', adminEmail: 'test.dsg@civilprom.com', adminPasswordHexOrPlain: 'DS3CU51TE', lang: 'Français, France', nomLogiciel: 'TestDSG' },
-  { id: 'D26', shortEnvId: 'D67', companyName: 'DSG Test', companyEmail: 'dsg.test@civilprom.com', companyPhone: '061234567890', adminName: 'Sommet Jérôme', adminEmail: 'dsg.test@civilprom.com', adminPasswordHexOrPlain: 'DS3CU51TE123', lang: 'Français, France', nomLogiciel: 'EssaiDSG' },
-  { id: 'D27', shortEnvId: 'D58', companyName: 'UN DÉFI POUR LA VIE', companyEmail: 'copilotudplv@civilprom.com', companyPhone: '0612345678', adminName: 'Jean-Luc Degont', adminEmail: 'copilotudplv@civilprom.com', adminPasswordHexOrPlain: 'C0P1L07UDPLV1IS0', lang: 'Français, France', nomLogiciel: 'Copilot' },
-  { id: 'D28', shortEnvId: 'D19', companyName: "Le Cœur d'un Sam", companyEmail: 'lecoeurdunsam@civilprom.com', companyPhone: '0765582200', adminName: 'Océane Chabrier', adminEmail: 'contact.lecoeurdunsam@gmail.com', adminPasswordHexOrPlain: 'L3C03U5D1S4M*%', lang: 'Français, France', nomLogiciel: 'lecoeurdunsam' }
+  { id: 'demo', shortEnvId: 'D10', companyName: 'Défibeo Solutions', lang: 'Français' },
 ];
 
 export function findTenantInList<T extends { id?: string; shortEnvId?: string }>(tenants: T[], targetTenantId: string): T | undefined {
@@ -2007,7 +1986,7 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
     companyPhone: '+33 1 47 20 00 01',
     adminName: 'Admin Démo',
     adminEmail: 'account@demo.com',
-    adminPasswordHexOrPlain: '123456',
+    adminPasswordHexOrPlain: '••••••••',
     lang: 'Français',
     createdAt: '2026-06-15',
     shortEnvId: 'D10'

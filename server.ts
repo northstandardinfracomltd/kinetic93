@@ -950,6 +950,91 @@ async function startServer() {
   // ============================================================================
   // STRICT BACKEND AUTHENTICATION & TENANT ISOLATION (100% AIRTIGHT SECURITY)
   // ============================================================================
+  // 0. Block all direct HTTP requests to backend data files, source files, and secrets
+  app.use((req, res, next) => {
+    const p = decodeURIComponent(req.path || '/').toLowerCase();
+    if (
+      p.startsWith('/data/') ||
+      p === '/data' ||
+      p.startsWith('/.data/') ||
+      p === '/.data' ||
+      p.startsWith('/server.') ||
+      p.startsWith('/src/server') ||
+      p.includes('server-store') ||
+      p.includes('registered_tenants') ||
+      p.includes('firebase-applet-config') ||
+      p.includes('firestore.rules') ||
+      p.startsWith('/.env') ||
+      p.endsWith('.key')
+    ) {
+      return res.status(403).json({
+        status: 'error',
+        error: 'Accès direct aux fichiers système et bases de données strictement interdit.',
+        code: 'FORBIDDEN_FILE_ACCESS',
+      });
+    }
+    return next();
+  });
+
+  const PASSWORD_HASH_PREFIX = 'sha256:';
+  const hashTenantPassword = (plain: string): string => {
+    const clean = String(plain || '').trim();
+    if (!clean || clean.startsWith(PASSWORD_HASH_PREFIX)) return clean;
+    const digest = crypto
+      .createHash('sha256')
+      .update(`defibeo_pwd_v1_salt:${clean}`)
+      .digest('hex');
+    return `${PASSWORD_HASH_PREFIX}${digest}`;
+  };
+
+  const verifyTenantPassword = (inputPlain: string, storedValue: string): boolean => {
+    const cleanInput = String(inputPlain || '').trim();
+    const cleanStored = String(storedValue || '').trim();
+    if (!cleanInput || !cleanStored || cleanStored.includes('•')) return false;
+    if (cleanStored.startsWith(PASSWORD_HASH_PREFIX)) {
+      const expected = hashTenantPassword(cleanInput);
+      try {
+        const a = Buffer.from(expected);
+        const b = Buffer.from(cleanStored);
+        return a.length === b.length && crypto.timingSafeEqual(a, b);
+      } catch (_) {
+        return false;
+      }
+    }
+    return cleanInput === cleanStored;
+  };
+
+  // Automatically hash all plaintext tenant passwords at rest in memory and on disk
+  try {
+    let storeModified = false;
+    for (const [k, val] of serverMemoryStore.entries()) {
+      if (k.toLowerCase().includes('registered_tenants') && Array.isArray(val)) {
+        let arrChanged = false;
+        const hashedArr = val.map((t: any) => {
+          if (!t || typeof t !== 'object') return t;
+          const rawPwd = String(t.adminPasswordHexOrPlain || t.adminPassword || '').trim();
+          if (rawPwd && !rawPwd.startsWith(PASSWORD_HASH_PREFIX) && !rawPwd.includes('•')) {
+            arrChanged = true;
+            const { adminPassword, ...rest } = t;
+            return {
+              ...rest,
+              adminPasswordHexOrPlain: hashTenantPassword(rawPwd),
+            };
+          }
+          return t;
+        });
+        if (arrChanged) {
+          serverMemoryStore.set(k, hashedArr);
+          persistSingleCollectionToDisk(k, hashedArr);
+          storeModified = true;
+        }
+      }
+    }
+    if (storeModified) {
+      persistServerStoreToDiskNow();
+    }
+  } catch (_) {}
+
   const SERVER_AUTH_SECRET = (() => {
     if (process.env.DEFIBEO_SESSION_SECRET) return process.env.DEFIBEO_SESSION_SECRET;
     const secretFile = path.join(DATA_DIR, 'session-secret.key');
@@ -5347,7 +5432,7 @@ async function warmupDefibrillateursStore() {
         if (loginRole === 'admin') {
           const tAdminEmail = String(tnt.adminEmail || '').trim().toLowerCase();
           const tAdminPass = String(tnt.adminPasswordHexOrPlain || tnt.adminPassword || '').trim();
-          if (tAdminEmail && tAdminPass && tAdminEmail === emailLower && tAdminPass === pass) {
+          if (tAdminEmail && tAdminPass && tAdminEmail === emailLower && verifyTenantPassword(pass, tAdminPass)) {
             firebaseMatchedMember = {
               email: tnt.adminEmail,
               name: tnt.adminName || 'Administrateur',
@@ -5837,6 +5922,7 @@ async function warmupDefibrillateursStore() {
       const { customTenantId, ...restTenantData } = tenantData;
       const newTenant = {
         ...restTenantData,
+        adminPasswordHexOrPlain: hashTenantPassword(String(restTenantData.adminPasswordHexOrPlain || '')),
         id: tenantId,
         shortEnvId,
         createdAt: new Date().toISOString(),
@@ -5848,6 +5934,7 @@ async function warmupDefibrillateursStore() {
         : tenants.filter((t: any) => t.id !== 'demo');
       rawTenantsList.push(newTenant);
       serverMemoryStore.set('registered_tenants', rawTenantsList);
+      serverMemoryStore.set('demo_registered_tenants', rawTenantsList);
       persistSingleCollectionToDisk('registered_tenants', rawTenantsList);
 
       const customCompanyInfo = {
@@ -6286,12 +6373,12 @@ async function warmupDefibrillateursStore() {
   // Real-time synchronization endpoint from browser client to server
   app.get("/api/sync-collection", async (req, res) => {
     try {
-      const collectionName = req.query.collectionName as string;
-      const tenantId = (req.query.tenantId as string) || 'demo';
+      const collectionName = String(req.query.collectionName || '').trim();
+      const tenantId = String(req.query.tenantId || 'demo').trim() || 'demo';
       if (!collectionName) {
         return res.status(400).json({ error: "collectionName is required" });
       }
-      const rawTenant = tenantId.trim();
+      const rawTenant = tenantId;
 
       // If chunkIndex is provided for defibrillateurs, serve that chunk directly only if authorized
       if (collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices') {
@@ -6355,11 +6442,25 @@ async function warmupDefibrillateursStore() {
         }
       }
 
-      // Sanitize registered_tenants on GET: never expose adminPasswordHexOrPlain over the network,
-      // and for non-megaadmin sessions, only return the caller's own tenant entry
-      if (collectionName === 'registered_tenants' && Array.isArray(items)) {
+      // Universal protection for registered_tenants (under any alias) and any object containing adminPasswordHexOrPlain
+      const isTenantsPayload =
+        collectionName.toLowerCase().includes('registered_tenants') ||
+        (Array.isArray(items) &&
+          items.some(
+            (it: any) =>
+              it &&
+              typeof it === 'object' &&
+              ('adminPasswordHexOrPlain' in it || ('shortEnvId' in it && 'adminEmail' in it))
+          ));
+
+      if (isTenantsPayload && Array.isArray(items)) {
         const authSession = (req as any).authSession as ServerSessionPayload | undefined;
-        const callerAliases = authSession ? getTenantAliasesSync(authSession.tenantId) : new Set<string>();
+        const sessionTenantLower = String(authSession?.tenantId || '').trim().toLowerCase();
+        const callerAliases =
+          authSession && sessionTenantLower && sessionTenantLower !== 'demo'
+            ? getTenantAliasesSync(authSession.tenantId)
+            : new Set<string>();
+
         const filteredTenants =
           authSession && authSession.role === 'megaadmin'
             ? items
@@ -6367,13 +6468,16 @@ async function warmupDefibrillateursStore() {
                 if (!t || typeof t !== 'object') return false;
                 const tid = String(t.id || '').trim().toLowerCase();
                 const shortId = String(t.shortEnvId || '').trim().toLowerCase();
+                if (!sessionTenantLower || sessionTenantLower === 'demo') {
+                  return tid === 'demo';
+                }
                 return (
-                  tid === 'demo' ||
-                  tid === String(authSession?.tenantId || '').toLowerCase() ||
+                  tid === sessionTenantLower ||
                   callerAliases.has(tid) ||
                   (shortId && callerAliases.has(shortId))
                 );
               });
+
         const maskedTenants = filteredTenants.map((t: any) => {
           if (!t || typeof t !== 'object') return t;
           const { adminPasswordHexOrPlain, adminPassword, ...rest } = t;
@@ -6398,7 +6502,8 @@ async function warmupDefibrillateursStore() {
 
   app.post("/api/sync-collection", (req, res) => {
     try {
-      const { collectionName, tenantId, value, explicitDatabaseSave } = req.body;
+      const { collectionName: rawColName, tenantId, value, explicitDatabaseSave } = req.body;
+      const collectionName = String(rawColName || '').trim();
       if (!collectionName || !tenantId) {
         return res.status(400).json({ error: "Paramètres collectionName et tenantId requis." });
       }
@@ -6411,8 +6516,8 @@ async function warmupDefibrillateursStore() {
 
       let finalValueToStore = value;
 
-      // Protect registered_tenants on POST: preserve masked passwords and restrict non-megaadmin to their own tenant
-      if (collectionName === 'registered_tenants' && Array.isArray(value)) {
+      // Protect registered_tenants on POST: hash new passwords, preserve masked passwords, and restrict non-megaadmin to their own tenant
+      if (collectionName.toLowerCase().includes('registered_tenants') && Array.isArray(value)) {
         const authSession = (req as any).authSession as ServerSessionPayload | undefined;
         const existingTenants = Array.isArray(serverMemoryStore.get('registered_tenants'))
           ? serverMemoryStore.get('registered_tenants')
@@ -6436,7 +6541,9 @@ async function warmupDefibrillateursStore() {
             if (!incomingMatch) return et;
             const incPass = String(incomingMatch.adminPasswordHexOrPlain || '').trim();
             const preservedPass =
-              !incPass || incPass.includes('•') ? et.adminPasswordHexOrPlain : incPass;
+              !incPass || incPass.includes('•')
+                ? et.adminPasswordHexOrPlain
+                : hashTenantPassword(incPass);
             return {
               ...et,
               ...incomingMatch,
@@ -6455,7 +6562,10 @@ async function warmupDefibrillateursStore() {
                 adminPasswordHexOrPlain: existing.adminPasswordHexOrPlain,
               };
             }
-            return inc;
+            return {
+              ...inc,
+              adminPasswordHexOrPlain: hashTenantPassword(incPass),
+            };
           });
         }
       }
@@ -9937,7 +10047,12 @@ async function warmupDefibrillateursStore() {
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        fs: {
+          deny: ['**/data/**', '**/.data/**', '**/server.ts', '**/src/server/**', '**/.env*', '**/*.key', '**/firebase-applet-config.json', '**/firestore.rules'],
+        },
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
