@@ -6503,6 +6503,26 @@ async function fetchLightweightSheetContextForColdUpsert(
           fetchedRowsByNumber.set(rn, vr.values[0].map((c: any) => String(c ?? '').trim()));
         }
       });
+    } else {
+      // Fallback: if spreadsheet is shared via public link rather than service account, check Row 1 via gviz CSV
+      try {
+        const csvUrl = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/gviz/tq?tqx=out:csv&range=A1:ZZ1&gid=${encodeURIComponent(gid || '0')}`;
+        const csvRes = await fetch(csvUrl, { signal: AbortSignal.timeout(5000) });
+        if (csvRes.ok) {
+          const csvText = await csvRes.text();
+          if (csvText && !csvText.trim().startsWith('<!DOCTYPE') && !csvText.trim().startsWith('<html')) {
+            const parsedHeaderMatrix = parseCSVToMatrix(csvText);
+            if (parsedHeaderMatrix.length > 0 && parsedHeaderMatrix[0].length > 0) {
+              const candidateHeaders = parsedHeaderMatrix[0].map((c: any) => String(c ?? '').trim());
+              const nonEmpty = candidateHeaders.filter(Boolean);
+              if (nonEmpty.length >= 2) {
+                headers = candidateHeaders;
+                hasRemoteHeaders = true;
+              }
+            }
+          }
+        }
+      } catch (_) {}
     }
 
     const effectiveHeaders = headers.length > 0 ? headers : defaultHeaders;
@@ -6543,14 +6563,14 @@ async function fetchLightweightSheetContextForColdUpsert(
       }
     }
 
-    // Step 2: If any record lacked a verified _sheetRowNumber, scan identifier/serial columns A2:AZ50000 (~180ms)
-    if (anyMissingRowNum && hasRemoteHeaders) {
-      const idRange = encodeURIComponent(`${rangePrefix}A2:AZ50000`);
+    // Step 2: If any record lacked a verified _sheetRowNumber, scan only the leading identifier/serial columns A2:D50000
+    if (anyMissingRowNum && hasRemoteHeaders && batchRes.ok) {
+      const idRange = encodeURIComponent(`${rangePrefix}A2:D50000`);
       const idRes = await fetchWithRetry(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${idRange}`,
         {
           headers: { Authorization: `Bearer ${accessToken}` },
-          signal: AbortSignal.timeout(10000),
+          signal: AbortSignal.timeout(8000),
         },
         2
       );
@@ -6627,11 +6647,21 @@ export async function upsertRecordsToTenantSheet(
   }
 
   return withSheetWriteLock(extracted.spreadsheetId, async () => {
-    const cacheKey = getSheetCacheKey(tabType, extracted.spreadsheetId, extracted.gid);
+    let cacheKey = getSheetCacheKey(tabType, extracted.spreadsheetId, extracted.gid);
     const accessToken = await getServiceAccountAccessToken();
     const cfg = getGlobalGoogleConfig();
 
-    const isCacheWarm = sheetMemoryCache.has(cacheKey);
+    let isCacheWarm = sheetMemoryCache.has(cacheKey);
+    if (!isCacheWarm) {
+      const sheetPrefix = `${tabType}_${extracted.spreadsheetId}_`;
+      for (const k of sheetMemoryCache.keys()) {
+        if (k.startsWith(sheetPrefix)) {
+          cacheKey = k;
+          isCacheWarm = true;
+          break;
+        }
+      }
+    }
     const warmCached = isCacheWarm ? sheetMemoryCache.get(cacheKey)! : null;
 
     let headers: string[] = [];
@@ -6641,25 +6671,7 @@ export async function upsertRecordsToTenantSheet(
     if (warmCached && warmCached.headers.length > 0) {
       headers = warmCached.headers;
       hasRemoteHeaders = warmCached.hasRemoteHeaders === true;
-      // Check if any record is missing from warmCached or if remote sheet had no headers yet
-      const isSingletonCheck =
-        tabType === 'reglages' ||
-        tabType === 'apparenceRapportsPdf' ||
-        tabType === 'communicationPortailClient' ||
-        (tabType === 'intituleEmplacements' && records.length === 1 && !records[0]?.emplacement);
-      const hasUnmatchedInWarmCache = records.some((rec, rIdx) => {
-        if (!rec || typeof rec !== 'object') return false;
-        const candidateRn =
-          (typeof rec._sheetRowNumber === 'number' && rec._sheetRowNumber >= 2 ? rec._sheetRowNumber : undefined) ||
-          extractRowNumFromSyntheticId(rec.id) ||
-          extractRowNumFromSyntheticId(rec.identifiant) ||
-          (isSingletonCheck && rIdx === 0 ? 2 : undefined);
-        if (candidateRn && warmCached.items.some(b => b && b._sheetRowNumber === candidateRn)) return false;
-        const recKeys = getRecordLookupKeys(rec, tabType);
-        if (warmCached.items.some(b => b && getRecordLookupKeys(b, tabType).some(bk => recKeys.includes(bk)))) return false;
-        return true;
-      });
-      if ((hasUnmatchedInWarmCache || !hasRemoteHeaders) && accessToken) {
+      if (!hasRemoteHeaders && accessToken) {
         const lightCtx = await fetchLightweightSheetContextForColdUpsert(
           extracted.spreadsheetId,
           extracted.gid,
@@ -6990,16 +7002,20 @@ export async function upsertRecordsToTenantSheet(
     }
 
     // Track in recentSheetUpserts in memory so any in-flight or immediate subsequent read sees the exact saved row
-    let sheetRecentMap = recentSheetUpserts.get(cacheKey);
-    if (!sheetRecentMap) {
-      sheetRecentMap = new Map();
-      recentSheetUpserts.set(cacheKey, sheetRecentMap);
-    }
+    const exactCacheKey = getSheetCacheKey(tabType, extracted.spreadsheetId, extracted.gid);
+    const targetCacheKeys = Array.from(new Set([cacheKey, exactCacheKey]));
     const nowMs = Date.now();
-    for (const item of upsertedList) {
-      const itemKeys = getRecordLookupKeys(item, tabType);
-      const pk = itemKeys[0] || `item_${nowMs}`;
-      sheetRecentMap.set(pk, { item, updatedAtMs: nowMs, syncedToRemoteSheet });
+    for (const ck of targetCacheKeys) {
+      let sheetRecentMap = recentSheetUpserts.get(ck);
+      if (!sheetRecentMap) {
+        sheetRecentMap = new Map();
+        recentSheetUpserts.set(ck, sheetRecentMap);
+      }
+      for (const item of upsertedList) {
+        const itemKeys = getRecordLookupKeys(item, tabType);
+        const pk = itemKeys[0] || `item_${nowMs}`;
+        sheetRecentMap.set(pk, { item, updatedAtMs: nowMs, syncedToRemoteSheet });
+      }
     }
 
     // Update overlay asynchronously in background so disk I/O never slows down the HTTP response
@@ -7026,6 +7042,9 @@ export async function upsertRecordsToTenantSheet(
       try {
         warmCached.stats = computeSheetCollectionStats(warmCached.items, tabType);
       } catch (_) {}
+      if (exactCacheKey !== cacheKey) {
+        sheetMemoryCache.set(exactCacheKey, warmCached);
+      }
       setImmediate(() => {
         try {
           saveDiskSnapshotAsync(cacheKey, warmCached);
@@ -7039,7 +7058,7 @@ export async function upsertRecordsToTenantSheet(
     }
 
     return {
-      success: syncedToRemoteSheet,
+      success: upsertedList.length > 0 || syncedToRemoteSheet,
       count: upsertedList.length,
       syncedToRemoteSheet,
       records: upsertedList,

@@ -4155,15 +4155,39 @@ export default function DefibTab({
           recordRecentDefibChange([editingDefib.id, payload.identifiant, payload.numeroSerie]);
         }
       } else {
-        const res = await onAddDefib({
+        const newRecordPayload = {
           ...payload,
+          id: 'df_' + Date.now(),
           createdAt: nowIso,
           updatedAt: nowIso,
           dateDerniereModification: nowIso,
-        });
+        };
+        const res = await onAddDefib(newRecordPayload);
         savedOk = res !== false;
         if (savedOk) {
-          recordRecentDefibChange([payload.identifiant, payload.numeroSerie]);
+          setRemoteQueriedDefibs(prev => {
+            const exists = prev.some(
+              df =>
+                df &&
+                ((df.identifiant && payload.identifiant && df.identifiant.toUpperCase() === payload.identifiant.toUpperCase()) ||
+                  (df.numeroSerie && payload.numeroSerie && df.numeroSerie.toUpperCase() === payload.numeroSerie.toUpperCase()))
+            );
+            return exists ? prev : [newRecordPayload as any, ...prev];
+          });
+          if (stableDefibsRef.current.items.length > 0) {
+            const exists = stableDefibsRef.current.items.some(
+              df =>
+                df &&
+                ((df.identifiant && payload.identifiant && df.identifiant.toUpperCase() === payload.identifiant.toUpperCase()) ||
+                  (df.numeroSerie && payload.numeroSerie && df.numeroSerie.toUpperCase() === payload.numeroSerie.toUpperCase()))
+            );
+            if (!exists) {
+              stableDefibsRef.current.items = [newRecordPayload as any, ...stableDefibsRef.current.items];
+              stableDefibsRef.current.totalCount += 1;
+            }
+          }
+          setRemoteTotalCount(prev => (typeof prev === 'number' ? prev + 1 : prev));
+          recordRecentDefibChange([newRecordPayload.id, payload.identifiant, payload.numeroSerie]);
         }
       }
 

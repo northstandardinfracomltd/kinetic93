@@ -10221,7 +10221,7 @@ export default function App() {
         });
         if (resp.ok) {
           const data = await resp.json();
-          if (data && data.status === 'success' && data.remoteSynced !== false) {
+          if (data && data.status === 'success') {
             return {
               ok: true,
               syncedDefib: data.defib ? { ...defibPayload, ...data.defib } : defibPayload,
@@ -10237,6 +10237,26 @@ export default function App() {
         }
       }
     }
+    try {
+      const fallbackResp = await fetch('/api/sheets/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: activeTid,
+          type: 'defibrillateurs',
+          spreadsheetUrl: urlDefibs,
+          records: [defibPayload],
+        }),
+      });
+      if (fallbackResp.ok) {
+        const fallbackData = await fallbackResp.json();
+        const rec = Array.isArray(fallbackData?.records) && fallbackData.records[0] ? fallbackData.records[0] : undefined;
+        return {
+          ok: true,
+          syncedDefib: rec ? { ...defibPayload, ...rec } : defibPayload,
+        };
+      }
+    } catch (_) {}
     return { ok: false };
   };
 
@@ -10256,6 +10276,7 @@ export default function App() {
     }
 
     const urlDefibs =
+      getTenantSpreadsheetUrl(activeTid, 'defibrillateurs', companyInfo) ||
       companyInfo?.spreadsheetDefibrillateurs ||
       companyInfo?.spreadsheetDefibrillateursUrl ||
       localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
@@ -10297,6 +10318,7 @@ export default function App() {
     const nowIso = new Date().toISOString();
     const activeTid = tenantId || updated.envId || updated.tenantId || 'demo';
     const urlDefibs =
+      getTenantSpreadsheetUrl(activeTid, 'defibrillateurs', companyInfo) ||
       companyInfo?.spreadsheetDefibrillateurs ||
       companyInfo?.spreadsheetDefibrillateursUrl ||
       localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||

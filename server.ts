@@ -668,18 +668,47 @@ try {
       }
     }
   }
-  // Also load any dedicated collection files
+  // Also load any dedicated collection files (deduplicating D27/D58/generic massive arrays in RAM)
   if (fs.existsSync(COLLECTIONS_DIR)) {
     const files = fs.readdirSync(COLLECTIONS_DIR);
     for (const file of files) {
       if (file.endsWith('.json')) {
         const key = file.replace(/\.json$/, '');
+        // Skip redundant 70MB/50MB duplicate copies if canonical D27_* exists on disk
+        if (
+          (key === 'D58_defibrillateurs' || key === 'defibrillateurs') &&
+          fs.existsSync(path.join(COLLECTIONS_DIR, 'D27_defibrillateurs.json'))
+        ) {
+          continue;
+        }
+        if (
+          (key === 'D58_interventions' || key === 'interventions') &&
+          fs.existsSync(path.join(COLLECTIONS_DIR, 'D27_interventions.json'))
+        ) {
+          continue;
+        }
+        if (
+          (key === 'D58_rapportsPdf' || key === 'rapportsPdf') &&
+          fs.existsSync(path.join(COLLECTIONS_DIR, 'D27_rapportsPdf.json'))
+        ) {
+          continue;
+        }
         try {
           const content = fs.readFileSync(path.join(COLLECTIONS_DIR, file), 'utf-8');
           const parsed = JSON.parse(content);
           if (parsed !== undefined && parsed !== null) {
             serverMemoryStore.set(key, parsed);
             serverStoreTimestamps.set(key, Date.now());
+            if (key === 'D27_defibrillateurs') {
+              serverMemoryStore.set('D58_defibrillateurs', parsed);
+              serverStoreTimestamps.set('D58_defibrillateurs', Date.now());
+            } else if (key === 'D27_interventions') {
+              serverMemoryStore.set('D58_interventions', parsed);
+              serverStoreTimestamps.set('D58_interventions', Date.now());
+            } else if (key === 'D27_rapportsPdf') {
+              serverMemoryStore.set('D58_rapportsPdf', parsed);
+              serverStoreTimestamps.set('D58_rapportsPdf', Date.now());
+            }
             if (key.includes('defibrillateurs') && Array.isArray(parsed)) {
               for (const item of parsed) {
                 indexDefibrillateur(item, key.replace(/_defibrillateurs$/, ''));
@@ -704,7 +733,9 @@ function persistSingleCollectionToDisk(key: string, value: any) {
       fs.mkdirSync(COLLECTIONS_DIR, { recursive: true });
     }
     const filePath = path.join(COLLECTIONS_DIR, `${key}.json`);
-    fs.writeFileSync(filePath, JSON.stringify(value), 'utf-8');
+    fs.promises.writeFile(filePath, JSON.stringify(value), 'utf-8').catch(e => {
+      console.warn(`Failed to persist collection ${key} to disk:`, e);
+    });
   } catch (e) {
     console.warn(`Failed to persist collection ${key} to disk:`, e);
   }
@@ -723,9 +754,8 @@ function persistServerStoreToDiskNow() {
     for (const [k, v] of serverMemoryStore.entries()) {
       // Skip redundant lowercase or raw numeric aliases to keep disk footprint minimal and avoid string length limits
       if (/^[0-9]+_/.test(k) || /^d[0-9]+_/.test(k)) continue;
-      // Large collections are saved individually in collections/ to avoid overflowing single JSON
+      // Large collections are saved individually via persistSingleCollectionToDisk when modified
       if (Array.isArray(v) && v.length > 500) {
-        persistSingleCollectionToDisk(k, v);
         continue;
       }
       obj[k] = v;
@@ -748,8 +778,8 @@ function persistServerStoreToDisk() {
       for (const [k, v] of serverMemoryStore.entries()) {
         // Skip redundant lowercase or raw numeric aliases to keep disk footprint minimal and avoid string length limits
         if (/^[0-9]+_/.test(k) || /^d[0-9]+_/.test(k)) continue;
+        // Large collections are saved individually via persistSingleCollectionToDisk when modified
         if (Array.isArray(v) && v.length > 500) {
-          persistSingleCollectionToDisk(k, v);
           continue;
         }
         obj[k] = v;
@@ -3823,46 +3853,64 @@ async function warmupDefibrillateursStore() {
     const d27ColFile = path.join(COLLECTIONS_DIR, 'D27_defibrillateurs.json');
     const genericColFile = path.join(COLLECTIONS_DIR, 'defibrillateurs.json');
     
-    // 3. Pre-load D27/D58 defibrillateurs exclusively for D27 / D58
-    const existingFile = [d58ColFile, d27ColFile].find(f => fs.existsSync(f));
-    if (existingFile) {
-      try {
-        const content = JSON.parse(fs.readFileSync(existingFile, 'utf-8'));
-        if (Array.isArray(content) && content.length > 0) {
-          serverMemoryStore.set('D58_defibrillateurs', content);
-          serverMemoryStore.set('D27_defibrillateurs', content);
-          serverStoreTimestamps.set('D58_defibrillateurs', Date.now());
-          serverStoreTimestamps.set('D27_defibrillateurs', Date.now());
-          for (const item of content) {
-            indexDefibrillateur(item, 'D27');
-          }
-          console.log(`[Warmup] Pre-indexed ${content.length} defibrillateurs for D27/D58 into fastDefibIndex.`);
+    // 3. Pre-load D27/D58 defibrillateurs exclusively for D27 / D58 if not already loaded at startup
+    const alreadyLoadedD27 = serverMemoryStore.get('D27_defibrillateurs') || serverMemoryStore.get('D58_defibrillateurs');
+    if (Array.isArray(alreadyLoadedD27) && alreadyLoadedD27.length > 0) {
+      serverMemoryStore.set('D27_defibrillateurs', alreadyLoadedD27);
+      serverMemoryStore.set('D58_defibrillateurs', alreadyLoadedD27);
+      if (fastDefibIndex.size === 0) {
+        for (const item of alreadyLoadedD27) {
+          indexDefibrillateur(item, 'D27');
         }
-      } catch (_) {}
+      }
+      console.log(`[Warmup] Reused ${alreadyLoadedD27.length} pre-loaded defibrillateurs for D27/D58 in fastDefibIndex.`);
+    } else {
+      const existingFile = [d27ColFile, d58ColFile].find(f => fs.existsSync(f));
+      if (existingFile) {
+        try {
+          const content = JSON.parse(fs.readFileSync(existingFile, 'utf-8'));
+          if (Array.isArray(content) && content.length > 0) {
+            serverMemoryStore.set('D58_defibrillateurs', content);
+            serverMemoryStore.set('D27_defibrillateurs', content);
+            serverStoreTimestamps.set('D58_defibrillateurs', Date.now());
+            serverStoreTimestamps.set('D27_defibrillateurs', Date.now());
+            for (const item of content) {
+              indexDefibrillateur(item, 'D27');
+            }
+            console.log(`[Warmup] Pre-indexed ${content.length} defibrillateurs for D27/D58 into fastDefibIndex.`);
+          }
+        } catch (_) {}
+      }
     }
 
-    // 3b. Pre-load D26/D67 defibrillateurs exclusively for D26 / D67
-    const d26ColFile = path.join(COLLECTIONS_DIR, 'D26_defibrillateurs.json');
-    const d67ColFile = path.join(COLLECTIONS_DIR, 'D67_defibrillateurs.json');
-    const existingD26File = [d26ColFile, d67ColFile].find(f => fs.existsSync(f));
-    if (existingD26File) {
-      try {
-        const d26Content = JSON.parse(fs.readFileSync(existingD26File, 'utf-8'));
-        if (Array.isArray(d26Content) && d26Content.length > 0) {
-          serverMemoryStore.set('D26_defibrillateurs', d26Content);
-          serverMemoryStore.set('D67_defibrillateurs', d26Content);
-          serverStoreTimestamps.set('D26_defibrillateurs', Date.now());
-          serverStoreTimestamps.set('D67_defibrillateurs', Date.now());
-          for (const item of d26Content) {
-            indexDefibrillateur(item, 'D26');
+    // 3b. Pre-load D26/D67 defibrillateurs exclusively for D26 / D67 if not already loaded
+    const alreadyLoadedD26 = serverMemoryStore.get('D26_defibrillateurs') || serverMemoryStore.get('D67_defibrillateurs');
+    if (Array.isArray(alreadyLoadedD26) && alreadyLoadedD26.length > 0) {
+      serverMemoryStore.set('D26_defibrillateurs', alreadyLoadedD26);
+      serverMemoryStore.set('D67_defibrillateurs', alreadyLoadedD26);
+    } else {
+      const d26ColFile = path.join(COLLECTIONS_DIR, 'D26_defibrillateurs.json');
+      const d67ColFile = path.join(COLLECTIONS_DIR, 'D67_defibrillateurs.json');
+      const existingD26File = [d26ColFile, d67ColFile].find(f => fs.existsSync(f));
+      if (existingD26File) {
+        try {
+          const d26Content = JSON.parse(fs.readFileSync(existingD26File, 'utf-8'));
+          if (Array.isArray(d26Content) && d26Content.length > 0) {
+            serverMemoryStore.set('D26_defibrillateurs', d26Content);
+            serverMemoryStore.set('D67_defibrillateurs', d26Content);
+            serverStoreTimestamps.set('D26_defibrillateurs', Date.now());
+            serverStoreTimestamps.set('D67_defibrillateurs', Date.now());
+            for (const item of d26Content) {
+              indexDefibrillateur(item, 'D26');
+            }
+            console.log(`[Warmup] Pre-indexed ${d26Content.length} defibrillateurs for D26/D67 into fastDefibIndex.`);
           }
-          console.log(`[Warmup] Pre-indexed ${d26Content.length} defibrillateurs for D26/D67 into fastDefibIndex.`);
-        }
-      } catch (_) {}
+        } catch (_) {}
+      }
     }
 
-    // 4. Background non-blocking pre-warm of disk chunks if present
-    if (fs.existsSync(CHUNKS_DIR)) {
+    // 4. Only scan disk chunks if fastDefibIndex is still empty
+    if (fastDefibIndex.size === 0 && fs.existsSync(CHUNKS_DIR)) {
       const chunkFiles = fs.readdirSync(CHUNKS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
       console.log(`[Warmup] Found ${chunkFiles.length} chunk files on disk. Pre-warming index...`);
       for (const cf of chunkFiles) {
@@ -3939,20 +3987,12 @@ async function warmupDefibrillateursStore() {
           console.warn('[GoogleSheetsDB] single defib upsert warning:', err);
           remoteSheetError = err?.message || String(err);
         }
-
-        if (!remoteSheetSynced) {
-          return res.status(502).json({
-            status: "error",
-            remoteSynced: false,
-            error: remoteSheetError || "Erreur lors de l'enregistrement des changements dans la base de données.",
-          });
-        }
       }
 
       indexDefibrillateur(formatted, rawTenant);
       serverDefibVersion = Date.now();
 
-      // Immediately return success to client once Google Spreadsheet is updated; run local disk/chunk mirror in background
+      // Immediately return success to client once Google Spreadsheet / local mirror is updated; run local disk/chunk mirror in background
       res.json({
         status: "success",
         defib: formatted,
@@ -4474,7 +4514,8 @@ async function warmupDefibrillateursStore() {
 
   function getSheetTabFieldCandidates(tabType: SheetTabType): string[] {
     const base = SHEET_TAB_FIELD_MAP[tabType] || 'spreadsheetDefibrillateurs';
-    return [base, `${base}Url`];
+    const shortKey = `${tabType}Url`;
+    return Array.from(new Set([base, `${base}Url`, shortKey, tabType]));
   }
 
   // Helper to resolve tenant spreadsheet URL synchronously from memory or disk
@@ -4495,12 +4536,38 @@ async function warmupDefibrillateursStore() {
 
     const fields = getSheetTabFieldCandidates(tabType);
 
+    const checkTenantsList = (list: any[]) => {
+      for (const t of list) {
+        if (!t || typeof t !== 'object') continue;
+        const tidStr = String(t.tenantId || t.envId || t.shortEnvId || t.id || '').trim().toLowerCase();
+        if (tAliases.has(tidStr) || candidateTenants.some(c => c.toLowerCase() === tidStr)) {
+          for (const f of fields) {
+            if (t[f] && typeof t[f] === 'string' && t[f].trim() && !isInvalidPlaceholder(t[f].trim())) {
+              return t[f].trim();
+            }
+          }
+        }
+      }
+      return '';
+    };
+
+    for (const globalKey of ['defib_tenantDatabases', 'tenantDatabases']) {
+      const memGlobal = serverMemoryStore.get(globalKey);
+      if (Array.isArray(memGlobal)) {
+        const found = checkTenantsList(memGlobal);
+        if (found) return found;
+      }
+    }
+
     for (const cand of candidateTenants) {
       for (const suffix of ['companyInfo', 'tenantDatabases', 'company_info']) {
         const key = cand === 'demo' ? suffix : `${cand}_${suffix}`;
         if (serverMemoryStore.has(key)) {
           const obj = serverMemoryStore.get(key);
-          if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+          if (Array.isArray(obj)) {
+            const found = checkTenantsList(obj);
+            if (found) return found;
+          } else if (obj && typeof obj === 'object') {
             for (const f of fields) {
               if (obj[f] && typeof obj[f] === 'string' && obj[f].trim() && !isInvalidPlaceholder(obj[f].trim())) {
                 return obj[f].trim();
@@ -4512,7 +4579,10 @@ async function warmupDefibrillateursStore() {
         if (fs.existsSync(diskFile)) {
           try {
             const obj = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
-            if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+            if (Array.isArray(obj)) {
+              const found = checkTenantsList(obj);
+              if (found) return found;
+            } else if (obj && typeof obj === 'object') {
               for (const f of fields) {
                 if (obj[f] && typeof obj[f] === 'string' && obj[f].trim() && !isInvalidPlaceholder(obj[f].trim())) {
                   return obj[f].trim();
@@ -4524,21 +4594,6 @@ async function warmupDefibrillateursStore() {
       }
     }
 
-    // Also check registered_tenants in memory or disk
-    const checkTenantsList = (list: any[]) => {
-      for (const t of list) {
-        if (!t || typeof t !== 'object') continue;
-        const tidStr = String(t.tenantId || t.id || '').trim().toLowerCase();
-        if (tAliases.has(tidStr) || candidateTenants.some(c => c.toLowerCase() === tidStr)) {
-          for (const f of fields) {
-            if (t[f] && typeof t[f] === 'string' && t[f].trim() && !isInvalidPlaceholder(t[f].trim())) {
-              return t[f].trim();
-            }
-          }
-        }
-      }
-      return '';
-    };
     const memTenants = serverMemoryStore.get('registered_tenants');
     if (Array.isArray(memTenants)) {
       const found = checkTenantsList(memTenants);
@@ -4547,7 +4602,7 @@ async function warmupDefibrillateursStore() {
 
     if (tAliases.has('d27') || activeTenant.toLowerCase() === 'd27') {
       if (tabType === 'defibrillateurs') {
-        return 'https://docs.google.com/spreadsheets/d/1gZO503C5HtbV5KzxOA4WXcBpsF9srKmlga0xD9J0exs/edit';
+        return 'https://docs.google.com/spreadsheets/d/1gZO503C5HtbV5KzxOA4WXcBpsF9srKmlga0xD9J0exs/edit?gid=672813022#gid=672813022';
       }
       if (tabType === 'clients') {
         return 'https://docs.google.com/spreadsheets/d/1-hgTWh9B07WeD4jYXH3vwNnKPMRSU3qTGltIYmm64gg/edit';
