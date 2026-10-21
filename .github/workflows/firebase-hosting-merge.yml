@@ -20,15 +20,75 @@ jobs:
           cache: 'npm'
 
       - name: Install Dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps || npm ci
 
       - name: Build Application
         run: npm run build
 
-      - name: Deploy to Firebase Hosting
+      - name: Resolve Firebase Credentials
+        id: firebase_creds
+        env:
+          SA_DEFIBEO: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEFIBEO }}
+          SA_DEFAULT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SA_GEN_044: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GEN_LANG_CLIENT_0441699702 }}
+          SA_GEN_041: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GEN_LANG_CLIENT_0413990730 }}
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+          FB_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+        run: |
+          SA_JSON=""
+          if [ -n "$SA_DEFIBEO" ]; then
+            SA_JSON="$SA_DEFIBEO"
+          elif [ -n "$SA_DEFAULT" ]; then
+            SA_JSON="$SA_DEFAULT"
+          elif [ -n "$SA_GEN_044" ]; then
+            SA_JSON="$SA_GEN_044"
+          elif [ -n "$SA_GEN_041" ]; then
+            SA_JSON="$SA_GEN_041"
+          elif [ -n "$GCP_SA_KEY" ]; then
+            SA_JSON="$GCP_SA_KEY"
+          fi
+
+          if [ -n "$SA_JSON" ]; then
+            echo "has_sa=true" >> "$GITHUB_OUTPUT"
+            EOF_MARKER="EOF_$(date +%s)"
+            echo "sa_json<<$EOF_MARKER" >> "$GITHUB_OUTPUT"
+            echo "$SA_JSON" >> "$GITHUB_OUTPUT"
+            echo "$EOF_MARKER" >> "$GITHUB_OUTPUT"
+
+            DETECTED_PROJECT=$(echo "$SA_JSON" | node -e "
+              let d = '';
+              process.stdin.on('data', c => d += c);
+              process.stdin.on('end', () => {
+                try {
+                  const p = JSON.parse(d);
+                  if (p.project_id) process.stdout.write(p.project_id);
+                } catch (e) {}
+              });
+            ")
+            if [ -n "$DETECTED_PROJECT" ]; then
+              echo "project_id=$DETECTED_PROJECT" >> "$GITHUB_OUTPUT"
+            else
+              echo "project_id=gen-lang-client-0441699702" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ -n "$FB_TOKEN" ]; then
+            echo "has_sa=false" >> "$GITHUB_OUTPUT"
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_sa=false" >> "$GITHUB_OUTPUT"
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Aucun secret Firebase (FIREBASE_SERVICE_ACCOUNT_DEFIBEO ou FIREBASE_SERVICE_ACCOUNT) n'est défini dans GitHub Settings > Secrets and variables > Actions. Le build a réussi et l'étape Firebase Hosting a été ignorée proprement."
+          fi
+
+      - name: Deploy to Firebase Hosting (Service Account)
+        if: steps.firebase_creds.outputs.has_sa == 'true'
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEFIBEO }}'
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ steps.firebase_creds.outputs.sa_json }}
           channelId: live
-          projectId: defibeo
+          projectId: ${{ steps.firebase_creds.outputs.project_id }}
+
+      - name: Deploy to Firebase Hosting (Firebase Token Fallback)
+        if: steps.firebase_creds.outputs.has_sa != 'true' && steps.firebase_creds.outputs.has_token == 'true'
+        run: npx --yes firebase-tools deploy --only hosting --token "${{ secrets.FIREBASE_TOKEN }}"
+

@@ -270,7 +270,7 @@ export async function sendScriptEmail(payload: {
  * When a user registers (CRÉER UN COMPTE), send a confirmation email containing credentials.
  * Scheduled for 15 minutes in the future.
  */
-export async function triggerEmail1Inscription(emailEntreprise: string, passwordHexOrPlain: string): Promise<boolean> {
+export async function triggerEmail1Inscription(emailEntreprise: string, _passwordHexOrPlain?: string): Promise<boolean> {
   const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
   const savedOption = localStorage.getItem(`defib_${tenantId}_enable_auto_emails`);
   if (savedOption === 'Non') {
@@ -279,7 +279,7 @@ export async function triggerEmail1Inscription(emailEntreprise: string, password
   }
   console.log(`[Email 1] Sending welcome/inscription email to ${emailEntreprise} immediately.`);
   const subject = "Défibeo : Confirmation pour l’ouverture de votre environnement.";
-  const body = `Bravo pour l’ouverture de votre environnement Défibeo! Pour rappel, pour vous connecter, accédez à https://defibeo.com/ et cliquez sur Connexion, ensuite veuillez utiliser votre email ${emailEntreprise} ainsi que le mot de passe que vous avez ajouté.`;
+  const body = `Bravo pour l’ouverture de votre environnement Défibeo! Pour rappel, pour vous connecter, accédez à https://defibeo.com/ et cliquez sur Connexion, ensuite veuillez utiliser votre email ${emailEntreprise} et valider le code de double authentification reçu par email.`;
   
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${emailEntreprise}`,

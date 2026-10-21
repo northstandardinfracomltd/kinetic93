@@ -278,7 +278,7 @@ export interface Tenant {
   companyPhone: string;
   adminName: string;
   adminEmail: string;
-  adminPasswordHexOrPlain: string;
+  adminPasswordHexOrPlain?: string;
   lang: string;
   createdAt: string;
   shortEnvId?: string;

@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   getRegisteredTenants, 
   saveCollectionToFirestore,
+  registerNewTenant,
   Tenant,
   seedTenantDemoData
 } from '../firebase';
+import { triggerEmail1Inscription } from '../utils/emailService';
 import { 
   ShieldAlert, 
   Power, 
@@ -22,8 +24,8 @@ import {
   HelpCircle,
   RotateCcw,
   Calendar,
-  Lock,
-  Key
+  Key,
+  Plus
 } from 'lucide-react';
 
 interface MegaAdminDashboardProps {
@@ -37,11 +39,21 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
   const [isSyncing, setIsSyncing] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
 
-  const [selectedTenantForPassword, setSelectedTenantForPassword] = useState<Tenant | null>(null);
-  const [newPasswordValue, setNewPasswordValue] = useState('');
-  const [passwordToastSuccess, setPasswordToastSuccess] = useState(false);
-  const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [paymentUrlDrafts, setPaymentUrlDrafts] = useState<Record<string, string>>({});
+
+  // Create Environment Form State (Mega Admin)
+  const [showCreateEnvPanel, setShowCreateEnvPanel] = useState(false);
+  const [newEnvCompanyName, setNewEnvCompanyName] = useState('');
+  const [newEnvNomLogiciel, setNewEnvNomLogiciel] = useState('');
+  const [newEnvCompanyEmail, setNewEnvCompanyEmail] = useState('');
+  const [newEnvCompanyPhone, setNewEnvCompanyPhone] = useState('');
+  const [newEnvAdminName, setNewEnvAdminName] = useState('');
+  const [newEnvAdminEmail, setNewEnvAdminEmail] = useState('');
+  const [newEnvLang, setNewEnvLang] = useState('Français');
+  const [newEnvPaymentUrl, setNewEnvPaymentUrl] = useState('');
+  const [isCreatingEnv, setIsCreatingEnv] = useState(false);
+  const [createEnvError, setCreateEnvError] = useState('');
+  const [createEnvSuccessToast, setCreateEnvSuccessToast] = useState(false);
 
   // Global Google Sheets API Configuration (All Tenants)
   const [googleApiKey, setGoogleApiKey] = useState('');
@@ -92,40 +104,83 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
     }
   };
 
-  const handleSavePassword = async () => {
-    if (!selectedTenantForPassword) return;
-    if (!newPasswordValue.trim()) {
-      alert('Veuillez saisir un mot de passe valide.');
+  const handleCreateEnvironment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateEnvError('');
+    if (
+      !newEnvCompanyName.trim() ||
+      !newEnvNomLogiciel.trim() ||
+      !newEnvCompanyEmail.trim() ||
+      !newEnvAdminName.trim() ||
+      !newEnvAdminEmail.trim()
+    ) {
+      setCreateEnvError('Veuillez remplir tous les champs obligatoires.');
       return;
     }
 
-    setIsSavingPassword(true);
-    const tenantId = selectedTenantForPassword.id;
-    const updatedList = tenants.map(t => {
-      if (t.id === tenantId) {
-        return { ...t, adminPasswordHexOrPlain: newPasswordValue.trim() };
-      }
-      return t;
-    });
-    setTenants(updatedList);
-
+    setIsCreatingEnv(true);
     try {
-      // Sync to server & cache
-      await saveCollectionToFirestore('registered_tenants', updatedList, 'demo');
-      
-      // Sync to local cache so other reads are coherent immediately
-      localStorage.setItem('fs_cache_registered_tenants', JSON.stringify(updatedList));
-      
-      setPasswordToastSuccess(true);
-      setTimeout(() => setPasswordToastSuccess(false), 4000);
-      setSelectedTenantForPassword(null);
-      setNewPasswordValue('');
-    } catch (err) {
-      console.error('Failed to sync tenant password update:', err);
-      alert('Une erreur est survenue lors de la mise à jour du mot de passe. Rétablissement...');
+      const existing = await getRegisteredTenants();
+      let maxNum = 0;
+      for (const tnt of existing) {
+        if (tnt.id && /^D\d+$/i.test(tnt.id)) {
+          const num = parseInt(tnt.id.substring(1), 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+      }
+      const nextTenantId = `D${maxNum + 1}`;
+      const usedShortIds = new Set(existing.map(tnt => tnt.shortEnvId).filter(Boolean));
+      let randomTwoDigits = Math.floor(10 + Math.random() * 90);
+      let shortEnvId = `D${randomTwoDigits}`;
+      let attempts = 0;
+      while (usedShortIds.has(shortEnvId) && attempts < 100) {
+        randomTwoDigits = Math.floor(10 + Math.random() * 90);
+        shortEnvId = `D${randomTwoDigits}`;
+        attempts++;
+      }
+
+      const newTenant: Tenant = {
+        id: nextTenantId,
+        shortEnvId,
+        companyName: newEnvCompanyName.trim(),
+        nomLogiciel: newEnvNomLogiciel.trim(),
+        companyEmail: newEnvCompanyEmail.trim().toLowerCase(),
+        companyPhone: newEnvCompanyPhone.trim(),
+        adminName: newEnvAdminName.trim(),
+        adminEmail: newEnvAdminEmail.trim().toLowerCase(),
+        createdAt: new Date().toISOString(),
+        lang: newEnvLang,
+        disabled: false,
+        blockedForPrez: false,
+        subscriptionActive: true,
+        paymentUrl: newEnvPaymentUrl.trim() || 'https://defibeo.com/hashtag#pricing2026',
+      };
+
+      await registerNewTenant(newTenant);
+
+      triggerEmail1Inscription(
+        newTenant.companyEmail,
+        newTenant.adminName,
+        newTenant.companyName,
+        newTenant.adminEmail
+      ).catch(err => console.error('Erreur envoi email bienvenue:', err));
+
+      setNewEnvCompanyName('');
+      setNewEnvNomLogiciel('');
+      setNewEnvCompanyEmail('');
+      setNewEnvCompanyPhone('');
+      setNewEnvAdminName('');
+      setNewEnvAdminEmail('');
+      setNewEnvPaymentUrl('');
+      setShowCreateEnvPanel(false);
+      setCreateEnvSuccessToast(true);
+      setTimeout(() => setCreateEnvSuccessToast(false), 4000);
       await fetchTenants();
+    } catch (err: any) {
+      console.error('Error creating environment:', err);
+      setCreateEnvError(err?.message || 'Erreur lors de la création de l’environnement.');
     } finally {
-      setIsSavingPassword(false);
+      setIsCreatingEnv(false);
     }
   };
 
@@ -370,7 +425,16 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
             />
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 shrink-0 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowCreateEnvPanel(prev => !prev)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-pink-600 hover:bg-pink-500 text-white font-bold text-sm rounded-xl border border-pink-500 transition-all cursor-pointer shadow-lg shadow-pink-600/20"
+              id="btn-mega-create-env"
+            >
+              <Plus className="w-4 h-4 text-white" />
+              Créer un environnement
+            </button>
             <button
               type="button"
               onClick={() => setShowGoogleConfigPanel(prev => !prev)}
@@ -390,6 +454,172 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
             </button>
           </div>
         </div>
+
+        {/* Create New Environment Form Panel (Mega Admin) */}
+        {showCreateEnvPanel && (
+          <div className="bg-neutral-900 border border-pink-500/40 rounded-2xl p-6 space-y-5" id="mega-create-env-panel">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h3 className="text-base font-black text-white flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-pink-500" />
+                  Créer un nouvel environnement client
+                </h3>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Crée un environnement isolé avec authentification stricte par double-auth email (sans mot de passe).
+                </p>
+              </div>
+            </div>
+
+            {createEnvError && (
+              <div className="p-3 bg-red-950/60 border border-red-500/40 text-red-300 rounded-xl text-xs font-bold">
+                {createEnvError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateEnvironment} className="space-y-4" id="mega-create-env-form">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-neutral-300">
+                    Nom de l'entreprise *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newEnvCompanyName}
+                    onChange={(e) => setNewEnvCompanyName(e.target.value)}
+                    placeholder="Ex: CardioSecours SAS"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2.5 px-3.5 text-sm text-white placeholder-neutral-600 focus:outline-hidden focus:border-pink-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-neutral-300">
+                    Nom du logiciel (max 15 car.) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={15}
+                    value={newEnvNomLogiciel}
+                    onChange={(e) => setNewEnvNomLogiciel(e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15))}
+                    placeholder="Ex: CardioSecours"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2.5 px-3.5 text-sm text-white placeholder-neutral-600 focus:outline-hidden focus:border-pink-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-neutral-300">
+                    Langue de l'environnement *
+                  </label>
+                  <select
+                    value={newEnvLang}
+                    onChange={(e) => setNewEnvLang(e.target.value)}
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2.5 px-3.5 text-sm text-white focus:outline-hidden focus:border-pink-500"
+                  >
+                    <option value="Français">Français</option>
+                    <option value="English">English</option>
+                    <option value="Deutsch">Deutsch</option>
+                    <option value="Português">Português</option>
+                    <option value="Español">Español</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-neutral-300">
+                    Email commercial *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={newEnvCompanyEmail}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewEnvCompanyEmail(val);
+                      if (!newEnvAdminEmail || newEnvAdminEmail === newEnvCompanyEmail) {
+                        setNewEnvAdminEmail(val);
+                      }
+                    }}
+                    placeholder="contact@entreprise.com"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2.5 px-3.5 text-sm text-white placeholder-neutral-600 focus:outline-hidden focus:border-pink-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-neutral-300">
+                    Téléphone commercial *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={newEnvCompanyPhone}
+                    onChange={(e) => setNewEnvCompanyPhone(e.target.value)}
+                    placeholder="06 12 34 56 78"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2.5 px-3.5 text-sm text-white placeholder-neutral-600 focus:outline-hidden focus:border-pink-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-neutral-300">
+                    URL de paiement (optionnel)
+                  </label>
+                  <input
+                    type="text"
+                    value={newEnvPaymentUrl}
+                    onChange={(e) => setNewEnvPaymentUrl(e.target.value)}
+                    placeholder="https://defibeo.com/hashtag#pricing2026"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2.5 px-3.5 text-sm text-white placeholder-neutral-600 focus:outline-hidden focus:border-pink-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-neutral-300">
+                    Nom & Prénom du Super-Admin *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newEnvAdminName}
+                    onChange={(e) => setNewEnvAdminName(e.target.value)}
+                    placeholder="Jean Dupont"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2.5 px-3.5 text-sm text-white placeholder-neutral-600 focus:outline-hidden focus:border-pink-500"
+                  />
+                </div>
+
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="block text-xs font-bold text-neutral-300">
+                    Email du Super-Admin (utilisé pour la double-auth par email) *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={newEnvAdminEmail}
+                    onChange={(e) => setNewEnvAdminEmail(e.target.value)}
+                    placeholder="admin@entreprise.com"
+                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-2.5 px-3.5 text-sm text-white placeholder-neutral-600 focus:outline-hidden focus:border-pink-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateEnvPanel(false)}
+                  className="px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-bold text-sm rounded-xl transition-all cursor-pointer"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingEnv}
+                  className="px-5 py-2.5 bg-pink-600 hover:bg-pink-500 text-white font-bold text-sm rounded-xl transition-all cursor-pointer disabled:opacity-50"
+                  id="btn-submit-create-env"
+                >
+                  {isCreatingEnv ? 'Création en cours...' : "Créer l'environnement"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Global Google Sheets API Configuration Panel */}
         {showGoogleConfigPanel && (
@@ -584,7 +814,7 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
                       </div>
                     </div>
 
-                    {/* Main Administrator */}
+                    {/* Main Administrator (Double-Auth Email Only) */}
                     <div className="bg-neutral-950/60 p-3 rounded-xl border border-neutral-800/40 space-y-1.5" id={`main-admin-${tnt.id}`}>
                       <div className="flex justify-between items-start">
                         <div className="min-w-0 flex-1">
@@ -592,22 +822,10 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
                           <p className="text-xs font-bold text-white truncate">{tnt.adminName || "—"}</p>
                           <p className="text-[11px] text-neutral-400 font-medium truncate">{tnt.adminEmail || "—"}</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedTenantForPassword(tnt);
-                            setNewPasswordValue(tnt.adminPasswordHexOrPlain || '');
-                          }}
-                          className="p-1.5 bg-neutral-900 hover:bg-neutral-800 hover:text-pink-400 text-neutral-400 rounded-lg transition-all cursor-pointer flex items-center justify-center border border-neutral-800 self-center"
-                          title="Définir un nouveau mot de passe"
-                          id={`btn-edit-pass-${tnt.id}`}
-                        >
-                          <Lock className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                       <div className="text-[10.5px] text-neutral-400 font-mono bg-neutral-900/50 px-2 py-1 rounded border border-neutral-850 flex items-center justify-between">
-                        <span>Mot de passe :</span>
-                        <span className="font-bold text-pink-400">{tnt.adminPasswordHexOrPlain || "—"}</span>
+                        <span>Authentification :</span>
+                        <span className="font-bold text-emerald-400">Double-Auth Email Strict</span>
                       </div>
                     </div>
 
@@ -754,90 +972,6 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
         </div>
       )}
 
-      {/* Password Edit Modal */}
-      {selectedTenantForPassword !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" id="modal-edit-password">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-neutral-950/85 backdrop-blur-sm transition-opacity"
-            onClick={() => {
-              if (!isSavingPassword) {
-                setSelectedTenantForPassword(null);
-                setNewPasswordValue('');
-              }
-            }}
-          />
-          
-          {/* Modal Card */}
-          <div className="relative w-full max-w-md transform overflow-hidden rounded-2xl bg-neutral-900 border border-neutral-800 p-6 shadow-2xl transition-all">
-            <div className="flex flex-col">
-              {/* Key Icon */}
-              <div className="w-12 h-12 rounded-full bg-pink-950/50 border border-pink-500/30 flex items-center justify-center mb-4 text-pink-400 self-center">
-                <Key className="w-6 h-6" />
-              </div>
-              
-              <h3 className="text-lg font-bold text-neutral-100 mb-2 text-center" id="modal-edit-password-title">
-                Définir un mot de passe
-              </h3>
-              
-              <p className="text-xs text-neutral-400 mb-4 text-center">
-                Définition d'un nouveau mot de passe pour le super-admin de l'environnement <strong className="text-white">{selectedTenantForPassword.companyName}</strong>.
-              </p>
-
-              <div className="space-y-4 mb-6">
-                <div>
-                  <label className="block text-xs font-bold text-neutral-400 uppercase mb-1">
-                    Super-Admin
-                  </label>
-                  <p className="text-sm font-semibold text-neutral-200 bg-neutral-950/40 p-2.5 rounded-xl border border-neutral-800/40 truncate">
-                    {selectedTenantForPassword.adminName} ({selectedTenantForPassword.adminEmail})
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-neutral-400 uppercase mb-1">
-                    Nouveau mot de passe
-                  </label>
-                  <input
-                    type="text"
-                    value={newPasswordValue}
-                    onChange={(e) => setNewPasswordValue(e.target.value)}
-                    placeholder="Saisissez le nouveau mot de passe"
-                    className="w-full bg-neutral-950 border border-neutral-800 rounded-xl py-3 px-4 text-sm text-white placeholder-neutral-500 focus:outline-hidden focus:border-pink-600 transition-colors font-mono font-bold"
-                    id="input-new-password"
-                    disabled={isSavingPassword}
-                  />
-                </div>
-              </div>
-              
-              {/* Buttons */}
-              <div className="flex gap-3 w-full">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedTenantForPassword(null);
-                    setNewPasswordValue('');
-                  }}
-                  disabled={isSavingPassword}
-                  className="flex-1 px-4 py-2.5 bg-neutral-800 hover:bg-neutral-700 active:bg-neutral-900 border border-neutral-700 rounded-xl text-xs font-semibold text-neutral-300 transition-all cursor-pointer disabled:opacity-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSavePassword}
-                  disabled={isSavingPassword || !newPasswordValue.trim()}
-                  className="flex-1 px-4 py-2.5 bg-pink-600 hover:bg-pink-500 active:bg-pink-700 rounded-xl text-xs font-semibold text-white shadow-lg shadow-pink-600/10 transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
-                  id="btn-confirm-save-password"
-                >
-                  {isSavingPassword ? "Enregistrement..." : "Enregistrer"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Elegant Toast Notifications */}
       {showSuccessToast && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-neutral-900 border border-neutral-800 rounded-2xl px-4 py-3 shadow-2xl animate-bounce-short">
@@ -851,14 +985,14 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
         </div>
       )}
 
-      {passwordToastSuccess && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-neutral-900 border border-neutral-800 rounded-2xl px-4 py-3 shadow-2xl animate-bounce-short" id="toast-password-success">
-          <div className="w-8 h-8 rounded-full bg-green-950 flex items-center justify-center text-green-400 border border-green-500/30">
+      {createEnvSuccessToast && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-neutral-900 border border-neutral-800 rounded-2xl px-4 py-3 shadow-2xl animate-bounce-short" id="toast-create-env-success">
+          <div className="w-8 h-8 rounded-full bg-pink-950 flex items-center justify-center text-pink-400 border border-pink-500/30">
             <CheckCircle className="w-4 h-4" />
           </div>
           <div>
-            <h4 className="text-xs font-bold text-neutral-200">Succès !</h4>
-            <p className="text-[10px] text-neutral-400">Le mot de passe du super-admin a été mis à jour avec succès.</p>
+            <h4 className="text-xs font-bold text-neutral-200">Environnement créé !</h4>
+            <p className="text-[10px] text-neutral-400">Le nouvel environnement client est opérationnel.</p>
           </div>
         </div>
       )}

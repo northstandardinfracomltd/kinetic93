@@ -422,59 +422,25 @@ const translations = {
   }
 };
 
-const VALID_AUTH_CODES = [
-  'CZ0808',
-  'XL0101',
-  'OX0404',
-  'SY0909',
-  'ZX0202'
-];
-
 /**
- * Détermine si la double authentification par code email est requise aujourd'hui.
- * Règle demandée :
- * Ne demander la double-auth que les lundi, jeudi, samedi et dimanche.
- * Les autres jours (mardi, mercredi, vendredi), l'utilisateur est connecté directement
- * après la saisie du mot de passe valide, sans demander le code 2FA.
- * 
- * JS Date.getDay():
- * 0 = Dimanche (Sunday)   -> OUI (2FA requis)
- * 1 = Lundi (Monday)      -> OUI (2FA requis)
- * 2 = Mardi (Tuesday)     -> NON (Connexion directe)
- * 3 = Mercredi (Wednesday) -> NON (Connexion directe)
- * 4 = Jeudi (Thursday)    -> OUI (2FA requis)
- * 5 = Vendredi (Friday)   -> NON (Connexion directe)
- * 6 = Samedi (Saturday)   -> OUI (2FA requis)
+ * La double authentification par code email aléatoire est strictement requise (100% du temps)
+ * pour chaque connexion (Admin, Technicien, Client, MegaAdmin), tous les jours.
  */
-export const isDoubleAuthRequiredToday = (testDate?: Date): boolean => {
-  try {
-    if (typeof window !== 'undefined') {
-      const forced = localStorage.getItem('defib_force_2fa_day');
-      if (forced !== null) {
-        const parsed = parseInt(forced, 10);
-        if (!isNaN(parsed) && parsed >= 0 && parsed <= 6) {
-          return parsed === 0 || parsed === 1 || parsed === 4 || parsed === 6;
-        }
-      }
-    }
-  } catch {}
-
-  const day = (testDate || new Date()).getDay();
-  // 0: Dimanche, 1: Lundi, 4: Jeudi, 6: Samedi
-  return day === 0 || day === 1 || day === 4 || day === 6;
+export const isDoubleAuthRequiredToday = (_testDate?: Date): boolean => {
+  return true;
 };
 
 export default function Login({ onLoginSuccess }: LoginProps) {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // 2FA Auth Code State
+  // 2FA Auth Code State (Strict random server-side 2FA)
   const [isAuthCodeStep, setIsAuthCodeStep] = useState(false);
   const [authCodeDigits, setAuthCodeDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [pendingUser, setPendingUser] = useState<{
+    loginIdentifier: string;
     email: string;
     name: string;
     tenantId: string;
@@ -625,35 +591,22 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     onLoginSuccess(emailVal, nameVal, tenantIdVal, roleVal, clientIp);
   };
 
-  const sendAuthCodeAndPrompt = async (userData: {
+  const promptForServerAuthCode = (userData: {
+    loginIdentifier: string;
     email: string;
     name: string;
     tenantId: string;
     role?: string;
     targetEmail: string;
   }) => {
-    // Si la double-authentification n'est pas requise aujourd'hui (mardi, mercredi, vendredi),
-    // connecter l'utilisateur directement après la saisie du mot de passe valide.
-    if (!isDoubleAuthRequiredToday()) {
-      handleSuccessLogin(userData.email, userData.name, userData.tenantId, userData.role);
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
     setError('');
-    const randomCode = VALID_AUTH_CODES[Math.floor(Math.random() * VALID_AUTH_CODES.length)];
-    try {
-      await triggerAuthCodeEmail(userData.targetEmail, randomCode);
-    } catch (e) {
-      console.error("Error sending auth code email:", e);
-    }
     setPendingUser({
+      loginIdentifier: userData.loginIdentifier,
       email: userData.email,
       name: userData.name,
       tenantId: userData.tenantId,
       role: userData.role,
-      sentToEmail: userData.targetEmail
+      sentToEmail: userData.targetEmail,
     });
     setAuthCodeDigits(['', '', '', '', '', '']);
     setIsAuthCodeStep(true);
@@ -724,7 +677,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     inputRefs.current[focusIdx]?.focus();
   };
 
-  const handleAuthCodeSubmit = (e: React.FormEvent) => {
+  const handleAuthCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     const fullCode = authCodeDigits.join('').trim().toUpperCase();
@@ -732,13 +685,50 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       setError(t.authCodeInvalid || "Veuillez saisir les 6 caractères du code.");
       return;
     }
-    if (!VALID_AUTH_CODES.includes(fullCode)) {
-      setError(t.authCodeInvalid || "Code d'authentification incorrect. Veuillez vérifier le code reçu.");
-      handleFailedAttempt();
-      return;
-    }
-    if (pendingUser) {
-      handleSuccessLogin(pendingUser.email, pendingUser.name, pendingUser.tenantId, pendingUser.role);
+    if (!pendingUser) return;
+
+    setIsLoading(true);
+    try {
+      const verifyRes = await fetch('/api/auth/verify-tenant-member', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: pendingUser.loginIdentifier,
+          role: loginRole,
+          authCode: fullCode,
+        }),
+      });
+
+      if (verifyRes.status === 429) {
+        const rateData = await verifyRes.json().catch(() => ({}));
+        setError(rateData.error || "Trop de tentatives de connexion. Veuillez patienter avant de réessayer.");
+        setIsLoading(false);
+        return;
+      }
+
+      const verifyData = await verifyRes.json().catch(() => ({}));
+      if (!verifyRes.ok || !verifyData?.matched || !verifyData?.codeVerified) {
+        setError(verifyData?.error || t.authCodeInvalid || "Code d'authentification incorrect. Veuillez vérifier le code reçu.");
+        handleFailedAttempt();
+        setIsLoading(false);
+        return;
+      }
+
+      if (verifyData.sessionToken) {
+        localStorage.setItem('defib_session_token', verifyData.sessionToken);
+      }
+
+      const finalEmail = verifyData.user?.email || pendingUser.email;
+      const finalName = verifyData.user?.name || pendingUser.name;
+      const finalTenantId = verifyData.tenantId || pendingUser.tenantId;
+      const finalRole = verifyData.user?.role || pendingUser.role;
+
+      setIsLoading(false);
+      handleSuccessLogin(finalEmail, finalName, finalTenantId, finalRole);
+    } catch (err: any) {
+      console.error("Error verifying auth code:", err);
+      setError(t.authCodeInvalid || "Erreur lors de la vérification du code.");
+      setIsLoading(false);
     }
   };
 
@@ -746,11 +736,20 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     if (!pendingUser || isSendingCode) return;
     setIsSendingCode(true);
     setError('');
-    const randomCode = VALID_AUTH_CODES[Math.floor(Math.random() * VALID_AUTH_CODES.length)];
     try {
-      await triggerAuthCodeEmail(pendingUser.sentToEmail, randomCode);
-      setAuthCodeSentSuccess(true);
-      setTimeout(() => setAuthCodeSentSuccess(false), 3500);
+      const res = await fetch('/api/auth/verify-tenant-member', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: pendingUser.loginIdentifier,
+          role: loginRole,
+          resend: true,
+        }),
+      });
+      if (res.ok) {
+        setAuthCodeSentSuccess(true);
+        setTimeout(() => setAuthCodeSentSuccess(false), 3500);
+      }
     } catch (e) {
       console.error("Error resending auth code:", e);
     } finally {
@@ -842,7 +841,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setIsLoading(true);
 
     const emailLower = email.trim().toLowerCase();
-    const pass = password.trim();
 
     try {
       const verifyRes = await fetch('/api/auth/verify-tenant-member', {
@@ -850,7 +848,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: emailLower,
-          password: pass,
           role: loginRole,
         }),
       });
@@ -871,10 +868,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             return;
           }
 
-          if (verifyData.sessionToken) {
-            localStorage.setItem('defib_session_token', verifyData.sessionToken);
-          }
-
           const matchedRole = verifyData.user?.role || verifyData.member?.role || loginRole;
           const matchedTenantId = verifyData.tenantId || 'demo';
           const matchedEmail = verifyData.user?.email || verifyData.member?.email || emailLower;
@@ -883,19 +876,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             verifyData.member?.denomination ||
             verifyData.member?.name ||
             emailLower;
+          const targetEmail = verifyData.sentToEmail || matchedEmail;
 
-          if (matchedRole === 'megaadmin') {
-            handleSuccessLogin('megaadmin@defibeo.com', 'Mega Admin', 'megaadmin', 'megaadmin');
-            setIsLoading(false);
-            return;
-          }
-
-          await sendAuthCodeAndPrompt({
+          promptForServerAuthCode({
+            loginIdentifier: emailLower,
             email: matchedEmail,
             name: matchedName,
             tenantId: matchedTenantId,
             role: matchedRole,
-            targetEmail: matchedEmail,
+            targetEmail,
           });
           return;
         }
@@ -1179,380 +1168,99 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       <div className="mt-2 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0 z-10">
         
-        {/* Connection/Creation Toggle */}
-        <div className="mb-6">
-          <div className="flex w-full p-1 bg-black/25 backdrop-blur-md rounded-[14px]" style={{ border: 'none' }} id="auth-toggle-capsule">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('login');
-              }}
-              style={{
-                fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                color: activeTab === 'login' ? 'rgb(15 23 42)' : '#fff',
-                boxShadow: 'none',
-              }}
-              className={`flex-1 text-center py-2.5 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
-                activeTab === 'login'
-                  ? 'bg-white text-[#0f172a]'
-                  : 'text-white hover:text-white'
-              }`}
-            >
-              {t.login}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab('register');
-              }}
-              style={{
-                fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                color: activeTab === 'register' ? 'rgb(15 23 42)' : '#fff',
-                boxShadow: 'none',
-              }}
-              className={`flex-1 text-center py-2.5 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
-                activeTab === 'register'
-                  ? 'bg-white text-[#0f172a]'
-                  : 'text-white hover:text-white'
-              }`}
-            >
-              {t.registerTab}
-            </button>
-          </div>
-        </div>
-
         {/* Main Content Card */}
         <div className="bg-white py-8 px-4 shadow-xl border-0 rounded-2xl sm:px-10" id="auth-main-card">
           
-          {activeTab === 'login' ? (
-            isAuthCodeStep ? (
-              /* 2FA Auth Code Step */
-              <div className="space-y-6 animate-fadeIn">
-                <form className="space-y-4" onSubmit={handleAuthCodeSubmit} id="auth-code-form">
-                  {error && (
-                    <div className="text-[18px] text-red-600 font-bold font-sans" id="auth-code-error-message">
-                      {error}
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    <label className="block text-[18px] font-bold text-black font-sans">
-                      {t.authCodeTitle}
-                    </label>
-                    
-                    <p 
-                      className="font-sans leading-relaxed"
-                      style={{
-                        color: '#000',
-                        fontSize: '18px'
-                      }}
-                    >
-                      {t.authCodeDesc}
-                    </p>
-
-                    {/* 6-box input occupying 100% of the div width */}
-                    <div className="grid grid-cols-6 gap-2 w-full pt-2" id="auth-code-inputs-container">
-                      {authCodeDigits.map((digit, index) => (
-                        <input
-                          key={index}
-                          ref={(el) => { inputRefs.current[index] = el; }}
-                          id={`auth-code-input-${index}`}
-                          type="text"
-                          maxLength={1}
-                          value={digit}
-                          onChange={(e) => handleDigitChange(index, e.target.value)}
-                          onKeyDown={(e) => handleDigitKeyDown(index, e)}
-                          onPaste={handlePaste}
-                          onFocus={(e) => e.target.select()}
-                          className="w-full text-center text-[22px] sm:text-[24px] font-bold uppercase rounded-[12px] border border-[#dedede] bg-white py-3 focus:border-[#3556ec] focus:outline-none transition-all shadow-xs"
-                          style={{
-                            height: '56px',
-                            fontSize: '22px',
-                            fontWeight: '700',
-                            textAlign: 'center',
-                            textTransform: 'uppercase',
-                            fontFamily: "'DefibeoMain', sans-serif",
-                            padding: '0px'
-                          }}
-                          autoComplete="off"
-                          autoCapitalize="characters"
-                          spellCheck={false}
-                        />
-                      ))}
-                    </div>
+          {isAuthCodeStep ? (
+            /* 2FA Auth Code Step */
+            <div className="space-y-6 animate-fadeIn">
+              <form className="space-y-4" onSubmit={handleAuthCodeSubmit} id="auth-code-form">
+                {error && (
+                  <div className="text-[18px] text-red-600 font-bold font-sans" id="auth-code-error-message">
+                    {error}
                   </div>
+                )}
 
-                  <div className="pt-2 text-center space-y-3">
-                    <button
-                      type="submit"
-                      disabled={isLoading || authCodeDigits.some((d) => !d || d.trim() === '')}
-                      style={{
-                        backgroundColor: '#3556ec',
-                        color: '#fff',
-                        textTransform: 'none',
-                        boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f',
-                        textDecoration: 'none',
-                        borderRadius: '12px',
-                        fontSize: '18px',
-                        fontWeight: '100',
-                        transition: 'transform 0s ease',
-                        fontFamily: "'DefibeoMain', sans-serif",
-                        marginRight: '0px',
-                        outline: 'none',
-                        padding: '13px 20px',
-                        outlineOffset: '0px',
-                        marginLeft: '0px',
-                        cursor: (isLoading || authCodeDigits.some((d) => !d || d.trim() === '')) ? 'not-allowed' : 'pointer'
-                      }}
-                      className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      id="btn-auth-code-confirm"
-                    >
-                      {isLoading ? <ApplePetalsLoader /> : t.authCodeConfirm}
-                    </button>
-
-                    {/* Side-by-side Cancel and Resend buttons with black background, identical structure, 50% 50% */}
-                    <div className="flex w-full gap-3 pt-1">
-                      <button
-                        type="button"
-                        onClick={handleBackToCredentials}
-                        style={{
-                          backgroundColor: '#0f172a',
-                          color: '#fff',
-                          textTransform: 'none',
-                          boxShadow: 'none',
-                          textDecoration: 'none',
-                          borderRadius: '12px',
-                          fontSize: '18px',
-                          fontWeight: '100',
-                          fontFamily: "'DefibeoMain', sans-serif",
-                          outline: 'none',
-                          padding: '13px 12px',
-                          outlineOffset: '0px',
-                          cursor: 'pointer'
-                        }}
-                        className="w-1/2 flex justify-center items-center text-center"
-                        id="btn-auth-code-back"
-                      >
-                        {t.changeAccount}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleResendAuthCode}
-                        disabled={isSendingCode}
-                        style={{
-                          backgroundColor: '#0f172a',
-                          color: '#fff',
-                          textTransform: 'none',
-                          boxShadow: 'none',
-                          textDecoration: 'none',
-                          borderRadius: '12px',
-                          fontSize: '18px',
-                          fontWeight: '100',
-                          fontFamily: "'DefibeoMain', sans-serif",
-                          outline: 'none',
-                          padding: '13px 12px',
-                          outlineOffset: '0px',
-                          cursor: isSendingCode ? 'not-allowed' : 'pointer'
-                        }}
-                        className="w-1/2 flex justify-center items-center text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                        id="btn-auth-code-resend"
-                      >
-                        {isSendingCode ? (t.sending || "Envoi...") : authCodeSentSuccess ? (t.codeSentSuccess || "✓ Code envoyé") : t.resendAuthCode}
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            ) : (
-              <div className="space-y-6">
                 <div className="space-y-2">
                   <label className="block text-[18px] font-bold text-black font-sans">
-                    {t.loginAs}
+                    {t.authCodeTitle}
                   </label>
                   
-                  {/* Role selection selector */}
-                  <div className="flex w-full p-1 bg-transparent rounded-[14px]" style={{ border: '1px solid #dce1ea' }} id="role-toggle-capsule">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginRole('admin');
-                        setError('');
-                      }}
-                      style={{ 
-                        fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                        ...(loginRole === 'admin' ? {
-                          backgroundColor: '#2e54ff',
-                          color: '#fff',
-                          boxShadow: 'none'
-                        } : {
-                          color: '#000'
-                        })
-                      }}
-                      className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
-                        loginRole === 'admin'
-                          ? 'text-white font-black'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {t.admin}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginRole('client');
-                        setError('');
-                      }}
-                      style={{ 
-                        fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                        ...(loginRole === 'client' ? {
-                          backgroundColor: '#2e54ff',
-                          color: '#fff',
-                          boxShadow: 'none'
-                        } : {
-                          color: '#000'
-                        })
-                      }}
-                      className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
-                        loginRole === 'client'
-                          ? 'text-white font-black'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {t.client}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLoginRole('technicien');
-                        setError('');
-                      }}
-                      style={{ 
-                        fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                        ...(loginRole === 'technicien' ? {
-                          backgroundColor: '#2e54ff',
-                          color: '#fff',
-                          boxShadow: 'none'
-                        } : {
-                          color: '#000'
-                        })
-                      }}
-                      className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
-                        loginRole === 'technicien'
-                          ? 'text-white font-black'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      {t.technicien}
-                    </button>
+                  <p 
+                    className="font-sans leading-relaxed"
+                    style={{
+                      color: '#000',
+                      fontSize: '18px'
+                    }}
+                  >
+                    {t.authCodeDesc}
+                  </p>
+
+                  {/* 6-box input occupying 100% of the div width */}
+                  <div className="grid grid-cols-6 gap-2 w-full pt-2" id="auth-code-inputs-container">
+                    {authCodeDigits.map((digit, index) => (
+                      <input
+                        key={index}
+                        ref={(el) => { inputRefs.current[index] = el; }}
+                        id={`auth-code-input-${index}`}
+                        type="text"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleDigitChange(index, e.target.value)}
+                        onKeyDown={(e) => handleDigitKeyDown(index, e)}
+                        onPaste={handlePaste}
+                        onFocus={(e) => e.target.select()}
+                        className="w-full text-center text-[22px] sm:text-[24px] font-bold uppercase rounded-[12px] border border-[#dedede] bg-white py-3 focus:border-[#3556ec] focus:outline-none transition-all shadow-xs"
+                        style={{
+                          height: '56px',
+                          fontSize: '22px',
+                          fontWeight: '700',
+                          textAlign: 'center',
+                          textTransform: 'uppercase',
+                          fontFamily: "'DefibeoMain', sans-serif",
+                          padding: '0px'
+                        }}
+                        autoComplete="off"
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                      />
+                    ))}
                   </div>
                 </div>
 
-                <form className="space-y-4" onSubmit={handleSubmit} id="login-form">
-                  {error && (
-                    <div className="text-[18px] text-red-600 font-bold font-sans" id="login-error-message">
-                      {error}
-                    </div>
-                  )}
+                <div className="pt-2 text-center space-y-3">
+                  <button
+                    type="submit"
+                    disabled={isLoading || authCodeDigits.some((d) => !d || d.trim() === '')}
+                    style={{
+                      backgroundColor: '#3556ec',
+                      color: '#fff',
+                      textTransform: 'none',
+                      boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f',
+                      textDecoration: 'none',
+                      borderRadius: '12px',
+                      fontSize: '18px',
+                      fontWeight: '100',
+                      transition: 'transform 0s ease',
+                      fontFamily: "'DefibeoMain', sans-serif",
+                      marginRight: '0px',
+                      outline: 'none',
+                      padding: '13px 20px',
+                      outlineOffset: '0px',
+                      marginLeft: '0px',
+                      cursor: (isLoading || authCodeDigits.some((d) => !d || d.trim() === '')) ? 'not-allowed' : 'pointer'
+                    }}
+                    className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    id="btn-auth-code-confirm"
+                  >
+                    {isLoading ? <ApplePetalsLoader /> : t.authCodeConfirm}
+                  </button>
 
-                  <div className="space-y-1.5">
-                    <label htmlFor="email" className="block text-[18px] font-bold text-black font-sans">
-                      {t.email}
-                    </label>
-                    <input
-                      id="email"
-                      name="email"
-                      type={(loginRole === 'technicien' || loginRole === 'client') ? 'text' : 'email'}
-                      required
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="block w-full text-center"
-                      style={{ textAlign: 'center' }}
-                      placeholder={t.emailPlace}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label htmlFor="password" className="block text-[18px] font-bold text-black font-sans">
-                      {t.password}
-                    </label>
-                    <input
-                      id="password"
-                      name="password"
-                      type="text"
-                      required
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="block w-full text-center"
-                      style={{ textAlign: 'center' }}
-                      placeholder={t.passwordPlace}
-                      autoCapitalize="none"
-                      autoCorrect="off"
-                      spellCheck={false}
-                    />
-                  </div>
-
-                  <div className="pt-1 flex items-center" style={{ minHeight: '32px', height: '32px' }}>
+                  {/* Side-by-side Cancel and Resend buttons with black background, identical structure, 50% 50% */}
+                  <div className="flex w-full gap-3 pt-1">
                     <button
                       type="button"
-                      role="radio"
-                      aria-checked={keepLoggedIn}
-                      id="radio-keep-logged-in"
-                      onClick={() => setKeepLoggedIn((prev) => !prev)}
-                      className="inline-flex items-center gap-2.5 cursor-pointer select-none bg-transparent border-0 p-0 text-left"
-                      style={{
-                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                        fontSize: '18px',
-                        fontWeight: 100,
-                        color: '#000000',
-                        outline: 'none',
-                        minHeight: '28px',
-                        lineHeight: '24px',
-                      }}
-                    >
-                      <span
-                        className="rounded-full flex items-center justify-center shrink-0"
-                        style={{
-                          width: '20px',
-                          height: '20px',
-                          minWidth: '20px',
-                          minHeight: '20px',
-                          boxSizing: 'border-box',
-                          border: keepLoggedIn ? '2px solid #2e54ff' : '2px solid #dce1ea',
-                          backgroundColor: '#ffffff',
-                        }}
-                      >
-                        <span
-                          className="rounded-full block"
-                          style={{
-                            width: '10px',
-                            height: '10px',
-                            backgroundColor: '#2e54ff',
-                            opacity: keepLoggedIn ? 1 : 0,
-                          }}
-                        />
-                      </span>
-                      <span
-                        className="font-sans"
-                        style={{
-                          fontSize: '18px',
-                          fontWeight: 100,
-                          color: '#000000',
-                          lineHeight: '24px',
-                        }}
-                      >
-                        {(t as any).keepLoggedIn || 'Maintenir la connexion.'}
-                      </span>
-                    </button>
-                  </div>
-
-                  <div className="pt-2 text-center">
-                    <button
-                      type="submit"
-                      disabled={isLoading}
+                      onClick={handleBackToCredentials}
                       style={{
                         backgroundColor: '#0f172a',
                         color: '#fff',
@@ -1562,321 +1270,240 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         borderRadius: '12px',
                         fontSize: '18px',
                         fontWeight: '100',
-                        transition: 'transform 0s ease',
                         fontFamily: "'DefibeoMain', sans-serif",
-                        marginRight: '0px',
                         outline: 'none',
-                        padding: '13px 20px',
+                        padding: '13px 12px',
                         outlineOffset: '0px',
-                        marginLeft: '0px',
+                        cursor: 'pointer'
                       }}
-                      className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      className="w-1/2 flex justify-center items-center text-center"
+                      id="btn-auth-code-back"
                     >
-                      {t.loginBtn}
+                      {t.changeAccount}
                     </button>
 
-                    <a
-                      href="mailto:support@defibeo.com"
-                      className="inline-block mt-3.5 transition-colors font-bold font-sans"
+                    <button
+                      type="button"
+                      onClick={handleResendAuthCode}
+                      disabled={isSendingCode}
                       style={{
-                        paddingTop: '16px',
+                        backgroundColor: '#0f172a',
+                        color: '#fff',
+                        textTransform: 'none',
+                        boxShadow: 'none',
+                        textDecoration: 'none',
+                        borderRadius: '12px',
                         fontSize: '18px',
-                        color: '#2e54ff'
+                        fontWeight: '100',
+                        fontFamily: "'DefibeoMain', sans-serif",
+                        outline: 'none',
+                        padding: '13px 12px',
+                        outlineOffset: '0px',
+                        cursor: isSendingCode ? 'not-allowed' : 'pointer'
                       }}
-                      id="btn-forgot-password"
+                      className="w-1/2 flex justify-center items-center text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                      id="btn-auth-code-resend"
                     >
-                      {t.forgotPassword}
-                    </a>
+                      {isSendingCode ? (t.sending || "Envoi...") : authCodeSentSuccess ? (t.codeSentSuccess || "✓ Code envoyé") : t.resendAuthCode}
+                    </button>
                   </div>
-                </form>
-              </div>
-            )
+                </div>
+              </form>
+            </div>
           ) : (
-            /* Request New Environment Form (Créer un compte contact form) */
-            <div className="space-y-5 animate-fadeIn">
-              <div className="space-y-4">
-                  <div className="space-y-1">
-                    <p className="text-black leading-normal" style={{ fontSize: '18px', fontFamily: "DefibeoMain, Civilprom, sans-serif", fontWeight: 100, color: '#000000', cursor: 'default' }}>
-                      {t.configDesc} <a href="https://defibeo.com/help" target="_blank" rel="noopener noreferrer" className="text-indigo-600 font-bold" style={{ fontWeight: 550 }}>{t.contactSupport}</a>.
-                    </p>
-                  </div>
-
-                  <form className="space-y-3.5" onSubmit={handleRequestSubmit} id="request-env-form">
-                    {reqError && (
-                      <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-xs font-semibold flex items-center gap-2" id="req-error-message">
-                        <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                        <span>{reqError}</span>
-                      </div>
-                    )}
-                    
-                    {/* Sélection langue */}
-                    <div className="space-y-1.5">
-                      <label className="block text-[11px] font-bold text-black font-sans">
-                        {t.selectLang}
-                      </label>
-                      <div className="flex flex-wrap gap-2 pt-0.5" id="register-lang-radio-group">
-                        {['Français', 'English', 'Deutsch', 'Português', 'Español'].map((lang) => {
-                          const isSelected = reqLang === lang;
-                          return (
-                            <button
-                              key={lang}
-                              type="button"
-                              onClick={() => {
-                                setReqLang(lang);
-                                setSelectedLang(lang);
-                                localStorage.setItem('defib_lang', lang);
-                              }}
-                              className="flex items-center gap-2 cursor-pointer"
-                              style={{
-                                border: isSelected ? '2px solid rgb(53, 86, 236)' : '2px solid #d3e8ff',
-                                backgroundColor: isSelected ? 'transparent' : '#d3e8ff',
-                                color: isSelected ? 'rgb(53, 86, 236)' : '#2e54ff',
-                                borderRadius: '10px',
-                                padding: '8px 15px',
-                                fontSize: '18px',
-                                fontWeight: 100,
-                                transition: 'none',
-                              }}
-                            >
-                              <span 
-                                className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
-                                style={{
-                                  border: isSelected ? '2px solid rgb(53, 86, 236)' : '2px solid rgb(168 184 255)',
-                                  backgroundColor: isSelected ? 'rgb(255, 255, 255)' : 'rgb(211 232 255)',
-                                  marginLeft: '-4px',
-                                  transition: 'none',
-                                }}
-                              >
-                                {isSelected && (
-                                  <span 
-                                    className="w-2 h-2 rounded-full"
-                                    style={{
-                                      backgroundColor: 'rgb(53, 86, 236)',
-                                      transition: 'none',
-                                    }}
-                                  />
-                                )}
-                              </span>
-                              <span className="font-sans leading-none" style={{ transition: 'none' }}>{lang}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Nom entreprise */}
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-black font-sans">
-                        {t.companyName}
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={reqCompany}
-                        onChange={(e) => setReqCompany(e.target.value)}
-                        className="block w-full text-center"
-                        style={{ textAlign: 'center' }}
-                        placeholder={t.companyNamePlace}
-                      />
-                    </div>
-
-                    {/* Nom du logiciel */}
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-black font-sans">
-                        {t.softwareName}
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        maxLength={15}
-                        value={reqNomLogiciel}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15);
-                          setReqNomLogiciel(val);
-                        }}
-                        className="block w-full text-center"
-                        style={{ textAlign: 'center' }}
-                        placeholder={t.softwareNamePlace}
-                      />
-                    </div>
-
-                    {/* Email entreprise */}
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-black font-sans">
-                        {t.companyEmail}
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={reqCompanyEmail}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setReqCompanyEmail(val);
-                          if (reqAdminEmail === reqCompanyEmail || reqAdminEmail === '') {
-                            setReqAdminEmail(val);
-                          }
-                        }}
-                        className="block w-full text-center"
-                        style={{ textAlign: 'center' }}
-                        placeholder={t.companyEmailPlace}
-                      />
-                    </div>
-
-                    {/* Téléphone Entreprise (mobile) */}
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-black font-sans">
-                        {t.companyPhone}
-                      </label>
-                      <input
-                        type="tel"
-                        required
-                        value={reqCompanyPhone}
-                        onChange={(e) => setReqCompanyPhone(e.target.value)}
-                        className="block w-full text-center"
-                        style={{ textAlign: 'center' }}
-                        placeholder={t.companyPhonePlace}
-                      />
-                    </div>
-
-                    {/* Information Super Administrateur */}
-                    <div style={{ paddingTop: '24px', paddingBottom: '16px' }}>
-                      <p className="text-black leading-normal" style={{ fontSize: '18px', fontFamily: "DefibeoMain, Civilprom, sans-serif", fontWeight: 100, color: '#000000', cursor: 'default' }}>
-                        {t.superAdminInfo}
-                      </p>
-                    </div>
-
-                    {/* SuperAdmin Nom & Prénom */}
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-black font-sans">
-                        {t.adminName}
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={reqAdminName}
-                        onChange={(e) => setReqAdminName(e.target.value)}
-                        className="block w-full text-center"
-                        style={{ textAlign: 'center' }}
-                        placeholder={t.adminNamePlace}
-                      />
-                    </div>
-
-                    {/* SuperAdmin Email */}
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-black font-sans">
-                        {t.adminEmail}
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        value={reqAdminEmail}
-                        onChange={(e) => setReqAdminEmail(e.target.value)}
-                        className="block w-full text-center"
-                        style={{ textAlign: 'center' }}
-                        placeholder={t.adminEmailPlace}
-                      />
-                    </div>
-
-                    {/* SuperAdmin Mot de Passe */}
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-bold text-black font-sans">
-                        {t.adminPassword}
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={reqAdminPassword}
-                        onChange={(e) => setReqAdminPassword(e.target.value)}
-                        className="block w-full text-center"
-                        style={{ textAlign: 'center' }}
-                        placeholder={t.adminPasswordPlace}
-                      />
-                    </div>
-
-                    {/* Activer l'abonnement button leading to PayPal */}
-                    <div className="pt-3 space-y-3">
-                      <button
-                        type="submit"
-                        disabled={isReqLoading}
-                        style={{
-                          backgroundColor: '#3556ec',
-                          color: '#fff',
-                          textTransform: 'none',
-                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f',
-                          textDecoration: 'none',
-                          borderRadius: '12px',
-                          fontSize: '18px',
-                          fontWeight: '100',
-                          transition: 'transform 0s ease',
-                          fontFamily: "'DefibeoMain', sans-serif",
-                          marginRight: '0px',
-                          outline: 'none',
-                          padding: '13px 20px',
-                          outlineOffset: '0px',
-                          marginLeft: '0px',
-                        }}
-                        className={`w-full flex justify-center items-center gap-2 transition-all cursor-pointer box-border ${isReqLoading ? 'opacity-80 cursor-not-allowed' : ''}`}
-                      >
-                        {isReqLoading ? (
-                          <div className="flex items-center gap-2">
-                            <ApplePetalsLoader />
-                            <span>Configuration en cours...</span>
-                          </div>
-                        ) : (
-                          t.activateSub
-                        )}
-                      </button>
-
-                      {/* Small text disclaimer with terms and secure info */}
-                      <p className="text-[14px] leading-relaxed text-center font-medium font-sans animate-fade-in" style={{ color: '#000000', cursor: 'default' }}>
-                        {t.paymentDisclaimer}
-                        <a 
-                          href="https://civilprom.s3.eu-north-1.amazonaws.com/DEFIBEO+ACCORD+%EF%BD%9C+FRANCE%2C+FRANC%CC%A7AIS+%EF%BD%9C+2026.pdf" 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="font-extrabold hover:underline" 
-                          style={{ color: 'oklch(51.1% 0.262 276.966)' }}
-                        >
-                          {t.eula}
-                        </a>
-                        {(t as any).disclaimerMid1}
-                        <a 
-                          href="https://civilprom.s3.eu-north-1.amazonaws.com/Data_Process_France.pdf.pdf" 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="font-extrabold hover:underline" 
-                          style={{ color: 'oklch(51.1% 0.262 276.966)' }}
-                        >
-                          {(t as any).privacyPolicy}
-                        </a>
-                        {(t as any).disclaimerMid2}
-                        <a 
-                          href="https://civilprom.s3.eu-north-1.amazonaws.com/Addendum_Defibeo_5JL26.pdf.pdf" 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="font-extrabold hover:underline" 
-                          style={{ color: 'oklch(51.1% 0.262 276.966)' }}
-                        >
-                          {(t as any).hdsCertification}
-                        </a>
-                        .
-                      </p>
-
-                      {/* Payment Methods Logo Badge */}
-                      <div className="flex justify-center pt-2" id="safe-payment-logos">
-                        <img
-                          src="https://civilprom.s3.eu-north-1.amazonaws.com/PaymentMethodsUXS.png"
-                          alt="Mémodes de paiement acceptées: PayPal, Mastercard, Visa"
-                          className="h-14 w-auto object-contain"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    </div>
-
-                  </form>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-[18px] font-bold text-black font-sans">
+                  {t.loginAs}
+                </label>
+                
+                {/* Role selection selector */}
+                <div className="flex w-full p-1 bg-transparent rounded-[14px]" style={{ border: '1px solid #dce1ea' }} id="role-toggle-capsule">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginRole('admin');
+                      setError('');
+                    }}
+                    style={{ 
+                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                      ...(loginRole === 'admin' ? {
+                        backgroundColor: '#2e54ff',
+                        color: '#fff',
+                        boxShadow: 'none'
+                      } : {
+                        color: '#000'
+                      })
+                    }}
+                    className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
+                      loginRole === 'admin'
+                        ? 'text-white font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {t.admin}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginRole('client');
+                      setError('');
+                    }}
+                    style={{ 
+                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                      ...(loginRole === 'client' ? {
+                        backgroundColor: '#2e54ff',
+                        color: '#fff',
+                        boxShadow: 'none'
+                      } : {
+                        color: '#000'
+                      })
+                    }}
+                    className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
+                      loginRole === 'client'
+                        ? 'text-white font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {t.client}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginRole('technicien');
+                      setError('');
+                    }}
+                    style={{ 
+                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                      ...(loginRole === 'technicien' ? {
+                        backgroundColor: '#2e54ff',
+                        color: '#fff',
+                        boxShadow: 'none'
+                      } : {
+                        color: '#000'
+                      })
+                    }}
+                    className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
+                      loginRole === 'technicien'
+                        ? 'text-white font-black'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {t.technicien}
+                  </button>
                 </div>
               </div>
-            )}
+
+              <form className="space-y-4" onSubmit={handleSubmit} id="login-form">
+                {error && (
+                  <div className="text-[18px] text-red-600 font-bold font-sans" id="login-error-message">
+                    {error}
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label htmlFor="email" className="block text-[18px] font-bold text-black font-sans">
+                    {t.email}
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type={(loginRole === 'technicien' || loginRole === 'client') ? 'text' : 'email'}
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="block w-full text-center"
+                    style={{ textAlign: 'center' }}
+                    placeholder={t.emailPlace}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                </div>
+
+                <div className="pt-1 flex items-center" style={{ minHeight: '32px', height: '32px' }}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={keepLoggedIn}
+                    id="radio-keep-logged-in"
+                    onClick={() => setKeepLoggedIn((prev) => !prev)}
+                    className="inline-flex items-center gap-2.5 cursor-pointer select-none bg-transparent border-0 p-0 text-left"
+                    style={{
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      fontSize: '18px',
+                      fontWeight: 100,
+                      color: '#000000',
+                      outline: 'none',
+                      minHeight: '28px',
+                      lineHeight: '24px',
+                    }}
+                  >
+                    <span
+                      className="rounded-full flex items-center justify-center shrink-0"
+                      style={{
+                        width: '20px',
+                        height: '20px',
+                        minWidth: '20px',
+                        minHeight: '20px',
+                        boxSizing: 'border-box',
+                        border: keepLoggedIn ? '2px solid #2e54ff' : '2px solid #dce1ea',
+                        backgroundColor: '#ffffff',
+                      }}
+                    >
+                      <span
+                        className="rounded-full block"
+                        style={{
+                          width: '10px',
+                          height: '10px',
+                          backgroundColor: '#2e54ff',
+                          opacity: keepLoggedIn ? 1 : 0,
+                        }}
+                      />
+                    </span>
+                    <span
+                      className="font-sans"
+                      style={{
+                        fontSize: '18px',
+                        fontWeight: 100,
+                        color: '#000000',
+                        lineHeight: '24px',
+                      }}
+                    >
+                      {(t as any).keepLoggedIn || 'Maintenir la connexion.'}
+                    </span>
+                  </button>
+                </div>
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    style={{
+                      backgroundColor: '#0f172a',
+                      color: '#fff',
+                      textTransform: 'none',
+                      boxShadow: 'none',
+                      textDecoration: 'none',
+                      borderRadius: '12px',
+                      fontSize: '18px',
+                      fontWeight: '100',
+                      transition: 'transform 0s ease',
+                      fontFamily: "'DefibeoMain', sans-serif",
+                      marginRight: '0px',
+                      outline: 'none',
+                      padding: '13px 20px',
+                      outlineOffset: '0px',
+                      marginLeft: '0px',
+                    }}
+                    className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {isLoading ? <ApplePetalsLoader /> : t.loginBtn}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
         </div>
 

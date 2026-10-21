@@ -962,7 +962,6 @@ async function startServer() {
       p.startsWith('/src/server') ||
       p.includes('server-store') ||
       p.includes('registered_tenants') ||
-      p.includes('firebase-applet-config') ||
       p.includes('firestore.rules') ||
       p.startsWith('/.env') ||
       p.endsWith('.key')
@@ -2823,36 +2822,36 @@ function formatDefibrillateurOutput(d: any): any {
 }
 
 const SERVER_KNOWN_TENANTS: any[] = [
-  { id: 'demo', shortEnvId: 'D10', companyName: 'Défibeo Solutions', companyEmail: 'contact@defibeo-solutions.com', companyPhone: '+33 1 47 20 00 01', adminName: 'Admin Démo', adminEmail: 'account@demo.com', adminPasswordHexOrPlain: '123456', lang: 'Français' },
-  { id: 'tenant_pvzvub57h_1781513640995', shortEnvId: 'D71', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv@civilprom.com', companyPhone: '0651517065', adminName: 'Jean-Luc Degont', adminEmail: 'udplv@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France' },
-  { id: 'D1', shortEnvId: 'D38', companyName: 'DemoTest', companyEmail: 'demottest@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'demottest@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
-  { id: 'D2', shortEnvId: 'D90', companyName: 'Test', companyEmail: 'test@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'test@civilprom.com', adminPasswordHexOrPlain: '95162testdemo', lang: 'Français' },
-  { id: 'D3', shortEnvId: 'D63', companyName: 'DEROESCH', companyEmail: 'deroesch@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'deroesch@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
-  { id: 'D4', shortEnvId: 'D64', companyName: 'DemoTest', companyEmail: 'demotest@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'demotest@civilprom.com', adminPasswordHexOrPlain: '951demo360', lang: 'Français' },
-  { id: 'D5', shortEnvId: 'D52', companyName: 'MATEO', companyEmail: 'mateo@civilprom.com', companyPhone: '0651516087', adminName: 'Alban test', adminEmail: 'mateo@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
-  { id: 'D6', shortEnvId: 'D53', companyName: 'cozy', companyEmail: 'cozy@civilprom.com', companyPhone: '0909090909', adminName: 'test mind', adminEmail: 'cozy@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français' },
-  { id: 'D7', shortEnvId: 'D28', companyName: 'JPM973', companyEmail: 'jpm973@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Pedro Maignan', adminEmail: 'jpm973@civilprom.com', adminPasswordHexOrPlain: '862379OHL-GENZX', lang: 'Français, France', nomLogiciel: 'JPM973' },
-  { id: 'D8', shortEnvId: 'D21', companyName: 'SAS Restenvie', companyEmail: 'restenvie@civilprom.com', companyPhone: '0600000000', adminName: 'Laurent Muller', adminEmail: 'restenvie@civilprom.com', adminPasswordHexOrPlain: 'R3S73NV1E-GENZX', lang: 'Français', nomLogiciel: 'Restenvie' },
-  { id: 'D9', shortEnvId: 'D11', companyName: 'DL France Defib', companyEmail: 'dlfrancedefib@civilprom.com', companyPhone: '0600000000', adminName: 'Denis Lamarche', adminEmail: 'dlfrancedefib@civilprom.com', adminPasswordHexOrPlain: 'D1FR4NC3D3F18-GENZL', lang: 'Français', nomLogiciel: 'DLFRANCEDEFIB' },
-  { id: 'D10', shortEnvId: 'D88', companyName: 'CardioPro', companyEmail: 'cardiopro@civilprom.com', companyPhone: '0600000000', adminName: 'Anthony Monaldi', adminEmail: 'cardiopro@civilprom.com', adminPasswordHexOrPlain: 'C4RD10PR0-GENWL', lang: 'Français', nomLogiciel: 'CardioPro' },
-  { id: 'D11', shortEnvId: 'D39', companyName: 'CardiaPulse', companyEmail: 'cardiapulse@civilprom.com', companyPhone: '0600000000', adminName: 'Georges Lanzi', adminEmail: 'cardiapulse@civilprom.com', adminPasswordHexOrPlain: 'C4RD14PU7S3-GENYL', lang: 'Français, France', nomLogiciel: 'CardiaPulse' },
-  { id: 'D12', shortEnvId: 'D22', companyName: 'CardiacSafe', companyEmail: 'cardiacsafe@civilprom.com', companyPhone: '0600000000', adminName: 'Ludovic Desvaux', adminEmail: 'cardiacsafe@civilprom.com', adminPasswordHexOrPlain: 'C4RD14C84F3-GENZV', lang: 'Français', nomLogiciel: 'CardiacSafe' },
-  { id: 'D13', shortEnvId: 'D31', companyName: 'Urgence Secours Équipements', companyEmail: 'use@civilprom.com', companyPhone: '0600000000', adminName: 'Arthur Sallé', adminEmail: 'use@civilprom.com', adminPasswordHexOrPlain: 'U5G3NC3S3C0U4R8-GENZH', lang: 'Français', nomLogiciel: 'USE' },
-  { id: 'D14', shortEnvId: 'D30', companyName: 'ExtraLife', companyEmail: 'extralife@civilprom.com', companyPhone: '0600000000', adminName: 'Thomas Christophe', adminEmail: 'extralife@civilprom.com', adminPasswordHexOrPlain: '3X7R4L163-GENZT', lang: 'Français', nomLogiciel: 'ExtraLife' },
-  { id: 'D15', shortEnvId: 'D62', companyName: 'Serenicoeur', companyEmail: 'serenicoeur@civilprom.com', companyPhone: '0600000000', adminName: 'Hubert Duverdier', adminEmail: 'serenicoeur@civilprom.com', adminPasswordHexOrPlain: 'S3R3N1C03U5-GENEL', lang: 'Français, France', nomLogiciel: 'Serenicoeur' },
-  { id: 'D16', shortEnvId: 'D85', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv.copilot@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Luc Degont', adminEmail: 'udplv.copilot@civilprom.com', adminPasswordHexOrPlain: 'UND3F1P0U5L4V13-GENZR', lang: 'Français', nomLogiciel: 'Copilot' },
-  { id: 'D17', shortEnvId: 'D56', companyName: 'DLFranceDefib', companyEmail: 'dlfrancedefib2@civilprom.com', companyPhone: '0651517065', adminName: 'Demarche Denis', adminEmail: 'dlfrancedefib2@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'DFranceDefib' },
-  { id: 'D18', shortEnvId: 'D83', companyName: 'DSECURITE GROUPE', companyEmail: 'dsecurite.test@civilprom.com', companyPhone: '0612345678', adminName: 'Jean Dupont', adminEmail: 'dsecurite.test@civilprom.com', adminPasswordHexOrPlain: 'DS3CUR1T3*%', lang: 'Français, France', nomLogiciel: 'DSECURITE' },
-  { id: 'D19', shortEnvId: 'D66', companyName: 'LION', companyEmail: 'lion@civilprom.com', companyPhone: '0651517065', adminName: 'Roesch Ronan', adminEmail: 'lion@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'LION123' },
-  { id: 'D20', shortEnvId: 'D74', companyName: 'Moraira', companyEmail: 'moraira@civilprom.com', companyPhone: '0612345678', adminName: 'Roesch Ronan', adminEmail: 'moraira@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français', nomLogiciel: 'MorairaGo' },
-  { id: 'D21', shortEnvId: 'D86', companyName: 'Denia', companyEmail: 'denia@civilprom.com', companyPhone: '0787878787', adminName: 'Roesch Ronan', adminEmail: 'denia@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Denia123' },
-  { id: 'D22', shortEnvId: 'D13', companyName: 'Xabia', companyEmail: 'xabia@civilprom.com', companyPhone: '0909090909', adminName: 'Axel Ronan', adminEmail: 'xabia@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Xabia123' },
-  { id: 'D23', shortEnvId: 'D73', companyName: 'Tolede', companyEmail: 'tolede@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch RonanPDF', adminEmail: 'tolede@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'ToledePDF' },
-  { id: 'D24', shortEnvId: 'D20', companyName: 'Hendaye', companyEmail: 'hendaye@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch Ronan', adminEmail: 'hendaye@civilprom.com', adminPasswordHexOrPlain: '95162secureUSA--', lang: 'Français, France', nomLogiciel: 'Hendaye123' },
-  { id: 'D25', shortEnvId: 'D24', companyName: 'Test DSG', companyEmail: 'test.dsg@civilprom.com', companyPhone: '0612345678', adminName: 'Jérôme Sommet', adminEmail: 'test.dsg@civilprom.com', adminPasswordHexOrPlain: 'DS3CU51TE', lang: 'Français, France', nomLogiciel: 'TestDSG' },
-  { id: 'D26', shortEnvId: 'D67', companyName: 'DSG Test', companyEmail: 'dsg.test@civilprom.com', companyPhone: '061234567890', adminName: 'Sommet Jérôme', adminEmail: 'dsg.test@civilprom.com', adminPasswordHexOrPlain: 'DS3CU51TE123', lang: 'Français, France', nomLogiciel: 'EssaiDSG' },
-  { id: 'D27', shortEnvId: 'D58', companyName: 'UN DÉFI POUR LA VIE', companyEmail: 'copilotudplv@civilprom.com', companyPhone: '0612345678', adminName: 'Jean-Luc Degont', adminEmail: 'copilotudplv@civilprom.com', adminPasswordHexOrPlain: 'C0P1L07UDPLV1IS0', lang: 'Français, France', nomLogiciel: 'Copilot' },
-  { id: 'D28', shortEnvId: 'D19', companyName: "Le Cœur d'un Sam", companyEmail: 'lecoeurdunsam@civilprom.com', companyPhone: '0765582200', adminName: 'Océane Chabrier', adminEmail: 'contact.lecoeurdunsam@gmail.com', adminPasswordHexOrPlain: 'L3C03U5D1S4M*%', lang: 'Français, France', nomLogiciel: 'lecoeurdunsam' }
+  { id: 'demo', shortEnvId: 'D10', companyName: 'Défibeo Solutions', companyEmail: 'contact@defibeo-solutions.com', companyPhone: '+33 1 47 20 00 01', adminName: 'Admin Démo', adminEmail: 'account@demo.com', lang: 'Français' },
+  { id: 'tenant_pvzvub57h_1781513640995', shortEnvId: 'D71', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv@civilprom.com', companyPhone: '0651517065', adminName: 'Jean-Luc Degont', adminEmail: 'udplv@civilprom.com', lang: 'Français, France' },
+  { id: 'D1', shortEnvId: 'D38', companyName: 'DemoTest', companyEmail: 'demottest@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'demottest@civilprom.com', lang: 'Français' },
+  { id: 'D2', shortEnvId: 'D90', companyName: 'Test', companyEmail: 'test@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'test@civilprom.com', lang: 'Français' },
+  { id: 'D3', shortEnvId: 'D63', companyName: 'DEROESCH', companyEmail: 'deroesch@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'deroesch@civilprom.com', lang: 'Français' },
+  { id: 'D4', shortEnvId: 'D64', companyName: 'DemoTest', companyEmail: 'demotest@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'demotest@civilprom.com', lang: 'Français' },
+  { id: 'D5', shortEnvId: 'D52', companyName: 'MATEO', companyEmail: 'mateo@civilprom.com', companyPhone: '0651516087', adminName: 'Alban test', adminEmail: 'mateo@civilprom.com', lang: 'Français' },
+  { id: 'D6', shortEnvId: 'D53', companyName: 'cozy', companyEmail: 'cozy@civilprom.com', companyPhone: '0909090909', adminName: 'test mind', adminEmail: 'cozy@civilprom.com', lang: 'Français' },
+  { id: 'D7', shortEnvId: 'D28', companyName: 'JPM973', companyEmail: 'jpm973@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Pedro Maignan', adminEmail: 'jpm973@civilprom.com', lang: 'Français, France', nomLogiciel: 'JPM973' },
+  { id: 'D8', shortEnvId: 'D21', companyName: 'SAS Restenvie', companyEmail: 'restenvie@civilprom.com', companyPhone: '0600000000', adminName: 'Laurent Muller', adminEmail: 'restenvie@civilprom.com', lang: 'Français', nomLogiciel: 'Restenvie' },
+  { id: 'D9', shortEnvId: 'D11', companyName: 'DL France Defib', companyEmail: 'dlfrancedefib@civilprom.com', companyPhone: '0600000000', adminName: 'Denis Lamarche', adminEmail: 'dlfrancedefib@civilprom.com', lang: 'Français', nomLogiciel: 'DLFRANCEDEFIB' },
+  { id: 'D10', shortEnvId: 'D88', companyName: 'CardioPro', companyEmail: 'cardiopro@civilprom.com', companyPhone: '0600000000', adminName: 'Anthony Monaldi', adminEmail: 'cardiopro@civilprom.com', lang: 'Français', nomLogiciel: 'CardioPro' },
+  { id: 'D11', shortEnvId: 'D39', companyName: 'CardiaPulse', companyEmail: 'cardiapulse@civilprom.com', companyPhone: '0600000000', adminName: 'Georges Lanzi', adminEmail: 'cardiapulse@civilprom.com', lang: 'Français, France', nomLogiciel: 'CardiaPulse' },
+  { id: 'D12', shortEnvId: 'D22', companyName: 'CardiacSafe', companyEmail: 'cardiacsafe@civilprom.com', companyPhone: '0600000000', adminName: 'Ludovic Desvaux', adminEmail: 'cardiacsafe@civilprom.com', lang: 'Français', nomLogiciel: 'CardiacSafe' },
+  { id: 'D13', shortEnvId: 'D31', companyName: 'Urgence Secours Équipements', companyEmail: 'use@civilprom.com', companyPhone: '0600000000', adminName: 'Arthur Sallé', adminEmail: 'use@civilprom.com', lang: 'Français', nomLogiciel: 'USE' },
+  { id: 'D14', shortEnvId: 'D30', companyName: 'ExtraLife', companyEmail: 'extralife@civilprom.com', companyPhone: '0600000000', adminName: 'Thomas Christophe', adminEmail: 'extralife@civilprom.com', lang: 'Français', nomLogiciel: 'ExtraLife' },
+  { id: 'D15', shortEnvId: 'D62', companyName: 'Serenicoeur', companyEmail: 'serenicoeur@civilprom.com', companyPhone: '0600000000', adminName: 'Hubert Duverdier', adminEmail: 'serenicoeur@civilprom.com', lang: 'Français, France', nomLogiciel: 'Serenicoeur' },
+  { id: 'D16', shortEnvId: 'D85', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv.copilot@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Luc Degont', adminEmail: 'udplv.copilot@civilprom.com', lang: 'Français', nomLogiciel: 'Copilot' },
+  { id: 'D17', shortEnvId: 'D56', companyName: 'DLFranceDefib', companyEmail: 'dlfrancedefib2@civilprom.com', companyPhone: '0651517065', adminName: 'Demarche Denis', adminEmail: 'dlfrancedefib2@civilprom.com', lang: 'Français, France', nomLogiciel: 'DFranceDefib' },
+  { id: 'D18', shortEnvId: 'D83', companyName: 'DSECURITE GROUPE', companyEmail: 'dsecurite.test@civilprom.com', companyPhone: '0612345678', adminName: 'Jean Dupont', adminEmail: 'dsecurite.test@civilprom.com', lang: 'Français, France', nomLogiciel: 'DSECURITE' },
+  { id: 'D19', shortEnvId: 'D66', companyName: 'LION', companyEmail: 'lion@civilprom.com', companyPhone: '0651517065', adminName: 'Roesch Ronan', adminEmail: 'lion@civilprom.com', lang: 'Français, France', nomLogiciel: 'LION123' },
+  { id: 'D20', shortEnvId: 'D74', companyName: 'Moraira', companyEmail: 'moraira@civilprom.com', companyPhone: '0612345678', adminName: 'Roesch Ronan', adminEmail: 'moraira@civilprom.com', lang: 'Français', nomLogiciel: 'MorairaGo' },
+  { id: 'D21', shortEnvId: 'D86', companyName: 'Denia', companyEmail: 'denia@civilprom.com', companyPhone: '0787878787', adminName: 'Roesch Ronan', adminEmail: 'denia@civilprom.com', lang: 'Français, France', nomLogiciel: 'Denia123' },
+  { id: 'D22', shortEnvId: 'D13', companyName: 'Xabia', companyEmail: 'xabia@civilprom.com', companyPhone: '0909090909', adminName: 'Axel Ronan', adminEmail: 'xabia@civilprom.com', lang: 'Français, France', nomLogiciel: 'Xabia123' },
+  { id: 'D23', shortEnvId: 'D73', companyName: 'Tolede', companyEmail: 'tolede@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch RonanPDF', adminEmail: 'tolede@civilprom.com', lang: 'Français, France', nomLogiciel: 'ToledePDF' },
+  { id: 'D24', shortEnvId: 'D20', companyName: 'Hendaye', companyEmail: 'hendaye@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch Ronan', adminEmail: 'hendaye@civilprom.com', lang: 'Français, France', nomLogiciel: 'Hendaye123' },
+  { id: 'D25', shortEnvId: 'D24', companyName: 'Test DSG', companyEmail: 'test.dsg@civilprom.com', companyPhone: '0612345678', adminName: 'Jérôme Sommet', adminEmail: 'test.dsg@civilprom.com', lang: 'Français, France', nomLogiciel: 'TestDSG' },
+  { id: 'D26', shortEnvId: 'D67', companyName: 'DSG Test', companyEmail: 'dsg.test@civilprom.com', companyPhone: '061234567890', adminName: 'Sommet Jérôme', adminEmail: 'dsg.test@civilprom.com', lang: 'Français, France', nomLogiciel: 'EssaiDSG' },
+  { id: 'D27', shortEnvId: 'D58', companyName: 'UN DÉFI POUR LA VIE', companyEmail: 'copilotudplv@civilprom.com', companyPhone: '0612345678', adminName: 'Jean-Luc Degont', adminEmail: 'copilotudplv@civilprom.com', lang: 'Français, France', nomLogiciel: 'Copilot' },
+  { id: 'D28', shortEnvId: 'D19', companyName: "Le Cœur d'un Sam", companyEmail: 'lecoeurdunsam@civilprom.com', companyPhone: '0765582200', adminName: 'Océane Chabrier', adminEmail: 'contact.lecoeurdunsam@gmail.com', lang: 'Français, France', nomLogiciel: 'lecoeurdunsam' }
 ];
 
 function getAllServerRegisteredTenantsSync(): any[] {
@@ -5189,6 +5188,71 @@ async function warmupDefibrillateursStore() {
     }
   });
 
+  // Strict Server-Side Random 2FA Code Storage (100% required for every login, random per login)
+  interface PendingTwoFactorChallenge {
+    code: string;
+    expiresAt: number;
+    attempts: number;
+    tenantId: string;
+    disabled: boolean;
+    source?: string;
+    targetEmail: string;
+    user: {
+      email: string;
+      name: string;
+      role: string;
+      memberRecord?: any;
+    };
+    member: any;
+  }
+  const pendingTwoFactorAuthMap = new Map<string, PendingTwoFactorChallenge>();
+
+  const generateRandomServerAuthCode = (): string => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars[crypto.randomInt(0, chars.length)];
+    }
+    return code;
+  };
+
+  const dispatchServerAuthCodeEmail = async (toEmail: string, authCode: string): Promise<boolean> => {
+    const GAS_EMAIL_PROXY_URL = "https://script.google.com/macros/s/AKfycbz3a9aG8wI2sT5tG_H3y-lG9k4S1xW8q_R7eP0mN2vB5cX6zJ4k/exec";
+    const subject = "Votre code d'authentification — Défibeo";
+    const htmlBody = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; max-width: 600px; margin: 0 auto; padding: 32px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+        <h2 style="color: #0f172a; font-size: 20px; font-weight: 800; margin-top: 0; margin-bottom: 16px;">Code d'authentification</h2>
+        <p style="font-size: 15px; line-height: 1.6; color: #334155;">Bonjour,</p>
+        <p style="font-size: 15px; line-height: 1.6; color: #334155;">Voici votre code de vérification unique pour vous connecter à votre espace Défibeo :</p>
+        <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; margin: 24px 0; border: 1px solid #e2e8f0; text-align: center;">
+          <span style="font-size: 28px; font-weight: 800; letter-spacing: 6px; color: #2e54ff; font-family: monospace;">${authCode}</span>
+        </div>
+        <p style="font-size: 13px; line-height: 1.6; color: #64748b;">Si vous n'êtes pas à l'origine de cette tentative de connexion, vous pouvez ignorer cet email en toute sécurité.</p>
+        <p style="margin-top: 32px; font-size: 13px; color: #64748b; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+          L'équipe Défibeo<br>
+          <a href="https://defibeo.com" style="color: #3556ec; text-decoration: none; font-weight: 600;">defibeo.com</a>
+        </p>
+      </div>
+    `;
+    try {
+      const response = await fetch(GAS_EMAIL_PROXY_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          to: toEmail,
+          subject,
+          htmlBody,
+          senderName: "Défibeo Solutions",
+          replyTo: "support@defibeo.com"
+        })
+      });
+      return response.ok;
+    } catch (err) {
+      console.error("Failed to dispatch 2FA email on server:", err);
+      return false;
+    }
+  };
+
   app.post("/api/auth/verify-tenant-member", async (req, res) => {
     try {
       const clientIp = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
@@ -5202,11 +5266,65 @@ async function warmupDefibrillateursStore() {
 
       const body = req.body || {};
       const emailLower = String(body.email || '').trim().toLowerCase();
-      const pass = String(body.password || '').trim();
       const loginRole = String(body.role || 'admin').trim().toLowerCase();
+      const submittedAuthCode = String(body.authCode || '').trim().toUpperCase();
+      const challengeKey = `${emailLower}::${loginRole}`;
 
-      if (!emailLower || !pass) {
+      if (!emailLower) {
         return res.json({ matched: false });
+      }
+
+      // STEP 2: Verify submitted 6-character random email 2FA code
+      if (submittedAuthCode) {
+        const pending = pendingTwoFactorAuthMap.get(challengeKey);
+        if (!pending || Date.now() > pending.expiresAt) {
+          pendingTwoFactorAuthMap.delete(challengeKey);
+          recordFailedLoginForIp(clientIp);
+          return res.json({
+            matched: false,
+            codeInvalid: true,
+            error: "Code d'authentification expiré ou invalide. Veuillez demander un nouveau code.",
+          });
+        }
+
+        const expectedBuf = Buffer.from(pending.code, 'utf-8');
+        const actualBuf = Buffer.from(submittedAuthCode, 'utf-8');
+        const isCodeValid =
+          expectedBuf.length === actualBuf.length &&
+          crypto.timingSafeEqual(expectedBuf, actualBuf);
+
+        if (!isCodeValid) {
+          pending.attempts += 1;
+          if (pending.attempts >= 5) {
+            pendingTwoFactorAuthMap.delete(challengeKey);
+          }
+          recordFailedLoginForIp(clientIp);
+          return res.json({
+            matched: false,
+            codeInvalid: true,
+            error: "Code d'authentification incorrect. Veuillez vérifier le code reçu par email.",
+          });
+        }
+
+        // Valid random 2FA code! Consume challenge and issue sessionToken
+        pendingTwoFactorAuthMap.delete(challengeKey);
+        clearFailedLoginForIp(clientIp);
+        const sessionToken = issueServerSessionToken(
+          pending.user.email,
+          pending.tenantId,
+          pending.user.role,
+          96
+        );
+        return res.json({
+          matched: true,
+          codeVerified: true,
+          tenantId: pending.tenantId,
+          disabled: pending.disabled,
+          source: pending.source,
+          sessionToken,
+          user: pending.user,
+          member: pending.member,
+        });
       }
 
       const sanitizeMemberProfile = (m: any) => {
@@ -5215,17 +5333,56 @@ async function warmupDefibrillateursStore() {
         return safeRest;
       };
 
-      // 1. Check Mega-Admin credentials on server
-      const megaAdminId = (process.env.DEFIBEO_MEGAADMIN_ID || 'is/megaadmin98121928/').toLowerCase();
-      const megaAdminPass = process.env.DEFIBEO_MEGAADMIN_PASS || '93931';
-      if (emailLower === megaAdminId && pass === megaAdminPass) {
-        clearFailedLoginForIp(clientIp);
-        const token = issueServerSessionToken('megaadmin@defibeo.com', 'megaadmin', 'megaadmin', 96);
+      const issueTwoFactorChallenge = async (params: {
+        tenantId: string;
+        disabled: boolean;
+        source?: string;
+        targetEmail: string;
+        user: { email: string; name: string; role: string; memberRecord?: any };
+        member: any;
+      }) => {
+        if (params.disabled) {
+          return res.json({
+            matched: true,
+            tenantId: params.tenantId,
+            disabled: true,
+          });
+        }
+        const randomCode = generateRandomServerAuthCode();
+        pendingTwoFactorAuthMap.set(challengeKey, {
+          code: randomCode,
+          expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes validity
+          attempts: 0,
+          tenantId: params.tenantId,
+          disabled: params.disabled,
+          source: params.source,
+          targetEmail: params.targetEmail,
+          user: params.user,
+          member: params.member,
+        });
+        await dispatchServerAuthCodeEmail(params.targetEmail, randomCode);
         return res.json({
           matched: true,
+          requiresTwoFactor: true,
+          tenantId: params.tenantId,
+          disabled: false,
+          sentToEmail: params.targetEmail,
+          user: {
+            email: params.user.email,
+            name: params.user.name,
+            role: params.user.role,
+          },
+        });
+      };
+
+      // 1. Check Mega-Admin identifier on server (always requires 2FA)
+      const megaAdminId = (process.env.DEFIBEO_MEGAADMIN_ID || 'is/megaadmin98121928/').toLowerCase();
+      const megaAdminTargetEmail = process.env.DEFIBEO_MEGAADMIN_EMAIL || 'megaadmin@defibeo.com';
+      if (emailLower === megaAdminId || emailLower === 'megaadmin@defibeo.com') {
+        return await issueTwoFactorChallenge({
           tenantId: 'megaadmin',
           disabled: false,
-          sessionToken: token,
+          targetEmail: megaAdminTargetEmail,
           user: {
             email: 'megaadmin@defibeo.com',
             name: 'Mega Admin',
@@ -5239,39 +5396,30 @@ async function warmupDefibrillateursStore() {
         });
       }
 
-      // 2. Built-in demo credentials check
-      if (loginRole === 'admin' && emailLower === 'account@demo.com' && pass === '123456') {
-        clearFailedLoginForIp(clientIp);
-        const token = issueServerSessionToken('account@demo.com', 'demo', 'admin', 96);
-        return res.json({
-          matched: true,
+      // 2. Built-in demo accounts check (passwordless, always requires 2FA)
+      if (loginRole === 'admin' && emailLower === 'account@demo.com') {
+        return await issueTwoFactorChallenge({
           tenantId: 'demo',
           disabled: false,
-          sessionToken: token,
+          targetEmail: 'account@demo.com',
           user: { email: 'account@demo.com', name: 'Admin Démo', role: 'admin' },
           member: { email: 'account@demo.com', name: 'Admin Démo', role: 'admin' },
         });
       }
-      if (loginRole === 'client' && emailLower === 'client@demo.com' && pass === 'client123') {
-        clearFailedLoginForIp(clientIp);
-        const token = issueServerSessionToken('client@demo.com', 'demo', 'client', 96);
-        return res.json({
-          matched: true,
+      if (loginRole === 'client' && emailLower === 'client@demo.com') {
+        return await issueTwoFactorChallenge({
           tenantId: 'demo',
           disabled: false,
-          sessionToken: token,
+          targetEmail: 'client@demo.com',
           user: { email: 'client@demo.com', name: 'Client Démo', role: 'client' },
           member: { email: 'client@demo.com', name: 'Client Démo', role: 'client', denomination: 'Client Démo' },
         });
       }
-      if (loginRole === 'technicien' && emailLower === 'tech.ouest@defibeo.com' && pass === '4321') {
-        clearFailedLoginForIp(clientIp);
-        const token = issueServerSessionToken('tech.ouest@defibeo.com', 'demo', 'technicien', 96);
-        return res.json({
-          matched: true,
+      if (loginRole === 'technicien' && emailLower === 'tech.ouest@defibeo.com') {
+        return await issueTwoFactorChallenge({
           tenantId: 'demo',
           disabled: false,
-          sessionToken: token,
+          targetEmail: 'tech.ouest@defibeo.com',
           user: { email: 'tech.ouest@defibeo.com', name: 'Technicien Ouest', role: 'technicien' },
           member: { email: 'tech.ouest@defibeo.com', name: 'Technicien Ouest', role: 'technicien' },
         });
@@ -5286,6 +5434,8 @@ async function warmupDefibrillateursStore() {
         const existing = tenantMap.get(id.toLowerCase()) || {};
         tenantMap.set(id.toLowerCase(), { ...existing, ...t, id: existing.id || id });
       };
+
+      SERVER_KNOWN_TENANTS.forEach(addTenantRecord);
 
       const memTenants = serverMemoryStore.get('registered_tenants');
       if (Array.isArray(memTenants)) memTenants.forEach(addTenantRecord);
@@ -5347,7 +5497,7 @@ async function warmupDefibrillateursStore() {
         let sheetProfileForEmail: any = null;
 
         if (loginRole === 'client') {
-          // 1. Check Firebase / Server clients collection
+          // 1. Check Firebase / Server clients collection (passwordless)
           const clientKey = tid === 'demo' ? 'clients' : `${tid}_clients`;
           let fbClients = serverMemoryStore.get(clientKey);
           if (!Array.isArray(fbClients)) {
@@ -5361,13 +5511,11 @@ async function warmupDefibrillateursStore() {
               (c: any) =>
                 c &&
                 ((c.email && String(c.email).trim().toLowerCase() === emailLower) ||
-                  (c.denomination && String(c.denomination).trim().toLowerCase() === emailLower)) &&
-                c.accessKey &&
-                String(c.accessKey).trim() === pass
+                  (c.denomination && String(c.denomination).trim().toLowerCase() === emailLower))
             );
           }
 
-          // 2. Check linked Clients Google Spreadsheet
+          // 2. Check linked Clients Google Spreadsheet (passwordless)
           const clientsSheetUrl = await resolveTenantSpreadsheetUrl(tid, 'clients');
           if (clientsSheetUrl && extractSpreadsheetIdAndGid(clientsSheetUrl)) {
             let sData = await fetchTenantSheetCollection(clientsSheetUrl, tid, 'clients', false).catch(() => null);
@@ -5376,9 +5524,7 @@ async function warmupDefibrillateursStore() {
                 (c: any) =>
                   c &&
                   ((c.email && String(c.email).trim().toLowerCase() === emailLower) ||
-                    (c.denomination && String(c.denomination).trim().toLowerCase() === emailLower)) &&
-                  c.accessKey &&
-                  String(c.accessKey).trim() === pass
+                    (c.denomination && String(c.denomination).trim().toLowerCase() === emailLower))
               );
             if (sData && Array.isArray(sData.items)) {
               sheetMatchedMember = findClientInSheet(sData.items);
@@ -5389,27 +5535,19 @@ async function warmupDefibrillateursStore() {
                 }
               }
               if (sData && Array.isArray(sData.items)) {
-                sheetProfileForEmail = sData.items.find(
-                  (c: any) =>
-                    c &&
-                    ((c.email && String(c.email).trim().toLowerCase() === emailLower) ||
-                      (c.denomination && String(c.denomination).trim().toLowerCase() === emailLower))
-                );
+                sheetProfileForEmail = findClientInSheet(sData.items);
               }
             }
           }
 
           if (firebaseMatchedMember || sheetMatchedMember) {
-            clearFailedLoginForIp(clientIp);
             const chosen = sanitizeMemberProfile(sheetMatchedMember || sheetProfileForEmail || firebaseMatchedMember);
-            const resolvedEmail = chosen?.email || emailLower;
+            const resolvedEmail = String(chosen?.email || tnt.companyEmail || tnt.adminEmail || emailLower).trim();
             const resolvedName = chosen?.denomination || chosen?.name || emailLower;
-            const sessionToken = issueServerSessionToken(resolvedEmail, tid, 'client', 96);
-            return res.json({
-              matched: true,
+            return await issueTwoFactorChallenge({
               tenantId: tid,
               disabled: Boolean(tnt.disabled),
-              sessionToken,
+              targetEmail: resolvedEmail,
               user: {
                 email: resolvedEmail,
                 name: resolvedName,
@@ -5427,14 +5565,14 @@ async function warmupDefibrillateursStore() {
           continue;
         }
 
-        // Admin or Technicien:
-        // 1. Check Firebase tenant primary admin credentials (if admin role)
+        // Admin or Technicien (passwordless, verified by email 2FA):
+        // 1. Check Firebase tenant primary admin email (if admin role)
         if (loginRole === 'admin') {
           const tAdminEmail = String(tnt.adminEmail || '').trim().toLowerCase();
-          const tAdminPass = String(tnt.adminPasswordHexOrPlain || tnt.adminPassword || '').trim();
-          if (tAdminEmail && tAdminPass && tAdminEmail === emailLower && verifyTenantPassword(pass, tAdminPass)) {
+          const tCompanyEmail = String(tnt.companyEmail || '').trim().toLowerCase();
+          if ((tAdminEmail && tAdminEmail === emailLower) || (tCompanyEmail && tCompanyEmail === emailLower)) {
             firebaseMatchedMember = {
-              email: tnt.adminEmail,
+              email: tnt.adminEmail || tnt.companyEmail,
               name: tnt.adminName || 'Administrateur',
               role: 'Super-Administrateur',
             };
@@ -5456,10 +5594,9 @@ async function warmupDefibrillateursStore() {
               if (!m || typeof m !== 'object') return false;
               const mEmail = String(m.email || '').trim().toLowerCase();
               const mName = String(m.name || '').trim().toLowerCase();
-              const mPin = String(m.pin ?? m.motDePasse ?? m.password ?? '').trim();
               const identityMatch =
                 mEmail === emailLower || (loginRole === 'technicien' && mName === emailLower);
-              return identityMatch && mPin === pass && isRoleMatch(m.role, loginRole);
+              return identityMatch && isRoleMatch(m.role, loginRole);
             });
           }
         }
@@ -5473,16 +5610,14 @@ async function warmupDefibrillateursStore() {
               if (!m || typeof m !== 'object') return false;
               const mEmail = String(m.email || '').trim().toLowerCase();
               const mName = String(m.name || '').trim().toLowerCase();
-              const mPin = String(m.pin ?? m.motDePasse ?? m.password ?? '').trim();
               const identityMatch =
                 mEmail === emailLower || (loginRole === 'technicien' && mName === emailLower);
-              return identityMatch && mPin === pass && isRoleMatch(m.role, loginRole);
+              return identityMatch && isRoleMatch(m.role, loginRole);
             });
 
           if (sData && Array.isArray(sData.items)) {
             sheetMatchedMember = findMemberInSheet(sData.items);
             if (!sheetMatchedMember && !firebaseMatchedMember) {
-              // Refresh once from Google Sheets in case credentials were just added/updated in the sheet
               sData = await fetchTenantSheetCollection(membresSheetUrl, tid, 'membresEnvironnement', true).catch(() => null);
               if (sData && Array.isArray(sData.items)) {
                 sheetMatchedMember = findMemberInSheet(sData.items);
@@ -5500,8 +5635,6 @@ async function warmupDefibrillateursStore() {
         }
 
         if (firebaseMatchedMember || sheetMatchedMember) {
-          clearFailedLoginForIp(clientIp);
-          // Prioritize spreadsheet profile data if this user is present in the linked spreadsheet
           const profileSource = sanitizeMemberProfile(sheetMatchedMember || sheetProfileForEmail || firebaseMatchedMember);
           const resolvedRole =
             loginRole === 'technicien'
@@ -5509,15 +5642,13 @@ async function warmupDefibrillateursStore() {
               : profileSource?.adminSubRole === 'Développeur' || profileSource?.role === 'Développeur'
               ? 'developpeur'
               : 'admin';
-          const resolvedEmail = profileSource?.email || emailLower;
+          const resolvedEmail = String(profileSource?.email || tnt.adminEmail || tnt.companyEmail || emailLower).trim();
           const resolvedName = profileSource?.name || (loginRole === 'technicien' ? 'Technicien' : 'Admin');
-          const sessionToken = issueServerSessionToken(resolvedEmail, tid, resolvedRole, 96);
-          return res.json({
-            matched: true,
+          return await issueTwoFactorChallenge({
             tenantId: tid,
             disabled: Boolean(tnt.disabled),
             source: sheetMatchedMember ? 'spreadsheet' : 'firebase',
-            sessionToken,
+            targetEmail: resolvedEmail,
             user: {
               email: resolvedEmail,
               name: resolvedName,
@@ -10050,7 +10181,7 @@ async function warmupDefibrillateursStore() {
       server: {
         middlewareMode: true,
         fs: {
-          deny: ['**/data/**', '**/.data/**', '**/server.ts', '**/src/server/**', '**/.env*', '**/*.key', '**/firebase-applet-config.json', '**/firestore.rules'],
+          deny: ['**/data/**', '**/.data/**', '**/server.ts', '**/src/server/**', '**/.env*', '**/*.key', '**/firestore.rules'],
         },
       },
       appType: "spa",
