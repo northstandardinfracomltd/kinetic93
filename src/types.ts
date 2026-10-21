@@ -617,7 +617,6 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetMessagesInternes', urlKey: 'spreadsheetMessagesInternesUrl', storageSuffix: 'spreadsheet_messages_internes', label: 'Spreadsheet Messages internes.', id: 'settings-db-spreadsheet-messages-internes' },
   { key: 'spreadsheetVariables', urlKey: 'spreadsheetVariablesUrl', storageSuffix: 'spreadsheet_variables', label: 'Spreadsheet Variables.', id: 'settings-db-spreadsheet-variables' },
   { key: 'spreadsheetGed', urlKey: 'spreadsheetGedUrl', storageSuffix: 'spreadsheet_ged', label: 'Spreadsheet GED.', id: 'settings-db-spreadsheet-ged' },
-  { key: 'spreadsheetExportations', urlKey: 'spreadsheetExportationsUrl', storageSuffix: 'spreadsheet_exportations', label: 'Spreadsheet Exportations.', id: 'settings-db-spreadsheet-exportations' },
   { key: 'spreadsheetIntituleEmplacements', urlKey: 'spreadsheetIntituleEmplacementsUrl', storageSuffix: 'spreadsheet_intitule_emplacements', label: 'Spreadsheet Intitulé des emplacements.', id: 'settings-db-spreadsheet-intitule-emplacements' },
   { key: 'spreadsheetMembresEnvironnement', urlKey: 'spreadsheetMembresEnvironnementUrl', storageSuffix: 'spreadsheet_membres_environnement', label: 'Spreadsheet Membres de l’environnement.', id: 'settings-db-spreadsheet-membres-environnement' },
   { key: 'spreadsheetReglages', urlKey: 'spreadsheetReglagesUrl', storageSuffix: 'spreadsheet_reglages', label: 'Spreadsheet Réglages.', id: 'settings-db-spreadsheet-reglages' },

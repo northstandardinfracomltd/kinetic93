@@ -1783,8 +1783,10 @@ export function sanitizeUndefined(obj: any): any {
     if (obj instanceof Date) {
       return obj.toISOString();
     }
+    const strippedKeys = new Set(['adminPasswordHexOrPlain', 'adminPassword', 'password', 'accessKey']);
     try {
       const serialized = JSON.stringify(obj, (key, value) => {
+        if (key && strippedKeys.has(key)) return undefined;
         if (value === undefined) return null;
         if (typeof value === 'function') return null;
         return value;
@@ -1793,7 +1795,7 @@ export function sanitizeUndefined(obj: any): any {
     } catch (e) {
       const res: any = {};
       for (const key in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        if (Object.prototype.hasOwnProperty.call(obj, key) && !strippedKeys.has(key)) {
           const val = obj[key];
           if (val !== undefined && typeof val !== 'function') {
             res[key] = sanitizeUndefined(val);
@@ -2002,17 +2004,21 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
     companyPhone: '+33 1 47 20 00 01',
     adminName: 'Admin Démo',
     adminEmail: 'account@demo.com',
-    adminPasswordHexOrPlain: '••••••••',
     lang: 'Français',
     createdAt: '2026-06-15',
     shortEnvId: 'D10'
   };
 
   const addDemoIfNeeded = (list: Tenant[]) => {
-    if (!list.some(t => t.id === 'demo')) {
-      return [demoTenant, ...list];
+    const cleaned = (list || []).map((t: any) => {
+      if (!t || typeof t !== 'object') return t;
+      const { adminPasswordHexOrPlain, adminPassword, password, ...rest } = t;
+      return rest as Tenant;
+    });
+    if (!cleaned.some(t => t.id === 'demo')) {
+      return [demoTenant, ...cleaned];
     }
-    return list;
+    return cleaned;
   };
 
   if (!bypassCache && typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -2409,7 +2415,6 @@ export async function seedTenantDemoData(tenantId: string): Promise<void> {
       siret: '12345678901234',
       email: clientEmail,
       phone: '+33 6 12 34 56 78',
-      accessKey: tenantId === 'demo' ? 'DEMO123' : 'ACCESS1' + suffix,
       signaturePin: '1234',
       nomPrenomSite: 'Jean-Marc DUPONT',
       telephoneSite: '+33 6 12 34 56 78',
@@ -2426,7 +2431,6 @@ export async function seedTenantDemoData(tenantId: string): Promise<void> {
       siret: '98765432100021',
       email: clientEmail,
       phone: '+33 7 98 76 54 32',
-      accessKey: 'ACCESS2' + suffix,
       signaturePin: '5678',
       nomPrenomSite: 'Pierre Martin',
       telephoneSite: '+33 7 98 76 54 32',
@@ -2443,7 +2447,6 @@ export async function seedTenantDemoData(tenantId: string): Promise<void> {
       siret: '55210928300012',
       email: clientEmail,
       phone: '+33 5 56 10 20 31',
-      accessKey: 'ACCESS3' + suffix,
       signaturePin: '9012',
       nomPrenomSite: 'Robert PASCAL',
       telephoneSite: '+33 5 56 10 20 31',

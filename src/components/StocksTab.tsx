@@ -1537,11 +1537,6 @@ export default function StocksTab({
             </div>
           </div>
 
-          <HelpBubble 
-            cacheKey="help_dismissed_stocks" 
-            text="Le compartiment de la centrale des stocks vous permet de créer et gérer des pièces et services tous emplacements confondus. Retrouvez ensuite dans l’onglet des stocks distribués la répartition des pièces et services pour chaque emplacement. Pour rappel, un seul emplacement peut être dédié à un technicien par exemple, comme un véhicule ; il est aussi possible de gérer des emplacements de type entrepôt afin de savoir où est placé chaque élément." 
-          />
-
           {/* Indicateur Valeur (HT) des stocks disponibles */}
           <div 
             id="stocks-available-value-indicator"

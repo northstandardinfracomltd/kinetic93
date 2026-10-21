@@ -103,11 +103,6 @@ export default function VeillesTab({ veilles, onDeleteVeille }: VeillesTabProps)
         </div>
       </div>
 
-      <HelpBubble 
-        cacheKey="help_dismissed_veilles" 
-        text="Le relevé concurrentiel vous permet d’enregistrer des informations sur les parcs de défibrillateurs de communes ou d'entreprises qui ne sont pas encore vos clients. Notez qui est le mainteneur actuel, la date d’échéance de leur marché public, et les coordonnées du contact. Cela vous permettra de les relancer au bon moment pour leur proposer une offre concurrente." 
-      />
-
       <TableSubHeaderButtons
         spreadsheetKey="spreadsheetReleveConcurrentiel"
         idSuffix="releve-concurrentiel"

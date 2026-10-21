@@ -24,7 +24,6 @@ const COMPARTIMENTS = [
   "Localisations",
   "Tickets Caisse",
   "Relevé Concurrentiel",
-  "Exportations",
   "Paramètres",
   "Connecteurs & API",
   "Facturation",

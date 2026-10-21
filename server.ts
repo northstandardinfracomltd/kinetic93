@@ -1003,28 +1003,29 @@ async function startServer() {
     return cleanInput === cleanStored;
   };
 
-  // Automatically hash all plaintext tenant passwords at rest in memory and on disk
+  // Automatically purge any stored passwords (adminPasswordHexOrPlain, adminPassword, password, accessKey) at rest in memory and on disk (2FA-only authentication)
   try {
     let storeModified = false;
     for (const [k, val] of serverMemoryStore.entries()) {
-      if (k.toLowerCase().includes('registered_tenants') && Array.isArray(val)) {
+      if (Array.isArray(val)) {
         let arrChanged = false;
-        const hashedArr = val.map((t: any) => {
-          if (!t || typeof t !== 'object') return t;
-          const rawPwd = String(t.adminPasswordHexOrPlain || t.adminPassword || '').trim();
-          if (rawPwd && !rawPwd.startsWith(PASSWORD_HASH_PREFIX) && !rawPwd.includes('•')) {
+        const cleanedArr = val.map((item: any) => {
+          if (!item || typeof item !== 'object') return item;
+          if (
+            'adminPasswordHexOrPlain' in item ||
+            'adminPassword' in item ||
+            'password' in item ||
+            'accessKey' in item
+          ) {
             arrChanged = true;
-            const { adminPassword, ...rest } = t;
-            return {
-              ...rest,
-              adminPasswordHexOrPlain: hashTenantPassword(rawPwd),
-            };
+            const { adminPasswordHexOrPlain, adminPassword, password, accessKey, ...rest } = item;
+            return rest;
           }
-          return t;
+          return item;
         });
         if (arrChanged) {
-          serverMemoryStore.set(k, hashedArr);
-          persistSingleCollectionToDisk(k, hashedArr);
+          serverMemoryStore.set(k, cleanedArr);
+          persistSingleCollectionToDisk(k, cleanedArr);
           storeModified = true;
         }
       }
@@ -6106,10 +6107,9 @@ async function warmupDefibrillateursStore() {
         }
       }
 
-      const { customTenantId, ...restTenantData } = tenantData;
+      const { customTenantId, adminPasswordHexOrPlain, adminPassword, password, ...restTenantData } = tenantData;
       const newTenant = {
         ...restTenantData,
-        adminPasswordHexOrPlain: hashTenantPassword(String(restTenantData.adminPasswordHexOrPlain || '')),
         id: tenantId,
         shortEnvId,
         createdAt: new Date().toISOString(),
@@ -6667,11 +6667,8 @@ async function warmupDefibrillateursStore() {
 
         const maskedTenants = filteredTenants.map((t: any) => {
           if (!t || typeof t !== 'object') return t;
-          const { adminPasswordHexOrPlain, adminPassword, ...rest } = t;
-          return {
-            ...rest,
-            adminPasswordHexOrPlain: '••••••••',
-          };
+          const { adminPasswordHexOrPlain, adminPassword, password, ...rest } = t;
+          return rest;
         });
         return res.json({ value: maskedTenants });
       }
@@ -6703,16 +6700,12 @@ async function warmupDefibrillateursStore() {
 
       let finalValueToStore = value;
 
-      // Protect registered_tenants on POST: hash new passwords, preserve masked passwords, and restrict non-megaadmin to their own tenant
+      // Protect registered_tenants on POST: strip all password fields and restrict non-megaadmin to their own tenant
       if (collectionName.toLowerCase().includes('registered_tenants') && Array.isArray(value)) {
         const authSession = (req as any).authSession as ServerSessionPayload | undefined;
         const existingTenants = Array.isArray(serverMemoryStore.get('registered_tenants'))
           ? serverMemoryStore.get('registered_tenants')
           : [];
-        const existingById = new Map<string, any>();
-        for (const et of existingTenants) {
-          if (et && et.id) existingById.set(String(et.id).trim().toLowerCase(), et);
-        }
 
         if (authSession && authSession.role !== 'megaadmin') {
           const callerAliases = getTenantAliasesSync(authSession.tenantId);
@@ -6720,39 +6713,27 @@ async function warmupDefibrillateursStore() {
             if (!et || !et.id) return et;
             const tid = String(et.id).trim().toLowerCase();
             if (tid !== authSession.tenantId.toLowerCase() && !callerAliases.has(tid)) {
-              return et;
+              const { adminPasswordHexOrPlain, adminPassword, password, ...cleanEt } = et;
+              return cleanEt;
             }
             const incomingMatch = value.find(
               (inc: any) => inc && String(inc.id || '').trim().toLowerCase() === tid
             );
-            if (!incomingMatch) return et;
-            const incPass = String(incomingMatch.adminPasswordHexOrPlain || '').trim();
-            const preservedPass =
-              !incPass || incPass.includes('•')
-                ? et.adminPasswordHexOrPlain
-                : hashTenantPassword(incPass);
-            return {
+            if (!incomingMatch) {
+              const { adminPasswordHexOrPlain, adminPassword, password, ...cleanEt } = et;
+              return cleanEt;
+            }
+            const { adminPasswordHexOrPlain, adminPassword, password, ...cleanMerged } = {
               ...et,
               ...incomingMatch,
-              adminPasswordHexOrPlain: preservedPass,
             };
+            return cleanMerged;
           });
         } else {
           finalValueToStore = value.map((inc: any) => {
             if (!inc || typeof inc !== 'object') return inc;
-            const tid = String(inc.id || '').trim().toLowerCase();
-            const existing = existingById.get(tid);
-            const incPass = String(inc.adminPasswordHexOrPlain || '').trim();
-            if (existing && (!incPass || incPass.includes('•'))) {
-              return {
-                ...inc,
-                adminPasswordHexOrPlain: existing.adminPasswordHexOrPlain,
-              };
-            }
-            return {
-              ...inc,
-              adminPasswordHexOrPlain: hashTenantPassword(incPass),
-            };
+            const { adminPasswordHexOrPlain, adminPassword, password, ...cleanInc } = inc;
+            return cleanInc;
           });
         }
       }
@@ -6935,8 +6916,9 @@ async function warmupDefibrillateursStore() {
         } else if (Array.isArray(value) && !isMassive) {
           finalValueToStore = value.map((item: any) => {
             if (item && typeof item === 'object') {
+              const { adminPasswordHexOrPlain, adminPassword, password, accessKey, ...restItem } = item;
               return {
-                ...item,
+                ...restItem,
                 envId: rawTenant,
                 tenantId: rawTenant
               };

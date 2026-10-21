@@ -4052,68 +4052,6 @@ export default function SettingsModal({
               </button>
             </div>
           </div>
-
-          {/* DESACTIVER AIDES ET TUTORIELS OPTION */}
-          <div className="space-y-2 mt-4">
-            <label className="block text-[16px] font-bold text-black font-sans leading-tight">
-              {t("Désactiver les aides et tutoriels.")}
-            </label>
-            <div className="flex items-center space-x-6 py-1 font-sans">
-              <button
-                type="button"
-                disabled={!isCurrentUserSuperAdmin}
-                onClick={() => {
-                  if (!isCurrentUserSuperAdmin) return;
-                  setDisableHelpsAndTutorials("Oui");
-                }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <span 
-                  className="rounded-full flex items-center justify-center transition-all bg-white"
-                  style={{
-                    border: disableHelpsAndTutorials === "Oui" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
-                    width: '20px',
-                    height: '20px',
-                    minWidth: '20px',
-                    minHeight: '20px',
-                    backgroundColor: '#ffffff'
-                  }}
-                >
-                  {disableHelpsAndTutorials === "Oui" && (
-                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
-                  )}
-                </span>
-                <span className="text-[15px] font-semibold text-black">{t("Oui")}</span>
-              </button>
-
-              <button
-                type="button"
-                disabled={!isCurrentUserSuperAdmin}
-                onClick={() => {
-                  if (!isCurrentUserSuperAdmin) return;
-                  setDisableHelpsAndTutorials("Non");
-                }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <span 
-                  className="rounded-full flex items-center justify-center transition-all bg-white"
-                  style={{
-                    border: disableHelpsAndTutorials === "Non" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
-                    width: '20px',
-                    height: '20px',
-                    minWidth: '20px',
-                    minHeight: '20px',
-                    backgroundColor: '#ffffff'
-                  }}
-                >
-                  {disableHelpsAndTutorials === "Non" && (
-                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
-                  )}
-                </span>
-                <span className="text-[15px] font-semibold text-black">{t("Non")}</span>
-              </button>
-            </div>
-          </div>
         </div>
       )}
 

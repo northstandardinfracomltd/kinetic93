@@ -70,7 +70,6 @@ export const INITIAL_CLIENTS: Client[] = [
     siret: '123456',
     email: 'demo1@demo.com',
     phone: '0000000000',
-    accessKey: 'DEMO123',
     signaturePin: 'DEMO1',
     typeContact1: 'Direction',
     nomPrenomSite: 'Jean Dupont',

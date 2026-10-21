@@ -107,8 +107,8 @@ const translations = {
     errorClient: "Identifiants Client incorrects.",
     errorTech: "Identifiants Technicien incorrects.",
     forgotPassword: "Mot de passe oublié",
-    authCodeTitle: "Double Authentification.",
-    authCodeDesc: "Code de 6 caractères envoyé par email.",
+    authCodeTitle: "Double Authentification",
+    authCodeDesc: "Code de 6 caractères envoyé par email",
     authCodeConfirm: "Confirmer",
     authCodeInvalid: "Code d'authentification incorrect. Veuillez vérifier le code reçu.",
     resendAuthCode: "Réenvoyer",
@@ -454,36 +454,90 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   // Connection & Creation language selector state
   const [selectedLang, setSelectedLang] = useState(() => localStorage.getItem('defib_lang') || 'Français');
 
-  const welcomeWords: Record<string, string> = {
-    'Français': 'Bienvenue',
-    'Français, France': 'Bienvenue',
-    'English': 'Welcome',
-    'Deutsch': 'Willkommen',
-    'Português': 'Bem-vindo',
-    'Español': 'Bienvenido',
-  };
-  const targetWelcomeWord = welcomeWords[selectedLang] || 'Bienvenue';
-  const [welcomeCharIndex, setWelcomeCharIndex] = useState(0);
-  const [hasFinishedInitialTyping, setHasFinishedInitialTyping] = useState(false);
+  const welcomeLine1 = 'Bienvenue';
+  const welcomeLine2 = 'Entrez votre email pour continuer';
+  const [typedLine1, setTypedLine1] = useState('');
+  const [typedLine2, setTypedLine2] = useState('');
 
   useEffect(() => {
+    if (isAuthCodeStep) return;
     let i = 0;
-    const word = welcomeWords[selectedLang] || 'Bienvenue';
-    const interval = setInterval(() => {
-      i += 1;
-      setWelcomeCharIndex(i);
-      if (i >= word.length) {
-        clearInterval(interval);
-        setHasFinishedInitialTyping(true);
-      }
-    }, 85);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let j = 0;
+    let line2Interval: ReturnType<typeof setInterval> | null = null;
+    let pauseTimeout: ReturnType<typeof setTimeout> | null = null;
 
-  const displayedWelcome = hasFinishedInitialTyping
-    ? targetWelcomeWord
-    : targetWelcomeWord.slice(0, welcomeCharIndex);
+    setTypedLine1('');
+    setTypedLine2('');
+
+    const line1Interval = setInterval(() => {
+      i += 1;
+      setTypedLine1(welcomeLine1.slice(0, i));
+      if (i >= welcomeLine1.length) {
+        clearInterval(line1Interval);
+        pauseTimeout = setTimeout(() => {
+          line2Interval = setInterval(() => {
+            j += 1;
+            setTypedLine2(welcomeLine2.slice(0, j));
+            if (j >= welcomeLine2.length && line2Interval) {
+              clearInterval(line2Interval);
+            }
+          }, 35);
+        }, 150);
+      }
+    }, 55);
+
+    return () => {
+      clearInterval(line1Interval);
+      if (pauseTimeout) clearTimeout(pauseTimeout);
+      if (line2Interval) clearInterval(line2Interval);
+    };
+  }, [isAuthCodeStep]);
+
+  const [typedAuthLine1, setTypedAuthLine1] = useState('');
+  const [typedAuthLine2, setTypedAuthLine2] = useState('');
+
+  useEffect(() => {
+    if (!isAuthCodeStep) {
+      setTypedAuthLine1('');
+      setTypedAuthLine2('');
+      return;
+    }
+
+    const currentTranslations = (translations as any)[selectedLang] || translations['Français'];
+    const authLine1 = String(currentTranslations.authCodeTitle || 'Double Authentification').replace(/[.:]+$/, '');
+    const authLine2 = String(currentTranslations.authCodeDesc || 'Code de 6 caractères envoyé par email').replace(/[.:]+$/, '');
+
+    let i = 0;
+    let j = 0;
+    let line2Interval: ReturnType<typeof setInterval> | null = null;
+    let pauseTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    setTypedAuthLine1('');
+    setTypedAuthLine2('');
+
+    const line1Interval = setInterval(() => {
+      i += 1;
+      setTypedAuthLine1(authLine1.slice(0, i));
+      if (i >= authLine1.length) {
+        clearInterval(line1Interval);
+        pauseTimeout = setTimeout(() => {
+          line2Interval = setInterval(() => {
+            j += 1;
+            setTypedAuthLine2(authLine2.slice(0, j));
+            if (j >= authLine2.length && line2Interval) {
+              clearInterval(line2Interval);
+            }
+          }, 35);
+        }, 150);
+      }
+    }, 55);
+
+    return () => {
+      clearInterval(line1Interval);
+      if (pauseTimeout) clearTimeout(pauseTimeout);
+      if (line2Interval) clearInterval(line2Interval);
+    };
+  }, [isAuthCodeStep, selectedLang]);
 
   // Toggle & Subscriber Creation Form states
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
@@ -950,66 +1004,66 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   };
 
-  return (
-    <div className="min-h-screen flex flex-col justify-center py-12 sm:px-6 lg:px-8 font-sans relative" style={{ backgroundColor: '#2e54ff' }} id="login-viewport-wrapper">
-      {/* Top Bar Progress Animation for Tab & Role Switching */}
-      <TopBarProgress triggerKey={`${activeTab}-${loginRole}`} duration={3000} height={3.5} zIndex={99999} />
+  const roleLabel =
+    loginRole === 'admin'
+      ? 'Admin'
+      : loginRole === 'technicien'
+      ? 'Technicien'
+      : 'Client';
 
+  return (
+    <div
+      className="min-h-screen w-full flex flex-col md:flex-row font-sans relative overflow-x-hidden"
+      id="login-viewport-wrapper"
+      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+    >
       <style>{`
         body {
-          background: #2e54ff !important;
+          background: #375bff !important;
+          margin: 0;
+          padding: 0;
         }
-        #connexion-lang-picker select {
-          width: auto !important;
-          background: #0f172a !important;
-          border: none !important;
-          border-radius: 9999px !important;
-          padding: 8px 10px !important;
-          display: inline-flex !important;
-          align-items: center !important;
-          cursor: pointer !important;
-          margin-bottom: 10px !important;
-          font-size: 15px !important;
-          font-weight: 500 !important;
+
+        #tab-topbar-loading-indicator {
+          display: none !important;
+        }
+
+        #login-email-input {
+          background-color: #4d6dff !important;
           color: #ffffff !important;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+          font-size: 18px !important;
+          border: none !important;
+          border-radius: 10px !important;
+          padding: 14px 16px !important;
           outline: none !important;
+          text-align: center !important;
           font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
           box-shadow: none !important;
-          appearance: none !important;
-          -webkit-appearance: none !important;
-          -moz-appearance: none !important;
+        }
+
+        #login-email-input::placeholder {
+          color: rgba(255, 255, 255, 0.55) !important;
+          font-size: 18px !important;
           text-align: center !important;
-          text-align-last: center !important;
+          opacity: 1 !important;
+          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
         }
-        #connexion-lang-picker select:hover {
-          background: #0f172a !important;
-          border: none !important;
-        }
-        #connexion-lang-picker select::-ms-expand {
-          display: none !important;
-        }
-        #connexion-lang-picker select option {
-          background-color: #0f172a !important;
-          color: #ffffff !important;
-        }
-        #register-lang-dropdown {
-          appearance: none !important;
-          -webkit-appearance: none !important;
-          -moz-appearance: none !important;
-          background-image: none !important;
+
+        #login-email-input::-webkit-input-placeholder {
+          color: rgba(255, 255, 255, 0.55) !important;
+          font-size: 18px !important;
           text-align: center !important;
-          text-align-last: center !important;
+          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
         }
-        #register-lang-dropdown::-ms-expand {
-          display: none !important;
+
+        #login-email-input::-moz-placeholder {
+          color: rgba(255, 255, 255, 0.55) !important;
+          font-size: 18px !important;
+          text-align: center !important;
+          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
         }
-        #register-lang-dropdown option {
-          background-color: #ffffff !important;
-          color: #000000 !important;
-        }
-        
-        #auth-main-card input, #auth-main-card select, #popup-main-card input, #popup-main-card select, #popup-main-card textarea {
+
+        #popup-main-card input, #popup-main-card select, #popup-main-card textarea {
           border: 1px solid #dce1ea !important;
           border-radius: 13px !important;
           padding: 14px !important;
@@ -1018,190 +1072,169 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           color: #000000 !important;
           background-color: #ffffff !important;
           outline: none !important;
-          transition: all 0s !important;
           font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
         }
-
-        #login-form input, #request-env-form input {
-          text-align: center !important;
-        }
-        
-        #popup-main-card textarea {
-          width: 100% !important;
-          display: block !important;
-        }
-        
-        #auth-main-card input:hover, #auth-main-card select:hover,
-        #auth-main-card input:focus, #auth-main-card select:focus,
-        #popup-main-card input:hover, #popup-main-card select:hover, #popup-main-card textarea:hover,
-        #popup-main-card input:focus, #popup-main-card select:focus, #popup-main-card textarea:focus {
-          outline: 2.5px solid #2e54ff !important;
-          outline-offset: 2px !important;
-          transition: all 0s !important;
-        }
-        
-        #auth-main-card input::placeholder, #popup-main-card input::placeholder, #popup-main-card textarea::placeholder {
-          font-weight: 100 !important;
-          color: #becadb !important;
-          font-size: 18px !important;
-          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
-          opacity: 1 !important;
-        }
-        #login-form input::placeholder, #request-env-form input::placeholder {
-          text-align: center !important;
-        }
-        #auth-main-card input::-webkit-input-placeholder, #popup-main-card input::-webkit-input-placeholder, #popup-main-card textarea::-webkit-input-placeholder {
-          font-weight: 100 !important;
-          color: #becadb !important;
-          font-size: 18px !important;
-          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
-        }
-        #login-form input::-webkit-input-placeholder, #request-env-form input::-webkit-input-placeholder {
-          text-align: center !important;
-        }
-        #auth-main-card input::-moz-placeholder, #popup-main-card input::-moz-placeholder, #popup-main-card textarea::-moz-placeholder {
-          font-weight: 100 !important;
-          color: #becadb !important;
-          font-size: 18px !important;
-          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
-        }
-        #login-form input::-moz-placeholder, #request-env-form input::-moz-placeholder {
-          text-align: center !important;
-        }
-        #auth-main-card input:-ms-input-placeholder, #popup-main-card input:-ms-input-placeholder, #popup-main-card textarea:-ms-input-placeholder {
-          font-weight: 100 !important;
-          color: #becadb !important;
-          font-size: 18px !important;
-          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
-        }
-        #login-form input:-ms-input-placeholder, #request-env-form input:-ms-input-placeholder {
-          text-align: center !important;
-        }
-        
-        #auth-main-card label, #popup-main-card label {
-          color: #000000 !important;
-          text-transform: none !important;
-          letter-spacing: normal !important;
-          font-weight: 500 !important;
-          font-size: 18px !important;
-          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
-        }
-        
-        #auth-toggle-capsule {
-          border-radius: 14px !important;
-        }
-        #auth-toggle-capsule button {
-          border-radius: 12px !important;
-          font-size: 18px !important;
-          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
-          text-transform: none !important;
-          letter-spacing: normal !important;
-          transition: none !important;
-        }
-        
-        #role-toggle-capsule {
-          border-radius: 14px !important;
-        }
-        #role-toggle-capsule button {
-          border-radius: 12px !important;
-          font-size: 18px !important;
-          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
-          text-transform: none !important;
-          letter-spacing: normal !important;
-          transition: none !important;
-        }
-        
-        #btn-login-return-to-site {
-          font-size: 18px !important;
-          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
-          text-transform: none !important;
-          letter-spacing: normal !important;
-        }
-        
-        #auth-main-card button, #auth-main-card a {
-          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
+        #auth-code-inputs-container input {
+          border: none !important;
+          outline: none !important;
         }
       `}</style>
 
-      {/* Decorative subtle background accents */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[10%] left-[20%] w-[30vw] h-[30vw] rounded-full bg-white/5 blur-[120px]" />
-        <div className="absolute bottom-[10%] right-[20%] w-[35vw] h-[35vw] rounded-full bg-white/5 blur-[130px]" />
-      </div>
+      {/* Left Column (Top on Mobile, Left on Desktop) */}
+      <div
+        className="w-full md:w-1/2 h-[220px] sm:h-[250px] md:min-h-screen md:h-screen relative overflow-hidden flex items-stretch shrink-0"
+        style={{ backgroundColor: '#e9edf1' }}
+        id="login-left-column"
+      >
+        <img
+          src="https://civilprom.s3.eu-north-1.amazonaws.com/loginpcillustration.svg"
+          alt="Illustration Connexion"
+          className="h-full w-auto max-w-[45%] md:max-w-none object-contain object-left select-none pointer-events-none"
+          style={{ height: '100%', alignSelf: 'flex-start' }}
+        />
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-md text-center z-10">
+        {/* Bottom-right stacked controls */}
         <div
-          id="login-welcome-heading"
-          className="mx-auto text-center text-white font-sans select-none mb-2 flex items-center justify-center"
-          style={{
-            fontSize: '26px',
-            color: '#ffffff',
-            textAlign: 'center',
-            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-            minHeight: '38px',
-          }}
+          className="absolute bottom-6 right-6 md:bottom-8 md:right-8 z-20 flex flex-col items-end gap-2.5"
+          id="login-left-controls"
         >
-          {displayedWelcome}
-        </div>
+          {/* 1. 3-dots icon with system dropdown ("Quitter", "Assistance") */}
+          <div
+            className="relative inline-flex items-center justify-center cursor-pointer"
+            style={{ marginBottom: '6px' }}
+          >
+            <img
+              src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+              alt="Menu"
+              className="w-auto object-contain select-none pointer-events-none"
+              style={{ height: '22px' }}
+            />
+            <select
+              aria-label="Options système"
+              value=""
+              onChange={(e) => {
+                const action = e.target.value;
+                if (action === 'quitter') {
+                  window.location.href = 'https://defibeo.com';
+                } else if (action === 'assistance') {
+                  window.location.href = 'mailto:support@defibeo.com';
+                }
+              }}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            >
+              <option value="" disabled hidden>
+                Options
+              </option>
+              <option value="quitter">Quitter</option>
+              <option value="assistance">Assistance</option>
+            </select>
+          </div>
 
-        {/* Language selector below the welcome text */}
-        <div className="mt-1 flex justify-center" id="connexion-lang-picker">
-          <select
-            value={selectedLang}
-            onChange={(e) => {
-              const val = e.target.value;
-              setSelectedLang(val);
-              setReqLang(val);
-              localStorage.setItem('defib_lang', val);
-            }}
-            className="font-sans text-white rounded-lg cursor-pointer focus:outline-hidden"
+          {/* 2. Green pill button for User Role ("En tant que Admin" by default) */}
+          <div
+            className="relative inline-flex items-center justify-center rounded-full px-5 py-2 cursor-pointer select-none"
             style={{
-              background: '#0f172a',
-              border: 'none',
-              padding: '8px 10px',
+              backgroundColor: '#3ddc84',
+              color: '#156337',
+              fontSize: '18px',
+              borderRadius: '9999px',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
             }}
           >
-            <option value="Français">Français</option>
-            <option value="English">English</option>
-            <option value="Deutsch">Deutsch</option>
-            <option value="Português">Português</option>
-            <option value="Español">Español</option>
-          </select>
+            <span className="pointer-events-none whitespace-nowrap">
+              En tant que {roleLabel}
+            </span>
+            <select
+              aria-label="Choisir le type d'utilisateur"
+              value={loginRole}
+              onChange={(e) => {
+                setLoginRole(e.target.value as 'admin' | 'technicien' | 'client');
+                setError('');
+              }}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            >
+              <option value="admin">Admin</option>
+              <option value="technicien">Technicien</option>
+              <option value="client">Client</option>
+            </select>
+          </div>
+
+          {/* 3. Green pill button for Language selection */}
+          <div
+            className="relative inline-flex items-center justify-center rounded-full px-5 py-2 cursor-pointer select-none"
+            style={{
+              backgroundColor: '#3ddc84',
+              color: '#156337',
+              fontSize: '18px',
+              borderRadius: '9999px',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+            }}
+          >
+            <span className="pointer-events-none whitespace-nowrap">
+              {selectedLang}
+            </span>
+            <select
+              aria-label="Choisir la langue"
+              value={selectedLang}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSelectedLang(val);
+                setReqLang(val);
+                localStorage.setItem('defib_lang', val);
+              }}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            >
+              <option value="Français">Français</option>
+              <option value="English">English</option>
+              <option value="Deutsch">Deutsch</option>
+              <option value="Português">Português</option>
+              <option value="Español">Español</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      <div className="mt-2 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0 z-10">
-        
-        {/* Main Content Card */}
-        <div className="bg-white py-8 px-4 shadow-xl border-0 rounded-2xl sm:px-10" id="auth-main-card">
-          
+      {/* Right Column (Bottom on Mobile, Right on Desktop) */}
+      <div
+        className="w-full md:w-1/2 min-h-[460px] md:min-h-screen flex-1 flex flex-col justify-center items-center px-6 py-12 md:px-12"
+        style={{ backgroundColor: '#375bff' }}
+        id="login-right-column"
+      >
+        <div className="w-full max-w-[380px]" id="auth-main-card">
           {isAuthCodeStep ? (
             /* 2FA Auth Code Step */
             <div className="space-y-6 animate-fadeIn">
               <form className="space-y-4" onSubmit={handleAuthCodeSubmit} id="auth-code-form">
                 {error && (
-                  <div className="text-[18px] text-red-600 font-bold font-sans" id="auth-code-error-message">
+                  <div
+                    className="text-[18px] text-white font-sans"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      padding: 0,
+                    }}
+                    id="auth-code-error-message"
+                  >
                     {error}
                   </div>
                 )}
 
                 <div className="space-y-2">
-                  <label className="block text-[18px] font-bold text-black font-sans">
-                    {t.authCodeTitle}
-                  </label>
-                  
-                  <p 
-                    className="font-sans leading-relaxed"
+                  <div
+                    className="text-left text-white font-sans leading-snug select-none"
                     style={{
-                      color: '#000',
-                      fontSize: '18px'
+                      fontSize: '18px',
+                      color: '#ffffff',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      minHeight: '50px',
                     }}
                   >
-                    {t.authCodeDesc}
-                  </p>
+                    <div style={{ minHeight: '25px' }}>{typedAuthLine1}</div>
+                    <div style={{ minHeight: '25px' }}>{typedAuthLine2}</div>
+                  </div>
 
                   {/* 6-box input occupying 100% of the div width */}
-                  <div className="grid grid-cols-6 gap-2 w-full pt-2" id="auth-code-inputs-container">
+                  <div className="grid grid-cols-6 gap-2 w-full pt-3" id="auth-code-inputs-container">
                     {authCodeDigits.map((digit, index) => (
                       <input
                         key={index}
@@ -1214,15 +1247,19 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         onKeyDown={(e) => handleDigitKeyDown(index, e)}
                         onPaste={handlePaste}
                         onFocus={(e) => e.target.select()}
-                        className="w-full text-center text-[22px] sm:text-[24px] font-bold uppercase rounded-[12px] border border-[#dedede] bg-white py-3 focus:border-[#3556ec] focus:outline-none transition-all shadow-xs"
+                        className="w-full text-center font-bold uppercase rounded-[10px] border-0 focus:outline-none transition-all"
                         style={{
-                          height: '56px',
+                          height: '54px',
                           fontSize: '22px',
                           fontWeight: '700',
                           textAlign: 'center',
                           textTransform: 'uppercase',
-                          fontFamily: "'DefibeoMain', sans-serif",
-                          padding: '0px'
+                          backgroundColor: '#4d6dff',
+                          color: '#ffffff',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          padding: '0px',
+                          border: 'none',
+                          outline: 'none',
                         }}
                         autoComplete="off"
                         autoCapitalize="characters"
@@ -1237,48 +1274,36 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     type="submit"
                     disabled={isLoading || authCodeDigits.some((d) => !d || d.trim() === '')}
                     style={{
-                      backgroundColor: '#3556ec',
-                      color: '#fff',
-                      textTransform: 'none',
-                      boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f',
-                      textDecoration: 'none',
-                      borderRadius: '12px',
+                      backgroundColor: '#1d0245',
+                      color: '#ffffff',
+                      borderRadius: '10px',
                       fontSize: '18px',
-                      fontWeight: '100',
-                      transition: 'transform 0s ease',
-                      fontFamily: "'DefibeoMain', sans-serif",
-                      marginRight: '0px',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      padding: '14px 20px',
+                      border: 'none',
                       outline: 'none',
-                      padding: '13px 20px',
-                      outlineOffset: '0px',
-                      marginLeft: '0px',
-                      cursor: (isLoading || authCodeDigits.some((d) => !d || d.trim() === '')) ? 'not-allowed' : 'pointer'
+                      cursor: (isLoading || authCodeDigits.some((d) => !d || d.trim() === '')) ? 'not-allowed' : 'pointer',
                     }}
                     className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     id="btn-auth-code-confirm"
                   >
-                    {isLoading ? <ApplePetalsLoader /> : t.authCodeConfirm}
+                    {t.authCodeConfirm}
                   </button>
 
-                  {/* Side-by-side Cancel and Resend buttons with black background, identical structure, 50% 50% */}
                   <div className="flex w-full gap-3 pt-1">
                     <button
                       type="button"
                       onClick={handleBackToCredentials}
                       style={{
-                        backgroundColor: '#0f172a',
-                        color: '#fff',
-                        textTransform: 'none',
-                        boxShadow: 'none',
-                        textDecoration: 'none',
-                        borderRadius: '12px',
+                        backgroundColor: '#4d6dff',
+                        color: '#ffffff',
+                        borderRadius: '10px',
                         fontSize: '18px',
-                        fontWeight: '100',
-                        fontFamily: "'DefibeoMain', sans-serif",
-                        outline: 'none',
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                         padding: '13px 12px',
-                        outlineOffset: '0px',
-                        cursor: 'pointer'
+                        border: 'none',
+                        outline: 'none',
+                        cursor: 'pointer',
                       }}
                       className="w-1/2 flex justify-center items-center text-center"
                       id="btn-auth-code-back"
@@ -1291,19 +1316,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       onClick={handleResendAuthCode}
                       disabled={isSendingCode}
                       style={{
-                        backgroundColor: '#0f172a',
-                        color: '#fff',
-                        textTransform: 'none',
-                        boxShadow: 'none',
-                        textDecoration: 'none',
-                        borderRadius: '12px',
+                        backgroundColor: '#4d6dff',
+                        color: '#ffffff',
+                        borderRadius: '10px',
                         fontSize: '18px',
-                        fontWeight: '100',
-                        fontFamily: "'DefibeoMain', sans-serif",
-                        outline: 'none',
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                         padding: '13px 12px',
-                        outlineOffset: '0px',
-                        cursor: isSendingCode ? 'not-allowed' : 'pointer'
+                        border: 'none',
+                        outline: 'none',
+                        cursor: isSendingCode ? 'not-allowed' : 'pointer',
                       }}
                       className="w-1/2 flex justify-center items-center text-center disabled:opacity-50 disabled:cursor-not-allowed"
                       id="btn-auth-code-resend"
@@ -1315,215 +1336,125 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </form>
             </div>
           ) : (
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="block text-[18px] font-bold text-black font-sans">
-                  {t.loginAs}
-                </label>
-                
-                {/* Role selection selector */}
-                <div className="flex w-full p-1 bg-transparent rounded-[14px]" style={{ border: '1px solid #dce1ea' }} id="role-toggle-capsule">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginRole('admin');
-                      setError('');
-                    }}
-                    style={{ 
-                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                      ...(loginRole === 'admin' ? {
-                        backgroundColor: '#2e54ff',
-                        color: '#fff',
-                        boxShadow: 'none'
-                      } : {
-                        color: '#000'
-                      })
-                    }}
-                    className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
-                      loginRole === 'admin'
-                        ? 'text-white font-black'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {t.admin}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginRole('client');
-                      setError('');
-                    }}
-                    style={{ 
-                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                      ...(loginRole === 'client' ? {
-                        backgroundColor: '#2e54ff',
-                        color: '#fff',
-                        boxShadow: 'none'
-                      } : {
-                        color: '#000'
-                      })
-                    }}
-                    className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
-                      loginRole === 'client'
-                        ? 'text-white font-black'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {t.client}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLoginRole('technicien');
-                      setError('');
-                    }}
-                    style={{ 
-                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                      ...(loginRole === 'technicien' ? {
-                        backgroundColor: '#2e54ff',
-                        color: '#fff',
-                        boxShadow: 'none'
-                      } : {
-                        color: '#000'
-                      })
-                    }}
-                    className={`flex-1 text-center py-2 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
-                      loginRole === 'technicien'
-                        ? 'text-white font-black'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {t.technicien}
-                  </button>
-                </div>
+            <form className="space-y-4" onSubmit={handleSubmit} id="login-form">
+              {/* Two-line title in 18px white with sequential typing effect */}
+              <div
+                className="text-left text-white leading-snug mb-5 select-none"
+                style={{
+                  fontSize: '18px',
+                  color: '#ffffff',
+                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                  minHeight: '50px',
+                }}
+              >
+                <div style={{ minHeight: '25px' }}>{typedLine1}</div>
+                <div style={{ minHeight: '25px' }}>{typedLine2}</div>
               </div>
 
-              <form className="space-y-4" onSubmit={handleSubmit} id="login-form">
-                {error && (
-                  <div className="text-[18px] text-red-600 font-bold font-sans" id="login-error-message">
-                    {error}
-                  </div>
-                )}
-
-                <div className="space-y-1.5">
-                  <label htmlFor="email" className="block text-[18px] font-bold text-black font-sans">
-                    {t.email}
-                  </label>
-                  <input
-                    id="email"
-                    name="email"
-                    type={(loginRole === 'technicien' || loginRole === 'client') ? 'text' : 'email'}
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="block w-full text-center"
-                    style={{ textAlign: 'center' }}
-                    placeholder={t.emailPlace}
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
+              {error && (
+                <div
+                  className="text-[18px] text-white font-sans"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                  }}
+                  id="login-error-message"
+                >
+                  {error}
                 </div>
+              )}
 
-                <div className="pt-1 flex items-center" style={{ minHeight: '32px', height: '32px' }}>
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={keepLoggedIn}
-                    id="radio-keep-logged-in"
-                    onClick={() => setKeepLoggedIn((prev) => !prev)}
-                    className="inline-flex items-center gap-2.5 cursor-pointer select-none bg-transparent border-0 p-0 text-left"
+              {/* Email field */}
+              <div>
+                <input
+                  id="login-email-input"
+                  name="email"
+                  type={(loginRole === 'technicien' || loginRole === 'client') ? 'text' : 'email'}
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="block w-full text-center"
+                  placeholder="exemple@email.com"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              </div>
+
+              {/* Submit button 'Se connecter' */}
+              <div>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  style={{
+                    backgroundColor: '#1d0245',
+                    color: '#ffffff',
+                    borderRadius: '10px',
+                    fontSize: '18px',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    padding: '14px 20px',
+                    border: 'none',
+                    outline: 'none',
+                  }}
+                  className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Se connecter
+                </button>
+              </div>
+
+              {/* Radio-check 'Maintenir la session' */}
+              <div className="pt-2 flex items-center">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={keepLoggedIn}
+                  id="radio-keep-logged-in"
+                  onClick={() => setKeepLoggedIn((prev) => !prev)}
+                  className="inline-flex items-center gap-3 cursor-pointer select-none bg-transparent border-0 p-0 text-left"
+                  style={{
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    fontSize: '18px',
+                    color: '#ffffff',
+                    outline: 'none',
+                  }}
+                >
+                  <span
+                    className="rounded-full flex items-center justify-center shrink-0"
                     style={{
-                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                      fontSize: '18px',
-                      fontWeight: 100,
-                      color: '#000000',
-                      outline: 'none',
-                      minHeight: '28px',
-                      lineHeight: '24px',
+                      width: '20px',
+                      height: '20px',
+                      minWidth: '20px',
+                      minHeight: '20px',
+                      boxSizing: 'border-box',
+                      border: '1.5px solid #ffffff',
+                      backgroundColor: 'transparent',
                     }}
                   >
                     <span
-                      className="rounded-full flex items-center justify-center shrink-0"
+                      className="rounded-full block transition-opacity"
                       style={{
-                        width: '20px',
-                        height: '20px',
-                        minWidth: '20px',
-                        minHeight: '20px',
-                        boxSizing: 'border-box',
-                        border: keepLoggedIn ? '2px solid #2e54ff' : '2px solid #dce1ea',
+                        width: '10px',
+                        height: '10px',
                         backgroundColor: '#ffffff',
+                        opacity: keepLoggedIn ? 1 : 0,
                       }}
-                    >
-                      <span
-                        className="rounded-full block"
-                        style={{
-                          width: '10px',
-                          height: '10px',
-                          backgroundColor: '#2e54ff',
-                          opacity: keepLoggedIn ? 1 : 0,
-                        }}
-                      />
-                    </span>
-                    <span
-                      className="font-sans"
-                      style={{
-                        fontSize: '18px',
-                        fontWeight: 100,
-                        color: '#000000',
-                        lineHeight: '24px',
-                      }}
-                    >
-                      {(t as any).keepLoggedIn || 'Maintenir la connexion.'}
-                    </span>
-                  </button>
-                </div>
-
-                <div className="pt-2 text-center">
-                  <button
-                    type="submit"
-                    disabled={isLoading}
+                    />
+                  </span>
+                  <span
                     style={{
-                      backgroundColor: '#0f172a',
-                      color: '#fff',
-                      textTransform: 'none',
-                      boxShadow: 'none',
-                      textDecoration: 'none',
-                      borderRadius: '12px',
                       fontSize: '18px',
-                      fontWeight: '100',
-                      transition: 'transform 0s ease',
-                      fontFamily: "'DefibeoMain', sans-serif",
-                      marginRight: '0px',
-                      outline: 'none',
-                      padding: '13px 20px',
-                      outlineOffset: '0px',
-                      marginLeft: '0px',
+                      color: '#ffffff',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                     }}
-                    className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
-                    {isLoading ? <ApplePetalsLoader /> : t.loginBtn}
-                  </button>
-                </div>
-              </form>
-            </div>
+                    Maintenir la session
+                  </span>
+                </button>
+              </div>
+            </form>
           )}
-
         </div>
-
-        {/* Retour au site button below the login/register card */}
-        <div className="mt-4 text-center">
-          <a
-            href="https://defibeo.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex justify-center items-center gap-1.5 w-full py-2.5 px-4 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl transition-all cursor-pointer border border-white/15 shadow-xs"
-            id="btn-login-return-to-site"
-          >
-            {t.returnToSite}
-          </a>
-        </div>
-
       </div>
 
       {/* Modal - Signaler un problème */}

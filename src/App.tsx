@@ -11364,7 +11364,6 @@ export default function App() {
               { id: 'formations', label: t('Formations') },
               { id: 'stagiaires', label: t('Stagiaires') },
               { id: 'emargements', label: t('Émargements') },
-              { id: 'import-export', label: t('Exportations') },
               { id: 'ged', label: t('GED') },
             ];
 
@@ -13177,18 +13176,6 @@ export default function App() {
                     </div>
                   </div>
                 )}
-
-                <HelpBubble 
-                  cacheKey="help_dismissed_fsm" 
-                  text="Abréviation de Field Service Management, orchestrez depuis cet onglet les tournées que devront réaliser les techniciens. Chaque tournée est calculée intelligemment selon de nombreux critères comme les créneaux d’accès du défibrillateur, les plages de disponibilité du technicien, la route optimisée en termes de distance et de consommation, etc. Une tournée s'affiche sur la webapp technicien uniquement lorsqu’elle est placée en situation « À faire »." 
-                />
-
-                <HelpBubble 
-                  cacheKey="help_dismissed_fsm_spontane" 
-                  imageSrc="https://civilprom.s3.eu-north-1.amazonaws.com/personnalise.svg"
-                  imageAlt="Aide populaire"
-                  text="Aide populaire : Pour enregistrer un rapport de maintenance sans passer par le système de tournées : depuis votre mobile, connectez-vous au logiciel avec un compte technicien. Rendez-vous ensuite dans l'onglet Rapports, cliquez sur le bouton « Nouveau rapport spontané », puis cliquez sur « Sélection d'un matériel » dans le formulaire pour choisir l'équipement concerné." 
-                />
 
                 <datalist id="fsm-techs-list">
                   {members
@@ -18013,96 +18000,6 @@ export default function App() {
                   </div>
                 </div>
 
-                <HelpBubble 
-                  cacheKey="help_dismissed_gmao_options" 
-                  imageSrc="https://civilprom.s3.eu-north-1.amazonaws.com/TERRA.svg"
-                  imageAlt="Guide Rapports PDF"
-                >
-                  <p>
-                    <strong>Aide concernant l’option Gérer :</strong> Pour chaque rapport, le bouton Gérer ouvre un volet latéral vous permettant de consulter le commentaire du technicien, de sélectionner un ou plusieurs drapeaux de signalement et de suivi, d’ajouter un commentaire interne et bien plus encore. En soi, il permet d’effectuer un traitement post-rapport directement depuis le logiciel principal. Le saviez-vous ? Les drapeaux sélectionnés s'affichent en début de ligne dans le tableau, selon la couleur configurée dans votre variable Drapeau GMAO.
-                  </p>
-                  <p>
-                    <strong>Aide concernant l’option Corriger :</strong> Pour chaque rapport, le bouton Corriger ouvre un volet latéral permettant de modifier manuellement les informations renseignées par le technicien depuis le logiciel.
-                  </p>
-                  <p>
-                    <strong>Aide concernant l’option Valider :</strong> Pour chaque rapport, le bouton Valider permet d'approuver définitivement le document complété par le technicien. Conformément à la législation, ce fichier PDF devient alors inaltérable.
-                  </p>
-                  <p>
-                    <strong>Aide concernant l’option Télécharger :</strong> Pour chaque rapport, le bouton Télécharger permet d’exporter le document au format PDF.
-                  </p>
-                  <p>
-                    <strong>Aide concernant la navigation À venir, Modération et Validés :</strong> Les rapports générés par les techniciens depuis la webapp s’affichent dans l’onglet Modération. L'onglet À venir regroupe les rapports attendus selon les maintenances prévues dans Tournées & Missions. L'onglet Validés réunit l'ensemble des rapports définitivement clôturés.
-                  </p>
-                </HelpBubble>
-
-                {!isGmaoAdminInfoDismissed && !isHelpTutorialsDisabled && (
-                  <div 
-                    className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
-                    style={{
-                      borderColor: 'rgb(218, 218, 218)',
-                      background: '#ffffff00',
-                      boxShadow: 'none',
-                      maxWidth: '98%',
-                      margin: '15px auto 5px auto',
-                    }}
-                  >
-                    <p 
-                      className="font-sans leading-relaxed flex-1"
-                      style={{ 
-                        fontSize: '16px', 
-                        fontWeight: 100, 
-                        color: '#000000', 
-                        cursor: 'default' 
-                      }}
-                    >
-                      Uniquement un membre contrôleur ou administrateur-contrôleur est en capacité de modifier et valider les documents émis qui actualisent la base de données.
-                    </p>
-                    <div className="flex items-center gap-2.5 shrink-0 flex-wrap sm:flex-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsGmaoAdminInfoDismissed(true);
-                          try {
-                            localStorage.setItem('defib_gmao_admin_info_dismissed', 'true');
-                          } catch (_) {}
-                        }}
-                        className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 inline-flex items-center justify-center text-center whitespace-nowrap"
-                        style={{
-                          backgroundColor: '#0f172a',
-                          color: '#ffffff',
-                          fontSize: '18px',
-                          borderRadius: '13px',
-                          padding: '8px 20px',
-                        }}
-                      >
-                        {t("J'ai compris")}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveTab('parametres');
-                          setTimeout(() => {
-                            const el = document.getElementById('settings-section-members');
-                            if (el) {
-                              el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            }
-                          }, 300);
-                        }}
-                        className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 inline-flex items-center justify-center text-center whitespace-nowrap"
-                        style={{
-                          backgroundColor: '#0f172a',
-                          color: '#ffffff',
-                          fontSize: '18px',
-                          borderRadius: '13px',
-                          padding: '8px 20px',
-                        }}
-                      >
-                        {t("Gérer les membres")}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {dropboxError && (
                   <div className="space-y-2 mt-4 mb-4">
                     <div className="text-red-600 font-sans font-light text-sm text-left">
@@ -20325,16 +20222,6 @@ export default function App() {
                       </div>
                     )}
 
-                    <HelpBubble 
-                      cacheKey="help_dismissed_devis" 
-                      text="Bon à savoir : lorsqu’un technicien enregistre un rapport d’intervention, il peut cocher l’option d’émettre une facture, alors Défibeo reprend les pièces utilisées et génère une facture brouillon que vous pouvez ensuite venir ajuster. Vous avez généré un devis et souhaitez le transformer en facture ? Cliquez sur le bouton Transformer pour la ligne en question." 
-                    />
-
-                    <HelpBubble 
-                      cacheKey="help_dismissed_devis_einvoicing" 
-                      text="Concernant le e-invoicing via le PPF ou une PDP en France et en Europe, si vous souhaitez opter pour Defibeo en tant que logiciel de facturation, vous devrez le connecter à un logiciel agréé comme Sage, Pennylane, Cegid ou autre avec l’aide de notre API disponible gratuitement dans l’onglet des paramètres." 
-                    />
-
                     {/* Filters Pills Row */}
                     <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" id="devis-type-pills">
                       {(['Tous', 'Devis', 'Facture', 'Bon de commande', 'Bon de livraison'] as const).map((filterOpt) => {
@@ -21325,26 +21212,6 @@ export default function App() {
               isDeveloper={isDeveloper}
               isReadOnly={isDeveloper}
               suspiciousActivityLogs={suspiciousActivityLogs}
-            />
-          )}
-
-          {activeTab === 'import-export' && (
-            <ImportExportTab 
-              tenantId={tenantId}
-              isFirebaseLoaded={isFirebaseLoaded}
-              defibrillateurs={defibrillateurs}
-              clients={clients}
-              stocks={stocks}
-              pointages={pointages}
-              variables={variables}
-              saveDefibs={saveDefibs}
-              saveClients={saveClients}
-              saveStocks={saveStocks}
-              saveVariables={saveVariables}
-              setActiveTab={setActiveTab}
-              dropboxActive={dropboxActive}
-              dropboxAccessToken={dropboxAccessToken}
-              companyInfo={companyInfo}
             />
           )}
 

@@ -1434,11 +1434,6 @@ export default function AutresMaterielsTab({
             </div>
           )}
 
-          <HelpBubble 
-            cacheKey="help_dismissed_autres_materiels_colors" 
-            text="Bon à savoir concernant le code des couleurs des valeurs dans le tableau : Le rouge correspond à une action requise expirée (critique), l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois." 
-          />
-
           {/* Sub-filter text buttons: Actualiser les données + Ouvrir l'éditeur SpreadSheets */}
           <div 
             className="flex items-center justify-start gap-4 flex-wrap"

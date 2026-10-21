@@ -1218,7 +1218,6 @@ export default function ClientTab({
       siret: siret.trim(),
       email: email.trim(),
       phone: phone.trim(),
-      accessKey: accessKey.trim(),
       signaturePin: signaturePin.trim().toUpperCase(),
       commentaire: commentaire.trim(),
       payeurId: payeurId.trim(),
@@ -1580,21 +1579,7 @@ export default function ClientTab({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label htmlFor="input-client-access-key" className="block text-[11px] font-bold text-slate-500 uppercase">
-                      Mot de passe.
-                    </label>
-                    <input
-                      type="text"
-                      id="input-client-access-key"
-                      value={accessKey}
-                      onChange={(e) => setAccessKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                      placeholder="Entrez un mot de passe."
-                      className="font-mono font-bold"
-                    />
-                  </div>
-
+                <div className="grid grid-cols-1 gap-4">
                   <div className="space-y-1">
                     <label htmlFor="input-client-signature-pin" className="block text-[11px] font-bold text-slate-500 uppercase">
                       Code PIN de signature unique.
