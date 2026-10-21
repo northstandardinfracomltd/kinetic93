@@ -214,9 +214,9 @@ export default function GedTab({
 
   // Harmonized styling constants
   const customButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000',
+    backgroundColor: '#0f172a',
     color: '#fff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '12px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -231,9 +231,9 @@ export default function GedTab({
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000',
+    backgroundColor: '#0f172a',
     color: '#fff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '10px',
     fontSize: '16px',
     padding: '11px 22px',

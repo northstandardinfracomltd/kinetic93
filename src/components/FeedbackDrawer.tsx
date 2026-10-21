@@ -263,7 +263,7 @@ ${description}`;
                     fontSize: '18px',
                     borderRadius: '13px',
                   }}
-                  className="w-full py-3 bg-black hover:bg-slate-900 text-white font-bold transition-colors cursor-pointer"
+                  className="w-full py-3 bg-[#0f172a] hover:bg-slate-900 text-white font-bold transition-colors cursor-pointer"
                 >
                   Fermer
                 </button>

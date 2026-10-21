@@ -751,9 +751,9 @@ export default function ClientTab({
   };
 
   const customButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000',
+    backgroundColor: '#0f172a',
     color: '#fff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '12px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -768,9 +768,9 @@ export default function ClientTab({
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000',
+    backgroundColor: '#0f172a',
     color: '#fff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '10px',
     fontSize: '16px',
     padding: '8px 16px',
@@ -2319,7 +2319,7 @@ export default function ClientTab({
                         (!redactionContrat || !redactionContrat.trim()) ? 'cursor-not-allowed opacity-50 bg-slate-400' : 'cursor-pointer hover:bg-slate-800'
                       }`}
                       style={{
-                        backgroundColor: (!redactionContrat || !redactionContrat.trim()) ? '#94a3b8' : '#000000',
+                        backgroundColor: (!redactionContrat || !redactionContrat.trim()) ? '#94a3b8' : '#0f172a',
                         borderRadius: '13px',
                         fontSize: '18px'
                       }}
@@ -2349,7 +2349,7 @@ export default function ClientTab({
                                 type="button"
                                 onClick={() => handleRemoveAutresContrat(ctr.id)}
                                 style={{
-                                  backgroundColor: '#000000',
+                                  backgroundColor: '#0f172a',
                                   borderRadius: '13px',
                                   fontSize: '18px',
                                   color: '#ffffff',
@@ -2453,7 +2453,7 @@ export default function ClientTab({
                         onClick={handleAddAutresContrat}
                         className="w-full py-3 text-white font-bold transition-all font-sans border-0 cursor-pointer hover:bg-slate-800 mt-2"
                         style={{
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           borderRadius: '13px',
                           fontSize: '18px'
                         }}

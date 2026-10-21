@@ -9540,7 +9540,7 @@ export default function PublicPortal({
                               <span
                                 style={{
                                   color: "rgb(255 255 255)",
-                                  backgroundColor: "#000",
+                                  backgroundColor: "#0f172a",
                                   padding: "6px 14px",
                                   borderRadius: "9999px",
                                   fontWeight: "bold",
@@ -9735,7 +9735,7 @@ export default function PublicPortal({
                                   setIsReportOverlayOpen(true);
                                 }}
                                 style={{
-                                  backgroundColor: isOwnReport ? "#000000" : "#e2e8f0",
+                                  backgroundColor: isOwnReport ? "#0f172a" : "#e2e8f0",
                                   color: isOwnReport ? "#ffffff" : "#94a3b8",
                                   fontSize: "18px",
                                   fontWeight: "bold",
@@ -10345,7 +10345,7 @@ export default function PublicPortal({
                                 <button
                                   type="button"
                                   onClick={() => setShowNewDistribTraceForm(false)}
-                                  className="flex-1 bg-black text-white font-bold py-2 rounded-lg text-[15px]"
+                                  className="flex-1 bg-[#0f172a] text-white font-bold py-2 rounded-lg text-[15px]"
                                 >
                                   Annuler
                                 </button>
@@ -10425,7 +10425,7 @@ export default function PublicPortal({
                             setNewDistribTraceabilityEnabled(false);
                           }}
                           style={{
-                            backgroundColor: "#000000",
+                            backgroundColor: "#0f172a",
                             color: "#ffffff",
                             fontSize: "18px",
                             borderRadius: "13px",
@@ -11237,7 +11237,7 @@ export default function PublicPortal({
                                 }
                               }}
                               style={{
-                                backgroundColor: isInventoryMode ? "#2563eb" : "#000000",
+                                backgroundColor: isInventoryMode ? "#2563eb" : "#0f172a",
                                 color: "#ffffff",
                                 borderRadius: "13px",
                                 fontSize: "18px",
@@ -11471,7 +11471,7 @@ export default function PublicPortal({
                                   type="button"
                                   onClick={() => setShowNewWebappTraceForm(false)}
                                   style={{
-                                    backgroundColor: "#000000",
+                                    backgroundColor: "#0f172a",
                                     color: "#ffffff",
                                     fontSize: "18px",
                                     borderRadius: "13px",
@@ -11773,7 +11773,7 @@ export default function PublicPortal({
                                               type="button"
                                               onClick={() => downloadBarcodeSVG(trace.lotOrSerial)}
                                               style={{
-                                                backgroundColor: "#000000",
+                                                backgroundColor: "#0f172a",
                                                 color: "#ffffff",
                                                 padding: "10px 20px",
                                                 fontSize: "18px",
@@ -11968,7 +11968,7 @@ export default function PublicPortal({
                             type="button"
                             onClick={handleAlertLogistique}
                             style={{
-                              backgroundColor: "#000000",
+                              backgroundColor: "#0f172a",
                               color: "#ffffff",
                               borderRadius: "13px",
                               fontSize: "18px",
@@ -12179,7 +12179,7 @@ export default function PublicPortal({
                                 onClick={() => setShowRapatriementForm(false)}
                                 className="flex-1 py-3 text-white hover:opacity-95 transition-all text-center cursor-pointer border-0"
                                 style={{
-                                  backgroundColor: "#000000",
+                                  backgroundColor: "#0f172a",
                                   borderRadius: "13px",
                                   fontSize: "18px",
                                   fontWeight: "bold",
@@ -12709,7 +12709,7 @@ export default function PublicPortal({
                     {/* Digital Clock Section */}
                     <div
                       style={{
-                        backgroundColor: "#000",
+                        backgroundColor: "#0f172a",
                         color: "#fff",
                         borderRadius: "0px 0px 16px 16px",
                       }}
@@ -12825,7 +12825,7 @@ export default function PublicPortal({
                                 <span
                                   style={{
                                     color: "#fff",
-                                    background: "#000",
+                                    background: "#0f172a",
                                     border: "none",
                                     fontSize: "18px",
                                     padding: "8px 16px",
@@ -13353,7 +13353,7 @@ export default function PublicPortal({
                                       alert("Pointage enregistré avec succès.")
                                     }
                                     style={{
-                                      backgroundColor: "#000000",
+                                      backgroundColor: "#0f172a",
                                       color: "#ffffff",
                                       fontSize: "18px",
                                       fontWeight: "bold",
@@ -13552,15 +13552,14 @@ export default function PublicPortal({
                               expensePhotoInputRef.current?.click()
                             }
                             style={{
-                              backgroundColor: "#000000",
+                              backgroundColor: "#0f172a",
                               color: "#fff",
                               fontSize: "18px",
                               fontWeight: "bold",
                               borderRadius: "12px",
                               padding: "9px 18px",
                               border: "none",
-                              boxShadow:
-                                "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset",
+                              boxShadow: 'none',
                               cursor: "pointer",
                             }}
                             className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold"
@@ -13985,7 +13984,7 @@ export default function PublicPortal({
                               fontWeight: 600,
                               borderRadius: "14px",
                               padding: "12px 18px",
-                              backgroundColor: isSelected ? "#000000" : "#ffffff",
+                              backgroundColor: isSelected ? "#0f172a" : "#ffffff",
                               color: isSelected ? "#ffffff" : "rgb(0, 0, 0)",
                               border: isSelected
                                 ? "1px solid #000000"
@@ -15210,15 +15209,14 @@ export default function PublicPortal({
                           onClick={handleGoogleCalendarSync}
                           disabled={isSyncingGoogleCal}
                           style={{
-                            backgroundColor: "#000000",
+                            backgroundColor: "#0f172a",
                             color: "#ffffff",
                             fontSize: "18px",
                             fontWeight: "bold",
                             borderRadius: "12px",
                             padding: "14px 20px",
                             border: "none",
-                            boxShadow:
-                              "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset",
+                            boxShadow: 'none',
                             cursor: "pointer",
                             width: "100%",
                           }}
@@ -15247,7 +15245,7 @@ export default function PublicPortal({
                             onClick={handleGoogleCalendarSync}
                             disabled={isSyncingGoogleCal}
                             style={{
-                              backgroundColor: "#000000",
+                              backgroundColor: "#0f172a",
                               color: "#ffffff",
                               fontSize: "18px",
                               fontWeight: "bold",

@@ -439,9 +439,9 @@ export default function SatisfactionTab({
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000',
+    backgroundColor: '#0f172a',
     color: '#fff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '10px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -839,12 +839,12 @@ export default function SatisfactionTab({
           rel="noopener noreferrer"
           className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 inline-flex items-center justify-center text-center whitespace-nowrap"
           style={{
-            backgroundColor: 'rgb(0, 0, 0)',
+            backgroundColor: '#0f172a',
             color: 'rgb(255, 255, 255)',
             fontSize: '18px',
             borderRadius: '13px',
             padding: '10px 20px',
-            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset',
+            boxShadow: 'none',
             textDecoration: 'none',
           }}
         >
@@ -1648,7 +1648,7 @@ export default function SatisfactionTab({
                 onClick={() => setIsPerformancePaneOpen(false)}
                 style={{
                   width: '100%',
-                  backgroundColor: '#000000',
+                  backgroundColor: '#0f172a',
                   color: '#ffffff',
                   fontSize: '18px',
                   fontWeight: '600',
@@ -1656,7 +1656,7 @@ export default function SatisfactionTab({
                   borderRadius: '12px',
                   cursor: 'pointer',
                   border: 'none',
-                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+                  boxShadow: 'none',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 }}
                 className="hover:bg-neutral-800 transition-colors"

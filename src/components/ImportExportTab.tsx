@@ -2098,9 +2098,9 @@ export default function ImportExportTab({
   };
 
   const roundedButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000000',
+    backgroundColor: '#0f172a',
     color: '#ffffff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '10px',
     fontSize: '16px',
     padding: '11px 22px',
@@ -2782,7 +2782,7 @@ export default function ImportExportTab({
                                 }}
                                 style={{
                                   ...roundedButton18Style,
-                                  backgroundColor: '#000000',
+                                  backgroundColor: '#0f172a',
                                   color: '#ffffff'
                                 }}
                                 className="transition-all hover:opacity-80"
@@ -2794,7 +2794,7 @@ export default function ImportExportTab({
                               type="button"
                               onClick={() => handleDelete(r.id)}
                               style={roundedButton18Style}
-                              className="transition-all text-white bg-black rounded cursor-pointer"
+                              className="transition-all text-white bg-[#0f172a] rounded cursor-pointer"
                             >
                               <span>{t("Supprimer")}</span>
                             </button>

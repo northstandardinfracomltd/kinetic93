@@ -488,7 +488,7 @@ export const DefibeoIntelligenceSidePane: React.FC<DefibeoIntelligenceSidePanePr
                 id="btn-quit-defibeo-intelligence"
                 className="shrink-0 px-5 py-2 rounded-full font-bold transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] whitespace-nowrap"
                 style={{
-                  backgroundColor: '#000000',
+                  backgroundColor: '#0f172a',
                   color: '#ffffff',
                   border: 'none',
                   boxShadow: 'none',

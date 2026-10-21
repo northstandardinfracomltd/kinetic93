@@ -693,9 +693,9 @@ export default function StocksDistribuesTab({
 
   // Styling constants designed exactly like StocksTab
   const customButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000',
+    backgroundColor: '#0f172a',
     color: '#fff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '12px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -710,9 +710,9 @@ export default function StocksDistribuesTab({
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000',
+    backgroundColor: '#0f172a',
     color: '#fff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '10px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -905,7 +905,7 @@ export default function StocksDistribuesTab({
                   onClick={() => setAttentionFilterActive(!attentionFilterActive)}
                   style={{
                     ...customButtonStyle,
-                    backgroundColor: attentionFilterActive ? '#2e54ff' : '#000000',
+                    backgroundColor: attentionFilterActive ? '#2e54ff' : '#0f172a',
                     color: '#ffffff',
                     border: 'none',
                   }}
@@ -920,7 +920,7 @@ export default function StocksDistribuesTab({
                   onClick={() => handleExportInvTraca()}
                   style={{
                     ...customButtonStyle,
-                    backgroundColor: '#000000',
+                    backgroundColor: '#0f172a',
                     color: '#ffffff',
                     border: 'none',
                   }}
@@ -1162,7 +1162,7 @@ export default function StocksDistribuesTab({
                                 onClick={() => onNavigateToCentraleStocks?.(ugsCode)}
                                 style={{
                                   ...rowActionButtonStyle,
-                                  backgroundColor: '#000000',
+                                  backgroundColor: '#0f172a',
                                   color: '#ffffff',
                                 }}
                                 className="cursor-pointer font-sans"
@@ -1683,7 +1683,7 @@ export default function StocksDistribuesTab({
                       }}
                       style={{
                         width: "100%",
-                        backgroundColor: isInventoryMode ? "#2563eb" : "#000000",
+                        backgroundColor: isInventoryMode ? "#2563eb" : "#0f172a",
                         color: "#ffffff",
                         borderRadius: "13px",
                         fontSize: "18px",
@@ -1775,7 +1775,7 @@ export default function StocksDistribuesTab({
                                         type="button"
                                         onClick={() => downloadBarcodeSVG(trace.lotOrSerial)}
                                         style={{
-                                          backgroundColor: '#000000',
+                                          backgroundColor: '#0f172a',
                                           color: '#ffffff',
                                           padding: '10px 20px',
                                           fontSize: '18px',

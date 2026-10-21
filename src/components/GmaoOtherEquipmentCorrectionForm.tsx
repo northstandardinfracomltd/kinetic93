@@ -160,9 +160,9 @@ function Code39Barcode({ value }: { value: string }) {
         type="button"
         onClick={downloadSvg}
         style={{
-          backgroundColor: '#000000',
+          backgroundColor: '#0f172a',
           color: '#ffffff',
-          boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+          boxShadow: 'none',
           borderRadius: '10px',
           fontSize: '18px',
           padding: '9px 19px',
@@ -210,9 +210,9 @@ const CustomPinkRadio = ({ value, currentValue, onChange, label }: { value: stri
 };
 
 const rowActionButtonStyle: React.CSSProperties = {
-  backgroundColor: '#000',
+  backgroundColor: '#0f172a',
   color: '#fff',
-  boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+  boxShadow: 'none',
   borderRadius: '10px',
   fontSize: '16px',
   padding: '11px 22px',
@@ -735,7 +735,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
             type="button"
             onClick={onCancel}
             id="btn-close-other-eq-modal"
-            style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#000000', color: '#ffffff', margin: 0, position: 'relative' }}
+            style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#0f172a', color: '#ffffff', margin: 0, position: 'relative' }}
             className="transition-colors cursor-pointer font-sans select-none block w-full"
           >
             Annuler
@@ -784,7 +784,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
             onClick={onCancel}
             style={{
               ...rowActionButton18Style,
-              backgroundColor: '#000000',
+              backgroundColor: '#0f172a',
               color: '#ffffff',
               border: '1px solid #000000',
             }}
@@ -903,7 +903,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
                       setIsLookupScannerOpen(true);
                     }}
                     style={rowActionButton18Style}
-                    className="shrink-0 transition-colors cursor-pointer font-sans bg-black text-white hover:bg-neutral-900"
+                    className="shrink-0 transition-colors cursor-pointer font-sans bg-[#0f172a] text-white hover:bg-neutral-900"
                   >
                     Scan
                   </button>

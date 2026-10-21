@@ -3374,9 +3374,9 @@ export default function SettingsModal({
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000',
+    backgroundColor: '#0f172a',
     color: '#fff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '0.75rem',
     fontSize: '18px',
     padding: '11px 22px',
@@ -3487,7 +3487,7 @@ export default function SettingsModal({
                 style={{
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
-                  boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                  boxShadow: 'none',
                   borderRadius: '0.75rem',
                   fontSize: '18px',
                   padding: '11px 22px',
@@ -3554,7 +3554,7 @@ export default function SettingsModal({
                       fontWeight: 600,
                       borderRadius: '14px',
                       padding: '12px 18px',
-                      backgroundColor: isSelected ? '#000000' : '#ffffff',
+                      backgroundColor: isSelected ? '#0f172a' : '#ffffff',
                       color: isSelected ? '#ffffff' : 'rgb(0, 0, 0)',
                       border: isSelected ? '1px solid #000000' : '1px solid #dadada',
                       boxShadow: isSelected 
@@ -3886,7 +3886,7 @@ export default function SettingsModal({
                       setShowDisableOtherEquipmentsConfirmation(false);
                     }}
                     style={{
-                      backgroundColor: '#000000',
+                      backgroundColor: '#0f172a',
                       color: '#ffffff',
                       border: 'none',
                       fontSize: '18px',
@@ -3911,7 +3911,7 @@ export default function SettingsModal({
                       setShowDisableOtherEquipmentsConfirmation(false);
                     }}
                     style={{
-                      backgroundColor: '#000000',
+                      backgroundColor: '#0f172a',
                       color: '#ffffff',
                       border: 'none',
                       fontSize: '18px',
@@ -4260,7 +4260,7 @@ export default function SettingsModal({
                     handleCompanyChange('pdfLabelTextColor', '#9f71a2');
                   }}
                   style={{
-                    backgroundColor: '#000000',
+                    backgroundColor: '#0f172a',
                     color: '#ffffff',
                     fontSize: '18px',
                     borderRadius: '13px',
@@ -4574,7 +4574,7 @@ export default function SettingsModal({
                                 className="cursor-pointer mb-2 inline-flex items-center justify-center font-bold text-center select-none"
                                 style={{
                                   backgroundColor: 'rgb(185, 28, 28)',
-                                  boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                                  boxShadow: 'none',
                                   color: '#ffffff',
                                   border: 'none',
                                   fontSize: '18px',
@@ -5049,7 +5049,7 @@ export default function SettingsModal({
                                     disabled={!canEditThisMember || (m.semaineTypique || []).length >= 2}
                                     onClick={() => handleAddMemberSchedule(idx)}
                                     style={{
-                                      backgroundColor: '#000000',
+                                      backgroundColor: '#0f172a',
                                       color: '#ffffff',
                                       border: 'none',
                                       fontSize: '18px',
@@ -5075,7 +5075,7 @@ export default function SettingsModal({
                                           borderRadius: '13px',
                                           fontSize: '16px',
                                           backgroundColor: 'rgb(185, 28, 28)',
-                                          boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                                          boxShadow: 'none',
                                           color: '#ffffff'
                                         }}
                                         className="absolute top-2 right-2 px-3 py-1 font-bold hover:bg-[#7f1d1d] active:scale-95 transition-all cursor-pointer font-sans disabled:opacity-50"
@@ -5213,7 +5213,7 @@ export default function SettingsModal({
                                                 }}
                                                 className={`px-4 py-1.5 font-semibold border transition-all select-none font-sans ${
                                                   isChecked
-                                                    ? 'bg-black text-white shadow-sm cursor-pointer'
+                                                    ? 'bg-[#0f172a] text-white shadow-sm cursor-pointer'
                                                     : isDayTakenElsewhere
                                                       ? 'bg-slate-100 text-slate-400 opacity-40 cursor-not-allowed'
                                                       : 'bg-white text-black cursor-pointer'
@@ -5259,7 +5259,7 @@ export default function SettingsModal({
                                     disabled={!canEditThisMember || (m.absences || []).length >= 2}
                                     onClick={() => handleAddMemberAbsence(idx)}
                                     style={{
-                                      backgroundColor: '#000000',
+                                      backgroundColor: '#0f172a',
                                       color: '#ffffff',
                                       border: 'none',
                                       fontSize: '18px',
@@ -5285,7 +5285,7 @@ export default function SettingsModal({
                                           borderRadius: '13px',
                                           fontSize: '16px',
                                           backgroundColor: 'rgb(185, 28, 28)',
-                                          boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                                          boxShadow: 'none',
                                           color: '#ffffff'
                                         }}
                                         className="absolute top-2 right-2 px-3 py-1 font-bold hover:bg-[#7f1d1d] active:scale-95 transition-all cursor-pointer font-sans disabled:opacity-50"
@@ -5414,7 +5414,7 @@ export default function SettingsModal({
                 style={{
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
-                  boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                  boxShadow: 'none',
                   borderRadius: '0.75rem',
                   fontSize: '18px',
                   padding: '11px 22px',
@@ -5488,7 +5488,7 @@ export default function SettingsModal({
                           <span
                             style={{
                               backgroundColor: 'rgb(185, 28, 28)',
-                              boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                              boxShadow: 'none',
                               color: '#ffffff',
                               fontSize: '16px',
                               borderRadius: '100px',
@@ -5532,7 +5532,7 @@ export default function SettingsModal({
                             <button
                               type="button"
                               onClick={() => copyToClipboard(envIdDisplay, 'envId')}
-                              style={{ backgroundColor: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
+                              style={{ backgroundColor: '#0f172a', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
                               className="whitespace-nowrap transition-opacity hover:opacity-80"
                             >
                               {apiDefibeoCopied === 'envId' ? 'Copié !' : 'Copier'}
@@ -5554,7 +5554,7 @@ export default function SettingsModal({
                             <button
                               type="button"
                               onClick={() => copyToClipboard('https://consoledefibeo.deroesch.com/v1', 'endpoint')}
-                              style={{ backgroundColor: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
+                              style={{ backgroundColor: '#0f172a', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
                               className="whitespace-nowrap transition-opacity hover:opacity-80"
                             >
                               {apiDefibeoCopied === 'endpoint' ? 'Copié !' : 'Copier'}
@@ -5580,7 +5580,7 @@ export default function SettingsModal({
                             <button
                               type="button"
                               onClick={() => copyToClipboard(apiDefibeoApiKey, 'apiKey')}
-                              style={{ backgroundColor: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
+                              style={{ backgroundColor: '#0f172a', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
                               className="whitespace-nowrap transition-opacity hover:opacity-80"
                             >
                               {apiDefibeoCopied === 'apiKey' ? 'Copié !' : 'Copier'}
@@ -5606,7 +5606,7 @@ export default function SettingsModal({
                             <button
                               type="button"
                               onClick={() => copyToClipboard(apiDefibeoSecretKey, 'secretKey')}
-                              style={{ backgroundColor: 'rgb(0, 0, 0)', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
+                              style={{ backgroundColor: '#0f172a', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
                               className="whitespace-nowrap transition-opacity hover:opacity-80"
                             >
                               {apiDefibeoCopied === 'secretKey' ? 'Copié !' : 'Copier'}
@@ -5676,7 +5676,7 @@ export default function SettingsModal({
                           <span
                             style={{
                               backgroundColor: dropboxActive ? '#2e54ff' : 'rgb(57, 169, 143)',
-                              boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                              boxShadow: 'none',
                               color: '#ffffff',
                               fontSize: '16px',
                               borderRadius: '100px',
@@ -5780,7 +5780,7 @@ export default function SettingsModal({
                           <span
                             style={{
                               backgroundColor: 'rgb(57, 169, 143)',
-                              boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                              boxShadow: 'none',
                               color: '#ffffff',
                               fontSize: '16px',
                               borderRadius: '100px',
@@ -5857,7 +5857,7 @@ export default function SettingsModal({
                               backgroundColor: selectedLang === 'Français, France' 
                                 ? (atlasanteActive ? '#2e54ff' : 'rgb(57, 169, 143)')
                                 : 'rgb(185, 28, 28)',
-                              boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                              boxShadow: 'none',
                               color: '#ffffff',
                               fontSize: '16px',
                               borderRadius: '100px',
@@ -5940,7 +5940,7 @@ export default function SettingsModal({
                           <span
                             style={{
                               backgroundColor: googleDriveActive ? '#2e54ff' : 'rgb(57, 169, 143)',
-                              boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                              boxShadow: 'none',
                               color: '#ffffff',
                               fontSize: '16px',
                               borderRadius: '100px',
@@ -6021,7 +6021,7 @@ export default function SettingsModal({
                 style={{
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
-                  boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                  boxShadow: 'none',
                   borderRadius: '0.75rem',
                   fontSize: '18px',
                   padding: '11px 22px',
@@ -6146,7 +6146,7 @@ export default function SettingsModal({
               style={{
                 backgroundColor: '#2e54ff',
                 color: '#ffffff',
-                boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                boxShadow: 'none',
                 borderRadius: '0.75rem',
                 fontSize: '18px',
                 padding: '11px 22px',
@@ -6280,7 +6280,7 @@ export default function SettingsModal({
 
                   <a
                     href="mailto:contact@defibeo.com"
-                    style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#000', color: '#fff' }}
+                    style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#0f172a', color: '#fff' }}
                     className="text-center cursor-pointer"
                   >
                     {t("Envoyer un message")}
@@ -6347,7 +6347,7 @@ export default function SettingsModal({
                   disabled={isSendingReferral || !referralCompany.trim()}
                   className="font-sans font-semibold active:scale-95 transition-all cursor-pointer shrink-0"
                   style={{
-                    backgroundColor: '#000000',
+                    backgroundColor: '#0f172a',
                     color: '#ffffff',
                     fontSize: '18px',
                     borderRadius: '13px',
@@ -6395,7 +6395,7 @@ export default function SettingsModal({
                 onClick={() => exportSuspiciousActivityToCsv(suspiciousLogs, myTenantId)}
                 style={{
                   ...rowActionButtonStyle,
-                  backgroundColor: '#000000',
+                  backgroundColor: '#0f172a',
                   color: '#ffffff',
                   fontSize: '18px',
                   padding: '11px 20px',
@@ -6406,7 +6406,7 @@ export default function SettingsModal({
                   alignItems: 'center',
                   cursor: 'pointer',
                   border: 'none',
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+                  boxShadow: 'none'
                 }}
                 className="hover:opacity-90 active:scale-[0.98] transition-all"
                 title={t("Télécharger le fichier CSV de toutes les traces")}
@@ -6459,7 +6459,7 @@ export default function SettingsModal({
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                             padding: '3px 8px',
                             border: 'none',
-                            background: '#000000',
+                            background: '#0f172a',
                             display: 'inline-flex',
                             alignItems: 'center',
                           }}
@@ -6475,7 +6475,7 @@ export default function SettingsModal({
                               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                               padding: '3px 8px',
                               border: 'none',
-                              background: '#000000',
+                              background: '#0f172a',
                               display: 'inline-flex',
                               alignItems: 'center',
                             }}
@@ -6594,7 +6594,7 @@ export default function SettingsModal({
                   }}
                   style={{
                     ...rowActionButtonStyle,
-                    backgroundColor: '#000000',
+                    backgroundColor: '#0f172a',
                     color: '#ffffff',
                     width: '100%',
                     fontSize: '18px',
@@ -6604,7 +6604,7 @@ export default function SettingsModal({
                     fontWeight: 600,
                     cursor: 'pointer',
                     border: 'none',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                    boxShadow: 'none'
                   }}
                   className="transition-all hover:opacity-90 active:scale-[0.99] text-white flex items-center justify-center gap-2"
                 >
@@ -6618,7 +6618,7 @@ export default function SettingsModal({
                   }}
                   style={{
                     ...rowActionButtonStyle,
-                    backgroundColor: '#000000',
+                    backgroundColor: '#0f172a',
                     color: '#ffffff',
                     width: '100%',
                     fontSize: '18px',
@@ -6628,7 +6628,7 @@ export default function SettingsModal({
                     fontWeight: 600,
                     cursor: 'pointer',
                     border: 'none',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                    boxShadow: 'none'
                   }}
                   className="transition-all hover:opacity-90 active:scale-[0.99] text-white flex items-center justify-center gap-2"
                 >
@@ -6649,7 +6649,7 @@ export default function SettingsModal({
               }}
               style={{
                 ...rowActionButtonStyle,
-                backgroundColor: '#000000',
+                backgroundColor: '#0f172a',
                 color: '#ffffff',
                 width: '100%',
                 fontSize: '18px',
@@ -6660,7 +6660,7 @@ export default function SettingsModal({
                 cursor: isSaving ? 'not-allowed' : 'pointer',
                 opacity: isSaving ? 0.7 : 1,
                 border: 'none',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
+                boxShadow: 'none'
               }}
               className="transition-all hover:opacity-90 active:scale-[0.99] text-white flex items-center justify-center gap-2"
             >
@@ -6755,7 +6755,7 @@ export default function SettingsModal({
                     <span style={{ color: '#fff', background: '#7aa637', border: 'none', borderRadius: '13px', padding: '5px 10px', fontSize: '16px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>REST JSON / ISO-8859 & UTF-8</span>
                   </div>
 
-                  <pre style={{ background: 'rgba(0,0,0,0.06)', borderRadius: '10px', padding: '15px', fontSize: '15px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                  <pre style={{ background: 'rgba(0,0,0,0.06)', borderRadius: '10px', padding: '15px', fontSize: '15px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`Host: consoledefibeo.deroesch.com
 X-Defibeo-Tenant-ID: YOUR_ENV_ID
 X-Defibeo-API-Key: YOUR_KEY
@@ -6901,7 +6901,7 @@ const { defibrillateurs } = await res.json();`}
                                 setTimeout(() => setCopiedSlug(null), 1500);
                               }}
                               style={{
-                                backgroundColor: copiedSlug === field.slug ? '#7aa637' : '#000000',
+                                backgroundColor: copiedSlug === field.slug ? '#7aa637' : '#0f172a',
                                 color: '#ffffff',
                                 fontSize: '16px',
                                 fontWeight: 'bold',
@@ -6937,7 +6937,7 @@ const { defibrillateurs } = await res.json();`}
                       </p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "status": "success",
   "environnement": "YOUR_ENV_ID",
@@ -6973,7 +6973,7 @@ const { defibrillateurs } = await res.json();`}
 
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "entreprise": "Clinique Saint-Jean de Paris",
   "email": "direction@clinique-stjean.fr",
@@ -7003,7 +7003,7 @@ const { defibrillateurs } = await res.json();`}
                       </p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Structure JSON retournée (Extrait)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "status": "success",
   "environnement": "YOUR_ENV_ID",
@@ -7135,7 +7135,7 @@ const { defibrillateurs } = await res.json();`}
                           <span>Corps de requête recommandé (camelCase) :</span>
                           <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">Recommandé</span>
                         </div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '15px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }} className="select-text">
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '15px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }} className="select-text">
 {`{
   "derniereMaintenance": "2026-08-03",
   "prochaineMaintenance": "2027-08-01",
@@ -7184,7 +7184,7 @@ const { defibrillateurs } = await res.json();`}
                           <span>Variante compatible (snake_case) :</span>
                           <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">Supporté à 100%</span>
                         </div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '15px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }} className="select-text">
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '15px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }} className="select-text">
 {`{
   "derniere_maintenance": "2026-08-03",
   "prochaine_v": "2027-08-01",
@@ -7226,7 +7226,7 @@ const { defibrillateurs } = await res.json();`}
                       {/* Exemple de réponse */}
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2">Structure de la réponse HTTP 200 (Success) :</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '15px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }} className="select-text">
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '15px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }} className="select-text">
 {`{
   "status": "success",
   "message": "Défibrillateur mis à jour avec succès",
@@ -7283,7 +7283,7 @@ const { defibrillateurs } = await res.json();`}
                       <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère les informations d'un matériel spécifique (Purificateur d'air, Extincteur, etc.) selon la variable d'URL <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:identifiant</code> (ex: <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>MAT-00109</code>).</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Champs retournés (JSON complet)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "categorie": "Purificateur d'air",
   "client_id": "CLI-0042",
@@ -7320,7 +7320,7 @@ const { defibrillateurs } = await res.json();`}
                       <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Édite et met à jour les informations d'un matériel spécifique. La variable d'URL <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:identifiant</code> (ex: <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>MAT-00109</code>) cible précisément l'équipement à modifier.</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "derniere_maintenance": "2026-08-03",
   "type_filtre": "HEPA H14 Ultra",
@@ -7343,7 +7343,7 @@ const { defibrillateurs } = await res.json();`}
                       <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée une nouvelle commande dans Defibeo avec ses articles et sous-tables de pièces.</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "membre_attribue": "Thomas Martin",
   "type": "Devis",
@@ -7382,7 +7382,7 @@ const { defibrillateurs } = await res.json();`}
                       <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée une nouvelle tournée FSM datée et insère des missions associées aux identifiants de défibrillateurs ou autres matériels.</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "titre_tournee": "Tournée Maintenance IDF Ouest - Août 2026",
   "date_periode": "2026-08-10 au 2026-08-15",
@@ -7421,7 +7421,7 @@ const { defibrillateurs } = await res.json();`}
                     <div className="p-4 space-y-4 text-[16px] text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête unitaire (JSON payload) :</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "identifiant": "DAE-88192",
   "client_id": "CLI-0042",
@@ -7441,7 +7441,7 @@ const { defibrillateurs } = await res.json();`}
 
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Variante par lot / Multi-missions (Batch) :</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "missions": [
     {
@@ -7464,7 +7464,7 @@ const { defibrillateurs } = await res.json();`}
 
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (201 Created) :</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "status": "success",
   "message": "1 mission(s) ajoutée(s) avec succès dans À trier / Ordres ADV",
@@ -7555,7 +7555,7 @@ const data = await res.json();`}
                       <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère les informations et l'URL de téléchargement d'un rapport d'intervention PDF selon la variable d'URL <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:identifiant</code> (ex: <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>RAP-2026-0412</code>).</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "identifiant": "RAP-2026-0412",
   "type": "Rapport de Maintenance Annuelle",
@@ -7583,7 +7583,7 @@ const data = await res.json();`}
                       </p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK - Formulaire Centrale + Traçabilité)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "type_stock": "Centrale des stocks",
   "piece_ou_service_id": "VAR-0012",
@@ -7659,7 +7659,7 @@ const data = await res.json();`}
                       </p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "quantite_disponible": 150,
   "quantite_reservee": 10,
@@ -7705,7 +7705,7 @@ const data = await res.json();`}
                       </p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK - Formulaire Stocks distribués)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "type_stock": "Stocks distribués",
   "stocks_distribues": [
@@ -7748,7 +7748,7 @@ const data = await res.json();`}
                       </p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "piece_ou_service_id": "VAR-0012",
   "ugs": "ELE-ZOLL-01",
@@ -7774,7 +7774,7 @@ const data = await res.json();`}
 
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Exemple de réponse (200 OK)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "environnement": "YOUR_ENV_ID",
   "version_api": "1.4.0",
@@ -7801,7 +7801,7 @@ const data = await res.json();`}
                       </p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (POST JSON payload)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "categorie": "Technique",
   "situation": "Nouveau",
@@ -7827,7 +7827,7 @@ const data = await res.json();`}
                       <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Récupère les informations complètes d'une session de formation spécifique selon la variable d'URL <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:formation_id</code> (ex: <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>FOR-2026-001</code>).</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Structure JSON complète retournée</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "formation_id": "FOR-2026-001",
   "intitule": "Formation Secourisme & Utilisation DAE",
@@ -7858,7 +7858,7 @@ const data = await res.json();`}
                       <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Crée une nouvelle session de formation dans la base de données Defibeo.</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "intitule": "Formation Manipulation DAE & Gestes d'Urgence",
   "date_heure": "2026-09-01T14:00",
@@ -7888,7 +7888,7 @@ const data = await res.json();`}
                       <p className="text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Met à jour et modifie les informations d'une session de formation existante ciblée par son identifiant unique <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>:formation_id</code> (ex: <code className="bg-white text-black px-1.5 py-0.5 rounded font-bold border border-[#e4e1e1]" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>FOR-2026-001</code>).</p>
                       <div>
                         <div className="text-[16px] font-bold text-black mb-2" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Corps de la requête (JSON payload)</div>
-                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
+                        <pre style={{ background: '#ffffff', borderRadius: '13px', padding: '20px', fontSize: '16px', color: '#0f172a', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', overflowX: 'auto', lineHeight: '1.5', border: '1px solid #e4e1e1' }}>
 {`{
   "intitule": "Formation Secourisme & Utilisation DAE - Session Avancée",
   "statut": "Terminé",

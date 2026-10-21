@@ -3083,7 +3083,7 @@ export default function ClientPortal({
                       }}
                       style={{
                         fontSize: '18px',
-                        backgroundColor: '#000000',
+                        backgroundColor: '#0f172a',
                         color: '#ffffff',
                         boxShadow: 'none',
                         borderRadius: '13px',
@@ -3212,7 +3212,7 @@ export default function ClientPortal({
                               type="button"
                               onClick={() => handleDownloadBarcode(df.identifiant || 'DEFIB')}
                               style={{ fontSize: '18px' }}
-                              className="px-6 py-2 bg-black text-white font-bold rounded-xl transition-all cursor-pointer shadow-sm border-none outline-none"
+                              className="px-6 py-2 bg-[#0f172a] text-white font-bold rounded-xl transition-all cursor-pointer shadow-sm border-none outline-none"
                             >
                               Télécharger
                             </button>
@@ -3285,7 +3285,7 @@ export default function ClientPortal({
                               type="button"
                               onClick={() => handleDownloadBarcode(oth.identifiant || 'OTHER')}
                               style={{ fontSize: '18px' }}
-                              className="px-6 py-2 bg-black text-white font-bold rounded-xl transition-all cursor-pointer shadow-sm border-none outline-none"
+                              className="px-6 py-2 bg-[#0f172a] text-white font-bold rounded-xl transition-all cursor-pointer shadow-sm border-none outline-none"
                             >
                               Télécharger
                             </button>
@@ -4212,10 +4212,10 @@ export default function ClientPortal({
                                 }}
                                 className="px-6 py-3 text-white transition-all cursor-pointer outline-none border-none font-bold"
                                 style={{
-                                  backgroundColor: '#000000',
+                                  backgroundColor: '#0f172a',
                                   borderRadius: '13px',
                                   fontSize: '18px',
-                                  boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff1f',
+                                  boxShadow: 'none',
                                 }}
                               >
                                 {t("Effacer")}
@@ -4243,10 +4243,10 @@ export default function ClientPortal({
                                 onClick={clearPortalContractSignature}
                                 className="px-6 py-3 text-white transition-all cursor-pointer outline-none border-none font-bold"
                                 style={{
-                                  backgroundColor: '#000000',
+                                  backgroundColor: '#0f172a',
                                   borderRadius: '13px',
                                   fontSize: '18px',
-                                  boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff1f',
+                                  boxShadow: 'none',
                                 }}
                               >
                                 {t("Effacer")}
@@ -4266,10 +4266,10 @@ export default function ClientPortal({
                         onClick={handleDownloadContractPDF}
                         className="w-full py-3 text-white transition-all cursor-pointer flex items-center justify-center gap-2 border-none outline-none font-bold"
                         style={{
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           borderRadius: '13px',
                           fontSize: '18px',
-                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff1f',
+                          boxShadow: 'none',
                         }}
                       >
                         {t("Télécharger")}
@@ -4504,10 +4504,10 @@ export default function ClientPortal({
                     onClick={clearSignatureSig}
                     className="w-full py-3 text-white transition-all cursor-pointer border-none outline-none font-bold"
                     style={{
-                      backgroundColor: '#000000',
+                      backgroundColor: '#0f172a',
                       borderRadius: '13px',
                       fontSize: '18px',
-                      boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff1f',
+                      boxShadow: 'none',
                     }}
                   >
                     {t("Effacer")}

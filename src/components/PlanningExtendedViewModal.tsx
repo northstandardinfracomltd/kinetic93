@@ -698,7 +698,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
               padding: '10px 20px',
               border: 'none',
               color: '#fff',
-              background: '#000000'
+              background: '#0f172a'
             }}
           >
             Fermer

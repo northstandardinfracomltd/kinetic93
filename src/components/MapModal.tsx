@@ -539,7 +539,7 @@ export default function MapModal({
   };
 
   const cancelFiltersButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000000',
+    backgroundColor: '#0f172a',
     borderRadius: '12px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -1146,7 +1146,7 @@ export default function MapModal({
                     : "Associer à une tournée"
                 }
                 style={{
-                  backgroundColor: '#000000',
+                  backgroundColor: '#0f172a',
                   borderRadius: '12px',
                   fontSize: '18px',
                   padding: '9px 19px',
@@ -1159,7 +1159,7 @@ export default function MapModal({
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '8px',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
+                  boxShadow: 'none'
                 }}
               >
                 <span
@@ -1220,7 +1220,7 @@ export default function MapModal({
                         onClose();
                       }}
                       style={{
-                        backgroundColor: '#000000',
+                        backgroundColor: '#0f172a',
                         borderRadius: '12px',
                         fontSize: '18px',
                         padding: '9px 19px',
@@ -1315,7 +1315,7 @@ export default function MapModal({
             }}
             id="btn-map-filters"
             style={{
-              backgroundColor: '#000000',
+              backgroundColor: '#0f172a',
               borderRadius: '12px',
               fontSize: '18px',
               padding: '9px 19px',
@@ -1327,7 +1327,7 @@ export default function MapModal({
               display: 'inline-flex',
               alignItems: 'center',
               gap: '8px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+              boxShadow: 'none',
               transition: 'all 0.1s ease-in-out'
             }}
           >
@@ -1512,7 +1512,7 @@ export default function MapModal({
               onClick={handleDismissInfoPopup}
               className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 self-end md:self-center"
               style={{
-                backgroundColor: '#000000',
+                backgroundColor: '#0f172a',
                 color: '#ffffff',
                 fontSize: '18px',
                 borderRadius: '13px',

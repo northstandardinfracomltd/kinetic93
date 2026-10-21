@@ -215,7 +215,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen
       <div className="relative w-full max-w-md h-fit bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col" id="barcode-scanner-modal-content">
         
         {/* Camera Viewport */}
-        <div className="relative bg-black flex flex-col items-center justify-center h-48" style={{ backgroundColor: '#000' }}>
+        <div className="relative bg-black flex flex-col items-center justify-center h-48" style={{ backgroundColor: '#0f172a' }}>
           <style>{`
             #${elementId} {
               background-color: #000 !important;
@@ -246,7 +246,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen
           )}
 
           {!isCameraActive && !errorMsg && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white bg-black z-10" style={{ backgroundColor: '#000' }}>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white bg-black z-10" style={{ backgroundColor: '#0f172a' }}>
               <span className="text-[14px] text-white font-sans font-normal" style={{ fontSize: '14px', color: '#fff' }}>
                 Recherche de caméra en cours...
               </span>
@@ -260,7 +260,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen
             type="button"
             onClick={onClose}
             style={{
-              backgroundColor: '#000000',
+              backgroundColor: '#0f172a',
               color: '#ffffff',
               borderRadius: '13px',
               fontSize: '18px',

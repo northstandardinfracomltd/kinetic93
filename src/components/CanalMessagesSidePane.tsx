@@ -356,7 +356,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               id="btn-close-canal-sidepane"
               className="px-4 sm:px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] text-[15px] sm:text-[18px]"
               style={{
-                backgroundColor: '#000000',
+                backgroundColor: '#0f172a',
                 color: '#ffffff',
                 border: 'none',
                 boxShadow: 'none',

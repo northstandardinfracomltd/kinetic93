@@ -150,9 +150,9 @@ function Code39Barcode({ value }: { value: string }) {
         type="button"
         onClick={downloadSvg}
         style={{
-          backgroundColor: '#000000',
+          backgroundColor: '#0f172a',
           color: '#ffffff',
-          boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+          boxShadow: 'none',
           borderRadius: '10px',
           fontSize: '18px',
           padding: '9px 19px',
@@ -1067,9 +1067,9 @@ export default function AutresMaterielsTab({
   };
 
   const customButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000000',
+    backgroundColor: '#0f172a',
     color: '#ffffff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '12px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -1084,9 +1084,9 @@ export default function AutresMaterielsTab({
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000000',
+    backgroundColor: '#0f172a',
     color: '#ffffff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '10px',
     fontSize: '16px',
     padding: '11px 22px',
@@ -1361,7 +1361,7 @@ export default function AutresMaterielsTab({
                           style={{
                             ...rowActionButton18Style,
                             width: '100%',
-                            backgroundColor: '#000000',
+                            backgroundColor: '#0f172a',
                             borderColor: '#000000',
                             color: '#ffffff',
                             opacity: !hasFsmSpreadsheet ? 0.45 : 1,
@@ -2412,7 +2412,7 @@ export default function AutresMaterielsTab({
                                 }}
                                 className={`px-4 py-1.5 font-semibold border transition-all select-none font-sans ${
                                   isChecked
-                                    ? 'bg-black text-white shadow-sm cursor-pointer'
+                                    ? 'bg-[#0f172a] text-white shadow-sm cursor-pointer'
                                     : isDayTakenElsewhere
                                       ? 'bg-slate-100 text-slate-400 opacity-40 cursor-not-allowed'
                                       : 'bg-white text-black cursor-pointer'
@@ -3099,7 +3099,7 @@ export default function AutresMaterielsTab({
                     html: `
                       <div class="relative flex items-center justify-center" style="transform: translate(-12px, -12px);">
                         <div class="absolute w-8 h-8 rounded-full bg-black/30 animate-ping"></div>
-                        <div class="w-5 h-5 rounded-full bg-black border-2 border-white shadow-lg"></div>
+                        <div class="w-5 h-5 rounded-full bg-[#0f172a] border-2 border-white shadow-lg"></div>
                       </div>
                     `,
                     className: 'custom-picker-icon',
@@ -3130,7 +3130,7 @@ export default function AutresMaterielsTab({
                 type="button"
                 onClick={() => setIsMapPickerOpen(false)}
                 style={{ borderRadius: '13px', fontSize: '18px' }}
-                className="flex-1 py-3 bg-black hover:bg-neutral-900 text-white font-bold transition-all cursor-pointer font-sans"
+                className="flex-1 py-3 bg-[#0f172a] hover:bg-neutral-900 text-white font-bold transition-all cursor-pointer font-sans"
               >
                 Annuler
               </button>

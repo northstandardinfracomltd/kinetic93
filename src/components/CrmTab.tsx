@@ -1598,9 +1598,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   const blackButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000000',
+    backgroundColor: '#0f172a',
     color: '#ffffff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '13px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -1651,7 +1651,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000000',
+    backgroundColor: '#0f172a',
     color: '#ffffff',
     borderRadius: '13px',
     fontSize: '18px',
@@ -2012,7 +2012,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     fontWeight: 600,
                     cursor: 'pointer',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: isSelected ? '#000000' : '#ffffff',
+                    backgroundColor: isSelected ? '#0f172a' : '#ffffff',
                     color: isSelected ? '#ffffff' : '#000000',
                     border: isSelected ? '1px solid #000000' : '1px solid rgb(218, 218, 218)',
                     transition: 'all 0.15s ease'
@@ -2844,7 +2844,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           value={formRef}
                           disabled
                           readOnly
-                          style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#000000', cursor: 'not-allowed' }}
+                          style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#0f172a', cursor: 'not-allowed' }}
                         />
                       </div>
 
@@ -2893,7 +2893,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           value={formDerActual}
                           disabled
                           readOnly
-                          style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#000000', cursor: 'not-allowed' }}
+                          style={{ fontSize: '18px', backgroundColor: '#f1f5f9', color: '#0f172a', cursor: 'not-allowed' }}
                         />
                       </div>
                     </div>
@@ -3313,7 +3313,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     fontWeight: 600,
                                     cursor: 'pointer',
                                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                    backgroundColor: isSelected ? '#000000' : '#ffffff',
+                                    backgroundColor: isSelected ? '#0f172a' : '#ffffff',
                                     color: isSelected ? '#ffffff' : '#000000',
                                     border: isSelected ? '1px solid #000000' : '1px solid #dadada',
                                     boxShadow: isSelected ? '0 2px 6px rgba(0,0,0,0.2)' : 'none',
@@ -3432,7 +3432,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                       type="button"
                                       onClick={() => window.open(f.url, '_blank', 'noopener,noreferrer')}
                                       style={{
-                                        backgroundColor: '#000000',
+                                        backgroundColor: '#0f172a',
                                         color: '#ffffff',
                                         borderRadius: '10px',
                                         fontSize: '14px',
@@ -3583,7 +3583,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             onClick={handleAddCommercialEvent}
                             disabled={formCommercialEvents.length >= 5}
                             style={{
-                              backgroundColor: '#000000',
+                              backgroundColor: '#0f172a',
                               color: '#ffffff',
                               borderRadius: '13px',
                               fontSize: '18px',
@@ -3686,7 +3686,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           onClick={handleOpenNewMessage}
                           disabled={!isNewMessageOpen && formSupportMessages.length >= 5}
                           style={{
-                            backgroundColor: '#000000',
+                            backgroundColor: '#0f172a',
                             color: '#ffffff',
                             borderRadius: '10px',
                             fontSize: '18px',
@@ -3756,7 +3756,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               type="button"
                               onClick={() => setIsNewMessageOpen(false)}
                               style={{
-                                backgroundColor: '#000000',
+                                backgroundColor: '#0f172a',
                                 color: '#ffffff',
                                 borderRadius: '12px',
                                 padding: '8px 18px',
@@ -3851,7 +3851,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     type="button"
                     onClick={() => setIsPaneOpen(false)}
                     style={{
-                      backgroundColor: '#000000',
+                      backgroundColor: '#0f172a',
                       color: '#ffffff',
                       borderRadius: '13px',
                       padding: '14px',
@@ -4099,7 +4099,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   onClick={() => setIsFilterPaneOpen(false)}
                   style={{
                     flex: 1,
-                    backgroundColor: '#000000',
+                    backgroundColor: '#0f172a',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',
@@ -4108,7 +4108,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     border: 'none',
                     cursor: 'pointer',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+                    boxShadow: 'none',
                   }}
                   className="hover:bg-zinc-800 transition-colors"
                 >
@@ -4396,7 +4396,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   id="btn-close-crm-performance-bottom"
                   onClick={() => setIsPerformancePaneOpen(false)}
                   style={{
-                    backgroundColor: '#000000',
+                    backgroundColor: '#0f172a',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',
@@ -4405,7 +4405,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     border: 'none',
                     width: '100%',
                     cursor: 'pointer',
-                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+                    boxShadow: 'none',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
                   className="hover:bg-zinc-800 transition-colors"
@@ -4693,7 +4693,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         setTimeout(() => setCopiedEmbed(false), 2000);
                       }}
                       style={{
-                        backgroundColor: '#000000',
+                        backgroundColor: '#0f172a',
                         color: '#ffffff',
                         fontSize: '18px',
                         fontWeight: 'normal',
@@ -4737,7 +4737,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   left: '24px',
                   right: '24px',
                   zIndex: 20,
-                  backgroundColor: '#000000',
+                  backgroundColor: '#0f172a',
                   color: '#ffffff',
                   borderRadius: '13px',
                   padding: '14px',
@@ -4746,7 +4746,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   border: 'none',
                   cursor: 'pointer',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+                  boxShadow: 'none',
                 }}
                 className="hover:bg-zinc-800 transition-colors"
               >
@@ -4805,7 +4805,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         borderRadius: '10px',
                         border: 'none',
                         cursor: 'pointer',
-                        backgroundColor: isActive ? '#000000' : '#f1f5f9',
+                        backgroundColor: isActive ? '#0f172a' : '#f1f5f9',
                         color: isActive ? '#ffffff' : '#475569',
                         transition: 'all 0.15s ease'
                       }}
@@ -4834,10 +4834,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         fontWeight: 600,
                         borderRadius: '14px',
                         padding: '12px 18px',
-                        backgroundColor: isHidden ? '#dc2626' : '#000000',
+                        backgroundColor: isHidden ? '#dc2626' : '#0f172a',
                         color: '#ffffff',
                         border: isHidden ? '1px solid #dc2626' : '1px solid #000000',
-                        boxShadow: 'rgba(0, 0, 0, 0.08) 0px 2px 8px -2px',
+                        boxShadow: 'none',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease-in-out',
                       }}
@@ -4859,7 +4859,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   setIsColumnVisibilityPaneOpen(false);
                 }}
                 style={{
-                  backgroundColor: '#000000',
+                  backgroundColor: '#0f172a',
                   color: '#ffffff',
                   fontSize: '18px',
                   fontWeight: 'bold',
@@ -4868,7 +4868,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   border: 'none',
                   cursor: 'pointer',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                  boxShadow: 'none',
                 }}
                 className="flex-1 text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
               >

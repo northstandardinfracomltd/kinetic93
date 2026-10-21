@@ -120,12 +120,12 @@ export default function HelpBubble({ cacheKey, text, children, style, imageSrc, 
         onClick={handleDismiss}
         className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0"
         style={{
-          backgroundColor: 'rgb(0, 0, 0)',
+          backgroundColor: '#0f172a',
           color: 'rgb(255, 255, 255)',
           fontSize: '18px',
           borderRadius: '13px',
           padding: '10px 20px',
-          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset',
+          boxShadow: 'none',
         }}
       >
         {t("J'ai compris")}

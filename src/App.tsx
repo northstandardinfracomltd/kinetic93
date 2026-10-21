@@ -222,6 +222,7 @@ export default function App() {
   const [paymentUrl, setPaymentUrl] = useState<string>('');
 
   const [locationNames, setLocationNames] = useState<Record<string, string>>({});
+  const [clickedSidebarItem, setClickedSidebarItem] = useState<{ id: string; key: number } | null>(null);
 
   useEffect(() => {
     try {
@@ -11411,12 +11412,16 @@ export default function App() {
                   )}
 
                   {mainNavItems.map((item) => {
+                    const isClickedWave = clickedSidebarItem?.id === item.id;
                     return (
                       <button
                         key={item.id}
                         type="button"
                         id={`tab-selector-${item.id}`}
-                        onClick={item.onClick}
+                        onClick={() => {
+                          setClickedSidebarItem({ id: item.id, key: Date.now() });
+                          item.onClick();
+                        }}
                         onMouseEnter={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect();
                           setHoveredSidebarItem({
@@ -11431,7 +11436,12 @@ export default function App() {
                           isSidebarCollapsed ? 'justify-center px-0' : 'gap-4 px-7'
                         } bg-transparent border-0 cursor-pointer text-left focus:outline-hidden`}
                       >
-                        <div className="flex items-center gap-4 min-w-0">
+                        <div
+                          key={isClickedWave ? clickedSidebarItem.key : 'idle'}
+                          className={`relative flex items-center gap-4 min-w-0 overflow-hidden ${
+                            isClickedWave ? 'sidebar-nav-click-shrink-wave' : ''
+                          }`}
+                        >
                           <img
                             src={item.isActive ? item.iconNoir : item.iconGris}
                             alt={item.label}
@@ -11440,7 +11450,7 @@ export default function App() {
                           />
                           {!isSidebarCollapsed && (
                             <span
-                              className="truncate whitespace-nowrap"
+                              className="sidebar-nav-text-wave truncate whitespace-nowrap"
                               style={{
                                 fontSize: '18px',
                                 color: item.isActive ? '#000000' : '#50617a',
@@ -11521,7 +11531,7 @@ export default function App() {
                       left: '92px',
                       top: `${hoveredSidebarItem.centerY}px`,
                       transform: 'translateY(-50%)',
-                      backgroundColor: '#000000',
+                      backgroundColor: '#0f172a',
                       color: '#ffffff',
                       borderRadius: '9999px',
                       padding: '6px 16px',
@@ -11687,9 +11697,9 @@ export default function App() {
             ];
 
             const customButtonStyle: React.CSSProperties = {
-              backgroundColor: '#000',
+              backgroundColor: '#0f172a',
               color: '#fff',
-              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+              boxShadow: 'none',
               borderRadius: '12px',
               fontSize: '18px',
               padding: '9px 19px',
@@ -11710,9 +11720,9 @@ export default function App() {
             };
 
             const rowActionButtonStyle: React.CSSProperties = {
-              backgroundColor: '#000',
+              backgroundColor: '#0f172a',
               color: '#fff',
-              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+              boxShadow: 'none',
               borderRadius: '10px',
               fontSize: '16px',
               padding: '8px 16px',
@@ -12148,7 +12158,7 @@ export default function App() {
                           onClick={() => setFsmPlanningSidePaneOpen(true)}
                           id="btn-fsm-plannings"
                           style={{
-                            backgroundColor: '#000000',
+                            backgroundColor: '#0f172a',
                             color: '#ffffff',
                             borderRadius: '13px',
                             padding: '9px 18px',
@@ -12156,7 +12166,7 @@ export default function App() {
                             fontWeight: '600',
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                             cursor: 'pointer',
-                            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+                            boxShadow: 'none',
                           }}
                           className="hover:bg-neutral-800 transition-colors"
                         >
@@ -12177,7 +12187,7 @@ export default function App() {
                               onClick={() => setIsFsmFilterSidePaneOpen(true)}
                               id="btn-fsm-filtres"
                               style={{
-                                backgroundColor: '#000000',
+                                backgroundColor: '#0f172a',
                                 color: '#ffffff',
                                 borderRadius: '13px',
                                 padding: '9px 18px',
@@ -12185,7 +12195,7 @@ export default function App() {
                                 fontWeight: '600',
                                 fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                                 cursor: 'pointer',
-                                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+                                boxShadow: 'none',
                                 border: 'none',
                                 position: 'relative',
                                 display: 'inline-flex',
@@ -12223,7 +12233,7 @@ export default function App() {
                           onClick={() => setIsFsmTeamPaneOpen(true)}
                           id="btn-fsm-team-settings"
                           style={{
-                            backgroundColor: '#000000',
+                            backgroundColor: '#0f172a',
                             color: '#ffffff',
                             borderRadius: '13px',
                             padding: '9px 18px',
@@ -12231,7 +12241,7 @@ export default function App() {
                             fontWeight: '600',
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                             cursor: 'pointer',
-                            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.12)',
+                            boxShadow: 'none',
                             border: 'none',
                           }}
                           className="hover:bg-neutral-800 transition-colors"
@@ -12304,7 +12314,7 @@ export default function App() {
                           onClick={bulkMoveFsmMissionsToATrier}
                           id="btn-bulk-a-trier"
                           style={{
-                            backgroundColor: '#000000',
+                            backgroundColor: '#0f172a',
                             color: '#ffffff',
                             border: '1px solid #000000',
                             borderRadius: '13px',
@@ -12332,7 +12342,7 @@ export default function App() {
                             onClick={() => setIsFsmBulkTourDropdownOpen(!isFsmBulkTourDropdownOpen)}
                             id="btn-bulk-assign-tour"
                             style={{
-                              backgroundColor: '#000000',
+                              backgroundColor: '#0f172a',
                               color: '#ffffff',
                               border: '1px solid #000000',
                               borderRadius: '13px',
@@ -12499,7 +12509,7 @@ export default function App() {
                           left: '16px',
                           right: '16px',
                           width: 'calc(100% - 32px)',
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           color: '#ffffff',
                           fontSize: '18px',
                           fontWeight: '600',
@@ -12507,7 +12517,7 @@ export default function App() {
                           borderRadius: '12px',
                           cursor: 'pointer',
                           zIndex: 50,
-                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)',
+                          boxShadow: 'none',
                           border: 'none',
                         }}
                         className="hover:bg-neutral-800 transition-colors"
@@ -12763,7 +12773,7 @@ export default function App() {
                           left: '16px',
                           right: '16px',
                           width: 'calc(100% - 32px)',
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           color: '#ffffff',
                           fontSize: '18px',
                           fontWeight: '600',
@@ -12771,7 +12781,7 @@ export default function App() {
                           borderRadius: '12px',
                           cursor: 'pointer',
                           zIndex: 50,
-                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)',
+                          boxShadow: 'none',
                           border: 'none',
                         }}
                         className="hover:bg-neutral-800 transition-colors"
@@ -12870,7 +12880,7 @@ export default function App() {
                                             padding: '8px 18px',
                                             fontSize: '16px',
                                             fontWeight: isSelected ? '600' : '400',
-                                            backgroundColor: isSelected ? '#000000' : '#ffffff',
+                                            backgroundColor: isSelected ? '#0f172a' : '#ffffff',
                                             color: isSelected ? '#ffffff' : '#000000',
                                             border: isSelected ? '1px solid #000000' : '1px solid #dedede',
                                             cursor: 'pointer',
@@ -12918,7 +12928,7 @@ export default function App() {
                                             padding: '8px 18px',
                                             fontSize: '16px',
                                             fontWeight: isSelected ? '600' : '400',
-                                            backgroundColor: isSelected ? '#000000' : '#ffffff',
+                                            backgroundColor: isSelected ? '#0f172a' : '#ffffff',
                                             color: isSelected ? '#ffffff' : '#000000',
                                             border: isSelected ? '1px solid #000000' : '1px solid #dedede',
                                             cursor: 'pointer',
@@ -12956,7 +12966,7 @@ export default function App() {
                                         padding: '8px 18px',
                                         fontSize: '16px',
                                         fontWeight: isSelected ? '600' : '400',
-                                        backgroundColor: isSelected ? '#000000' : '#ffffff',
+                                        backgroundColor: isSelected ? '#0f172a' : '#ffffff',
                                         color: isSelected ? '#ffffff' : '#000000',
                                         border: isSelected ? '1px solid #000000' : '1px solid #dedede',
                                         cursor: 'pointer',
@@ -13016,7 +13026,7 @@ export default function App() {
                                       type="button"
                                       onClick={() => handleEditTeamWorkGroup(g)}
                                       style={{
-                                        backgroundColor: '#000000',
+                                        backgroundColor: '#0f172a',
                                         color: '#ffffff',
                                         borderRadius: '11px',
                                         padding: '7px 16px',
@@ -13115,7 +13125,7 @@ export default function App() {
                             onClick={() => setIsFsmTeamPaneOpen(false)}
                             style={{
                               width: '100%',
-                              backgroundColor: '#000000',
+                              backgroundColor: '#0f172a',
                               color: '#ffffff',
                               fontSize: '18px',
                               fontWeight: '600',
@@ -13123,7 +13133,7 @@ export default function App() {
                               borderRadius: '12px',
                               cursor: 'pointer',
                               border: 'none',
-                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                              boxShadow: 'none',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                             }}
                             className="hover:opacity-90 transition-all"
@@ -13216,7 +13226,7 @@ export default function App() {
                               id="btn-fsm-month-stats"
                               className="inline-flex items-center justify-center text-center select-none hover:opacity-90 active:scale-95 transition-all"
                               style={{
-                                backgroundColor: '#000000',
+                                backgroundColor: '#0f172a',
                                 border: 'none',
                                 borderRadius: '13px',
                                 padding: '9px 18px',
@@ -13912,7 +13922,7 @@ export default function App() {
                                                       fontSize: '14px',
                                                       padding: '4.5px 15px',
                                                       border: 'none',
-                                                      background: '#000000',
+                                                      background: '#0f172a',
                                                       cursor: 'default'
                                                     }}
                                                     className="inline-flex items-center rounded-full font-sans font-medium"
@@ -13938,7 +13948,7 @@ export default function App() {
                                                       fontSize: '14px',
                                                       padding: '4.5px 15px',
                                                       border: 'none',
-                                                      background: '#000000',
+                                                      background: '#0f172a',
                                                       cursor: 'default'
                                                     }}
                                                     className="inline-flex items-center rounded-full font-sans font-medium"
@@ -14799,7 +14809,7 @@ export default function App() {
                                                     alert("Mission transférée avec succès !");
                                                   }}
                                                   style={{
-                                                    backgroundColor: '#000000',
+                                                    backgroundColor: '#0f172a',
                                                     color: '#ffffff',
                                                     padding: '12px 18px',
                                                     borderRadius: '13px',
@@ -15998,7 +16008,7 @@ export default function App() {
                                                     fontSize: '14px',
                                                     padding: '4.5px 15px',
                                                     border: 'none',
-                                                    background: '#000000',
+                                                    background: '#0f172a',
                                                     cursor: 'default'
                                                   }}
                                                   className="inline-flex items-center rounded-full font-sans font-medium"
@@ -16024,7 +16034,7 @@ export default function App() {
                                                     fontSize: '14px',
                                                     padding: '4.5px 15px',
                                                     border: 'none',
-                                                    background: '#000000',
+                                                    background: '#0f172a',
                                                     cursor: 'default'
                                                   }}
                                                   className="inline-flex items-center rounded-full font-sans font-medium"
@@ -17166,9 +17176,9 @@ export default function App() {
           {/* ======================================= */}
           {activeTab === 'gmao' && (() => {
             const customButtonStyle: React.CSSProperties = {
-              backgroundColor: '#000',
+              backgroundColor: '#0f172a',
               color: '#fff',
-              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+              boxShadow: 'none',
               borderRadius: '12px',
               fontSize: '18px',
               padding: '9px 19px',
@@ -17183,9 +17193,9 @@ export default function App() {
             };
 
             const rowActionButtonStyle: React.CSSProperties = {
-              backgroundColor: '#000',
+              backgroundColor: '#0f172a',
               color: '#fff',
-              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+              boxShadow: 'none',
               borderRadius: '10px',
               fontSize: '18px',
               padding: '9px 19px',
@@ -17502,7 +17512,7 @@ export default function App() {
 
             const cancelFiltersButtonStyle: React.CSSProperties = {
               ...rowActionButtonStyle,
-              backgroundColor: '#000000',
+              backgroundColor: '#0f172a',
               color: '#ffffff',
               width: '100%',
               borderRadius: '13px',
@@ -17512,7 +17522,7 @@ export default function App() {
 
             const applyFiltersButtonStyle: React.CSSProperties = {
               ...rowActionButtonStyle,
-              backgroundColor: '#000000',
+              backgroundColor: '#0f172a',
               color: '#ffffff',
               width: '100%',
               borderRadius: '13px',
@@ -18026,7 +18036,7 @@ export default function App() {
                         }}
                         className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 inline-flex items-center justify-center text-center whitespace-nowrap"
                         style={{
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           color: '#ffffff',
                           fontSize: '18px',
                           borderRadius: '13px',
@@ -18048,7 +18058,7 @@ export default function App() {
                         }}
                         className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 inline-flex items-center justify-center text-center whitespace-nowrap"
                         style={{
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           color: '#ffffff',
                           fontSize: '18px',
                           borderRadius: '13px',
@@ -18250,7 +18260,7 @@ export default function App() {
                               ...rowActionButtonStyle,
                               opacity: isDisabled ? 0.35 : 1,
                               cursor: isDisabled ? 'not-allowed' : 'pointer',
-                              backgroundColor: isDisabled ? '#cbd5e1' : '#000000',
+                              backgroundColor: isDisabled ? '#cbd5e1' : '#0f172a',
                               color: isDisabled ? '#64748b' : '#ffffff',
                               boxShadow: isDisabled ? 'none' : rowActionButtonStyle.boxShadow,
                               border: 'none',
@@ -18904,7 +18914,7 @@ export default function App() {
                         fontSize: '18px',
                         borderRadius: '13px',
                         boxShadow: 'none',
-                        backgroundColor: '#000000',
+                        backgroundColor: '#0f172a',
                         borderColor: '#000000',
                         borderWidth: '1px',
                         borderStyle: 'solid',
@@ -18916,7 +18926,7 @@ export default function App() {
                       }}
                     >
                       {Array.from({ length: totalGmaoPages }, (_, i) => i + 1).map((p) => (
-                        <option key={p} value={p} style={{ backgroundColor: '#000000', color: '#ffffff', textAlign: 'center' }}>
+                        <option key={p} value={p} style={{ backgroundColor: '#0f172a', color: '#ffffff', textAlign: 'center' }}>
                           Page {p}
                         </option>
                       ))}
@@ -19201,7 +19211,7 @@ export default function App() {
                             type="button"
                             onClick={() => setManagingReportId(null)}
                             style={{
-                              backgroundColor: '#000000',
+                              backgroundColor: '#0f172a',
                               color: '#ffffff',
                               fontSize: '18px',
                               fontWeight: '600',
@@ -19209,7 +19219,7 @@ export default function App() {
                               height: '48px',
                               border: 'none',
                               cursor: 'pointer',
-                              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.18)'
+                              boxShadow: 'none'
                             }}
                             className="flex-1 py-3 px-4 hover:bg-slate-800 transition-all flex items-center justify-center font-sans"
                           >
@@ -19536,7 +19546,7 @@ export default function App() {
                           setGmaoCurrentPage(1);
                         }}
                         style={{
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           color: '#ffffff',
                           borderRadius: '13px',
                           fontSize: '18px',
@@ -19545,7 +19555,7 @@ export default function App() {
                           border: 'none',
                           cursor: 'pointer',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                          boxShadow: 'none',
                         }}
                         className="flex-1 text-center cursor-pointer animate-none"
                       >
@@ -19847,7 +19857,7 @@ export default function App() {
                                     type="button"
                                     onClick={() => handleDeleteDevisRequest(r.id)}
                                     style={{
-                                      backgroundColor: '#000000',
+                                      backgroundColor: '#0f172a',
                                       color: '#ffffff',
                                       borderRadius: '12px',
                                       fontSize: '18px',
@@ -19873,7 +19883,7 @@ export default function App() {
                                     setIsGmaoDevisPaneOpen(false);
                                   }}
                                   style={{
-                                    backgroundColor: '#000000',
+                                    backgroundColor: '#0f172a',
                                     color: '#ffffff',
                                     borderRadius: '12px',
                                     fontSize: '18px',
@@ -19882,7 +19892,7 @@ export default function App() {
                                     border: 'none',
                                     cursor: 'pointer',
                                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                                    boxShadow: 'none',
                                   }}
                                   className="cursor-pointer hover:opacity-90 active:scale-95 transition-all"
                                 >
@@ -19925,7 +19935,7 @@ export default function App() {
                         type="button"
                         onClick={() => setIsGmaoDevisPaneOpen(false)}
                         style={{
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           color: '#ffffff',
                           fontSize: '18px',
                           fontWeight: 'bold',
@@ -19935,7 +19945,7 @@ export default function App() {
                           border: 'none',
                           cursor: 'pointer',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+                          boxShadow: 'none',
                         }}
                         className="pointer-events-auto text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all shadow-xl"
                       >
@@ -19992,9 +20002,9 @@ export default function App() {
           {/* ======================================= */}
           {activeTab === 'devis' && (() => {
             const customButtonStyle: React.CSSProperties = {
-              backgroundColor: '#000',
+              backgroundColor: '#0f172a',
               color: '#fff',
-              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+              boxShadow: 'none',
               borderRadius: '12px',
               fontSize: '18px',
               padding: '9px 19px',
@@ -20009,9 +20019,9 @@ export default function App() {
             };
 
             const rowActionButtonStyle: React.CSSProperties = {
-              backgroundColor: '#000',
+              backgroundColor: '#0f172a',
               color: '#fff',
-              boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+              boxShadow: 'none',
               borderRadius: '10px',
               fontSize: '15px',
               padding: '8px 16px',
@@ -20227,7 +20237,7 @@ export default function App() {
                               onClick={handlePennylaneGlobalSync}
                               style={{
                                 ...customButtonStyle,
-                                backgroundColor: '#000000',
+                                backgroundColor: '#0f172a',
                                 color: '#ffffff',
                               }}
                               className="font-sans"
@@ -20363,7 +20373,7 @@ export default function App() {
                                 const clientDisplay = clientName.length > 20 ? clientName.substring(0, 20) + '(...)' : clientName;
                                 const rowActionButton18Style: React.CSSProperties = {
                                   ...rowActionButtonStyle,
-                                  backgroundColor: '#000000',
+                                  backgroundColor: '#0f172a',
                                   color: '#ffffff',
                                   fontSize: '18px',
                                   padding: '9px 19px',
@@ -20458,7 +20468,7 @@ export default function App() {
                                              }
                                            }}
                                            style={{
-                                             backgroundColor: '#000000',
+                                             backgroundColor: '#0f172a',
                                              color: '#ffffff',
                                              fontSize: '18px',
                                              padding: '9px 19px',
@@ -20475,13 +20485,13 @@ export default function App() {
                                            }}
                                            className="transformer-select cursor-pointer font-sans"
                                          >
-                                           <option value="" disabled hidden style={{ backgroundColor: '#000000', color: '#ffffff' }}>
+                                           <option value="" disabled hidden style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>
                                              {t("Transformer")}
                                            </option>
                                            {(['Devis', 'Facture', 'Bon de commande', 'Bon de livraison'] as const)
                                              .filter(tType => tType !== doc.type)
                                              .map(tType => (
-                                               <option key={tType} value={tType} style={{ backgroundColor: '#ffffff', color: '#000000' }}>
+                                               <option key={tType} value={tType} style={{ backgroundColor: '#ffffff', color: '#0f172a' }}>
                                                  {tType}
                                                </option>
                                              ))
@@ -20501,7 +20511,7 @@ export default function App() {
                                             onClick={() => triggerPennylaneSync(doc)}
                                             style={{
                                               ...rowActionButton18Style,
-                                              backgroundColor: '#000000',
+                                              backgroundColor: '#0f172a',
                                               color: '#ffffff',
                                               border: 'none',
                                             }}

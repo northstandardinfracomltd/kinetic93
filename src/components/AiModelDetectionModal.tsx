@@ -198,7 +198,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
       <div className="relative w-full max-w-md h-fit bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col" id="ai-model-detector-modal-content">
         
         {/* Camera Viewport / Visual Feedback Header */}
-        <div className="relative bg-black flex flex-col items-center justify-center h-64 overflow-hidden" style={{ backgroundColor: '#000' }}>
+        <div className="relative bg-black flex flex-col items-center justify-center h-64 overflow-hidden" style={{ backgroundColor: '#0f172a' }}>
           
           {/* Main video stream */}
           {!detectedModel && (
@@ -212,7 +212,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white bg-black z-10 p-6" style={{ backgroundColor: '#000' }}>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white bg-black z-10 p-6" style={{ backgroundColor: '#0f172a' }}>
                   {!errorMsg ? (
                     <span className="text-[14px] text-white font-sans font-normal">
                       Recherche de caméra en cours...
@@ -288,7 +288,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
                 type="button"
                 onClick={onClose}
                 style={{
-                  backgroundColor: '#000000',
+                  backgroundColor: '#0f172a',
                   color: '#ffffff',
                   borderRadius: '13px',
                   fontSize: '18px',
@@ -359,7 +359,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
                 type="button"
                 onClick={onClose}
                 style={{
-                  backgroundColor: '#000000',
+                  backgroundColor: '#0f172a',
                   color: '#ffffff',
                   borderRadius: '13px',
                   fontSize: '18px',
@@ -406,7 +406,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
                 type="button"
                 onClick={handleRetry}
                 style={{
-                  backgroundColor: '#000000',
+                  backgroundColor: '#0f172a',
                   color: '#ffffff',
                   borderRadius: '13px',
                   fontSize: '18px',

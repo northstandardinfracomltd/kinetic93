@@ -1447,7 +1447,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
   };
 
   const actionButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000',
+    backgroundColor: '#0f172a',
     color: '#fff',
     borderRadius: '13px',
     fontSize: '18px',
@@ -1697,7 +1697,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                           id={`btn-download-csv-${row.techName}-${row.year}-${row.monthIndex}`}
                           onClick={() => handleDownloadCSV(row.techName, row.year, row.monthIndex)}
                           style={actionButtonStyle}
-                          className="hover:opacity-90 active:scale-95 font-sans bg-black text-white rounded"
+                          className="hover:opacity-90 active:scale-95 font-sans bg-[#0f172a] text-white rounded"
                         >
                           {t("Télécharger CSV")}
                         </button>
@@ -1706,7 +1706,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                           id={`btn-download-pdf-${row.techName}-${row.year}-${row.monthIndex}`}
                           onClick={() => handleDownloadPDF(row.techName, row.year, row.monthIndex)}
                           style={actionButtonStyle}
-                          className="hover:opacity-90 active:scale-95 font-sans bg-black text-white rounded"
+                          className="hover:opacity-90 active:scale-95 font-sans bg-[#0f172a] text-white rounded"
                         >
                           {t("Télécharger PDF")}
                         </button>
@@ -2093,7 +2093,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                             borderRadius: '13px',
                             fontSize: '16px',
                             backgroundColor: 'rgb(185, 28, 28)',
-                            boxShadow: 'rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset',
+                            boxShadow: 'none',
                             color: 'rgb(255, 255, 255)',
                             padding: '6px 16px',
                             border: 'none',
@@ -2168,7 +2168,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                                 }}
                                 className={`font-semibold border transition-all select-none font-sans cursor-pointer ${
                                   isSelected
-                                    ? 'bg-black text-white shadow-sm'
+                                    ? 'bg-[#0f172a] text-white shadow-sm'
                                     : 'bg-white text-black hover:border-black'
                                 }`}
                               >
@@ -2336,7 +2336,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   onClick={handleAddParam}
                   disabled={draftSettings.length >= 5}
                   style={{
-                    backgroundColor: '#000000',
+                    backgroundColor: '#0f172a',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',
@@ -2378,7 +2378,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   type="button"
                   onClick={closeSettingsPane}
                   style={{
-                    backgroundColor: '#000000',
+                    backgroundColor: '#0f172a',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',

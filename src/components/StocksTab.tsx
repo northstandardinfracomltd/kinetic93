@@ -1249,9 +1249,9 @@ export default function StocksTab({
 
   // Harmonized styling constants
   const customButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000',
+    backgroundColor: '#0f172a',
     color: '#fff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '12px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -1266,9 +1266,9 @@ export default function StocksTab({
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
-    backgroundColor: '#000',
+    backgroundColor: '#0f172a',
     color: '#fff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '10px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -1426,8 +1426,8 @@ export default function StocksTab({
             <div 
               className="w-full text-white text-center font-medium px-4 py-3 flex items-center justify-center gap-2 transition-opacity hover:opacity-95"
               style={{
-                backgroundColor: '#000000',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                backgroundColor: '#0f172a',
+                boxShadow: 'none',
                 borderRadius: '0px',
                 fontSize: '16px',
                 fontFamily: "DefibeoMain, Civilprom, sans-serif"
@@ -1953,7 +1953,7 @@ export default function StocksTab({
                   id="stocks-form-info-dismiss-btn"
                   className="px-4 py-2 text-white font-semibold transition-all whitespace-nowrap cursor-pointer"
                   style={{
-                    backgroundColor: '#000',
+                    backgroundColor: '#0f172a',
                     color: '#ffffff',
                     fontSize: '18px',
                     boxShadow: 'none',
@@ -2337,7 +2337,7 @@ export default function StocksTab({
                       type="button"
                       onClick={() => setShowMvForm(!showMvForm)}
                       style={{
-                        backgroundColor: '#000000',
+                        backgroundColor: '#0f172a',
                         color: '#ffffff',
                         padding: '10px 20px',
                         fontSize: '18px',
@@ -2613,7 +2613,7 @@ export default function StocksTab({
                         type="button"
                         onClick={() => setShowMvForm(false)}
                         style={{
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           color: '#ffffff',
                           padding: '10px 20px',
                           fontSize: '18px',
@@ -2627,7 +2627,7 @@ export default function StocksTab({
                         type="button"
                         onClick={handleAddMovementInline}
                         style={{
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           color: '#ffffff',
                           padding: '10px 20px',
                           fontSize: '18px',
@@ -2759,7 +2759,7 @@ export default function StocksTab({
                                   disabled={mv.isCanceled || mv.type === 'Annulation'}
                                   onClick={() => handleCancelMovement(mv.id)}
                                   style={{
-                                    backgroundColor: (mv.isCanceled || mv.type === 'Annulation') ? '#e2e8f0' : '#000000',
+                                    backgroundColor: (mv.isCanceled || mv.type === 'Annulation') ? '#e2e8f0' : '#0f172a',
                                     color: (mv.isCanceled || mv.type === 'Annulation') ? '#94a3b8' : '#ffffff',
                                     padding: '8px 16px',
                                     fontSize: '16px',
@@ -2804,7 +2804,7 @@ export default function StocksTab({
                           value={selectedSituationFilter}
                           onChange={(e) => setSelectedSituationFilter(e.target.value)}
                           style={{
-                            backgroundColor: '#000000',
+                            backgroundColor: '#0f172a',
                             color: '#ffffff',
                             padding: '10px 20px',
                             fontSize: '18px',
@@ -2816,18 +2816,18 @@ export default function StocksTab({
                           className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0 text-white"
                           title="Filtrer par situation"
                         >
-                          <option value="Toutes situations" style={{ backgroundColor: '#000000', color: '#ffffff' }}>Toutes situations</option>
-                          <option value="Disponible" style={{ backgroundColor: '#000000', color: '#ffffff' }}>Disponible</option>
-                          <option value="Utilisé" style={{ backgroundColor: '#000000', color: '#ffffff' }}>Utilisé</option>
-                          <option value="Indisponible" style={{ backgroundColor: '#000000', color: '#ffffff' }}>Indisponible</option>
-                          <option value="Signalé manquant" style={{ backgroundColor: '#000000', color: '#ffffff' }}>Signalé manquant</option>
-                          <option value="Prêté" style={{ backgroundColor: '#000000', color: '#ffffff' }}>Prêté</option>
+                          <option value="Toutes situations" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Toutes situations</option>
+                          <option value="Disponible" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Disponible</option>
+                          <option value="Utilisé" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Utilisé</option>
+                          <option value="Indisponible" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Indisponible</option>
+                          <option value="Signalé manquant" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Signalé manquant</option>
+                          <option value="Prêté" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Prêté</option>
                         </select>
                         <button
                           type="button"
                           onClick={() => setShowTraceabilityForm(!showTraceabilityForm)}
                           style={{
-                            backgroundColor: '#000000',
+                            backgroundColor: '#0f172a',
                             color: '#ffffff',
                             padding: '10px 20px',
                             fontSize: '18px',
@@ -2928,7 +2928,7 @@ export default function StocksTab({
                             type="button"
                             onClick={() => setShowTraceabilityForm(false)}
                             style={{
-                              backgroundColor: '#000000',
+                              backgroundColor: '#0f172a',
                               color: '#ffffff',
                               padding: '10px 20px',
                               fontSize: '18px',
@@ -2942,7 +2942,7 @@ export default function StocksTab({
                             type="button"
                             onClick={handleAddTraceabilityInline}
                             style={{
-                              backgroundColor: '#000000',
+                              backgroundColor: '#0f172a',
                               color: '#ffffff',
                               padding: '10px 20px',
                               fontSize: '18px',
@@ -3159,8 +3159,8 @@ export default function StocksTab({
                                   return (
                                     <React.Fragment key={locName}>
                                       {/* Intercalaire (Divider Row) */}
-                                      <tr className="bg-black select-none" style={{ borderBottom: '1px solid #000000', borderTop: '1px solid #000000' }}>
-                                        <td colSpan={isDefibrillator ? 12 : 11} className="px-4 py-3 bg-black">
+                                      <tr className="bg-[#0f172a] select-none" style={{ borderBottom: '1px solid #000000', borderTop: '1px solid #000000' }}>
+                                        <td colSpan={isDefibrillator ? 12 : 11} className="px-4 py-3 bg-[#0f172a]">
                                           <div className="flex items-center gap-6 font-sans text-[15px] font-bold text-white bg-transparent">
                                             <span className="bg-transparent">
                                               Emplacement : {getLocationCustomName(locName)}
@@ -3218,7 +3218,7 @@ export default function StocksTab({
                                                   disabled={trace.volume === 0}
                                                   onClick={() => handleExtractDeployDefib(trace, idx)}
                                                   style={{
-                                                    backgroundColor: trace.volume === 0 ? '#94a3b8' : '#000000',
+                                                    backgroundColor: trace.volume === 0 ? '#94a3b8' : '#0f172a',
                                                     color: '#ffffff',
                                                     padding: '8px 16px',
                                                     fontSize: '18px',
@@ -3245,7 +3245,7 @@ export default function StocksTab({
                                                 type="button"
                                                 onClick={() => downloadBarcodeSVG(trace.lotOrSerial)}
                                                 style={{
-                                                  backgroundColor: '#000000',
+                                                  backgroundColor: '#0f172a',
                                                   color: '#ffffff',
                                                   padding: '8px 16px',
                                                   fontSize: '18px',
@@ -3402,7 +3402,7 @@ export default function StocksTab({
                                                 setTraceabilities(traceabilities.filter((_, i) => i !== idx));
                                               }}
                                               style={{
-                                                backgroundColor: '#000000',
+                                                backgroundColor: '#0f172a',
                                                 color: '#ffffff',
                                                 padding: '8px 16px',
                                                 fontSize: '18px',
@@ -3575,7 +3575,7 @@ export default function StocksTab({
                       }}
                       style={{
                         width: '50%',
-                        backgroundColor: '#000000',
+                        backgroundColor: '#0f172a',
                         color: '#ffffff',
                         borderRadius: '10px',
                         padding: '10px 0',
@@ -3600,7 +3600,7 @@ export default function StocksTab({
                 onClick={() => setIsNotifDrawerOpen(false)}
                 style={{
                   width: '100%',
-                  backgroundColor: '#000000',
+                  backgroundColor: '#0f172a',
                   color: '#ffffff',
                   fontSize: '18px',
                   fontWeight: '600',
@@ -3608,7 +3608,7 @@ export default function StocksTab({
                   borderRadius: '12px',
                   cursor: 'pointer',
                   border: 'none',
-                  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+                  boxShadow: 'none',
                 }}
                 className="hover:bg-neutral-800 transition-colors"
               >

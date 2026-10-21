@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertCircle, ShieldCheck, CheckCircle, Send, CreditCard } from 'lucide-react';
 import { 
   registerNewTenant, 
@@ -487,6 +487,37 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   // Connection & Creation language selector state
   const [selectedLang, setSelectedLang] = useState(() => localStorage.getItem('defib_lang') || 'Français');
+
+  const welcomeWords: Record<string, string> = {
+    'Français': 'Bienvenue',
+    'Français, France': 'Bienvenue',
+    'English': 'Welcome',
+    'Deutsch': 'Willkommen',
+    'Português': 'Bem-vindo',
+    'Español': 'Bienvenido',
+  };
+  const targetWelcomeWord = welcomeWords[selectedLang] || 'Bienvenue';
+  const [welcomeCharIndex, setWelcomeCharIndex] = useState(0);
+  const [hasFinishedInitialTyping, setHasFinishedInitialTyping] = useState(false);
+
+  useEffect(() => {
+    let i = 0;
+    const word = welcomeWords[selectedLang] || 'Bienvenue';
+    const interval = setInterval(() => {
+      i += 1;
+      setWelcomeCharIndex(i);
+      if (i >= word.length) {
+        clearInterval(interval);
+        setHasFinishedInitialTyping(true);
+      }
+    }, 85);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const displayedWelcome = hasFinishedInitialTyping
+    ? targetWelcomeWord
+    : targetWelcomeWord.slice(0, welcomeCharIndex);
 
   // Toggle & Subscriber Creation Form states
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
@@ -1175,7 +1206,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         }
         #connexion-lang-picker select {
           width: auto !important;
-          background: #732c78 !important;
+          background: #0f172a !important;
           border: none !important;
           border-radius: 9999px !important;
           padding: 8px 10px !important;
@@ -1197,14 +1228,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           text-align-last: center !important;
         }
         #connexion-lang-picker select:hover {
-          background: #732c78 !important;
+          background: #0f172a !important;
           border: none !important;
         }
         #connexion-lang-picker select::-ms-expand {
           display: none !important;
         }
         #connexion-lang-picker select option {
-          background-color: #36093a !important;
+          background-color: #0f172a !important;
           color: #ffffff !important;
         }
         #register-lang-dropdown {
@@ -1224,7 +1255,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         }
         
         #auth-main-card input, #auth-main-card select, #popup-main-card input, #popup-main-card select, #popup-main-card textarea {
-          border: 1px solid #dedede !important;
+          border: 1px solid #dce1ea !important;
           border-radius: 13px !important;
           padding: 14px !important;
           font-size: 18px !important;
@@ -1234,6 +1265,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           outline: none !important;
           transition: all 0s !important;
           font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
+        }
+
+        #login-form input, #request-env-form input {
+          text-align: center !important;
         }
         
         #popup-main-card textarea {
@@ -1245,35 +1280,47 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         #auth-main-card input:focus, #auth-main-card select:focus,
         #popup-main-card input:hover, #popup-main-card select:hover, #popup-main-card textarea:hover,
         #popup-main-card input:focus, #popup-main-card select:focus, #popup-main-card textarea:focus {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
         
         #auth-main-card input::placeholder, #popup-main-card input::placeholder, #popup-main-card textarea::placeholder {
           font-weight: 100 !important;
-          color: #747474 !important;
+          color: #becadb !important;
           font-size: 18px !important;
           font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
           opacity: 1 !important;
         }
+        #login-form input::placeholder, #request-env-form input::placeholder {
+          text-align: center !important;
+        }
         #auth-main-card input::-webkit-input-placeholder, #popup-main-card input::-webkit-input-placeholder, #popup-main-card textarea::-webkit-input-placeholder {
           font-weight: 100 !important;
-          color: #747474 !important;
+          color: #becadb !important;
           font-size: 18px !important;
           font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
+        }
+        #login-form input::-webkit-input-placeholder, #request-env-form input::-webkit-input-placeholder {
+          text-align: center !important;
         }
         #auth-main-card input::-moz-placeholder, #popup-main-card input::-moz-placeholder, #popup-main-card textarea::-moz-placeholder {
           font-weight: 100 !important;
-          color: #747474 !important;
+          color: #becadb !important;
           font-size: 18px !important;
           font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
         }
+        #login-form input::-moz-placeholder, #request-env-form input::-moz-placeholder {
+          text-align: center !important;
+        }
         #auth-main-card input:-ms-input-placeholder, #popup-main-card input:-ms-input-placeholder, #popup-main-card textarea:-ms-input-placeholder {
           font-weight: 100 !important;
-          color: #747474 !important;
+          color: #becadb !important;
           font-size: 18px !important;
           font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
+        }
+        #login-form input:-ms-input-placeholder, #request-env-form input:-ms-input-placeholder {
+          text-align: center !important;
         }
         
         #auth-main-card label, #popup-main-card label {
@@ -1328,16 +1375,21 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center z-10">
-        <img
-          src="https://civilprom.s3.eu-north-1.amazonaws.com/DefibeoLogo.svg"
-          alt="Défibeo"
-          className="mx-auto object-contain font-sans"
-          style={{ maxHeight: '140px', width: '100%' }}
-          referrerPolicy="no-referrer"
-          id="login-main-logo"
-        />
+        <div
+          id="login-welcome-heading"
+          className="mx-auto text-center text-white font-sans select-none mb-2 flex items-center justify-center"
+          style={{
+            fontSize: '26px',
+            color: '#ffffff',
+            textAlign: 'center',
+            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+            minHeight: '38px',
+          }}
+        >
+          {displayedWelcome}
+        </div>
 
-        {/* Language selector below the logo */}
+        {/* Language selector below the welcome text */}
         <div className="mt-1 flex justify-center" id="connexion-lang-picker">
           <select
             value={selectedLang}
@@ -1349,7 +1401,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             }}
             className="font-sans text-white rounded-lg cursor-pointer focus:outline-hidden"
             style={{
-              background: '#732c78',
+              background: '#0f172a',
               border: 'none',
               padding: '8px 10px',
             }}
@@ -1367,17 +1419,21 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         
         {/* Connection/Creation Toggle */}
         <div className="mb-6">
-          <div className="flex w-full p-1 bg-black/25 backdrop-blur-md rounded-[14px] border border-white/10" id="auth-toggle-capsule">
+          <div className="flex w-full p-1 bg-black/25 backdrop-blur-md rounded-[14px]" style={{ border: 'none' }} id="auth-toggle-capsule">
             <button
               type="button"
               onClick={() => {
                 setActiveTab('login');
               }}
-              style={{ fontFamily: "DefibeoMain, Civilprom, sans-serif" }}
+              style={{
+                fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                color: activeTab === 'login' ? 'rgb(15 23 42)' : '#fff',
+                boxShadow: 'none',
+              }}
               className={`flex-1 text-center py-2.5 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
                 activeTab === 'login'
-                  ? 'bg-white text-[#36093a] shadow-xs'
-                  : 'text-white/85 hover:text-white'
+                  ? 'bg-white text-[#0f172a]'
+                  : 'text-white hover:text-white'
               }`}
             >
               {t.login}
@@ -1387,11 +1443,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               onClick={() => {
                 setActiveTab('register');
               }}
-              style={{ fontFamily: "DefibeoMain, Civilprom, sans-serif" }}
+              style={{
+                fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                color: activeTab === 'register' ? 'rgb(15 23 42)' : '#fff',
+                boxShadow: 'none',
+              }}
               className={`flex-1 text-center py-2.5 rounded-[12px] text-[18px] font-bold transition-all cursor-pointer ${
                 activeTab === 'register'
-                  ? 'bg-white text-[#36093a] shadow-xs'
-                  : 'text-white/85 hover:text-white'
+                  ? 'bg-white text-[#0f172a]'
+                  : 'text-white hover:text-white'
               }`}
             >
               {t.registerTab}
@@ -1494,10 +1554,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         type="button"
                         onClick={handleBackToCredentials}
                         style={{
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           color: '#fff',
                           textTransform: 'none',
-                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, inset 0 6px 12px #ffffff1f',
+                          boxShadow: 'none',
                           textDecoration: 'none',
                           borderRadius: '12px',
                           fontSize: '18px',
@@ -1519,10 +1579,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         onClick={handleResendAuthCode}
                         disabled={isSendingCode}
                         style={{
-                          backgroundColor: '#000000',
+                          backgroundColor: '#0f172a',
                           color: '#fff',
                           textTransform: 'none',
-                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, inset 0 6px 12px #ffffff1f',
+                          boxShadow: 'none',
                           textDecoration: 'none',
                           borderRadius: '12px',
                           fontSize: '18px',
@@ -1550,7 +1610,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   </label>
                   
                   {/* Role selection selector */}
-                  <div className="flex w-full p-1 bg-transparent rounded-[14px] border border-slate-200" id="role-toggle-capsule">
+                  <div className="flex w-full p-1 bg-transparent rounded-[14px]" style={{ border: '1px solid #dce1ea' }} id="role-toggle-capsule">
                     <button
                       type="button"
                       onClick={() => {
@@ -1560,9 +1620,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       style={{ 
                         fontFamily: "DefibeoMain, Civilprom, sans-serif",
                         ...(loginRole === 'admin' ? {
-                          backgroundColor: '#3556ec',
+                          backgroundColor: '#2e54ff',
                           color: '#fff',
-                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f'
+                          boxShadow: 'none'
                         } : {
                           color: '#000'
                         })
@@ -1584,9 +1644,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       style={{ 
                         fontFamily: "DefibeoMain, Civilprom, sans-serif",
                         ...(loginRole === 'client' ? {
-                          backgroundColor: '#3556ec',
+                          backgroundColor: '#2e54ff',
                           color: '#fff',
-                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f'
+                          boxShadow: 'none'
                         } : {
                           color: '#000'
                         })
@@ -1608,9 +1668,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       style={{ 
                         fontFamily: "DefibeoMain, Civilprom, sans-serif",
                         ...(loginRole === 'technicien' ? {
-                          backgroundColor: '#3556ec',
+                          backgroundColor: '#2e54ff',
                           color: '#fff',
-                          boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f'
+                          boxShadow: 'none'
                         } : {
                           color: '#000'
                         })
@@ -1644,7 +1704,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="block w-full"
+                      className="block w-full text-center"
+                      style={{ textAlign: 'center' }}
                       placeholder={t.emailPlace}
                       autoCapitalize="none"
                       autoCorrect="off"
@@ -1663,7 +1724,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="block w-full"
+                      className="block w-full text-center"
+                      style={{ textAlign: 'center' }}
                       placeholder={t.passwordPlace}
                       autoCapitalize="none"
                       autoCorrect="off"
@@ -1671,7 +1733,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     />
                   </div>
 
-                  <div className="pt-1">
+                  <div className="pt-1 flex items-center" style={{ minHeight: '32px', height: '32px' }}>
                     <button
                       type="button"
                       role="radio"
@@ -1685,21 +1747,31 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         fontWeight: 100,
                         color: '#000000',
                         outline: 'none',
+                        minHeight: '28px',
+                        lineHeight: '24px',
                       }}
                     >
                       <span
-                        className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                        className="rounded-full flex items-center justify-center shrink-0"
                         style={{
-                          border: keepLoggedIn ? '2px solid #3556ec' : '2px solid #dedede',
+                          width: '20px',
+                          height: '20px',
+                          minWidth: '20px',
+                          minHeight: '20px',
+                          boxSizing: 'border-box',
+                          border: keepLoggedIn ? '2px solid #2e54ff' : '2px solid #dce1ea',
                           backgroundColor: '#ffffff',
                         }}
                       >
-                        {keepLoggedIn && (
-                          <span
-                            className="w-2.5 h-2.5 rounded-full"
-                            style={{ backgroundColor: '#3556ec' }}
-                          />
-                        )}
+                        <span
+                          className="rounded-full block"
+                          style={{
+                            width: '10px',
+                            height: '10px',
+                            backgroundColor: '#2e54ff',
+                            opacity: keepLoggedIn ? 1 : 0,
+                          }}
+                        />
                       </span>
                       <span
                         className="font-sans"
@@ -1707,6 +1779,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                           fontSize: '18px',
                           fontWeight: 100,
                           color: '#000000',
+                          lineHeight: '24px',
                         }}
                       >
                         {(t as any).keepLoggedIn || 'Maintenir la connexion.'}
@@ -1719,10 +1792,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       type="submit"
                       disabled={isLoading}
                       style={{
-                        backgroundColor: '#3556ec',
+                        backgroundColor: '#0f172a',
                         color: '#fff',
                         textTransform: 'none',
-                        boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f',
+                        boxShadow: 'none',
                         textDecoration: 'none',
                         borderRadius: '12px',
                         fontSize: '18px',
@@ -1746,7 +1819,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       style={{
                         paddingTop: '16px',
                         fontSize: '18px',
-                        color: 'rgb(53, 86, 236)'
+                        color: '#2e54ff'
                       }}
                       id="btn-forgot-password"
                     >
@@ -1793,9 +1866,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                               }}
                               className="flex items-center gap-2 cursor-pointer"
                               style={{
-                                border: isSelected ? '2px solid rgb(53, 86, 236)' : '2px solid rgb(253, 240, 255)',
-                                backgroundColor: isSelected ? 'transparent' : 'rgb(253, 240, 255)',
-                                color: isSelected ? 'rgb(53, 86, 236)' : '#83358a',
+                                border: isSelected ? '2px solid rgb(53, 86, 236)' : '2px solid #d3e8ff',
+                                backgroundColor: isSelected ? 'transparent' : '#d3e8ff',
+                                color: isSelected ? 'rgb(53, 86, 236)' : '#2e54ff',
                                 borderRadius: '10px',
                                 padding: '8px 15px',
                                 fontSize: '18px',
@@ -1806,8 +1879,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                               <span 
                                 className="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
                                 style={{
-                                  border: isSelected ? '2px solid rgb(53, 86, 236)' : '2px solid rgb(226, 191, 232)',
-                                  backgroundColor: 'rgb(255, 255, 255)',
+                                  border: isSelected ? '2px solid rgb(53, 86, 236)' : '2px solid rgb(168 184 255)',
+                                  backgroundColor: isSelected ? 'rgb(255, 255, 255)' : 'rgb(211 232 255)',
                                   marginLeft: '-4px',
                                   transition: 'none',
                                 }}
@@ -1839,7 +1912,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         required
                         value={reqCompany}
                         onChange={(e) => setReqCompany(e.target.value)}
-                        className="block w-full"
+                        className="block w-full text-center"
+                        style={{ textAlign: 'center' }}
                         placeholder={t.companyNamePlace}
                       />
                     </div>
@@ -1858,7 +1932,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                           const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15);
                           setReqNomLogiciel(val);
                         }}
-                        className="block w-full"
+                        className="block w-full text-center"
+                        style={{ textAlign: 'center' }}
                         placeholder={t.softwareNamePlace}
                       />
                     </div>
@@ -1879,7 +1954,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                             setReqAdminEmail(val);
                           }
                         }}
-                        className="block w-full"
+                        className="block w-full text-center"
+                        style={{ textAlign: 'center' }}
                         placeholder={t.companyEmailPlace}
                       />
                     </div>
@@ -1894,7 +1970,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         required
                         value={reqCompanyPhone}
                         onChange={(e) => setReqCompanyPhone(e.target.value)}
-                        className="block w-full"
+                        className="block w-full text-center"
+                        style={{ textAlign: 'center' }}
                         placeholder={t.companyPhonePlace}
                       />
                     </div>
@@ -1916,7 +1993,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         required
                         value={reqAdminName}
                         onChange={(e) => setReqAdminName(e.target.value)}
-                        className="block w-full"
+                        className="block w-full text-center"
+                        style={{ textAlign: 'center' }}
                         placeholder={t.adminNamePlace}
                       />
                     </div>
@@ -1931,7 +2009,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         required
                         value={reqAdminEmail}
                         onChange={(e) => setReqAdminEmail(e.target.value)}
-                        className="block w-full"
+                        className="block w-full text-center"
+                        style={{ textAlign: 'center' }}
                         placeholder={t.adminEmailPlace}
                       />
                     </div>
@@ -1946,7 +2025,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         required
                         value={reqAdminPassword}
                         onChange={(e) => setReqAdminPassword(e.target.value)}
-                        className="block w-full"
+                        className="block w-full text-center"
+                        style={{ textAlign: 'center' }}
                         placeholder={t.adminPasswordPlace}
                       />
                     </div>

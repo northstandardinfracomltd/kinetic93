@@ -395,9 +395,9 @@ export default function FormationsTab({
   });
 
   const rowActionButton18Style: React.CSSProperties = {
-    backgroundColor: '#000000',
+    backgroundColor: '#0f172a',
     color: '#ffffff',
-    boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+    boxShadow: 'none',
     borderRadius: '13px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -555,7 +555,7 @@ export default function FormationsTab({
                             style={{
                               ...rowActionButton18Style,
                               width: '100%',
-                              backgroundColor: '#000000',
+                              backgroundColor: '#0f172a',
                               borderColor: '#000000',
                               color: '#ffffff',
                               opacity: !hasFsmSpreadsheet ? 0.45 : 1,

@@ -1023,7 +1023,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                 }}
                 className="w-full font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer select-none"
                 style={{
-                  backgroundColor: "#000000",
+                  backgroundColor: "#0f172a",
                   borderRadius: "13px",
                   color: "#ffffff",
                   padding: "14px 20px",
@@ -1203,7 +1203,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         {holidayName && (
                           <div className="flex flex-wrap items-center gap-2">
                             <span
-                              className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0 select-none"
+                              className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0 select-none"
                               title={`Jour férié : ${holidayName}`}
                             >
                               <span className="shrink-0 whitespace-nowrap">Jour férié :&nbsp;</span>
@@ -1245,7 +1245,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           }}
                         >
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
+                            <span className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px]">
                               Indisponible
                             </span>
                           </div>
@@ -1272,7 +1272,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                             }}
                           >
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px]">
+                              <span className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px]">
                                 {slotText}
                               </span>
                             </div>
@@ -1309,11 +1309,11 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                             {/* Gélules Créneau, Badge + Bouton Supprimer */}
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-                                <span className="px-3.5 py-1.5 rounded-full bg-black text-white font-bold text-[16px] inline-flex items-center shrink-0 whitespace-nowrap">
+                                <span className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-bold text-[16px] inline-flex items-center shrink-0 whitespace-nowrap">
                                   Événement spontané
                                 </span>
                                 <span
-                                  className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
+                                  className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
                                   title={`Créneau : ${evt.creneau}`}
                                 >
                                   <span className="shrink-0 whitespace-nowrap">Créneau :&nbsp;</span>
@@ -1530,7 +1530,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                               <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
                                 {/* Gélule 1 : Client */}
                                 <span
-                                  className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
+                                  className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
                                   title={`Client : ${clientName || 'NC'}`}
                                 >
                                   <span className="shrink-0 whitespace-nowrap">Client :&nbsp;</span>
@@ -1539,7 +1539,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
                                 {/* Gélule 2 : Créneau */}
                                 <span
-                                  className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
+                                  className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
                                   title={`Créneau : ${creneauVal}`}
                                 >
                                   <span className="shrink-0 whitespace-nowrap">Créneau :&nbsp;</span>
@@ -1548,7 +1548,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
                                 {/* Gélule 3 : Type */}
                                 <span
-                                  className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
+                                  className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
                                   title={`Type : ${typeVal}`}
                                 >
                                   <span className="shrink-0 whitespace-nowrap">Type :&nbsp;</span>
@@ -1557,7 +1557,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
                                 {/* Gélule 4 : Situation */}
                                 <span
-                                  className="px-3.5 py-1.5 rounded-full bg-black text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
+                                  className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
                                   title={`Situation : ${situationVal}`}
                                 >
                                   <span className="shrink-0 whitespace-nowrap">Situation :&nbsp;</span>

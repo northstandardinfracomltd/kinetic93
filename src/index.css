@@ -424,3 +424,86 @@ html.is-edge [style*="font-weight:100"] {
 #sidebar-tenant-pill-text::first-letter {
   text-transform: uppercase;
 }
+
+@keyframes sidebarClickShrinkIcon {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(0.84);
+  }
+  70% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes sidebarClickShrinkText {
+  0% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(0.91, 0.9);
+  }
+  80% {
+    transform: scale(1.01, 1.01);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes sidebarClickWaveOverlay {
+  0% {
+    transform: translateX(-115%) skewX(-18deg);
+    opacity: 0.95;
+  }
+  85% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateX(125%) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+.sidebar-nav-click-shrink-wave .sidebar-nav-icon-bounce {
+  animation: sidebarClickShrinkIcon 0.46s cubic-bezier(0.22, 1, 0.36, 1) 1 forwards !important;
+}
+
+.sidebar-nav-click-shrink-wave .sidebar-nav-text-wave {
+  display: inline-block;
+  transform-origin: left center;
+  animation: sidebarClickShrinkText 0.52s cubic-bezier(0.22, 1, 0.36, 1) 1 forwards;
+}
+
+.sidebar-nav-click-shrink-wave::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 20;
+  background: linear-gradient(
+    90deg,
+    rgba(245, 247, 250, 0) 0%,
+    rgba(245, 247, 250, 0.82) 50%,
+    rgba(245, 247, 250, 0) 100%
+  );
+  animation: sidebarClickWaveOverlay 0.52s cubic-bezier(0.22, 1, 0.36, 1) 1 forwards;
+}
+
+button[style*="#0f172a"],
+button[style*="rgb(15, 23, 42)"],
+a[style*="#0f172a"],
+a[style*="rgb(15, 23, 42)"],
+select[style*="#0f172a"],
+select[style*="rgb(15, 23, 42)"],
+.bg-\[\#0f172a\] {
+  box-shadow: none !important;
+}
+

@@ -242,7 +242,7 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
             }}
             className="w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
             style={{
-              backgroundColor: '#000000',
+              backgroundColor: '#0f172a',
               color: '#ffffff',
               fontSize: '18px',
               border: 'none',

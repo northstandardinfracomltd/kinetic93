@@ -195,9 +195,9 @@ const ERROR_CODES_DB = [
 ];
 
 const rowActionButtonStyle: React.CSSProperties = {
-  backgroundColor: '#000',
+  backgroundColor: '#0f172a',
   color: '#fff',
-  boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #000000, inset 0 6px 12px #ffffff36',
+  boxShadow: 'none',
   borderRadius: '10px',
   fontSize: '16px',
   padding: '11px 22px',
@@ -2562,7 +2562,7 @@ export default function GmaoCorrectionForm({
           type="button"
           onClick={onCancel}
           id="btn-close-gmao-modal"
-          style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#000000', color: '#ffffff', margin: 0, position: 'relative' }}
+          style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#0f172a', color: '#ffffff', margin: 0, position: 'relative' }}
           className="transition-colors cursor-pointer font-sans select-none block w-full"
         >
           Annuler
@@ -2961,7 +2961,7 @@ export default function GmaoCorrectionForm({
                         setIsLookupScannerOpen(true);
                       }}
                       style={rowActionButton18Style}
-                      className="shrink-0 transition-colors cursor-pointer font-sans bg-black text-white hover:bg-neutral-900 disabled:cursor-not-allowed"
+                      className="shrink-0 transition-colors cursor-pointer font-sans bg-[#0f172a] text-white hover:bg-neutral-900 disabled:cursor-not-allowed"
                     >
                       Scan
                     </button>
@@ -3280,8 +3280,8 @@ export default function GmaoCorrectionForm({
               )}
               {selectedModelVar && selectedModelVar.infosTechnicien && (
                 <div 
-                  className="mt-3 text-sm text-white bg-black p-3 rounded-lg leading-relaxed animate-fadeIn w-full font-sans"
-                  style={{ backgroundColor: '#000000', color: '#ffffff' }}
+                  className="mt-3 text-sm text-white bg-[#0f172a] p-3 rounded-lg leading-relaxed animate-fadeIn w-full font-sans"
+                  style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
                 >
                   <strong className="block text-[10px] uppercase tracking-wider text-slate-400 mb-1 font-sans">
                     Info(s) au technicien :
@@ -6243,7 +6243,7 @@ export default function GmaoCorrectionForm({
                               toggleDevisArticle(item);
                             }}
                             style={{
-                              backgroundColor: '#000000',
+                              backgroundColor: '#0f172a',
                               color: '#ffffff',
                               border: 'none',
                               borderRadius: '100px',
@@ -6333,7 +6333,7 @@ export default function GmaoCorrectionForm({
                                   <div className="flex items-center gap-2 min-w-0 flex-1">
                                     <span 
                                       style={{
-                                        backgroundColor: '#000000',
+                                        backgroundColor: '#0f172a',
                                         color: '#ffffff',
                                         border: 'none',
                                         borderRadius: '100px',
@@ -6519,7 +6519,7 @@ export default function GmaoCorrectionForm({
                     type="button"
                     onClick={() => setSelectedErrorCode('')}
                     style={{ fontSize: '18px' }}
-                    className="w-full py-2.5 bg-black hover:bg-neutral-900 text-white font-bold rounded-xl transition-all cursor-pointer"
+                    className="w-full py-2.5 bg-[#0f172a] hover:bg-neutral-900 text-white font-bold rounded-xl transition-all cursor-pointer"
                   >
                     Fermer
                   </button>
@@ -6583,7 +6583,7 @@ export default function GmaoCorrectionForm({
                     html: `
                       <div class="relative flex items-center justify-center" style="transform: translate(-12px, -12px);">
                         <div class="absolute w-8 h-8 rounded-full bg-black/30 animate-ping"></div>
-                        <div class="w-5 h-5 rounded-full bg-black border-2 border-white shadow-lg"></div>
+                        <div class="w-5 h-5 rounded-full bg-[#0f172a] border-2 border-white shadow-lg"></div>
                       </div>
                     `,
                     className: 'custom-picker-icon',
@@ -6614,7 +6614,7 @@ export default function GmaoCorrectionForm({
                 type="button"
                 onClick={() => setIsMapPickerOpen(false)}
                 style={{ borderRadius: '13px', fontSize: '18px' }}
-                className="flex-1 py-3 bg-black hover:bg-neutral-900 text-white font-bold transition-all cursor-pointer font-sans"
+                className="flex-1 py-3 bg-[#0f172a] hover:bg-neutral-900 text-white font-bold transition-all cursor-pointer font-sans"
               >
                 Annuler
               </button>
@@ -6665,7 +6665,7 @@ export default function GmaoCorrectionForm({
               <button
                 type="button"
                 onClick={() => setPreviewModalPhoto(null)}
-                className="px-4 py-2 bg-slate-900 text-white rounded-lg font-medium text-sm hover:bg-black cursor-pointer"
+                className="px-4 py-2 bg-slate-900 text-white rounded-lg font-medium text-sm hover:bg-[#0f172a] cursor-pointer"
               >
                 Fermer
               </button>
