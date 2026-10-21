@@ -4973,7 +4973,7 @@ export default function DefibTab({
               }}
               className="transition-all"
             >
-              {t("Ajouté/modifié récemment")}
+              {t("Récemment")}
             </button>
 
             <button
@@ -4986,15 +4986,15 @@ export default function DefibTab({
                 fontWeight: 100,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: sortFilter === 'closest_maintenance' ? '#e21d1d' : 'rgb(255 217 217)',
-                color: sortFilter === 'closest_maintenance' ? '#fff' : '#e21d1d',
+                backgroundColor: sortFilter === 'closest_maintenance' ? '#e21d1d' : 'rgb(255 219 219)',
+                color: sortFilter === 'closest_maintenance' ? '#fff' : 'rgb(210 55 32)',
                 border: 'none',
                 boxShadow: 'none',
                 transition: 'all 0.15s ease'
               }}
               className="transition-all"
             >
-              {t("Pro.Main au plus proche")}
+              {t("Pro.Main. Urgente")}
             </button>
 
             {/* Filter: Indicatif postal court */}
@@ -5019,9 +5019,9 @@ export default function DefibTab({
                   transition: 'all 0.15s ease'
                 }}
                 className="transition-all select-none"
-                title={`${t("Indicatif postal court")} (${selectedDepartment})`}
+                title={`${t("Indicatif Postal")} (${selectedDepartment})`}
               >
-                {`${t("Indicatif postal court")} (${selectedDepartment})`}
+                {`${t("Indicatif Postal")} (${selectedDepartment})`}
               </button>
             ) : (
               <div className="relative inline-block">
@@ -5065,10 +5065,10 @@ export default function DefibTab({
                     transition: 'all 0.15s ease'
                   }}
                   className="transition-all select-none"
-                  title={t("Filtrer selon indicatif postal")}
+                  title={t("Indicatif Postal")}
                 >
                   <option value="" disabled style={{ backgroundColor: '#ffffff', color: '#0f172a' }}>
-                    {t("Filtrer selon indicatif postal")}
+                    {t("Indicatif Postal")}
                   </option>
                   {FRENCH_DEPARTMENTS.map((dept) => (
                     <option
@@ -5082,6 +5082,30 @@ export default function DefibTab({
                 </select>
               </div>
             )}
+
+            <button
+              type="button"
+              id="btn-refresh-data"
+              onClick={handleRefreshClick}
+              disabled={effectiveRefreshing}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: 'rgb(192 248 252)',
+                color: 'rgb(5 112 114)',
+                border: 'none',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="hover:opacity-80 transition-all select-none cursor-pointer"
+              title={t("Actualiser Données")}
+            >
+              {effectiveRefreshing ? t("Actualisation...") : t("Actualiser Données")}
+            </button>
 
             <button
               type="button"
@@ -5103,39 +5127,21 @@ export default function DefibTab({
               {`${t("Conforme")}: ${compliancePercent}%`}
             </button>
 
-            <button
-              type="button"
-              id="btn-refresh-data"
-              onClick={handleRefreshClick}
-              disabled={effectiveRefreshing}
-              style={{
-                borderRadius: '1000px',
-                padding: '8px 16px',
-                fontSize: '18px',
-                fontWeight: 100,
-                cursor: 'pointer',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: 'rgb(247 252 192)',
-                color: 'rgb(105 114 5)',
-                border: 'none',
-                boxShadow: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              className="hover:opacity-80 transition-all select-none cursor-pointer"
-              title={t("Actualiser les données")}
-            >
-              {effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}
-            </button>
-
             {/* 3-dots Native System Dropdown */}
             <div
-              className="relative inline-flex items-center justify-center px-2 py-2 cursor-pointer transition-opacity hover:opacity-80"
+              className="relative inline-flex items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
+              style={{
+                background: '#f5f7fa',
+                borderRadius: '100px',
+                padding: '12px'
+              }}
               title={t("Plus")}
             >
               <img
                 src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
                 alt={t("Plus")}
-                className="w-[22px] h-[22px] object-contain shrink-0 pointer-events-none"
+                style={{ width: '18px', height: '18px' }}
+                className="w-[18px] h-[18px] object-contain shrink-0 pointer-events-none"
                 referrerPolicy="no-referrer"
               />
               <select
