@@ -4949,84 +4949,9 @@ export default function DefibTab({
             text="Bon à savoir concernant le code des couleurs des valeurs dans le tableau : Le rouge correspond à une action requise expirée (critique), l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois." 
           />
 
-          {/* Indicateur Conforme et à jour (sur une seule ligne, sans count) */}
-          <div 
-            id="defib-compliance-indicator"
-            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '16px', marginBottom: '6px' }}
-            className="w-full flex items-center gap-3 select-none"
-          >
-            <span 
-              style={{ 
-                fontSize: '15px', 
-                fontWeight: 600, 
-                color: '#000000', 
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                cursor: 'default',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {t("Conforme et à jour")}
-            </span>
-
-            <div 
-              className="relative flex-1 overflow-hidden select-none" 
-              style={{ 
-                height: '22px', 
-                backgroundColor: '#e5e7eb', 
-                borderRadius: '11px',
-                boxShadow: 'none'
-              }}
-            >
-              {/* Layer bleu semi-opaque: ce qui va devenir conforme et à jour (conformes + tournées actives) */}
-              <div 
-                style={{ 
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  height: '100%',
-                  width: `${projectedCompliancePercent}%`, 
-                  backgroundColor: 'rgba(59, 130, 246, 0.42)', 
-                  borderRadius: '11px',
-                  transition: 'width 0.4s ease-in-out',
-                  zIndex: 1
-                }}
-              />
-              {/* Layer bleu plein: conforme et à jour actuel */}
-              <div 
-                className="animate-compliance-blue-wave overflow-hidden"
-                style={{ 
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  height: '100%',
-                  width: `${compliancePercent}%`, 
-                  backgroundColor: '#3b82f6', 
-                  borderRadius: '11px',
-                  transition: 'width 0.4s ease-in-out',
-                  zIndex: 2
-                }}
-              />
-              <div 
-                className="absolute inset-0 flex items-center justify-start pl-3 pointer-events-none select-none"
-                style={{ 
-                  zIndex: 3,
-                  fontSize: '13px', 
-                  fontWeight: 700, 
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  color: compliancePercent > 5 ? '#ffffff' : '#0f172a',
-                  textShadow: 'none',
-                  boxShadow: 'none',
-                  textAlign: 'left'
-                }}
-              >
-                {compliancePercent}%
-              </div>
-            </div>
-          </div>
-
           {/* Filters Pills Row (placed between div-infos and the table) */}
           <div 
-            className="flex flex-wrap gap-2.5 justify-start" 
+            className="flex flex-wrap items-center gap-2.5 justify-start" 
             id="defibrillateurs-sort-pills"
             style={{ maxWidth: '98%', margin: '0 auto', marginTop: '14px', padding: '0px' }}
           >
@@ -5157,89 +5082,25 @@ export default function DefibTab({
                 </select>
               </div>
             )}
-          </div>
-
-          {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard + Gérer la visibilité des colonnes */}
-          <div 
-            className="flex items-center justify-start gap-2.5 flex-wrap"
-            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
-          >
-            <button
-              type="button"
-              id="btn-toggle-fit-view"
-              onClick={toggleTableFitView}
-              style={{
-                color: 'rgb(80 97 122)',
-                background: '#f5f7fa',
-                borderRadius: '14px',
-                fontSize: '12px',
-                padding: '5px 10px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                fontWeight: 100,
-                cursor: 'pointer',
-                border: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                textDecoration: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              className="hover:opacity-80 transition-all select-none cursor-pointer"
-              title={isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
-            >
-              <span>{isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
-            </button>
 
             <button
               type="button"
-              id="btn-manage-columns-visibility"
-              onClick={() => {
-                setTempHiddenColumns(new Set(hiddenColumns));
-                setIsColumnVisibilityPaneOpen(true);
-              }}
               style={{
-                color: 'rgb(80 97 122)',
-                background: '#f5f7fa',
-                borderRadius: '14px',
-                fontSize: '12px',
-                padding: '5px 10px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
                 fontWeight: 100,
-                cursor: 'pointer',
+                cursor: 'default',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: 'rgb(247 252 192)',
+                color: 'rgb(105 114 5)',
                 border: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                textDecoration: 'none',
+                boxShadow: 'none',
                 transition: 'all 0.15s ease'
               }}
-              className="hover:opacity-80 transition-all select-none cursor-pointer"
-              title={t("Gérer la visibilité des colonnes")}
+              className="transition-all select-none"
             >
-              <span>{t("Gérer la visibilité des colonnes")}</span>
-            </button>
-
-            <button
-              type="button"
-              id="btn-defibeo-intelligence-ai"
-              onClick={() => setIsDefibeoIntelligenceOpen(true)}
-              style={{
-                color: 'rgb(80 97 122)',
-                background: '#f5f7fa',
-                borderRadius: '14px',
-                fontSize: '12px',
-                padding: '5px 10px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                fontWeight: 100,
-                cursor: 'pointer',
-                border: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                textDecoration: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              className="hover:opacity-80 transition-all select-none cursor-pointer"
-              title={t("Interroger l’IA Defibeo Intelligence")}
-            >
-              <span>{t("Interroger l’IA Defibeo Intelligence")}</span>
+              {`${t("Conforme")}: ${compliancePercent}%`}
             </button>
 
             <button
@@ -5248,52 +5109,71 @@ export default function DefibTab({
               onClick={handleRefreshClick}
               disabled={effectiveRefreshing}
               style={{
-                color: 'rgb(80 97 122)',
-                background: '#f5f7fa',
-                borderRadius: '14px',
-                fontSize: '12px',
-                padding: '5px 10px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
                 fontWeight: 100,
                 cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: 'rgb(247 252 192)',
+                color: 'rgb(105 114 5)',
                 border: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                textDecoration: 'none',
+                boxShadow: 'none',
                 transition: 'all 0.15s ease'
               }}
               className="hover:opacity-80 transition-all select-none cursor-pointer"
               title={t("Actualiser les données")}
             >
-              <span>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
+              {effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}
             </button>
 
-            <button
-              type="button"
-              id="btn-open-spreadsheet-editor-defibs"
-              onClick={handleOpenSpreadsheetEditor}
-              disabled={!resolvedSpreadsheetUrl}
-              style={{
-                color: 'rgb(80 97 122)',
-                background: '#f5f7fa',
-                borderRadius: '14px',
-                fontSize: '12px',
-                padding: '5px 10px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                fontWeight: 100,
-                cursor: resolvedSpreadsheetUrl ? 'pointer' : 'not-allowed',
-                opacity: resolvedSpreadsheetUrl ? 1 : 0.4,
-                border: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                textDecoration: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              className={resolvedSpreadsheetUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
-              title={t("Ouvrir l'éditeur SpreadSheets")}
+            {/* 3-dots Native System Dropdown */}
+            <div
+              className="relative inline-flex items-center justify-center px-2 py-2 cursor-pointer transition-opacity hover:opacity-80"
+              title={t("Plus")}
             >
-              <span>{t("Ouvrir l'éditeur SpreadSheets")}</span>
-            </button>
+              <img
+                src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                alt={t("Plus")}
+                className="w-[22px] h-[22px] object-contain shrink-0 pointer-events-none"
+                referrerPolicy="no-referrer"
+              />
+              <select
+                id="defibs-more-options-dropdown"
+                aria-label={t("Plus")}
+                value=""
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'toggle-fit-view') {
+                    toggleTableFitView();
+                  } else if (val === 'manage-columns') {
+                    setTempHiddenColumns(new Set(hiddenColumns));
+                    setIsColumnVisibilityPaneOpen(true);
+                  } else if (val === 'defibeo-intelligence') {
+                    setIsDefibeoIntelligenceOpen(true);
+                  } else if (val === 'spreadsheet-editor') {
+                    handleOpenSpreadsheetEditor();
+                  }
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+              >
+                <option value="" disabled>
+                  —
+                </option>
+                <option value="toggle-fit-view">
+                  {isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
+                </option>
+                <option value="manage-columns">
+                  {t("Gérer la visibilité des colonnes")}
+                </option>
+                <option value="defibeo-intelligence">
+                  {t("Interroger l’IA Defibeo Intelligence")}
+                </option>
+                <option value="spreadsheet-editor" disabled={!resolvedSpreadsheetUrl}>
+                  {t("Ouvrir l'éditeur SpreadSheets")}
+                </option>
+              </select>
+            </div>
           </div>
 
       {/* Main Table Records Sheet */}
