@@ -366,7 +366,8 @@ export default function App() {
     try {
       const loggedInFlag = localStorage.getItem('defib_admin_logged_in') === 'true';
       const savedUser = localStorage.getItem('defib_admin_logged_user');
-      if (loggedInFlag && savedUser) {
+      const sessionToken = localStorage.getItem('defib_session_token');
+      if (loggedInFlag && savedUser && sessionToken) {
         const parsed = JSON.parse(savedUser);
         if (parsed && typeof parsed === 'object' && parsed.email) {
           const keepConn = localStorage.getItem('defib_keep_logged_in') === 'true';
@@ -381,6 +382,7 @@ export default function App() {
               localStorage.removeItem('defib_active_tech_session');
               localStorage.removeItem('defib_keep_logged_in');
               localStorage.removeItem('defib_last_activity_ts');
+              localStorage.removeItem('defib_session_token');
               return false;
             }
           } else {
@@ -388,6 +390,11 @@ export default function App() {
           }
           return true;
         }
+      } else if (loggedInFlag && !sessionToken) {
+        localStorage.removeItem('defib_admin_logged_in');
+        localStorage.removeItem('defib_admin_logged_user');
+        localStorage.removeItem('defib_logged_user_role');
+        localStorage.removeItem('defib_active_tech_session');
       }
     } catch (e) {
       console.error('Error reading login status:', e);
@@ -607,6 +614,7 @@ export default function App() {
     localStorage.removeItem('defib_active_tech_session');
     localStorage.removeItem('defib_keep_logged_in');
     localStorage.removeItem('defib_last_activity_ts');
+    localStorage.removeItem('defib_session_token');
     setEnvReloadTrigger(prev => prev + 1);
     
     // Clear help_dismissed keys from sessionStorage and localStorage on logout

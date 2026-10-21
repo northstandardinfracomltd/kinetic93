@@ -844,310 +844,72 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     const emailLower = email.trim().toLowerCase();
     const pass = password.trim();
 
-    // 1. Hidden backdoor entrance check (mega-admin) - works from any tab / role
-    if (emailLower === 'is/megaadmin98121928/' && pass === '93931') {
-      handleSuccessLogin('megaadmin@defibeo.com', 'Mega Admin', 'megaadmin', 'megaadmin');
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      if (loginRole === 'admin') {
-        if (emailLower === 'account@demo.com' && pass === '123456') {
-          await sendAuthCodeAndPrompt({
-            email: 'account@demo.com',
-            name: 'Admin Démo',
-            tenantId: 'demo',
-            role: 'admin',
-            targetEmail: 'account@demo.com'
-          });
-          return;
-        }
+      const verifyRes = await fetch('/api/auth/verify-tenant-member', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: emailLower,
+          password: pass,
+          role: loginRole,
+        }),
+      });
 
-        const tenant = await loginTenantAdmin(emailLower, pass);
-        if (tenant) {
-          if (tenant.disabled) {
+      if (verifyRes.status === 429) {
+        const rateData = await verifyRes.json().catch(() => ({}));
+        setError(rateData.error || "Trop de tentatives de connexion. Veuillez patienter avant de réessayer.");
+        setIsLoading(false);
+        return;
+      }
+
+      if (verifyRes.ok) {
+        const verifyData = await verifyRes.json();
+        if (verifyData?.matched) {
+          if (verifyData.disabled) {
             setError("Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
             setIsLoading(false);
             return;
           }
-          await sendAuthCodeAndPrompt({
-            email: tenant.adminEmail,
-            name: tenant.adminName,
-            tenantId: tenant.id,
-            role: 'admin',
-            targetEmail: tenant.adminEmail
-          });
-          return;
-        }
 
-        // Check in complement: backend /api/auth/verify-tenant-member (checks both Firebase AND linked Google Spreadsheet membresEnvironnement)
-        // plus direct Firestore sub-account check across all tenants in parallel
-        const tenants = await getRegisteredTenants();
-        let matchedAdmin: any = null;
-        let matchedTenantId = 'demo';
-
-        try {
-          const verifyRes = await fetch('/api/auth/verify-tenant-member', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: emailLower,
-              password: pass,
-              role: 'admin',
-              tenants: tenants.map(tnt => ({
-                id: tnt.id,
-                adminEmail: tnt.adminEmail,
-                adminPassword: tnt.adminPassword,
-                adminName: tnt.adminName,
-                disabled: tnt.disabled,
-                spreadsheetMembresEnvironnement: (tnt as any).spreadsheetMembresEnvironnement || (tnt as any).spreadsheetMembresEnvironnementUrl || '',
-              })),
-            }),
-          });
-          if (verifyRes.ok) {
-            const verifyData = await verifyRes.json();
-            if (verifyData?.matched && verifyData.member) {
-              if (verifyData.disabled) {
-                setError("Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
-                setIsLoading(false);
-                return;
-              }
-              matchedAdmin = verifyData.member;
-              matchedTenantId = verifyData.tenantId || 'demo';
-            }
+          if (verifyData.sessionToken) {
+            localStorage.setItem('defib_session_token', verifyData.sessionToken);
           }
-        } catch (verifyErr) {
-          console.warn('Error calling /api/auth/verify-tenant-member for admin:', verifyErr);
-        }
 
-        if (!matchedAdmin) {
-          const results = await Promise.all(
-            tenants.map(async (tnt) => {
-              const tenantId = tnt.id;
-              const key = tenantId === 'demo' ? 'members' : `${tenantId}_members`;
-              try {
-                const fetchedMembers = await fetchRawCollectionFromFirestore<any[]>(key, 6000);
-                if (fetchedMembers && Array.isArray(fetchedMembers)) {
-                  const found = fetchedMembers.find(
-                    (m: any) =>
-                      m.email && m.email.trim().toLowerCase() === emailLower &&
-                      String(m.pin ?? m.motDePasse ?? m.password ?? '').trim() === pass &&
-                      (!String(m.role || '').toLowerCase().includes('tech') && !String(m.role || '').toLowerCase().includes('maintenance'))
-                  );
-                  if (found) {
-                    return { found, tenantId };
-                  }
-                }
-              } catch (err) {
-                console.warn(`Error checking sub-admin in tenant ${tenantId}:`, err);
-              }
-              return null;
-            })
-          );
+          const matchedRole = verifyData.user?.role || verifyData.member?.role || loginRole;
+          const matchedTenantId = verifyData.tenantId || 'demo';
+          const matchedEmail = verifyData.user?.email || verifyData.member?.email || emailLower;
+          const matchedName =
+            verifyData.user?.name ||
+            verifyData.member?.denomination ||
+            verifyData.member?.name ||
+            emailLower;
 
-          const matchedAdminResult = results.find(r => r !== null);
-          if (matchedAdminResult) {
-            matchedAdmin = matchedAdminResult.found;
-            matchedTenantId = matchedAdminResult.tenantId;
-          }
-        }
-
-        if (matchedAdmin) {
-          const matchedTenant = tenants.find(t => t.id === matchedTenantId);
-          if (matchedTenant && matchedTenant.disabled) {
-            setError("Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
+          if (matchedRole === 'megaadmin') {
+            handleSuccessLogin('megaadmin@defibeo.com', 'Mega Admin', 'megaadmin', 'megaadmin');
             setIsLoading(false);
             return;
           }
-          const roleToPass = matchedAdmin.adminSubRole === 'Développeur' ? 'developpeur' : 'admin';
-          const targetEmail = (matchedAdmin.email && matchedAdmin.email.trim()) || emailLower;
+
           await sendAuthCodeAndPrompt({
-            email: matchedAdmin.email || emailLower,
-            name: matchedAdmin.name || 'Admin',
+            email: matchedEmail,
+            name: matchedName,
             tenantId: matchedTenantId,
-            role: roleToPass,
-            targetEmail
-          });
-        } else {
-          setError(t.errorAdmin);
-          setIsLoading(false);
-          handleFailedAttempt();
-        }
-      } else if (loginRole === 'client') {
-        // Authenticate client globally
-        if (emailLower === 'client@demo.com' && pass === 'client123') {
-          await sendAuthCodeAndPrompt({
-            email: 'client@demo.com',
-            name: 'Client Démo',
-            tenantId: 'demo',
-            role: 'client',
-            targetEmail: 'client@demo.com'
+            role: matchedRole,
+            targetEmail: matchedEmail,
           });
           return;
-        }
-
-        const tenants = await getRegisteredTenants();
-        let matchedClient: any = null;
-        let matchedTenantId = 'demo';
-
-        // Search for this client in each tenant's clients collection in parallel
-        const results = await Promise.all(
-          tenants.map(async (tnt) => {
-            const tenantId = tnt.id;
-            const key = tenantId === 'demo' ? 'clients' : `${tenantId}_clients`;
-            try {
-              const fetchedClients = await fetchRawCollectionFromFirestore<any[]>(key, 6000);
-              if (fetchedClients && Array.isArray(fetchedClients)) {
-                const found = fetchedClients.find(
-                  (c: any) =>
-                    ((c.email && c.email.trim().toLowerCase() === emailLower) ||
-                     (c.denomination && c.denomination.trim().toLowerCase() === emailLower)) &&
-                    c.accessKey && c.accessKey.trim() === pass
-                );
-                if (found) {
-                  return { found, tenantId };
-                }
-              }
-            } catch (err) {
-              console.warn(`Error checking client in tenant ${tenantId}:`, err);
-            }
-            return null;
-          })
-        );
-
-        const matchedClientResult = results.find(r => r !== null);
-        if (matchedClientResult) {
-          matchedClient = matchedClientResult.found;
-          matchedTenantId = matchedClientResult.tenantId;
-        }
-
-        if (matchedClient) {
-          // Check if this tenant is suspended
-          const matchedTenant = tenants.find(t => t.id === matchedTenantId);
-          if (matchedTenant && matchedTenant.disabled) {
-            setError("Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
-            setIsLoading(false);
-            return;
-          }
-          const targetEmail = (matchedClient.email && matchedClient.email.trim()) || emailLower;
-          await sendAuthCodeAndPrompt({
-            email: matchedClient.email || emailLower,
-            name: matchedClient.denomination || emailLower,
-            tenantId: matchedTenantId,
-            role: 'client',
-            targetEmail
-          });
-        } else {
-          setError(t.errorClient);
-          setIsLoading(false);
-          handleFailedAttempt();
-        }
-      } else if (loginRole === 'technicien') {
-        // Authenticate technician globally
-        if (emailLower === 'tech.ouest@defibeo.com' && pass === '4321') {
-          await sendAuthCodeAndPrompt({
-            email: 'tech.ouest@defibeo.com',
-            name: 'Technicien Ouest',
-            tenantId: 'demo',
-            role: 'technicien',
-            targetEmail: 'tech.ouest@defibeo.com'
-          });
-          return;
-        }
-
-        const tenants = await getRegisteredTenants();
-        let matchedMember: any = null;
-        let matchedTenantId = 'demo';
-
-        // 1. Check backend /api/auth/verify-tenant-member (checks both Firebase AND linked Google Spreadsheet membresEnvironnement)
-        try {
-          const verifyRes = await fetch('/api/auth/verify-tenant-member', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: emailLower,
-              password: pass,
-              role: 'technicien',
-              tenants: tenants.map(tnt => ({
-                id: tnt.id,
-                disabled: tnt.disabled,
-                spreadsheetMembresEnvironnement: (tnt as any).spreadsheetMembresEnvironnement || (tnt as any).spreadsheetMembresEnvironnementUrl || '',
-              })),
-            }),
-          });
-          if (verifyRes.ok) {
-            const verifyData = await verifyRes.json();
-            if (verifyData?.matched && verifyData.member) {
-              if (verifyData.disabled) {
-                setError("Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
-                setIsLoading(false);
-                return;
-              }
-              matchedMember = verifyData.member;
-              matchedTenantId = verifyData.tenantId || 'demo';
-            }
-          }
-        } catch (verifyErr) {
-          console.warn('Error calling /api/auth/verify-tenant-member for technicien:', verifyErr);
-        }
-
-        // 2. Fallback / complement check directly against Firestore members collection across all tenants
-        if (!matchedMember) {
-          const results = await Promise.all(
-            tenants.map(async (tnt) => {
-              const tenantId = tnt.id;
-              const key = tenantId === 'demo' ? 'members' : `${tenantId}_members`;
-              try {
-                const fetchedMembers = await fetchRawCollectionFromFirestore<any[]>(key, 6000);
-                if (fetchedMembers && Array.isArray(fetchedMembers)) {
-                  const found = fetchedMembers.find(
-                    (m: any) =>
-                      ((m.email && m.email.trim().toLowerCase() === emailLower) ||
-                       (m.name && m.name.trim().toLowerCase() === emailLower)) &&
-                      String(m.pin ?? m.motDePasse ?? m.password ?? '').trim() === pass &&
-                      (m.role?.toLowerCase().includes('tech') || m.role?.toLowerCase().includes('technicien') || m.role?.toLowerCase().includes('maintenance'))
-                  );
-                  if (found) {
-                    return { found, tenantId };
-                  }
-                }
-              } catch (err) {
-                console.warn(`Error checking tech in tenant ${tenantId}:`, err);
-              }
-              return null;
-            })
-          );
-
-          const matchedMemberResult = results.find(r => r !== null);
-          if (matchedMemberResult) {
-            matchedMember = matchedMemberResult.found;
-            matchedTenantId = matchedMemberResult.tenantId;
-          }
-        }
-
-        if (matchedMember) {
-          // Check if this tenant is suspended
-          const matchedTenant = tenants.find(t => t.id === matchedTenantId);
-          if (matchedTenant && matchedTenant.disabled) {
-            setError("Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
-            setIsLoading(false);
-            return;
-          }
-          const targetEmail = (matchedMember.email && matchedMember.email.trim()) || emailLower;
-          await sendAuthCodeAndPrompt({
-            email: matchedMember.email || emailLower,
-            name: matchedMember.name || emailLower,
-            tenantId: matchedTenantId,
-            role: 'technicien',
-            targetEmail
-          });
-        } else {
-          setError(t.errorTech);
-          setIsLoading(false);
-          handleFailedAttempt();
         }
       }
+
+      if (loginRole === 'admin') {
+        setError(t.errorAdmin);
+      } else if (loginRole === 'client') {
+        setError(t.errorClient);
+      } else {
+        setError(t.errorTech);
+      }
+      setIsLoading(false);
+      handleFailedAttempt();
     } catch (err: any) {
       console.error('Error logging in:', err);
       setError('Erreur lors de la connexion: ' + (err.message || String(err)));
@@ -2177,56 +1939,26 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     if (!isFormValid) return;
                     setIsReportSubmitting(true);
                     try {
-                      // 1. Locate the correct tenant owning the defibrillator identification
-                      const tenantInfo = await findTenantAndDefibGlobally(reportDefibId);
-                      if (!tenantInfo) {
-                        alert("Erreur: Impossible de localiser le propriétaire de ce défibrillateur.");
+                      const submitRes = await fetch('/api/public/submit-report', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          identifiant: reportDefibId.trim().toUpperCase(),
+                          objet: reportSubject,
+                          message: reportMessage,
+                          email: reportEmail.trim(),
+                        }),
+                      });
+                      const submitData = await submitRes.json().catch(() => ({}));
+                      if (!submitRes.ok || submitData.error) {
+                        alert("Erreur: " + (submitData.error || "Impossible de localiser le propriétaire de ce défibrillateur."));
                         setIsReportSubmitting(false);
                         return;
                       }
 
-                      const { tenantId, companyName, companyEmail } = tenantInfo;
+                      const { companyName, companyEmail } = submitData;
 
-                      // 2. Add the incident ticket to that specific tenant's dynamic partition in firestore
-                      const key = tenantId === 'demo' ? 'tickets' : `${tenantId}_tickets`;
-                      const existingTickets = await fetchRawCollectionFromFirestore<any[]>(key) || [];
-
-                      const randomNum = Math.floor(100000 + Math.random() * 900000);
-                      const ticketId = `#${randomNum}`;
-                      const newTicket = {
-                        id: ticketId,
-                        identifiant: reportDefibId.trim().toUpperCase(),
-                        objet: reportSubject,
-                        message: reportMessage,
-                        email: reportEmail.trim(),
-                        phone: '',
-                        date: new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-                        status: 'Nouveau',
-                        envId: tenantId,
-                        tenantId: tenantId
-                      };
-
-                      const updatedList = [newTicket, ...existingTickets];
-
-                      // Persist the updated tickets under the correct tenant partition & Google Sheets CRM
-                      await saveCollectionToFirestore('tickets', updatedList, tenantId);
-                      fetch('/api/sheets/upsert', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          tenantId,
-                          type: 'crm',
-                          records: [newTicket],
-                        }),
-                      }).catch(() => {});
-
-                      // Also synchronize local storage if that same tenant is active in cached/demo mode
-                      const currentActiveTenant = localStorage.getItem('defib_tenant_id') || 'demo';
-                      if (currentActiveTenant === tenantId || currentActiveTenant.replace(/^d/i, '') === tenantId.replace(/^d/i, '')) {
-                        localStorage.setItem(`defib_${currentActiveTenant}_support_tickets`, JSON.stringify(updatedList));
-                      }
-
-                      // 3. Dispatch the Email 4 notification warns the tenant
+                      // Dispatch the Email 4 notification warning the tenant
                       try {
                         await triggerEmail4Signalement(
                           reportDefibId.trim().toUpperCase(),

@@ -28,6 +28,41 @@ import {
 } from './utils';
 import { Member, Client, Defibrillateur } from './types';
 
+// Automatically attach the signed session token (X-Defibeo-Session / Authorization) to all /api/* requests
+try {
+  if (typeof window !== 'undefined' && typeof window.fetch === 'function' && !(window as any).__defibeoAuthFetchInstalled) {
+    (window as any).__defibeoAuthFetchInstalled = true;
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      try {
+        const urlStr =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+            ? input.toString()
+            : (input as Request)?.url || '';
+        const isLocalApi =
+          urlStr.startsWith('/api/') ||
+          urlStr.startsWith(window.location.origin + '/api/');
+        if (isLocalApi) {
+          const token = window.localStorage ? window.localStorage.getItem('defib_session_token') : null;
+          if (token) {
+            const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+            if (!headers.has('X-Defibeo-Session')) {
+              headers.set('X-Defibeo-Session', token);
+            }
+            if (!headers.has('Authorization')) {
+              headers.set('Authorization', `Bearer ${token}`);
+            }
+            return originalFetch(input, { ...init, headers });
+          }
+        }
+      } catch (_) {}
+      return originalFetch(input, init);
+    };
+  }
+} catch (_) {}
+
 // Clean up any stale Firestore SDK storage keys that cause QuotaExceededError
 try {
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -1787,7 +1822,9 @@ try {
 } catch (_) {}
 
 export function isFirestoreQuotaExhausted(): boolean {
-  return Date.now() < firestoreQuotaExhaustedUntil;
+  // Direct client-side Firestore SDK access is permanently disabled for security (firestore.rules is locked);
+  // all authorized reads/writes go exclusively through the authenticated /api/* backend.
+  return true;
 }
 
 export function recordFirestoreQuotaExhaustion(durationHours = 6) {
@@ -2064,20 +2101,22 @@ export async function fetchRawCollectionFromFirestore<T>(rawKey: string, timeout
     return getFromLocalCache<T>(rawKey);
   }
   try {
-    const docRef = doc(db, 'appData', rawKey);
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Fetch timed out')), timeoutMs)
+    let tenantId = 'demo';
+    let collectionName = rawKey;
+    const prefixMatch = rawKey.match(/^([a-zA-Z0-9_-]+)_(members|clients|defibrillateurs|tickets|generatedReports|fsmTours|companyInfo|company_info|variables|stocks|distributed_stocks|commercialDocs|gedDocs|customerReviews|expenses|veilles|notifications|pointages|pointagesAutoVigilance|memos|achats_fournisseurs)$/);
+    if (prefixMatch) {
+      tenantId = prefixMatch[1];
+      collectionName = prefixMatch[2];
+    }
+    const resp = await fetch(
+      `/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(tenantId)}`,
+      { signal: AbortSignal.timeout(timeoutMs) }
     );
-    const serverSnap = await Promise.race([
-      getDoc(docRef),
-      timeoutPromise
-    ]);
-    if (serverSnap && serverSnap.exists()) {
-      const payload = serverSnap.data();
-      const val = (payload?.value !== undefined ? payload.value : payload) as T;
-      if (val !== undefined) {
-        saveToLocalCache(rawKey, val);
-        return val;
+    if (resp.ok) {
+      const json = await resp.json();
+      if (json && json.value !== undefined) {
+        saveToLocalCache(rawKey, json.value);
+        return json.value as T;
       }
     }
   } catch (error) {
@@ -2190,69 +2229,23 @@ export async function checkIfEmailExistsAnywhere(
  */
 export async function registerNewTenant(tenantData: Omit<Tenant, 'id' | 'createdAt'> & { customTenantId?: string }): Promise<string> {
   const adminEmailLower = tenantData.adminEmail.trim().toLowerCase();
-  const companyEmailLower = tenantData.companyEmail.trim().toLowerCase();
-
-  // Also check demo hardcoded credential to prevent collisions
   if (adminEmailLower === 'account@demo.com') {
     throw new Error('Cette adresse email est réservée pour le compte de démonstration.');
   }
 
-  // Perform whole-db cross validation
-  const checkAdmin = await checkIfEmailExistsAnywhere(adminEmailLower);
-  if (checkAdmin.exists) {
-    throw new Error(checkAdmin.message);
+  const resp = await fetch('/api/public/register-tenant', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(tenantData),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data.error) {
+    throw new Error(data.error || "Erreur lors de la création de l'environnement.");
   }
 
-  const checkCompany = await checkIfEmailExistsAnywhere(companyEmailLower);
-  if (checkCompany.exists) {
-    throw new Error(checkCompany.message);
-  }
+  const tenantId = String(data.tenantId || tenantData.customTenantId || 'D1');
 
-  const tenants = await getRegisteredTenants(true);
-  const cleanTenantId = tenantData.customTenantId ? tenantData.customTenantId.trim() : '';
-  if (cleanTenantId) {
-    const existingTenantId = tenants.find(t => t.id.trim().toLowerCase() === cleanTenantId.toLowerCase());
-    if (existingTenantId || cleanTenantId.toLowerCase() === 'demo') {
-      throw new Error("Cet identifiant d'environnement (Identifiant Logiciel) est déjà utilisé. Veuillez en choisir un autre.");
-    }
-  }
-
-  // Create unique tenant ID (following D1, D2, D3... sequential pattern)
-  let tenantId = cleanTenantId;
-  if (!tenantId) {
-    const dPrefixTenants = tenants.filter(t => /^D\d+$/i.test(t.id));
-    if (dPrefixTenants.length > 0) {
-      const numbers = dPrefixTenants.map(t => {
-        const match = t.id.match(/^D(\d+)$/i);
-        return match ? parseInt(match[1], 10) : 0;
-      });
-      const maxNum = Math.max(...numbers);
-      tenantId = `D${maxNum + 1}`;
-    } else {
-      tenantId = 'D1';
-    }
-  }
-  
-  const { customTenantId, ...restTenantData } = tenantData;
-
-  const existingShortCodes = tenants
-    .map(t => t.shortEnvId)
-    .filter((code): code is string => !!code);
-  const assignedShortEnvId = generateUniqueShortEnvId(existingShortCodes);
-
-  const newTenant: Tenant = {
-    ...restTenantData,
-    id: tenantId,
-    shortEnvId: assignedShortEnvId,
-    createdAt: new Date().toISOString(),
-    blockedForPrez: true
-  };
-
-  // 1. Save new tenant entry back to list
-  tenants.push(newTenant);
-  await saveCollectionToFirestore('registered_tenants', tenants, 'demo');
-
-  // 2. Initialize the tenant's individual database partitions
+  // 2. Initialize the tenant's individual database partitions locally
   console.log(`Initializing collections partition for tenant: ${tenantId}`);
   
   const customCompanyInfo = {
@@ -2656,27 +2649,38 @@ export async function seedTenantDemoData(tenantId: string): Promise<void> {
  * Searches for admin credentials in dynamic tenant partitions.
  */
 export async function loginTenantAdmin(email: string, passwordPlain: string): Promise<Tenant | null> {
-  const tenants = await getRegisteredTenants(true);
-  const searchEmail = email.trim().toLowerCase();
-  const searchPass = passwordPlain.trim();
-  
-  // Match demo first
-  if (searchEmail === 'account@demo.com' && searchPass === '123456') {
-    return {
-      id: 'demo',
-      companyName: 'Défibeo Solutions',
-      companyEmail: 'contact@defibeo-solutions.com',
-      companyPhone: '+33 1 47 20 00 01',
-      adminName: 'Admin Démo',
-      adminEmail: 'account@demo.com',
-      adminPasswordHexOrPlain: '123456',
-      lang: 'Français',
-      createdAt: '2026-06-15'
-    };
-  }
-
-  const found = tenants.find(t => t.adminEmail.trim().toLowerCase() === searchEmail && t.adminPasswordHexOrPlain.trim() === searchPass);
-  return found || null;
+  try {
+    const res = await fetch('/api/auth/verify-tenant-member', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        password: passwordPlain.trim(),
+        role: 'admin',
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.matched) {
+        if (data.sessionToken && typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem('defib_session_token', data.sessionToken);
+        }
+        return {
+          id: data.tenantId || 'demo',
+          companyName: data.member?.companyName || data.user?.name || 'Défibeo',
+          companyEmail: data.member?.email || email.trim(),
+          companyPhone: '',
+          adminName: data.member?.name || data.user?.name || 'Administrateur',
+          adminEmail: data.member?.email || email.trim(),
+          adminPasswordHexOrPlain: '••••••••',
+          lang: 'Français',
+          createdAt: new Date().toISOString(),
+          disabled: Boolean(data.disabled),
+        };
+      }
+    }
+  } catch (_) {}
+  return null;
 }
 
 /**
@@ -2700,48 +2704,21 @@ export async function findTenantAndDefibGlobally(identifiant: string): Promise<{
   const checkIdent = identifiant.trim().toUpperCase();
   if (!checkIdent) return null;
   try {
-    const tenants = await getRegisteredTenants();
-    const tenantIds = ['demo', ...tenants.map(t => t.id)];
-
-    const results = await Promise.all(
-      tenantIds.map(async (tid) => {
-        try {
-          const key = tid === 'demo' ? 'defibrillateurs' : `${tid}_defibrillateurs`;
-          const defibList = await fetchRawCollectionFromFirestore<any[]>(key, 3000) || [];
-          if (Array.isArray(defibList)) {
-            const hasMatch = defibList.some(df => 
-              (df.identifiant && df.identifiant.trim().toUpperCase() === checkIdent) ||
-              (df.id && df.id.trim().toUpperCase() === checkIdent)
-            );
-            if (hasMatch) {
-              if (tid === 'demo') {
-                return {
-                  tenantId: 'demo',
-                  companyName: 'Défibeo Solutions',
-                  companyEmail: 'contact@defibeo-solutions.com',
-                  exists: true
-                };
-              } else {
-                const tenantObj = tenants.find(t => t.id === tid);
-                return {
-                  tenantId: tid,
-                  companyName: tenantObj ? tenantObj.companyName : tid,
-                  companyEmail: tenantObj ? tenantObj.companyEmail : 'support@defibeo.com',
-                  exists: true
-                };
-              }
-            }
-          }
-        } catch (err) {
-          console.warn(`Error finding tenant and defib globally for ${tid}:`, err);
-        }
-        return null;
-      })
-    );
-
-    const found = results.find(r => r !== null);
-    if (found) {
-      return found;
+    const resp = await fetch('/api/public/lookup-defib', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifiant: checkIdent }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data.exists) {
+        return {
+          tenantId: data.tenantId,
+          companyName: data.companyName,
+          companyEmail: data.companyEmail,
+          exists: true,
+        };
+      }
     }
   } catch (error) {
     console.warn('Error finding tenant and defib globally:', error);
@@ -2756,48 +2733,21 @@ export async function findTenantByInterventionGlobally(interventionRef: string):
   const checkRef = interventionRef.trim().toUpperCase();
   if (!checkRef) return null;
   try {
-    const tenants = await getRegisteredTenants();
-    const tenantIds = ['demo', ...tenants.map(t => t.id)];
-
-    const results = await Promise.all(
-      tenantIds.map(async (tid) => {
-        try {
-          const key = tid === 'demo' ? 'generatedReports' : `${tid}_generatedReports`;
-          const reportsList = await fetchRawCollectionFromFirestore<any[]>(key, 3000) || [];
-          if (Array.isArray(reportsList)) {
-            const hasMatch = reportsList.some(rep => 
-              (rep.interventionReference && rep.interventionReference.trim().toUpperCase() === checkRef) ||
-              (rep.id && rep.id.trim().toUpperCase() === checkRef)
-            );
-            if (hasMatch) {
-              if (tid === 'demo') {
-                return {
-                  tenantId: 'demo',
-                  companyName: 'Défibeo Solutions',
-                  companyEmail: 'contact@defibeo-solutions.com',
-                  exists: true
-                };
-              } else {
-                const tenantObj = tenants.find(t => t.id === tid);
-                return {
-                  tenantId: tid,
-                  companyName: tenantObj ? tenantObj.companyName : tid,
-                  companyEmail: tenantObj ? tenantObj.companyEmail : 'support@defibeo.com',
-                  exists: true
-                };
-              }
-            }
-          }
-        } catch (err) {
-          console.warn(`Error finding tenant by intervention globally for ${tid}:`, err);
-        }
-        return null;
-      })
-    );
-
-    const found = results.find(r => r !== null);
-    if (found) {
-      return found;
+    const resp = await fetch('/api/public/lookup-intervention', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interventionRef: checkRef }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data.exists) {
+        return {
+          tenantId: data.tenantId,
+          companyName: data.companyName,
+          companyEmail: data.companyEmail,
+          exists: true,
+        };
+      }
     }
   } catch (error) {
     console.warn('Error finding tenant by intervention globally:', error);
@@ -2871,82 +2821,21 @@ export async function findMissionByInterventionGlobally(
   if (!checkRef) return null;
 
   try {
-    const tenants = await getRegisteredTenants();
-    const allTenantIds = ['demo', ...tenants.map(t => t.id)];
-    const prioritizedTenants = tenantHint 
-      ? Array.from(new Set([tenantHint, ...allTenantIds]))
-      : allTenantIds;
-
-    // Search across tenants
-    for (const tid of prioritizedTenants) {
-      try {
-        const candidateKeys = getCollectionKeyCandidates('fsmTours', tid);
-        let toursList: any[] | null = null;
-
-        for (const ck of candidateKeys) {
-          toursList = await fetchRawCollectionFromFirestore<any[]>(ck, 4000);
-          if (Array.isArray(toursList) && toursList.length > 0) break;
-        }
-
-        if (!Array.isArray(toursList) || toursList.length === 0) {
-          const directKey = tid === 'demo' ? 'fsmTours' : `${tid}_fsmTours`;
-          toursList = await fetchRawCollectionFromFirestore<any[]>(directKey, 4000);
-        }
-
-        if (Array.isArray(toursList)) {
-          for (const tour of toursList) {
-            const missions = tour.missions || [];
-            const foundMission = missions.find((m: any) => 
-              (m.interventionReference && m.interventionReference.trim().toUpperCase() === checkRef) ||
-              (m.id && String(m.id).trim().toUpperCase() === checkRef)
-            );
-            if (foundMission) {
-              return {
-                tenantId: tid,
-                tour,
-                mission: foundMission,
-                tours: toursList
-              };
-            }
-          }
-        }
-      } catch (err) {
-        console.warn(`Error searching fsmTours for tenant ${tid}:`, err);
+    const resp = await fetch('/api/public/lookup-mission', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ interventionRef: checkRef, tenantHint }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data.found) {
+        return {
+          tenantId: data.tenantId,
+          tour: data.tour,
+          mission: data.mission,
+          tours: [],
+        };
       }
-    }
-
-    // Secondary check: If not found in fsmTours, check generatedReports for pending report line
-    for (const tid of prioritizedTenants) {
-      try {
-        const repKey = tid === 'demo' ? 'generatedReports' : `${tid}_generatedReports`;
-        const reportsList = await fetchRawCollectionFromFirestore<any[]>(repKey, 3000);
-        if (Array.isArray(reportsList)) {
-          const matchedReport = reportsList.find((r: any) => 
-            (r.interventionReference && r.interventionReference.trim().toUpperCase() === checkRef) ||
-            (r.id && String(r.id).trim().toUpperCase() === checkRef) ||
-            (r.missionId && String(r.missionId).trim().toUpperCase() === checkRef)
-          );
-          if (matchedReport) {
-            // Synthesize mission object from report
-            const synthMission = {
-              id: matchedReport.missionId || matchedReport.id,
-              interventionReference: matchedReport.interventionReference || checkRef,
-              estimatedDate: matchedReport.estimatedDate || matchedReport.date || '',
-              estimatedSlot: matchedReport.estimatedSlot || '',
-              status: matchedReport.missionStatus || 'Brouillon',
-              refusalComment: matchedReport.refusalComment || '',
-              clientName: matchedReport.clientName || matchedReport.siteMission || '',
-              defibIdentifiant: matchedReport.defibIdentifiant || '',
-            };
-            return {
-              tenantId: tid,
-              tour: { id: matchedReport.origin || 'Tour', title: matchedReport.tourName || 'Tour' },
-              mission: synthMission,
-              tours: []
-            };
-          }
-        }
-      } catch (_) {}
     }
   } catch (err) {
     console.warn('Error in findMissionByInterventionGlobally:', err);
@@ -2968,91 +2857,28 @@ export async function updateMissionStatusByIntervention(
   if (!checkRef) return { success: false };
 
   try {
-    const searchResult = await findMissionByInterventionGlobally(checkRef, tenantHint);
-    if (!searchResult) {
-      console.warn(`Could not locate mission with interventionReference ${checkRef}`);
-      return { success: false };
+    const resp = await fetch('/api/public/update-mission-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        interventionRef: checkRef,
+        newStatus,
+        comment,
+        tenantHint,
+      }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      return {
+        success: Boolean(data?.success),
+        tenantId: data?.tenantId,
+        mission: data?.mission,
+      };
     }
-
-    const { tenantId, tours } = searchResult;
-    const nowIso = new Date().toISOString();
-    let updatedMission: any = null;
-
-    if (Array.isArray(tours) && tours.length > 0) {
-      const updatedTours = tours.map((tour) => {
-        let tourChanged = false;
-        const nextMissions = (tour.missions || []).map((m: any) => {
-          if (
-            (m.interventionReference && m.interventionReference.trim().toUpperCase() === checkRef) ||
-            (m.id && String(m.id).trim().toUpperCase() === checkRef)
-          ) {
-            tourChanged = true;
-            updatedMission = {
-              ...m,
-              status: newStatus,
-              refusalComment: comment !== undefined ? comment : (m.refusalComment || ''),
-              clientRefusalComment: comment !== undefined ? comment : (m.clientRefusalComment || ''),
-              clientDecisionDate: nowIso,
-              updatedAt: nowIso
-            };
-            return updatedMission;
-          }
-          return m;
-        });
-
-        if (tourChanged) {
-          return { ...tour, missions: nextMissions, updatedAt: nowIso };
-        }
-        return tour;
-      });
-
-      // Save updated tours to Firestore
-      await saveCollectionToFirestore('fsmTours', updatedTours, tenantId);
-
-      // Save to local cache
-      try {
-        localStorage.setItem(`defib_${tenantId}_fsm_tours`, JSON.stringify(updatedTours));
-      } catch (_) {}
-    }
-
-    // Also synchronize generatedReports for that tenant so GMAO stays up to date
-    try {
-      const repKey = tenantId === 'demo' ? 'generatedReports' : `${tenantId}_generatedReports`;
-      const reportsList = await fetchRawCollectionFromFirestore<any[]>(repKey, 3000);
-      if (Array.isArray(reportsList)) {
-        let reportsChanged = false;
-        const updatedReports = reportsList.map((rep) => {
-          if (
-            (rep.interventionReference && rep.interventionReference.trim().toUpperCase() === checkRef) ||
-            (updatedMission && rep.missionId && String(rep.missionId) === String(updatedMission.id))
-          ) {
-            reportsChanged = true;
-            return {
-              ...rep,
-              missionStatus: newStatus,
-              refusalComment: comment !== undefined ? comment : rep.refusalComment,
-              updatedAt: nowIso
-            };
-          }
-          return rep;
-        });
-
-        if (reportsChanged) {
-          await saveCollectionToFirestore('generatedReports', updatedReports, tenantId);
-          try {
-            localStorage.setItem(`defib_${tenantId}_generated_reports`, JSON.stringify(updatedReports));
-          } catch (_) {}
-        }
-      }
-    } catch (repErr) {
-      console.warn('Failed to sync report status with mission decision:', repErr);
-    }
-
-    return { success: true, tenantId, mission: updatedMission };
   } catch (error) {
     console.error('Error updating mission status by intervention:', error);
-    return { success: false };
   }
+  return { success: false };
 }
 
 function fileOrBlobToDataUrl(file: File | Blob): Promise<string> {

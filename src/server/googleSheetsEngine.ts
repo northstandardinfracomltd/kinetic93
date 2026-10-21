@@ -191,10 +191,17 @@ export function getGlobalGoogleConfig(): GlobalGoogleSheetsConfig {
 
 export function saveGlobalGoogleConfig(config: GlobalGoogleSheetsConfig): GlobalGoogleSheetsConfig {
   const current = getGlobalGoogleConfig();
+  const cleanApiKey = config.apiKey !== undefined ? config.apiKey.trim() : '';
+  const cleanSaJson = config.serviceAccountJson !== undefined ? config.serviceAccountJson.trim() : '';
   const merged: GlobalGoogleSheetsConfig = {
-    apiKey: config.apiKey !== undefined ? config.apiKey.trim() : current.apiKey,
-    serviceAccountJson: config.serviceAccountJson !== undefined ? config.serviceAccountJson.trim() : current.serviceAccountJson,
-    appsScriptBridgeUrl: config.appsScriptBridgeUrl !== undefined ? config.appsScriptBridgeUrl.trim() : current.appsScriptBridgeUrl,
+    apiKey: cleanApiKey && !cleanApiKey.includes('••••') ? cleanApiKey : current.apiKey,
+    serviceAccountJson: cleanSaJson && cleanSaJson.startsWith('{') ? cleanSaJson : current.serviceAccountJson,
+    appsScriptBridgeUrl:
+      config.appsScriptBridgeUrl !== undefined
+        ? config.appsScriptBridgeUrl.trim()
+        : (config as any).appsScriptUrl !== undefined
+        ? String((config as any).appsScriptUrl).trim()
+        : current.appsScriptBridgeUrl,
     updatedAt: new Date().toISOString(),
   };
   cachedAccessToken = null;
