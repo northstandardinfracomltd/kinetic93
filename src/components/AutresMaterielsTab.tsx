@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { OtherEquipment, Client, Variable, CompanyInfo } from '../types';
-import { Plus, Search, Trash2, Edit, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, Trash2, Edit } from 'lucide-react';
 import { generateRandomShortCode } from '../utils';
 import { t } from '../utils/translate';
 import { getRegionsForCountry } from '../utils/regions';
@@ -263,6 +263,13 @@ export default function AutresMaterielsTab({
   const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
   const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
   const effectiveRefreshing = isRefreshing || isLocalRefreshing;
+  const [clickedPill, setClickedPill] = useState<{ id: string; key: number } | null>(null);
+  const triggerPillWave = (id: string) => {
+    setClickedPill(null);
+    requestAnimationFrame(() => {
+      setClickedPill({ id, key: Date.now() });
+    });
+  };
 
   const resolvedSpreadsheetUrl = useMemo(() => {
     const raw =
@@ -370,6 +377,32 @@ export default function AutresMaterielsTab({
   const [editingItem, setEditingItem] = useState<OtherEquipment | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('Tous');
   const [isMapOpen, setIsMapOpen] = useState(false);
+
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
+  const [isTableFitView, setIsTableFitView] = useState<boolean>(false);
+  const [tableFitScale, setTableFitScale] = useState<number>(1);
+  const naturalTableWidthRef = useRef<number>(1500);
+
+  const toggleTableFitView = () => {
+    setIsTableFitView(prev => {
+      const next = !prev;
+      if (next) {
+        if (bottomScrollRef.current) {
+          const sWidth = bottomScrollRef.current.scrollWidth;
+          if (sWidth > 500) {
+            naturalTableWidthRef.current = sWidth;
+          }
+          const clientW = bottomScrollRef.current.clientWidth;
+          const naturalW = naturalTableWidthRef.current || 1500;
+          const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
+          setTableFitScale(scale);
+        }
+      } else {
+        setTableFitScale(1);
+      }
+      return next;
+    });
+  };
 
   const isAnySelectedInTour = useMemo(() => {
     return selectedIds.some(id => {
@@ -1047,9 +1080,15 @@ export default function AutresMaterielsTab({
     fontWeight: 100,
     letterSpacing: 'normal',
     textTransform: 'none',
-    color: '#000000',
+    color: 'rgb(80 97 122)',
     cursor: 'default',
     whiteSpace: 'nowrap',
+    position: 'relative',
+    top: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+    borderTop: '0px solid transparent',
+    borderBottom: '0px solid transparent',
   };
 
   const searchInputStyle: React.CSSProperties = {
@@ -1169,13 +1208,19 @@ export default function AutresMaterielsTab({
               <div className="flex flex-wrap items-center gap-3">
                 {/* Field recherche (Search input) with size reduced */}
                 <div className="relative w-full sm:w-64">
+                  <style>{`
+                    #search-materiels-input::placeholder {
+                      color: rgb(222, 222, 222) !important;
+                      opacity: 1 !important;
+                    }
+                  `}</style>
                   <input
                     type="text"
                     id="search-materiels-input"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Recherche."
-                    className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
+                    placeholder={t('Recherche rapide')}
+                    className="w-full text-black placeholder:text-[rgb(222,222,222)] placeholder:font-light outline-none"
                     style={searchInputStyle}
                     onMouseEnter={() => setIsSearchHovered(true)}
                     onMouseLeave={() => setIsSearchHovered(false)}
@@ -1185,13 +1230,6 @@ export default function AutresMaterielsTab({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => setIsMapOpen(true)}
-                    id="btn-open-map"
-                    style={customButtonStyle}
-                  >
-                    Plan
-                  </button>
                   <button
                     type="button"
                     disabled={!resolvedSpreadsheetUrl}
@@ -1218,7 +1256,7 @@ export default function AutresMaterielsTab({
 
           {/* Filters Pills Row */}
           <div 
-            className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" 
+            className="px-4 flex flex-wrap items-center gap-2.5 justify-center sm:justify-start pt-5" 
             id="autres-materiels-category-pills"
             style={{ maxWidth: '98%', margin: '0 auto' }}
           >
@@ -1235,7 +1273,10 @@ export default function AutresMaterielsTab({
                 <button
                   key={filterOpt}
                   type="button"
-                  onClick={() => setCategoryFilter(filterOpt)}
+                  onClick={() => {
+                    triggerPillWave(`cat-${filterOpt}`);
+                    setCategoryFilter(filterOpt);
+                  }}
                   style={{
                     borderRadius: '1000px',
                     padding: '8px 16px',
@@ -1243,18 +1284,93 @@ export default function AutresMaterielsTab({
                     fontWeight: 100,
                     cursor: 'pointer',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: isActive ? '#2e54ff' : '#ffffff',
-                    color: isActive ? '#ffffff' : '#000000',
-                    border: isActive ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
+                    backgroundColor: isActive ? '#2e54ff' : 'rgb(232 236 255)',
+                    color: isActive ? '#ffffff' : '#2e54ff',
+                    border: 'none',
                     boxShadow: 'none',
                     transition: 'all 0.15s ease'
                   }}
-                  className="transition-all"
+                  className={`relative overflow-hidden transition-all select-none ${clickedPill?.id === `cat-${filterOpt}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                 >
                   {filterOpt} ({count})
                 </button>
               );
             })}
+
+            <button
+              type="button"
+              id="btn-refresh-data-autres-materiels"
+              onClick={() => {
+                triggerPillWave('refresh-autres');
+                handleRefreshClick();
+              }}
+              disabled={effectiveRefreshing}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: 'rgb(192 248 252)',
+                color: 'rgb(5 112 114)',
+                border: 'none',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill?.id === 'refresh-autres' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+              title={t("Actualiser les données")}
+            >
+              {effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}
+            </button>
+
+            {/* 3-dots Native System Dropdown */}
+            <div
+              className="relative inline-flex items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
+              style={{
+                background: '#f5f7fa',
+                borderRadius: '100px',
+                padding: '12px'
+              }}
+              title={t("Plus")}
+            >
+              <img
+                src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                alt={t("Plus")}
+                style={{ width: '18px', height: '18px' }}
+                className="w-[18px] h-[18px] object-contain shrink-0 pointer-events-none"
+                referrerPolicy="no-referrer"
+              />
+              <select
+                id="autres-materiels-more-options-dropdown"
+                aria-label={t("Plus")}
+                value=""
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'toggle-fit-view') {
+                    toggleTableFitView();
+                  } else if (val === 'spreadsheet-editor') {
+                    handleOpenSpreadsheetEditor();
+                  } else if (val === 'open-map') {
+                    setIsMapOpen(true);
+                  }
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+              >
+                <option value="" disabled>
+                  —
+                </option>
+                <option value="toggle-fit-view">
+                  {isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
+                </option>
+                <option value="spreadsheet-editor" disabled={!resolvedSpreadsheetUrl}>
+                  {t("Ouvrir l'éditeur SpreadSheets")}
+                </option>
+                <option value="open-map">
+                  {t("Consulter la cartographie")}
+                </option>
+              </select>
+            </div>
           </div>
 
           {/* Dynamic bulk Action Bar at the top of the table if at least one record checked */}
@@ -1434,74 +1550,31 @@ export default function AutresMaterielsTab({
             </div>
           )}
 
-          {/* Sub-filter text buttons: Actualiser les données + Ouvrir l'éditeur SpreadSheets */}
-          <div 
-            className="flex items-center justify-start gap-4 flex-wrap"
-            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
-          >
-            <button
-              type="button"
-              id="btn-refresh-data-autres-materiels"
-              onClick={handleRefreshClick}
-              disabled={effectiveRefreshing}
-              style={{
-                fontSize: '9px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                fontWeight: 100,
-                cursor: 'pointer',
-                background: 'transparent',
-                border: 'none',
-                padding: '2px 4px',
-                color: '#000000',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                textDecoration: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              className="hover:opacity-80 transition-all select-none cursor-pointer"
-              title={t("Actualiser les données")}
-            >
-              <RefreshCw size={10} className={`shrink-0 text-black ${effectiveRefreshing ? 'animate-spin' : ''}`} color="#000000" />
-              <span style={{ color: '#000000' }}>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
-            </button>
-
-            <button
-              type="button"
-              id="btn-open-spreadsheet-editor-autres-materiels"
-              onClick={handleOpenSpreadsheetEditor}
-              disabled={!resolvedSpreadsheetUrl}
-              style={{
-                fontSize: '9px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                fontWeight: 100,
-                cursor: resolvedSpreadsheetUrl ? 'pointer' : 'not-allowed',
-                opacity: resolvedSpreadsheetUrl ? 1 : 0.4,
-                background: 'transparent',
-                border: 'none',
-                padding: '2px 4px',
-                color: '#000000',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                textDecoration: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              className={resolvedSpreadsheetUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
-              title={t("Ouvrir l'éditeur SpreadSheets")}
-            >
-              <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
-              <span style={{ color: '#000000' }}>{t("Ouvrir l'éditeur SpreadSheets")}</span>
-            </button>
-          </div>
-
           {/* Main Table Records Sheet */}
           <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left font-sans border-collapse text-xs" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+            <div 
+              ref={bottomScrollRef}
+              className={isTableFitView ? "overflow-x-hidden" : "overflow-x-auto"}
+              style={isTableFitView ? { width: '100%', overflowX: 'hidden' } : undefined}
+            >
+              <table 
+                className="w-full text-left font-sans border-collapse text-xs" 
+                style={{ 
+                  borderTop: '0px solid transparent', 
+                  borderBottom: '0px solid transparent',
+                  ...(isTableFitView ? {
+                    zoom: tableFitScale,
+                    width: `${naturalTableWidthRef.current || 1500}px`,
+                    minWidth: `${naturalTableWidthRef.current || 1500}px`,
+                    transition: 'zoom 0.15s ease'
+                  } : {
+                    width: '100%'
+                  })
+                }}
+              >
                 <thead>
-                  <tr className="bg-transparent">
-                    <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default' }}>
+                  <tr className="bg-transparent" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
+                    <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default', position: 'relative', top: 0, backgroundColor: '#ffffff', zIndex: 10, borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
                       <button
                         type="button"
                         onClick={() => {
@@ -1527,17 +1600,17 @@ export default function AutresMaterielsTab({
                         )}
                       </button>
                     </th>
-                    <th className="px-5 py-3.5 whitespace-nowrap" style={thStyle}>Catégorie.</th>
-                    <th className="px-5 py-3.5 whitespace-nowrap" style={thStyle}>Identifiant.</th>
-                    <th className="px-5 py-3.5 whitespace-nowrap" style={thStyle}>Client.</th>
-                    <th className="px-5 py-3.5 whitespace-nowrap" style={thStyle}>Localisation.</th>
-                    <th className="px-5 py-3.5 whitespace-nowrap" style={thStyle}>Expir. garantie.</th>
-                    <th className="px-5 py-3.5 whitespace-nowrap" style={thStyle}>Pro. visite.</th>
-                    <th className="px-5 py-3.5 text-center whitespace-nowrap" style={thStyle}>Tournée.</th>
-                    <th className="px-5 py-3.5 text-right w-32 whitespace-nowrap" style={thStyle}>Actions.</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Catégorie.</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Identifiant.</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Client.</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Localisation.</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Expir. garantie.</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Pro. visite.</th>
+                    <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Tournée.</th>
+                    <th className="px-4 py-3.5 text-right w-12 whitespace-nowrap" style={thStyle}>Actions.</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-slate-700">
+                <tbody className="text-slate-700 text-xs">
                   {filteredList.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="text-center py-10 font-sans" style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
@@ -1553,7 +1626,9 @@ export default function AutresMaterielsTab({
                         <tr 
                           key={item.id} 
                           onClick={() => handleOpenEditForm(item)}
-                          className="group hover:bg-[#ecefff] transition-all cursor-pointer"
+                          className={`group hover:bg-[#f5f7fa] transition-all cursor-pointer ${
+                            isRowChecked ? 'bg-[#ecefff]/60' : ''
+                          }`}
                           style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #2e54ff' } : undefined}
                         >
                           {/* Checkbox column */}
@@ -1582,7 +1657,7 @@ export default function AutresMaterielsTab({
                               )}
                             </button>
                           </td>
-                          <td className="px-5 py-4 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                          <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             <div className="flex flex-col items-start gap-1">
                               <span 
                                 style={{
@@ -1600,29 +1675,29 @@ export default function AutresMaterielsTab({
                                 }}
                               >
                                 <span 
-                                  className="w-2.5 h-2.5 rounded-full mr-2 shrink-0" 
+                                  className="w-2 h-2 rounded-full mr-2 shrink-0" 
                                   style={{ backgroundColor: getMaintenanceDotColor(item.prochaineMaintenance) }}
                                 />
                                 {item.categorie}
                               </span>
                             </div>
                           </td>
-                          <td className="px-5 py-4 select-all whitespace-nowrap text-xs" style={{ fontSize: '15px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <td className="px-4 py-5 select-all whitespace-nowrap font-sans" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             {item.identifiant || '—'}
                           </td>
-                          <td className="px-5 py-4 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                          <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             {clientData ? clientData.denomination : (item.clientId || item.nomPrenomSite || '')}
                           </td>
-                          <td className="px-5 py-4 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                          <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             {item.ville}{item.codePostal ? ` (${item.codePostal})` : ''}
                           </td>
-                          <td className="px-5 py-4 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                          <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             {item.expirationGarantie || '—'}
                           </td>
-                          <td className="px-5 py-4 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                          <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             {item.prochaineMaintenance || '—'}
                           </td>
-                          <td className="px-5 py-4 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             {(() => {
                               const matchingTour = (fsmTours || []).find(t => 
                                 t.missions?.some((m: any) => m.defibIdentifiant === item.identifiant)
@@ -1651,23 +1726,25 @@ export default function AutresMaterielsTab({
                               return null;
                             })()}
                           </td>
-                          <td className="px-5 py-4 text-right space-x-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => handleOpenEditForm(item)}
-                              style={rowActionButton18Style}
-                              className="transition-colors cursor-pointer"
-                            >
-                              Modifier
-                            </button>
-                            <button
-                              onClick={() => {
-                                handleDeleteItem(item.id);
-                              }}
-                              style={rowActionButton18Style}
-                              className="transition-colors cursor-pointer"
-                            >
-                              Supprimer
-                            </button>
+                          <td className="px-4 py-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                            <div className="inline-flex gap-1.5">
+                              <button
+                                onClick={() => handleOpenEditForm(item)}
+                                style={rowActionButton18Style}
+                                className="transition-colors cursor-pointer"
+                              >
+                                Modifier
+                              </button>
+                              <button
+                                onClick={() => {
+                                  handleDeleteItem(item.id);
+                                }}
+                                style={rowActionButton18Style}
+                                className="transition-colors cursor-pointer"
+                              >
+                                Supprimer
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

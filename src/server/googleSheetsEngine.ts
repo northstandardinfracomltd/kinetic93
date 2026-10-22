@@ -1438,7 +1438,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Expéditeur', field: 'authorName', aliases: ['expediteur', 'sender', 'authorname', 'auteur', 'collaborateur', 'utilisateur', 'membre', 'nom', 'de'] },
     { header: 'Email', field: 'authorEmail', aliases: ['email', 'authoremail', 'mail', 'courriel'] },
     { header: 'Rôle', field: 'role', aliases: ['role', 'fonction', 'statut', 'poste'] },
-    { header: 'Canal', field: 'tag', aliases: ['canal', 'channel', 'tag', 'destinataire', 'conversation', 'sujet'] },
+    { header: 'Canal.', field: 'tag', aliases: ['canal', 'channel', 'tag', 'destinataire', 'conversation', 'sujet'] },
     { header: 'Message', field: 'content', aliases: ['message', 'text', 'content', 'texte', 'contenu', 'corps'] },
     { header: 'Date & Heure', field: 'dateStr', aliases: ['dateheure', 'dateetheure', 'datestr', 'heure', 'time', 'horaire', 'horodatage', 'date'] },
     { header: 'Timestamp', field: 'createdAt', aliases: ['timestamp', 'createdat'] },
@@ -3504,8 +3504,8 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.sender = merged.sender || merged.authorName;
     merged.authorEmail = merged.authorEmail || '';
     merged.role = merged.role || 'Administrateur';
-    merged.tag = merged.tag || merged.channel || 'Exploitation';
-    merged.channel = merged.channel || merged.tag;
+    merged.tag = 'All';
+    merged.channel = 'All';
     merged.content = merged.content || merged.text || '';
     merged.text = merged.text || merged.content;
     merged.createdAt = merged.createdAt ? (isNaN(Number(merged.createdAt)) ? Date.parse(String(merged.createdAt)) || Date.now() : Number(merged.createdAt)) : Date.now();
@@ -4887,7 +4887,10 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.date = enriched.date || enriched.dateStr || '';
   } else if (tabType === 'messagesInternes') {
     enriched.authorName = enriched.authorName || enriched.sender || '';
-    enriched.tag = enriched.tag || enriched.channel || 'Exploitation';
+    enriched.tag = 'All';
+    enriched.channel = 'All';
+    enriched['Canal.'] = 'All';
+    enriched['Canal'] = 'All';
     enriched.content = enriched.content || enriched.text || '';
     enriched.dateStr = enriched.dateStr || enriched.time || '';
   } else if (tabType === 'membresEnvironnement') {

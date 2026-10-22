@@ -11,62 +11,8 @@ interface TopBarProgressProps {
   zIndex?: number;
 }
 
-export const TopBarProgress: React.FC<TopBarProgressProps> = ({
-  triggerKey,
-  duration = 3000,
-  height = 3.5,
-  zIndex = 99999,
-}) => {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    if (!triggerKey) return;
-    setVisible(true);
-    const timer = setTimeout(() => {
-      setVisible(false);
-    }, duration);
-
-    return () => clearTimeout(timer);
-  }, [triggerKey, duration]);
-
-  if (!visible) return null;
-
-  return (
-    <div
-      className="fixed top-0 left-0 right-0 pointer-events-none overflow-hidden"
-      style={{
-        height: `${height}px`,
-        zIndex,
-        backgroundColor: 'rgba(0, 0, 0, 0.04)',
-      }}
-      id="tab-topbar-loading-indicator"
-    >
-      {/* Material Design Indeterminate Sliding Bar 1 (#0362FF) */}
-      <div
-        className="absolute top-0 bottom-0 mat-bar-1"
-        style={{
-          backgroundColor: '#0362FF',
-          height: `${height}px`,
-        }}
-      />
-      {/* Material Design Indeterminate Sliding Bar 2 (#2e54ff) */}
-      <div
-        className="absolute top-0 bottom-0 mat-bar-2"
-        style={{
-          backgroundColor: '#2e54ff',
-          height: `${height}px`,
-        }}
-      />
-      {/* Material Design Indeterminate Sliding Bar 3 (#2e54ff) */}
-      <div
-        className="absolute top-0 bottom-0 mat-bar-3"
-        style={{
-          backgroundColor: '#2e54ff',
-          height: `${height}px`,
-        }}
-      />
-    </div>
-  );
+export const TopBarProgress: React.FC<TopBarProgressProps> = () => {
+  return null;
 };
 
 export default TopBarProgress;

@@ -968,7 +968,7 @@ export default function DefibTab({
     fontWeight: 100,
     letterSpacing: 'normal',
     textTransform: 'none',
-    color: '#000000',
+    color: 'rgb(80 97 122)',
     cursor: 'default',
     whiteSpace: 'nowrap',
     position: 'relative',
@@ -2163,6 +2163,13 @@ export default function DefibTab({
   const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | null>(null);
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('all');
+  const [clickedPill, setClickedPill] = useState<{ id: string; key: number } | null>(null);
+  const triggerPillWave = (id: string) => {
+    setClickedPill(null);
+    requestAnimationFrame(() => {
+      setClickedPill({ id, key: Date.now() });
+    });
+  };
 
   // Ensure 100% of MAIN OUI defibrillators from the tenant's Spreadsheet are loaded when the Plan map is opened
   useEffect(() => {
@@ -4528,6 +4535,12 @@ export default function DefibTab({
               <div className="flex flex-wrap items-center gap-3">
                 {/* Field recherche (Search input) */}
                 <div className="relative w-full sm:w-48 md:w-52">
+                  <style>{`
+                    #search-defibs-input::placeholder {
+                      color: rgb(222, 222, 222) !important;
+                      opacity: 1 !important;
+                    }
+                  `}</style>
                   <input
                     type="text"
                     id="search-defibs-input"
@@ -4538,8 +4551,8 @@ export default function DefibTab({
                         onSearchChange(e.target.value);
                       }
                     }}
-                    placeholder={t('Recherche rapide.')}
-                    className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
+                    placeholder={t('Recherche rapide')}
+                    className="w-full text-black placeholder:text-[rgb(222,222,222)] placeholder:font-light outline-none"
                     style={searchInputStyle}
                     onMouseEnter={() => setIsSearchHovered(true)}
                     onMouseLeave={() => setIsSearchHovered(false)}
@@ -4618,56 +4631,6 @@ export default function DefibTab({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => {
-                    setDraftFilters(activeFilters);
-                    setAdvancedSearchInputValue('');
-                    setIsFilterPaneOpen(true);
-                  }}
-                  id="btn-trigger-filters"
-                  style={customButtonStyle}
-                >
-                  <span>{t('Filtres')}</span>
-                  {(() => {
-                    const count = [
-                      activeFilters.region !== 'Tous',
-                      activeFilters.modeleId !== 'Tous',
-                      activeFilters.clientId !== 'Tous',
-                      activeFilters.action3To6 === true,
-                      activeFilters.actionUnder3 === true,
-                      activeFilters.actionExpired === true,
-                      activeFilters.categorie !== 'Tous',
-                      activeFilters.contrat !== 'Tous',
-                      activeFilters.actionRejected === true,
-                      Boolean(activeFilters.advancedSearchTerms && activeFilters.advancedSearchTerms.length > 0),
-                    ].filter(Boolean).length;
-                    return count > 0 ? (
-                      <span
-                        className="inline-flex items-center justify-center font-black rounded-full"
-                        style={{
-                          color: '#ffffff',
-                          background: '#0f172a',
-                          border: '1.5px solid #ffffff59',
-                          fontSize: '14px',
-                          width: '25px',
-                          height: '25px',
-                          marginLeft: '-1px',
-                          marginRight: '-5px',
-                          padding: '0px 1px 0px 0px',
-                        }}
-                      >
-                        {count}
-                      </span>
-                    ) : null;
-                  })()}
-                </button>
-                <button
-                  onClick={() => setIsMapOpen(true)}
-                  id="btn-open-map"
-                  style={customButtonStyle}
-                >
-                  {t('Plan')}
-                </button>
                 <button
                   type="button"
                   disabled={!resolvedSpreadsheetUrl}
@@ -4973,7 +4936,10 @@ export default function DefibTab({
           >
             <button
               type="button"
-              onClick={() => setSortFilter(prev => prev === 'recent' ? null : 'recent')}
+              onClick={() => {
+                triggerPillWave('recent');
+                setSortFilter(prev => prev === 'recent' ? null : 'recent');
+              }}
               style={{
                 borderRadius: '1000px',
                 padding: '8px 16px',
@@ -4987,14 +4953,17 @@ export default function DefibTab({
                 boxShadow: 'none',
                 transition: 'all 0.15s ease'
               }}
-              className="transition-all"
+              className={`relative overflow-hidden transition-all ${clickedPill?.id === 'recent' ? 'sidebar-nav-click-shrink-wave' : ''}`}
             >
               {t("Récemment")}
             </button>
 
             <button
               type="button"
-              onClick={() => setSortFilter(prev => prev === 'closest_maintenance' ? null : 'closest_maintenance')}
+              onClick={() => {
+                triggerPillWave('closest_maintenance');
+                setSortFilter(prev => prev === 'closest_maintenance' ? null : 'closest_maintenance');
+              }}
               style={{
                 borderRadius: '1000px',
                 padding: '8px 16px',
@@ -5008,7 +4977,7 @@ export default function DefibTab({
                 boxShadow: 'none',
                 transition: 'all 0.15s ease'
               }}
-              className="transition-all"
+              className={`relative overflow-hidden transition-all ${clickedPill?.id === 'closest_maintenance' ? 'sidebar-nav-click-shrink-wave' : ''}`}
             >
               {t("Pro.Main. Urgente")}
             </button>
@@ -5018,7 +4987,10 @@ export default function DefibTab({
               <button
                 type="button"
                 id="filter-postal-court-select"
-                onClick={() => setSelectedDepartment(null)}
+                onClick={() => {
+                  triggerPillWave('postal');
+                  setSelectedDepartment(null);
+                }}
                 style={{
                   borderRadius: '1000px',
                   padding: '8px 16px',
@@ -5034,13 +5006,15 @@ export default function DefibTab({
                   textAlign: 'center',
                   transition: 'all 0.15s ease'
                 }}
-                className="transition-all select-none"
+                className={`relative overflow-hidden transition-all select-none ${clickedPill?.id === 'postal' ? 'sidebar-nav-click-shrink-wave' : ''}`}
                 title={`${t("Indicatif Postal")} (${selectedDepartment})`}
               >
                 {`${t("Indicatif Postal")} (${selectedDepartment})`}
               </button>
             ) : (
-              <div className="relative inline-block">
+              <div
+                className={`relative inline-block overflow-hidden rounded-full ${clickedPill?.id === 'postal' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+              >
                 <style>{`
                   #filter-postal-court-select {
                     appearance: none !important;
@@ -5055,6 +5029,7 @@ export default function DefibTab({
                 <select
                   id="filter-postal-court-select"
                   value=""
+                  onMouseDown={() => triggerPillWave('postal')}
                   onChange={(e) => {
                     const val = e.target.value;
                     if (val && val !== '__ALL__') {
@@ -5102,7 +5077,10 @@ export default function DefibTab({
             <button
               type="button"
               id="btn-refresh-data"
-              onClick={handleRefreshClick}
+              onClick={() => {
+                triggerPillWave('refresh');
+                handleRefreshClick();
+              }}
               disabled={effectiveRefreshing}
               style={{
                 borderRadius: '1000px',
@@ -5117,7 +5095,7 @@ export default function DefibTab({
                 boxShadow: 'none',
                 transition: 'all 0.15s ease'
               }}
-              className="hover:opacity-80 transition-all select-none cursor-pointer"
+              className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill?.id === 'refresh' ? 'sidebar-nav-click-shrink-wave' : ''}`}
               title={t("Actualiser Données")}
             >
               {effectiveRefreshing ? t("Actualisation...") : t("Actualiser Données")}
@@ -5138,9 +5116,9 @@ export default function DefibTab({
                 boxShadow: 'none',
                 transition: 'all 0.15s ease'
               }}
-              className="transition-all select-none"
+              className="relative overflow-hidden transition-all select-none"
             >
-              {`${t("Conforme")}: ${compliancePercent}%`}
+              {`${compliancePercent}% ${t("Conforme")}`}
             </button>
 
             {/* 3-dots Native System Dropdown */}
@@ -5166,13 +5144,17 @@ export default function DefibTab({
                 value=""
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val === 'toggle-fit-view') {
+                  if (val === 'open-filters') {
+                    setDraftFilters(activeFilters);
+                    setAdvancedSearchInputValue('');
+                    setIsFilterPaneOpen(true);
+                  } else if (val === 'open-map') {
+                    setIsMapOpen(true);
+                  } else if (val === 'toggle-fit-view') {
                     toggleTableFitView();
                   } else if (val === 'manage-columns') {
                     setTempHiddenColumns(new Set(hiddenColumns));
                     setIsColumnVisibilityPaneOpen(true);
-                  } else if (val === 'defibeo-intelligence') {
-                    setIsDefibeoIntelligenceOpen(true);
                   } else if (val === 'spreadsheet-editor') {
                     handleOpenSpreadsheetEditor();
                   }
@@ -5182,14 +5164,17 @@ export default function DefibTab({
                 <option value="" disabled>
                   —
                 </option>
+                <option value="open-filters">
+                  {t("Appliquer des filtres")}
+                </option>
+                <option value="open-map">
+                  {t("Consulter la cartographie")}
+                </option>
                 <option value="toggle-fit-view">
                   {isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
                 </option>
                 <option value="manage-columns">
                   {t("Gérer la visibilité des colonnes")}
-                </option>
-                <option value="defibeo-intelligence">
-                  {t("Interroger l’IA Defibeo Intelligence")}
                 </option>
                 <option value="spreadsheet-editor" disabled={!resolvedSpreadsheetUrl}>
                   {t("Ouvrir l'éditeur SpreadSheets")}
@@ -5358,7 +5343,7 @@ export default function DefibTab({
                       key={df.id}
                       id={`defib-row-${df.id}`}
                       onClick={(e) => openEditForm(df, e)}
-                      className={`group hover:bg-[#ecefff] transition-all cursor-pointer ${
+                      className={`group hover:bg-[#f5f7fa] transition-all cursor-pointer ${
                         isChecked ? 'bg-[#ecefff]/60' : ''
                       }`}
                       style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #2e54ff' } : undefined}

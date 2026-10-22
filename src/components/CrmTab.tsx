@@ -295,6 +295,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   // CRM Date Range Filters (Filtre Date Début et Filtre Date Fin)
   const [crmDateStart, setCrmDateStart] = useState<string>('');
   const [crmDateEnd, setCrmDateEnd] = useState<string>('');
+  const [clickedPill, setClickedPill] = useState<string | null>(null);
 
   // CRM Filtres Side-pane state
   const [isFilterPaneOpen, setIsFilterPaneOpen] = useState(false);
@@ -303,6 +304,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [filterSemaine, setFilterSemaine] = useState<string>('Tous');
   const [filterSituationDevis, setFilterSituationDevis] = useState<string>('Tous');
 
+  const [draftDateStart, setDraftDateStart] = useState<string>('');
+  const [draftDateEnd, setDraftDateEnd] = useState<string>('');
   const [draftFilterStatut, setDraftFilterStatut] = useState<'Tous' | 'Nouveau' | 'En cours' | 'Terminé'>('Tous');
   const [draftFilterCollaborateur, setDraftFilterCollaborateur] = useState<string>('Tous');
   const [draftFilterCriticite, setDraftFilterCriticite] = useState<string>('Tous');
@@ -310,6 +313,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [draftFilterSituationDevis, setDraftFilterSituationDevis] = useState<string>('Tous');
 
   const activeFiltersCount = (
+    (crmDateStart ? 1 : 0) +
+    (crmDateEnd ? 1 : 0) +
     (ticketStatusFilter !== 'Tous' ? 1 : 0) +
     (filterCollaborateur !== 'Tous' ? 1 : 0) +
     (filterCriticite !== 'Tous' ? 1 : 0) +
@@ -1617,12 +1622,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
   const thStyle: React.CSSProperties = {
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    fontWeight: 600,
+    fontWeight: 100,
     letterSpacing: 'normal',
     textTransform: 'none',
-    color: '#000000',
+    color: 'rgb(80 97 122)',
+    backgroundColor: '#ffffff',
     cursor: 'default',
-    fontSize: '15px',
+    fontSize: '16px',
     whiteSpace: 'nowrap',
   };
 
@@ -1777,7 +1783,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     <div className="space-y-6 animate-fadeIn" id="crm-tab-container">
       <style>{`
         #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-crm-input):not(.crm-event-date-input),
-        #crm-tab-container select,
+        #crm-tab-container select:not(#crm-more-options-dropdown),
         #crm-tab-container textarea:not(#crm-embed-textarea):not(#crm-relance-email-textarea):not(.crm-event-textarea) {
           padding: 10px 12px !important;
           border: 1px solid #dadada !important;
@@ -1791,6 +1797,46 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           outline: none !important;
           transition: all 0s !important;
           width: 100% !important;
+        }
+        #crm-tab-container select#crm-more-options-dropdown {
+          width: 100% !important;
+          height: 100% !important;
+          opacity: 0 !important;
+          position: absolute !important;
+          inset: 0 !important;
+          border: none !important;
+          outline: none !important;
+          padding: 0 !important;
+          background: transparent !important;
+          cursor: pointer !important;
+        }
+        #crm-tab-container #search-crm-input::placeholder {
+          color: rgb(222, 222, 222) !important;
+          opacity: 1 !important;
+        }
+        #crm-tab-container table,
+        #crm-tab-container thead,
+        #crm-tab-container tbody,
+        #crm-tab-container tr,
+        #crm-tab-container th,
+        #crm-tab-container td {
+          border: 0px solid transparent !important;
+          border-top: 0px solid transparent !important;
+          border-bottom: 0px solid transparent !important;
+          border-left: 0px solid transparent !important;
+          border-right: 0px solid transparent !important;
+        }
+        #crm-tab-container thead th {
+          background-color: #ffffff !important;
+          color: rgb(80 97 122) !important;
+          font-size: 16px !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+          letter-spacing: normal !important;
+          text-transform: none !important;
+        }
+        #crm-tab-container tbody tr:hover {
+          background-color: #f5f7fa !important;
         }
         #crm-tab-container input[type="date"]::-webkit-calendar-picker-indicator {
           display: block !important;
@@ -1827,7 +1873,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           min-height: 38px !important;
           line-height: 1.4 !important;
         }
-        #crm-tab-container select {
+        #crm-tab-container select:not(#crm-more-options-dropdown) {
           appearance: none !important;
           -webkit-appearance: none !important;
           -moz-appearance: none !important;
@@ -1847,8 +1893,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         }
         #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-crm-input),
         #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-crm-input),
-        #crm-tab-container select:hover:not(:disabled),
-        #crm-tab-container select:focus:not(:disabled),
+        #crm-tab-container select:not(#crm-more-options-dropdown):hover:not(:disabled),
+        #crm-tab-container select:not(#crm-more-options-dropdown):focus:not(:disabled),
         #crm-tab-container textarea:not(#crm-embed-textarea):hover:not(:disabled),
         #crm-tab-container textarea:not(#crm-embed-textarea):focus:not(:disabled),
         #crm-tab-container #search-crm-input:hover,
@@ -1857,7 +1903,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           outline-offset: 2px !important;
         }
         #crm-tab-container input:disabled,
-        #crm-tab-container select:disabled {
+        #crm-tab-container select:not(#crm-more-options-dropdown):disabled {
           background-color: #f1f5f9 !important;
           color: #000000 !important;
           cursor: not-allowed !important;
@@ -1882,14 +1928,123 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
           <div />
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* 3 Dots More Options Dropdown */}
+            {(() => {
+              const resolvedSpreadsheetUrl = getTenantSpreadsheetUrl('spreadsheetCrm', companyInfo);
+              return (
+                <div
+                  className="relative inline-flex items-center justify-center shrink-0 hover:opacity-80 transition-all select-none cursor-pointer"
+                  style={{
+                    background: '#f5f7fa',
+                    borderRadius: '100px',
+                    padding: '12px',
+                    cursor: 'pointer',
+                  }}
+                  title={t("Plus d'options")}
+                >
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                    alt="Options"
+                    style={{ width: '18px', height: '18px', display: 'block', pointerEvents: 'none' }}
+                    referrerPolicy="no-referrer"
+                  />
+                  <select
+                    id="crm-more-options-dropdown"
+                    aria-label={t("Plus d'options")}
+                    value=""
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'performance') {
+                        setIsPerformancePaneOpen(true);
+                      } else if (val === 'settings') {
+                        setIsSettingsPaneOpen(true);
+                      } else if (val === 'filters') {
+                        setDraftDateStart(crmDateStart);
+                        setDraftDateEnd(crmDateEnd);
+                        setDraftFilterStatut(ticketStatusFilter);
+                        setDraftFilterCollaborateur(filterCollaborateur);
+                        setDraftFilterCriticite(filterCriticite);
+                        setDraftFilterSemaine(filterSemaine);
+                        setDraftFilterSituationDevis(filterSituationDevis);
+                        setIsFilterPaneOpen(true);
+                      } else if (val === 'fit-view') {
+                        toggleTableFitView();
+                      } else if (val === 'columns') {
+                        setTempHiddenColumns(new Set(hiddenColumns));
+                        setColumnFilterScope('Actif');
+                        setIsColumnVisibilityPaneOpen(true);
+                      } else if (val === 'spreadsheet') {
+                        if (resolvedSpreadsheetUrl) {
+                          openTenantSpreadsheetUrl(resolvedSpreadsheetUrl);
+                        }
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    style={{ WebkitAppearance: 'menulist-button', appearance: 'auto', border: 'none', outline: 'none' }}
+                  >
+                    <option value="" disabled hidden></option>
+                    <option value="performance">
+                      {t("Statistiques de performance")}
+                    </option>
+                    <option value="settings">
+                      {t("Modifier les réglages")}
+                    </option>
+                    <option value="filters">
+                      {activeFiltersCount > 0 ? `${t("Appliquer des filtres")} (${activeFiltersCount})` : t("Appliquer des filtres")}
+                    </option>
+                    <option value="fit-view">
+                      {isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
+                    </option>
+                    <option value="columns">
+                      {t("Gérer la visibilité des colonnes")}
+                    </option>
+                    <option value="spreadsheet" disabled={!resolvedSpreadsheetUrl}>
+                      {t("Ouvrir l'éditeur SpreadSheets")}
+                    </option>
+                  </select>
+                </div>
+              );
+            })()}
+
+            {/* Actualiser les données Pill Button */}
+            <button
+              type="button"
+              id="btn-refresh-crm-data"
+              onClick={() => {
+                setClickedPill('refresh-crm');
+                setTimeout(() => setClickedPill(prev => prev === 'refresh-crm' ? null : prev), 320);
+                handleRefreshCrmClick();
+              }}
+              disabled={effectiveRefreshing}
+              className={clickedPill === 'refresh-crm' ? 'sidebar-nav-click-shrink-wave' : ''}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: effectiveRefreshing ? 'wait' : 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: 'rgb(192 248 252)',
+                color: 'rgb(5 112 114)',
+                border: 'none',
+                transition: 'all 0.15s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              title={t("Actualiser les données")}
+            >
+              <span>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
+            </button>
+
             {/* Search Input */}
             <input
               type="text"
               id="search-crm-input"
               value={ticketSearch}
               onChange={(e) => setTicketSearch(e.target.value)}
-              placeholder="Recherche."
+              placeholder="Recherche rapide"
               style={{
                 border: '1px solid #dedede',
                 borderRadius: '13px',
@@ -1904,74 +2059,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               }}
             />
 
-            {/* Performance Button (entre la search-bar et Réglages) */}
-            <button
-              type="button"
-              onClick={() => setIsPerformancePaneOpen(true)}
-              id="btn-crm-performance"
-              style={blackButtonStyle}
-              className="hover:bg-zinc-800 transition-colors"
-            >
-              Performance
-            </button>
-
-            {/* Réglages Button (renamed from Réglages CRM) */}
-            <button
-              type="button"
-              onClick={() => setIsSettingsPaneOpen(true)}
-              id="btn-crm-settings"
-              style={blackButtonStyle}
-              className="hover:bg-zinc-800 transition-colors"
-            >
-              Réglages
-            </button>
-
-            {/* Filtres Button (à gauche de Nouveau avec badge de comptage si actif) */}
-            <button
-              type="button"
-              onClick={() => {
-                setDraftFilterStatut(ticketStatusFilter);
-                setDraftFilterCollaborateur(filterCollaborateur);
-                setDraftFilterCriticite(filterCriticite);
-                setDraftFilterSemaine(filterSemaine);
-                setDraftFilterSituationDevis(filterSituationDevis);
-                setIsFilterPaneOpen(true);
-              }}
-              id="btn-crm-filters"
-              style={{
-                ...blackButtonStyle,
-                position: 'relative',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-              className="hover:bg-zinc-800 transition-colors"
-            >
-              <span>Filtres</span>
-              {activeFiltersCount > 0 && (
-                <span
-                  style={{
-                    minWidth: '22px',
-                    height: '22px',
-                    borderRadius: '9999px',
-                    backgroundColor: '#2e54ff',
-                    color: '#ffffff',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 6px',
-                    lineHeight: 1
-                  }}
-                  title={`${activeFiltersCount} filtre(s) actif(s)`}
-                >
-                  {activeFiltersCount}
-                </span>
-              )}
-            </button>
-
-            {/* Nouveau Button (renamed from Nouveau Ticket) */}
+            {/* Nouveau Button */}
             <button
               type="button"
               disabled={!hasCrmSpreadsheet}
@@ -1994,7 +2082,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         </div>
       </div>
 
-      {/* Header Pills: Gélules de catégories et Filtre date à date sur la même ligne */}
+      {/* Header Pills: Gélules de catégories */}
       <div className="px-4 mt-4" id="crm-filter-pills-wrapper">
         <div className="flex flex-wrap gap-3 items-center justify-between" id="crm-category-pills">
           <div className="flex flex-wrap gap-2.5 items-center justify-center sm:justify-start">
@@ -2004,7 +2092,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 <button
                   key={catOpt}
                   type="button"
-                  onClick={() => setTicketCategoryFilter(catOpt)}
+                  onClick={() => {
+                    setClickedPill(`cat-${catOpt}`);
+                    setTimeout(() => setClickedPill(prev => prev === `cat-${catOpt}` ? null : prev), 320);
+                    setTicketCategoryFilter(catOpt);
+                  }}
+                  className={clickedPill === `cat-${catOpt}` ? 'sidebar-nav-click-shrink-wave' : ''}
                   style={{
                     borderRadius: '1000px',
                     padding: '7px 16px',
@@ -2012,9 +2105,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     fontWeight: 600,
                     cursor: 'pointer',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: isSelected ? '#0f172a' : '#ffffff',
-                    color: isSelected ? '#ffffff' : '#000000',
-                    border: isSelected ? '1px solid #000000' : '1px solid rgb(218, 218, 218)',
+                    backgroundColor: isSelected ? 'rgb(89, 22, 144)' : 'rgb(230, 197, 255)',
+                    color: isSelected ? '#fff' : 'rgb(89, 22, 144)',
+                    border: 'none',
                     transition: 'all 0.15s ease'
                   }}
                 >
@@ -2027,206 +2120,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               );
             })}
           </div>
-
-          {/* Filtres date à date sur la même ligne après un gap */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <label htmlFor="crm-filter-date-start" className="text-xs font-semibold text-neutral-600 whitespace-nowrap">
-                Début :
-              </label>
-              <input
-                type="date"
-                id="crm-filter-date-start"
-                value={crmDateStart}
-                onChange={(e) => setCrmDateStart(e.target.value)}
-                style={{
-                  border: '1px solid rgb(218, 218, 218)',
-                  borderRadius: '12px',
-                  padding: '6px 8px',
-                  fontSize: '14px',
-                  width: '125px',
-                  backgroundColor: '#ffffff',
-                  color: '#000000',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  outline: 'none',
-                }}
-              />
-            </div>
-            <div className="flex items-center gap-1.5">
-              <label htmlFor="crm-filter-date-end" className="text-xs font-semibold text-neutral-600 whitespace-nowrap">
-                Fin :
-              </label>
-              <input
-                type="date"
-                id="crm-filter-date-end"
-                value={crmDateEnd}
-                onChange={(e) => setCrmDateEnd(e.target.value)}
-                style={{
-                  border: '1px solid rgb(218, 218, 218)',
-                  borderRadius: '12px',
-                  padding: '6px 8px',
-                  fontSize: '14px',
-                  width: '125px',
-                  backgroundColor: '#ffffff',
-                  color: '#000000',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  outline: 'none',
-                }}
-              />
-            </div>
-            {(crmDateStart || crmDateEnd) && (
-              <button
-                type="button"
-                onClick={() => { setCrmDateStart(''); setCrmDateEnd(''); }}
-                style={{
-                  backgroundColor: '#D71E1D',
-                  color: '#ffffff',
-                  fontSize: '18px',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  fontWeight: 600,
-                  borderRadius: '12px',
-                  border: 'none',
-                  padding: '6px 14px',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  lineHeight: '1.2'
-                }}
-                className="hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer shadow-xs"
-                title="Réinitialiser le filtre date"
-              >
-                Réinitialiser
-              </button>
-            )}
-          </div>
         </div>
-      </div>
-
-      {/* Feature « Minimiser et ajuster l’affichage », « Gérer la visibilité des colonnes » & « Actualiser les données » (Identique à l'onglet Défibrillateur) */}
-      <div 
-        className="flex items-center justify-start gap-4 flex-wrap"
-        style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
-      >
-        <button
-          type="button"
-          id="btn-toggle-crm-fit-view"
-          onClick={toggleTableFitView}
-          style={{
-            fontSize: '9px',
-            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-            fontWeight: 100,
-            cursor: 'pointer',
-            background: 'transparent',
-            border: 'none',
-            padding: '2px 4px',
-            color: '#000000',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            textDecoration: 'none',
-            transition: 'all 0.15s ease'
-          }}
-          className="hover:opacity-80 transition-all select-none cursor-pointer"
-          title={isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
-        >
-          {isTableFitView ? (
-            <Maximize2 size={10} className="shrink-0 text-black" color="#000000" />
-          ) : (
-            <Minimize2 size={10} className="shrink-0 text-black" color="#000000" />
-          )}
-          <span style={{ color: '#000000' }}>{isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
-        </button>
-
-        <button
-          type="button"
-          id="btn-manage-crm-columns-visibility"
-          onClick={() => {
-            setTempHiddenColumns(new Set(hiddenColumns));
-            setColumnFilterScope('Actif');
-            setIsColumnVisibilityPaneOpen(true);
-          }}
-          style={{
-            fontSize: '9px',
-            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-            fontWeight: 100,
-            cursor: 'pointer',
-            background: 'transparent',
-            border: 'none',
-            padding: '2px 4px',
-            color: '#000000',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            textDecoration: 'none',
-            transition: 'all 0.15s ease'
-          }}
-          className="hover:opacity-80 transition-all select-none cursor-pointer"
-          title={t("Gérer la visibilité des colonnes")}
-        >
-          <Eye size={10} className="shrink-0 text-black" color="#000000" />
-          <span style={{ color: '#000000' }}>{t("Gérer la visibilité des colonnes")}</span>
-        </button>
-
-        <button
-          type="button"
-          id="btn-refresh-crm-data"
-          onClick={handleRefreshCrmClick}
-          disabled={effectiveRefreshing}
-          style={{
-            fontSize: '9px',
-            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-            fontWeight: 100,
-            cursor: effectiveRefreshing ? 'wait' : 'pointer',
-            background: 'transparent',
-            border: 'none',
-            padding: '2px 4px',
-            color: '#000000',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            textDecoration: 'none',
-            transition: 'all 0.15s ease'
-          }}
-          className="hover:opacity-80 transition-all select-none cursor-pointer"
-          title={t("Actualiser les données")}
-        >
-          <RefreshCw size={10} className={`shrink-0 text-black ${effectiveRefreshing ? 'animate-spin' : ''}`} color="#000000" />
-          <span style={{ color: '#000000' }}>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
-        </button>
-
-        {(() => {
-          const resolvedSpreadsheetUrl = getTenantSpreadsheetUrl('spreadsheetCrm', companyInfo);
-          return (
-            <button
-              type="button"
-              id="btn-open-spreadsheet-editor-crm"
-              onClick={() => openTenantSpreadsheetUrl(resolvedSpreadsheetUrl)}
-              disabled={!resolvedSpreadsheetUrl}
-              style={{
-                fontSize: '9px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                fontWeight: 100,
-                cursor: resolvedSpreadsheetUrl ? 'pointer' : 'not-allowed',
-                opacity: resolvedSpreadsheetUrl ? 1 : 0.4,
-                background: 'transparent',
-                border: 'none',
-                padding: '2px 4px',
-                color: '#000000',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-                textDecoration: 'none',
-                transition: 'all 0.15s ease'
-              }}
-              className={resolvedSpreadsheetUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
-              title={t("Ouvrir l'éditeur SpreadSheets")}
-            >
-              <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
-              <span style={{ color: '#000000' }}>{t("Ouvrir l'éditeur SpreadSheets")}</span>
-            </button>
-          );
-        })()}
       </div>
 
       {/* Bulk selection status bar if at least 1 ticket selected */}
@@ -2338,8 +2232,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               className="w-full text-left font-sans border-collapse text-sm" 
               id="crm-table" 
               style={{ 
-                borderTop: '1px solid rgb(218, 218, 218)', 
-                borderBottom: '1px solid rgb(218, 218, 218)',
+                border: '0px solid transparent',
                 ...(isTableFitView ? {
                   zoom: tableFitScale,
                   width: `${naturalTableWidthRef.current || 1650}px`,
@@ -2352,7 +2245,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               }}
             >
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
+                <tr className="bg-white">
                   {/* Select All Radio-Check Column */}
                   <th className="px-4 py-3.5 w-12 text-center select-none whitespace-nowrap" style={{ cursor: 'default', whiteSpace: 'nowrap' }}>
                     <button
@@ -2442,7 +2335,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <th className="px-4 py-3.5 text-right whitespace-nowrap" style={{ ...thStyle, minWidth: '240px' }}>Actions.</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody>
                 {filteredTickets.map((t) => {
                   const isChecked = selectedTicketIds.includes(t.id);
                   const refVal = t.reference || t.id;
@@ -2461,7 +2354,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <tr 
                       key={t.id} 
                       onClick={() => openEditTicketPane(t)}
-                      className={`group hover:bg-[#ecefff] transition-all cursor-pointer ${isChecked ? 'bg-[#ecefff]/60' : ''}`}
+                      className={`group hover:bg-[#f5f7fa] transition-all cursor-pointer ${isChecked ? 'bg-[#f5f7fa]' : ''}`}
                     >
                       {/* Row selection Radio Check */}
                       <td 
@@ -3886,6 +3779,54 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             <div className="relative w-screen max-w-md bg-white shadow-2xl flex flex-col overflow-hidden h-full">
               {/* Scrollable content area without title header or divider */}
               <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28 font-sans">
+                {/* 0. Filtres de dates (Début : & Fin :) en premier */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="crm-filter-date-start" style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      Début :
+                    </label>
+                    <input
+                      type="date"
+                      id="crm-filter-date-start"
+                      value={draftDateStart}
+                      onChange={(e) => setDraftDateStart(e.target.value)}
+                      style={{
+                        width: '100%',
+                        border: '1px solid #dedede',
+                        borderRadius: '13px',
+                        padding: '10px 14px',
+                        fontSize: '16px',
+                        color: '#000000',
+                        backgroundColor: '#ffffff',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="crm-filter-date-end" style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      Fin :
+                    </label>
+                    <input
+                      type="date"
+                      id="crm-filter-date-end"
+                      value={draftDateEnd}
+                      onChange={(e) => setDraftDateEnd(e.target.value)}
+                      style={{
+                        width: '100%',
+                        border: '1px solid #dedede',
+                        borderRadius: '13px',
+                        padding: '10px 14px',
+                        fontSize: '16px',
+                        color: '#000000',
+                        backgroundColor: '#ffffff',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+                </div>
+
                 {/* 1. Sélection du collaborateur */}
                 <div>
                   <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
@@ -4034,11 +3975,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 </div>
 
                 {/* Réinitialiser si au moins un filtre est actif */}
-                {(draftFilterStatut !== 'Tous' || draftFilterCollaborateur !== 'Tous' || draftFilterCriticite !== 'Tous' || draftFilterSemaine !== 'Tous' || draftFilterSituationDevis !== 'Tous') && (
+                {(draftDateStart !== '' || draftDateEnd !== '' || draftFilterStatut !== 'Tous' || draftFilterCollaborateur !== 'Tous' || draftFilterCriticite !== 'Tous' || draftFilterSemaine !== 'Tous' || draftFilterSituationDevis !== 'Tous') && (
                   <div className="pt-2 text-center">
                     <button
                       type="button"
                       onClick={() => {
+                        setDraftDateStart('');
+                        setDraftDateEnd('');
                         setDraftFilterStatut('Tous');
                         setDraftFilterCollaborateur('Tous');
                         setDraftFilterCriticite('Tous');
@@ -4069,6 +4012,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   type="button"
                   id="btn-apply-crm-filters"
                   onClick={() => {
+                    setCrmDateStart(draftDateStart);
+                    setCrmDateEnd(draftDateEnd);
                     setTicketStatusFilter(draftFilterStatut);
                     setFilterCollaborateur(draftFilterCollaborateur);
                     setFilterCriticite(draftFilterCriticite);

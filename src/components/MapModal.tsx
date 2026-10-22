@@ -1493,37 +1493,6 @@ export default function MapModal({
           </div>
         )}
 
-        {/* Bottom-Left Information Popup Overlay */}
-        {!isHelpsDisabled && isInfoPopupVisible && (
-          <div 
-            id="map-info-popup"
-            className="absolute bottom-6 left-6 z-[3000] max-w-xl bg-white/95 backdrop-blur-xs p-4 rounded-xl border border-slate-200 text-black animate-fadeIn flex flex-col md:flex-row md:items-center justify-between gap-4"
-            style={{
-              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              borderColor: 'rgb(218, 218, 218)',
-              boxShadow: 'none',
-            }}
-          >
-            <div className="flex-1 text-[16px] leading-relaxed text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", cursor: 'default' }}>
-              <strong>Bon à savoir :</strong> Cliquez sur les points de position pour les intégrer à une tournée. Si le matériel est déjà présent dans une tournée, il n’est pas possible de le sélectionner. Pour rappel, le rouge correspond à une action requise expirée, l’orange à une échéance de moins de 3 mois, le bleu entre 3 et 6 mois, tandis que le vert signifie qu’aucune action n’est requise et le gris que le logiciel manque d’informations pour déterminer son état.
-            </div>
-            <button
-              type="button"
-              onClick={handleDismissInfoPopup}
-              className="font-sans font-semibold active:scale-95 transition-all border-0 cursor-pointer shrink-0 self-end md:self-center"
-              style={{
-                backgroundColor: '#0f172a',
-                color: '#ffffff',
-                fontSize: '18px',
-                borderRadius: '13px',
-                padding: '8px 20px',
-                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              }}
-            >
-              J'ai compris
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

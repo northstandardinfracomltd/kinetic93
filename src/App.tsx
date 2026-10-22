@@ -880,6 +880,8 @@ export default function App() {
   };
   const [distributedStocksSearchQuery, setDistributedStocksSearchQuery] = useState('');
   const [stockSearchQuery, setStockSearchQuery] = useState('');
+  const [isCommandesMoreMenuOpen, setIsCommandesMoreMenuOpen] = useState(false);
+  const [isRefreshCommandesSliding, setIsRefreshCommandesSliding] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -3492,7 +3494,7 @@ export default function App() {
                 id: m.id || `msg_sheet_${idx + 2}`,
                 authorName: m.authorName || m.sender || 'Membre',
                 authorEmail: m.authorEmail || '',
-                tag: m.tag || m.channel || 'Exploitation',
+                tag: 'All',
                 content: m.content || m.text || '',
                 createdAt: Number(m.createdAt) || Date.now(),
                 dateStr: m.dateStr || m.time || '',
@@ -4248,6 +4250,13 @@ export default function App() {
     const m = String(now.getMonth() + 1).padStart(2, '0');
     return `${y}-${m}`;
   });
+  const [fsmClickedPill, setFsmClickedPill] = useState<{ id: string; key: number } | null>(null);
+  const triggerFsmPillWave = (id: string) => {
+    setFsmClickedPill(null);
+    requestAnimationFrame(() => {
+      setFsmClickedPill({ id, key: Date.now() });
+    });
+  };
 
   // Helper pour extraire le mois YYYY-MM d'un rapport
   const getReportMonthKey = (rep: any): string => {
@@ -10842,30 +10851,11 @@ export default function App() {
 
   // Cross-tab single instance guard (Logiciel principal ou Webapp)
   if (isDuplicateTab) {
-    const isWebappActive = Boolean(
-      isPublicPortalOpen ||
-      (typeof localStorage !== 'undefined' && localStorage.getItem('defib_logged_user_role') === 'technicien') ||
-      loggedUser?.email === 'tech.ouest@defibeo.com'
-    );
-    let webappThemeColor: string | null = null;
-    if (isWebappActive && typeof localStorage !== 'undefined') {
-      const rawTheme = localStorage.getItem(`defib_${tenantId}_theme`) ||
-        localStorage.getItem('defib_current_user_theme') ||
-        localStorage.getItem('defib_tech_theme');
-      if (rawTheme) {
-        const found = APP_THEMES.find(t => t.id === rawTheme || t.color.toLowerCase() === rawTheme.toLowerCase());
-        webappThemeColor = found ? found.color : (rawTheme.startsWith('#') || rawTheme.startsWith('rgb') ? rawTheme : null);
-      }
-    }
-    const overlayBg = isWebappActive
-      ? (webappThemeColor || currentSidebarTheme?.color || '#1e293b')
-      : (currentSidebarTheme?.color || '#1e293b');
-
     return (
       <div 
         className="fixed inset-0 z-[999999] flex flex-col items-center justify-center text-center font-sans p-6 select-none" 
         style={{ 
-          background: overlayBg,
+          backgroundColor: '#2e54ff',
           color: '#ffffff'
         }}
         id="duplicate-tab-warning-overlay"
@@ -10881,30 +10871,11 @@ export default function App() {
 
   // Network connection guard (No internet OR 3G) (Logiciel principal ou Webapp)
   if (isNetworkUnavailable) {
-    const isWebappActive = Boolean(
-      isPublicPortalOpen ||
-      (typeof localStorage !== 'undefined' && localStorage.getItem('defib_logged_user_role') === 'technicien') ||
-      loggedUser?.email === 'tech.ouest@defibeo.com'
-    );
-    let webappThemeColor: string | null = null;
-    if (isWebappActive && typeof localStorage !== 'undefined') {
-      const rawTheme = localStorage.getItem(`defib_${tenantId}_theme`) ||
-        localStorage.getItem('defib_current_user_theme') ||
-        localStorage.getItem('defib_tech_theme');
-      if (rawTheme) {
-        const found = APP_THEMES.find(t => t.id === rawTheme || t.color.toLowerCase() === rawTheme.toLowerCase());
-        webappThemeColor = found ? found.color : (rawTheme.startsWith('#') || rawTheme.startsWith('rgb') ? rawTheme : null);
-      }
-    }
-    const overlayBg = isWebappActive
-      ? (webappThemeColor || currentSidebarTheme?.color || '#1e293b')
-      : (currentSidebarTheme?.color || '#1e293b');
-
     return (
       <div 
         className="fixed inset-0 z-[999999] flex flex-col items-center justify-center text-center font-sans p-6 select-none" 
         style={{ 
-          background: overlayBg,
+          backgroundColor: '#2e54ff',
           color: '#ffffff'
         }}
         id="offline-warning-overlay"
@@ -11147,7 +11118,7 @@ export default function App() {
       <div 
         className="fixed inset-0 z-[99999] flex flex-col items-center justify-center text-center font-sans p-6" 
         style={{ 
-          background: currentSidebarTheme.color,
+          backgroundColor: '#2e54ff',
           color: '#ffffff'
         }}
         id="resolution-warning-overlay"
@@ -11163,8 +11134,6 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen bg-white font-sans" id="app-root-container">
-      {/* Google Material-style 3.5px Top Bar Progress when switching tabs */}
-      <TopBarProgress triggerKey={activeTab} duration={3000} height={3.5} zIndex={99999} />
 
       {(showEnvLoading || !isFirebaseLoaded || minEnvLoading) && (
         <div 
@@ -11331,7 +11300,7 @@ export default function App() {
               },
               {
                 id: 'messagerie',
-                label: t('Messagerie'),
+                label: t('Messages'),
                 iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/messageriegris.svg',
                 iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/messagerienoir.svg',
                 isActive: isCanalMessagesOpen,
@@ -11387,13 +11356,14 @@ export default function App() {
                   />
                   {!isSidebarCollapsed ? (
                     <div
-                      className="absolute bottom-2.5 right-2.5 flex items-center justify-center px-4 py-1.5 rounded-full truncate"
+                      className="absolute bottom-2.5 right-2.5 flex items-center justify-center rounded-full truncate"
                       style={{
                         backgroundColor: '#3ddc84',
                         color: '#136437',
                         fontSize: '18px',
                         fontWeight: 400,
                         fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                        padding: '10px 17px',
                         maxWidth: 'calc(100% - 20px)',
                         lineHeight: 1.2,
                         textTransform: 'capitalize',
@@ -12055,8 +12025,8 @@ export default function App() {
                   }
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-fsm-input),
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-fsm-input),
-                  #fsm-tab-container select:hover:not(:disabled),
-                  #fsm-tab-container select:focus:not(:disabled),
+                  #fsm-tab-container select:hover:not(:disabled):not(#fsm-more-options-dropdown),
+                  #fsm-tab-container select:focus:not(:disabled):not(#fsm-more-options-dropdown),
                   #fsm-tab-container textarea:hover:not(:disabled),
                   #fsm-tab-container textarea:focus:not(:disabled),
                   #fsm-tab-container #search-fsm-input:hover,
@@ -12064,6 +12034,36 @@ export default function App() {
                     outline: 2.5px solid #2e54ff !important;
                     outline-offset: 2px !important;
                     transition: all 0s !important;
+                  }
+                  #fsm-tab-container #search-fsm-input::placeholder {
+                    color: rgb(222, 222, 222) !important;
+                    opacity: 1 !important;
+                  }
+                  #fsm-tab-container table,
+                  #fsm-tab-container thead,
+                  #fsm-tab-container tbody,
+                  #fsm-tab-container tr,
+                  #fsm-tab-container th,
+                  #fsm-tab-container td {
+                    border: 0px solid transparent !important;
+                    border-top: 0px solid transparent !important;
+                    border-bottom: 0px solid transparent !important;
+                    border-left: 0px solid transparent !important;
+                    border-right: 0px solid transparent !important;
+                  }
+                  #fsm-tab-container thead th {
+                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                    font-weight: 100 !important;
+                    font-size: 16px !important;
+                    letter-spacing: normal !important;
+                    text-transform: none !important;
+                    color: rgb(80 97 122) !important;
+                    cursor: default !important;
+                    white-space: nowrap !important;
+                    background-color: #ffffff !important;
+                  }
+                  #fsm-tab-container tbody tr:hover {
+                    background-color: #f5f7fa !important;
                   }
                   #fsm-tab-container select {
                     appearance: none !important;
@@ -12107,7 +12107,8 @@ export default function App() {
                     background-color: transparent !important;
                     box-sizing: border-box !important;
                   }
-                  #fsm-tab-container select#select-fsm-month-stats {
+                  #fsm-tab-container select#select-fsm-month-stats,
+                  #fsm-tab-container select#fsm-more-options-dropdown {
                     width: 100% !important;
                     height: 100% !important;
                     opacity: 0 !important;
@@ -12117,6 +12118,7 @@ export default function App() {
                     margin: 0 !important;
                     padding: 0 !important;
                     border: none !important;
+                    outline: none !important;
                   }
                   #fsm-tab-container select option {
                     color: #000000 !important;
@@ -12160,6 +12162,131 @@ export default function App() {
                     <div />
 
                     <div className="flex flex-wrap items-center gap-2.5">
+                      {/* 3-dots Native System Dropdown */}
+                      {(() => {
+                        const tourneesUrl = getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo);
+                        const missionsUrl = getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo);
+                        return (
+                          <div
+                            className="relative inline-flex items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
+                            style={{
+                              background: '#f5f7fa',
+                              borderRadius: '100px',
+                              padding: '12px'
+                            }}
+                            title={translate("Plus")}
+                          >
+                            <img
+                              src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                              alt={translate("Plus")}
+                              style={{ width: '18px', height: '18px' }}
+                              className="w-[18px] h-[18px] object-contain shrink-0 pointer-events-none"
+                              referrerPolicy="no-referrer"
+                            />
+                            <select
+                              id="fsm-more-options-dropdown"
+                              aria-label={translate("Plus")}
+                              value=""
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === 'toggle-stats') {
+                                  setIsFsmStatsHidden(prev => {
+                                    const next = !prev;
+                                    try {
+                                      localStorage.setItem('defib_hide_fsm_stats', String(next));
+                                    } catch (_) {}
+                                    return next;
+                                  });
+                                } else if (val === 'spreadsheet-tournees') {
+                                  if (tourneesUrl) openTenantSpreadsheetUrl(tourneesUrl);
+                                } else if (val === 'spreadsheet-missions') {
+                                  if (missionsUrl) openTenantSpreadsheetUrl(missionsUrl);
+                                } else if (val === 'open-filters') {
+                                  setIsFsmFilterSidePaneOpen(true);
+                                } else if (val === 'open-groups') {
+                                  setIsFsmTeamPaneOpen(true);
+                                }
+                              }}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                            >
+                              <option value="" disabled>
+                                —
+                              </option>
+                              <option value="toggle-stats">
+                                {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer les statistiques")}
+                              </option>
+                              <option value="spreadsheet-tournees" disabled={!tourneesUrl}>
+                                {translate("Ouvrir l’éditeur Spreadsheets Tournées")}
+                              </option>
+                              <option value="spreadsheet-missions" disabled={!missionsUrl}>
+                                {translate("Ouvrir l’éditeur Spreadsheets Missions")}
+                              </option>
+                              <option value="open-filters">
+                                {translate("Appliquer des filtres")}
+                              </option>
+                              <option value="open-groups">
+                                {translate("Gérer les groupes et zones")}
+                              </option>
+                            </select>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Bouton Actualiser les données */}
+                      <button
+                        type="button"
+                        id="btn-refresh-data-fsm"
+                        onClick={() => {
+                          triggerFsmPillWave('refresh-fsm');
+                          handleManualRefreshFsm();
+                        }}
+                        disabled={isRefreshingFsm}
+                        style={{
+                          borderRadius: '1000px',
+                          padding: '8px 16px',
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          cursor: isRefreshingFsm ? 'wait' : 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          backgroundColor: 'rgb(192 248 252)',
+                          color: 'rgb(5 112 114)',
+                          border: 'none',
+                          boxShadow: 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                        className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${fsmClickedPill?.id === 'refresh-fsm' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                        title={translate("Actualiser les données")}
+                      >
+                        {isRefreshingFsm ? translate("Actualisation...") : translate("Actualiser les données")}
+                      </button>
+
+                      {/* Bouton Plannings (style Indicatif Postal) */}
+                      <button
+                        type="button"
+                        id="btn-fsm-plannings"
+                        onClick={() => {
+                          triggerFsmPillWave('plannings-fsm');
+                          setFsmPlanningSidePaneOpen(true);
+                        }}
+                        style={{
+                          borderRadius: '1000px',
+                          padding: '8px 16px',
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          backgroundColor: 'rgb(230 197 255)',
+                          color: '#591690',
+                          border: 'none',
+                          boxShadow: 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                        className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${fsmClickedPill?.id === 'plannings-fsm' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                        title={translate("Plannings")}
+                      >
+                        {translate("Plannings")}
+                      </button>
+
                       {/* Field recherche (Search input) */}
                       <div className="relative w-full sm:w-48">
                         <input
@@ -12167,8 +12294,8 @@ export default function App() {
                           id="search-fsm-input"
                           value={fsmSearchQuery}
                           onChange={(e) => setFsmSearchQuery(e.target.value)}
-                          placeholder="Recherche."
-                          className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none placeholder:text-[18px]"
+                          placeholder={translate("Recherche rapide")}
+                          className="w-full text-black placeholder-[rgb(222,222,222)] placeholder:font-light outline-none placeholder:text-[18px]"
                           style={{
                             border: '1px solid #dedede',
                             borderRadius: '13px',
@@ -12185,100 +12312,6 @@ export default function App() {
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          onClick={() => setFsmPlanningSidePaneOpen(true)}
-                          id="btn-fsm-plannings"
-                          style={{
-                            backgroundColor: '#0f172a',
-                            color: '#ffffff',
-                            borderRadius: '13px',
-                            padding: '9px 18px',
-                            fontSize: '18px',
-                            fontWeight: '600',
-                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                            cursor: 'pointer',
-                            boxShadow: 'none',
-                          }}
-                          className="hover:bg-neutral-800 transition-colors"
-                        >
-                          Plannings
-                        </button>
-                        {(() => {
-                          const fsmActiveFiltersCount = [
-                            fsmRegionFilter !== 'Tous',
-                            fsmTechFilter !== 'Tous',
-                            fsmPlannerFilter !== 'Tous',
-                            fsmClientFilter !== 'Tous',
-                            fsmRejectedOrRefusedFilter,
-                            (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0)
-                          ].filter(Boolean).length;
-
-                          return (
-                            <button
-                              onClick={() => setIsFsmFilterSidePaneOpen(true)}
-                              id="btn-fsm-filtres"
-                              style={{
-                                backgroundColor: '#0f172a',
-                                color: '#ffffff',
-                                borderRadius: '13px',
-                                padding: '9px 18px',
-                                fontSize: '18px',
-                                fontWeight: '600',
-                                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                                cursor: 'pointer',
-                                boxShadow: 'none',
-                                border: 'none',
-                                position: 'relative',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '8px'
-                              }}
-                              className="hover:bg-neutral-800 transition-colors"
-                            >
-                              <span>Filtres</span>
-                              {fsmActiveFiltersCount > 0 && (
-                                <span
-                                  style={{
-                                    minWidth: '22px',
-                                    height: '22px',
-                                    borderRadius: '9999px',
-                                    backgroundColor: '#2e54ff',
-                                    color: '#ffffff',
-                                    fontSize: '12px',
-                                    fontWeight: 'bold',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    padding: '0 6px',
-                                    lineHeight: 1
-                                  }}
-                                  title={`${fsmActiveFiltersCount} filtre(s) actif(s)`}
-                                >
-                                  {fsmActiveFiltersCount}
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })()}
-                        <button
-                          onClick={() => setIsFsmTeamPaneOpen(true)}
-                          id="btn-fsm-team-settings"
-                          style={{
-                            backgroundColor: '#0f172a',
-                            color: '#ffffff',
-                            borderRadius: '13px',
-                            padding: '9px 18px',
-                            fontSize: '18px',
-                            fontWeight: '600',
-                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                            cursor: 'pointer',
-                            boxShadow: 'none',
-                            border: 'none',
-                          }}
-                          className="hover:bg-neutral-800 transition-colors"
-                        >
-                          Groupes et zones
-                        </button>
                         {(() => {
                           const hasFsmSpreadsheet = Boolean(
                             getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo) ||
@@ -13361,135 +13394,6 @@ export default function App() {
                       </div>
                     </div>
                   )}
-
-                  <div className="flex items-center justify-start gap-4 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsFsmStatsHidden(prev => {
-                          const next = !prev;
-                          try {
-                            localStorage.setItem('defib_hide_fsm_stats', String(next));
-                          } catch (_) {}
-                          return next;
-                        });
-                      }}
-                      style={{
-                        fontSize: '9px',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        fontWeight: 100,
-                        cursor: 'pointer',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '2px 4px',
-                        color: '#000000',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        textDecoration: 'none',
-                        transition: 'all 0.15s ease'
-                      }}
-                      className="hover:opacity-80 transition-all select-none cursor-pointer"
-                      id="btn-toggle-fsm-stats"
-                      title={isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer les statistiques")}
-                    >
-                      <ChartNoAxesColumn size={10} className="shrink-0 text-black" color="#000000" />
-                      <span style={{ color: '#000000' }}>
-                        {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer les statistiques")}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      id="btn-refresh-data-fsm"
-                      onClick={handleManualRefreshFsm}
-                      disabled={isRefreshingFsm}
-                      style={{
-                        fontSize: '9px',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        fontWeight: 100,
-                        cursor: isRefreshingFsm ? 'wait' : 'pointer',
-                        background: 'transparent',
-                        border: 'none',
-                        padding: '2px 4px',
-                        color: '#000000',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        textDecoration: 'none',
-                        transition: 'all 0.15s ease'
-                      }}
-                      className="hover:opacity-80 transition-all select-none cursor-pointer"
-                      title={translate("Actualiser les données")}
-                    >
-                      <RefreshCw size={10} className={`shrink-0 text-black ${isRefreshingFsm ? 'animate-spin' : ''}`} color="#000000" />
-                      <span style={{ color: '#000000' }}>{isRefreshingFsm ? translate("Actualisation...") : translate("Actualiser les données")}</span>
-                    </button>
-
-                    {(() => {
-                      const tourneesUrl = getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo);
-                      const missionsUrl = getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo);
-                      return (
-                        <>
-                          <button
-                            type="button"
-                            id="btn-open-spreadsheet-editor-tournees"
-                            onClick={() => openTenantSpreadsheetUrl(tourneesUrl)}
-                            disabled={!tourneesUrl}
-                            style={{
-                              fontSize: '9px',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              fontWeight: 100,
-                              cursor: tourneesUrl ? 'pointer' : 'not-allowed',
-                              opacity: tourneesUrl ? 1 : 0.4,
-                              background: 'transparent',
-                              border: 'none',
-                              padding: '2px 4px',
-                              color: '#000000',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              textDecoration: 'none',
-                              transition: 'all 0.15s ease'
-                            }}
-                            className={tourneesUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
-                            title={translate("Ouvrir l’éditeur Spreadsheets Tournées")}
-                          >
-                            <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
-                            <span style={{ color: '#000000' }}>{translate("Ouvrir l’éditeur Spreadsheets Tournées")}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            id="btn-open-spreadsheet-editor-missions"
-                            onClick={() => openTenantSpreadsheetUrl(missionsUrl)}
-                            disabled={!missionsUrl}
-                            style={{
-                              fontSize: '9px',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              fontWeight: 100,
-                              cursor: missionsUrl ? 'pointer' : 'not-allowed',
-                              opacity: missionsUrl ? 1 : 0.4,
-                              background: 'transparent',
-                              border: 'none',
-                              padding: '2px 4px',
-                              color: '#000000',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              textDecoration: 'none',
-                              transition: 'all 0.15s ease'
-                            }}
-                            className={missionsUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
-                            title={translate("Ouvrir l’éditeur Spreadsheets Missions")}
-                          >
-                            <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
-                            <span style={{ color: '#000000' }}>{translate("Ouvrir l’éditeur Spreadsheets Missions")}</span>
-                          </button>
-                        </>
-                      );
-                    })()}
-                  </div>
                 </div>
 
                 {/* Info message système lors de la création d'une tournée */}
@@ -17740,7 +17644,7 @@ export default function App() {
               <div className="space-y-6 animate-fadeIn" id="gmao-tab-container">
                 <style>{`
                   #gmao-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-gmao-input),
-                  #gmao-tab-container select:not(#select-gmao-page),
+                  #gmao-tab-container select:not(#select-gmao-page):not(#gmao-more-options-dropdown),
                   #gmao-tab-container textarea {
                     padding: 12px !important;
                     border: 1px solid #dedede !important;
@@ -17756,8 +17660,8 @@ export default function App() {
                   }
                   #gmao-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-gmao-input),
                   #gmao-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-gmao-input),
-                  #gmao-tab-container select:not(#select-gmao-page):hover:not(:disabled),
-                  #gmao-tab-container select:not(#select-gmao-page):focus:not(:disabled),
+                  #gmao-tab-container select:not(#select-gmao-page):not(#gmao-more-options-dropdown):hover:not(:disabled),
+                  #gmao-tab-container select:not(#select-gmao-page):not(#gmao-more-options-dropdown):focus:not(:disabled),
                   #gmao-tab-container textarea:hover:not(:disabled),
                   #gmao-tab-container textarea:focus:not(:disabled),
                   #gmao-tab-container #search-gmao-input:hover,
@@ -17766,11 +17670,53 @@ export default function App() {
                     outline-offset: 2px !important;
                     transition: all 0s !important;
                   }
+                  #gmao-tab-container #search-gmao-input::placeholder {
+                    color: rgb(222, 222, 222) !important;
+                    opacity: 1 !important;
+                  }
+                  #gmao-tab-container table,
+                  #gmao-tab-container thead,
+                  #gmao-tab-container tbody,
+                  #gmao-tab-container tr,
+                  #gmao-tab-container th,
+                  #gmao-tab-container td {
+                    border: 0px solid transparent !important;
+                    border-top: 0px solid transparent !important;
+                    border-bottom: 0px solid transparent !important;
+                    border-left: 0px solid transparent !important;
+                    border-right: 0px solid transparent !important;
+                  }
+                  #gmao-tab-container thead th {
+                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                    font-weight: 100 !important;
+                    font-size: 16px !important;
+                    letter-spacing: normal !important;
+                    text-transform: none !important;
+                    color: rgb(80 97 122) !important;
+                    cursor: default !important;
+                    white-space: nowrap !important;
+                    background-color: #ffffff !important;
+                  }
+                  #gmao-tab-container tbody tr:hover {
+                    background-color: #f5f7fa !important;
+                  }
                   #gmao-tab-container select:not(#select-gmao-page) {
                     appearance: none !important;
                     -webkit-appearance: none !important;
                     -moz-appearance: none !important;
                     background-image: none !important;
+                  }
+                  #gmao-tab-container select#gmao-more-options-dropdown {
+                    width: 100% !important;
+                    height: 100% !important;
+                    opacity: 0 !important;
+                    cursor: pointer !important;
+                    position: absolute !important;
+                    inset: 0 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    border: none !important;
+                    outline: none !important;
                   }
                   #gmao-tab-container select:not(#select-gmao-page) option {
                     color: #000000 !important;
@@ -17842,15 +17788,102 @@ export default function App() {
                     <div />
 
                     <div className="flex flex-wrap items-center gap-3">
+                      {/* 3-dots Native System Dropdown */}
+                      {(() => {
+                        const rapportsSheetUrl = getTenantSpreadsheetUrl('spreadsheetRapportsPdf', companyInfo);
+                        return (
+                          <div
+                            className="relative inline-flex items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
+                            style={{
+                              background: '#f5f7fa',
+                              borderRadius: '100px',
+                              padding: '12px'
+                            }}
+                            title={t("Plus")}
+                          >
+                            <img
+                              src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                              alt={t("Plus")}
+                              style={{ width: '18px', height: '18px' }}
+                              className="w-[18px] h-[18px] object-contain shrink-0 pointer-events-none"
+                              referrerPolicy="no-referrer"
+                            />
+                            <select
+                              id="gmao-more-options-dropdown"
+                              aria-label={t("Plus")}
+                              value=""
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === 'toggle-fit') {
+                                  toggleGmaoTableFitView();
+                                } else if (val === 'spreadsheet-rapports') {
+                                  if (rapportsSheetUrl) openTenantSpreadsheetUrl(rapportsSheetUrl);
+                                } else if (val === 'open-filters') {
+                                  setDraftGmaoFilters(activeGmaoFilters);
+                                  setIsGmaoFilterPaneOpen(true);
+                                } else if (val === 'open-devis') {
+                                  setIsGmaoDevisPaneOpen(true);
+                                }
+                              }}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                            >
+                              <option value="" disabled>
+                                —
+                              </option>
+                              <option value="toggle-fit">
+                                {gmaoIsTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
+                              </option>
+                              <option value="spreadsheet-rapports" disabled={!rapportsSheetUrl}>
+                                {t("Ouvrir l’éditeur Spreadsheets")}
+                              </option>
+                              <option value="open-filters">
+                                {t("Appliquer des filtres")}{activeGmaoFiltersCount > 0 ? ` (${activeGmaoFiltersCount})` : ''}
+                              </option>
+                              <option value="open-devis">
+                                {t("Demandes de devis")}{pendingDevisCount > 0 ? ` (${pendingDevisCount})` : ''}
+                              </option>
+                            </select>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Bouton Actualiser les données */}
+                      <button
+                        type="button"
+                        id="btn-refresh-data-rapports-pdf"
+                        onClick={() => {
+                          triggerFsmPillWave('refresh-rapports-pdf');
+                          handleManualRefreshRapportsPdf();
+                        }}
+                        disabled={isRefreshingRapportsPdf}
+                        style={{
+                          borderRadius: '1000px',
+                          padding: '8px 16px',
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          cursor: isRefreshingRapportsPdf ? 'wait' : 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          backgroundColor: 'rgb(192 248 252)',
+                          color: 'rgb(5 112 114)',
+                          border: 'none',
+                          boxShadow: 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                        className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${fsmClickedPill?.id === 'refresh-rapports-pdf' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                        title={t("Actualiser les données")}
+                      >
+                        {isRefreshingRapportsPdf ? t("Actualisation...") : t("Actualiser les données")}
+                      </button>
+
                       {/* Field recherche (Search input) */}
-                      <div className="relative w-full sm:w-36 md:w-40">
+                      <div className="relative w-full sm:w-48">
                         <input
                           type="text"
                           id="search-gmao-input"
                           value={gmaoSearchQuery}
                           onChange={(e) => setGmaoSearchQuery(e.target.value)}
-                          placeholder="Recherche."
-                          className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
+                          placeholder={t("Recherche rapide")}
+                          className="w-full text-black placeholder-[rgb(222,222,222)] placeholder:font-light outline-none placeholder:text-[18px]"
                           style={{
                             border: '1px solid #dedede',
                             borderRadius: '13px',
@@ -17960,42 +17993,6 @@ export default function App() {
                           <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" />
                         </div>
                       </label>
-
-                      {/* Boutons Filtres & Dem. Devis */}
-                      <div className="flex items-center gap-1.5 ml-1">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDraftGmaoFilters(activeGmaoFilters);
-                            setIsGmaoFilterPaneOpen(true);
-                          }}
-                          id="btn-trigger-gmao-filters"
-                          style={customButtonStyle}
-                          className="flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <span>{t('Filtres')}</span>
-                          {activeGmaoFiltersCount > 0 && (
-                            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#2e54ff] rounded-full ml-0.5">
-                              {activeGmaoFiltersCount}
-                            </span>
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setIsGmaoDevisPaneOpen(true)}
-                          id="btn-trigger-gmao-devis-requests"
-                          style={customButtonStyle}
-                          className="flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <span>{t('Dem. Devis')}</span>
-                          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[11px] font-black text-white bg-[#2e54ff] rounded-full ml-0.5">
-                            {pendingDevisCount}
-                          </span>
-                        </button>
-                      </div>
-
-                      {/* No Actualiser button */}
                     </div>
                   </div>
                 </div>
@@ -18022,102 +18019,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Sub-filter text button: Minimiser et ajuster l’affichage / Retourner l’affichage standard */}
-                <div 
-                  className="flex items-center justify-start gap-4 flex-wrap"
-                  style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
-                >
-                  <button
-                    type="button"
-                    id="btn-toggle-fit-view-gmao"
-                    onClick={toggleGmaoTableFitView}
-                    style={{
-                      fontSize: '9px',
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      cursor: 'pointer',
-                      background: 'transparent',
-                      border: 'none',
-                      padding: '2px 4px',
-                      color: '#000000',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      textDecoration: 'none',
-                      transition: 'all 0.15s ease'
-                    }}
-                    className="hover:opacity-80 transition-all select-none cursor-pointer"
-                    title={gmaoIsTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
-                  >
-                    {gmaoIsTableFitView ? (
-                      <Maximize2 size={10} className="shrink-0 text-black" color="#000000" />
-                    ) : (
-                      <Minimize2 size={10} className="shrink-0 text-black" color="#000000" />
-                    )}
-                    <span style={{ color: '#000000' }}>{gmaoIsTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    id="btn-refresh-data-rapports-pdf"
-                    onClick={handleManualRefreshRapportsPdf}
-                    disabled={isRefreshingRapportsPdf}
-                    style={{
-                      fontSize: '9px',
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontWeight: 100,
-                      cursor: isRefreshingRapportsPdf ? 'wait' : 'pointer',
-                      background: 'transparent',
-                      border: 'none',
-                      padding: '2px 4px',
-                      color: '#000000',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      textDecoration: 'none',
-                      transition: 'all 0.15s ease'
-                    }}
-                    className="hover:opacity-80 transition-all select-none cursor-pointer"
-                    title={t("Actualiser les données")}
-                  >
-                    <RefreshCw size={10} className={`shrink-0 text-black ${isRefreshingRapportsPdf ? 'animate-spin' : ''}`} color="#000000" />
-                    <span style={{ color: '#000000' }}>{isRefreshingRapportsPdf ? t("Actualisation...") : t("Actualiser les données")}</span>
-                  </button>
-
-                  {(() => {
-                    const rapportsSheetUrl = getTenantSpreadsheetUrl('spreadsheetRapportsPdf', companyInfo);
-                    return (
-                      <button
-                        type="button"
-                        id="btn-open-spreadsheet-editor-rapports-pdf"
-                        onClick={() => openTenantSpreadsheetUrl(rapportsSheetUrl)}
-                        disabled={!rapportsSheetUrl}
-                        style={{
-                          fontSize: '9px',
-                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          fontWeight: 100,
-                          cursor: rapportsSheetUrl ? 'pointer' : 'not-allowed',
-                          opacity: rapportsSheetUrl ? 1 : 0.4,
-                          background: 'transparent',
-                          border: 'none',
-                          padding: '2px 4px',
-                          color: '#000000',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          textDecoration: 'none',
-                          transition: 'all 0.15s ease'
-                        }}
-                        className={rapportsSheetUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
-                        title={t("Ouvrir l'éditeur SpreadSheets")}
-                      >
-                        <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
-                        <span style={{ color: '#000000' }}>{t("Ouvrir l'éditeur SpreadSheets")}</span>
-                      </button>
-                    );
-                  })()}
-                </div>
-
                 {/* Main Table Records Sheet */}
                 <div className="bg-white overflow-hidden mt-2 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
                   <div 
@@ -18133,8 +18034,7 @@ export default function App() {
                         className="w-full text-left font-sans border-collapse text-xs" 
                         id="gmao-table" 
                         style={{ 
-                          borderTop: '1px solid rgb(218, 218, 218)', 
-                          borderBottom: '1px solid rgb(218, 218, 218)',
+                          border: '0px solid transparent',
                           ...(gmaoIsTableFitView ? {
                             zoom: gmaoTableFitScale,
                             width: `${gmaoNaturalTableWidthRef.current || 1500}px`,
@@ -18226,7 +18126,7 @@ export default function App() {
                                     setManagingReportId(rep.id);
                                   }
                                 }}
-                                className="group hover:bg-[#ecefff] transition-all cursor-pointer"
+                                className="group hover:bg-[#f5f7fa] transition-all cursor-pointer"
                               >
                                 {/* Conforme Status Dot Banner column & Flag Voyants */}
                                 <td className="px-3 py-5 text-center whitespace-nowrap" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
@@ -19963,8 +19863,13 @@ export default function App() {
               fontWeight: 100,
               letterSpacing: 'normal',
               textTransform: 'none',
-              color: '#000000',
+              color: 'rgb(80 97 122)',
               cursor: 'default',
+              whiteSpace: 'nowrap',
+              position: 'sticky',
+              top: 0,
+              backgroundColor: '#ffffff',
+              fontSize: '16px',
             };
 
             const itemValueStyle: React.CSSProperties = {
@@ -20124,6 +20029,10 @@ export default function App() {
                     cursor: not-allowed !important;
                     opacity: 0.82 !important;
                   }
+                  #devis-tab-container-harmonized #search-devis-input::placeholder {
+                    color: rgb(222, 222, 222) !important;
+                    opacity: 1 !important;
+                  }
                 `}</style>
 
                 {!isDocFormOpen ? (
@@ -20137,6 +20046,102 @@ export default function App() {
                         <div />
 
                         <div className="flex flex-wrap items-center gap-3 bg-white">
+                          {/* 3 dots More Menu */}
+                          <div className="relative flex items-center">
+                            <button
+                              type="button"
+                              id="btn-commandes-more-options"
+                              onClick={() => setIsCommandesMoreMenuOpen((prev) => !prev)}
+                              style={{
+                                backgroundColor: 'transparent',
+                                border: 'none',
+                                padding: '8px',
+                                borderRadius: '1000px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                              }}
+                              className="hover:bg-slate-100 transition-colors"
+                              title="Plus d'options"
+                            >
+                              <img
+                                src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                                alt="Plus d'options"
+                                style={{ width: '22px', height: '22px', objectFit: 'contain' }}
+                                referrerPolicy="no-referrer"
+                              />
+                            </button>
+                            <select
+                              id="commandes-more-options-dropdown"
+                              aria-label="Plus d'options"
+                              value=""
+                              onFocus={() => setIsCommandesMoreMenuOpen(true)}
+                              onBlur={() => setIsCommandesMoreMenuOpen(false)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setIsCommandesMoreMenuOpen(false);
+                                if (val === 'spreadsheets') {
+                                  const url = getTenantSpreadsheetUrl('spreadsheetCommandes', companyInfo);
+                                  if (url) openTenantSpreadsheetUrl(url);
+                                }
+                              }}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                            >
+                              <option value="" disabled>
+                                —
+                              </option>
+                              <option
+                                value="spreadsheets"
+                                disabled={!Boolean(getTenantSpreadsheetUrl('spreadsheetCommandes', companyInfo))}
+                              >
+                                Ouvrir l’éditeur Spreadsheets
+                              </option>
+                            </select>
+                          </div>
+
+                          {/* Actualiser les données */}
+                          <button
+                            type="button"
+                            id="btn-refresh-commandes"
+                            disabled={!Boolean(getTenantSpreadsheetUrl('spreadsheetCommandes', companyInfo))}
+                            onClick={() => {
+                              if (!Boolean(getTenantSpreadsheetUrl('spreadsheetCommandes', companyInfo))) return;
+                              setIsRefreshCommandesSliding(false);
+                              requestAnimationFrame(() => setIsRefreshCommandesSliding(true));
+                              setTimeout(() => setIsRefreshCommandesSliding(false), 600);
+                              window.dispatchEvent(
+                                new CustomEvent('defib-manual-refresh-spreadsheet', {
+                                  detail: { spreadsheetKey: 'spreadsheetCommandes', idSuffix: 'commandes' },
+                                })
+                              );
+                            }}
+                            style={{
+                              backgroundColor: 'rgb(192 248 252)',
+                              color: 'rgb(5 112 114)',
+                              boxShadow: 'none',
+                              borderRadius: '1000px',
+                              fontSize: '18px',
+                              padding: '8px 16px',
+                              fontWeight: 100,
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '0.5rem',
+                              cursor: Boolean(getTenantSpreadsheetUrl('spreadsheetCommandes', companyInfo)) ? 'pointer' : 'not-allowed',
+                              opacity: Boolean(getTenantSpreadsheetUrl('spreadsheetCommandes', companyInfo)) ? 1 : 0.45,
+                              border: 'none',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                            }}
+                            className="font-sans"
+                          >
+                            <span className={`inline-block ${isRefreshCommandesSliding ? 'sidebar-nav-click-shrink-wave' : ''}`}>
+                              {t("Actualiser les données")}
+                            </span>
+                          </button>
+
                           {/* Field recherche (Search input) */}
                           <div className="relative w-full sm:w-80 bg-white">
                             <input
@@ -20144,8 +20149,8 @@ export default function App() {
                               id="search-devis-input"
                               value={docSearchQuery}
                               onChange={(e) => setDocSearchQuery(e.target.value)}
-                              placeholder="Recherche."
-                              className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
+                              placeholder="Recherche rapide"
+                              className="w-full text-black placeholder-[#dedede] placeholder:font-light outline-none"
                               style={{
                                 border: '1px solid #dedede',
                                 borderRadius: '13px',
@@ -20241,14 +20246,14 @@ export default function App() {
                             onClick={() => setDocTypeFilter(filterOpt)}
                             style={{
                               borderRadius: '1000px',
-                              padding: '10px 20px',
-                              fontSize: '15px',
+                              padding: '8px 16px',
+                              fontSize: '18px',
                               fontWeight: 100,
                               cursor: 'pointer',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              backgroundColor: docTypeFilter === filterOpt ? '#2e54ff' : '#ffffff',
-                              color: docTypeFilter === filterOpt ? '#ffffff' : '#000000',
-                              border: docTypeFilter === filterOpt ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
+                              backgroundColor: docTypeFilter === filterOpt ? 'rgb(89, 22, 144)' : 'rgb(230, 197, 255)',
+                              color: docTypeFilter === filterOpt ? '#fff' : 'rgb(89, 22, 144)',
+                              border: 'none',
                               boxShadow: 'none',
                               transition: 'all 0.15s ease'
                             }}
@@ -20260,21 +20265,15 @@ export default function App() {
                       })}
                     </div>
 
-                    <TableSubHeaderButtons
-                      spreadsheetKey="spreadsheetCommandes"
-                      idSuffix="commandes"
-                      companyInfo={companyInfo}
-                    />
-
                     {/* Main Table Records Sheet */}
                     <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
                       <div className="overflow-x-auto">
                         {filtDocs.length === 0 ? (
                           <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                         ) : (
-                          <table className="w-full text-left font-sans border-collapse text-xs" id="devis-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+                          <table className="w-full text-left font-sans border-collapse text-xs" id="devis-table" style={{ border: 'none' }}>
                             <thead>
-                              <tr className="bg-transparent">
+                              <tr className="bg-transparent" style={{ border: 'none' }}>
                                 <th className="px-4 py-3.5" style={thStyle}>{t("Référence.")}</th>
                                 <th className="px-4 py-3.5" style={thStyle}>{t("Client.")}</th>
                                 <th className="px-4 py-3.5" style={thStyle}>{t("Membre attribué.")}</th>
@@ -20286,7 +20285,7 @@ export default function App() {
                                 <th className="px-4 py-3.5 text-right w-12" style={thStyle}>{t("Actions.")}</th>
                               </tr>
                             </thead>
-                            <tbody className="text-slate-705 text-xs">
+                            <tbody className="text-slate-705 text-xs" style={{ border: 'none' }}>
                               {filtDocs.map((doc) => {
                                 const clientName = doc.clientDenomination || '';
                                 const clientDisplay = clientName.length > 20 ? clientName.substring(0, 20) + '(...)' : clientName;
@@ -20304,7 +20303,8 @@ export default function App() {
                                 return (
                                   <tr
                                     key={doc.id}
-                                    className="group hover:bg-[#ecefff] transition-all cursor-pointer"
+                                    className="group hover:bg-[#f5f7fa] transition-all cursor-pointer"
+                                    style={{ border: 'none' }}
                                     onClick={(e) => {
                                       if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
                                       startEditDoc(doc);
@@ -21324,8 +21324,6 @@ export default function App() {
         onMessagesRead={handleMessagesRead}
         companyInfo={companyInfo}
       />
-
-      <FeedbackDrawer companyName={companyInfo?.name} />
     </div>
   );
 }

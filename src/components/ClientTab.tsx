@@ -795,8 +795,15 @@ export default function ClientTab({
     fontWeight: 100,
     letterSpacing: 'normal',
     textTransform: 'none',
-    color: '#000000',
+    color: 'rgb(80 97 122)',
     cursor: 'default',
+    whiteSpace: 'nowrap',
+    position: 'relative',
+    top: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+    borderTop: '0px solid transparent',
+    borderBottom: '0px solid transparent',
   };
 
   const FIVE_MINUTES_MS = 5 * 60 * 1000;
@@ -1327,7 +1334,7 @@ export default function ClientTab({
                 ...rowActionButton18Style,
                 backgroundColor: '#2e54ff',
                 color: '#ffffff',
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                boxShadow: 'none'
               }}
               className="transition-all cursor-pointer"
             >
@@ -1343,16 +1350,19 @@ export default function ClientTab({
           id="client-form-box"
         >
           <style>{`
+             #client-form-overlay button {
+               box-shadow: none !important;
+             }
              #client-form input:not([type="radio"]):not([type="checkbox"]),
              #client-form select,
              #client-form textarea {
                padding: 12px !important;
-               border: 1px solid #dedede !important;
+               border: 1px solid #DCE1EA !important;
                border-radius: 13px !important;
                font-size: 16px !important;
                font-weight: 100 !important;
                background: #ffffff !important;
-               color: #000000 !important;
+               color: #0f172a !important;
                font-family: "DefibeoMain", "Civilprom", sans-serif !important;
                box-sizing: border-box !important;
                outline: none !important;
@@ -1371,7 +1381,28 @@ export default function ClientTab({
              }
              #client-form input:not([type="radio"]):not([type="checkbox"])::placeholder,
              #client-form textarea::placeholder {
-               color: #000000 !important;
+               color: #becadb !important;
+               opacity: 1 !important;
+               font-weight: 100 !important;
+               font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+             }
+             #client-form input:not([type="radio"]):not([type="checkbox"])::-webkit-input-placeholder,
+             #client-form textarea::-webkit-input-placeholder {
+               color: #becadb !important;
+               opacity: 1 !important;
+               font-weight: 100 !important;
+               font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+             }
+             #client-form input:not([type="radio"]):not([type="checkbox"])::-moz-placeholder,
+             #client-form textarea::-moz-placeholder {
+               color: #becadb !important;
+               opacity: 1 !important;
+               font-weight: 100 !important;
+               font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+             }
+             #client-form input:not([type="radio"]):not([type="checkbox"]):-ms-input-placeholder,
+             #client-form textarea:-ms-input-placeholder {
+               color: #becadb !important;
                opacity: 1 !important;
                font-weight: 100 !important;
                font-family: "DefibeoMain", "Civilprom", sans-serif !important;
@@ -1379,8 +1410,8 @@ export default function ClientTab({
              #client-form input:disabled,
              #client-form select:disabled,
              #client-form textarea:disabled {
-               color: #000000 !important;
-               -webkit-text-fill-color: #000000 !important;
+               color: #0f172a !important;
+               -webkit-text-fill-color: #0f172a !important;
                background-color: #f1f5f9 !important;
                opacity: 0.95 !important;
                font-family: "DefibeoMain", "Civilprom", sans-serif !important;
@@ -1401,7 +1432,7 @@ export default function ClientTab({
                background-image: none !important;
              }
              #client-form select option {
-               color: #000000 !important;
+               color: #0f172a !important;
                background: #ffffff !important;
                font-family: "DefibeoMain", "Civilprom", sans-serif !important;
              }
@@ -1426,7 +1457,7 @@ export default function ClientTab({
                -webkit-appearance: none !important;
                width: 18px !important;
                height: 18px !important;
-               border: 2px solid #cbd5e1 !important;
+               border: 2px solid #DCE1EA !important;
                border-radius: 50% !important;
                background-color: #ffffff !important;
                outline: none !important;
@@ -1457,7 +1488,7 @@ export default function ClientTab({
                -webkit-appearance: none !important;
                width: 18px !important;
                height: 18px !important;
-               border: 2px solid #cbd5e1 !important;
+               border: 2px solid #DCE1EA !important;
                border-radius: 4px !important;
                background-color: #ffffff !important;
                outline: none !important;
@@ -1498,17 +1529,20 @@ export default function ClientTab({
             <div className="space-y-0" style={{ maxWidth: '98%', margin: 'auto' }}>
               {/* Section 1 - Informations Sociales / Entreprise */}
               <div 
-                className="bg-white p-5 relative space-y-3"
+                className="p-5 relative space-y-3"
                 style={{
-                  border: '1px solid rgb(218, 218, 218)',
+                  backgroundColor: '#f5f7fa',
+                  border: 'none',
                   borderRadius: '18px 18px 0px 0px',
                 }}
               >
                 <div className="mb-2 bg-transparent">
                   <span 
-                    className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                    className="px-3 py-1 inline-block font-sans"
                     style={{
-                      backgroundColor: '#2e54ff',
+                      backgroundColor: 'rgb(61 220 132)',
+                      color: '#115830',
+                      fontSize: '18px',
                       borderRadius: '1000px',
                       cursor: 'default',
                       fontWeight: 100,
@@ -1653,18 +1687,20 @@ export default function ClientTab({
 
               {/* Section 2 - Responsable / Contact Physique sur Site */}
               <div 
-                className="bg-white p-5 relative space-y-3"
+                className="p-5 relative space-y-3"
                 style={{
-                  border: '1px solid rgb(218, 218, 218)',
-                  borderTop: 'none',
+                  backgroundColor: '#f5f7fa',
+                  border: 'none',
                   borderRadius: '0px',
                 }}
               >
                 <div className="mb-2 bg-transparent">
                   <span 
-                    className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                    className="px-3 py-1 inline-block font-sans"
                     style={{
-                      backgroundColor: '#2e54ff',
+                      backgroundColor: 'rgb(61 220 132)',
+                      color: '#115830',
+                      fontSize: '18px',
                       borderRadius: '1000px',
                       cursor: 'default',
                       fontWeight: 100,
@@ -2074,18 +2110,20 @@ export default function ClientTab({
 
               {/* Section 3 - Contrat de Maintenance du Client */}
               <div 
-                className="bg-white p-5 relative space-y-3"
+                className="p-5 relative space-y-3"
                 style={{
-                  border: '1px solid rgb(218, 218, 218)',
-                  borderTop: 'none',
+                  backgroundColor: '#f5f7fa',
+                  border: 'none',
                   borderRadius: '0px 0px 18px 18px',
                 }}
               >
                 <div className="mb-2 bg-transparent flex flex-wrap items-center justify-between gap-4">
                   <span 
-                    className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                    className="px-3 py-1 inline-block font-sans"
                     style={{
-                      backgroundColor: '#2e54ff',
+                      backgroundColor: 'rgb(61 220 132)',
+                      color: '#115830',
+                      fontSize: '18px',
                       borderRadius: '1000px',
                       cursor: 'default',
                       fontWeight: 100,
@@ -2275,11 +2313,12 @@ export default function ClientTab({
                         Signature du client.
                       </label>
                       <div 
-                        className="bg-slate-50/50 flex flex-col items-center justify-center p-2"
+                        className="bg-white flex flex-col items-center justify-center p-2"
                         style={{
-                          border: '1px solid rgb(218, 218, 218)',
+                          border: '1px solid #DCE1EA',
                           borderRadius: '13px',
                           minHeight: '120px',
+                          backgroundColor: '#ffffff',
                           boxSizing: 'border-box'
                         }}
                       >
@@ -2320,9 +2359,10 @@ export default function ClientTab({
                         {autresContrats.map((ctr, idx) => (
                           <div 
                             key={ctr.id || idx} 
-                            className="bg-white p-4 space-y-3 relative"
+                            className="p-4 space-y-3 relative"
                             style={{
-                              border: '1px solid #dedede',
+                              backgroundColor: '#f5f7fa',
+                              border: 'none',
                               borderRadius: '13px',
                             }}
                           >
@@ -2470,15 +2510,89 @@ export default function ClientTab({
 
           {/* Both search and buttons are placed directly next to the title */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* 3-dots Native System Dropdown */}
+            <div
+              className="relative inline-flex items-center justify-center cursor-pointer transition-opacity hover:opacity-80"
+              style={{
+                background: '#f5f7fa',
+                borderRadius: '100px',
+                padding: '12px'
+              }}
+              title={t("Plus")}
+            >
+              <img
+                src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                alt={t("Plus")}
+                style={{ width: '18px', height: '18px' }}
+                className="w-[18px] h-[18px] object-contain shrink-0 pointer-events-none"
+                referrerPolicy="no-referrer"
+              />
+              <select
+                id="clients-more-options-dropdown"
+                aria-label={t("Plus")}
+                value=""
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'refresh-data') {
+                    handleRefreshClick();
+                  } else if (val === 'spreadsheet-editor') {
+                    handleOpenSpreadsheetEditor();
+                  }
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+              >
+                <option value="" disabled>
+                  —
+                </option>
+                <option value="refresh-data" disabled={effectiveRefreshing}>
+                  {t("Actualiser les données")}
+                </option>
+                <option value="spreadsheet-editor" disabled={!resolvedSpreadsheetUrl}>
+                  {t("Ouvrir l’éditeur SpreadSheets")}
+                </option>
+              </select>
+            </div>
+
+            {/* Bouton Actualiser les données */}
+            <button
+              type="button"
+              id="btn-refresh-data-clients"
+              onClick={handleRefreshClick}
+              disabled={effectiveRefreshing}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: 'rgb(192 248 252)',
+                color: 'rgb(5 112 114)',
+                border: 'none',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className="relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer"
+              title={t("Actualiser les données")}
+            >
+              {effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}
+            </button>
+
             {/* Field recherche (Search input) with size reduced */}
             <div className="relative w-full sm:w-64">
+              <style>{`
+                #search-clients-input::placeholder {
+                  color: rgb(222, 222, 222) !important;
+                  opacity: 1 !important;
+                }
+              `}</style>
               <input
                 type="text"
                 id="search-clients-input"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Recherche."
-                className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
+                placeholder={t("Recherche rapide")}
+                className="w-full text-black placeholder:text-[rgb(222,222,222)] placeholder:font-light outline-none"
                 style={searchInputStyle}
                 onMouseEnter={() => setIsSearchHovered(true)}
                 onMouseLeave={() => setIsSearchHovered(false)}
@@ -2510,67 +2624,6 @@ export default function ClientTab({
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Sub-filter text buttons: Actualiser les données + Ouvrir l'éditeur SpreadSheets */}
-      <div 
-        className="flex items-center justify-start gap-4 flex-wrap"
-        style={{ maxWidth: '98%', margin: '0 auto', marginTop: '10px', padding: '0px' }}
-      >
-        <button
-          type="button"
-          id="btn-refresh-data-clients"
-          onClick={handleRefreshClick}
-          disabled={effectiveRefreshing}
-          style={{
-            fontSize: '9px',
-            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-            fontWeight: 100,
-            cursor: 'pointer',
-            background: 'transparent',
-            border: 'none',
-            padding: '2px 4px',
-            color: '#000000',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            textDecoration: 'none',
-            transition: 'all 0.15s ease'
-          }}
-          className="hover:opacity-80 transition-all select-none cursor-pointer"
-          title={t("Actualiser les données")}
-        >
-          <RefreshCw size={10} className={`shrink-0 text-black ${effectiveRefreshing ? 'animate-spin' : ''}`} color="#000000" />
-          <span style={{ color: '#000000' }}>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
-        </button>
-
-        <button
-          type="button"
-          id="btn-open-spreadsheet-editor-clients"
-          onClick={handleOpenSpreadsheetEditor}
-          disabled={!resolvedSpreadsheetUrl}
-          style={{
-            fontSize: '9px',
-            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-            fontWeight: 100,
-            cursor: resolvedSpreadsheetUrl ? 'pointer' : 'not-allowed',
-            opacity: resolvedSpreadsheetUrl ? 1 : 0.4,
-            background: 'transparent',
-            border: 'none',
-            padding: '2px 4px',
-            color: '#000000',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '4px',
-            textDecoration: 'none',
-            transition: 'all 0.15s ease'
-          }}
-          className={resolvedSpreadsheetUrl ? "hover:opacity-80 transition-all select-none cursor-pointer" : "opacity-40 transition-all select-none cursor-not-allowed"}
-          title={t("Ouvrir l'éditeur SpreadSheets")}
-        >
-          <FileSpreadsheet size={10} className="shrink-0 text-black" color="#000000" />
-          <span style={{ color: '#000000' }}>{t("Ouvrir l'éditeur SpreadSheets")}</span>
-        </button>
       </div>
 
       {/* Main Table Records Sheet */}
@@ -2614,14 +2667,14 @@ export default function ClientTab({
           ) : displayedClients.length === 0 ? (
             <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
           ) : (
-            <table className="w-full text-left font-sans border-collapse text-xs" id="clients-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+            <table className="w-full text-left font-sans border-collapse text-xs" id="clients-table" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
               <thead>
-                <tr className="bg-transparent border-b border-slate-100">
-                  <th className="px-4 py-3.5 w-12 text-center" style={thStyle}>Volume.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Entreprise.</th>
-                  <th className="px-4 py-3.5" style={thStyle}>Numéro fiscal.</th>
+                <tr className="bg-transparent" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
+                  <th className="px-4 py-3.5 w-12 text-center whitespace-nowrap" style={thStyle}>Volume.</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Entreprise.</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Numéro fiscal.</th>
                   <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Contrat.</th>
-                  <th className="px-4 py-3.5 text-right w-12" style={thStyle}>Actions.</th>
+                  <th className="px-4 py-3.5 text-right w-12 whitespace-nowrap" style={thStyle}>Actions.</th>
                 </tr>
               </thead>
               <tbody className="text-slate-700 text-xs">
@@ -2630,7 +2683,7 @@ export default function ClientTab({
                     key={client.id}
                     id={`client-row-${client.id}`}
                     onClick={() => openEditModal(client)}
-                    className="group hover:bg-[#ecefff] transition-all cursor-pointer"
+                    className="group hover:bg-[#f5f7fa] transition-all cursor-pointer"
                   >
                     {/* Defib count pill */}
                     <td className="px-4 py-5 text-center whitespace-nowrap">

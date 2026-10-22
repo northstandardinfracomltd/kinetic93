@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Variable, VariableCategory, Defibrillateur, StockRecord, DistributedStockLocation, OtherEquipment, AchatFournisseur, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
+import { Variable, VariableCategory, Defibrillateur, StockRecord, DistributedStockLocation, OtherEquipment, AchatFournisseur, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { Plus, Search, Trash2, Edit2, X, Sliders, Box, Image as ImageIcon, Sparkles, Check } from 'lucide-react';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
-import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { t } from '../utils/translate';
 
 // Custom Radio Component with exact design styling (representing white gap, rose border and pink dot)
@@ -169,9 +168,41 @@ export default function VariableTab({
   isReadOnly = false,
   companyInfo,
 }: VariableTabProps) {
-  const hasVariablesSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetVariables', companyInfo));
+  const [spreadsheetVersion, setSpreadsheetVersion] = useState(0);
+  const [clickedPill, setClickedPill] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    const handleSpreadsheetUpdated = () => setSpreadsheetVersion((v) => v + 1);
+    window.addEventListener('defib-tenant-spreadsheets-updated', handleSpreadsheetUpdated);
+    window.addEventListener('storage', handleSpreadsheetUpdated);
+    return () => {
+      window.removeEventListener('defib-tenant-spreadsheets-updated', handleSpreadsheetUpdated);
+      window.removeEventListener('storage', handleSpreadsheetUpdated);
+    };
+  }, []);
+
+  const resolvedSpreadsheetUrl = useMemo(() => {
+    return getTenantSpreadsheetUrl('spreadsheetVariables', companyInfo);
+  }, [companyInfo, spreadsheetVersion]);
+
+  const hasVariablesSpreadsheet = Boolean(resolvedSpreadsheetUrl);
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('Tous');
+
+  const handleRefreshVariables = () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      window.dispatchEvent(
+        new CustomEvent('defib-manual-refresh-spreadsheet', {
+          detail: { spreadsheetKey: 'spreadsheetVariables', idSuffix: 'variables' },
+        })
+      );
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
 
   const isVariableUsed = (v: Variable): boolean => {
     const id = v.id;
@@ -309,8 +340,11 @@ export default function VariableTab({
     fontWeight: 100,
     letterSpacing: 'normal',
     textTransform: 'none',
-    color: '#000000',
+    color: 'rgb(80 97 122)',
+    backgroundColor: '#ffffff',
+    fontSize: '16px',
     cursor: 'default',
+    whiteSpace: 'nowrap',
   };
 
   // Form State
@@ -1242,6 +1276,39 @@ export default function VariableTab({
 
   return (
     <div className="space-y-6" id="variable-tab-container">
+      <style>{`
+        #variable-tab-container input#search-variable-input::placeholder {
+          color: rgb(222, 222, 222) !important;
+          opacity: 1 !important;
+          font-size: 18px !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+          font-weight: 100 !important;
+        }
+        #variable-tab-container table,
+        #variable-tab-container thead,
+        #variable-tab-container tbody,
+        #variable-tab-container tr,
+        #variable-tab-container th,
+        #variable-tab-container td {
+          border: 0px solid transparent !important;
+          border-top: 0px solid transparent !important;
+          border-bottom: 0px solid transparent !important;
+          border-left: 0px solid transparent !important;
+          border-right: 0px solid transparent !important;
+        }
+        #variable-tab-container thead th {
+          background-color: #ffffff !important;
+          color: rgb(80 97 122) !important;
+          font-size: 16px !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+          letter-spacing: normal !important;
+          text-transform: none !important;
+        }
+        #variable-tab-container tbody tr:hover {
+          background-color: #f5f7fa !important;
+        }
+      `}</style>
       {/* Upper Action Block & Search metrics */}
       <div 
         className="bg-white space-y-4"
@@ -1250,7 +1317,79 @@ export default function VariableTab({
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
           <div />
 
-          <div className="flex flex-wrap items-center gap-3 bg-white">
+          <div className="flex flex-wrap items-center gap-2.5 bg-white">
+            {/* 3 Dots More Options Dropdown */}
+            <div
+              className="relative inline-flex items-center justify-center shrink-0 hover:opacity-80 transition-all select-none cursor-pointer"
+              style={{
+                background: '#f5f7fa',
+                borderRadius: '100px',
+                padding: '12px',
+                cursor: 'pointer',
+              }}
+              title={t("Plus d'options")}
+            >
+              <img
+                src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                alt="Options"
+                style={{ width: '18px', height: '18px', display: 'block', pointerEvents: 'none' }}
+                referrerPolicy="no-referrer"
+              />
+              <select
+                id="variables-more-options-dropdown"
+                aria-label={t("Plus d'options")}
+                value=""
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'spreadsheet') {
+                    if (resolvedSpreadsheetUrl) {
+                      openTenantSpreadsheetUrl(resolvedSpreadsheetUrl);
+                    }
+                  }
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                style={{ WebkitAppearance: 'menulist-button', appearance: 'auto', border: 'none', outline: 'none' }}
+              >
+                <option value="" disabled hidden></option>
+                <option value="spreadsheet" disabled={!resolvedSpreadsheetUrl}>
+                  {t("Ouvrir l’éditeur Spreadsheets")}
+                </option>
+              </select>
+            </div>
+
+            {/* Actualiser les données Pill Button */}
+            <button
+              type="button"
+              id="btn-refresh-data-variables"
+              onClick={() => {
+                setClickedPill('refresh-variables');
+                setTimeout(() => setClickedPill((prev) => (prev === 'refresh-variables' ? null : prev)), 320);
+                handleRefreshVariables();
+              }}
+              disabled={isRefreshing}
+              className={clickedPill === 'refresh-variables' ? 'sidebar-nav-click-shrink-wave' : ''}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: isRefreshing ? 'wait' : 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: 'rgb(192 248 252)',
+                color: 'rgb(5 112 114)',
+                border: 'none',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+              }}
+              title={t("Actualiser les données")}
+            >
+              <span>{isRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
+            </button>
+
             {/* Field recherche (Search input) */}
             <div className="relative w-full sm:w-64 bg-white">
               <input
@@ -1258,8 +1397,8 @@ export default function VariableTab({
                 id="search-variable-input"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Recherche."
-                className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
+                placeholder="Recherche rapide"
+                className="w-full text-black outline-none"
                 style={searchInputStyle}
                 onMouseEnter={() => setIsSearchHovered(true)}
                 onMouseLeave={() => setIsSearchHovered(false)}
@@ -1292,7 +1431,7 @@ export default function VariableTab({
         </div>
       </div>
 
-      {/* Filters Pills Row - placed outside the header block, exactly like FSM and Stocks */}
+      {/* Filters Pills Row */}
       <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" id="variables-category-pills">
         {['Tous', ...CATEGORIES].map((cat) => {
           const isSelected = filterCategory === cat;
@@ -1307,20 +1446,24 @@ export default function VariableTab({
             <button
               key={cat}
               type="button"
-              onClick={() => setFilterCategory(cat)}
+              onClick={() => {
+                setClickedPill(`cat-${cat}`);
+                setTimeout(() => setClickedPill((prev) => (prev === `cat-${cat}` ? null : prev)), 320);
+                setFilterCategory(cat);
+              }}
               style={{
                 borderRadius: '1000px',
-                padding: '10px 20px',
+                padding: '8px 16px',
                 fontSize: '18px',
                 fontWeight: 100,
                 cursor: 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
-                color: isSelected ? '#ffffff' : '#000000',
-                border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
+                backgroundColor: isSelected ? 'rgb(89, 22, 144)' : 'rgb(230, 197, 255)',
+                color: isSelected ? '#fff' : 'rgb(89, 22, 144)',
+                border: 'none',
                 transition: 'all 0.15s ease'
               }}
-              className="transition-all"
+              className={`transition-all ${clickedPill === `cat-${cat}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
             >
               {cat} ({count})
             </button>
@@ -1328,21 +1471,15 @@ export default function VariableTab({
         })}
       </div>
 
-      <TableSubHeaderButtons
-        spreadsheetKey="spreadsheetVariables"
-        companyInfo={companyInfo}
-        idSuffix="variables"
-      />
-
       {/* Main Table Records Sheet */}
       <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         <div className="overflow-x-auto">
           {filteredVariables.length === 0 ? (
             <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
           ) : (
-            <table className="w-full text-left font-sans border-collapse text-xs" id="variables-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+            <table className="w-full text-left font-sans border-collapse text-xs" id="variables-table" style={{ border: '0px solid transparent' }}>
               <thead>
-                <tr className="bg-transparent border-b border-slate-100">
+                <tr className="bg-white">
                   <th className="px-4 py-3.5 w-14 text-left whitespace-nowrap" style={thStyle}>Miniature.</th>
                   <th className="px-4 py-3.5 text-left whitespace-nowrap" style={thStyle}>Identifiant.</th>
                   <th className="px-4 py-3.5 text-left" style={thStyle}>Titre de la variable.</th>
@@ -1361,7 +1498,7 @@ export default function VariableTab({
                         if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
                         openEditModal(v);
                       }}
-                      className="group hover:bg-[#ecefff] transition-all cursor-pointer"
+                      className="group hover:bg-[#f5f7fa] transition-all cursor-pointer"
                     >
                       {/* Visual box column */}
                       <td className="px-4 py-3.5">

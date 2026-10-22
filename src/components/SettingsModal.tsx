@@ -3289,7 +3289,6 @@ export default function SettingsModal({
   const [sectionSavedKey, setSectionSavedKey] = React.useState<string | null>(null);
 
   const renderSectionSaveHeader = (title: string, sectionKey: SettingsSectionKey, requireSuperAdmin = false) => {
-    const isSaved = sectionSavedKey === sectionKey;
     const isDisabled = isSaving || isDeveloper || isReadOnly || (requireSuperAdmin && !isCurrentUserSuperAdmin);
     return (
       <div className="flex items-center justify-between w-full mb-3 select-none bg-transparent">
@@ -3310,37 +3309,24 @@ export default function SettingsModal({
           disabled={isDisabled}
           onClick={() => handleSaveAll()}
           style={{
-            backgroundColor: isSaved ? '#16a34a' : '#2466ea',
+            backgroundColor: '#2e54ff',
             color: '#fff',
-            boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, 0 4px 4px #ffffff00, 0 7px 0 -12px #2466ea, inset 0 6px 12px #ffffff1f',
+            boxShadow: 'none',
             borderRadius: '0.75rem',
             fontSize: '18px',
             padding: '11px 22px',
             fontWeight: 100,
-            transition: 'all 0.2s ease-in-out',
+            transition: 'none',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
             gap: '0.5rem',
             cursor: isDisabled ? 'not-allowed' : 'pointer',
             border: 'none',
-            opacity: isDisabled ? 0.6 : 1,
+            opacity: isDisabled ? 0.5 : 1,
           }}
-          className="hover:brightness-110 active:scale-[0.99]"
         >
-          {isSaving ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>{t("Enregistrement...")}</span>
-            </>
-          ) : isSaved ? (
-            <>
-              <Check className="w-4 h-4" />
-              <span>{t("Enregistré")}</span>
-            </>
-          ) : (
-            <span>{t("Enregistrer")}</span>
-          )}
+          <span>{t("Enregistrer")}</span>
         </button>
       </div>
     );
@@ -3396,11 +3382,11 @@ export default function SettingsModal({
         #settings-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]),
         #settings-tab-container-harmonized select {
           height: 48px !important;
-          padding: 12px 16px !important;
-          border: 1px solid #cbd5e1 !important;
+          padding: 12px !important;
+          border: none !important;
           border-radius: 13px !important;
           font-size: 16px !important;
-          font-weight: 400 !important;
+          font-weight: 100 !important;
           background: #ffffff !important;
           color: #000000 !important;
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
@@ -3409,14 +3395,14 @@ export default function SettingsModal({
           transition: all 0s !important;
         }
         #settings-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]).bg-grey-input {
-          background: #f1f5f9 !important;
+          background: #ffffff !important;
         }
         #settings-tab-container-harmonized textarea {
-          padding: 12px 16px !important;
-          border: 1px solid #cbd5e1 !important;
+          padding: 12px !important;
+          border: none !important;
           border-radius: 13px !important;
           font-size: 16px !important;
-          font-weight: 400 !important;
+          font-weight: 100 !important;
           background: #ffffff !important;
           color: #000000 !important;
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
@@ -3443,16 +3429,19 @@ export default function SettingsModal({
         #settings-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled),
         #settings-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled),
         #settings-tab-container-harmonized select:hover:not(:disabled),
-        #settings-tab-container-harmonized select:focus:not(:disabled) {
+        #settings-tab-container-harmonized select:focus:not(:disabled),
+        #settings-tab-container-harmonized textarea:hover:not(:disabled),
+        #settings-tab-container-harmonized textarea:focus:not(:disabled) {
           outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
         #settings-tab-container-harmonized input:disabled {
-          background-color: #f3f4f6 !important;
-          color: #9ca3af !important;
+          background-color: #ffffff !important;
+          color: #555555 !important;
           cursor: not-allowed !important;
-          border-color: #e5e7eb !important;
+          border: none !important;
+          opacity: 0.7 !important;
         }
       `}</style>
 
@@ -3492,19 +3481,18 @@ export default function SettingsModal({
                   fontSize: '18px',
                   padding: '11px 22px',
                   fontWeight: '100',
-                  transition: 'all 0s ease-in-out',
+                  transition: 'none',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.5rem',
                   cursor: isSaving ? 'not-allowed' : 'pointer',
-                  opacity: isSaving ? 0.6 : 1,
+                  opacity: isSaving ? 0.5 : 1,
                   border: 'none',
                   fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                 }}
-                className="transition-all"
               >
-                Enregistrer
+                {t("Enregistrer")}
               </button>
               <button
                 onClick={onClose}
@@ -3522,24 +3510,8 @@ export default function SettingsModal({
           id="settings-tab-container-harmonized"
           style={isPage ? { maxWidth: '98%', margin: '0 auto', width: '100%' } : {}}
         >
-          {/* HUB ACCORDION: QUE SOUHAITEZ-VOUS FAIRE ? */}
+          {/* HUB ACCORDION */}
           <div className="space-y-4 select-none pt-2 pb-4" id="settings-accordion-hub">
-            <h2 
-              className="font-bold text-black select-none text-left"
-              style={{
-                fontSize: '32px',
-                fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif",
-                color: '#000000',
-                cursor: 'default',
-                letterSpacing: '-0.02em',
-                paddingTop: '16px',
-                paddingBottom: '16px',
-                margin: 0
-              }}
-            >
-              {t("Que souhaitez-vous faire ?")}
-            </h2>
-
             <div className="flex flex-wrap gap-3 sm:gap-3.5 items-center">
               {SETTINGS_SECTIONS.map((sec) => {
                 const isSelected = activeSection === sec.key;
@@ -3552,21 +3524,19 @@ export default function SettingsModal({
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                       fontSize: '18px',
                       fontWeight: 600,
-                      borderRadius: '14px',
+                      borderRadius: '100px',
                       padding: '12px 18px',
-                      backgroundColor: isSelected ? '#0f172a' : '#ffffff',
-                      color: isSelected ? '#ffffff' : 'rgb(0, 0, 0)',
-                      border: isSelected ? '1px solid #000000' : '1px solid #dadada',
-                      boxShadow: isSelected 
-                        ? 'rgba(0, 0, 0, 0.16) 0px 4px 12px -2px' 
-                        : 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
+                      backgroundColor: isSelected ? 'rgb(61 220 132)' : 'rgb(245 247 250)',
+                      color: isSelected ? 'rgb(21 99 55)' : 'rgb(80 97 122)',
+                      border: 'none',
+                      boxShadow: 'none',
                       cursor: 'pointer',
                       transition: 'all 0.15s ease-in-out',
                       textAlign: 'center',
                       whiteSpace: 'normal',
                       lineHeight: '1.3'
                     }}
-                    className="hover:scale-[1.02] active:scale-[0.98] select-none"
+                    className="select-none"
                   >
                     {t(sec.label)}
                   </button>
@@ -3577,7 +3547,7 @@ export default function SettingsModal({
 
           {/* SECTION 1: RÉGLAGES */}
           {activeSection === 'reglages' && (
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left animate-fadeIn" id="settings-section-company">
+            <div className="rounded-2xl p-5 space-y-4 text-left animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-company">
             {renderSectionSaveHeader(t("Réglages"), 'reglages', true)}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -4057,7 +4027,7 @@ export default function SettingsModal({
 
       {/* SECTION 2: APPARENCE DES RAPPORTS PDF (DIV DÉDIÉE INDÉPENDANTE) */}
       {activeSection === 'pdf' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left animate-fadeIn" id="settings-section-pdf">
+        <div className="rounded-2xl p-5 space-y-4 text-left animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-pdf">
           {renderSectionSaveHeader(t("Apparence des rapports PDF"), 'pdf', true)}
           <div className="grid grid-cols-1 gap-4">
               <div className="space-y-1">
@@ -4319,7 +4289,7 @@ export default function SettingsModal({
 
       {/* SECTION 4: INTITULÉS DES EMPLACEMENTS */}
       {activeSection === 'emplacements' && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 mt-4 text-left animate-fadeIn" id="settings-section-location-names">
+        <div className="rounded-2xl p-5 space-y-4 mt-4 text-left animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-location-names">
           {renderSectionSaveHeader(t("Intitulés des emplacements"), 'emplacements')}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 pt-2">
               {(['Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'] as const).map(loc => (
@@ -4338,7 +4308,7 @@ export default function SettingsModal({
                           [loc]: e.target.value
                         }));
                       }}
-                      className="w-full text-black placeholder-[#a0a0a0] font-sans text-xs py-1 px-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-0 focus:border-slate-200"
+                      className="w-full text-black placeholder-[#a0a0a0] font-sans text-xs py-1 px-2.5 rounded-lg focus:outline-none focus:ring-0"
                       placeholder={t("Entrez un texte")}
                     />
                   </div>
@@ -4350,7 +4320,7 @@ export default function SettingsModal({
           
         {/* SECTION 6: MEMBRES DE L'ENVIRONNEMENT */}
         {activeSection === 'membres' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-members" style={{ order: 98 }}>
+          <div className="rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-members" style={{ order: 98, backgroundColor: 'rgb(245 247 250)', border: 'none' }}>
             {renderSectionSaveHeader(t("Membres de l’environnement"), 'membres')}
             {/* Formulaire d'ajout rapide de collaborateur */}
             <form onSubmit={handleAddMemberSubmit} className="space-y-4">
@@ -5311,7 +5281,7 @@ export default function SettingsModal({
 
         {/* SECTION: COMMUNICATION PORTAIL CLIENT */}
         {activeSection === 'communication' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-communication-portail" style={{ order: 99 }}>
+          <div className="rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-communication-portail" style={{ order: 99, backgroundColor: 'rgb(245 247 250)', border: 'none' }}>
             {renderSectionSaveHeader(t("Communication portail client"), 'communication')}
             <div className="space-y-2">
               <label htmlFor="settings-communication-portail" className="block text-[14px] font-bold text-black font-sans">
@@ -5323,7 +5293,7 @@ export default function SettingsModal({
                 onChange={(e) => setCommunicationPortailClient(e.target.value)}
                 placeholder={t("Entrez le message d’information pour les clients...")}
                 rows={4}
-                className="w-full p-3 border border-slate-200 rounded-lg text-sm bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 font-sans"
+                className="w-full p-3 rounded-lg text-sm bg-white text-slate-800 focus:outline-none font-sans"
               />
             </div>
           </div>
@@ -5331,7 +5301,7 @@ export default function SettingsModal({
 
         {/* SECTION 3: CONNECTIONS */}
         {activeSection === 'connecteurs' && (
-          <div className="border border-slate-200 rounded-2xl p-5 space-y-4 bg-white animate-fadeIn" id="settings-section-connectors">
+          <div className="rounded-2xl p-5 space-y-4 animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-connectors">
             <div className="flex items-center justify-between w-full mb-3 select-none bg-transparent">
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
@@ -5357,19 +5327,18 @@ export default function SettingsModal({
                   fontSize: '18px',
                   padding: '11px 22px',
                   fontWeight: '100',
-                  transition: 'all 0s ease-in-out',
+                  transition: 'none',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.5rem',
                   cursor: connectorsSaveStatus === 'saving' ? 'not-allowed' : 'pointer',
-                  opacity: connectorsSaveStatus === 'saving' ? 0.6 : 1,
+                  opacity: connectorsSaveStatus === 'saving' ? 0.5 : 1,
                   border: 'none',
                   fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                 }}
-                className="transition-all"
               >
-                {connectorsSaveStatus === 'saving' ? t("Enregistrement...") : t("Enregistrer")}
+                {t("Enregistrer")}
               </button>
             </div>
 
@@ -5938,7 +5907,7 @@ export default function SettingsModal({
 
         {/* SECTION: BASES DE DONNÉES */}
         {activeSection === 'bases_de_donnees' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left animate-fadeIn" id="settings-section-databases">
+          <div className="rounded-2xl p-5 space-y-4 text-left animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-databases">
             <div className="flex items-center justify-between w-full mb-3 select-none bg-transparent">
               <span 
                 className="text-white px-3 py-1 text-[13px] inline-block font-sans"
@@ -5964,31 +5933,18 @@ export default function SettingsModal({
                   fontSize: '18px',
                   padding: '11px 22px',
                   fontWeight: '100',
-                  transition: 'all 0s ease-in-out',
+                  transition: 'none',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.5rem',
                   cursor: databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin ? 'not-allowed' : 'pointer',
-                  opacity: databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin ? 0.6 : 1,
+                  opacity: databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin ? 0.5 : 1,
                   border: 'none',
                   fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                 }}
-                className="transition-all"
               >
-                {databasesSaveStatus === 'saving' ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                    {t("Enregistrement...")}
-                  </>
-                ) : databasesSaveStatus === 'saved' ? (
-                  <>
-                    <span className="text-emerald-200 mr-1.5">✓</span>
-                    {t("Enregistré !")}
-                  </>
-                ) : (
-                  t("Enregistrer")
-                )}
+                {t("Enregistrer")}
               </button>
             </div>
 
@@ -6058,10 +6014,10 @@ export default function SettingsModal({
         {/* BANNIÈRE BOUTIQUE EN LIGNE */}
         {activeSection === 'boutique' && (
           <div 
-            className="p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left bg-white"
+            className="p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
             style={{
-              borderColor: 'rgb(218, 218, 218)',
-              background: '#ffffff',
+              border: 'none',
+              backgroundColor: 'rgb(245 247 250)',
               boxShadow: 'none',
               width: '100%',
               margin: '0 auto',
@@ -6109,7 +6065,7 @@ export default function SettingsModal({
 
         {/* SECTION 5: ASSISTANCE DEFIBEO */}
         {activeSection === 'assistance' && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left mt-4 animate-fadeIn" id="settings-section-assistance-group">
+          <div className="rounded-2xl p-5 space-y-4 text-left mt-4 animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-assistance-group">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* SECTION 2: SUBSCRIPTION */}
               <div 
@@ -6233,10 +6189,10 @@ export default function SettingsModal({
         {/* SECTION: PARRAINAGE */}
         {activeSection === 'parrainage' && (
           <div 
-            className="p-5 rounded-xl border flex flex-col gap-4 mt-4 text-left animate-fadeIn bg-white"
+            className="p-5 rounded-xl flex flex-col gap-4 mt-4 text-left animate-fadeIn"
             style={{
-              borderColor: 'rgb(218, 218, 218)',
-              background: '#ffffff',
+              border: 'none',
+              backgroundColor: 'rgb(245 247 250)',
               boxShadow: 'none',
               maxWidth: '100%',
               margin: '16px 0px 16px 0px',
@@ -6271,9 +6227,9 @@ export default function SettingsModal({
                   className="flex-1 w-full text-black placeholder-[#747474] font-sans text-sm"
                   placeholder={t("Entrez un texte.")}
                   style={{
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
+                    border: 'none',
+                    borderRadius: '13px',
+                    padding: '12px',
                     height: '48px',
                     boxSizing: 'border-box',
                     outline: 'none'
@@ -6316,10 +6272,10 @@ export default function SettingsModal({
         {/* SECTION: OBSERVATEUR DES ACTIONS SUSPECTES */}
         {activeSection === 'actions_suspectes' && (
           <div 
-            className="p-5 rounded-2xl border flex flex-col gap-5 mt-4 text-left animate-fadeIn bg-white"
+            className="p-5 rounded-2xl flex flex-col gap-5 mt-4 text-left animate-fadeIn"
             style={{
-              borderColor: 'rgb(218, 218, 218)',
-              background: '#ffffff',
+              border: 'none',
+              backgroundColor: 'rgb(245 247 250)',
               boxShadow: 'none',
               maxWidth: '100%',
               margin: '16px 0px 16px 0px',
@@ -6575,47 +6531,6 @@ export default function SettingsModal({
               </div>
             );
           })()}
-
-        {/* BOUTON TERMINÉ PLEINE LARGEUR */}
-        {activeSection !== null && (
-          <div className="pt-2 w-full animate-fadeIn" style={{ order: 99 }}>
-            <button
-              type="button"
-              disabled={isSaving}
-              onClick={async () => {
-                await handleSaveAll();
-              }}
-              style={{
-                ...rowActionButtonStyle,
-                backgroundColor: '#0f172a',
-                color: '#ffffff',
-                width: '100%',
-                fontSize: '18px',
-                padding: '14px 22px',
-                borderRadius: '13px',
-                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                fontWeight: 600,
-                cursor: isSaving ? 'not-allowed' : 'pointer',
-                opacity: isSaving ? 0.7 : 1,
-                border: 'none',
-                boxShadow: 'none'
-              }}
-              className="transition-all hover:opacity-90 active:scale-[0.99] text-white flex items-center justify-center gap-2"
-            >
-              {isSaving ? (
-                <>
-                  <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  <span>{t("Enregistrement en cours...")}</span>
-                </>
-              ) : (
-                t("Terminé")
-              )}
-            </button>
-          </div>
-        )}
 
           {onLogout && (
             <div className="pt-4" style={{ order: 100 }}>

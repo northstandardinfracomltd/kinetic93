@@ -42,8 +42,6 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   companyInfo,
 }) => {
   const hasMessagesSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetMessagesInternes', companyInfo));
-  // Par défaut, le filtre est positionné sur 'Exploitation' (la gélule Tous ayant été supprimée)
-  const [selectedFilterTag, setSelectedFilterTag] = useState<CanalTagName>('Exploitation');
   const [messageInput, setMessageInput] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: string } | null>(null);
 
@@ -124,7 +122,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 id: m.id || `msg_sheet_${idx + 2}`,
                 authorName: m.authorName || m.sender || 'Membre',
                 authorEmail: m.authorEmail || '',
-                tag: m.tag || m.channel || 'Exploitation',
+                tag: 'All',
                 content: m.content || m.text || '',
                 createdAt: Number(m.createdAt) || Date.now(),
                 dateStr: m.dateStr || m.time || '',
@@ -183,24 +181,8 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     }
   }, [messages.length, isOpen]);
 
-  // Filtered messages
-  const displayedMessages = useMemo(() => {
-    return messages.filter((m) => m.tag === selectedFilterTag);
-  }, [messages, selectedFilterTag]);
-
-  // Tag helper
-  const getTagInfo = (tagName: string) => {
-    const found = CANAL_TAGS.find((t) => t.name === tagName);
-    return (
-      found || {
-        name: tagName,
-        bg: '#f1f5f9',
-        text: '#334155',
-        border: '#cbd5e1',
-        dot: '#64748b',
-      }
-    );
-  };
+  // All messages in a single unified thread for the tenant
+  const displayedMessages = messages;
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -217,12 +199,11 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       minute: '2-digit',
     })}`;
 
-    // Le message est automatiquement envoyé dans le tag de l'onglet actif (ex: Exploitation)
     const newMsg: TenantMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       authorName: currentUser.name || 'Membre',
       authorEmail: currentUser.email || '',
-      tag: selectedFilterTag,
+      tag: 'All',
       content: text,
       createdAt: Date.now(),
       dateStr: dateFormatted,
@@ -330,134 +311,6 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
       }}
     >
-      {/* TOP TAGS BAR (SPACING À GAUCHE DU BOUTON FERMER, BORDER-BOTTOM FULLWIDTH #dadada) */}
-      <div
-        className={
-          embedded
-            ? "sticky top-0 z-20 w-full bg-white/95 backdrop-blur-xs py-2.5 px-3 shrink-0"
-            : "sticky top-0 z-20 w-full py-2.5 sm:py-3 shrink-0 px-4 sm:px-5 bg-[#fbfbfb]"
-        }
-        style={{
-          background: embedded ? '#ffffff' : '#fbfbfb',
-          backgroundColor: embedded ? '#ffffff' : '#fbfbfb',
-          border: 'none',
-          borderBottom: '1px solid #dadada',
-          boxShadow: 'none',
-          paddingLeft: embedded ? '12px' : '20px',
-          paddingRight: embedded ? '12px' : '20px',
-        }}
-      >
-        <div className="flex items-center gap-2 py-0.5 w-full relative z-20 overflow-visible flex-wrap sm:flex-nowrap">
-          {/* Bouton Fermer : uniquement dans le logiciel principal, masqué dans la webapp */}
-          {!embedded && (
-            <button
-              type="button"
-              onClick={onClose}
-              id="btn-close-canal-sidepane"
-              className="px-4 sm:px-5 py-2 rounded-full font-bold shrink-0 transition-all cursor-pointer hover:opacity-90 active:scale-[0.98] text-[15px] sm:text-[18px]"
-              style={{
-                backgroundColor: '#0f172a',
-                color: '#ffffff',
-                border: 'none',
-                boxShadow: 'none',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-              }}
-            >
-              {t('Fermer')}
-            </button>
-          )}
-
-          {/* 1 Gélule du canal ouvert (cursor default au hover) */}
-          {(() => {
-            const currentTag = CANAL_TAGS.find((t) => t.name === selectedFilterTag) || CANAL_TAGS[0];
-            const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-            const now = Date.now();
-            const recentCount = messages.filter((m) => {
-              if (m.tag !== currentTag.name) return false;
-              const msgTime = m.createdAt ? Number(m.createdAt) : 0;
-              return now - msgTime <= TWO_HOURS_MS;
-            }).length;
-
-            return (
-              <div
-                className="px-3.5 sm:px-4 py-2 rounded-full shrink-0 flex items-center gap-2 font-medium text-[15px] sm:text-[18px] cursor-default select-none"
-                style={{
-                  backgroundColor: currentTag.dot,
-                  color: '#ffffff',
-                  border: 'none',
-                  boxShadow: 'none',
-                  cursor: 'default',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                }}
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0 bg-white"
-                />
-                <span className="truncate max-w-[130px] sm:max-w-none">{currentTag.name}</span>
-                {recentCount > 0 && (
-                  <span
-                    className="inline-flex items-center justify-center rounded-full shrink-0 font-bold"
-                    style={{
-                      backgroundColor: 'rgb(163, 20, 20)',
-                      color: '#ffffff',
-                      fontSize: '13px',
-                      width: '23px',
-                      height: '23px',
-                      padding: '2px',
-                      lineHeight: 1,
-                    }}
-                  >
-                    {recentCount}
-                  </span>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Bouton « Ouvrir un canal » avec dropdown système non stylisé (sans arrow icon) */}
-          <div className="relative inline-flex items-center shrink-0">
-            <button
-              type="button"
-              id="btn-ouvrir-un-canal"
-              tabIndex={-1}
-              className="px-4 sm:px-5 py-2 rounded-full font-bold shrink-0 transition-all text-white flex items-center justify-center text-[15px] sm:text-[18px] pointer-events-none"
-              style={{
-                backgroundColor: '#2e54ff',
-                color: '#ffffff',
-                border: 'none',
-                boxShadow: 'none',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-              }}
-            >
-              <span>{t('Ouvrir un canal')}</span>
-            </button>
-            <select
-              id="select-ouvrir-un-canal"
-              value=""
-              onChange={(e) => {
-                const newTag = e.target.value as CanalTagName;
-                if (newTag) {
-                  setSelectedFilterTag(newTag);
-                }
-                e.target.value = '';
-              }}
-              title={t('Ouvrir un canal')}
-              aria-label={t('Ouvrir un canal')}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            >
-              <option value="" disabled hidden>
-                {t('Ouvrir un canal')}
-              </option>
-              {CANAL_TAGS.map((tag) => (
-                <option key={tag.name} value={tag.name}>
-                  {tag.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
       {/* MESSAGES LIST AREA (LEAVE EMPTY WHEN NO MESSAGES) */}
       <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4 bg-[#f8f9fa]">
         {displayedMessages.map((msg) => {
@@ -465,7 +318,6 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             currentUser.email &&
             msg.authorEmail &&
             currentUser.email.trim().toLowerCase() === msg.authorEmail.trim().toLowerCase();
-          const tagInfo = getTagInfo(msg.tag);
 
           return (
             <div
@@ -473,7 +325,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} group`}
               onContextMenu={(e) => handleContextMenu(e, msg.id)}
             >
-              {/* Author Name + Dot Tag Color + Horodatée (font color black) */}
+              {/* Author Name + Dot + Horodatée (font color black) */}
               <div
                 className={`flex items-center gap-2 mb-1.5 px-1 ${
                   isMine ? 'flex-row-reverse text-right' : 'flex-row text-left'
@@ -484,8 +336,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 </span>
                 <span
                   className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: tagInfo.dot }}
-                  title={tagInfo.name}
+                  style={{ backgroundColor: '#334155' }}
                 />
                 <span
                   className="text-[13px] font-normal"
@@ -602,6 +453,25 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             >
               <span>{t('Envoyer')}</span>
             </button>
+
+            {/* Bouton Fermer : en bas à droite, à droite du bouton Envoyer */}
+            {!embedded && (
+              <button
+                type="button"
+                onClick={onClose}
+                id="btn-close-canal-sidepane"
+                className="inline-flex items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center hover:opacity-90 active:scale-[0.98] text-[15px] sm:text-[18px]"
+                style={{
+                  backgroundColor: '#0f172a',
+                  color: '#ffffff',
+                  border: 'none',
+                  boxShadow: 'none',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+              >
+                <span>{t('Fermer')}</span>
+              </button>
+            )}
           </div>
         </form>
       </div>

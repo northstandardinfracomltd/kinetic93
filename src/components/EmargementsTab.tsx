@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { EmargementRecord, EmargementStagiaireItem, FormationRecord, StagiaireRecord, Member, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
+import { EmargementRecord, EmargementStagiaireItem, FormationRecord, StagiaireRecord, Member, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
-import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { uploadMediaToFirebase } from '../firebase';
 
 interface EmargementsTabProps {
@@ -219,6 +218,8 @@ export default function EmargementsTab({
   const [search, setSearch] = useState('');
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
+  const [isRefreshSliding, setIsRefreshSliding] = useState(false);
 
   const handleDownloadCertificat = (stItem: EmargementStagiaireItem) => {
     const stagiaire = resolveStagiaire(stItem.stagiaireId);
@@ -750,16 +751,23 @@ export default function EmargementsTab({
     fontWeight: 100,
     letterSpacing: 'normal',
     textTransform: 'none',
-    color: '#000000',
+    color: 'rgb(80 97 122)',
     cursor: 'default',
     whiteSpace: 'nowrap',
     position: 'sticky',
     top: 0,
     backgroundColor: '#ffffff',
+    fontSize: '16px',
   };
 
   return (
     <div id="emargements-tab-container" className="space-y-6">
+      <style>{`
+        #emargements-tab-container #search-emargements-input::placeholder {
+          color: rgb(222, 222, 222) !important;
+          opacity: 1 !important;
+        }
+      `}</style>
       {!isFormOpen ? (
         <>
           {/* Top Header Block */}
@@ -778,14 +786,110 @@ export default function EmargementsTab({
               <div />
 
               <div className="flex flex-wrap items-center gap-3">
+                {/* 3 dots More Menu */}
+                <div className="relative flex items-center">
+                  <button
+                    type="button"
+                    id="btn-emargements-more-options"
+                    onClick={() => setIsMoreMenuOpen((prev) => !prev)}
+                    style={{
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      padding: '8px',
+                      borderRadius: '1000px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                    }}
+                    className="hover:bg-slate-100 transition-colors"
+                    title="Plus d'options"
+                  >
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                      alt="Plus d'options"
+                      style={{ width: '22px', height: '22px', objectFit: 'contain' }}
+                      referrerPolicy="no-referrer"
+                    />
+                  </button>
+                  <select
+                    id="emargements-more-options-dropdown"
+                    aria-label="Plus d'options"
+                    value=""
+                    onFocus={() => setIsMoreMenuOpen(true)}
+                    onBlur={() => setIsMoreMenuOpen(false)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setIsMoreMenuOpen(false);
+                      if (val === 'spreadsheets') {
+                        const url = getTenantSpreadsheetUrl('spreadsheetEmargements', companyInfo);
+                        if (url) openTenantSpreadsheetUrl(url);
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                  >
+                    <option value="" disabled>
+                      —
+                    </option>
+                    <option
+                      value="spreadsheets"
+                      disabled={!Boolean(getTenantSpreadsheetUrl('spreadsheetEmargements', companyInfo))}
+                    >
+                      Ouvrir l’éditeur Spreadsheets
+                    </option>
+                  </select>
+                </div>
+
+                {/* Actualiser les données */}
+                <button
+                  type="button"
+                  id="btn-refresh-emargements"
+                  disabled={!Boolean(getTenantSpreadsheetUrl('spreadsheetEmargements', companyInfo))}
+                  onClick={() => {
+                    if (!Boolean(getTenantSpreadsheetUrl('spreadsheetEmargements', companyInfo))) return;
+                    setIsRefreshSliding(false);
+                    requestAnimationFrame(() => setIsRefreshSliding(true));
+                    setTimeout(() => setIsRefreshSliding(false), 600);
+                    window.dispatchEvent(
+                      new CustomEvent('defib-manual-refresh-spreadsheet', {
+                        detail: { spreadsheetKey: 'spreadsheetEmargements', idSuffix: 'emargements' },
+                      })
+                    );
+                  }}
+                  style={{
+                    backgroundColor: 'rgb(192 248 252)',
+                    color: 'rgb(5 112 114)',
+                    boxShadow: 'none',
+                    borderRadius: '1000px',
+                    fontSize: '18px',
+                    padding: '8px 16px',
+                    fontWeight: 100,
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    cursor: Boolean(getTenantSpreadsheetUrl('spreadsheetEmargements', companyInfo)) ? 'pointer' : 'not-allowed',
+                    opacity: Boolean(getTenantSpreadsheetUrl('spreadsheetEmargements', companyInfo)) ? 1 : 0.45,
+                    border: 'none',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                  }}
+                  className="font-sans"
+                >
+                  <span className={`inline-block ${isRefreshSliding ? 'defib-slide- loop-unused sidebar-nav-click-shrink-wave' : ''}`}>
+                    Actualiser les données
+                  </span>
+                </button>
+
                 <div className="relative w-full sm:w-64">
                   <input
                     type="text"
                     id="search-emargements-input"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Recherche."
-                    className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
+                    placeholder="Recherche rapide"
+                    className="w-full text-black placeholder-[#dedede] placeholder:font-light outline-none"
                     style={searchInputStyle}
                     onMouseEnter={() => setIsSearchHovered(true)}
                     onMouseLeave={() => setIsSearchHovered(false)}
@@ -819,29 +923,23 @@ export default function EmargementsTab({
             </div>
           </div>
 
-          <TableSubHeaderButtons
-            spreadsheetKey="spreadsheetEmargements"
-            idSuffix="emargements"
-            companyInfo={companyInfo}
-          />
-
           {/* Main Records Table Sheet - Full Width */}
           <div className="bg-white overflow-hidden rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
             <div className="overflow-x-auto">
               <table
                 className="w-full text-left font-sans border-collapse text-xs"
                 id="records-table"
-                style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}
+                style={{ border: 'none' }}
               >
                 <thead>
-                  <tr className="bg-transparent">
+                  <tr className="bg-transparent" style={{ border: 'none' }}>
                     <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Formation.</th>
                     <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Stagiaire(s).</th>
                     <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Statut.</th>
                     <th className="px-4 py-3.5 text-right whitespace-nowrap" style={thStyle}>Actions.</th>
                   </tr>
                 </thead>
-                <tbody className="text-slate-700 text-xs">
+                <tbody className="text-slate-700 text-xs" style={{ border: 'none' }}>
                   {filteredEmargements.length === 0 ? (
                     <tr>
                       <td colSpan={4}>
@@ -855,7 +953,8 @@ export default function EmargementsTab({
                         <tr
                           key={item.id}
                           onClick={() => startEditEmargement(item)}
-                          className="group hover:bg-[#ecefff] transition-all cursor-pointer"
+                          className="group hover:bg-[#f5f7fa] transition-all cursor-pointer"
+                          style={{ border: 'none' }}
                         >
                           <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             <span

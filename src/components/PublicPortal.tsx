@@ -5862,7 +5862,7 @@ export default function PublicPortal({
       <div 
         className="fixed inset-0 z-[999999] flex flex-col items-center justify-center text-center font-sans p-6 select-none" 
         style={{ 
-          background: currentTechTheme.color,
+          backgroundColor: '#2e54ff',
           color: '#ffffff'
         }}
         id="offline-warning-overlay-webapp"
@@ -5881,7 +5881,7 @@ export default function PublicPortal({
       <div 
         className="fixed inset-0 z-[99999] flex flex-col items-center justify-center text-center font-sans p-6 select-none" 
         style={{ 
-          background: currentTechTheme.color,
+          backgroundColor: '#2e54ff',
           color: '#ffffff'
         }}
         id="resolution-warning-overlay-webapp"

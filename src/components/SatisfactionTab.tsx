@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { t } from '../utils/translate';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
-import { TableSubHeaderButtons } from './TableSubHeaderButtons';
+import { getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 
 interface Review {
   id: string;
@@ -154,6 +154,42 @@ export default function SatisfactionTab({
 
   // Month filter state
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [clickedPill, setClickedPill] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [spreadsheetVersion, setSpreadsheetVersion] = useState(0);
+
+  useEffect(() => {
+    const handleSpreadsheetUpdated = () => setSpreadsheetVersion((v) => v + 1);
+    window.addEventListener('defib-tenant-spreadsheets-updated', handleSpreadsheetUpdated);
+    window.addEventListener('storage', handleSpreadsheetUpdated);
+    return () => {
+      window.removeEventListener('defib-tenant-spreadsheets-updated', handleSpreadsheetUpdated);
+      window.removeEventListener('storage', handleSpreadsheetUpdated);
+    };
+  }, []);
+
+  const resolvedSpreadsheetUrl = useMemo(() => {
+    return getTenantSpreadsheetUrl('spreadsheetSatisfaction');
+  }, [spreadsheetVersion]);
+
+  const handleRefreshSatisfaction = () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      window.dispatchEvent(
+        new CustomEvent('defib-manual-refresh-spreadsheet', {
+          detail: { spreadsheetKey: 'spreadsheetSatisfaction', idSuffix: 'satisfaction' },
+        })
+      );
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
+
+  // Filter Side-Pane State
+  const [isFilterPaneOpen, setIsFilterPaneOpen] = useState(false);
+  const [draftSatStartDate, setDraftSatStartDate] = useState<string>('');
+  const [draftSatEndDate, setDraftSatEndDate] = useState<string>('');
 
   // Performance Drawer & Period States
   const [isPerformancePaneOpen, setIsPerformancePaneOpen] = useState(false);
@@ -161,6 +197,8 @@ export default function SatisfactionTab({
   const [satEndDate, setSatEndDate] = useState<string>('');
   const [npsStartDate, setNpsStartDate] = useState<string>('');
   const [npsEndDate, setNpsEndDate] = useState<string>('');
+
+  const activeFiltersCount = (satStartDate ? 1 : 0) + (satEndDate ? 1 : 0);
 
   // Dynamically extract only months that actually exist in the reviews list
   const availableMonths = useMemo<MonthOption[]>(() => {
@@ -406,8 +444,11 @@ export default function SatisfactionTab({
     fontWeight: 100,
     letterSpacing: 'normal',
     textTransform: 'none',
-    color: '#000000',
+    color: 'rgb(80 97 122)',
+    backgroundColor: '#ffffff',
+    fontSize: '16px',
     cursor: 'default',
+    whiteSpace: 'nowrap',
   };
 
   const roundBadgeStyle: React.CSSProperties = {
@@ -702,12 +743,38 @@ export default function SatisfactionTab({
           font-size: 18px !important;
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
           font-weight: 100 !important;
+          color: rgb(222, 222, 222) !important;
+          opacity: 1 !important;
         }
         #satisfaction-tab-container-harmonized #search-satisfaction-input:hover,
         #satisfaction-tab-container-harmonized #search-satisfaction-input:focus {
           outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
           transition: all 0s !important;
+        }
+        #satisfaction-tab-container-harmonized table,
+        #satisfaction-tab-container-harmonized thead,
+        #satisfaction-tab-container-harmonized tbody,
+        #satisfaction-tab-container-harmonized tr,
+        #satisfaction-tab-container-harmonized th,
+        #satisfaction-tab-container-harmonized td {
+          border: 0px solid transparent !important;
+          border-top: 0px solid transparent !important;
+          border-bottom: 0px solid transparent !important;
+          border-left: 0px solid transparent !important;
+          border-right: 0px solid transparent !important;
+        }
+        #satisfaction-tab-container-harmonized thead th {
+          background-color: #ffffff !important;
+          color: rgb(80 97 122) !important;
+          font-size: 16px !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+          letter-spacing: normal !important;
+          text-transform: none !important;
+        }
+        #satisfaction-tab-container-harmonized tbody tr:hover {
+          background-color: #f5f7fa !important;
         }
       `}</style>
       
@@ -719,40 +786,97 @@ export default function SatisfactionTab({
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
           <div />
 
-          <div className="flex flex-wrap items-center gap-3 bg-white">
-            {/* Search Bar Input (reduced width) */}
-            <div className="relative w-44 sm:w-52 bg-white">
-              <input
-                type="text"
-                id="search-satisfaction-input"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={t("Rechercher.") || t("Recherche.") || "Rechercher."}
-                className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
-                style={searchInputStyle}
-                onMouseEnter={() => setIsSearchHovered(true)}
-                onMouseLeave={() => setIsSearchHovered(false)}
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setIsSearchFocused(false)}
+          <div className="flex flex-wrap items-center gap-2.5 bg-white">
+            {/* 3 Dots More Options Dropdown */}
+            <div
+              className="relative inline-flex items-center justify-center shrink-0 hover:opacity-80 transition-all select-none cursor-pointer"
+              style={{
+                background: '#f5f7fa',
+                borderRadius: '100px',
+                padding: '12px',
+                cursor: 'pointer',
+              }}
+              title={t("Plus d'options")}
+            >
+              <img
+                src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                alt="Options"
+                style={{ width: '18px', height: '18px', display: 'block', pointerEvents: 'none' }}
+                referrerPolicy="no-referrer"
               />
+              <select
+                id="satisfaction-more-options-dropdown"
+                aria-label={t("Plus d'options")}
+                value=""
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'filters') {
+                    setDraftSatStartDate(satStartDate);
+                    setDraftSatEndDate(satEndDate);
+                    setIsFilterPaneOpen(true);
+                  } else if (val === 'performance') {
+                    setIsPerformancePaneOpen(true);
+                  } else if (val === 'export') {
+                    if (filteredReviews.length > 0) {
+                      handleExportCSV();
+                    }
+                  } else if (val === 'spreadsheet') {
+                    if (resolvedSpreadsheetUrl) {
+                      openTenantSpreadsheetUrl(resolvedSpreadsheetUrl);
+                    }
+                  }
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                style={{ WebkitAppearance: 'menulist-button', appearance: 'auto', border: 'none', outline: 'none' }}
+              >
+                <option value="" disabled hidden></option>
+                <option value="filters">
+                  {activeFiltersCount > 0 ? `${t("Appliquer des filtres")} (${activeFiltersCount})` : t("Appliquer des filtres")}
+                </option>
+                <option value="performance">
+                  {t("Statistiques de performance")}
+                </option>
+                <option value="export" disabled={filteredReviews.length === 0}>
+                  {t("Exporter les évaluations")}
+                </option>
+                <option value="spreadsheet" disabled={!resolvedSpreadsheetUrl}>
+                  {t("Ouvrir l’éditeur Spreadsheets")}
+                </option>
+              </select>
             </div>
 
-            {/* Filter Month Button / Native Dropdown (Largeur auto selon le texte affiché) */}
-            <div className="relative inline-flex items-center">
+            {/* Filter Month Button ("Tous les mois") styled like "Indicatif postal" on Défibrillateurs */}
+            <div
+              className={`relative inline-flex items-center overflow-hidden rounded-full ${clickedPill === 'month-satisfaction' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+            >
               <button
                 type="button"
                 style={{
-                  ...rowActionButtonStyle,
-                  width: 'auto',
+                  borderRadius: '1000px',
+                  padding: '8px 16px',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  backgroundColor: selectedMonth !== 'all' ? '#591690' : 'rgb(230 197 255)',
+                  color: selectedMonth !== 'all' ? '#fff' : '#591690',
+                  border: 'none',
+                  boxShadow: 'none',
+                  outline: 'none',
                   whiteSpace: 'nowrap',
+                  transition: 'all 0.15s ease',
                 }}
-                className="cursor-pointer font-sans hover:opacity-80 transition-all select-none"
+                className="cursor-pointer font-sans transition-all select-none"
               >
                 <span>{selectedMonthLabel}</span>
               </button>
               <select
                 id="filter-month-satisfaction"
                 value={selectedMonth}
+                onMouseDown={() => {
+                  setClickedPill('month-satisfaction');
+                  setTimeout(() => setClickedPill((prev) => (prev === 'month-satisfaction' ? null : prev)), 320);
+                }}
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 title={t("Filtrer par mois")}
@@ -768,128 +892,66 @@ export default function SatisfactionTab({
               </select>
             </div>
 
-            {/* Performance Button */}
+            {/* Actualiser les données Pill Button */}
             <button
               type="button"
-              id="btn-satisfaction-performance"
-              onClick={() => setIsPerformancePaneOpen(true)}
-              style={rowActionButtonStyle}
-              className="cursor-pointer font-sans whitespace-nowrap hover:opacity-80 transition-all"
-            >
-              <span>{t("Performance")}</span>
-            </button>
-
-            {/* Export CSV Button */}
-            <button
-              type="button"
-              id="btn-export-satisfaction-csv"
-              onClick={handleExportCSV}
-              disabled={filteredReviews.length === 0}
-              style={{
-                ...rowActionButtonStyle,
-                opacity: filteredReviews.length === 0 ? 0.4 : 1,
-                cursor: filteredReviews.length === 0 ? 'not-allowed' : 'pointer',
+              id="btn-refresh-data-satisfaction"
+              onClick={() => {
+                setClickedPill('refresh-satisfaction');
+                setTimeout(() => setClickedPill((prev) => (prev === 'refresh-satisfaction' ? null : prev)), 320);
+                handleRefreshSatisfaction();
               }}
-              className="font-sans whitespace-nowrap hover:opacity-80 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <span>{t("Exporter")}</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Filtres date à date au dessus du table view (exactement comme sur l’onglet CRM) */}
-      <div 
-        className="flex flex-wrap items-center justify-start gap-2 px-4 mt-6 mb-3"
-        style={{ maxWidth: '98%', margin: '24px auto 12px auto', padding: '0 4px' }}
-        id="satisfaction-filter-dates-wrapper"
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <label htmlFor="sat-filter-date-start" className="text-xs font-semibold text-neutral-600 whitespace-nowrap">
-              Début :
-            </label>
-            <input
-              type="date"
-              id="sat-filter-date-start"
-              value={satStartDate}
-              onChange={(e) => setSatStartDate(e.target.value)}
+              disabled={isRefreshing}
+              className={clickedPill === 'refresh-satisfaction' ? 'sidebar-nav-click-shrink-wave' : ''}
               style={{
-                border: '1px solid rgb(218, 218, 218)',
-                borderRadius: '12px',
-                padding: '6px 8px',
-                fontSize: '14px',
-                width: '125px',
-                backgroundColor: '#ffffff',
-                color: '#000000',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                outline: 'none',
-              }}
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label htmlFor="sat-filter-date-end" className="text-xs font-semibold text-neutral-600 whitespace-nowrap">
-              Fin :
-            </label>
-            <input
-              type="date"
-              id="sat-filter-date-end"
-              value={satEndDate}
-              onChange={(e) => setSatEndDate(e.target.value)}
-              style={{
-                border: '1px solid rgb(218, 218, 218)',
-                borderRadius: '12px',
-                padding: '6px 8px',
-                fontSize: '14px',
-                width: '125px',
-                backgroundColor: '#ffffff',
-                color: '#000000',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                outline: 'none',
-              }}
-            />
-          </div>
-          {(satStartDate || satEndDate) && (
-            <button
-              type="button"
-              id="btn-reset-sat-dates"
-              onClick={() => { setSatStartDate(''); setSatEndDate(''); }}
-              style={{
-                backgroundColor: '#D71E1D',
-                color: '#ffffff',
+                borderRadius: '1000px',
+                padding: '8px 16px',
                 fontSize: '18px',
+                fontWeight: 100,
+                cursor: isRefreshing ? 'wait' : 'pointer',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                fontWeight: 600,
-                borderRadius: '12px',
+                backgroundColor: 'rgb(192 248 252)',
+                color: 'rgb(5 112 114)',
                 border: 'none',
-                padding: '6px 14px',
-                cursor: 'pointer',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease',
                 display: 'inline-flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                lineHeight: '1.2'
+                gap: '6px',
+                whiteSpace: 'nowrap',
               }}
-              className="hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer shadow-xs"
-              title={t("Réinitialiser le filtre date")}
+              title={t("Actualiser les données")}
             >
-              {t("Réinitialiser")}
+              <span>{isRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
             </button>
-          )}
+
+            {/* Search Bar Input */}
+            <div className="relative w-44 sm:w-52 bg-white">
+              <input
+                type="text"
+                id="search-satisfaction-input"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Recherche rapide"
+                className="w-full text-black outline-none"
+                style={searchInputStyle}
+                onMouseEnter={() => setIsSearchHovered(true)}
+                onMouseLeave={() => setIsSearchHovered(false)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+              />
+            </div>
+          </div>
         </div>
       </div>
-
-      <TableSubHeaderButtons
-        spreadsheetKey="spreadsheetSatisfaction"
-        idSuffix="satisfaction"
-      />
 
       {/* Main Table Content */}
       <div className="bg-white overflow-hidden mt-3 rounded-none animate-fadeIn" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
         <div className="overflow-x-auto">
-          <table className="w-full text-left font-sans border-collapse text-xs" id="satisfaction-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+          <table className="w-full text-left font-sans border-collapse text-xs" id="satisfaction-table" style={{ border: '0px solid transparent' }}>
             <thead>
-              <tr className="bg-transparent">
-                <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default', position: 'relative', top: 0, backgroundColor: '#ffffff', zIndex: 10, borderBottom: '1px solid rgb(218, 218, 218)' }}>
+              <tr className="bg-white">
+                <th className="px-4 py-3.5 w-12 text-center select-none" style={{ cursor: 'default', position: 'relative', top: 0, backgroundColor: '#ffffff', zIndex: 10, border: '0px solid transparent' }}>
                   <button
                     type="button"
                     onClick={handleToggleSelectAll}
@@ -923,7 +985,7 @@ export default function SatisfactionTab({
                 <th className="px-4 pt-3 pb-1.5 text-right w-44 whitespace-nowrap" style={thStyle}>{t("Actions.")}</th>
               </tr>
               {/* Second header row: column averages */}
-              <tr className="bg-transparent" style={{ borderBottom: '1px solid rgb(218, 218, 218)' }}>
+              <tr className="bg-white" style={{ border: '0px solid transparent' }}>
                 <th className="px-4 pt-1.5 pb-3"></th>
                 <th className="px-3 pt-1.5 pb-3 text-center align-middle whitespace-nowrap">
                   <div className="inline-flex items-center justify-center gap-[2px]">
@@ -1036,7 +1098,7 @@ export default function SatisfactionTab({
                   return (
                     <tr 
                       key={rev.id} 
-                      className={`group hover:bg-[#ecefff] transition-all cursor-pointer ${isChecked ? 'bg-[#ecefff]' : ''}`}
+                      className={`group hover:bg-[#f5f7fa] transition-all cursor-pointer ${isChecked ? 'bg-[#f5f7fa]' : ''}`}
                     >
                       {/* Radio selection column */}
                       <td className="px-4 py-3.5 w-12 text-center select-none" onClick={(e) => e.stopPropagation()}>
@@ -1177,6 +1239,164 @@ export default function SatisfactionTab({
             </table>
         </div>
       </div>
+
+      {/* Side-pane Appliquer des filtres */}
+      {isFilterPaneOpen && (
+        <div className="fixed inset-0 z-[9999] overflow-hidden" id="satisfaction-filters-drawer-modal">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity cursor-pointer"
+            onClick={() => setIsFilterPaneOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
+            <div className="relative w-screen max-w-md bg-white shadow-2xl flex flex-col overflow-hidden h-full">
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28 font-sans">
+                {/* Filtres de dates (Début : & Fin :) en premier */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label
+                      htmlFor="sat-filter-date-start"
+                      style={{
+                        fontSize: '18px',
+                        fontWeight: 600,
+                        color: '#000000',
+                        marginBottom: '6px',
+                        display: 'block',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                    >
+                      Début :
+                    </label>
+                    <input
+                      type="date"
+                      id="sat-filter-date-start"
+                      value={draftSatStartDate}
+                      onChange={(e) => setDraftSatStartDate(e.target.value)}
+                      style={{
+                        width: '100%',
+                        border: '1px solid #dedede',
+                        borderRadius: '13px',
+                        padding: '10px 14px',
+                        fontSize: '16px',
+                        color: '#000000',
+                        backgroundColor: '#ffffff',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="sat-filter-date-end"
+                      style={{
+                        fontSize: '18px',
+                        fontWeight: 600,
+                        color: '#000000',
+                        marginBottom: '6px',
+                        display: 'block',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                    >
+                      Fin :
+                    </label>
+                    <input
+                      type="date"
+                      id="sat-filter-date-end"
+                      value={draftSatEndDate}
+                      onChange={(e) => setDraftSatEndDate(e.target.value)}
+                      style={{
+                        width: '100%',
+                        border: '1px solid #dedede',
+                        borderRadius: '13px',
+                        padding: '10px 14px',
+                        fontSize: '16px',
+                        color: '#000000',
+                        backgroundColor: '#ffffff',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {(draftSatStartDate !== '' || draftSatEndDate !== '') && (
+                  <div className="pt-2 text-center">
+                    <button
+                      type="button"
+                      id="btn-reset-sat-dates"
+                      onClick={() => {
+                        setDraftSatStartDate('');
+                        setDraftSatEndDate('');
+                      }}
+                      className="text-sm text-neutral-500 hover:text-black cursor-pointer font-sans underline"
+                    >
+                      Réinitialiser les filtres
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '24px',
+                  left: '24px',
+                  right: '24px',
+                  zIndex: 20,
+                  display: 'flex',
+                  gap: '12px',
+                }}
+              >
+                <button
+                  type="button"
+                  id="btn-apply-satisfaction-filters"
+                  onClick={() => {
+                    setSatStartDate(draftSatStartDate);
+                    setSatEndDate(draftSatEndDate);
+                    setIsFilterPaneOpen(false);
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#2e54ff',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    padding: '14px',
+                    fontSize: '18px',
+                    fontWeight: 'normal',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    boxShadow: '0 4px 14px rgba(53, 86, 236, 0.3)',
+                  }}
+                  className="hover:bg-[#2b48cc] transition-colors"
+                >
+                  Appliquer
+                </button>
+                <button
+                  type="button"
+                  id="btn-close-satisfaction-filters"
+                  onClick={() => setIsFilterPaneOpen(false)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#0f172a',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    padding: '14px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    boxShadow: 'none',
+                  }}
+                  className="hover:bg-zinc-800 transition-colors"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Side-pane Performance */}
       {isPerformancePaneOpen && (
