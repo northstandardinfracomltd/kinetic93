@@ -2110,7 +2110,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     justifyContent: 'center',
     cursor: 'pointer',
     border: 'none',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+    boxShadow: 'none',
     transition: 'background-color 0.15s ease',
   };
 
@@ -2543,12 +2543,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               id="btn-refresh-crm-data"
               onClick={() => {
                 setClickedPill('refresh-crm');
-                setTimeout(() => setClickedPill(prev => prev === 'refresh-crm' ? null : prev), 320);
+                setTimeout(() => setClickedPill(prev => prev === 'refresh-crm' ? null : prev), 480);
                 handleRefreshCrmClick();
               }}
               disabled={effectiveRefreshing}
-              className={clickedPill === 'refresh-crm' ? 'sidebar-nav-click-shrink-wave' : ''}
+              className={`relative overflow-hidden ${clickedPill === 'refresh-crm' ? 'sidebar-nav-click-shrink-wave' : ''}`}
               style={{
+                position: 'relative',
+                overflow: 'hidden',
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
@@ -2600,6 +2602,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               id="btn-new-ticket"
               style={{
                 ...customButtonStyle,
+                boxShadow: 'none',
                 opacity: !hasCrmSpreadsheet ? 0.45 : 1,
                 cursor: !hasCrmSpreadsheet ? 'not-allowed' : 'pointer',
               }}
@@ -2624,11 +2627,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   type="button"
                   onClick={() => {
                     setClickedPill(`cat-${catOpt}`);
-                    setTimeout(() => setClickedPill(prev => prev === `cat-${catOpt}` ? null : prev), 320);
+                    setTimeout(() => setClickedPill(prev => prev === `cat-${catOpt}` ? null : prev), 480);
                     setTicketCategoryFilter(catOpt);
                   }}
-                  className={clickedPill === `cat-${catOpt}` ? 'sidebar-nav-click-shrink-wave' : ''}
+                  className={`relative overflow-hidden select-none ${clickedPill === `cat-${catOpt}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                   style={{
+                    position: 'relative',
+                    overflow: 'hidden',
                     borderRadius: '1000px',
                     padding: '7px 16px',
                     fontSize: '18px',
@@ -2638,6 +2643,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     backgroundColor: isSelected ? 'rgb(89, 22, 144)' : 'rgb(230, 197, 255)',
                     color: isSelected ? '#fff' : 'rgb(89, 22, 144)',
                     border: 'none',
+                    boxShadow: 'none',
                     transition: 'all 0.15s ease'
                   }}
                 >

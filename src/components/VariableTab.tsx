@@ -1363,12 +1363,14 @@ export default function VariableTab({
               id="btn-refresh-data-variables"
               onClick={() => {
                 setClickedPill('refresh-variables');
-                setTimeout(() => setClickedPill((prev) => (prev === 'refresh-variables' ? null : prev)), 320);
+                setTimeout(() => setClickedPill((prev) => (prev === 'refresh-variables' ? null : prev)), 480);
                 handleRefreshVariables();
               }}
               disabled={isRefreshing}
-              className={clickedPill === 'refresh-variables' ? 'sidebar-nav-click-shrink-wave' : ''}
+              className={`relative overflow-hidden ${clickedPill === 'refresh-variables' ? 'sidebar-nav-click-shrink-wave' : ''}`}
               style={{
+                position: 'relative',
+                overflow: 'hidden',
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
@@ -1419,7 +1421,7 @@ export default function VariableTab({
               style={{
                 ...customButtonStyle,
                 backgroundColor: '#2e54ff',
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                boxShadow: 'none',
                 opacity: !hasVariablesSpreadsheet ? 0.45 : 1,
                 cursor: !hasVariablesSpreadsheet ? 'not-allowed' : 'pointer',
               }}
@@ -1448,10 +1450,12 @@ export default function VariableTab({
               type="button"
               onClick={() => {
                 setClickedPill(`cat-${cat}`);
-                setTimeout(() => setClickedPill((prev) => (prev === `cat-${cat}` ? null : prev)), 320);
+                setTimeout(() => setClickedPill((prev) => (prev === `cat-${cat}` ? null : prev)), 480);
                 setFilterCategory(cat);
               }}
               style={{
+                position: 'relative',
+                overflow: 'hidden',
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
@@ -1461,9 +1465,10 @@ export default function VariableTab({
                 backgroundColor: isSelected ? 'rgb(89, 22, 144)' : 'rgb(230, 197, 255)',
                 color: isSelected ? '#fff' : 'rgb(89, 22, 144)',
                 border: 'none',
+                boxShadow: 'none',
                 transition: 'all 0.15s ease'
               }}
-              className={`transition-all ${clickedPill === `cat-${cat}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+              className={`relative overflow-hidden transition-all select-none ${clickedPill === `cat-${cat}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
             >
               {cat} ({count})
             </button>

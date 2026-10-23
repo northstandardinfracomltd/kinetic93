@@ -1078,7 +1078,7 @@ export default function MapModal({
           <ChangeMapView viewTarget={viewTarget} />
 
           {/* Plot Markers */}
-          {displayedItems.map(({ item, coords }) => {
+          {displayedItems.map(({ item, coords }, mIdx) => {
             const isFocused = item.id === selectedItemId;
             const isChecked = selectedIds.includes(item.id);
             const statusColor = getSafetyStatusColor(item);
@@ -1086,7 +1086,7 @@ export default function MapModal({
 
             return (
               <DefibMarker
-                key={item.id}
+                key={`${item.id}_${mIdx}`}
                 item={item}
                 coords={coords}
                 isFocused={isFocused}

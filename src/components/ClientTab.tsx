@@ -2613,7 +2613,7 @@ export default function ClientTab({
                 style={{
                   ...customButtonStyle,
                   backgroundColor: '#2e54ff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  boxShadow: 'none',
                   opacity: !resolvedSpreadsheetUrl ? 0.45 : 1,
                   cursor: !resolvedSpreadsheetUrl ? 'not-allowed' : 'pointer',
                 }}

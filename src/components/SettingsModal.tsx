@@ -348,6 +348,7 @@ export default function SettingsModal({
     return false;
   }, [currentUser, localMembers, members, isReadOnly, isDeveloper]);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [clickedTabPill, setClickedTabPill] = React.useState<string | null>(null);
   const [memberToDeleteIndex, setMemberToDeleteIndex] = React.useState<number | null>(null);
   const [enableOtherEquipments, setEnableOtherEquipments] = React.useState(propEnableOtherEquipments);
   const [showDisableOtherEquipmentsConfirmation, setShowDisableOtherEquipmentsConfirmation] = React.useState(false);
@@ -3647,8 +3648,14 @@ export default function SettingsModal({
                   <button
                     key={sec.key}
                     type="button"
-                    onClick={() => setActiveSection(prev => prev === sec.key ? null : sec.key)}
+                    onClick={() => {
+                      setClickedTabPill(sec.key);
+                      setTimeout(() => setClickedTabPill(prev => prev === sec.key ? null : prev), 480);
+                      setActiveSection(prev => prev === sec.key ? null : sec.key);
+                    }}
                     style={{
+                      position: 'relative',
+                      overflow: 'hidden',
                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                       fontSize: '18px',
                       fontWeight: 600,
@@ -3664,7 +3671,7 @@ export default function SettingsModal({
                       whiteSpace: 'normal',
                       lineHeight: '1.3'
                     }}
-                    className="select-none"
+                    className={`relative overflow-hidden select-none ${clickedTabPill === sec.key ? 'sidebar-nav-click-shrink-wave' : ''}`}
                   >
                     {t(sec.label)}
                   </button>

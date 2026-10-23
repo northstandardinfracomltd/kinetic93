@@ -1208,6 +1208,42 @@ export function mapRowToClient(
   if (!obj.denomination && row[0] !== undefined && !isPlaceholderClientValue(String(row[0]).trim())) {
     obj.denomination = String(row[0]).trim();
   }
+
+  // Handle legacy 35-column Clients sheet alignment where Col 11 is Contact 1 Name, Col 12 is Contact 1 Phone, Col 13 is Contact 1 Email, Col 2 is Email, and Col 3 is Phone
+  const col11 = row[11] !== undefined ? String(row[11]).trim() : '';
+  const col12 = row[12] !== undefined ? String(row[12]).trim() : '';
+  const col13 = row[13] !== undefined ? String(row[13]).trim() : '';
+  const col2 = row[2] !== undefined ? String(row[2]).trim() : '';
+  const col3 = row[3] !== undefined ? String(row[3]).trim() : '';
+  if (
+    !obj.nomPrenomSite &&
+    col11 &&
+    !isPlaceholderClientValue(col11) &&
+    /[a-zA-ZÀ-ÿ]{2,}/.test(col11) &&
+    !/^\+?[\d\s.\-()]+$/.test(col11)
+  ) {
+    obj.nomPrenomSite = col11;
+    if (col12 && !isPlaceholderClientValue(col12) && !col12.includes('@')) {
+      obj.telephoneSite = col12;
+    } else if (col3 && !isPlaceholderClientValue(col3) && /^\+?[\d\s.\-()]{6,}$/.test(col3)) {
+      obj.telephoneSite = col3;
+    } else {
+      obj.telephoneSite = '';
+    }
+    if (col13 && col13.includes('@')) {
+      obj.emailSite = col13;
+    } else if (col12 && col12.includes('@')) {
+      obj.emailSite = col12;
+    } else if (col2 && col2.includes('@')) {
+      obj.emailSite = col2;
+    }
+  }
+  if (obj.tvaIntra && String(obj.tvaIntra).includes('@')) {
+    if (!obj.email) obj.email = obj.tvaIntra;
+    if (!obj.emailSite) obj.emailSite = obj.tvaIntra;
+    obj.tvaIntra = '';
+  }
+
   const cleanClientId = String(obj.clientIdField || '').trim();
   const cleanSiret = String(obj.siret || '').trim();
   const cleanDenom = String(obj.denomination || '').trim();
@@ -6371,6 +6407,21 @@ export async function fetchTenantSheetCollection(
           seenVarIds.add(vid.toLowerCase());
           item.id = vid;
         }
+      } else {
+        const seenGenericIds = new Set<string>();
+        for (let i = 0; i < baseItems.length; i++) {
+          const item = baseItems[i];
+          if (!item) continue;
+          let gid = String(item.id || item.identifiant || '').trim();
+          if (!gid) {
+            gid = `sheet_${tabType}_${tenantId}_${item._sheetRowNumber || i + 2}`;
+          }
+          if (seenGenericIds.has(gid.toLowerCase())) {
+            gid = `${gid}_r${item._sheetRowNumber || i + 2}`;
+          }
+          seenGenericIds.add(gid.toLowerCase());
+          item.id = gid;
+        }
       }
 
       // Never overwrite a warm non-empty cache with an empty result caused by a transient Google API timeout/rate-limit (when rawMatrix is null)
@@ -6987,6 +7038,13 @@ export async function upsertRecordsToTenantSheet(
           isCacheWarm = true;
           break;
         }
+      }
+    }
+    if (!isCacheWarm) {
+      const diskSnap = loadDiskSnapshot(cacheKey);
+      if (diskSnap && Array.isArray(diskSnap.items) && diskSnap.items.length > 0 && Array.isArray(diskSnap.headers) && diskSnap.headers.length > 0) {
+        sheetMemoryCache.set(cacheKey, diskSnap);
+        isCacheWarm = true;
       }
     }
     const warmCached = isCacheWarm ? sheetMemoryCache.get(cacheKey)! : null;

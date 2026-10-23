@@ -1312,32 +1312,44 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
     );
   };
 
-  // Extract technician list
+  const isTechnicianMember = (m: any): boolean => {
+    if (!m) return false;
+    const rawRole = String(
+      (m.role && m.role !== 'Collaborateur' ? m.role : '') ||
+      m.categorie ||
+      m.category ||
+      m['Catégorie.'] ||
+      m['Catégorie'] ||
+      m.adminSubRole ||
+      m.metier ||
+      m['Métier.'] ||
+      m['Métier'] ||
+      m.role ||
+      ''
+    ).trim().toLowerCase();
+    const subRole = String(
+      m.adminSubRole ||
+      m.categorie ||
+      m.category ||
+      m['Catégorie.'] ||
+      m['Catégorie'] ||
+      ''
+    ).trim().toLowerCase();
+    return (
+      rawRole.includes('tech') ||
+      rawRole === 'maintenance terrain' ||
+      subRole.includes('tech') ||
+      subRole === 'maintenance terrain'
+    );
+  };
+
+  // Extract technician list strictly from members of type Technicien
   const techNamesFromMembers = (Array.isArray(members) ? members : [])
-    .filter((m) => m && (m.role === 'Technicien' || (m.role || '').toLowerCase().includes('tech')))
-    .map((m) => m && m.name)
+    .filter((m) => isTechnicianMember(m))
+    .map((m) => (m && m.name ? String(m.name).trim() : ''))
     .filter((n): n is string => Boolean(n));
 
-  const techNamesFromPointages = (Array.isArray(pointages) ? pointages : [])
-    .map((p) => p && p.techName)
-    .filter((n): n is string => Boolean(n));
-
-  const allTechnicians = Array.from(
-    new Set([...techNamesFromMembers, ...techNamesFromPointages])
-  ).sort();
-
-  // If no technicians found specifically as Technicien role, fall back to all member names or pointage techNames
-  const technicians =
-    allTechnicians.length > 0
-      ? allTechnicians
-      : Array.from(
-          new Set([
-            ...(Array.isArray(members) ? members : []).map((m) => m && m.name),
-            ...(Array.isArray(pointages) ? pointages : []).map((p) => p && p.techName),
-          ])
-        )
-          .filter((n): n is string => Boolean(n))
-          .sort();
+  const technicians = Array.from(new Set(techNamesFromMembers)).sort();
 
   // Generate 12 recent months up to current month plus any additional months from pointages
   const now = new Date();
@@ -1655,12 +1667,14 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
               id="btn-refresh-data-temps"
               onClick={() => {
                 setClickedPill('refresh-temps');
-                setTimeout(() => setClickedPill((prev) => (prev === 'refresh-temps' ? null : prev)), 320);
+                setTimeout(() => setClickedPill((prev) => (prev === 'refresh-temps' ? null : prev)), 480);
                 handleRefreshTemps();
               }}
               disabled={isRefreshing}
-              className={clickedPill === 'refresh-temps' ? 'sidebar-nav-click-shrink-wave' : ''}
+              className={`relative overflow-hidden ${clickedPill === 'refresh-temps' ? 'sidebar-nav-click-shrink-wave' : ''}`}
               style={{
+                position: 'relative',
+                overflow: 'hidden',
                 borderRadius: '1000px',
                 padding: '8px 16px',
                 fontSize: '18px',
@@ -1713,10 +1727,12 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                 type="button"
                 onClick={() => {
                   setClickedPill(`tech-${filterOpt}`);
-                  setTimeout(() => setClickedPill((prev) => (prev === `tech-${filterOpt}` ? null : prev)), 320);
+                  setTimeout(() => setClickedPill((prev) => (prev === `tech-${filterOpt}` ? null : prev)), 480);
                   setSelectedTechFilter(filterOpt);
                 }}
                 style={{
+                  position: 'relative',
+                  overflow: 'hidden',
                   borderRadius: '1000px',
                   padding: '8px 16px',
                   fontSize: '18px',
@@ -1729,7 +1745,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   boxShadow: 'none',
                   transition: 'all 0.15s ease',
                 }}
-                className={`transition-all ${clickedPill === `tech-${filterOpt}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                className={`relative overflow-hidden transition-all select-none ${clickedPill === `tech-${filterOpt}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
               >
                 {t(filterOpt)}
               </button>

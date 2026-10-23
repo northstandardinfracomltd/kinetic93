@@ -2950,8 +2950,8 @@ export default function GmaoCorrectionForm({
                       <option value="">Sélection d'un matériel.</option>
                       {defibrillateurs.length > 0 && (
                         <optgroup label="DÉFIBRILLATEURS (DAE)">
-                          {defibrillateurs.map(df => (
-                            <option key={df.id} value={df.id}>
+                          {defibrillateurs.map((df, dfIdx) => (
+                            <option key={`${df.id}_${dfIdx}`} value={df.id}>
                               Défibrillateur - {df.identifiant} - {df.numeroSerie || "Sans série"}
                             </option>
                           ))}
@@ -2959,8 +2959,8 @@ export default function GmaoCorrectionForm({
                       )}
                       {otherEquipments.length > 0 && (
                         <optgroup label="AUTRES MATÉRIELS">
-                          {otherEquipments.map(o => (
-                            <option key={o.id} value={`OTHER:${o.id}`}>
+                          {otherEquipments.map((o, oIdx) => (
+                            <option key={`${o.id}_${oIdx}`} value={`OTHER:${o.id}`}>
                               {o.categorie || "Autre"} - {o.identifiant} - {o.id.substring(0, 8).toUpperCase()}
                             </option>
                           ))}

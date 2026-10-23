@@ -1652,13 +1652,27 @@ export async function fetchCollectionFromFirestore<T>(
     }
 
     try {
-      const resp = await fetch(`/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(activeTenantId)}&_t=${Date.now()}`, {
-        cache: 'no-store',
-        signal: AbortSignal.timeout(60000)
-      });
-      if (resp.ok) {
-        const json = await resp.json();
-        if (json && json.value !== undefined) {
+      let json: any = null;
+      for (let syncAttempt = 1; syncAttempt <= 3; syncAttempt++) {
+        try {
+          const resp = await fetch(`/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(activeTenantId)}&_t=${Date.now()}`, {
+            cache: 'no-store',
+            signal: AbortSignal.timeout(60000)
+          });
+          if (resp.ok) {
+            const rawText = await resp.text();
+            const trimmed = rawText.trim();
+            if (trimmed && !trimmed.startsWith('<')) {
+              json = JSON.parse(trimmed);
+              break;
+            }
+          }
+        } catch (_) {}
+        if (syncAttempt < 3) {
+          await new Promise(r => setTimeout(r, 400 * syncAttempt));
+        }
+      }
+      if (json && json.value !== undefined) {
           const val = filterCollectionForTenant(json.value as T, collectionName, activeTenantId);
           const primaryKey = candidateKeys[0] || `${collectionName}_${activeTenantId}`;
 
@@ -1715,7 +1729,6 @@ export async function fetchCollectionFromFirestore<T>(
             }
           }
         }
-      }
     } catch (apiErr) {
       console.warn(`[Sync Server Relay] Error fetching ${collectionName} via /api/sync-collection:`, apiErr);
     }

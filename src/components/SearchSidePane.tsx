@@ -162,11 +162,11 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
               Aucun résultat trouvé.
             </div>
           ) : (
-            filteredItems.map((item) => {
+            filteredItems.map((item, idx) => {
               const isSelected = item.id === selectedId;
               return (
                 <div
-                  key={item.id}
+                  key={`${item.id}_${idx}`}
                   onClick={() => {
                     onSelect(item);
                     onClose();

@@ -1886,13 +1886,13 @@ export default function AutresMaterielsTab({
                       </td>
                     </tr>
                   ) : (
-                    filteredList.map((item) => {
+                    filteredList.map((item, rowIdx) => {
                       const clientData = getLinkedClientForItem(item);
                       const isRowChecked = selectedIds.includes(item.id);
                       const isPinned = pinnedOtherIds.includes(item.id);
                       return (
                         <tr 
-                          key={item.id} 
+                          key={`${item.id}_${rowIdx}`} 
                           onClick={() => handleOpenEditForm(item)}
                           className={`group hover:bg-[#f5f7fa] transition-all cursor-pointer ${
                             isRowChecked ? 'bg-[#ecefff]/60' : ''

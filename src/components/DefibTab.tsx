@@ -1142,31 +1142,35 @@ export default function DefibTab({
     }
 
     const secondaryBase = defibrillateurs.length >= fallbackSheetDefibs.length ? fallbackSheetDefibs : defibrillateurs;
-    if (secondaryBase.length === 0 && remoteQueriedDefibs.length === 0 && planSheetDefibs.length === 0) return baseList;
-    const byKey = new Map<string, number>();
+    const byId = new Map<string, number>();
+    const byIdent = new Map<string, number>();
     const out: Defibrillateur[] = [];
 
-    for (const df of baseList) {
-      if (!df) continue;
-      const k = String(df.identifiant || df.id || '').trim().toLowerCase();
-      const idx = out.length;
-      out.push(df);
-      if (k) byKey.set(k, idx);
-    }
-    for (const sourceList of [secondaryBase, planSheetDefibs, remoteQueriedDefibs]) {
+    for (const sourceList of [baseList, secondaryBase, planSheetDefibs, remoteQueriedDefibs]) {
       for (const df of sourceList) {
         if (!df) continue;
-        const k = String(df.identifiant || df.id || '').trim().toLowerCase();
-        if (k) {
-          const existingIdx = byKey.get(k);
-          if (existingIdx === undefined) {
-            byKey.set(k, out.length);
-            out.push(df);
-          } else {
-            const existing = out[existingIdx];
-            if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
-              out[existingIdx] = { ...existing, ...df };
-            }
+        const idKey = String(df.id || '').trim().toLowerCase();
+        const identKey = String(df.identifiant || '').trim().toLowerCase();
+        if (!idKey && !identKey) continue;
+
+        const existingIdx =
+          (idKey ? byId.get(idKey) : undefined) ??
+          (identKey ? byIdent.get(identKey) : undefined);
+
+        if (existingIdx === undefined) {
+          const idx = out.length;
+          out.push(df);
+          if (idKey) byId.set(idKey, idx);
+          if (identKey) byIdent.set(identKey, idx);
+        } else {
+          const existing = out[existingIdx];
+          if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
+            const merged = { ...existing, ...df, id: existing.id || df.id };
+            out[existingIdx] = merged;
+            const mId = String(merged.id || '').trim().toLowerCase();
+            const mIdent = String(merged.identifiant || '').trim().toLowerCase();
+            if (mId) byId.set(mId, existingIdx);
+            if (mIdent) byIdent.set(mIdent, existingIdx);
           }
         }
       }
@@ -2508,24 +2512,49 @@ export default function DefibTab({
 
   // Autopopulate site / contract fields on Client lookup change
   const handleClientChange = (selectedClientId: string) => {
-    setClientId(selectedClientId);
-    const linkedClient = clientMap.get(selectedClientId) || clients.find(c => c && (c.id === selectedClientId || c.clientIdField === selectedClientId));
+    const cleanId = String(selectedClientId || '').trim();
+    setClientId(cleanId);
+    const linkedClient = cleanId
+      ? clientMap.get(cleanId) ||
+        clientMap.get(cleanId.toLowerCase()) ||
+        clients.find(
+          c =>
+            c &&
+            (c.id === cleanId ||
+              (c.clientIdField && String(c.clientIdField).trim() !== '' && c.clientIdField === cleanId))
+        )
+      : undefined;
     if (linkedClient) {
-      setClientSearchQuery(`${linkedClient.denomination || ''}${linkedClient.siret ? ` (${linkedClient.siret})` : ''}`);
-      if (linkedClient.nomSite || !nomSite.trim() || (editingDefib && nomSite === editingDefib.nomSite)) {
-        setNomSite(linkedClient.nomSite || linkedClient.denomination || '');
-      }
-      setNomPrenomSite(linkedClient.nomPrenomSite || '');
-      setTelephoneSite(linkedClient.telephoneSite || '');
-      setEmailSite(linkedClient.emailSite || '');
+      setClientSearchQuery(`${linkedClient.denomination || ''}${linkedClient.siret && !isPlaceholderClientVal(linkedClient.siret) ? ` (${linkedClient.siret})` : ''}`);
+      setNomSite((linkedClient as any).nomSite || linkedClient.denomination || '');
+      const rawContact =
+        linkedClient.nomPrenomSite ||
+        (linkedClient as any).nomPrenom ||
+        (linkedClient as any).contact ||
+        (linkedClient as any).responsable ||
+        '';
+      const rawTel =
+        linkedClient.telephoneSite ||
+        linkedClient.phone ||
+        (linkedClient as any).telephone ||
+        '';
+      const rawEmail =
+        linkedClient.emailSite ||
+        linkedClient.email ||
+        '';
+      setNomPrenomSite(!isPlaceholderClientVal(rawContact) ? rawContact : '');
+      setTelephoneSite(!isPlaceholderClientVal(rawTel) ? rawTel : '');
+      setEmailSite(!isPlaceholderClientVal(rawEmail) ? rawEmail : '');
       setContrat(linkedClient.contrat || 'Non');
       setNomContrat(linkedClient.nomContrat || '');
       setReferenceContrat(linkedClient.referenceContrat || '');
-      setDebutContrat(linkedClient.debutContrat || '');
-      setFinContrat(linkedClient.finContrat || '');
+      setDebutContrat(toISODateOnly(linkedClient.debutContrat || ''));
+      setFinContrat(toISODateOnly(linkedClient.finContrat || ''));
       setPayeurId(linkedClient.payeurId || '');
-      setClientIdField(linkedClient.clientIdField || '');
+      setClientIdField(!isPlaceholderClientVal(linkedClient.clientIdField) ? linkedClient.clientIdField || '' : '');
     } else {
+      setClientSearchQuery('');
+      setNomSite('');
       setNomPrenomSite('');
       setTelephoneSite('');
       setEmailSite('');
@@ -2557,6 +2586,8 @@ export default function DefibTab({
     return set;
   }, [fsmTours, activeFilters.actionRejected]);
 
+  const [localDeletedVersion, setLocalDeletedVersion] = useState(0);
+
   // Set of deleted defib keys to prevent resurrection during optimistic deletions
   const deletedDefibSet = useMemo(() => {
     const set = new Set<string>();
@@ -2583,7 +2614,7 @@ export default function DefibTab({
       } catch (_) {}
     }
     return set;
-  }, [activeTenantId, defibrillateurs]);
+  }, [activeTenantId, defibrillateurs, localDeletedVersion]);
 
   // Total active defibs excluding deleted records
   const activeDefibrillateurs = useMemo(() => {
@@ -4177,59 +4208,59 @@ export default function DefibTab({
           updatedAt: nowIso,
           dateDerniereModification: nowIso,
         } as any;
-        const res = await onUpdateDefib(updatedRecord);
-        savedOk = res !== false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const res = await onUpdateDefib(updatedRecord);
+            if (res !== false) {
+              savedOk = true;
+              break;
+            }
+          } catch (_) {}
+          if (attempt < 3) await new Promise(r => setTimeout(r, 300 * attempt));
+        }
         if (savedOk) {
-          setRemoteQueriedDefibs(prev =>
-            prev.map(df =>
-              df && (
-                (df.id && df.id === editingDefib.id) ||
-                (df.identifiant && editingDefib.identifiant && df.identifiant.toUpperCase() === editingDefib.identifiant.toUpperCase())
-              )
-                ? { ...df, ...updatedRecord }
-                : df
-            )
-          );
+          const matchDefib = (df: any) =>
+            df && (
+              (df.id && df.id === editingDefib.id) ||
+              (df.identifiant && editingDefib.identifiant && df.identifiant.toUpperCase() === editingDefib.identifiant.toUpperCase())
+            );
+          setFallbackSheetDefibs(prev => prev.map(df => matchDefib(df) ? { ...df, ...updatedRecord } : df));
+          setRemoteQueriedDefibs(prev => prev.map(df => matchDefib(df) ? { ...df, ...updatedRecord } : df));
           if (stableDefibsRef.current.items.length > 0) {
             stableDefibsRef.current.items = stableDefibsRef.current.items.map(df =>
-              df && (
-                (df.id && df.id === editingDefib.id) ||
-                (df.identifiant && editingDefib.identifiant && df.identifiant.toUpperCase() === editingDefib.identifiant.toUpperCase())
-              )
-                ? { ...df, ...updatedRecord }
-                : df
+              matchDefib(df) ? { ...df, ...updatedRecord } : df
             );
           }
           recordRecentDefibChange([editingDefib.id, payload.identifiant, payload.numeroSerie]);
         }
       } else {
+        const canonicalId = String(payload.identifiant || '').trim() || ('df_' + Date.now());
         const newRecordPayload = {
           ...payload,
-          id: 'df_' + Date.now(),
+          id: canonicalId,
           createdAt: nowIso,
           updatedAt: nowIso,
           dateDerniereModification: nowIso,
         };
-        const res = await onAddDefib(newRecordPayload);
-        savedOk = res !== false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const res = await onAddDefib(newRecordPayload);
+            if (res !== false) {
+              savedOk = true;
+              break;
+            }
+          } catch (_) {}
+          if (attempt < 3) await new Promise(r => setTimeout(r, 300 * attempt));
+        }
         if (savedOk) {
-          setRemoteQueriedDefibs(prev => {
-            const exists = prev.some(
-              df =>
-                df &&
-                ((df.identifiant && payload.identifiant && df.identifiant.toUpperCase() === payload.identifiant.toUpperCase()) ||
-                  (df.numeroSerie && payload.numeroSerie && df.numeroSerie.toUpperCase() === payload.numeroSerie.toUpperCase()))
-            );
-            return exists ? prev : [newRecordPayload as any, ...prev];
-          });
+          const isSameNew = (df: any) =>
+            df &&
+            ((df.identifiant && payload.identifiant && df.identifiant.toUpperCase() === payload.identifiant.toUpperCase()) ||
+              (df.numeroSerie && payload.numeroSerie && df.numeroSerie.toUpperCase() === payload.numeroSerie.toUpperCase()));
+          setFallbackSheetDefibs(prev => prev.some(isSameNew) ? prev : [newRecordPayload as any, ...prev]);
+          setRemoteQueriedDefibs(prev => prev.some(isSameNew) ? prev : [newRecordPayload as any, ...prev]);
           if (stableDefibsRef.current.items.length > 0) {
-            const exists = stableDefibsRef.current.items.some(
-              df =>
-                df &&
-                ((df.identifiant && payload.identifiant && df.identifiant.toUpperCase() === payload.identifiant.toUpperCase()) ||
-                  (df.numeroSerie && payload.numeroSerie && df.numeroSerie.toUpperCase() === payload.numeroSerie.toUpperCase()))
-            );
-            if (!exists) {
+            if (!stableDefibsRef.current.items.some(isSameNew)) {
               stableDefibsRef.current.items = [newRecordPayload as any, ...stableDefibsRef.current.items];
               stableDefibsRef.current.totalCount += 1;
             }
@@ -5348,7 +5379,7 @@ export default function DefibTab({
                 </tr>
               </thead>
               <tbody className="text-slate-700 text-xs">
-                {paginatedDefibs.map(df => {
+                {paginatedDefibs.map((df, dfRowIdx) => {
                   const linkedClient = getLinkedClientForDefib(df);
                   const linkedModel = variableMap.get(df.modeleId);
                   const isChecked = selectedIdsSet.has(df.id);
@@ -5379,7 +5410,7 @@ export default function DefibTab({
 
                   return (
                     <tr
-                      key={df.id}
+                      key={`${df.id}_${dfRowIdx}`}
                       id={`defib-row-${df.id}`}
                       onClick={(e) => openEditForm(df, e)}
                       className={`group hover:bg-[#f5f7fa] transition-all cursor-pointer ${
@@ -5720,28 +5751,54 @@ export default function DefibTab({
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               const inTour = (fsmTours || []).some(t =>
-                                (t.missions || []).some((m: any) => m.defibIdentifiant === df.identifiant)
+                                (t.missions || []).some((m: any) => m.defibIdentifiant && df.identifiant && String(m.defibIdentifiant).trim().toLowerCase() === String(df.identifiant).trim().toLowerCase())
                               );
                               if (inTour) {
-                                alert(t("Action impossible : ce défibrillateur fait déjà partie d'une tournée."));
                                 return;
                               }
-                              if (window.confirm(t("Êtes-vous sûr de vouloir supprimer ce défibrillateur ?"))) {
-                                try {
-                                  const raw = sessionStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
-                                  const parsed = raw ? JSON.parse(raw) : [];
-                                  const keysToAdd = [df.id, df.identifiant, df.numeroSerie, (df as any).num_serie].filter(Boolean).map(s => String(s).trim().toLowerCase());
-                                  const combined = Array.from(new Set([...parsed, ...keysToAdd]));
-                                  sessionStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
-                                  localStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
-                                  localStorage.setItem('defib_D27_deleted_defib_keys', JSON.stringify(combined));
-                                  localStorage.setItem('defib_D58_deleted_defib_keys', JSON.stringify(combined));
-                                } catch (_) {}
-                                onDeleteDefib(df.id);
-                                setSelectedIds(prev => prev.filter(id => id !== df.id));
+                              const keysToAdd = [df.id, df.identifiant, df.numeroSerie, (df as any).num_serie]
+                                .filter(Boolean)
+                                .map(s => String(s).trim().toLowerCase());
+                              const keySet = new Set(keysToAdd);
+                              try {
+                                const raw = sessionStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
+                                const parsed = raw ? JSON.parse(raw) : [];
+                                const combined = Array.from(new Set([...(Array.isArray(parsed) ? parsed : []), ...keysToAdd]));
+                                sessionStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
+                                localStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
+                                localStorage.setItem('defib_D27_deleted_defib_keys', JSON.stringify(combined));
+                                localStorage.setItem('defib_D58_deleted_defib_keys', JSON.stringify(combined));
+                              } catch (_) {}
+
+                              const shouldKeep = (item: any) => {
+                                if (!item) return false;
+                                const itemId = String(item.id || '').trim().toLowerCase();
+                                const itemIdent = String(item.identifiant || '').trim().toLowerCase();
+                                const itemSn = String(item.numeroSerie || item.num_serie || '').trim().toLowerCase();
+                                if (itemId && keySet.has(itemId)) return false;
+                                if (itemIdent && keySet.has(itemIdent)) return false;
+                                if (itemSn && keySet.has(itemSn)) return false;
+                                return true;
+                              };
+
+                              setLocalDeletedVersion(v => v + 1);
+                              setFallbackSheetDefibs(prev => prev.filter(shouldKeep));
+                              setRemoteQueriedDefibs(prev => prev.filter(shouldKeep));
+                              setPlanSheetDefibs(prev => prev.filter(shouldKeep));
+                              if (stableDefibsRef.current.items.length > 0) {
+                                const beforeLen = stableDefibsRef.current.items.length;
+                                stableDefibsRef.current.items = stableDefibsRef.current.items.filter(shouldKeep);
+                                if (stableDefibsRef.current.items.length < beforeLen) {
+                                  stableDefibsRef.current.totalCount = Math.max(0, stableDefibsRef.current.totalCount - 1);
+                                }
                               }
+                              setRemoteFilteredTotal(prev => (typeof prev === 'number' ? Math.max(0, prev - 1) : prev));
+                              setLocalSheetStats(prev => prev ? { ...prev, total: Math.max(0, (prev.total || 1) - 1) } : prev);
+                              setSelectedIds(prev => prev.filter(id => !keySet.has(String(id).trim().toLowerCase())));
+                              onDeleteDefib(df.identifiant || df.id);
                             }}
                             style={rowActionButton18Style}
                             className="cursor-pointer"

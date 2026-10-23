@@ -455,6 +455,8 @@ html.is-edge [style*="font-weight:100"] {
 }
 
 .sidebar-nav-click-shrink-wave {
+  position: relative;
+  overflow: hidden;
   display: inline-block;
   transform-origin: left center;
   animation: sidebarClickShrinkText 0.48s cubic-bezier(0.22, 1, 0.36, 1) 1 forwards;
@@ -464,6 +466,7 @@ html.is-edge [style*="font-weight:100"] {
   content: '';
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   pointer-events: none;
   z-index: 20;
   background: linear-gradient(

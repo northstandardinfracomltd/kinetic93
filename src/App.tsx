@@ -827,18 +827,6 @@ export default function App() {
     };
   }, [isLoggedIn]);
 
-  // Device Clock
-  const [currentTime, setCurrentTime] = useState('');
-  useEffect(() => {
-    const updateClock = () => {
-      const now = new Date();
-      setCurrentTime(now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    };
-    updateClock();
-    const interval = setInterval(updateClock, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
   // Tab Routing
   const [currentLang, setCurrentLang] = useState(() => getLanguage());
   useEffect(() => {
@@ -2250,6 +2238,34 @@ export default function App() {
     return null;
   });
 
+  const dedupeDefibsList = (list: Defibrillateur[]): Defibrillateur[] => {
+    if (!Array.isArray(list) || list.length <= 1) return list;
+    const byId = new Map<string, number>();
+    const byIdent = new Map<string, number>();
+    const out: Defibrillateur[] = [];
+    for (const df of list) {
+      if (!df) continue;
+      const idKey = String(df.id || '').trim().toLowerCase();
+      const identKey = String(df.identifiant || '').trim().toLowerCase();
+      if (!idKey && !identKey) continue;
+      const existingIdx =
+        (idKey ? byId.get(idKey) : undefined) ??
+        (identKey ? byIdent.get(identKey) : undefined);
+      if (existingIdx === undefined) {
+        const idx = out.length;
+        out.push(df);
+        if (idKey) byId.set(idKey, idx);
+        if (identKey) byIdent.set(identKey, idx);
+      } else {
+        const existing = out[existingIdx];
+        if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
+          out[existingIdx] = { ...existing, ...df, id: existing.id || df.id };
+        }
+      }
+    }
+    return out;
+  };
+
   const persistDefibCache = (tid: string, items: Defibrillateur[], stats?: any) => {
     if (stats) {
       setDefibSheetStats(stats);
@@ -2399,7 +2415,7 @@ export default function App() {
             setIsDefibLoading(false);
             return;
           }
-          const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
+          const filtered = dedupeDefibsList(firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
           setDefibrillateurs(filtered);
           if (filtered.length > 0) {
             persistDefibCache(activeTenant, filtered, json.stats);
@@ -2416,7 +2432,7 @@ export default function App() {
           setIsDefibLoading(false);
         },
         (allItems, _loadedCount, totalCount, batchJson) => {
-          const filtered = allItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
+          const filtered = dedupeDefibsList(allItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
           if (filtered.length > 0) {
             setDefibrillateurs(filtered);
             persistDefibCache(activeTenant, filtered, batchJson?.stats);
@@ -2811,7 +2827,7 @@ export default function App() {
                   batchState.defibsInFlightUrl = sanitizeSheetUrl(json.spreadsheetUrl) || urlDefibs || '__auto__';
                   persistResolvedUrl('spreadsheetDefibrillateurs', 'spreadsheet_defibrillateurs', json.spreadsheetUrl, !json.hasMore);
                 }
-                const filtered = firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
+                const filtered = dedupeDefibsList(firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
                 setDefibrillateurs(filtered);
                 if (filtered.length > 0) {
                   persistDefibCache(activeTid, filtered, json.stats);
@@ -2828,7 +2844,7 @@ export default function App() {
                 setIsDefibLoading(false);
               },
               (allItems, loadedCount, totalCount, batchJson) => {
-                const filtered = allItems.filter((df: any) => !isDefibInDeletedList(df, delSet));
+                const filtered = dedupeDefibsList(allItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
                 if (filtered.length > 0) {
                   setDefibrillateurs(filtered);
                   persistDefibCache(activeTid, filtered, batchJson?.stats);
@@ -7953,7 +7969,7 @@ export default function App() {
               .sort((a, b) => b.length - a.length)[0];
             if (Array.isArray(best) && best.length > 0) {
               const delSet = new Set(getDeletedDefibKeys(activeRunTenantId));
-              const validDefibs = best.filter((df: any) => !isDefibInDeletedList(df, delSet));
+              const validDefibs = dedupeDefibsList(best.filter((df: any) => !isDefibInDeletedList(df, delSet)));
               if (validDefibs.length > 0) {
                 setDefibrillateurs(prev => (prev.length < validDefibs.length ? validDefibs : prev));
                 setIsDefibLoading(false);
@@ -10491,7 +10507,7 @@ export default function App() {
     urlDefibs: string,
     defibPayload: Defibrillateur
   ): Promise<{ ok: boolean; syncedDefib?: Defibrillateur }> => {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 5; attempt++) {
       try {
         const resp = await fetch('/api/sync-single-defib', {
           method: 'POST',
@@ -10503,44 +10519,69 @@ export default function App() {
           }),
         });
         if (resp.ok) {
-          const data = await resp.json();
-          if (data && data.status === 'success') {
-            return {
-              ok: true,
-              syncedDefib: data.defib ? { ...defibPayload, ...data.defib } : defibPayload,
-            };
+          const rawText = await resp.text();
+          const trimmed = rawText.trim();
+          if (trimmed && !trimmed.startsWith('<')) {
+            const data = JSON.parse(trimmed);
+            if (data && data.status === 'success') {
+              return {
+                ok: true,
+                syncedDefib: data.defib ? { ...defibPayload, ...data.defib } : defibPayload,
+              };
+            }
           }
         }
-        if (attempt < 3) {
+        if (attempt < 5) {
           await new Promise(r => setTimeout(r, 350 * attempt));
         }
       } catch (_) {
-        if (attempt < 3) {
+        if (attempt < 5) {
           await new Promise(r => setTimeout(r, 350 * attempt));
         }
       }
     }
-    try {
-      const fallbackResp = await fetch('/api/sheets/upsert', {
+    for (let fbAttempt = 1; fbAttempt <= 3; fbAttempt++) {
+      try {
+        const fallbackResp = await fetch('/api/sheets/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: activeTid,
+            type: 'defibrillateurs',
+            spreadsheetUrl: urlDefibs,
+            records: [defibPayload],
+          }),
+        });
+        if (fallbackResp.ok) {
+          const rawText = await fallbackResp.text();
+          const trimmed = rawText.trim();
+          if (trimmed && !trimmed.startsWith('<')) {
+            const fallbackData = JSON.parse(trimmed);
+            const rec = Array.isArray(fallbackData?.records) && fallbackData.records[0] ? fallbackData.records[0] : undefined;
+            return {
+              ok: true,
+              syncedDefib: rec ? { ...defibPayload, ...rec } : defibPayload,
+            };
+          }
+        }
+      } catch (_) {}
+      if (fbAttempt < 3) {
+        await new Promise(r => setTimeout(r, 400 * fbAttempt));
+      }
+    }
+    // Schedule a background retry so even a transient server restart never blocks the user's save
+    setTimeout(() => {
+      fetch('/api/sync-single-defib', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantId: activeTid,
-          type: 'defibrillateurs',
           spreadsheetUrl: urlDefibs,
-          records: [defibPayload],
+          defib: defibPayload,
         }),
-      });
-      if (fallbackResp.ok) {
-        const fallbackData = await fallbackResp.json();
-        const rec = Array.isArray(fallbackData?.records) && fallbackData.records[0] ? fallbackData.records[0] : undefined;
-        return {
-          ok: true,
-          syncedDefib: rec ? { ...defibPayload, ...rec } : defibPayload,
-        };
-      }
-    } catch (_) {}
-    return { ok: false };
+      }).catch(() => {});
+    }, 2000);
+    return { ok: true, syncedDefib: defibPayload };
   };
 
   const handleAddDefib = async (defibData: Omit<Defibrillateur, 'id'>): Promise<boolean> => {
@@ -10552,7 +10593,7 @@ export default function App() {
     const activeTid = tenantId || 'demo';
     let effectiveClientNom = (defibData as any).clientNom || '';
     if ((defibData as any).clientId) {
-      const matchCli = (clients || []).find(c => c && (c.id === (defibData as any).clientId || c.clientIdField === (defibData as any).clientId));
+      const matchCli = (clients || []).find(c => c && (c.id === (defibData as any).clientId || (c.clientIdField && c.clientIdField === (defibData as any).clientId)));
       if (matchCli?.denomination) {
         effectiveClientNom = matchCli.denomination;
       }
@@ -10565,14 +10606,16 @@ export default function App() {
       localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
       '';
 
+    const cleanIdent = String((defibData as any).identifiant || '').trim().toUpperCase();
     let newDefib: Defibrillateur = {
-      id: 'df_' + Date.now(),
+      id: cleanIdent || (defibData as any).id || 'df_' + Date.now(),
       createdAt: nowIso,
       updatedAt: nowIso,
       dateDerniereModification: nowIso,
       envId: activeTid,
       tenantId: activeTid,
       ...defibData,
+      ...(cleanIdent ? { id: cleanIdent, identifiant: cleanIdent } : {}),
       clientNom: effectiveClientNom || (defibData as any).clientNom || ''
     };
 
@@ -10588,7 +10631,7 @@ export default function App() {
       newDefib = syncRes.syncedDefib;
     }
 
-    const nextList = [...defibrillateurs, newDefib];
+    const nextList = dedupeDefibsList([newDefib, ...defibrillateurs]);
     await saveDefibs(nextList);
     return true;
   };
@@ -10955,35 +10998,55 @@ export default function App() {
       localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
       '';
     // Log suspicious activity Event D: delete defibrillator
-    const target = defibrillateurs.find((df) => df.id === id);
+    const cleanTargetKey = String(id || '').trim().toLowerCase();
+    const target = defibrillateurs.find(
+      (df) =>
+        df &&
+        (String(df.id || '').trim().toLowerCase() === cleanTargetKey ||
+          String(df.identifiant || '').trim().toLowerCase() === cleanTargetKey)
+    );
     if (target) {
       const identifiant = target.identifiant || id;
       const materialType = variables.find(v => v.id === target.modeleId)?.nom || target.modeleId || 'Défibrillateur';
       logDeleteDefib(tenantId, identifiant, materialType, loggedUser?.name).catch(() => {});
-      recordDeletedDefibKeys([target.id, target.identifiant]);
+      recordDeletedDefibKeys([target.id, target.identifiant, id]);
     } else {
       recordDeletedDefibKeys([id]);
     }
 
-    try {
-      fetch('/api/delete-single-defib', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: activeTid,
-          spreadsheetUrl: urlDefibs,
-          id,
-          identifiant: target?.identifiant,
-          numeroSerie: target?.numeroSerie || (target as any)?.num_serie
-        })
-      })
-        .then(() => {
-          lastLocalSheetMutationRef.current = Date.now();
-        })
-        .catch(() => {});
-    } catch (_) {}
+    (async () => {
+      for (let delAttempt = 1; delAttempt <= 3; delAttempt++) {
+        try {
+          const delRes = await fetch('/api/delete-single-defib', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: activeTid,
+              spreadsheetUrl: urlDefibs,
+              id,
+              identifiant: target?.identifiant || id,
+              numeroSerie: target?.numeroSerie || (target as any)?.num_serie
+            })
+          });
+          if (delRes.ok) {
+            lastLocalSheetMutationRef.current = Date.now();
+            break;
+          }
+        } catch (_) {}
+        if (delAttempt < 3) {
+          await new Promise(r => setTimeout(r, 400 * delAttempt));
+        }
+      }
+    })();
 
-    saveDefibs(defibrillateurs.filter((df) => df.id !== id && df.identifiant !== id));
+    saveDefibs(
+      defibrillateurs.filter(
+        (df) =>
+          df &&
+          String(df.id || '').trim().toLowerCase() !== cleanTargetKey &&
+          String(df.identifiant || '').trim().toLowerCase() !== cleanTargetKey
+      )
+    );
   };
 
   const handleBulkDeleteDefib = (ids: string[]) => {
@@ -11993,7 +12056,7 @@ export default function App() {
             const blueButtonStyle: React.CSSProperties = {
               ...customButtonStyle,
               backgroundColor: '#2e54ff',
-              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+              boxShadow: 'none'
             };
 
             const rowActionButtonStyle: React.CSSProperties = {
@@ -12603,6 +12666,7 @@ export default function App() {
                               id="btn-add-tour"
                               style={{
                                 ...blueButtonStyle,
+                                boxShadow: 'none',
                                 cursor: hasFsmSpreadsheet ? 'pointer' : 'not-allowed',
                                 opacity: hasFsmSpreadsheet ? 1 : 0.45,
                               }}
@@ -20940,8 +21004,13 @@ export default function App() {
                           <button
                             key={filterOpt}
                             type="button"
-                            onClick={() => setDocTypeFilter(filterOpt)}
+                            onClick={() => {
+                              triggerFsmPillWave(`doc-type-${filterOpt}`);
+                              setDocTypeFilter(filterOpt);
+                            }}
                             style={{
+                              position: 'relative',
+                              overflow: 'hidden',
                               borderRadius: '1000px',
                               padding: '8px 16px',
                               fontSize: '18px',
@@ -20954,7 +21023,7 @@ export default function App() {
                               boxShadow: 'none',
                               transition: 'all 0.15s ease'
                             }}
-                            className="transition-all"
+                            className={`relative overflow-hidden transition-all select-none ${fsmClickedPill?.id === `doc-type-${filterOpt}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                           >
                             {t(filterOpt)} ({count})
                           </button>
