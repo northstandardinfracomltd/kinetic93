@@ -665,10 +665,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     // Purge cached collection snapshots on arriving at the login screen to ensure fresh synchronization
     purgeAllLocalEnvironmentCaches();
 
-    fetch('https://api64.ipify.org?format=json')
-      .then(res => res.json())
+    fetch('/api/public/client-ip')
+      .then(res => (res.ok ? res.json() : null))
       .then(data => {
-        if (data.ip) {
+        if (data?.ip) {
           setClientIp(data.ip);
           setCurrentIp(data.ip);
         }

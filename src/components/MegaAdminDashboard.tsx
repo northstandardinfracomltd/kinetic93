@@ -120,16 +120,17 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
 
     setIsCreatingEnv(true);
     try {
-      const existing = await getRegisteredTenants();
+      const rawExisting = await getRegisteredTenants();
+      const existing = Array.isArray(rawExisting) ? rawExisting : [];
       let maxNum = 0;
       for (const tnt of existing) {
-        if (tnt.id && /^D\d+$/i.test(tnt.id)) {
+        if (tnt && tnt.id && /^D\d+$/i.test(tnt.id)) {
           const num = parseInt(tnt.id.substring(1), 10);
           if (!isNaN(num) && num > maxNum) maxNum = num;
         }
       }
       const nextTenantId = `D${maxNum + 1}`;
-      const usedShortIds = new Set(existing.map(tnt => tnt.shortEnvId).filter(Boolean));
+      const usedShortIds = new Set(existing.map(tnt => tnt?.shortEnvId).filter(Boolean));
       let randomTwoDigits = Math.floor(10 + Math.random() * 90);
       let shortEnvId = `D${randomTwoDigits}`;
       let attempts = 0;
@@ -188,7 +189,7 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
     setIsLoading(true);
     try {
       const list = await getRegisteredTenants();
-      setTenants(list);
+      setTenants(Array.isArray(list) ? list : []);
     } catch (err) {
       console.error('Error fetching environments for mega-admin:', err);
     } finally {
@@ -332,7 +333,9 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
     }
   };
 
-  const filteredTenants = tenants.filter(t => {
+  const safeTenants = Array.isArray(tenants) ? tenants : [];
+  const filteredTenants = safeTenants.filter(t => {
+    if (!t) return false;
     const term = searchQuery.toLowerCase().trim();
     if (!term) return true;
     return (
@@ -345,8 +348,8 @@ export default function MegaAdminDashboard({ onLogout }: MegaAdminDashboardProps
     );
   });
 
-  const activeCount = tenants.filter(t => !t.disabled).length;
-  const suspendedCount = tenants.filter(t => t.disabled).length;
+  const activeCount = safeTenants.filter(t => t && !t.disabled).length;
+  const suspendedCount = safeTenants.filter(t => t && t.disabled).length;
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white font-sans flex flex-col selection:bg-pink-500 selection:text-white" id="mega-admin-container">

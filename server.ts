@@ -1135,6 +1135,14 @@ async function startServer() {
     const subPath = req.path || '/';
 
     // 1. Explicitly public routes (strictly minimal & non-sensitive)
+    if (subPath === '/public/client-ip' && req.method === 'GET') {
+      const forwarded = req.headers['x-forwarded-for'];
+      const ip =
+        (typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : Array.isArray(forwarded) ? forwarded[0] : '') ||
+        req.socket?.remoteAddress ||
+        '127.0.0.1';
+      return res.json({ ip });
+    }
     if (
       subPath === '/health' ||
       subPath === '/auth/verify-tenant-member' ||

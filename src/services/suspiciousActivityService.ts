@@ -35,8 +35,8 @@ if (typeof window !== 'undefined') {
     if (cached) {
       inMemoryIp = cached;
     } else {
-      fetch('https://api64.ipify.org?format=json')
-        .then((res) => res.json())
+      fetch('/api/public/client-ip')
+        .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data?.ip) {
             inMemoryIp = String(data.ip);
@@ -81,14 +81,16 @@ export async function fetchCurrentIp(): Promise<string> {
   } catch (_) {}
 
   try {
-    const res = await fetch('https://api64.ipify.org?format=json');
-    const data = await res.json();
-    if (data?.ip) {
-      inMemoryIp = String(data.ip);
-      try {
-        sessionStorage.setItem('user_client_ip', inMemoryIp);
-      } catch (_) {}
-      return inMemoryIp;
+    const res = await fetch('/api/public/client-ip');
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.ip) {
+        inMemoryIp = String(data.ip);
+        try {
+          sessionStorage.setItem('user_client_ip', inMemoryIp);
+        } catch (_) {}
+        return inMemoryIp;
+      }
     }
   } catch (_) {}
 
@@ -181,6 +183,19 @@ export async function recordSuspiciousActivity(
   onLogsUpdated?: (logs: SuspiciousActivityLog[]) => void
 ): Promise<SuspiciousActivityLog> {
   const effectiveTenantId = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+  const loggedRole = typeof localStorage !== 'undefined' ? localStorage.getItem('defib_logged_user_role') : '';
+  if (effectiveTenantId.toLowerCase() === 'megaadmin' || loggedRole === 'megaadmin') {
+    return {
+      id: 'sus_megaadmin_' + Date.now(),
+      tenantId: 'megaadmin',
+      timestamp: new Date().toISOString(),
+      userName: entry.userName || 'Mega Admin',
+      userIp: entry.userIp || 'local_ip',
+      actionType: entry.actionType,
+      message: entry.message,
+      details: entry.details,
+    };
+  }
   let ip = entry.userIp || getCurrentCachedIp();
   if (ip === 'local_ip') {
     const cached = getCurrentCachedIp();
@@ -282,8 +297,8 @@ export async function recordSuspiciousActivity(
     });
   }
 
-  // Sync to Google Sheets (observateurActionsSuspectes) if configured
-  if (typeof window !== 'undefined') {
+  // Sync to Google Sheets (observateurActionsSuspectes) if configured and session token is present
+  if (typeof window !== 'undefined' && localStorage.getItem('defib_session_token')) {
     fetch('/api/sheets/upsert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

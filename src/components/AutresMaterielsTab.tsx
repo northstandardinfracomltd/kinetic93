@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { OtherEquipment, Client, Variable, CompanyInfo } from '../types';
 import { Plus, Search, Trash2, Edit } from 'lucide-react';
 import { generateRandomShortCode } from '../utils';

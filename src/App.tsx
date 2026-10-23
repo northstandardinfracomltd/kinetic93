@@ -511,11 +511,14 @@ export default function App() {
     localStorage.setItem('defib_admin_logged_user', JSON.stringify(user));
     localStorage.setItem('defib_last_activity_ts', String(Date.now()));
 
-    // Log suspicious activity Event A: user login
-    logUserLogin(tenantToSet, name || email, clientIp).catch(() => {});
-
     const roleToSet = loggedInRole || 'admin';
     localStorage.setItem('defib_logged_user_role', roleToSet);
+
+    // Log suspicious activity Event A: user login (only for regular customer tenants, never for megaadmin)
+    if (roleToSet !== 'megaadmin' && tenantToSet.toLowerCase() !== 'megaadmin') {
+      logUserLogin(tenantToSet, name || email, clientIp).catch(() => {});
+    }
+
     setActiveTab('defibrillateurs');
 
     setEnvReloadTrigger(prev => prev + 1);
@@ -719,16 +722,17 @@ export default function App() {
         if (!localStorage.getItem('defib_active_tech_session')) {
           localStorage.setItem('defib_active_tech_session', JSON.stringify(techSession));
         }
-      } else {
+      } else if (role !== 'megaadmin') {
+        const safeClientsList = Array.isArray(clients) ? clients : [];
         const loggedEmailLower = loggedUser.email.trim().toLowerCase();
-        const matchedClient = clients.find(c => c.email && c.email.trim().toLowerCase() === loggedEmailLower);
+        const matchedClient = safeClientsList.find(c => c && c.email && c.email.trim().toLowerCase() === loggedEmailLower);
         if (matchedClient) {
           setIsClientPortalOpen(true);
           setActivePortalClient(matchedClient);
         } else if (loggedEmailLower === 'client@demo.com') {
           setIsClientPortalOpen(true);
-          if (!activePortalClient && clients.length > 0) {
-            const spoClient = clients.find(c => c.id === 'c1');
+          if (!activePortalClient && safeClientsList.length > 0) {
+            const spoClient = safeClientsList.find(c => c && c.id === 'c1');
             if (spoClient) {
               setActivePortalClient(spoClient);
             }
@@ -1719,16 +1723,20 @@ export default function App() {
 
   const currentLoggedInMember = useMemo(() => {
     if (!loggedUser) return null;
+    const safeMembers = Array.isArray(members) ? members : [];
     const emailLower = loggedUser.email?.trim().toLowerCase();
     const nameLower = loggedUser.name?.trim().toLowerCase();
-    return members.find(m => 
-      (emailLower && m.email?.trim().toLowerCase() === emailLower) ||
-      (nameLower && m.name?.trim().toLowerCase() === nameLower)
+    return safeMembers.find(m => 
+      m && (
+        (emailLower && m.email?.trim().toLowerCase() === emailLower) ||
+        (nameLower && m.name?.trim().toLowerCase() === nameLower)
+      )
     ) || null;
   }, [loggedUser, members]);
 
   const currentFavicon = useMemo(() => {
     const userEmail = loggedUser?.email?.trim().toLowerCase() || '';
+    const safeMembers = Array.isArray(members) ? members : [];
 
     // 1. From currentLoggedInMember faviconPreference
     if (currentLoggedInMember?.faviconPreference) {
@@ -1738,7 +1746,7 @@ export default function App() {
 
     // 2. From members list matching userEmail
     if (userEmail) {
-      const mem = members.find(m => m.email?.trim().toLowerCase() === userEmail);
+      const mem = safeMembers.find(m => m && m.email?.trim().toLowerCase() === userEmail);
       if (mem?.faviconPreference) {
         const found = APP_FAVICONS.find(f => f.id === mem.faviconPreference || f.url === mem.faviconPreference);
         if (found) return found;
@@ -1779,6 +1787,7 @@ export default function App() {
 
   const currentSidebarTheme = useMemo(() => {
     const userEmail = loggedUser?.email?.trim().toLowerCase() || '';
+    const safeMembers = Array.isArray(members) ? members : [];
 
     // 1. From currentLoggedInMember themePreference
     if (currentLoggedInMember?.themePreference) {
@@ -1788,7 +1797,7 @@ export default function App() {
 
     // 2. From members list matching userEmail
     if (userEmail) {
-      const mem = members.find(m => m.email?.trim().toLowerCase() === userEmail);
+      const mem = safeMembers.find(m => m && m.email?.trim().toLowerCase() === userEmail);
       if (mem?.themePreference) {
         const found = APP_THEMES.find(t => t.id === mem.themePreference || t.color.toLowerCase() === mem.themePreference?.toLowerCase());
         if (found) return found;
@@ -1822,11 +1831,14 @@ export default function App() {
     if (currentLoggedInMember?.adminSubRole === 'Développeur' || currentLoggedInMember?.role === 'Développeur') return true;
 
     if (loggedUser) {
+      const safeMembers = Array.isArray(members) ? members : [];
       const emailLower = loggedUser.email?.trim().toLowerCase();
       const nameLower = loggedUser.name?.trim().toLowerCase();
-      const found = members.find(m => 
-        (emailLower && m.email?.trim().toLowerCase() === emailLower) ||
-        (nameLower && m.name?.trim().toLowerCase() === nameLower)
+      const found = safeMembers.find(m => 
+        m && (
+          (emailLower && m.email?.trim().toLowerCase() === emailLower) ||
+          (nameLower && m.name?.trim().toLowerCase() === nameLower)
+        )
       );
       if (found?.adminSubRole === 'Développeur' || found?.role === 'Développeur') return true;
     }
@@ -2060,8 +2072,8 @@ export default function App() {
   const unreadMessagesCount = useMemo(() => {
     if (isCanalMessagesOpen) return 0;
     const myEmail = loggedUser?.email?.trim().toLowerCase() || '';
-    return tenantMessages.filter(
-      (m) => m.createdAt > lastSeenMessageTime && m.authorEmail?.trim().toLowerCase() !== myEmail
+    return (Array.isArray(tenantMessages) ? tenantMessages : []).filter(
+      (m) => m && m.createdAt > lastSeenMessageTime && m.authorEmail?.trim().toLowerCase() !== myEmail
     ).length;
   }, [tenantMessages, lastSeenMessageTime, loggedUser?.email, isCanalMessagesOpen]);
 
@@ -2069,7 +2081,8 @@ export default function App() {
   const recentMessagesCount = useMemo(() => {
     const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
     const threeHoursAgo = Date.now() - THREE_HOURS_MS;
-    return (tenantMessages || []).filter((m) => {
+    return (Array.isArray(tenantMessages) ? tenantMessages : []).filter((m) => {
+      if (!m) return false;
       const msgTime = typeof m.createdAt === 'number' ? m.createdAt : Number(m.createdAt) || 0;
       return msgTime >= threeHoursAgo;
     }).length;
@@ -2170,6 +2183,7 @@ export default function App() {
     (async () => {
       try {
         const tId = tenantId || 'demo';
+        if (tId.toLowerCase() === 'megaadmin' || localStorage.getItem('defib_logged_user_role') === 'megaadmin') return;
         const remoteKeys = await fetchRemoteDeletedDefibKeys(tId);
         if (remoteKeys.length > 0) {
           const localKeys = getDeletedDefibKeys(tId);
@@ -2636,7 +2650,15 @@ export default function App() {
 
   // Automatic Google Spreadsheets sync for Défibrillateurs, Autres Matériels, and Clients whenever URLs are configured or updated
   useEffect(() => {
-    if (!isLoggedIn || !tenantId || !isFirebaseLoaded || loadedTenantIdState !== tenantId) return;
+    if (
+      !isLoggedIn ||
+      !tenantId ||
+      tenantId.toLowerCase() === 'megaadmin' ||
+      localStorage.getItem('defib_logged_user_role') === 'megaadmin' ||
+      !isFirebaseLoaded ||
+      loadedTenantIdState !== tenantId
+    )
+      return;
 
     const sanitizeSheetUrl = (u?: string | null): string => {
       if (!u || typeof u !== 'string') return '';
@@ -3784,7 +3806,15 @@ export default function App() {
 
   // Also load any configured secondary Google Spreadsheets for the active tenant on startup and whenever spreadsheet URLs change
   useEffect(() => {
-    if (!isLoggedIn || !tenantId || !isFirebaseLoaded || loadedTenantIdState !== tenantId) return;
+    if (
+      !isLoggedIn ||
+      !tenantId ||
+      tenantId.toLowerCase() === 'megaadmin' ||
+      localStorage.getItem('defib_logged_user_role') === 'megaadmin' ||
+      !isFirebaseLoaded ||
+      loadedTenantIdState !== tenantId
+    )
+      return;
     const secondaryTabTypes = [
       'tournees',
       'rapportsPdf',
@@ -4133,7 +4163,7 @@ export default function App() {
     if (!rapportsSheetUrl && !hasToursSheet) {
       return;
     }
-    if (!fsmTours || fsmTours.length === 0) {
+    if (!Array.isArray(fsmTours) || fsmTours.length === 0) {
       return;
     }
 
@@ -4142,7 +4172,7 @@ export default function App() {
     let toursUpdated = idsChanged;
     const verifiedTours = toursWithIds.map((tour) => {
       let tourMissionsUpdated = false;
-      const verifiedMissions = (tour.missions || []).map((m: any) => {
+      const verifiedMissions = (Array.isArray(tour?.missions) ? tour.missions : []).map((m: any) => {
         const rawRef = String(m.interventionReference || '').trim();
         if (!rawRef || rawRef.startsWith('fsm-m-')) {
           tourMissionsUpdated = true;
@@ -4169,7 +4199,7 @@ export default function App() {
     // 2. Map active missions across all tours
     const activeMissionsMap = new Map<string, { mission: any; tour: any }>();
     verifiedTours.forEach((tour) => {
-      (tour.missions || []).forEach((m: any) => {
+      (Array.isArray(tour?.missions) ? tour.missions : []).forEach((m: any) => {
         if (m.id) {
           activeMissionsMap.set(m.id, { mission: m, tour });
         }
@@ -4192,9 +4222,10 @@ export default function App() {
 
     // 3. Synchronize generatedReports array
     let reportsChanged = false;
+    const safeGeneratedReports = Array.isArray(generatedReports) ? generatedReports : [];
     
     // Filter out Formation mission reports and orphaned pending upcoming reports
-    let updatedReports = generatedReports.filter((rep) => {
+    let updatedReports = safeGeneratedReports.filter((rep) => {
       const matchedMissionObj = 
         (rep.missionId && activeMissionsMap.get(rep.missionId)?.mission) ||
         (rep.interventionReference && activeMissionsMap.get(rep.interventionReference)?.mission);
@@ -4420,8 +4451,13 @@ export default function App() {
     let countedInterventions = 0;
     const handledReportIds = new Set<string>();
 
+    const safeFsmTours = Array.isArray(fsmTours) ? fsmTours : [];
+    const safeGeneratedReports = Array.isArray(generatedReports) ? generatedReports : [];
+    const safeVariables = Array.isArray(variables) ? variables : [];
+    const safePointages = Array.isArray(pointages) ? pointages : [];
+
     // 1. Interventions des missions dans les tournées FSM du mois sélectionné
-    const activeToursInMonth = (fsmTours || []).filter(t => {
+    const activeToursInMonth = safeFsmTours.filter(t => {
       if (!t || t.id === 'a-trier') return false;
       const mKey = getTourMonthKey(t);
       return mKey === selectedFsmMonth;
@@ -4433,7 +4469,7 @@ export default function App() {
         let missionMinutes = 0;
 
         // A. Vérifier si un rapport GMAO a été généré pour cette mission avec des horaires réels
-        const matchedReport = (generatedReports || []).find((rep: any) => {
+        const matchedReport = safeGeneratedReports.find((rep: any) => {
           if (!rep) return false;
           if (rep.id && (rep.id === m.reportId || rep.id === m.id)) return true;
           if (rep.missionId && rep.missionId === m.id) return true;
@@ -4469,7 +4505,8 @@ export default function App() {
             
             let reasonsSum = 0;
             for (const r of reasonsList) {
-              const matchVar = (variables || []).find((v: any) =>
+              const matchVar = safeVariables.find((v: any) =>
+                v &&
                 v.category === 'Modèle Raison Prestation' &&
                 (v.nom?.toLowerCase().trim() === r.toLowerCase().trim() || v.id === r)
               );
@@ -4497,7 +4534,7 @@ export default function App() {
     });
 
     // 2. Rapports GMAO indépendants du mois sélectionné (non déjà pris en compte avec les tournées)
-    (generatedReports || []).forEach((rep: any) => {
+    safeGeneratedReports.forEach((rep: any) => {
       if (!rep || handledReportIds.has(rep.id)) return;
 
       const isFormation =
@@ -4546,7 +4583,7 @@ export default function App() {
 
     // 3. Fallback aux pointages du mois sélectionné si aucune tournée ou rapport avec durée
     if (countedInterventions === 0) {
-      const finished = (pointages || []).filter(p => {
+      const finished = safePointages.filter(p => {
         if (!p || p.isOngoing) return false;
         const pDateStr = p.startDate || p.date;
         if (!pDateStr) return false;
@@ -7750,6 +7787,11 @@ export default function App() {
   // Load from Firebase on startup, fallback to LocalStorage/Seed Defaults
   useEffect(() => {
     if (!isLoggedIn) return;
+    if (tenantId.toLowerCase() === 'megaadmin' || localStorage.getItem('defib_logged_user_role') === 'megaadmin') {
+      setMinEnvLoading(false);
+      setIsDefibLoading(false);
+      return;
+    }
     let minTimer: any = null;
     const loadStartMs = Date.now();
     setMinEnvLoading(true);
@@ -7761,13 +7803,22 @@ export default function App() {
 
       // Multi-candidate resilient local storage reader (checks primary key first, avoiding resurrection of deleted records)
       const getLocalTenantValue = <T,>(suffix: string, fallback: T): T => {
+        const isExpectedArray = Array.isArray(fallback);
+        const isExpectedObject = !isExpectedArray && typeof fallback === 'object' && fallback !== null;
+        const isValidParsed = (val: any): val is T => {
+          if (val === undefined || val === null) return false;
+          if (isExpectedArray) return Array.isArray(val);
+          if (isExpectedObject) return typeof val === 'object' && !Array.isArray(val);
+          return true;
+        };
+
         // 1. Primary key check
         const primaryRaw = localStorage.getItem(`defib_${activeRunTenantId}_${suffix}`) || localStorage.getItem(`fs_cache_${activeRunTenantId}_${suffix}`);
         if (primaryRaw) {
           try {
             const parsed = JSON.parse(primaryRaw);
-            if (parsed !== undefined && parsed !== null) {
-              return parsed as T;
+            if (isValidParsed(parsed)) {
+              return parsed;
             }
           } catch (_) {}
         }
@@ -7810,8 +7861,8 @@ export default function App() {
           if (raw) {
             try {
               const parsed = JSON.parse(raw);
-              if (parsed !== undefined && parsed !== null) {
-                return parsed as T;
+              if (isValidParsed(parsed)) {
+                return parsed;
               }
             } catch (_) {}
           }
@@ -8058,6 +8109,8 @@ export default function App() {
               // The server relay provides the single authoritative source of truth for this tenant
               if (Array.isArray(finalData)) {
                 finalData = filterCollectionForTenant(finalData, collectionName, activeRunTenantId);
+              } else if (collectionName !== 'companyInfo' && collectionName !== 'company_info') {
+                return;
               }
 
               stateSetter(finalData as T);
