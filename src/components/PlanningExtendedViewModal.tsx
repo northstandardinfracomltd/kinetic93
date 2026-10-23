@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Member } from '../types';
 import { SpontaneousEvent } from './PlanningTab';
-import { fetchCollectionFromFirestore } from '../firebase';
+import { fetchCollectionFromFirestore, saveCollectionToFirestore } from '../firebase';
 
 interface PlanningExtendedViewModalProps {
   isOpen: boolean;
@@ -15,6 +15,7 @@ interface PlanningExtendedViewModalProps {
   initialMonth?: number;
   initialYear?: number;
   onUpdateSpontaneousEvents?: (events: SpontaneousEvent[]) => void;
+  onUpdateTours?: (tours: any[]) => void;
 }
 
 const MONTH_NAMES_FR = [
@@ -125,7 +126,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
   otherEquipments = [],
   initialMonth,
   initialYear,
-  onUpdateSpontaneousEvents
+  onUpdateSpontaneousEvents,
+  onUpdateTours
 }) => {
   const today = useMemo(() => new Date(), []);
   const [currentMonth, setCurrentMonth] = useState<number>(() => {
@@ -162,6 +164,103 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
   const [localEvents, setLocalEvents] = useState<SpontaneousEvent[]>(initialEvents || []);
   const [lastRefreshedText, setLastRefreshedText] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  // Drag & Drop state for missions across tournées
+  const [draggedMission, setDraggedMission] = useState<{
+    missionId: string;
+    sourceTourId: string;
+    sourceTechName: string;
+    missionObj: any;
+  } | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<{
+    tourId: string;
+    isoDate: string;
+    techName: string;
+  } | null>(null);
+
+  const handleDropMissionOnTour = useCallback(
+    (targetTourId: string, targetTechName: string, targetIsoDate: string) => {
+      if (!draggedMission) return;
+      const { missionId, sourceTourId, missionObj } = draggedMission;
+      setDraggedMission(null);
+      setDragOverTarget(null);
+
+      if (!missionId || !targetTourId || !targetIsoDate) return;
+      if (
+        sourceTourId === targetTourId &&
+        (missionObj?.resolvedIsoDate === targetIsoDate || toIsoDateStr(missionObj?.estimatedDate || missionObj?.date) === targetIsoDate) &&
+        normalizeName(missionObj?.techName || draggedMission.sourceTechName) === normalizeName(targetTechName)
+      ) {
+        return;
+      }
+
+      setLocalTours((prevTours) => {
+        let movedMission: any = null;
+        // Find the mission in sourceTourId
+        for (const t of prevTours) {
+          if (String(t.id) === String(sourceTourId)) {
+            const list = Array.isArray(t.missions) ? t.missions : Array.isArray(t.passages) ? t.passages : [];
+            const found = list.find((m: any) => String(m.id) === String(missionId));
+            if (found) {
+              movedMission = { ...found };
+              break;
+            }
+          }
+        }
+        if (!movedMission && missionObj) {
+          movedMission = { ...missionObj };
+        }
+        if (!movedMission) return prevTours;
+
+        delete movedMission.resolvedIsoDate;
+        const updatedMission = {
+          ...movedMission,
+          estimatedDate: targetIsoDate,
+          date: targetIsoDate,
+          techName: targetTechName,
+          technicien: targetTechName,
+          tourIdentifiant: targetTourId,
+          isManualDate: true,
+        };
+
+        const nextTours = prevTours.map((t) => {
+          const isSource = String(t.id) === String(sourceTourId);
+          const isTarget = String(t.id) === String(targetTourId);
+          const listKey = Array.isArray(t.missions) ? 'missions' : Array.isArray(t.passages) ? 'passages' : 'missions';
+          const currentList: any[] = Array.isArray(t[listKey]) ? t[listKey] : [];
+
+          if (isSource && isTarget) {
+            const nextList = currentList.map((m: any) =>
+              String(m.id) === String(missionId) ? updatedMission : m
+            );
+            return { ...t, [listKey]: nextList };
+          }
+          if (isSource) {
+            const nextList = currentList.filter((m: any) => String(m.id) !== String(missionId));
+            return { ...t, [listKey]: nextList };
+          }
+          if (isTarget) {
+            const nextList = [...currentList.filter((m: any) => String(m.id) !== String(missionId)), updatedMission];
+            return { ...t, [listKey]: nextList };
+          }
+          return t;
+        });
+
+        try {
+          const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+          localStorage.setItem(`defib_${tid}_fsm_tours`, JSON.stringify(nextTours));
+          localStorage.setItem('defib_fsm_tours', JSON.stringify(nextTours));
+          saveCollectionToFirestore('fsm_tours', nextTours, tid).catch(() => {});
+        } catch (_) {}
+
+        if (onUpdateTours) {
+          onUpdateTours(nextTours);
+        }
+        return nextTours;
+      });
+    },
+    [draggedMission, onUpdateTours]
+  );
 
   // Sync with initial props
   useEffect(() => {
@@ -858,12 +957,49 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                           {daysInMonth.map((d) => {
                             const isWithinTour = d.isoDate >= tItem.startIso && d.isoDate <= tItem.endIso;
                             const dayMissions = tItem.missions.filter((m: any) => m.resolvedIsoDate === d.isoDate);
+                            const isDropTarget =
+                              Boolean(draggedMission) &&
+                              dragOverTarget?.tourId === tItem.tourId &&
+                              dragOverTarget?.isoDate === d.isoDate &&
+                              dragOverTarget?.techName === tech.name;
 
                             return (
                               <td
                                 key={`tour-day-${tItem.tourId}-${d.isoDate}`}
-                                className={`relative border-r border-neutral-200 p-1.5 align-top w-[200px] min-w-[200px] max-w-[200px] ${
-                                  d.isToday
+                                onDragOver={(e) => {
+                                  if (!draggedMission) return;
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = 'move';
+                                  if (
+                                    dragOverTarget?.tourId !== tItem.tourId ||
+                                    dragOverTarget?.isoDate !== d.isoDate ||
+                                    dragOverTarget?.techName !== tech.name
+                                  ) {
+                                    setDragOverTarget({
+                                      tourId: tItem.tourId,
+                                      isoDate: d.isoDate,
+                                      techName: tech.name,
+                                    });
+                                  }
+                                }}
+                                onDragLeave={() => {
+                                  if (
+                                    dragOverTarget?.tourId === tItem.tourId &&
+                                    dragOverTarget?.isoDate === d.isoDate &&
+                                    dragOverTarget?.techName === tech.name
+                                  ) {
+                                    setDragOverTarget(null);
+                                  }
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDropMissionOnTour(tItem.tourId, tech.name, d.isoDate);
+                                }}
+                                className={`relative border-r border-neutral-200 p-1.5 align-top w-[200px] min-w-[200px] max-w-[200px] transition-colors ${
+                                  isDropTarget
+                                    ? 'bg-blue-100/70 ring-2 ring-inset ring-[#2e54ff]'
+                                    : d.isToday
                                     ? 'bg-pink-50/50'
                                     : isWithinTour
                                     ? 'bg-pink-50/25'
@@ -905,11 +1041,31 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                       const timeOffset = getTimeOffsetPercent(details.creneau);
                                       // Shift horizontally between 0px and 40px depending on time
                                       const marginLeftPx = Math.round(timeOffset * 40);
+                                      const isBeingDragged = draggedMission?.missionId === String(m.id);
 
                                       return (
                                         <div
                                           key={`mission-bar-${m.id || mIdx}`}
-                                          className="w-[150px] max-w-[150px] select-none cursor-default overflow-hidden transition-all shadow-xs"
+                                          data-interactive="true"
+                                          draggable
+                                          onDragStart={(e) => {
+                                            e.stopPropagation();
+                                            setDraggedMission({
+                                              missionId: String(m.id),
+                                              sourceTourId: String(tItem.tourId),
+                                              sourceTechName: tech.name,
+                                              missionObj: m,
+                                            });
+                                            e.dataTransfer.effectAllowed = 'move';
+                                            try {
+                                              e.dataTransfer.setData('text/plain', String(m.id));
+                                            } catch (_) {}
+                                          }}
+                                          onDragEnd={() => {
+                                            setDraggedMission(null);
+                                            setDragOverTarget(null);
+                                          }}
+                                          className="w-[150px] max-w-[150px] select-none cursor-grab active:cursor-grabbing overflow-hidden transition-all shadow-xs hover:brightness-110"
                                           style={{
                                             marginLeft: `${marginLeftPx}px`,
                                             backgroundColor: barColor,
@@ -917,9 +1073,10 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                             padding: '8px 12px',
                                             fontSize: '12px',
                                             color: '#fff',
-                                            lineHeight: '16px'
+                                            lineHeight: '16px',
+                                            opacity: isBeingDragged ? 0.45 : 1,
                                           }}
-                                          title={`Créneau : ${details.creneau || 'Non spécifié'}`}
+                                          title={`Créneau : ${details.creneau || 'Non spécifié'} — Glisser-déposer vers une tournée`}
                                         >
                                           {/* Line 1: Créneau - Identifiant */}
                                           <div

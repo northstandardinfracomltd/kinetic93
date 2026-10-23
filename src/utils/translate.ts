@@ -3988,7 +3988,14 @@ export function getLanguage(): string {
  */
 export function setLanguage(lang: string): void {
   if (typeof window !== 'undefined') {
-    localStorage.setItem('defib_lang', lang);
+    const lower = (lang || '').trim().toLowerCase();
+    let normalized = 'Français';
+    if (lower.startsWith('en') || lower.includes('english')) normalized = 'English';
+    else if (lower.startsWith('de') || lower.includes('deutsch')) normalized = 'Deutsch';
+    else if (lower.startsWith('pt') || lower.includes('português') || lower.includes('portugues')) normalized = 'Português';
+    else if (lower.startsWith('es') || lower.includes('español') || lower.includes('espanol')) normalized = 'Español';
+    else if (lower.startsWith('fr') || lower.includes('français') || lower.includes('francais')) normalized = 'Français';
+    localStorage.setItem('defib_lang', normalized);
     // Dispatch custom event to let other components know the language changed
     window.dispatchEvent(new Event('defib_lang_changed'));
   }
@@ -4159,6 +4166,9 @@ let isTranslating = false;
  * Translates a single DOM Node recursively.
  */
 function translateDOMNode(el: Node) {
+  if (typeof document !== 'undefined' && document.getElementById('login-viewport-wrapper')) {
+    return;
+  }
   const currentLang = getLanguage();
   if (currentLang === 'Français') return;
 

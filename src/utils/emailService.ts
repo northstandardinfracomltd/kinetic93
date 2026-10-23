@@ -401,7 +401,15 @@ export async function triggerEmail5AvisageFSM(
   companyEmail: string, 
   periodDate: string,
   pinCode?: string,
-  estimatedSlot?: string
+  estimatedSlot?: string,
+  missionDetails?: {
+    clientName?: string;
+    siteName?: string;
+    localisation?: string;
+    clientIdField?: string;
+    payeurId?: string;
+    bonCommande?: string;
+  }
 ): Promise<boolean> {
   const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
   const savedOption = localStorage.getItem(`defib_${tenantId}_enable_auto_emails`);
@@ -413,12 +421,28 @@ export async function triggerEmail5AvisageFSM(
   const subject = `${senderName} : Nouvelle visite prévue pour votre matériel.`;
   const pinText = pinCode ? `\n\nVoici le code pin à fournir au technicien pour signer la visite sur site : ${pinCode}\n` : '';
   const slotStr = estimatedSlot || '09:00am';
-  const body = `${companyName} a prévu une visite sur votre matériel ${defibIdentifiant} le ${periodDate} (estimé) à ${slotStr} (estimé).${pinText}\nSi vous souhaitez en savoir plus ou vous opposer à l’intervention, répondez simplement au présent email.`;
+  const infoLines = missionDetails ? `\nClient: ${missionDetails.clientName || ''}.\nSite: ${missionDetails.siteName || ''}.\nLocalisation: ${missionDetails.localisation || ''}.\nClient ID: ${missionDetails.clientIdField || ''}.\nPayeur ID: ${missionDetails.payeurId || ''}.\nBon de commande: ${missionDetails.bonCommande || ''}.\n` : '';
+  const body = `${companyName} a prévu une visite sur votre matériel ${defibIdentifiant} le ${periodDate} (estimé) à ${slotStr} (estimé).${infoLines}${pinText}\nAccédez à Portail Client (https://consoledefibeo.deroesch.com/y26m8v105DRSHdatacentersession187DVF) puis cliquez sur Connexion, en tant que Client.\nSi vous souhaitez en savoir plus ou vous opposer à l’intervention, répondez simplement au présent email.`;
+  const htmlBody = `<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
+    <p>${companyName} a prévu une visite sur votre matériel <strong>${defibIdentifiant}</strong> le <strong>${periodDate}</strong> (estimé) à <strong>${slotStr}</strong> (estimé).</p>
+    ${missionDetails ? `<p style="margin: 12px 0;">
+      Client: ${missionDetails.clientName || ''}.<br/>
+      Site: ${missionDetails.siteName || ''}.<br/>
+      Localisation: ${missionDetails.localisation || ''}.<br/>
+      Client ID: ${missionDetails.clientIdField || ''}.<br/>
+      Payeur ID: ${missionDetails.payeurId || ''}.<br/>
+      Bon de commande: ${missionDetails.bonCommande || ''}.
+    </p>` : ''}
+    ${pinCode ? `<p>Voici le code pin à fournir au technicien pour signer la visite sur site : <strong>${pinCode}</strong></p>` : ''}
+    <p>Vous pouvez également accéder à votre portail client pour consulter les détails : accédez à <a href="https://consoledefibeo.deroesch.com/y26m8v105DRSHdatacentersession187DVF" style="color: #3556ec; text-decoration: underline;">Portail Client</a> puis cliquez sur Connexion, en tant que Client.</p>
+    <p>Si vous souhaitez en savoir plus ou vous opposer à l’intervention, répondez simplement au présent email.</p>
+  </div>`;
   
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${clientEmail}`,
     subject,
     body,
+    htmlBody,
     replyTo: companyEmail || "defibeo@gmail.com",
     name: senderName,
     senderName
@@ -590,6 +614,12 @@ export async function triggerEmailSoumettreAuClient(
     estimatedDate?: string;
     estimatedSlot?: string;
     actionUrl?: string;
+    clientName?: string;
+    siteName?: string;
+    localisation?: string;
+    clientIdField?: string;
+    payeurId?: string;
+    bonCommande?: string;
   }
 ): Promise<boolean> {
   const cleanRecipients = Array.from(new Set(['defibeo@gmail.com', ...recipientEmails].filter(Boolean)));
@@ -597,20 +627,27 @@ export async function triggerEmailSoumettreAuClient(
   const senderName = getActiveTenantCommercialName(companyName);
   const subject = `${senderName} : (Attention requise) Proposition de date et créneau.`;
   
+  const clientText = `Client: ${missionDetails?.clientName || ''}.\n`;
+  const siteText = `Site: ${missionDetails?.siteName || ''}.\n`;
+  const locText = `Localisation: ${missionDetails?.localisation || ''}.\n`;
+  const clientIdText = `Client ID: ${missionDetails?.clientIdField || ''}.\n`;
+  const payeurIdText = `Payeur ID: ${missionDetails?.payeurId || ''}.\n`;
+  const bdcText = `Bon de commande: ${missionDetails?.bonCommande || ''}.\n`;
   const refText = missionDetails?.interventionRef ? `Référence de l'intervention : ${missionDetails.interventionRef}\n` : '';
   const autreRefText = `Autre référence : ${missionDetails?.autreReference || ''}\n`;
   const dateText = missionDetails?.estimatedDate ? `Date estimée proposée : ${missionDetails.estimatedDate}\n` : '';
   const slotText = missionDetails?.estimatedSlot ? `Créneau estimé proposé : ${missionDetails.estimatedSlot}\n` : '';
   const urlLink = missionDetails?.actionUrl || 'https://consoledefibeo.deroesch.com';
+  const clientPortalUrl = 'https://consoledefibeo.deroesch.com/y26m8v105DRSHdatacentersession187DVF';
 
   const body = `Bonjour,
 
 Une date et un créneau sont proposés pour une intervention sur votre site.
-${refText}${autreRefText}${dateText}${slotText}
+${clientText}${siteText}${locText}${clientIdText}${payeurIdText}${bdcText}${refText}${autreRefText}${dateText}${slotText}
 Pour valider ou refuser cette proposition de passage, veuillez cliquer sur le lien ci-dessous :
 ${urlLink}
 
-Vous pouvez également accéder à votre portail client pour consulter les détails : accédez à defibeo.com puis cliquez sur Connexion, en tant que Client.
+Vous pouvez également accéder à votre portail client pour consulter les détails : accédez à Portail Client (${clientPortalUrl}) puis cliquez sur Connexion, en tant que Client.
 
 Vous remerciant pour votre retour.`;
 
@@ -621,6 +658,12 @@ Vous remerciant pour votre retour.`;
   <p>Une date et un créneau sont proposés pour une intervention sur votre site :</p>
   
   <table style="width: 100%; border-collapse: collapse; margin: 16px 0; background-color: #f8fafc; border-radius: 8px; overflow: hidden;">
+    <tr><td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0; width: 40%;">Client:</td><td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${missionDetails?.clientName || ''}.</td></tr>
+    <tr><td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0; width: 40%;">Site:</td><td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${missionDetails?.siteName || ''}.</td></tr>
+    <tr><td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0; width: 40%;">Localisation:</td><td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${missionDetails?.localisation || ''}.</td></tr>
+    <tr><td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0; width: 40%;">Client ID:</td><td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${missionDetails?.clientIdField || ''}.</td></tr>
+    <tr><td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0; width: 40%;">Payeur ID:</td><td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${missionDetails?.payeurId || ''}.</td></tr>
+    <tr><td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0; width: 40%;">Bon de commande:</td><td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${missionDetails?.bonCommande || ''}.</td></tr>
     ${missionDetails?.interventionRef ? `<tr><td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0; width: 40%;">Référence de l'intervention :</td><td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${missionDetails.interventionRef}</td></tr>` : ''}
     <tr><td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0; width: 40%;">Autre référence :</td><td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${missionDetails?.autreReference || ''}</td></tr>
     ${missionDetails?.estimatedDate ? `<tr><td style="padding: 10px 14px; font-weight: bold; border-bottom: 1px solid #e2e8f0;">Date estimée proposée :</td><td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0;">${missionDetails.estimatedDate}</td></tr>` : ''}
@@ -643,7 +686,7 @@ Vous remerciant pour votre retour.`;
   <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
 
   <p style="font-size: 13px; color: #475569; margin-bottom: 8px;">
-    Vous pouvez également accéder à votre portail client pour consulter les détails : accédez à defibeo.com puis cliquez sur Connexion, en tant que Client.
+    Vous pouvez également accéder à votre portail client pour consulter les détails : accédez à <a href="${clientPortalUrl}" style="color: #3556ec; text-decoration: underline;">Portail Client</a> puis cliquez sur Connexion, en tant que Client.
   </p>
 
   <p style="margin-top: 20px; font-size: 14px; color: #000000;">

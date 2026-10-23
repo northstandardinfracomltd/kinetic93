@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { getRegionsForCountry } from './utils/regions';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion, fetchRemoteDeletedDefibKeys, findTenantInList, ensureTenantMembersClient, ensureTenantCustomLocationNames } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { idbSet, idbGet } from './idb';
+import { idbSet, idbGet, idbClear } from './idb';
 import { generateReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
@@ -431,8 +431,9 @@ export default function App() {
   const handleLoginSuccess = (email: string, name: string, activeTenantId?: string, loggedInRole?: string, clientIp?: string) => {
     const tenantToSet = activeTenantId || 'demo';
     
-    // Purge volatile local cached payloads
+    // Purge volatile local cached payloads and IndexedDB
     purgeAllLocalEnvironmentCaches(tenantToSet);
+    idbClear().catch(() => {});
 
     // Immediately clear all in-memory database states to prevent any cross-tenant state bleed
     setClients([]);
@@ -460,27 +461,41 @@ export default function App() {
     setEmargements([]);
     setLogisticsNotifications([]);
     setMembers([]);
-    const matchedKnownTenant = KNOWN_TENANTS_REGISTRY.find(
-      t => t.id.toLowerCase() === tenantToSet.toLowerCase() || t.shortEnvId.toLowerCase() === tenantToSet.toLowerCase()
-    );
+    setLocationNames({});
+    setTenantMessages([]);
+    setTeamWorkGroups([]);
+    setFsmCo2History({});
+    setFsmMissionCounts({});
+    setDefibSheetStats({ total: 0, synced: true });
+    lastLoadedSheetUrlsRef.current = { tenant: '', defibs: '', autres: '', clients: '' };
+    activeSheetBatchRunRef.current = {
+      tenant: '',
+      defibsRunId: 0,
+      defibsInFlightUrl: '',
+      autresRunId: 0,
+      autresInFlightUrl: '',
+      clientsRunId: 0,
+      clientsInFlightUrl: '',
+    };
+
+    const matchedKnownTenant = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], tenantToSet) as any;
     let initialCompanyInfo: CompanyInfo = {
       name: tenantToSet === 'demo' ? "Défibeo Solutions" : (matchedKnownTenant?.companyName || "Mon Cabinet"),
       nomCommercial: tenantToSet === 'demo' ? "Défibeo Solutions" : (matchedKnownTenant?.companyName || "Mon Cabinet"),
       logo: "",
       website: tenantToSet === 'demo' ? "29382302.defibeo.com" : "",
       email: email || "",
-      phone: ""
+      phone: "",
+      spreadsheetDefibrillateurs: "",
+      spreadsheetAutresMateriels: "",
+      spreadsheetClients: "",
+      spreadsheetDefibrillateursUrl: "",
+      spreadsheetAutresMaterielsUrl: "",
+      spreadsheetClientsUrl: "",
+      ...Object.fromEntries(EXTRA_SPREADSHEET_FIELDS.flatMap(f => [[f.key, ''], [f.urlKey, '']])),
     };
-    try {
-      const savedInfo = localStorage.getItem(`defib_${tenantToSet}_company_info`);
-      if (savedInfo) {
-        const parsed = JSON.parse(savedInfo);
-        if (parsed && typeof parsed === 'object' && parsed.name) {
-          initialCompanyInfo = { ...initialCompanyInfo, ...parsed };
-        }
-      }
-    } catch (_) {}
     setCompanyInfo(initialCompanyInfo);
+    companyInfoRef.current = initialCompanyInfo;
     loadedDataRef.current = {};
     setIsFirebaseLoaded(false);
     setLoadedTenantIdState('');
@@ -563,8 +578,9 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    // Purge local cached payloads on logout to avoid residual tenant leaks
+    // Purge local cached payloads and IndexedDB on logout to avoid residual tenant leaks
     purgeAllLocalEnvironmentCaches();
+    idbClear().catch(() => {});
 
     // Immediately clear all database states
     setClients([]);
@@ -592,13 +608,38 @@ export default function App() {
     setLogisticsNotifications([]);
     setSuspiciousActivityLogs([]);
     setMembers([]);
-    setCompanyInfo({
+    setLocationNames({});
+    setTenantMessages([]);
+    setTeamWorkGroups([]);
+    setFsmCo2History({});
+    setFsmMissionCounts({});
+    setDefibSheetStats({ total: 0, synced: true });
+    lastLoadedSheetUrlsRef.current = { tenant: '', defibs: '', autres: '', clients: '' };
+    activeSheetBatchRunRef.current = {
+      tenant: '',
+      defibsRunId: 0,
+      defibsInFlightUrl: '',
+      autresRunId: 0,
+      autresInFlightUrl: '',
+      clientsRunId: 0,
+      clientsInFlightUrl: '',
+    };
+    const emptyCompanyInfo: CompanyInfo = {
       name: "Mon Cabinet",
       logo: "",
       website: "",
       email: "",
-      phone: ""
-    });
+      phone: "",
+      spreadsheetDefibrillateurs: "",
+      spreadsheetAutresMateriels: "",
+      spreadsheetClients: "",
+      spreadsheetDefibrillateursUrl: "",
+      spreadsheetAutresMaterielsUrl: "",
+      spreadsheetClientsUrl: "",
+      ...Object.fromEntries(EXTRA_SPREADSHEET_FIELDS.flatMap(f => [[f.key, ''], [f.urlKey, '']])),
+    };
+    setCompanyInfo(emptyCompanyInfo);
+    companyInfoRef.current = emptyCompanyInfo;
     loadedDataRef.current = {};
     setIsFirebaseLoaded(false);
     setLoadedTenantIdState('');
@@ -2589,7 +2630,7 @@ export default function App() {
 
   // Automatic Google Spreadsheets sync for Défibrillateurs, Autres Matériels, and Clients whenever URLs are configured or updated
   useEffect(() => {
-    if (!isLoggedIn || !tenantId) return;
+    if (!isLoggedIn || !tenantId || !isFirebaseLoaded || loadedTenantIdState !== tenantId) return;
 
     const sanitizeSheetUrl = (u?: string | null): string => {
       if (!u || typeof u !== 'string') return '';
@@ -2917,6 +2958,8 @@ export default function App() {
   }, [
     isLoggedIn,
     tenantId,
+    isFirebaseLoaded,
+    loadedTenantIdState,
     companyInfo?.spreadsheetDefibrillateurs,
     companyInfo?.spreadsheetAutresMateriels,
     companyInfo?.spreadsheetClients,
@@ -3681,7 +3724,7 @@ export default function App() {
 
   // Also load any configured secondary Google Spreadsheets for the active tenant on startup and whenever spreadsheet URLs change
   useEffect(() => {
-    if (!isLoggedIn || !tenantId) return;
+    if (!isLoggedIn || !tenantId || !isFirebaseLoaded || loadedTenantIdState !== tenantId) return;
     const secondaryTabTypes = [
       'tournees',
       'rapportsPdf',
@@ -3724,7 +3767,7 @@ export default function App() {
       clearTimeout(timer);
       window.removeEventListener('defib-tenant-spreadsheets-updated', handleSheetsUpdated);
     };
-  }, [isLoggedIn, tenantId, isFirebaseLoaded, refreshGenericSheetCompartment]);
+  }, [isLoggedIn, tenantId, isFirebaseLoaded, loadedTenantIdState, refreshGenericSheetCompartment]);
 
   const [isRefreshingCrm, setIsRefreshingCrm] = useState<boolean>(false);
   const handleManualRefreshCrm = async () => {
@@ -5888,6 +5931,52 @@ export default function App() {
     saveFsmTours(updatedTours);
   };
 
+  const resolveMissionAvisageInfo = (m: any, defibObj?: any, otherEqObj?: any, clientObj?: any) => {
+    const eq = defibObj || otherEqObj || defibrillateurs.find(df => df.identifiant === m.defibIdentifiant) || otherEquipments.find((oe: any) => oe.identifiant === m.defibIdentifiant);
+    const matchedClient = clientObj || clients.find(c =>
+      (m.clientId && (c.id === m.clientId || c.denomination === m.clientId)) ||
+      (eq?.clientId && (c.id === eq.clientId || c.denomination === eq.clientId)) ||
+      (m.clientName && c.denomination && c.denomination.trim().toLowerCase() === m.clientName.trim().toLowerCase())
+    );
+
+    const clientName = eq?.denominationClient || matchedClient?.denomination || m.clientName || '';
+    const siteName = eq?.nomSite || m.siteName || matchedClient?.nomSite || '';
+
+    const locParts = [
+      eq?.adresse || matchedClient?.adresse || '',
+      eq?.codePostal || matchedClient?.codePostal || '',
+      eq?.ville || matchedClient?.ville || ''
+    ].map(s => String(s || '').trim()).filter(Boolean);
+    const localisation = locParts.join(', ') || m.address || '';
+
+    const clientIdField = matchedClient?.id || eq?.clientId || m.clientId || '';
+
+    // Bidirectional lookup for Payeur ID from equipment, client, or commercialDocs
+    let payeurId = (eq as any)?.payeurId || (matchedClient as any)?.payeurId || '';
+    if (!payeurId && m.autreReference) {
+      const matchedDoc = commercialDocs.find((d: any) =>
+        d.reference === m.autreReference || d.numeroCommande === m.autreReference
+      );
+      if (matchedDoc && (matchedDoc as any).payeurId) {
+        payeurId = (matchedDoc as any).payeurId;
+      }
+    }
+    if (!payeurId) {
+      payeurId = clientIdField;
+    }
+
+    const bonCommande = m.autreReference || '';
+
+    return {
+      clientName,
+      siteName,
+      localisation,
+      clientIdField,
+      payeurId,
+      bonCommande
+    };
+  };
+
   const handleExecuteAvisage = async (tour: any) => {
     if (!tour) return;
     const companyName = (companyInfo.nomCommercial || companyInfo.name || '').trim() || 'Défibeo Solutions';
@@ -5899,11 +5988,13 @@ export default function App() {
     toursMissions.forEach((m: any) => {
       const defibId = m.defibIdentifiant;
       const defib = defibrillateurs.find(df => df.identifiant === defibId);
-      if (defib) {
-        const index = updatedClientsList.findIndex(c => c.id === defib.clientId);
+      const otherEq = otherEquipments.find((oe: any) => oe.identifiant === defibId);
+      const eq = defib || otherEq;
+      if (eq) {
+        const index = updatedClientsList.findIndex(c => c.id === eq.clientId || c.denomination === eq.clientId);
         if (index !== -1) {
           const matchedClient = updatedClientsList[index];
-          const clientEmail = defib.emailSite || matchedClient.email || matchedClient.emailSite;
+          const clientEmail = eq.emailSite || matchedClient.email || matchedClient.emailSite;
           if (clientEmail && clientEmail.trim()) {
             const pin = matchedClient.signaturePin || generateRandomPin();
             const newPins = [...(matchedClient.signaturePins || [])];
@@ -5930,6 +6021,7 @@ export default function App() {
               }
             }
             const estSlot = m.estimatedSlot || '09:00';
+            const avisageExtra = resolveMissionAvisageInfo(m, defib, otherEq, matchedClient);
 
             triggerEmail5AvisageFSM(
               clientEmail.trim(),
@@ -5938,7 +6030,8 @@ export default function App() {
               companyEmail,
               estDateFormatted || 'prochainement',
               pin,
-              estSlot
+              estSlot,
+              avisageExtra
             ).catch(e => console.error("Error sending Email 5:", e));
           }
         }
@@ -6051,6 +6144,7 @@ export default function App() {
       ? window.location.origin
       : 'https://consoledefibeo.deroesch.com';
     const validationUrl = `${origin}/validation-passage?ref=${encodeURIComponent(interventionRef)}&tenant=${encodeURIComponent(tenantId)}`;
+    const avisageExtra = resolveMissionAvisageInfo(m, defib, otherEq, client);
 
     try {
       const isSent = await triggerEmailSoumettreAuClient(
@@ -6064,7 +6158,13 @@ export default function App() {
           autreReference: m.autreReference || '',
           estimatedDate: estDateFormatted,
           estimatedSlot: estSlot,
-          actionUrl: validationUrl
+          actionUrl: validationUrl,
+          clientName: avisageExtra.clientName,
+          siteName: avisageExtra.siteName,
+          localisation: avisageExtra.localisation,
+          clientIdField: avisageExtra.clientIdField,
+          payeurId: avisageExtra.payeurId,
+          bonCommande: avisageExtra.bonCommande
         }
       );
 
@@ -8035,12 +8135,24 @@ export default function App() {
           }
           if (merged.spreadsheetDefibrillateurs) {
             safeSetLocalStorage(`defib_${tenantId}_spreadsheet_defibrillateurs`, merged.spreadsheetDefibrillateurs);
+          } else {
+            localStorage.removeItem(`defib_${tenantId}_spreadsheet_defibrillateurs`);
+            localStorage.removeItem(`defib_${tenantId.toUpperCase()}_spreadsheet_defibrillateurs`);
+            localStorage.removeItem(`defib_${tenantId.toLowerCase()}_spreadsheet_defibrillateurs`);
           }
           if (merged.spreadsheetAutresMateriels) {
             safeSetLocalStorage(`defib_${tenantId}_spreadsheet_autres_materiels`, merged.spreadsheetAutresMateriels);
+          } else {
+            localStorage.removeItem(`defib_${tenantId}_spreadsheet_autres_materiels`);
+            localStorage.removeItem(`defib_${tenantId.toUpperCase()}_spreadsheet_autres_materiels`);
+            localStorage.removeItem(`defib_${tenantId.toLowerCase()}_spreadsheet_autres_materiels`);
           }
           if (merged.spreadsheetClients) {
             safeSetLocalStorage(`defib_${tenantId}_spreadsheet_clients`, merged.spreadsheetClients);
+          } else {
+            localStorage.removeItem(`defib_${tenantId}_spreadsheet_clients`);
+            localStorage.removeItem(`defib_${tenantId.toUpperCase()}_spreadsheet_clients`);
+            localStorage.removeItem(`defib_${tenantId.toLowerCase()}_spreadsheet_clients`);
           }
           companyInfoRef.current = merged;
           const allSheetsToRefresh: Array<{ key: string; storageSuffix: string; tabType: string }> = [
@@ -8078,6 +8190,14 @@ export default function App() {
               if (!refreshedTabTypes.has(st.tabType)) {
                 refreshedTabTypes.add(st.tabType);
                 refreshGenericSheetCompartment(st.tabType, false, activeRunTenantId, st.tabType === 'tournees' ? undefined : sUrl).catch(() => {});
+              }
+            } else {
+              localStorage.removeItem(`defib_${tenantId}_${st.storageSuffix}`);
+              localStorage.removeItem(`defib_${tenantId.toUpperCase()}_${st.storageSuffix}`);
+              localStorage.removeItem(`defib_${tenantId.toLowerCase()}_${st.storageSuffix}`);
+              if (!refreshedTabTypes.has(st.tabType) && st.key !== 'spreadsheetMissionsTournees') {
+                refreshedTabTypes.add(st.tabType);
+                refreshGenericSheetCompartment(st.tabType, false, activeRunTenantId, '').catch(() => {});
               }
             }
           }
@@ -12557,6 +12677,7 @@ export default function App() {
                           t={translate}
                           initialTech=""
                           enableExtendedView={true}
+                          onUpdateTours={(updatedTours) => saveFsmTours(updatedTours)}
                           onConsultMission={(tour) => {
                             setFsmPlanningSidePaneOpen(false);
                             setActiveTab('fsm');
@@ -14664,6 +14785,31 @@ export default function App() {
                                               </div>
                                             );
                                           })()}
+
+                                          {/* Commentaire visible par le technicien. */}
+                                          <div className="space-y-0.5 bg-transparent pt-1">
+                                            <label className="block mb-1 fsm-label-style" style={{ fontSize: '18px' }}>Commentaire visible par le technicien.</label>
+                                            <textarea
+                                              rows={1}
+                                              value={m.commentaireInterne || ''}
+                                              onChange={(e) => {
+                                                updateFsmMission(t.id, m.id, { commentaireInterne: e.target.value });
+                                                e.target.style.height = '48px';
+                                                e.target.style.height = `${Math.max(48, e.target.scrollHeight)}px`;
+                                              }}
+                                              ref={(el) => {
+                                                if (el) {
+                                                  el.style.height = '48px';
+                                                  if (el.value) {
+                                                    el.style.height = `${Math.max(48, el.scrollHeight)}px`;
+                                                  }
+                                                }
+                                              }}
+                                              placeholder="Saisir un commentaire privé pour le technicien..."
+                                              className="w-full px-3 py-2 text-[18px] bg-white border border-slate-200 focus:border-[#0000FF] rounded-lg outline-none text-slate-900 font-normal transition-all resize-none overflow-hidden"
+                                              style={{ minHeight: '48px', height: '48px', lineHeight: '28px' }}
+                                            />
+                                          </div>
 
                                           {/* Bottom row: Transférer & Supprimer */}
                                           <div className="pt-2 grid grid-cols-1 md:grid-cols-4 gap-3 w-full bg-transparent items-end">
@@ -16800,6 +16946,31 @@ export default function App() {
                                       </div>
                                     );
                                   })()}
+
+                                  {/* Commentaire visible par le technicien. */}
+                                  <div className="space-y-0.5 bg-transparent pt-1">
+                                    <label className="block mb-1 fsm-label-style" style={{ fontSize: '18px' }}>Commentaire visible par le technicien.</label>
+                                    <textarea
+                                      rows={1}
+                                      value={m.commentaireInterne || ''}
+                                      onChange={(e) => {
+                                        updateFsmMission(t.id, m.id, { commentaireInterne: e.target.value });
+                                        e.target.style.height = '48px';
+                                        e.target.style.height = `${Math.max(48, e.target.scrollHeight)}px`;
+                                      }}
+                                      ref={(el) => {
+                                        if (el) {
+                                          el.style.height = '48px';
+                                          if (el.value) {
+                                            el.style.height = `${Math.max(48, el.scrollHeight)}px`;
+                                          }
+                                        }
+                                      }}
+                                      placeholder="Saisir un commentaire privé pour le technicien..."
+                                      className="w-full px-3 py-2 text-[18px] bg-white border border-slate-200 focus:border-[#0000FF] rounded-lg outline-none text-slate-900 font-normal transition-all resize-none overflow-hidden"
+                                      style={{ minHeight: '48px', height: '48px', lineHeight: '28px' }}
+                                    />
+                                  </div>
 
                                   {/* Bottom row: Situation, Soumettre au client, Supprimer & Mettre à trier (25% / 25% / 25% / 25%) */}
                                   <div className="pt-2 grid grid-cols-1 md:grid-cols-4 gap-3 w-full bg-transparent items-end">

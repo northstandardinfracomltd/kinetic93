@@ -694,77 +694,33 @@ export async function getFromLocalCacheAsync<T>(key: string): Promise<T | null> 
 export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
   if (typeof window === 'undefined' || !window.localStorage) return;
   try {
-    const unprefixedCrossTenantKeys = new Set([
-      'defib_company_info',
-      'defib_members',
-      'defib_location_names',
-      'defib_custom_location_names',
-      'defib_sage100_active',
-      'defib_sage100_client_id',
-      'defib_sage100_access_token',
-      'defib_sage100_secret_token',
-      'defib_sage4197_active',
-      'defib_sage4197_client_id',
-      'defib_sage4197_access_token',
-      'defib_sage4197_secret_token',
-      'defib_pennylane_active',
-      'defib_pennylane_client_id',
-      'defib_pennylane_company_token',
-      'defib_pennylane_secret_token',
-      'defib_dropbox_active',
-      'defib_dropbox_app_key',
-      'defib_dropbox_app_secret',
-      'defib_dropbox_access_token',
-      'defib_cegid_active',
-      'defib_cegid_api_key',
-      'defib_cegid_api_secret',
-      'defib_lemongroup_ws_active',
-      'defib_lemongroup_ws_api_key',
-      'defib_lemongroup_ws_api_secret',
-      'defib_textelp_active',
-      'defib_textelp_env_id',
-      'defib_textelp_secret_id',
-      'defib_civilprom_active',
-      'defib_civilprom_website_url',
-      'defib_civilprom_assets_file_url',
-      'defib_atlasante_active',
-      'defib_atlasante_declarant_id',
-      'defib_atlasante_url_auth',
-      'defib_google_drive_active',
-      'defib_google_drive_email',
-      'defib_google_drive_token',
-      'defib_api_defibeo_active',
-      'defib_api_defibeo_key',
-      'defib_api_defibeo_secret'
-    ]);
+    // Clear IndexedDB cache completely on logout / tenant switch
+    idbClear().catch(() => {});
+
     const keysToRemove: string[] = [];
 
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (!k) continue;
 
-      if (unprefixedCrossTenantKeys.has(k)) {
-        keysToRemove.push(k);
-        continue;
-      }
-
-      if (
-        k.includes('spreadsheet_') ||
-        k.includes('company_info') ||
-        k.includes('companyInfo') ||
-        k.includes('tenantDatabases') ||
-        k.includes('_members') ||
-        k.includes('custom_location_names') ||
-        k.includes('api_connectors') ||
-        k === 'fs_cache_registered_tenants'
-      ) {
+      // Preserve only device fingerprint ID
+      if (k === 'defib_device_id') {
         continue;
       }
 
       const lower = k.toLowerCase();
       if (
+        k.startsWith('defib_') ||
+        k.startsWith('fs_cache_') ||
         k.startsWith('help_dismissed') ||
-        k.startsWith('defib_temp_') ||
+        k === 'ctt_global_rules' ||
+        lower.includes('spreadsheet_') ||
+        lower.includes('company_info') ||
+        lower.includes('companyinfo') ||
+        lower.includes('tenantdatabases') ||
+        lower.includes('_members') ||
+        lower.includes('custom_location_names') ||
+        lower.includes('api_connectors') ||
         lower.includes('defibrillateur') ||
         lower.includes('_defibs') ||
         lower.includes('_clients') ||
@@ -782,7 +738,7 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
       localStorage.removeItem(k);
     }
 
-    // Also clear session storage
+    // Also clear session storage completely
     if (window.sessionStorage) {
       sessionStorage.clear();
     }
@@ -1234,8 +1190,10 @@ export async function fetchCollectionFromFirestore<T>(
     } catch (err) {
       console.warn(`[GoogleSheets] Error fetching ${collectionName} for ${activeTenantId}:`, err);
     }
-    onProgress?.(0, 0, 'Terminé.');
-    return [] as unknown as T;
+    if (collectionName !== 'members' && collectionName !== 'environment_members') {
+      onProgress?.(0, 0, 'Terminé.');
+      return [] as unknown as T;
+    }
   }
 
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
@@ -1640,6 +1598,7 @@ export async function fetchCollectionFromFirestore<T>(
       }
     }
 
+    let fallbackObjectVal: any = null;
     try {
       const resp = await fetch(`/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(activeTenantId)}&_t=${Date.now()}`, {
         cache: 'no-store',
@@ -1673,7 +1632,8 @@ export async function fetchCollectionFromFirestore<T>(
             // If server returned empty array [], do NOT overwrite local cache before checking Strategy 3 below!
           } else if (val && typeof val === 'object' && Object.keys(val as any).length > 0) {
             if ((collectionName === 'companyInfo' || collectionName === 'company_info') && (val as any)._isDefaultFallback) {
-              // Do not overwrite local cache with synthetic default fallback before checking Strategy 3
+              // Keep as fallback if Strategy 3 has no cached companyInfo for this tenant
+              fallbackObjectVal = val;
             } else {
               // Non-empty object (e.g. companyInfo, api_connectors, tenantDatabases)
               if (collectionName === 'api_connectors' && typeof window !== 'undefined' && window.localStorage) {
@@ -1757,6 +1717,10 @@ export async function fetchCollectionFromFirestore<T>(
       return ensureTenantMembersClient(filtered, activeTenantId) as unknown as T;
     }
     return filtered;
+  }
+
+  if (fallbackObjectVal !== null && fallbackObjectVal !== undefined) {
+    return fallbackObjectVal as T;
   }
 
   if (collectionName === 'members') {

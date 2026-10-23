@@ -2077,8 +2077,10 @@ async function getTenantApiCredentials(tenantId: string, extraAliases: (string |
     }
   }
 
-  // Always append default D27 and generic connectors as fallback for shared tenant credentials
-  candidateKeys.push('D27_api_connectors', 'D58_api_connectors', 'api_connectors');
+  // Only fall back to generic api_connectors for demo tenant, never leak D27/D58 credentials to other tenants
+  if (!tenantId || tenantId === 'demo') {
+    candidateKeys.push('api_connectors');
+  }
 
   const uniqueKeys = Array.from(new Set(candidateKeys.filter(Boolean)));
 
@@ -4944,15 +4946,12 @@ async function warmupDefibrillateursStore() {
 
   async function resolveTenantSpreadsheetUrl(tenantId: string, tabType: SheetTabType, explicitUrl?: string): Promise<string> {
     const isInvalidPlaceholderUrl = (u?: string) => !u || u.includes('1tB1e41') || u.includes('2mX5O6r9hD0i3Z9m');
-    if (explicitUrl && explicitUrl.trim() && !isInvalidPlaceholderUrl(explicitUrl) && extractSpreadsheetIdAndGid(explicitUrl.trim())) {
-      rememberTenantSpreadsheetUrl(tenantId, tabType, explicitUrl.trim());
-      return explicitUrl.trim();
-    }
+    // 1. Check server-authoritative tenant spreadsheet URL first
     const syncUrl = getTenantSpreadsheetUrlSync(tenantId, tabType);
     if (syncUrl && !isInvalidPlaceholderUrl(syncUrl) && extractSpreadsheetIdAndGid(syncUrl)) {
       return syncUrl;
     }
-    // Check if companyInfo or tenantDatabases exists in Firestore REST (across all tenant aliases e.g. D27 / D58)
+    // 2. Check if companyInfo or tenantDatabases exists in Firestore REST (across all tenant aliases e.g. D27 / D58)
     try {
       const activeTenant = (tenantId || 'demo').trim();
       const tAliases = getTenantAliasesSync(activeTenant);
@@ -5009,6 +5008,10 @@ async function warmupDefibrillateursStore() {
         }
       }
     } catch (_) {}
+    // 3. Only use explicitUrl as a read-only fallback (NEVER overwrite server-side tenantDatabases from a GET query param)
+    if (explicitUrl && explicitUrl.trim() && !isInvalidPlaceholderUrl(explicitUrl) && extractSpreadsheetIdAndGid(explicitUrl.trim())) {
+      return explicitUrl.trim();
+    }
     return '';
   }
 
@@ -5546,6 +5549,44 @@ async function warmupDefibrillateursStore() {
       };
 
       const candidateTenants = Array.from(tenantMap.values());
+
+      // Pass 1 (Admin role only): Prioritize exact primary tenant owner match (adminEmail / companyEmail)
+      // across all registered tenants before checking secondary member lists of other tenants.
+      if (loginRole === 'admin') {
+        const primaryOwnerTenants = candidateTenants.filter(tnt => {
+          const tAdminEmail = String(tnt.adminEmail || '').trim().toLowerCase();
+          const tCompanyEmail = String(tnt.companyEmail || '').trim().toLowerCase();
+          return (tAdminEmail && tAdminEmail === emailLower) || (tCompanyEmail && tCompanyEmail === emailLower);
+        });
+        if (primaryOwnerTenants.length > 0) {
+          // Prefer non-disabled active tenant if multiple match
+          const chosenTenant = primaryOwnerTenants.find(t => !t.disabled) || primaryOwnerTenants[0];
+          const tid = String(chosenTenant.id || 'demo').trim();
+          const resolvedEmail = String(chosenTenant.adminEmail || chosenTenant.companyEmail || emailLower).trim();
+          const resolvedName = chosenTenant.adminName || 'Administrateur';
+          const primaryProfile = {
+            email: resolvedEmail,
+            name: resolvedName,
+            role: 'Super-Administrateur',
+          };
+          return await issueTwoFactorChallenge({
+            tenantId: tid,
+            disabled: Boolean(chosenTenant.disabled),
+            source: 'firebase',
+            targetEmail: resolvedEmail,
+            user: {
+              email: resolvedEmail,
+              name: resolvedName,
+              role: 'admin',
+              memberRecord: primaryProfile,
+            },
+            member: {
+              ...primaryProfile,
+              role: 'admin',
+            },
+          });
+        }
+      }
 
       for (const tnt of candidateTenants) {
         const tid = String(tnt.id || 'demo').trim();

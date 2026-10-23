@@ -39,6 +39,7 @@ interface PlanningTabProps {
   enableExtendedView?: boolean;
   onConsultMission?: (tour: any, mission: any) => void;
   onRefresh?: () => void | Promise<void>;
+  onUpdateTours?: (tours: any[]) => void;
 }
 
 const MONTH_NAMES_FR = [
@@ -1694,6 +1695,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           initialMonth={selectedMonth}
           initialYear={selectedYear}
           onUpdateSpontaneousEvents={(updated) => setSpontaneousEvents(updated)}
+          onUpdateTours={onUpdateTours}
         />
       )}
     </div>

@@ -113,27 +113,37 @@ export interface CrmColumnConfig {
 }
 
 export const CRM_CONFIGURABLE_COLUMNS: CrmColumnConfig[] = [
-  // Commercial
-  { id: 'ouv_comm', label: 'Ouverture (Commercial)', category: 'Commercial' },
-  { id: 'sit_comm', label: 'Situation (Commercial)', category: 'Commercial' },
-  { id: 'cp_comm', label: 'Indicatif Postal (Commercial)', category: 'Commercial' },
-  { id: 'cli_comm', label: 'Client (Commercial)', category: 'Commercial' },
-  { id: 'interloc_comm', label: 'Interlocuteur (Commercial)', category: 'Commercial' },
-  { id: 'type_comm', label: 'Type (Commercial)', category: 'Commercial' },
-  { id: 'famille_comm', label: 'Famille (Commercial)', category: 'Commercial' },
-  { id: 'lead_comm', label: 'Origine Lead (Commercial)', category: 'Commercial' },
-  { id: 'datedevis_comm', label: 'Date Devis (Commercial)', category: 'Commercial' },
-  { id: 'refdevis_comm', label: 'Référence Devis (Commercial)', category: 'Commercial' },
-  { id: 'dateprorelance_comm', label: 'Date Pro Relance (Commercial)', category: 'Commercial' },
-  { id: 'collab_comm', label: 'Collaborateur (Commercial)', category: 'Commercial' },
+  // Commercial (20 configurable columns + Actions always visible)
+  { id: 'ref_comm', label: 'Référence.', category: 'Commercial' },
+  { id: 'sit_comm', label: 'Situation Ticket.', category: 'Commercial' },
+  { id: 'ouv_comm', label: 'Ouverture.', category: 'Commercial' },
+  { id: 'famille_comm', label: 'Famille.', category: 'Commercial' },
+  { id: 'sitdevis_comm', label: 'Situation Devis.', category: 'Commercial' },
+  { id: 'typeclient_comm', label: 'Type Client.', category: 'Commercial' },
+  { id: 'cli_comm', label: 'Client.', category: 'Commercial' },
+  { id: 'cp_comm', label: 'Indicatif Postal.', category: 'Commercial' },
+  { id: 'lead_comm', label: 'Origine Lead.', category: 'Commercial' },
+  { id: 'interloc_comm', label: 'Interlocuteur.', category: 'Commercial' },
+  { id: 'tel_comm', label: 'Téléphone.', category: 'Commercial' },
+  { id: 'email_comm', label: 'Email.', category: 'Commercial' },
+  { id: 'datedevis_comm', label: 'Date Devis.', category: 'Commercial' },
+  { id: 'montantht_comm', label: 'Montant HT.', category: 'Commercial' },
+  { id: 'typevente_comm', label: 'Type Vente.', category: 'Commercial' },
+  { id: 'desccourte_comm', label: 'Description Courte.', category: 'Commercial' },
+  { id: 'derrelance_comm', label: 'Dernière Relance.', category: 'Commercial' },
+  { id: 'prorelance_comm', label: 'Prochaine Relance.', category: 'Commercial' },
+  { id: 'datecde_comm', label: 'Date Commande.', category: 'Commercial' },
+  { id: 'collab_comm', label: 'Collaborateur.', category: 'Commercial' },
 
   // Non Commercial
-  { id: 'ouv_noncomm', label: 'Ouverture (Non Commercial)', category: 'Non Commercial' },
-  { id: 'sit_noncomm', label: 'Situation (Non Commercial)', category: 'Non Commercial' },
-  { id: 'cp_noncomm', label: 'Indicatif Postal (Non Commercial)', category: 'Non Commercial' },
-  { id: 'cli_noncomm', label: 'Client (Non Commercial)', category: 'Non Commercial' },
-  { id: 'objet_noncomm', label: 'Objet (Non Commercial)', category: 'Non Commercial' },
-  { id: 'collab_noncomm', label: 'Collaborateur (Non Commercial)', category: 'Non Commercial' },
+  { id: 'ref_noncomm', label: 'Référence.', category: 'Non Commercial' },
+  { id: 'crit_noncomm', label: 'Criticité.', category: 'Non Commercial' },
+  { id: 'ouv_noncomm', label: 'Ouverture.', category: 'Non Commercial' },
+  { id: 'sit_noncomm', label: 'Situation.', category: 'Non Commercial' },
+  { id: 'cp_noncomm', label: 'Indicatif Postal.', category: 'Non Commercial' },
+  { id: 'cli_noncomm', label: 'Client.', category: 'Non Commercial' },
+  { id: 'objet_noncomm', label: 'Objet.', category: 'Non Commercial' },
+  { id: 'collab_noncomm', label: 'Collaborateur.', category: 'Non Commercial' },
 ];
 
 interface CrmTabProps {
@@ -166,9 +176,32 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   // Selection state for rows
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
   const [isSendingRelance, setIsSendingRelance] = useState(false);
+  const [isRelanceDropdownOpen, setIsRelanceDropdownOpen] = useState(false);
+  const [selectedRelanceTemplateIdx, setSelectedRelanceTemplateIdx] = useState<1 | 2 | 3>(1);
   const [relanceBannerMsg, setRelanceBannerMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Column visibility state (identical to DefibTab with sensitivity to commercial / non-commercial)
+  // Column visibility & session ordering state
+  const defaultColOrder = useMemo(() => CRM_CONFIGURABLE_COLUMNS.map(c => c.id), []);
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = sessionStorage.getItem('crm_table_column_order');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            const validIds = new Set(CRM_CONFIGURABLE_COLUMNS.map(c => c.id));
+            const filtered = parsed.filter((id: string) => validIds.has(id));
+            const missing = CRM_CONFIGURABLE_COLUMNS.map(c => c.id).filter(id => !filtered.includes(id));
+            return [...filtered, ...missing];
+          }
+        }
+      } catch (e) {}
+    }
+    return CRM_CONFIGURABLE_COLUMNS.map(c => c.id);
+  });
+  const [tempColumnOrder, setTempColumnOrder] = useState<string[]>(columnOrder);
+  const [draggedColId, setDraggedColId] = useState<string | null>(null);
+
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -176,7 +209,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
-            return new Set(parsed);
+            const validIds = new Set(CRM_CONFIGURABLE_COLUMNS.map(c => c.id));
+            return new Set(parsed.filter((id: string) => validIds.has(id)));
           }
         }
       } catch (e) {}
@@ -208,31 +242,51 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   const toggleColumnVisibility = (colId: string) => {
+    const targetCol = CRM_CONFIGURABLE_COLUMNS.find(c => c.id === colId);
+    if (!targetCol) return;
     setTempHiddenColumns((prev) => {
       const next = new Set(prev);
       if (next.has(colId)) {
         next.delete(colId);
       } else {
+        // Enforce minimum of 4 visible columns in this category
+        const categoryCols = CRM_CONFIGURABLE_COLUMNS.filter(c => c.category === targetCol.category);
+        const currentlyVisibleCount = categoryCols.filter(c => !prev.has(c.id)).length;
+        if (currentlyVisibleCount <= 4) {
+          return prev;
+        }
         next.add(colId);
       }
       return next;
     });
   };
 
+  const orderedConfigurableColumns = useMemo(() => {
+    const map = new Map(CRM_CONFIGURABLE_COLUMNS.map(c => [c.id, c]));
+    return tempColumnOrder.map(id => map.get(id)).filter((c): c is CrmColumnConfig => Boolean(c));
+  }, [tempColumnOrder]);
+
+  const activeOrderedColumns = useMemo(() => {
+    const map = new Map(CRM_CONFIGURABLE_COLUMNS.map(c => [c.id, c]));
+    const ordered = columnOrder.map(id => map.get(id)).filter((c): c is CrmColumnConfig => Boolean(c));
+    const cat = ticketCategoryFilter === 'Commercial' ? 'Commercial' : 'Non Commercial';
+    return ordered.filter(c => c.category === cat && !hiddenColumns.has(c.id));
+  }, [columnOrder, ticketCategoryFilter, hiddenColumns]);
+
   const visibleConfigurableColumns = useMemo(() => {
     if (columnFilterScope === 'Commercial') {
-      return CRM_CONFIGURABLE_COLUMNS.filter(c => c.category === 'Commercial');
+      return orderedConfigurableColumns.filter(c => c.category === 'Commercial');
     }
     if (columnFilterScope === 'Non Commercial') {
-      return CRM_CONFIGURABLE_COLUMNS.filter(c => c.category === 'Non Commercial');
+      return orderedConfigurableColumns.filter(c => c.category === 'Non Commercial');
     }
     if (columnFilterScope === 'Actif') {
       return ticketCategoryFilter === 'Commercial'
-        ? CRM_CONFIGURABLE_COLUMNS.filter(c => c.category === 'Commercial')
-        : CRM_CONFIGURABLE_COLUMNS.filter(c => c.category === 'Non Commercial');
+        ? orderedConfigurableColumns.filter(c => c.category === 'Commercial')
+        : orderedConfigurableColumns.filter(c => c.category === 'Non Commercial');
     }
-    return CRM_CONFIGURABLE_COLUMNS;
-  }, [columnFilterScope, ticketCategoryFilter]);
+    return orderedConfigurableColumns;
+  }, [columnFilterScope, ticketCategoryFilter, orderedConfigurableColumns]);
 
   // Fit View / Unzoom feature like DefibTab
   const [isTableFitView, setIsTableFitView] = useState<boolean>(false);
@@ -334,7 +388,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [perfEndDate, setPerfEndDate] = useState('');
   const [perfCollaborateur, setPerfCollaborateur] = useState('Tous');
 
-  // Settings: Texte de l'email de relance
+  // Settings: Texte de l'email de relance (Modèles 1, 2, 3)
   const activeTenant = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
   const defaultRelanceTemplate = `Bonjour {Client.},\n\nNous nous permettons de vous relancer concernant notre proposition commerciale {Référence Devis.}.\nVous pouvez consulter les pièces du dossier ici : {Lien Stockage Partagé Devis.}.\n\nRestant à votre entière disposition pour tout renseignement complémentaire.\n\nBien cordialement,`;
 
@@ -342,9 +396,26 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_relance_template`) : null;
     return local || defaultRelanceTemplate;
   });
-
   const [relanceEmailReplyTo, setRelanceEmailReplyTo] = useState<string>(() => {
     const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_relance_replyto`) : null;
+    return local || '';
+  });
+
+  const [relanceEmailBody2, setRelanceEmailBody2] = useState<string>(() => {
+    const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_relance_template_2`) : null;
+    return local || defaultRelanceTemplate;
+  });
+  const [relanceEmailReplyTo2, setRelanceEmailReplyTo2] = useState<string>(() => {
+    const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_relance_replyto_2`) : null;
+    return local || '';
+  });
+
+  const [relanceEmailBody3, setRelanceEmailBody3] = useState<string>(() => {
+    const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_relance_template_3`) : null;
+    return local || defaultRelanceTemplate;
+  });
+  const [relanceEmailReplyTo3, setRelanceEmailReplyTo3] = useState<string>(() => {
+    const local = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_crm_relance_replyto_3`) : null;
     return local || '';
   });
 
@@ -368,8 +439,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   });
 
   const [isSavingRelance, setIsSavingRelance] = useState(false);
+  const [isSavingRelance2, setIsSavingRelance2] = useState(false);
+  const [isSavingRelance3, setIsSavingRelance3] = useState(false);
   const [isSavingSupport, setIsSavingSupport] = useState(false);
   const [relanceEmailError, setRelanceEmailError] = useState('');
+  const [relanceEmailError2, setRelanceEmailError2] = useState('');
+  const [relanceEmailError3, setRelanceEmailError3] = useState('');
   const [supportEmailError, setSupportEmailError] = useState('');
 
   const isValidEmailAddress = (email: string) => {
@@ -398,6 +473,22 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               setRelanceEmailReplyTo(settingsObj.relanceEmailReplyTo || '');
               localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto`, settingsObj.relanceEmailReplyTo || '');
             }
+            if (settingsObj.relanceEmailBody2) {
+              setRelanceEmailBody2(settingsObj.relanceEmailBody2);
+              localStorage.setItem(`defib_${activeTenant}_crm_relance_template_2`, settingsObj.relanceEmailBody2);
+            }
+            if (settingsObj.relanceEmailReplyTo2 !== undefined) {
+              setRelanceEmailReplyTo2(settingsObj.relanceEmailReplyTo2 || '');
+              localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto_2`, settingsObj.relanceEmailReplyTo2 || '');
+            }
+            if (settingsObj.relanceEmailBody3) {
+              setRelanceEmailBody3(settingsObj.relanceEmailBody3);
+              localStorage.setItem(`defib_${activeTenant}_crm_relance_template_3`, settingsObj.relanceEmailBody3);
+            }
+            if (settingsObj.relanceEmailReplyTo3 !== undefined) {
+              setRelanceEmailReplyTo3(settingsObj.relanceEmailReplyTo3 || '');
+              localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto_3`, settingsObj.relanceEmailReplyTo3 || '');
+            }
             if (settingsObj.supportEmailSubject) {
               setSupportEmailSubject(settingsObj.supportEmailSubject);
               localStorage.setItem(`defib_${activeTenant}_crm_support_subject`, settingsObj.supportEmailSubject);
@@ -418,29 +509,62 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     }
   }, [activeTenant]);
 
-  const handleSaveRelanceSettings = async () => {
-    if (relanceEmailReplyTo.trim() && !isValidEmailAddress(relanceEmailReplyTo)) {
-      setRelanceEmailError('Veuillez renseigner une adresse email valide (avec un @ et un nom de domaine).');
-      return;
+  const persistAllCrmSettings = async () => {
+    localStorage.setItem(`defib_${activeTenant}_crm_relance_template`, relanceEmailBody);
+    localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto`, relanceEmailReplyTo);
+    localStorage.setItem(`defib_${activeTenant}_crm_relance_template_2`, relanceEmailBody2);
+    localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto_2`, relanceEmailReplyTo2);
+    localStorage.setItem(`defib_${activeTenant}_crm_relance_template_3`, relanceEmailBody3);
+    localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto_3`, relanceEmailReplyTo3);
+    localStorage.setItem(`defib_${activeTenant}_crm_support_subject`, supportEmailSubject);
+    localStorage.setItem(`defib_${activeTenant}_crm_support_template`, supportEmailBody);
+    localStorage.setItem(`defib_${activeTenant}_crm_support_replyto`, supportEmailReplyTo);
+    if (activeTenant) {
+      await saveCollectionToFirestore('crm_settings', {
+        relanceEmailBody,
+        relanceEmailReplyTo,
+        relanceEmailBody2,
+        relanceEmailReplyTo2,
+        relanceEmailBody3,
+        relanceEmailReplyTo3,
+        supportEmailSubject,
+        supportEmailBody,
+        supportEmailReplyTo
+      }, activeTenant);
     }
-    setRelanceEmailError('');
-    setIsSavingRelance(true);
-    try {
-      localStorage.setItem(`defib_${activeTenant}_crm_relance_template`, relanceEmailBody);
-      localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto`, relanceEmailReplyTo);
-      if (activeTenant) {
-        await saveCollectionToFirestore('crm_settings', {
-          relanceEmailBody,
-          relanceEmailReplyTo,
-          supportEmailSubject,
-          supportEmailBody,
-          supportEmailReplyTo
-        }, activeTenant);
+  };
+
+  const handleSaveRelanceSettings = async (templateIndex: 1 | 2 | 3 = 1) => {
+    if (templateIndex === 1) {
+      if (relanceEmailReplyTo.trim() && !isValidEmailAddress(relanceEmailReplyTo)) {
+        setRelanceEmailError('Veuillez renseigner une adresse email valide (avec un @ et un nom de domaine).');
+        return;
       }
+      setRelanceEmailError('');
+      setIsSavingRelance(true);
+    } else if (templateIndex === 2) {
+      if (relanceEmailReplyTo2.trim() && !isValidEmailAddress(relanceEmailReplyTo2)) {
+        setRelanceEmailError2('Veuillez renseigner une adresse email valide (avec un @ et un nom de domaine).');
+        return;
+      }
+      setRelanceEmailError2('');
+      setIsSavingRelance2(true);
+    } else {
+      if (relanceEmailReplyTo3.trim() && !isValidEmailAddress(relanceEmailReplyTo3)) {
+        setRelanceEmailError3('Veuillez renseigner une adresse email valide (avec un @ et un nom de domaine).');
+        return;
+      }
+      setRelanceEmailError3('');
+      setIsSavingRelance3(true);
+    }
+    try {
+      await persistAllCrmSettings();
     } catch (err) {
       console.error('Erreur enregistrement réglages CRM relance:', err);
     } finally {
       setIsSavingRelance(false);
+      setIsSavingRelance2(false);
+      setIsSavingRelance3(false);
     }
   };
 
@@ -452,18 +576,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setSupportEmailError('');
     setIsSavingSupport(true);
     try {
-      localStorage.setItem(`defib_${activeTenant}_crm_support_subject`, supportEmailSubject);
-      localStorage.setItem(`defib_${activeTenant}_crm_support_template`, supportEmailBody);
-      localStorage.setItem(`defib_${activeTenant}_crm_support_replyto`, supportEmailReplyTo);
-      if (activeTenant) {
-        await saveCollectionToFirestore('crm_settings', {
-          relanceEmailBody,
-          relanceEmailReplyTo,
-          supportEmailSubject,
-          supportEmailBody,
-          supportEmailReplyTo
-        }, activeTenant);
-      }
+      await persistAllCrmSettings();
     } catch (err) {
       console.error('Erreur enregistrement réglages CRM support:', err);
     } finally {
@@ -516,7 +629,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formIndicatifPostal, setFormIndicatifPostal] = useState('');
   const [formOrigineLead, setFormOrigineLead] = useState<'Service Client' | 'Direct' | 'Internet' | 'Planification' | 'Autre' | string>('Service Client');
   const [formDescriptionOffreDevis, setFormDescriptionOffreDevis] = useState('');
+  const [formTypeVente, setFormTypeVente] = useState('');
   const [formDateDevis, setFormDateDevis] = useState('');
+  const [formDateDerniereRelance, setFormDateDerniereRelance] = useState('');
   const [formDateProchaineRelance, setFormDateProchaineRelance] = useState('');
   const [formDateCommande, setFormDateCommande] = useState('');
   const [formLienDevis, setFormLienDevis] = useState('');
@@ -646,7 +761,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormIndicatifPostal('');
     setFormOrigineLead('Service Client');
     setFormDescriptionOffreDevis('');
+    setFormTypeVente('');
     setFormDateDevis('');
+    setFormDateDerniereRelance('');
     setFormDateProchaineRelance('');
     setFormDateCommande('');
     setFormLienDevis('');
@@ -717,7 +834,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormIndicatifPostal(ticket.indicatifPostal || '');
     setFormOrigineLead(ticket.origineLead || 'Service Client');
     setFormDescriptionOffreDevis(ticket.descriptionOffreDevis || '');
+    setFormTypeVente(ticket.typeVente || '');
     setFormDateDevis(ticket.dateDevis || '');
+    setFormDateDerniereRelance(ticket.dateDerniereRelance || '');
     setFormDateProchaineRelance(ticket.dateProchaineRelance || '');
     setFormDateCommande(ticket.dateCommande || '');
     setFormLienDevis(ticket.lienStockagePartageDevis || '');
@@ -965,7 +1084,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       indicatifPostal: formIndicatifPostal.trim(),
       origineLead: formOrigineLead,
       descriptionOffreDevis: formDescriptionOffreDevis.trim(),
+      typeVente: formTypeVente.trim(),
       dateDevis: formDateDevis.trim(),
+      dateDerniereRelance: formDateDerniereRelance.trim(),
       dateProchaineRelance: formDateProchaineRelance.trim(),
       dateCommande: formDateCommande.trim(),
       lienStockagePartageDevis: sharedFileUrls,
@@ -1082,12 +1203,33 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setSelectedTicketIds([]);
   };
 
-  const handleBulkRelanceEmail = async () => {
+  const handleQuickSituationDevis = (ticketId: string, newSitDevis: 'Gagné' | 'Perdu') => {
+    const today = getTodayFormatted();
+    const updated = tickets.map((t) => {
+      if (t.id === ticketId) {
+        return {
+          ...t,
+          situationDevis: newSitDevis,
+          dateDerniereActualisation: today,
+        };
+      }
+      return t;
+    });
+    onSaveTickets(updated);
+  };
+
+  const handleBulkRelanceEmail = async (templateIdx: 1 | 2 | 3 = selectedRelanceTemplateIdx) => {
     if (!isRelanceEnabled || selectedTicketIds.length === 0) return;
     setIsSendingRelance(true);
     setRelanceBannerMsg(null);
     let sentCount = 0;
     let missingEmailCount = 0;
+    const sentTicketIds = new Set<string>();
+
+    const chosenTemplateBody =
+      templateIdx === 2 ? relanceEmailBody2 : templateIdx === 3 ? relanceEmailBody3 : relanceEmailBody;
+    const chosenReplyTo =
+      templateIdx === 2 ? relanceEmailReplyTo2 : templateIdx === 3 ? relanceEmailReplyTo3 : relanceEmailReplyTo;
 
     for (const ticketId of selectedTicketIds) {
       const ticket = tickets.find(t => t.id === ticketId);
@@ -1104,17 +1246,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       const lienStockage = ticket.lienStockagePartageDevis || '';
 
       // Replace template variables
-      let bodyText = relanceEmailBody
+      let bodyText = chosenTemplateBody
         .replace(/{Client\.}|Client\./g, clientName)
         .replace(/{Référence Devis\.}|Référence Devis\./g, refDevis)
         .replace(/{Lien Stockage Partagé Devis\.}|Lien Stockage Partagé Devis\./g, lienStockage);
 
       const subject = `Relance - ${refDevis}`;
-      const replyTo = relanceEmailReplyTo.trim() || companyInfo?.email || 'contact@defibeo.com';
+      const replyTo = chosenReplyTo.trim() || companyInfo?.email || 'contact@defibeo.com';
       const senderName = getActiveTenantCommercialName(companyInfo?.name);
 
       try {
-        await sendScriptEmail({
+        const ok = await sendScriptEmail({
           to: targetEmail,
           subject,
           body: bodyText,
@@ -1122,13 +1264,34 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           name: senderName,
           senderName
         });
-        sentCount++;
+        if (ok !== false) {
+          sentCount++;
+          sentTicketIds.add(ticket.id);
+        }
       } catch (err) {
         console.warn('Erreur envoi email relance:', err);
       }
     }
 
+    if (sentTicketIds.size > 0) {
+      const now = new Date();
+      const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const todayDisplay = getTodayFormatted();
+      const updatedTickets = tickets.map((t) => {
+        if (sentTicketIds.has(t.id)) {
+          return {
+            ...t,
+            dateDerniereRelance: todayIso,
+            dateDerniereActualisation: todayDisplay,
+          };
+        }
+        return t;
+      });
+      onSaveTickets(updatedTickets);
+    }
+
     setIsSendingRelance(false);
+    setIsRelanceDropdownOpen(false);
     if (sentCount > 0 && missingEmailCount === 0) {
       setRelanceBannerMsg({ type: 'success', text: `✓ ${sentCount} email(s) de relance envoyé(s) avec succès !` });
     } else if (sentCount > 0 && missingEmailCount > 0) {
@@ -1972,6 +2135,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         toggleTableFitView();
                       } else if (val === 'columns') {
                         setTempHiddenColumns(new Set(hiddenColumns));
+                        setTempColumnOrder([...columnOrder]);
                         setColumnFilterScope('Actif');
                         setIsColumnVisibilityPaneOpen(true);
                       } else if (val === 'spreadsheet') {
@@ -2162,27 +2326,75 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               Supprimer
             </button>
 
-            {/* Email Relance button */}
-            <button
-              type="button"
-              onClick={handleBulkRelanceEmail}
-              disabled={!isRelanceEnabled}
-              style={{
-                ...rowActionButtonStyle,
-                backgroundColor: isRelanceEnabled ? '#2e54ff' : '#cbd5e1',
-                color: isRelanceEnabled ? '#ffffff' : '#64748b',
-                cursor: isRelanceEnabled ? (isSendingRelance ? 'wait' : 'pointer') : 'not-allowed',
-                opacity: isRelanceEnabled ? 1 : 0.65,
-              }}
-              className={isRelanceEnabled ? "hover:bg-[#2b48cc] transition-colors cursor-pointer" : "cursor-not-allowed"}
-              title={
-                !isRelanceEnabled
-                  ? "Email Relance est disponible uniquement pour les tickets de type Commercial ayant une adresse renseignée dans le champ email."
-                  : "Envoyer un email de relance aux adresses renseignées dans les lignes sélectionnées"
-              }
-            >
-              {isSendingRelance ? 'Envoi en cours...' : 'Email Relance'}
-            </button>
+            {/* Email Relance button + system dropdown */}
+            <div className="inline-flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isRelanceEnabled) return;
+                  setIsRelanceDropdownOpen(prev => !prev);
+                }}
+                disabled={!isRelanceEnabled}
+                style={{
+                  ...rowActionButtonStyle,
+                  backgroundColor: isRelanceEnabled ? '#2e54ff' : '#cbd5e1',
+                  color: isRelanceEnabled ? '#ffffff' : '#64748b',
+                  cursor: isRelanceEnabled ? (isSendingRelance ? 'wait' : 'pointer') : 'not-allowed',
+                  opacity: isRelanceEnabled ? 1 : 0.65,
+                }}
+                className={isRelanceEnabled ? "hover:bg-[#2b48cc] transition-colors cursor-pointer" : "cursor-not-allowed"}
+                title={
+                  !isRelanceEnabled
+                    ? "Email Relance est disponible uniquement pour les tickets de type Commercial ayant une adresse renseignée dans le champ email."
+                    : "Choisir un modèle d'email de relance et l'envoyer"
+                }
+              >
+                {isSendingRelance ? 'Envoi en cours...' : 'Email Relance'}
+              </button>
+
+              {isRelanceDropdownOpen && isRelanceEnabled && (
+                <div className="inline-flex items-center gap-2 animate-fadeIn">
+                  <select
+                    id="crm-bulk-relance-template-select"
+                    value={selectedRelanceTemplateIdx}
+                    onChange={(e) => setSelectedRelanceTemplateIdx(Number(e.target.value) as 1 | 2 | 3)}
+                    style={{
+                      border: '1px solid #dedede',
+                      borderRadius: '13px',
+                      padding: '8px 14px',
+                      fontSize: '16px',
+                      fontWeight: 500,
+                      color: '#000000',
+                      backgroundColor: '#ffffff',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      cursor: 'pointer',
+                      width: 'auto',
+                      minWidth: '170px',
+                      appearance: 'auto',
+                      WebkitAppearance: 'menulist',
+                    }}
+                  >
+                    <option value={1}>Modèle de relance 1</option>
+                    <option value={2}>Modèle de relance 2</option>
+                    <option value={3}>Modèle de relance 3</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleBulkRelanceEmail(selectedRelanceTemplateIdx)}
+                    disabled={isSendingRelance}
+                    style={{
+                      ...rowActionButtonStyle,
+                      backgroundColor: '#16a34a',
+                      color: '#ffffff',
+                      cursor: isSendingRelance ? 'wait' : 'pointer',
+                    }}
+                    className="hover:bg-emerald-700 transition-colors cursor-pointer"
+                  >
+                    {isSendingRelance ? 'Envoi...' : 'Envoyer'}
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Export CSV button */}
             <button
@@ -2267,72 +2479,21 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       )}
                     </button>
                   </th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Référence.</th>
-                  <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Criticité.</th>
 
-                  {ticketCategoryFilter === 'Commercial' ? (
-                    <>
-                      {!hiddenColumns.has('ouv_comm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Ouverture.</th>
-                      )}
-                      {!hiddenColumns.has('sit_comm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Situation.</th>
-                      )}
-                      {!hiddenColumns.has('cp_comm') && (
-                        <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Indicatif Postal.</th>
-                      )}
-                      {!hiddenColumns.has('cli_comm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Client.</th>
-                      )}
-                      {!hiddenColumns.has('interloc_comm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Interlocuteur.</th>
-                      )}
-                      {!hiddenColumns.has('type_comm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Type.</th>
-                      )}
-                      {!hiddenColumns.has('famille_comm') && (
-                        <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Famille.</th>
-                      )}
-                      {!hiddenColumns.has('lead_comm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Origine Lead.</th>
-                      )}
-                      {!hiddenColumns.has('datedevis_comm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Date Devis.</th>
-                      )}
-                      {!hiddenColumns.has('refdevis_comm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Référence Devis.</th>
-                      )}
-                      {!hiddenColumns.has('dateprorelance_comm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Date Pro. Relance.</th>
-                      )}
-                      {!hiddenColumns.has('collab_comm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Collaborateur.</th>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {!hiddenColumns.has('ouv_noncomm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Ouverture.</th>
-                      )}
-                      {!hiddenColumns.has('sit_noncomm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Situation.</th>
-                      )}
-                      {!hiddenColumns.has('cp_noncomm') && (
-                        <th className="px-4 py-3.5 text-center whitespace-nowrap" style={thStyle}>Indicatif Postal.</th>
-                      )}
-                      {!hiddenColumns.has('cli_noncomm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Client.</th>
-                      )}
-                      {!hiddenColumns.has('objet_noncomm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Objet.</th>
-                      )}
-                      {!hiddenColumns.has('collab_noncomm') && (
-                        <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Collaborateur.</th>
-                      )}
-                    </>
-                  )}
+                  {activeOrderedColumns.map((col) => {
+                    const isCentered = col.id === 'cp_comm' || col.id === 'famille_comm' || col.id === 'cp_noncomm';
+                    return (
+                      <th
+                        key={col.id}
+                        className={`px-4 py-3.5 whitespace-nowrap ${isCentered ? 'text-center' : ''}`}
+                        style={thStyle}
+                      >
+                        {col.label}
+                      </th>
+                    );
+                  })}
 
-                  <th className="px-4 py-3.5 text-right whitespace-nowrap" style={{ ...thStyle, minWidth: '240px' }}>Actions.</th>
+                  <th className="px-4 py-3.5 text-right whitespace-nowrap" style={{ ...thStyle, minWidth: '280px' }}>Actions.</th>
                 </tr>
               </thead>
               <tbody>
@@ -2349,6 +2510,193 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   const colVal = t.collaborateur || 'Non attribué';
                   const rawObjet = t.objet || '';
                   const truncatedObjet = rawObjet.length > 40 ? rawObjet.substring(0, 40) + '...' : rawObjet;
+                  const rawDescCourte = (t.descriptionOffreDevis || t.objet || t.description || '').replace(/\r?\n/g, ' ').trim();
+                  const truncatedDescCourte = rawDescCourte.length > 40 ? rawDescCourte.slice(0, 40) + '...' : (rawDescCourte || '—');
+                  const montantHtVal = t.totalAffaireHT !== undefined && t.totalAffaireHT !== null && String(t.totalAffaireHT).trim() !== ''
+                    ? `${Number(String(t.totalAffaireHT).replace(',', '.')).toLocaleString('fr-FR')} €`
+                    : '—';
+
+                  const renderColumnCell = (colId: string) => {
+                    switch (colId) {
+                      case 'ref_comm':
+                      case 'ref_noncomm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap">
+                            <span style={geluleStyle}>{refVal}</span>
+                          </td>
+                        );
+                      case 'crit_noncomm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap">
+                            <span style={geluleStyle} className="inline-flex items-center gap-2">
+                              <span>{critVal}</span>
+                              <span
+                                className="inline-block rounded-full shrink-0"
+                                style={{
+                                  width: '10px',
+                                  height: '10px',
+                                  minWidth: '10px',
+                                  minHeight: '10px',
+                                  backgroundColor: getCriticiteColor(critVal),
+                                }}
+                                aria-hidden="true"
+                              />
+                            </span>
+                          </td>
+                        );
+                      case 'sit_comm':
+                      case 'sit_noncomm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap">
+                            <span style={geluleStyle}>{sitVal}</span>
+                          </td>
+                        );
+                      case 'ouv_comm':
+                      case 'ouv_noncomm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            <div className="inline-flex items-center gap-2">
+                              <span>{ouvVal}</span>
+                              {weekNum && (
+                                <span 
+                                  className="inline-flex items-center justify-center rounded-full text-white font-bold font-sans select-none"
+                                  style={{ 
+                                    width: '40px', 
+                                    height: '40px', 
+                                    minWidth: '25px', 
+                                    minHeight: '25px', 
+                                    marginLeft: '10px', 
+                                    fontSize: '16px', 
+                                    backgroundColor: '#8f1961',
+                                    border: 'none',
+                                    outline: 'none',
+                                    boxShadow: 'none'
+                                  }}
+                                  title={`Semaine ${weekNum}`}
+                                >
+                                  {weekNum}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      case 'famille_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
+                            <span className="font-bold text-slate-900">{t.famille || '—'}</span>
+                          </td>
+                        );
+                      case 'sitdevis_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap">
+                            <span style={geluleStyle}>{t.situationDevis || 'Non renseigné'}</span>
+                          </td>
+                        );
+                      case 'typeclient_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {t.typeStructure || t.situationInterlocuteur || '—'}
+                          </td>
+                        );
+                      case 'cli_comm':
+                      case 'cli_noncomm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap">
+                            <span style={geluleStyle} title={t.email ? `Email : ${t.email}` : undefined}>
+                              {cliVal}
+                            </span>
+                          </td>
+                        );
+                      case 'cp_comm':
+                      case 'cp_noncomm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
+                            <span className="font-semibold text-slate-800">{indicatifPostalVal}</span>
+                          </td>
+                        );
+                      case 'lead_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {t.origineLead || '—'}
+                          </td>
+                        );
+                      case 'interloc_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {t.prenomNom || '—'}
+                          </td>
+                        );
+                      case 'tel_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {t.telephone || t.phone || '—'}
+                          </td>
+                        );
+                      case 'email_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {t.email || '—'}
+                          </td>
+                        );
+                      case 'datedevis_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {formatDateDisplay(t.dateDevis)}
+                          </td>
+                        );
+                      case 'montantht_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {montantHtVal}
+                          </td>
+                        );
+                      case 'typevente_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {t.typeVente || '—'}
+                          </td>
+                        );
+                      case 'desccourte_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle} title={rawDescCourte}>
+                            {truncatedDescCourte}
+                          </td>
+                        );
+                      case 'derrelance_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {formatDateDisplay(t.dateDerniereRelance)}
+                          </td>
+                        );
+                      case 'prorelance_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {formatDateDisplay(t.dateProchaineRelance)}
+                          </td>
+                        );
+                      case 'datecde_comm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {formatDateDisplay(t.dateCommande)}
+                          </td>
+                        );
+                      case 'objet_noncomm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap max-w-[260px] truncate" style={cellTextStyle} title={rawObjet}>
+                            {truncatedObjet}
+                          </td>
+                        );
+                      case 'collab_comm':
+                      case 'collab_noncomm':
+                        return (
+                          <td key={colId} className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
+                            {colVal}
+                          </td>
+                        );
+                      default:
+                        return null;
+                    }
+                  };
 
                   return (
                     <tr 
@@ -2382,216 +2730,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </button>
                       </td>
 
-                      {/* Référence. (in gelule) */}
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span style={geluleStyle}>
-                          {refVal}
-                        </span>
-                      </td>
-
-                      {/* Criticité. (in gelule) */}
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span style={geluleStyle} className="inline-flex items-center gap-2">
-                          <span>{critVal}</span>
-                          <span
-                            className="inline-block rounded-full shrink-0"
-                            style={{
-                              width: '10px',
-                              height: '10px',
-                              minWidth: '10px',
-                              minHeight: '10px',
-                              backgroundColor: getCriticiteColor(critVal),
-                            }}
-                            aria-hidden="true"
-                          />
-                        </span>
-                      </td>
-
-                      {ticketCategoryFilter === 'Commercial' ? (
-                        <>
-                          {/* Ouverture. (Commercial) */}
-                          {!hiddenColumns.has('ouv_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                              <div className="inline-flex items-center gap-2">
-                                <span>{ouvVal}</span>
-                                {weekNum && (
-                                  <span 
-                                    className="inline-flex items-center justify-center rounded-full text-white font-bold font-sans select-none"
-                                    style={{ 
-                                      width: '40px', 
-                                      height: '40px', 
-                                      minWidth: '25px', 
-                                      minHeight: '25px', 
-                                      marginLeft: '10px', 
-                                      fontSize: '16px', 
-                                      backgroundColor: '#8f1961',
-                                      border: 'none',
-                                      outline: 'none',
-                                      boxShadow: 'none'
-                                    }}
-                                    title={`Semaine ${weekNum}`}
-                                  >
-                                    {weekNum}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                          )}
-
-                          {/* Situation. (Commercial) */}
-                          {!hiddenColumns.has('sit_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <span style={geluleStyle}>
-                                {sitVal}
-                              </span>
-                            </td>
-                          )}
-
-                          {/* Indicatif Postal. (Commercial) */}
-                          {!hiddenColumns.has('cp_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
-                              <span className="font-semibold text-slate-800">{indicatifPostalVal}</span>
-                            </td>
-                          )}
-
-                          {/* Client. (Commercial) */}
-                          {!hiddenColumns.has('cli_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <span style={geluleStyle} title={t.email ? `Email : ${t.email}` : undefined}>
-                                {cliVal}
-                              </span>
-                            </td>
-                          )}
-
-                          {/* Interlocuteur. (Commercial) - standard text as Type */}
-                          {!hiddenColumns.has('interloc_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                              {t.situationInterlocuteur || '—'}
-                            </td>
-                          )}
-
-                          {/* Type. (Commercial) */}
-                          {!hiddenColumns.has('type_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                              {t.typeStructure || '—'}
-                            </td>
-                          )}
-
-                          {/* Famille. (Commercial) */}
-                          {!hiddenColumns.has('famille_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
-                              <span className="font-bold text-slate-900">{t.famille || '—'}</span>
-                            </td>
-                          )}
-
-                          {/* Origine Lead. (Commercial) */}
-                          {!hiddenColumns.has('lead_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                              {t.origineLead || '—'}
-                            </td>
-                          )}
-
-                          {/* Date Devis. (Commercial) */}
-                          {!hiddenColumns.has('datedevis_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                              {formatDateDisplay(t.dateDevis)}
-                            </td>
-                          )}
-
-                          {/* Référence Devis. (Commercial) */}
-                          {!hiddenColumns.has('refdevis_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                              {t.referenceDevis ? (
-                                <span style={geluleStyle}>{t.referenceDevis}</span>
-                              ) : '—'}
-                            </td>
-                          )}
-
-                          {/* Date Pro. Relance (Commercial) */}
-                          {!hiddenColumns.has('dateprorelance_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                              {formatDateDisplay(t.dateProchaineRelance)}
-                            </td>
-                          )}
-
-                          {/* Collaborateur. (Commercial) */}
-                          {!hiddenColumns.has('collab_comm') && (
-                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                              {colVal}
-                            </td>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {/* Ouverture. (Non Commercial) */}
-                          {!hiddenColumns.has('ouv_noncomm') && (
-                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                              <div className="inline-flex items-center gap-2">
-                                <span>{ouvVal}</span>
-                                {weekNum && (
-                                  <span 
-                                    className="inline-flex items-center justify-center rounded-full text-white font-bold font-sans select-none"
-                                    style={{ 
-                                      width: '40px', 
-                                      height: '40px', 
-                                      minWidth: '25px', 
-                                      minHeight: '25px', 
-                                      marginLeft: '10px', 
-                                      fontSize: '16px', 
-                                      backgroundColor: '#8f1961',
-                                      border: 'none',
-                                      outline: 'none',
-                                      boxShadow: 'none'
-                                    }}
-                                    title={`Semaine ${weekNum}`}
-                                  >
-                                    {weekNum}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                          )}
-
-                          {/* Situation. (Non Commercial) */}
-                          {!hiddenColumns.has('sit_noncomm') && (
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <span style={geluleStyle}>
-                                {sitVal}
-                              </span>
-                            </td>
-                          )}
-
-                          {/* Indicatif Postal. (Non Commercial) */}
-                          {!hiddenColumns.has('cp_noncomm') && (
-                            <td className="px-4 py-4 whitespace-nowrap text-center" style={cellTextStyle}>
-                              <span className="font-semibold text-slate-800">{indicatifPostalVal}</span>
-                            </td>
-                          )}
-
-                          {/* Client. (Non Commercial) */}
-                          {!hiddenColumns.has('cli_noncomm') && (
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <span style={geluleStyle} title={t.email ? `Email : ${t.email}` : undefined}>
-                                {cliVal}
-                              </span>
-                            </td>
-                          )}
-
-                          {/* Objet. (Non Commercial) */}
-                          {!hiddenColumns.has('objet_noncomm') && (
-                            <td className="px-4 py-4 whitespace-nowrap max-w-[260px] truncate" style={cellTextStyle} title={rawObjet}>
-                              {truncatedObjet}
-                            </td>
-                          )}
-
-                          {/* Collaborateur. (Non Commercial) */}
-                          {!hiddenColumns.has('collab_noncomm') && (
-                            <td className="px-4 py-4 whitespace-nowrap" style={cellTextStyle}>
-                              {colVal}
-                            </td>
-                          )}
-                        </>
-                      )}
+                      {activeOrderedColumns.map((col) => renderColumnCell(col.id))}
 
                       {/* Actions. */}
                       <td 
@@ -2615,19 +2754,38 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           >
                             Gérer
                           </button>
-                          {sitVal !== 'Terminé' && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleQuickTerminate(t.id);
-                              }}
-                              style={rowActionButtonStyle}
-                              className="hover:bg-zinc-800 transition-colors"
-                            >
-                              Terminer
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuickSituationDevis(t.id, 'Gagné');
+                            }}
+                            style={{
+                              ...rowActionButtonStyle,
+                              backgroundColor: t.situationDevis === 'Gagné' ? '#16a34a' : '#0f172a',
+                              color: '#ffffff',
+                              border: 'none',
+                            }}
+                            className="hover:opacity-90 transition-colors"
+                          >
+                            Gagné
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuickSituationDevis(t.id, 'Perdu');
+                            }}
+                            style={{
+                              ...rowActionButtonStyle,
+                              backgroundColor: t.situationDevis === 'Perdu' ? '#dc2626' : '#0f172a',
+                              color: '#ffffff',
+                              border: 'none',
+                            }}
+                            className="hover:opacity-90 transition-colors"
+                          >
+                            Perdu
+                          </button>
                           <button
                             type="button"
                             onClick={(e) => {
@@ -2647,6 +2805,27 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               </tbody>
             </table>
           )}
+        </div>
+      </div>
+
+      {/* Bottom Table Summary Stats (like Défibrillateurs) */}
+      <div 
+        className="p-4 font-sans flex flex-col sm:flex-row items-center justify-between gap-4" 
+        id="crm-tab-total-summary"
+      >
+        <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
+          {(() => {
+            const totalVolume = filteredTickets.reduce((acc, item) => {
+              const raw = item.totalAffaireHT;
+              if (raw === undefined || raw === null || String(raw).trim() === '') return acc;
+              const num = parseFloat(String(raw).replace(/\s/g, '').replace(',', '.'));
+              return isNaN(num) ? acc : acc + num;
+            }, 0);
+            const formattedVol = Number.isInteger(totalVolume)
+              ? totalVolume.toLocaleString('fr-FR')
+              : totalVolume.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return `Nombre de ligne(s): ${filteredTickets.length}. Volume Affaire(s) HT: ${formattedVol}.`;
+          })()}
         </div>
       </div>
 
@@ -3367,16 +3546,27 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         )}
                       </div>
 
-                      {/* Description Offre Devis. (limité à max 55 caractères) */}
-                      <div>
-                        <label>Description Offre Devis.</label>
-                        <input
-                          type="text"
-                          maxLength={55}
-                          placeholder="Entrez un résumé court de l’offre."
-                          value={formDescriptionOffreDevis}
-                          onChange={(e) => setFormDescriptionOffreDevis(e.target.value)}
-                        />
+                      {/* Description Offre Devis. (limité à max 55 caractères) & Type Vente. */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label>Description Offre Devis.</label>
+                          <input
+                            type="text"
+                            maxLength={55}
+                            placeholder="Entrez un résumé court de l’offre."
+                            value={formDescriptionOffreDevis}
+                            onChange={(e) => setFormDescriptionOffreDevis(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label>Type Vente.</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Vente, Location, Maintenance..."
+                            value={formTypeVente}
+                            onChange={(e) => setFormTypeVente(e.target.value)}
+                          />
+                        </div>
                       </div>
 
                       {/* Total Affaire / Famille / Indicatif Postal / Origine Lead (4 cols équitables sur la même ligne) */}
@@ -3439,14 +3629,22 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </div>
                       </div>
 
-                      {/* Dates commerciales : Date Devis., Date Prochaine Relance., Date Commande. */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {/* Dates commerciales : Date Devis., Date Dernière Relance., Date Prochaine Relance., Date Commande. */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         <div>
                           <label>Date Devis.</label>
                           <input
                             type="date"
                             value={formDateDevis}
                             onChange={(e) => setFormDateDevis(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label>Date Dernière Relance.</label>
+                          <input
+                            type="date"
+                            value={formDateDerniereRelance}
+                            onChange={(e) => setFormDateDerniereRelance(e.target.value)}
                           />
                         </div>
                         <div>
@@ -4377,102 +4575,158 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             <div className="relative w-screen max-w-md sm:max-w-2xl bg-white shadow-2xl flex flex-col overflow-hidden h-full">
               {/* Scrollable content area */}
               <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28">
-                {/* Section 1: Modèle Texte de l'email de relance avec variables */}
-                <div 
-                  className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
-                  id="crm-settings-section-relance-email"
-                >
-                  <div>
-                    <label style={{ fontSize: '22px', fontWeight: 600, color: '#000000', paddingTop: '16px', marginBottom: '14px', display: 'block', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}>
-                      Texte de l’email de relance
-                    </label>
+                {/* Sections 1, 2, 3: 3 Modèles Texte de l'email de relance avec variables et numéro dans un rond */}
+                {([
+                  {
+                    idx: 1 as const,
+                    body: relanceEmailBody,
+                    setBody: setRelanceEmailBody,
+                    replyTo: relanceEmailReplyTo,
+                    setReplyTo: setRelanceEmailReplyTo,
+                    error: relanceEmailError,
+                    setError: setRelanceEmailError,
+                    isSaving: isSavingRelance,
+                  },
+                  {
+                    idx: 2 as const,
+                    body: relanceEmailBody2,
+                    setBody: setRelanceEmailBody2,
+                    replyTo: relanceEmailReplyTo2,
+                    setReplyTo: setRelanceEmailReplyTo2,
+                    error: relanceEmailError2,
+                    setError: setRelanceEmailError2,
+                    isSaving: isSavingRelance2,
+                  },
+                  {
+                    idx: 3 as const,
+                    body: relanceEmailBody3,
+                    setBody: setRelanceEmailBody3,
+                    replyTo: relanceEmailReplyTo3,
+                    setReplyTo: setRelanceEmailReplyTo3,
+                    error: relanceEmailError3,
+                    setError: setRelanceEmailError3,
+                    isSaving: isSavingRelance3,
+                  },
+                ]).map((tpl) => (
+                  <div
+                    key={tpl.idx}
+                    className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4 text-left"
+                    id={tpl.idx === 1 ? "crm-settings-section-relance-email" : `crm-settings-section-relance-email-${tpl.idx}`}
+                  >
+                    <div>
+                      {/* Numéro du modèle dans un rond au début de la div */}
+                      <div className="flex items-center gap-3 mb-2">
+                        <span
+                          className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-white shrink-0 select-none"
+                          style={{
+                            backgroundColor: '#2e54ff',
+                            fontSize: '16px',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          }}
+                        >
+                          {tpl.idx}
+                        </span>
+                        <label
+                          style={{
+                            fontSize: '22px',
+                            fontWeight: 600,
+                            color: '#000000',
+                            margin: 0,
+                            display: 'block',
+                            fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif",
+                          }}
+                        >
+                          Texte de l’email de relance
+                        </label>
+                      </div>
 
-                    {/* Champ Email de réponse. */}
-                    <div className="mb-3">
-                      <label style={{ fontSize: '15px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
-                        Email de réponse.
-                      </label>
-                      <input
-                        type="email"
-                        value={relanceEmailReplyTo}
-                        onChange={(e) => {
-                          setRelanceEmailReplyTo(e.target.value);
-                          if (relanceEmailError) setRelanceEmailError('');
-                        }}
+                      {/* Champ Email de réponse. */}
+                      <div className="mb-3 mt-3">
+                        <label style={{ fontSize: '15px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block' }}>
+                          Email de réponse.
+                        </label>
+                        <input
+                          type="email"
+                          value={tpl.replyTo}
+                          onChange={(e) => {
+                            tpl.setReplyTo(e.target.value);
+                            if (tpl.error) tpl.setError('');
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            border: tpl.error ? '1px solid #ef4444' : '1px solid #dadada',
+                            borderRadius: '11px',
+                            fontSize: '15px',
+                            color: '#000000',
+                            boxSizing: 'border-box',
+                            outline: 'none',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                          }}
+                        />
+                        {tpl.error && (
+                          <p className="text-xs text-red-600 font-sans mt-1.5 font-medium">
+                            {tpl.error}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Texte ferré à gauche des variables dynamiques */}
+                      <p 
+                        style={{ fontSize: '16px', color: '#000000', textAlign: 'left', marginBottom: '12px' }}
+                        className="font-sans leading-relaxed"
+                      >
+                        Utilisez les variables suivantes pour des textes dynamiques : {'{Client.}'} ou {'{Référence Devis.}'} ou {'{Lien Stockage Partagé Devis.}'}
+                      </p>
+
+                      {/* Multiline textarea */}
+                      <textarea
+                        id={tpl.idx === 1 ? "crm-relance-email-textarea" : `crm-relance-email-textarea-${tpl.idx}`}
+                        rows={7}
+                        value={tpl.body}
+                        onChange={(e) => tpl.setBody(e.target.value)}
+                        placeholder="Écrivez le modèle d'email de relance..."
                         style={{
                           width: '100%',
-                          padding: '10px 14px',
-                          border: relanceEmailError ? '1px solid #ef4444' : '1px solid #dadada',
-                          borderRadius: '11px',
-                          fontSize: '15px',
+                          padding: '12px 16px',
+                          border: '1px solid #dadada',
+                          borderRadius: '13px',
+                          fontSize: '16px',
                           color: '#000000',
                           boxSizing: 'border-box',
                           outline: 'none',
+                          resize: 'vertical',
+                          lineHeight: '1.5',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                         }}
                       />
-                      {relanceEmailError && (
-                        <p className="text-xs text-red-600 font-sans mt-1.5 font-medium">
-                          {relanceEmailError}
-                        </p>
-                      )}
                     </div>
 
-                    {/* Texte ferré à gauche des variables dynamiques */}
-                    <p 
-                      style={{ fontSize: '16px', color: '#000000', textAlign: 'left', marginBottom: '12px' }}
-                      className="font-sans leading-relaxed"
-                    >
-                      Utilisez les variables suivantes pour des textes dynamiques : {'{Client.}'} ou {'{Référence Devis.}'} ou {'{Lien Stockage Partagé Devis.}'}
-                    </p>
-
-                    {/* Multiline textarea */}
-                    <textarea
-                      id="crm-relance-email-textarea"
-                      rows={7}
-                      value={relanceEmailBody}
-                      onChange={(e) => setRelanceEmailBody(e.target.value)}
-                      placeholder="Écrivez le modèle d'email de relance..."
+                    <button
+                      type="button"
+                      onClick={() => handleSaveRelanceSettings(tpl.idx)}
+                      disabled={tpl.isSaving}
                       style={{
+                        backgroundColor: '#2e54ff',
+                        color: '#ffffff',
+                        fontSize: '18px',
+                        fontWeight: 'normal',
+                        borderRadius: '12px',
+                        padding: '12px 24px',
+                        border: 'none',
+                        cursor: tpl.isSaving ? 'not-allowed' : 'pointer',
+                        opacity: tpl.isSaving ? 0.6 : 1,
                         width: '100%',
-                        padding: '12px 16px',
-                        border: '1px solid #dadada',
-                        borderRadius: '13px',
-                        fontSize: '16px',
-                        color: '#000000',
-                        boxSizing: 'border-box',
-                        outline: 'none',
-                        resize: 'vertical',
-                        lineHeight: '1.5',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                        display: 'block',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        transition: 'opacity 0.2s',
                       }}
-                    />
+                      className={tpl.isSaving ? '' : 'hover:bg-[#2b48cc] transition-colors'}
+                    >
+                      Enregistrer
+                    </button>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={handleSaveRelanceSettings}
-                    disabled={isSavingRelance}
-                    style={{
-                      backgroundColor: '#2e54ff',
-                      color: '#ffffff',
-                      fontSize: '18px',
-                      fontWeight: 'normal',
-                      borderRadius: '12px',
-                      padding: '12px 24px',
-                      border: 'none',
-                      cursor: isSavingRelance ? 'not-allowed' : 'pointer',
-                      opacity: isSavingRelance ? 0.6 : 1,
-                      width: '100%',
-                      display: 'block',
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      transition: 'opacity 0.2s',
-                    }}
-                    className={isSavingRelance ? '' : 'hover:bg-[#2b48cc] transition-colors'}
-                  >
-                    Enregistrer
-                  </button>
-                </div>
+                ))}
 
                 {/* Section 1-bis: Modèle Texte initial email de support avec options & champ Objet */}
                 <div 
@@ -4763,15 +5017,44 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               </div>
             </div>
 
-            {/* Nuage de boutons initialement tous background noir - Pas de titre, Pas de line divider, Pas de cross-close icon */}
+            {/* Nuage de boutons initialement tous background noir - Drag and drop pour réorganiser */}
             <div className="flex-1 overflow-y-auto px-6 pb-6">
               <div className="flex flex-wrap gap-2.5 sm:gap-3 items-center">
                 {visibleConfigurableColumns.map((col) => {
                   const isHidden = tempHiddenColumns.has(col.id);
+                  const isDragging = draggedColId === col.id;
                   return (
                     <button
                       key={col.id}
                       type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        setDraggedColId(col.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                        try {
+                          e.dataTransfer.setData('text/plain', col.id);
+                        } catch (_) {}
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const fromId = draggedColId || e.dataTransfer.getData('text/plain');
+                        if (!fromId || fromId === col.id) return;
+                        setTempColumnOrder((prev) => {
+                          const next = [...prev];
+                          const fromIdx = next.indexOf(fromId);
+                          const toIdx = next.indexOf(col.id);
+                          if (fromIdx === -1 || toIdx === -1) return prev;
+                          next.splice(fromIdx, 1);
+                          next.splice(toIdx, 0, fromId);
+                          return next;
+                        });
+                        setDraggedColId(null);
+                      }}
+                      onDragEnd={() => setDraggedColId(null)}
                       onClick={() => toggleColumnVisibility(col.id)}
                       style={{
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -4783,10 +5066,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         color: '#ffffff',
                         border: isHidden ? '1px solid #dc2626' : '1px solid #000000',
                         boxShadow: 'none',
-                        cursor: 'pointer',
+                        cursor: 'grab',
+                        opacity: isDragging ? 0.5 : 1,
                         transition: 'all 0.15s ease-in-out',
                       }}
-                      className="hover:scale-[1.02] active:scale-[0.98] select-none cursor-pointer"
+                      className="hover:scale-[1.02] active:scale-[0.98] select-none cursor-grab"
+                      title="Cliquer pour afficher/masquer (min. 4 colonnes) — Glisser-déposer pour réorganiser"
                     >
                       {col.label}
                     </button>
@@ -4801,6 +5086,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 type="button"
                 onClick={() => {
                   setTempHiddenColumns(new Set(hiddenColumns));
+                  setTempColumnOrder([...columnOrder]);
                   setIsColumnVisibilityPaneOpen(false);
                 }}
                 style={{
@@ -4823,8 +5109,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 type="button"
                 onClick={() => {
                   setHiddenColumns(new Set(tempHiddenColumns));
+                  setColumnOrder([...tempColumnOrder]);
                   try {
                     localStorage.setItem('crm_table_hidden_columns', JSON.stringify(Array.from(tempHiddenColumns)));
+                    sessionStorage.setItem('crm_table_column_order', JSON.stringify(tempColumnOrder));
                   } catch (e) {}
                   setIsColumnVisibilityPaneOpen(false);
                 }}

@@ -1873,6 +1873,7 @@ export default function PublicPortal({
                     formationId: m.formationId,
                     bonCommandeId: m.bonCommandeId,
                     customBonCommande: m.customBonCommande,
+                    commentaireInterne: m.commentaireInterne || "",
                   };
                 }),
               };
@@ -2282,6 +2283,7 @@ export default function PublicPortal({
                 formationId: m.formationId,
                 bonCommandeId: m.bonCommandeId,
                 customBonCommande: m.customBonCommande,
+                commentaireInterne: m.commentaireInterne || "",
               };
             }),
           };
@@ -8920,6 +8922,22 @@ export default function PublicPortal({
                                                   );
                                                   return cleanParts.join(", ");
                                                 })()}
+                                              </span>
+                                            </p>
+                                          )}
+
+                                          {p.commentaireInterne && String(p.commentaireInterne).trim() !== "" && (
+                                            <p
+                                              style={{
+                                                fontSize: "20px",
+                                                color: "rgb(31, 41, 55)",
+                                                fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+                                                marginTop: "2px",
+                                              }}
+                                            >
+                                              <span style={{ fontWeight: 400 }}>Commentaire privé:</span>{" "}
+                                              <span style={{ fontWeight: 700, fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>
+                                                {p.commentaireInterne}.
                                               </span>
                                             </p>
                                           )}

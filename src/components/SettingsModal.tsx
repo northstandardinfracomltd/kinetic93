@@ -1341,19 +1341,65 @@ export default function SettingsModal({
                   localStorage.setItem(`defib_${tid}_${f.storageSuffix}`, effVal);
                 }
               } catch (_) {}
+            } else {
+              try {
+                for (const tid of tKeys) {
+                  localStorage.removeItem(`defib_${tid}_${f.storageSuffix}`);
+                }
+              } catch (_) {}
             }
           }
 
+          const resolvedHasReglagesSheet = Boolean(extraEffFields.spreadsheetReglages);
+          const resolvedHasPdfSheet = Boolean(extraEffFields.spreadsheetApparenceRapportsPdf);
+          const resolvedHasEmplacementsSheet = Boolean(extraEffFields.spreadsheetIntituleEmplacements);
+          const resolvedHasComSheet = Boolean(extraEffFields.spreadsheetCommunicationPortailClient);
+
           setLocalCompany(prev => ({
             ...prev,
-            spreadsheetDefibrillateurs: effDefibs || prev.spreadsheetDefibrillateurs,
-            spreadsheetAutresMateriels: effAutres || prev.spreadsheetAutresMateriels,
-            spreadsheetClients: effClients || prev.spreadsheetClients,
-            spreadsheetDefibrillateursUrl: effDefibs || prev.spreadsheetDefibrillateursUrl,
-            spreadsheetAutresMaterielsUrl: effAutres || prev.spreadsheetAutresMaterielsUrl,
-            spreadsheetClientsUrl: effClients || prev.spreadsheetClientsUrl,
+            ...(validCompany && !resolvedHasReglagesSheet ? {
+              name: validCompany.name || cleanDefault.name,
+              nomCommercial: validCompany.nomCommercial || validCompany.name || cleanDefault.nomCommercial,
+              logo: validCompany.logo !== undefined ? validCompany.logo : cleanDefault.logo,
+              website: validCompany.website !== undefined ? validCompany.website : cleanDefault.website,
+              email: validCompany.email || cleanDefault.email,
+              phone: validCompany.phone !== undefined ? validCompany.phone : cleanDefault.phone,
+              nomLogiciel: validCompany.nomLogiciel !== undefined ? validCompany.nomLogiciel : cleanDefault.nomLogiciel,
+              gmailPartageLocalisation: validCompany.gmailPartageLocalisation !== undefined ? validCompany.gmailPartageLocalisation : cleanDefault.gmailPartageLocalisation,
+              hiddenTabs: validCompany.hiddenTabs !== undefined ? validCompany.hiddenTabs : cleanDefault.hiddenTabs,
+            } : {}),
+            ...(validCompany && !resolvedHasPdfSheet ? {
+              pdfHeaderImg: validCompany.pdfHeaderImg !== undefined ? validCompany.pdfHeaderImg : cleanDefault.pdfHeaderImg,
+              pdfPageHeaderText: validCompany.pdfPageHeaderText !== undefined ? validCompany.pdfPageHeaderText : cleanDefault.pdfPageHeaderText,
+              pdfPageFooterText: validCompany.pdfPageFooterText !== undefined ? validCompany.pdfPageFooterText : cleanDefault.pdfPageFooterText,
+              pdfLastPageInfoText: validCompany.pdfLastPageInfoText !== undefined ? validCompany.pdfLastPageInfoText : cleanDefault.pdfLastPageInfoText,
+              pdfHeaderBgColor: validCompany.pdfHeaderBgColor !== undefined ? validCompany.pdfHeaderBgColor : cleanDefault.pdfHeaderBgColor,
+              pdfCardBorderColor: validCompany.pdfCardBorderColor !== undefined ? validCompany.pdfCardBorderColor : cleanDefault.pdfCardBorderColor,
+              pdfCardBgColor: validCompany.pdfCardBgColor !== undefined ? validCompany.pdfCardBgColor : cleanDefault.pdfCardBgColor,
+              pdfLabelTextColor: validCompany.pdfLabelTextColor !== undefined ? validCompany.pdfLabelTextColor : cleanDefault.pdfLabelTextColor,
+              pdfHideElectrodeSecoursA: validCompany.pdfHideElectrodeSecoursA !== undefined ? validCompany.pdfHideElectrodeSecoursA : cleanDefault.pdfHideElectrodeSecoursA,
+              pdfHideElectrodeSecoursP: validCompany.pdfHideElectrodeSecoursP !== undefined ? validCompany.pdfHideElectrodeSecoursP : cleanDefault.pdfHideElectrodeSecoursP,
+              pdfHideKitSecours: validCompany.pdfHideKitSecours !== undefined ? validCompany.pdfHideKitSecours : cleanDefault.pdfHideKitSecours,
+              pdfSimplifyCoffret: validCompany.pdfSimplifyCoffret !== undefined ? validCompany.pdfSimplifyCoffret : cleanDefault.pdfSimplifyCoffret,
+              pdfHideVerificationsTechniques: validCompany.pdfHideVerificationsTechniques !== undefined ? validCompany.pdfHideVerificationsTechniques : cleanDefault.pdfHideVerificationsTechniques,
+              pdfHideHorodatagesDiagnostic: validCompany.pdfHideHorodatagesDiagnostic !== undefined ? validCompany.pdfHideHorodatagesDiagnostic : cleanDefault.pdfHideHorodatagesDiagnostic,
+              pdfShowDemandeDevisDetails: validCompany.pdfShowDemandeDevisDetails !== undefined ? validCompany.pdfShowDemandeDevisDetails : cleanDefault.pdfShowDemandeDevisDetails,
+            } : {}),
+            spreadsheetDefibrillateurs: effDefibs,
+            spreadsheetAutresMateriels: effAutres,
+            spreadsheetClients: effClients,
+            spreadsheetDefibrillateursUrl: effDefibs,
+            spreadsheetAutresMaterielsUrl: effAutres,
+            spreadsheetClientsUrl: effClients,
             ...extraEffFields,
           }));
+
+          if (validCompany && !resolvedHasEmplacementsSheet && validCompany.customLocationNames) {
+            setLocalLocationNames(ensureTenantCustomLocationNames(validCompany.customLocationNames, activeTid, ensuredMems));
+          }
+          if (validCompany && !resolvedHasComSheet && validCompany.communicationPortailClient !== undefined) {
+            setCommunicationPortailClient(validCompany.communicationPortailClient);
+          }
 
           // Always fetch from dedicated spreadsheets using discovered URLs
           fetchSettingsCompartmentsFromSheets({

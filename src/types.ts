@@ -355,7 +355,9 @@ export interface SupportTicket {
   indicatifPostal?: string;
   origineLead?: 'Service Client' | 'Direct' | 'Internet' | 'Planification' | 'Autre.' | string;
   descriptionOffreDevis?: string;
+  typeVente?: string;
   dateDevis?: string;
+  dateDerniereRelance?: string;
   dateProchaineRelance?: string;
   dateCommande?: string;
   lienStockagePartageDevis?: string;

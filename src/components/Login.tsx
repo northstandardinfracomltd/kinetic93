@@ -14,11 +14,22 @@ import { triggerEmail1Inscription, triggerEmail4Signalement, triggerAuthCodeEmai
 import { updateLoginSessionSlug } from '../utils/sessionSlug';
 import TopBarProgress from './TopBarProgress';
 import { setCurrentIp, logUserLogin } from '../services/suspiciousActivityService';
+import { getLanguage, setLanguage } from '../utils/translate';
 
 interface LoginProps {
   onLoginSuccess: (email: string, name: string, tenantId: string, role?: string, clientIp?: string) => void;
 }
 
+const normalizeLoginLang = (raw?: string | null): 'Français' | 'English' | 'Deutsch' | 'Português' | 'Español' => {
+  if (!raw) return 'Français';
+  const lower = raw.trim().toLowerCase();
+  if (lower.startsWith('en') || lower.includes('english')) return 'English';
+  if (lower.startsWith('de') || lower.includes('deutsch')) return 'Deutsch';
+  if (lower.startsWith('pt') || lower.includes('português') || lower.includes('portugues')) return 'Português';
+  if (lower.startsWith('es') || lower.includes('español') || lower.includes('espanol')) return 'Español';
+  if (lower.startsWith('fr') || lower.includes('français') || lower.includes('francais')) return 'Français';
+  return 'Français';
+};
 
 const ApplePetalsLoader = () => (
   <svg
@@ -41,6 +52,18 @@ const ApplePetalsLoader = () => (
 
 const translations = {
   'Français': {
+    welcomeLine1: "Bienvenue",
+    welcomeLine2: "Entrez votre email pour continuer",
+    asRolePrefix: "En tant que",
+    optionsLabel: "Options",
+    quitLabel: "Quitter",
+    assistanceLabel: "Assistance",
+    systemOptionsAria: "Options système",
+    chooseRoleAria: "Choisir le type d'utilisateur",
+    chooseLangAria: "Choisir la langue",
+    emailInputPlaceholder: "exemple@email.com",
+    connectBtn: "Se connecter",
+    keepSession: "Maintenir la session",
     reportAlertTitle: "Signaler un problème avec un défibrillateur, envoyer un message en tant que client ou passant.",
     continue: "Continuer",
     login: "Connexion",
@@ -95,6 +118,7 @@ const translations = {
     yourEmailPlace: "Ex: contact@mail.com.",
     defibIdValid: "Identifiant valide.",
     defibIdInvalid: "Identifiant invalide, vérifiez la saisie.",
+    checkingId: "Vérification de l'identifiant...",
     defibId: "Identifiant Défibrillateur",
     defibIdPlace: "Ex: ABC1X123.",
     subject: "Objet",
@@ -106,6 +130,8 @@ const translations = {
     errorAdmin: "Identifiants Admin incorrects.",
     errorClient: "Identifiants Client incorrects.",
     errorTech: "Identifiants Technicien incorrects.",
+    tooManyAttempts: "Trop de tentatives de connexion. Veuillez patienter avant de réessayer.",
+    accountSuspended: "Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.",
     forgotPassword: "Mot de passe oublié",
     authCodeTitle: "Double Authentification",
     authCodeDesc: "Code de 6 caractères envoyé par email",
@@ -117,6 +143,18 @@ const translations = {
     keepLoggedIn: "Maintenir la connexion.",
   },
   'English': {
+    welcomeLine1: "Welcome",
+    welcomeLine2: "Enter your email to continue",
+    asRolePrefix: "As",
+    optionsLabel: "Options",
+    quitLabel: "Quit",
+    assistanceLabel: "Support",
+    systemOptionsAria: "System options",
+    chooseRoleAria: "Choose user role",
+    chooseLangAria: "Choose language",
+    emailInputPlaceholder: "example@email.com",
+    connectBtn: "Log in",
+    keepSession: "Keep me signed in",
     reportAlertTitle: "Report a problem with a defibrillator, send a message as a client or bystander.",
     continue: "Continue",
     login: "Login",
@@ -171,6 +209,7 @@ const translations = {
     yourEmailPlace: "e.g., contact@gmail.com",
     defibIdValid: "Valid ID.",
     defibIdInvalid: "Invalid ID, check your entry.",
+    checkingId: "Checking ID...",
     defibId: "Defibrillator ID",
     defibIdPlace: "e.g., DEFIB-2026-PAU.",
     subject: "Subject",
@@ -182,17 +221,31 @@ const translations = {
     errorAdmin: "Incorrect Admin credentials.",
     errorClient: "Incorrect Client credentials.",
     errorTech: "Incorrect Technician credentials.",
+    tooManyAttempts: "Too many login attempts. Please wait before trying again.",
+    accountSuspended: "Your account is suspended, contact Défibeo to reactivate your environment.",
     forgotPassword: "Forgot password",
-    authCodeTitle: "Authentication Code",
-    authCodeDesc: "A 6-character authentication code has been sent to:",
+    authCodeTitle: "Two-Factor Authentication",
+    authCodeDesc: "6-character code sent by email",
     authCodeConfirm: "Confirm",
     authCodeInvalid: "Incorrect authentication code. Please check the code received.",
-    resendAuthCode: "Resend code",
-    changeAccount: "Back to login",
+    resendAuthCode: "Resend",
+    changeAccount: "Cancel",
     codeSentSuccess: "Code sent successfully!",
     keepLoggedIn: "Keep me signed in.",
   },
   'Deutsch': {
+    welcomeLine1: "Willkommen",
+    welcomeLine2: "Geben Sie Ihre E-Mail-Adresse ein, um fortzufahren",
+    asRolePrefix: "Als",
+    optionsLabel: "Optionen",
+    quitLabel: "Beenden",
+    assistanceLabel: "Support",
+    systemOptionsAria: "Systemoptionen",
+    chooseRoleAria: "Benutzertyp wählen",
+    chooseLangAria: "Sprache wählen",
+    emailInputPlaceholder: "beispiel@email.com",
+    connectBtn: "Anmelden",
+    keepSession: "Angemeldet bleiben",
     reportAlertTitle: "Melden Sie ein Problem mit einem Defibrillator, senden Sie eine Nachricht als Kunde oder Passant.",
     continue: "Fortfahren",
     login: "Anmeldung",
@@ -205,7 +258,7 @@ const translations = {
     emailPlace: "z.B. contact@info.com",
     password: "Passwort",
     passwordPlace: "z.B. 123ABC%",
-    loginBtn: "Anzeigen",
+    loginBtn: "Anmelden",
     reqSubmittedTitle: "Anfrage registriert",
     reqSubmittedDesc: "Ihre Anfrage zur Erstellung einer neuen Defibeo-Umgebung und Ihre Aktivierung wurden erfolgreich registriert. Unser Support konfiguriert Ihren Bereich innerhalb von 24 Stunden.",
     backToLogin: "Zurück zur Anmeldung",
@@ -247,6 +300,7 @@ const translations = {
     yourEmailPlace: "z.B. contact@gmail.com",
     defibIdValid: "Gültige ID.",
     defibIdInvalid: "Ungültige ID, bitte Eingabe prüfen.",
+    checkingId: "ID wird überprüft...",
     defibId: "Defibrillator-ID",
     defibIdPlace: "z.B. DEFIB-2026-PAU.",
     subject: "Betreff",
@@ -256,19 +310,33 @@ const translations = {
     sending: "Senden...",
     send: "Senden",
     errorAdmin: "Falsche Admin-Anmeldedaten.",
-    errorClient: "Falsche Client-Anmeldedaten.",
+    errorClient: "Falsche Kunden-Anmeldedaten.",
     errorTech: "Falsche Techniker-Anmeldedaten.",
+    tooManyAttempts: "Zu viele Anmeldeversuche. Bitte warten Sie, bevor Sie es erneut versuchen.",
+    accountSuspended: "Ihr Konto ist gesperrt. Kontaktieren Sie Défibeo, um Ihre Umgebung zu reaktivieren.",
     forgotPassword: "Passwort vergessen",
-    authCodeTitle: "Authentifizierungscode",
-    authCodeDesc: "Ein 6-stelliger Authentifizierungscode wurde gesendet an:",
+    authCodeTitle: "Zwei-Faktor-Authentifizierung",
+    authCodeDesc: "6-stelliger Code per E-Mail gesendet",
     authCodeConfirm: "Bestätigen",
     authCodeInvalid: "Ungültiger Authentifizierungscode. Bitte prüfen Sie den Code.",
-    resendAuthCode: "Code erneut senden",
-    changeAccount: "Zurück",
+    resendAuthCode: "Erneut senden",
+    changeAccount: "Abbrechen",
     codeSentSuccess: "Code erfolgreich gesendet!",
     keepLoggedIn: "Angemeldet bleiben.",
   },
   'Português': {
+    welcomeLine1: "Bem-vindo",
+    welcomeLine2: "Insira o seu e-mail para continuar",
+    asRolePrefix: "Como",
+    optionsLabel: "Opções",
+    quitLabel: "Sair",
+    assistanceLabel: "Assistência",
+    systemOptionsAria: "Opções do sistema",
+    chooseRoleAria: "Escolher tipo de utilizador",
+    chooseLangAria: "Escolher idioma",
+    emailInputPlaceholder: "exemplo@email.com",
+    connectBtn: "Iniciar sessão",
+    keepSession: "Manter a sessão iniciada",
     reportAlertTitle: "Reporte um problema com um desfibrilhador, envie uma mensagem como cliente ou transeunte.",
     continue: "Continuar",
     login: "Entrar",
@@ -323,6 +391,7 @@ const translations = {
     yourEmailPlace: "Ex: contact@gmail.com",
     defibIdValid: "ID válido.",
     defibIdInvalid: "ID inválido, verifique a entrada.",
+    checkingId: "Verificando ID...",
     defibId: "ID do Desfibrilhador",
     defibIdPlace: "Ex: DEFIB-2026-PAU.",
     subject: "Assunto",
@@ -334,17 +403,31 @@ const translations = {
     errorAdmin: "Credenciais de administrador incorretas.",
     errorClient: "Credenciais de cliente incorretas.",
     errorTech: "Credenciais de técnico incorretas.",
+    tooManyAttempts: "Muitas tentativas de login. Aguarde antes de tentar novamente.",
+    accountSuspended: "Sua conta está suspensa, entre em contato com a Défibeo para reativar seu ambiente.",
     forgotPassword: "Esqueceu a senha",
-    authCodeTitle: "Código de autenticação",
-    authCodeDesc: "Um código de 6 caracteres foi enviado para:",
+    authCodeTitle: "Autenticação de Dois Fatores",
+    authCodeDesc: "Código de 6 caracteres enviado por e-mail",
     authCodeConfirm: "Confirmar",
     authCodeInvalid: "Código de autenticação incorreto. Verifique o código recebido.",
-    resendAuthCode: "Reenviar código",
-    changeAccount: "Voltar",
+    resendAuthCode: "Reenviar",
+    changeAccount: "Cancelar",
     codeSentSuccess: "Código enviado com sucesso!",
     keepLoggedIn: "Manter a sessão iniciada.",
   },
   'Español': {
+    welcomeLine1: "Bienvenido",
+    welcomeLine2: "Ingrese su correo electrónico para continuar",
+    asRolePrefix: "Como",
+    optionsLabel: "Opciones",
+    quitLabel: "Salir",
+    assistanceLabel: "Asistencia",
+    systemOptionsAria: "Opciones del sistema",
+    chooseRoleAria: "Elegir tipo de usuario",
+    chooseLangAria: "Elegir idioma",
+    emailInputPlaceholder: "ejemplo@email.com",
+    connectBtn: "Iniciar sesión",
+    keepSession: "Mantener la sesión iniciada",
     reportAlertTitle: "Reportar un problema con un desfibrilador, envíe un mensaje como cliente o transeúnte.",
     continue: "Continuar",
     login: "Iniciar sesión",
@@ -399,6 +482,7 @@ const translations = {
     yourEmailPlace: "Ej: contact@gmail.com",
     defibIdValid: "Identificador válido.",
     defibIdInvalid: "Identificador inválido, verifique la entrada.",
+    checkingId: "Verificando identificador...",
     defibId: "Identificador de desfibrilador",
     defibIdPlace: "Ej: DEFIB-2026-PAU.",
     subject: "Asunto",
@@ -410,13 +494,15 @@ const translations = {
     errorAdmin: "Credenciales de administrador incorrectas.",
     errorClient: "Credenciales de cliente incorrectas.",
     errorTech: "Credenciales de técnico incorrectas.",
+    tooManyAttempts: "Demasiados intentos de inicio de sesión. Espere antes de volver a intentarlo.",
+    accountSuspended: "Su cuenta está suspendida, contacte con Défibeo para reactivar su entorno.",
     forgotPassword: "Contraseña olvidada",
-    authCodeTitle: "Código de autenticación",
-    authCodeDesc: "Se ha enviado un código de 6 caracteres a:",
+    authCodeTitle: "Doble Autenticación",
+    authCodeDesc: "Código de 6 caracteres enviado por correo electrónico",
     authCodeConfirm: "Confirmar",
     authCodeInvalid: "Código de autenticación incorrecto. Verifique el código recibido.",
-    resendAuthCode: "Reenviar código",
-    changeAccount: "Volver",
+    resendAuthCode: "Reenviar",
+    changeAccount: "Cancelar",
     codeSentSuccess: "¡Código enviado con éxito!",
     keepLoggedIn: "Mantener la sesión iniciada.",
   }
@@ -451,16 +537,30 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [authCodeSentSuccess, setAuthCodeSentSuccess] = useState(false);
   const inputRefs = React.useRef<(HTMLInputElement | null)[]>([]);
 
-  // Connection & Creation language selector state
-  const [selectedLang, setSelectedLang] = useState(() => localStorage.getItem('defib_lang') || 'Français');
+  // Connection & Creation language selector state (always normalized, e.g. 'Français' not 'Français, France')
+  const [selectedLang, setSelectedLang] = useState<'Français' | 'English' | 'Deutsch' | 'Português' | 'Español'>(() =>
+    normalizeLoginLang(getLanguage())
+  );
 
-  const welcomeLine1 = 'Bienvenue';
-  const welcomeLine2 = 'Entrez votre email pour continuer';
+  useEffect(() => {
+    const normalized = normalizeLoginLang(localStorage.getItem('defib_lang'));
+    if (localStorage.getItem('defib_lang') !== normalized) {
+      setLanguage(normalized);
+    }
+    if (selectedLang !== normalized) {
+      setSelectedLang(normalized);
+    }
+  }, []);
+
   const [typedLine1, setTypedLine1] = useState('');
   const [typedLine2, setTypedLine2] = useState('');
 
   useEffect(() => {
     if (isAuthCodeStep) return;
+    const currentTranslations = (translations as any)[selectedLang] || translations['Français'];
+    const welcomeLine1 = String(currentTranslations.welcomeLine1 || 'Bienvenue');
+    const welcomeLine2 = String(currentTranslations.welcomeLine2 || 'Entrez votre email pour continuer');
+
     let i = 0;
     let j = 0;
     let line2Interval: ReturnType<typeof setInterval> | null = null;
@@ -491,7 +591,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       if (pauseTimeout) clearTimeout(pauseTimeout);
       if (line2Interval) clearInterval(line2Interval);
     };
-  }, [isAuthCodeStep]);
+  }, [isAuthCodeStep, selectedLang]);
 
   const [typedAuthLine1, setTypedAuthLine1] = useState('');
   const [typedAuthLine2, setTypedAuthLine2] = useState('');
@@ -755,14 +855,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       if (verifyRes.status === 429) {
         const rateData = await verifyRes.json().catch(() => ({}));
-        setError(rateData.error || "Trop de tentatives de connexion. Veuillez patienter avant de réessayer.");
+        setError(rateData.error || t.tooManyAttempts || "Trop de tentatives de connexion. Veuillez patienter avant de réessayer.");
         setIsLoading(false);
         return;
       }
 
       const verifyData = await verifyRes.json().catch(() => ({}));
       if (!verifyRes.ok || !verifyData?.matched || !verifyData?.codeVerified) {
-        setError(verifyData?.error || t.authCodeInvalid || "Code d'authentification incorrect. Veuillez vérifier le code reçu.");
+        setError(t.authCodeInvalid || verifyData?.error || "Code d'authentification incorrect. Veuillez vérifier le code reçu.");
         handleFailedAttempt();
         setIsLoading(false);
         return;
@@ -864,7 +964,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [reqAdminName, setReqAdminName] = useState('');
   const [reqAdminEmail, setReqAdminEmail] = useState('');
   const [reqAdminPassword, setReqAdminPassword] = useState('');
-  const [reqLang, setReqLang] = useState(() => localStorage.getItem('defib_lang') || 'Français');
+  const [reqLang, setReqLang] = useState(() => normalizeLoginLang(localStorage.getItem('defib_lang')));
 
   const [isReqLoading, setIsReqLoading] = useState(false);
   const [reqError, setReqError] = useState('');
@@ -890,7 +990,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     // Preemptive block check
     const block = getBlockInfo();
     if (block) {
-      setError(`Vous avez effectué plusieurs tentatives de connexions. Par sécurité, veuillez patienter ${block.hoursText} avant d'essayer à nouveau.`);
+      setError(t.tooManyAttempts || `Vous avez effectué plusieurs tentatives de connexions. Par sécurité, veuillez patienter ${block.hoursText} avant d'essayer à nouveau.`);
       return;
     }
 
@@ -912,7 +1012,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       if (verifyRes.status === 429) {
         const rateData = await verifyRes.json().catch(() => ({}));
-        setError(rateData.error || "Trop de tentatives de connexion. Veuillez patienter avant de réessayer.");
+        setError(t.tooManyAttempts || rateData.error || "Trop de tentatives de connexion. Veuillez patienter avant de réessayer.");
         setIsLoading(false);
         return;
       }
@@ -921,7 +1021,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         const verifyData = await verifyRes.json();
         if (verifyData?.matched) {
           if (verifyData.disabled) {
-            setError("Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
+            setError(t.accountSuspended || "Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
             setIsLoading(false);
             return;
           }
@@ -1006,10 +1106,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   const roleLabel =
     loginRole === 'admin'
-      ? 'Admin'
+      ? t.admin
       : loginRole === 'technicien'
-      ? 'Technicien'
-      : 'Client';
+      ? t.technicien
+      : t.client;
 
   return (
     <div
@@ -1110,7 +1210,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               style={{ height: '22px' }}
             />
             <select
-              aria-label="Options système"
+              aria-label={t.systemOptionsAria}
               value=""
               onChange={(e) => {
                 const action = e.target.value;
@@ -1123,10 +1223,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             >
               <option value="" disabled hidden>
-                Options
+                {t.optionsLabel}
               </option>
-              <option value="quitter">Quitter</option>
-              <option value="assistance">Assistance</option>
+              <option value="quitter">{t.quitLabel}</option>
+              <option value="assistance">{t.assistanceLabel}</option>
             </select>
           </div>
 
@@ -1142,10 +1242,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             }}
           >
             <span className="pointer-events-none whitespace-nowrap">
-              En tant que {roleLabel}
+              {t.asRolePrefix} {roleLabel}
             </span>
             <select
-              aria-label="Choisir le type d'utilisateur"
+              aria-label={t.chooseRoleAria}
               value={loginRole}
               onChange={(e) => {
                 setLoginRole(e.target.value as 'admin' | 'technicien' | 'client');
@@ -1153,9 +1253,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               }}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             >
-              <option value="admin">Admin</option>
-              <option value="technicien">Technicien</option>
-              <option value="client">Client</option>
+              <option value="admin">{t.admin}</option>
+              <option value="technicien">{t.technicien}</option>
+              <option value="client">{t.client}</option>
             </select>
           </div>
 
@@ -1174,13 +1274,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               {selectedLang}
             </span>
             <select
-              aria-label="Choisir la langue"
+              aria-label={t.chooseLangAria}
               value={selectedLang}
               onChange={(e) => {
-                const val = e.target.value;
+                const val = normalizeLoginLang(e.target.value);
                 setSelectedLang(val);
                 setReqLang(val);
-                localStorage.setItem('defib_lang', val);
+                setLanguage(val);
+                setError('');
               }}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
             >
@@ -1329,7 +1430,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       className="w-1/2 flex justify-center items-center text-center disabled:opacity-50 disabled:cursor-not-allowed"
                       id="btn-auth-code-resend"
                     >
-                      {isSendingCode ? (t.sending || "Envoi...") : authCodeSentSuccess ? (t.codeSentSuccess || "✓ Code envoyé") : t.resendAuthCode}
+                      {isSendingCode ? t.sending : authCodeSentSuccess ? t.codeSentSuccess : t.resendAuthCode}
                     </button>
                   </div>
                 </div>
@@ -1375,7 +1476,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="block w-full text-center"
-                  placeholder="exemple@email.com"
+                  placeholder={t.emailInputPlaceholder}
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
@@ -1399,7 +1500,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   }}
                   className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  Se connecter
+                  {t.connectBtn}
                 </button>
               </div>
 
@@ -1448,7 +1549,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                     }}
                   >
-                    Maintenir la session
+                    {t.keepSession}
                   </span>
                 </button>
               </div>
@@ -1563,7 +1664,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     />
                     {isCheckingId && (
                       <p className="text-[14px] text-slate-500 font-medium font-sans mt-1 animate-pulse" style={{ cursor: 'default' }}>
-                        Vérification de l'identifiant...
+                        {t.checkingId}
                       </p>
                     )}
                     {!isCheckingId && isDefibIdTypedValid === true && (
