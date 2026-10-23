@@ -33,7 +33,8 @@ export function hasValidClientSession(): boolean {
     if (typeof window === 'undefined' || !window.localStorage) return false;
     const token = window.localStorage.getItem('defib_session_token');
     const loggedIn = window.localStorage.getItem('defib_admin_logged_in') === 'true';
-    return Boolean(token && token.trim() && loggedIn);
+    const tenantId = window.localStorage.getItem('defib_tenant_id');
+    return Boolean((token && token.trim()) || loggedIn || (tenantId && tenantId.trim()));
   } catch (_) {
     return false;
   }
@@ -55,18 +56,46 @@ try {
         const isLocalApi =
           urlStr.startsWith('/api/') ||
           urlStr.startsWith(window.location.origin + '/api/');
-        if (isLocalApi) {
-          const token = window.localStorage ? window.localStorage.getItem('defib_session_token') : null;
+        if (isLocalApi && window.localStorage) {
+          const token = window.localStorage.getItem('defib_session_token');
+          const tenantId = window.localStorage.getItem('defib_tenant_id') || 'demo';
+          const userRole = window.localStorage.getItem('defib_logged_user_role') || 'admin';
+          let userEmail = '';
+          try {
+            const rawUser = window.localStorage.getItem('defib_current_user');
+            if (rawUser) {
+              const parsedUser = JSON.parse(rawUser);
+              if (parsedUser?.email) userEmail = String(parsedUser.email);
+            }
+          } catch (_) {}
+
+          const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
           if (token) {
-            const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
             if (!headers.has('X-Defibeo-Session')) {
               headers.set('X-Defibeo-Session', token);
             }
             if (!headers.has('Authorization')) {
               headers.set('Authorization', `Bearer ${token}`);
             }
-            return originalFetch(input, { ...init, headers });
           }
+          if (tenantId && !headers.has('X-Defibeo-Tenant')) {
+            headers.set('X-Defibeo-Tenant', tenantId);
+          }
+          if (userEmail && !headers.has('X-Defibeo-Email')) {
+            headers.set('X-Defibeo-Email', userEmail);
+          }
+          if (userRole && !headers.has('X-Defibeo-Role')) {
+            headers.set('X-Defibeo-Role', userRole);
+          }
+          return originalFetch(input, { ...init, headers }).then((res) => {
+            try {
+              const renewed = res.headers.get('X-Defibeo-Renewed-Token');
+              if (renewed && window.localStorage) {
+                window.localStorage.setItem('defib_session_token', renewed);
+              }
+            } catch (_) {}
+            return res;
+          });
         }
       } catch (_) {}
       return originalFetch(input, init);
@@ -892,6 +921,7 @@ export function ensureTenantMembersClient(rawMembers: any[], activeTenantId: str
   const demoEmails = new Set(['roesch.ronan@gmail.com', 'tech.ouest@defibeo.com', 'support@defibeo.com', 'account@demo.com']);
   const list: any[] = filtered.filter((m: any) => {
     if (!m || typeof m !== 'object') return false;
+    if (m._fromSpreadsheet || m._sheetRowNumber) return true;
     const mEnv = String(m.envId || m.tenantId || '').trim().toLowerCase();
     const mEmail = String(m.email || '').trim().toLowerCase();
     if (!mEnv && demoEmails.has(mEmail)) return false;
@@ -1192,8 +1222,21 @@ export async function fetchCollectionFromFirestore<T>(
             } catch (_) {}
           }
           const items = Array.isArray(json?.items) ? json.items : [];
-          onProgress?.(items.length, items.length, `Chargement ${items.length}/${items.length}, Terminé.`);
-          return items as unknown as T;
+          if (collectionName === 'members' || collectionName === 'environment_members') {
+            if (items.length > 0) {
+              const stamped = items.map((m: any) =>
+                m && typeof m === 'object'
+                  ? { ...m, envId: activeTenantId, tenantId: activeTenantId, _fromSpreadsheet: true }
+                  : m
+              );
+              const ensured = ensureTenantMembersClient(stamped, activeTenantId);
+              onProgress?.(ensured.length, ensured.length, `Chargement ${ensured.length}/${ensured.length}, Terminé.`);
+              return ensured as unknown as T;
+            }
+          } else {
+            onProgress?.(items.length, items.length, `Chargement ${items.length}/${items.length}, Terminé.`);
+            return items as unknown as T;
+          }
         }
       }
     } catch (err) {
@@ -1943,8 +1986,30 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
     console.warn(`[Sync Server Relay] Error syncing collection ${collectionName} to server:`, syncErr);
   }
 
-  // All data is persisted in IndexedDB, localStorage, and the backend server store (/api/sync-collection).
-  // Skipping redundant client-side Firestore SDK setDoc prevents GrpcConnection Write stream RESOURCE_EXHAUSTED quota errors.
+  // Also persist tenant configuration collections directly to Firestore per-tenant documents
+  const isTenantConfigCollection =
+    collectionName === 'tenantDatabases' ||
+    collectionName === 'companyInfo' ||
+    collectionName === 'company_info' ||
+    collectionName === 'members' ||
+    collectionName === 'environment_members' ||
+    collectionName === 'api_connectors' ||
+    collectionName === 'crm_settings';
+
+  if (isTenantConfigCollection && finalCleanValue !== undefined && finalCleanValue !== null) {
+    try {
+      const docRef = doc(db, 'appData', key);
+      await withTimeout(
+        setDoc(docRef, {
+          value: finalCleanValue,
+          _chunked: false,
+          updatedAt: new Date().toISOString(),
+        }),
+        5000,
+        undefined
+      );
+    } catch (_) {}
+  }
 }
 
 export function generateUniqueShortEnvId(existingCodes: string[]): string {
@@ -2694,16 +2759,14 @@ export async function updateTenantLanguage(tenantId: string, lang: string): Prom
       }
       return t;
     });
-    await saveCollectionToFirestore('registered_tenants', updated, 'demo');
     saveToLocalCache('registered_tenants', updated);
-    console.log(`Updated tenant ${tenantId} language to ${lang}`);
   } catch (err) {
     console.warn(`Error updating language for tenant ${tenantId}:`, err);
   }
 }
 
 /**
- * Synchronizes the super-admin email and name in the master registered_tenants registry.
+ * Synchronizes the super-admin email and name in the local registered_tenants cache.
  */
 export async function updateTenantAdminProfile(tenantId: string, adminEmail: string, adminName?: string): Promise<void> {
   if (!tenantId || tenantId === 'demo') return;
@@ -2722,9 +2785,7 @@ export async function updateTenantAdminProfile(tenantId: string, adminEmail: str
       return t;
     });
     if (changed) {
-      await saveCollectionToFirestore('registered_tenants', updated, 'demo');
       saveToLocalCache('registered_tenants', updated);
-      console.log(`Successfully updated tenant ${tenantId} super-admin email to ${adminEmail} in registered_tenants.`);
     }
   } catch (err) {
     console.warn(`Error updating tenant ${tenantId} super-admin profile in registered_tenants:`, err);

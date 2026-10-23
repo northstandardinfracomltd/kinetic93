@@ -823,7 +823,14 @@ export default function SettingsModal({
   // Helper to merge Firebase/DB members and Spreadsheet members (2 sources)
   const mergeFirebaseAndSpreadsheetMembers = React.useCallback((fbMembers: Member[], sheetMembers: Member[], activeTid: string): Member[] => {
     const fbBase = ensureTenantMembersClient(Array.isArray(fbMembers) ? fbMembers : [], activeTid);
-    const validSheet = (Array.isArray(sheetMembers) ? sheetMembers : []).filter((m: any) => m && (m.name || m.email));
+    const validSheet = (Array.isArray(sheetMembers) ? sheetMembers : [])
+      .filter((m: any) => m && (m.name || m.email))
+      .map((m: any) => ({
+        ...m,
+        envId: activeTid,
+        tenantId: activeTid,
+        _fromSpreadsheet: true,
+      }));
     if (validSheet.length === 0) return fbBase;
 
     const sheetEmails = new Set(validSheet.map((m: any) => String(m.email || '').trim().toLowerCase()).filter(Boolean));
@@ -841,7 +848,13 @@ export default function SettingsModal({
         return {
           ...fbMatch,
           ...sm,
+          name: sm.name || fbMatch.name,
+          email: sm.email || fbMatch.email,
           role: sm.role || fbMatch.role,
+          pin: sm.pin || fbMatch.pin || '1234',
+          envId: activeTid,
+          tenantId: activeTid,
+          _fromSpreadsheet: true,
         };
       }
       return sm;
@@ -851,28 +864,61 @@ export default function SettingsModal({
       const fmEmail = String(fm.email || '').trim().toLowerCase();
       const fmName = String(fm.name || '').trim().toLowerCase();
       if (fmEmail && sheetEmails.has(fmEmail)) return false;
-      if (!fmEmail && fmName && sheetNames.has(fmName)) return false;
+      if (fmName && sheetNames.has(fmName)) return false;
       return true;
     });
 
-    return ensureTenantMembersClient([...fbOnly, ...mergedFromSheet], activeTid);
+    return ensureTenantMembersClient([...mergedFromSheet, ...fbOnly], activeTid);
   }, []);
+
+  // Synchronise if parent prop changes upon load or reset, keeping refs to trace incoming changes
+  const lastPropsMembersRef = React.useRef<Member[]>(members);
+  const lastPropsCompanyRef = React.useRef<CompanyInfo>(companyInfo);
+  const lastPropTenantIdRef = React.useRef<string | undefined>(propTenantId);
+  const latestLocalCompanyRef = React.useRef<CompanyInfo>(localCompany);
+  const latestCompanyInfoRef = React.useRef<CompanyInfo>(companyInfo);
+  const latestMembersRef = React.useRef<Member[]>(members);
+  latestLocalCompanyRef.current = localCompany;
+  latestCompanyInfoRef.current = companyInfo;
+  latestMembersRef.current = members;
 
   // Helper to resolve the effective Google Spreadsheet URL for any settings compartment
   const resolveSettingsSheetUrl = React.useCallback((key: string, urlKey: string, storageSuffix: string, activeTid: string, compObj?: any): string => {
+    const lc = latestLocalCompanyRef.current as any;
+    const ci = latestCompanyInfoRef.current as any;
+    let cachedComp: any = null;
+    try {
+      const rawComp =
+        localStorage.getItem(`defib_${activeTid}_company_info`) ||
+        localStorage.getItem(`defib_${activeTid.toLowerCase()}_company_info`) ||
+        localStorage.getItem(`defib_${activeTid.toUpperCase()}_company_info`);
+      if (rawComp) cachedComp = JSON.parse(rawComp);
+    } catch (_) {}
+    let cachedDbs: any = null;
+    try {
+      const rawDbs =
+        localStorage.getItem(`defib_cache_${activeTid}_tenantDatabases`) ||
+        localStorage.getItem(`defib_cache_${activeTid.toLowerCase()}_tenantDatabases`) ||
+        localStorage.getItem(`defib_cache_${activeTid.toUpperCase()}_tenantDatabases`);
+      if (rawDbs) cachedDbs = JSON.parse(rawDbs);
+    } catch (_) {}
     return String(
       compObj?.[key] ||
       compObj?.[urlKey] ||
-      (localCompany as any)?.[key] ||
-      (localCompany as any)?.[urlKey] ||
-      (companyInfo as any)?.[key] ||
-      (companyInfo as any)?.[urlKey] ||
+      lc?.[key] ||
+      lc?.[urlKey] ||
+      ci?.[key] ||
+      ci?.[urlKey] ||
+      cachedDbs?.[key] ||
+      cachedDbs?.[urlKey] ||
+      cachedComp?.[key] ||
+      cachedComp?.[urlKey] ||
       localStorage.getItem(`defib_${activeTid}_${storageSuffix}`) ||
       localStorage.getItem(`defib_${activeTid.toLowerCase()}_${storageSuffix}`) ||
       localStorage.getItem(`defib_${activeTid.toUpperCase()}_${storageSuffix}`) ||
       ''
     ).trim();
-  }, [localCompany, companyInfo]);
+  }, []);
 
   // Apply fresh data fetched from a dedicated Google Spreadsheet to local states
   const applySpreadsheetDataToState = React.useCallback((tabType: string, items: any[], activeTid: string, baseFbMembers?: Member[]) => {
@@ -881,17 +927,6 @@ export default function SettingsModal({
     if (tabType === 'reglages') {
       const firstRow = items[0];
       if (!firstRow || typeof firstRow !== 'object') {
-        setLocalCompany(prev => ({
-          ...prev,
-          name: '',
-          nomCommercial: '',
-          logo: '',
-          website: '',
-          email: '',
-          phone: '',
-          nomLogiciel: '',
-          gmailPartageLocalisation: '',
-        }));
         return;
       }
       const cleanPatch: Record<string, any> = {};
@@ -900,8 +935,10 @@ export default function SettingsModal({
           cleanPatch[k] = v;
         }
       }
-      if (cleanPatch.language) {
-        setSelectedLang(String(cleanPatch.language));
+      const langVal = cleanPatch.langue || cleanPatch.language;
+      if (langVal) {
+        setSelectedLang(String(langVal));
+        setLanguage(String(langVal));
       }
       if (cleanPatch.enableAutoEmails === 'Oui' || cleanPatch.enableAutoEmails === 'Non') {
         setEnableAutoEmails(cleanPatch.enableAutoEmails);
@@ -919,39 +956,37 @@ export default function SettingsModal({
       if (cleanPatch.disableHelpsAndTutorials === 'Oui' || cleanPatch.disableHelpsAndTutorials === 'Non') {
         setDisableHelpsAndTutorials(cleanPatch.disableHelpsAndTutorials);
       }
-      setLocalCompany(prev => ({
-        ...prev,
-        ...cleanPatch,
-        name: cleanPatch.name !== undefined ? String(cleanPatch.name) : (cleanPatch.nomCommercial !== undefined ? String(cleanPatch.nomCommercial) : ''),
-        nomCommercial: cleanPatch.nomCommercial !== undefined ? String(cleanPatch.nomCommercial) : (cleanPatch.name !== undefined ? String(cleanPatch.name) : ''),
-        logo: cleanPatch.logo !== undefined ? String(cleanPatch.logo) : '',
-        website: cleanPatch.website !== undefined ? String(cleanPatch.website) : '',
-        email: cleanPatch.email !== undefined ? String(cleanPatch.email) : '',
-        phone: cleanPatch.phone !== undefined ? String(cleanPatch.phone) : '',
-        nomLogiciel: cleanPatch.nomLogiciel !== undefined ? String(cleanPatch.nomLogiciel) : '',
-        gmailPartageLocalisation: cleanPatch.gmailPartageLocalisation !== undefined ? String(cleanPatch.gmailPartageLocalisation) : '',
-      }));
+      setLocalCompany(prev => {
+        const nextComp: CompanyInfo = {
+          ...prev,
+          ...cleanPatch,
+          name: cleanPatch.name !== undefined ? String(cleanPatch.name) : (cleanPatch.nomCommercial !== undefined ? String(cleanPatch.nomCommercial) : ''),
+          nomCommercial: cleanPatch.nomCommercial !== undefined ? String(cleanPatch.nomCommercial) : (cleanPatch.name !== undefined ? String(cleanPatch.name) : ''),
+          logo: cleanPatch.logo !== undefined ? String(cleanPatch.logo) : '',
+          website: cleanPatch.website !== undefined ? String(cleanPatch.website) : '',
+          email: cleanPatch.email !== undefined ? String(cleanPatch.email) : '',
+          phone: cleanPatch.phone !== undefined ? String(cleanPatch.phone) : '',
+          nomLogiciel: cleanPatch.nomLogiciel !== undefined ? String(cleanPatch.nomLogiciel) : '',
+          conditionsLegalesLink: cleanPatch.conditionsLegalesLink !== undefined ? String(cleanPatch.conditionsLegalesLink) : '',
+          mentionsLegalesFactures: cleanPatch.mentionsLegalesFactures !== undefined ? String(cleanPatch.mentionsLegalesFactures) : '',
+          gmailPartageLocalisation: cleanPatch.gmailPartageLocalisation !== undefined ? String(cleanPatch.gmailPartageLocalisation) : '',
+          hiddenTabs: Array.isArray(cleanPatch.hiddenTabs) ? cleanPatch.hiddenTabs : (prev.hiddenTabs || []),
+        };
+        lastPropsCompanyRef.current = nextComp;
+        latestLocalCompanyRef.current = nextComp;
+        try {
+          localStorage.setItem(`defib_${activeTid}_company_info`, JSON.stringify(nextComp));
+        } catch (_) {}
+        setTimeout(() => {
+          try {
+            onUpdateCompanyInfo(nextComp);
+          } catch (_) {}
+        }, 0);
+        return nextComp;
+      });
     } else if (tabType === 'apparenceRapportsPdf') {
       const firstRow = items[0];
       if (!firstRow || typeof firstRow !== 'object') {
-        setLocalCompany(prev => ({
-          ...prev,
-          pdfHeaderImg: '',
-          pdfPageHeaderText: '',
-          pdfPageFooterText: '',
-          pdfLastPageInfoText: '',
-          pdfHeaderBgColor: '',
-          pdfCardBorderColor: '',
-          pdfCardBgColor: '',
-          pdfLabelTextColor: '',
-          pdfHideElectrodeSecoursA: 'Non',
-          pdfHideElectrodeSecoursP: 'Non',
-          pdfHideKitSecours: 'Non',
-          pdfSimplifyCoffret: 'Non',
-          pdfHideVerificationsTechniques: 'Non',
-          pdfHideHorodatagesDiagnostic: 'Non',
-          pdfShowDemandeDevisDetails: 'Non',
-        }));
         return;
       }
       const cleanPatch: Record<string, any> = {};
@@ -960,25 +995,38 @@ export default function SettingsModal({
           cleanPatch[k] = v;
         }
       }
-      setLocalCompany(prev => ({
-        ...prev,
-        ...cleanPatch,
-        pdfHeaderImg: cleanPatch.pdfHeaderImg !== undefined ? String(cleanPatch.pdfHeaderImg) : '',
-        pdfPageHeaderText: cleanPatch.pdfPageHeaderText !== undefined ? String(cleanPatch.pdfPageHeaderText) : '',
-        pdfPageFooterText: cleanPatch.pdfPageFooterText !== undefined ? String(cleanPatch.pdfPageFooterText) : '',
-        pdfLastPageInfoText: cleanPatch.pdfLastPageInfoText !== undefined ? String(cleanPatch.pdfLastPageInfoText) : '',
-        pdfHeaderBgColor: cleanPatch.pdfHeaderBgColor !== undefined ? String(cleanPatch.pdfHeaderBgColor) : '',
-        pdfCardBorderColor: cleanPatch.pdfCardBorderColor !== undefined ? String(cleanPatch.pdfCardBorderColor) : '',
-        pdfCardBgColor: cleanPatch.pdfCardBgColor !== undefined ? String(cleanPatch.pdfCardBgColor) : '',
-        pdfLabelTextColor: cleanPatch.pdfLabelTextColor !== undefined ? String(cleanPatch.pdfLabelTextColor) : '',
-        pdfHideElectrodeSecoursA: (cleanPatch.pdfHideElectrodeSecoursA as 'Oui' | 'Non') || 'Non',
-        pdfHideElectrodeSecoursP: (cleanPatch.pdfHideElectrodeSecoursP as 'Oui' | 'Non') || 'Non',
-        pdfHideKitSecours: (cleanPatch.pdfHideKitSecours as 'Oui' | 'Non') || 'Non',
-        pdfSimplifyCoffret: (cleanPatch.pdfSimplifyCoffret as 'Oui' | 'Non') || 'Non',
-        pdfHideVerificationsTechniques: (cleanPatch.pdfHideVerificationsTechniques as 'Oui' | 'Non') || 'Non',
-        pdfHideHorodatagesDiagnostic: (cleanPatch.pdfHideHorodatagesDiagnostic as 'Oui' | 'Non') || 'Non',
-        pdfShowDemandeDevisDetails: (cleanPatch.pdfShowDemandeDevisDetails as 'Oui' | 'Non') || 'Non',
-      }));
+      setLocalCompany(prev => {
+        const nextComp: CompanyInfo = {
+          ...prev,
+          ...cleanPatch,
+          pdfHeaderImg: cleanPatch.pdfHeaderImg !== undefined ? String(cleanPatch.pdfHeaderImg) : '',
+          pdfPageHeaderText: cleanPatch.pdfPageHeaderText !== undefined ? String(cleanPatch.pdfPageHeaderText) : '',
+          pdfPageFooterText: cleanPatch.pdfPageFooterText !== undefined ? String(cleanPatch.pdfPageFooterText) : '',
+          pdfLastPageInfoText: cleanPatch.pdfLastPageInfoText !== undefined ? String(cleanPatch.pdfLastPageInfoText) : '',
+          pdfHeaderBgColor: cleanPatch.pdfHeaderBgColor ? String(cleanPatch.pdfHeaderBgColor) : '#7c2882',
+          pdfCardBorderColor: cleanPatch.pdfCardBorderColor ? String(cleanPatch.pdfCardBorderColor) : '#7d2882',
+          pdfCardBgColor: cleanPatch.pdfCardBgColor ? String(cleanPatch.pdfCardBgColor) : '#fef2ff',
+          pdfLabelTextColor: cleanPatch.pdfLabelTextColor ? String(cleanPatch.pdfLabelTextColor) : '#9f71a2',
+          pdfHideElectrodeSecoursA: (cleanPatch.pdfHideElectrodeSecoursA as 'Oui' | 'Non') || 'Non',
+          pdfHideElectrodeSecoursP: (cleanPatch.pdfHideElectrodeSecoursP as 'Oui' | 'Non') || 'Non',
+          pdfHideKitSecours: (cleanPatch.pdfHideKitSecours as 'Oui' | 'Non') || 'Non',
+          pdfSimplifyCoffret: (cleanPatch.pdfSimplifyCoffret as 'Oui' | 'Non') || 'Non',
+          pdfHideVerificationsTechniques: (cleanPatch.pdfHideVerificationsTechniques as 'Oui' | 'Non') || 'Non',
+          pdfHideHorodatagesDiagnostic: (cleanPatch.pdfHideHorodatagesDiagnostic as 'Oui' | 'Non') || 'Non',
+          pdfShowDemandeDevisDetails: (cleanPatch.pdfShowDemandeDevisDetails as 'Oui' | 'Non') || 'Non',
+        };
+        lastPropsCompanyRef.current = nextComp;
+        latestLocalCompanyRef.current = nextComp;
+        try {
+          localStorage.setItem(`defib_${activeTid}_company_info`, JSON.stringify(nextComp));
+        } catch (_) {}
+        setTimeout(() => {
+          try {
+            onUpdateCompanyInfo(nextComp);
+          } catch (_) {}
+        }, 0);
+        return nextComp;
+      });
     } else if (tabType === 'intituleEmplacements') {
       const nextLocs: Record<string, string> = {};
       const ALL_LOCS = [
@@ -988,34 +1036,83 @@ export default function SettingsModal({
         'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J',
       ];
       ALL_LOCS.forEach(l => { nextLocs[l] = ''; });
+      const normalizeLocKey = (rawKey: string): string | null => {
+        const cleaned = String(rawKey || '').replace(/\.+$/, '').trim();
+        const m = cleaned.match(/^(entrep[oô]t|v[eé]hicule)\s*([a-j])$/i);
+        if (!m) return null;
+        const prefix = m[1].toLowerCase().startsWith('entrep') ? 'Entrepôt' : 'Véhicule';
+        return `${prefix} ${m[2].toUpperCase()}`;
+      };
       for (const row of items) {
         if (!row || typeof row !== 'object') continue;
         if (row.emplacement && row.intitule !== undefined) {
-          nextLocs[String(row.emplacement).trim()] = String(row.intitule).trim();
+          const normLoc = normalizeLocKey(String(row.emplacement));
+          if (normLoc) {
+            nextLocs[normLoc] = String(row.intitule).trim();
+          }
         }
         for (const [k, v] of Object.entries(row)) {
-          if (/^(?:Entrepôt|Véhicule)\s+[A-J]$/i.test(k) && v !== undefined && v !== null) {
-            nextLocs[k] = String(v).trim();
+          const normLoc = normalizeLocKey(k);
+          if (normLoc && v !== undefined && v !== null) {
+            nextLocs[normLoc] = String(v).trim();
           }
         }
       }
       setLocalLocationNames(nextLocs);
       if (onUpdateLocationNames) onUpdateLocationNames(nextLocs);
-      localStorage.setItem(`defib_${activeTid}_custom_location_names`, JSON.stringify(nextLocs));
+      try {
+        localStorage.setItem(`defib_${activeTid}_custom_location_names`, JSON.stringify(nextLocs));
+      } catch (_) {}
+      setLocalCompany(prev => {
+        const nextComp: CompanyInfo = {
+          ...prev,
+          customLocationNames: nextLocs,
+        };
+        lastPropsCompanyRef.current = nextComp;
+        latestLocalCompanyRef.current = nextComp;
+        try {
+          localStorage.setItem(`defib_${activeTid}_company_info`, JSON.stringify(nextComp));
+        } catch (_) {}
+        setTimeout(() => {
+          try {
+            onUpdateCompanyInfo(nextComp);
+          } catch (_) {}
+        }, 0);
+        return nextComp;
+      });
     } else if (tabType === 'communicationPortailClient') {
       const firstRow = items[0];
       const msg = firstRow ? String(firstRow.communicationPortailClient ?? firstRow.message ?? '').trim() : '';
       setCommunicationPortailClient(msg);
-      setLocalCompany(prev => ({ ...prev, communicationPortailClient: msg }));
-      localStorage.setItem(`defib_${activeTid}_communication_portail_client`, msg);
+      try {
+        localStorage.setItem(`defib_${activeTid}_communication_portail_client`, msg);
+      } catch (_) {}
+      setLocalCompany(prev => {
+        const nextComp: CompanyInfo = {
+          ...prev,
+          communicationPortailClient: msg,
+        };
+        lastPropsCompanyRef.current = nextComp;
+        latestLocalCompanyRef.current = nextComp;
+        try {
+          localStorage.setItem(`defib_${activeTid}_company_info`, JSON.stringify(nextComp));
+        } catch (_) {}
+        setTimeout(() => {
+          try {
+            onUpdateCompanyInfo(nextComp);
+          } catch (_) {}
+        }, 0);
+        return nextComp;
+      });
     } else if (tabType === 'membresEnvironnement') {
-      const fbSource = baseFbMembers || members || [];
+      const fbSource = baseFbMembers || latestMembersRef.current || [];
       const mixed = mergeFirebaseAndSpreadsheetMembers(fbSource, items, activeTid);
+      lastPropsMembersRef.current = mixed;
       setLocalMembers(mixed);
       onUpdateMembers(mixed);
       localStorage.setItem(`defib_${activeTid}_members`, JSON.stringify(mixed));
     }
-  }, [members, mergeFirebaseAndSpreadsheetMembers, onUpdateOtherEquipments, onUpdateLocationNames, onUpdateMembers]);
+  }, [mergeFirebaseAndSpreadsheetMembers, onUpdateOtherEquipments, onUpdateLocationNames, onUpdateMembers, onUpdateCompanyInfo, setLanguage]);
 
   // Force GET from dedicated Google Spreadsheets for the 5 settings compartments
   const fetchSettingsCompartmentsFromSheets = React.useCallback(async (compOverride?: any, onlySection?: SettingsSectionKey | null) => {
@@ -1037,7 +1134,7 @@ export default function SettingsModal({
           if (t.section === 'membres' && activeTid && activeTid !== 'demo') {
             try {
               const remoteMembers = await fetchCollectionFromFirestore<Member[]>('members', activeTid);
-              const ensuredRemote = ensureTenantMembersClient(Array.isArray(remoteMembers) ? remoteMembers : members, activeTid);
+              const ensuredRemote = ensureTenantMembersClient(Array.isArray(remoteMembers) ? remoteMembers : latestMembersRef.current, activeTid);
               if (ensuredRemote.length > 0) {
                 setLocalMembers(ensuredRemote);
                 onUpdateMembers(ensuredRemote);
@@ -1048,7 +1145,7 @@ export default function SettingsModal({
         }
 
         try {
-          let fbMems: Member[] = members || [];
+          let fbMems: Member[] = latestMembersRef.current || [];
           if (t.section === 'membres' && activeTid && activeTid !== 'demo') {
             try {
               const remoteMems = await fetchCollectionFromFirestore<Member[]>('members', activeTid);
@@ -1069,12 +1166,7 @@ export default function SettingsModal({
         } catch (_) {}
       })
     );
-  }, [propTenantId, resolveSettingsSheetUrl, applySpreadsheetDataToState, members, onUpdateMembers]);
-
-  // Synchronise if parent prop changes upon load or reset, keeping refs to trace incoming changes
-  const lastPropsMembersRef = React.useRef<Member[]>(members);
-  const lastPropsCompanyRef = React.useRef<CompanyInfo>(companyInfo);
-  const lastPropTenantIdRef = React.useRef<string | undefined>(propTenantId);
+  }, [propTenantId, resolveSettingsSheetUrl, applySpreadsheetDataToState, onUpdateMembers]);
 
   React.useEffect(() => {
     const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
@@ -1214,30 +1306,6 @@ export default function SettingsModal({
       setLocalCompany({
         ...cleanDefault,
         ...comp,
-        ...(hasReglagesSheet ? {
-          name: '',
-          nomCommercial: '',
-          logo: '',
-          website: '',
-          email: '',
-          phone: '',
-          nomLogiciel: '',
-          gmailPartageLocalisation: '',
-        } : {
-          name: comp.name || cleanDefault.name,
-          email: comp.email || cleanDefault.email,
-          phone: comp.phone || cleanDefault.phone,
-        }),
-        ...(hasPdfSheet ? {
-          pdfHeaderImg: '',
-          pdfPageHeaderText: '',
-          pdfPageFooterText: '',
-          pdfLastPageInfoText: '',
-          pdfHeaderBgColor: '',
-          pdfCardBorderColor: '',
-          pdfCardBgColor: '',
-          pdfLabelTextColor: '',
-        } : {}),
         spreadsheetDefibrillateurs: comp.spreadsheetDefibrillateurs || cachedDefib,
         spreadsheetAutresMateriels: comp.spreadsheetAutresMateriels || cachedAutres,
         spreadsheetClients: comp.spreadsheetClients || cachedClients,
@@ -1263,12 +1331,24 @@ export default function SettingsModal({
       const ensuredMems = ensureTenantMembersClient(initialMems, activeTid);
       setLocalMembers(ensuredMems);
 
+      let cachedLocs: Record<string, string> | undefined = comp?.customLocationNames;
+      try {
+        const rawLocs = localStorage.getItem(`defib_${activeTid}_custom_location_names`);
+        if (rawLocs) {
+          const parsedLocs = JSON.parse(rawLocs);
+          if (parsedLocs && typeof parsedLocs === 'object') {
+            cachedLocs = parsedLocs;
+          }
+        }
+      } catch (_) {}
       if (hasEmplacementsSheet) {
-        const blankLocs: Record<string, string> = {};
-        ['Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'].forEach(l => { blankLocs[l] = ''; });
-        setLocalLocationNames(blankLocs);
+        const initLocs: Record<string, string> = {};
+        ['Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'].forEach(l => {
+          initLocs[l] = cachedLocs?.[l] ?? '';
+        });
+        setLocalLocationNames(initLocs);
       } else {
-        setLocalLocationNames(ensureTenantCustomLocationNames(comp?.customLocationNames, activeTid, ensuredMems));
+        setLocalLocationNames(ensureTenantCustomLocationNames(cachedLocs, activeTid, ensuredMems));
       }
 
       if (!hasReglagesSheet) {
@@ -1279,11 +1359,8 @@ export default function SettingsModal({
         setEnableOtherEquipments(comp?.enableOtherEquipments || 'Non');
       }
 
-      if (hasComSheet) {
-        setCommunicationPortailClient('');
-      } else {
-        setCommunicationPortailClient(comp?.communicationPortailClient ?? '');
-      }
+      const cachedCom = localStorage.getItem(`defib_${activeTid}_communication_portail_client`);
+      setCommunicationPortailClient(cachedCom !== null ? cachedCom : (comp?.communicationPortailClient ?? ''));
 
       // Immediately trigger GET from dedicated spreadsheets for all configured compartments
       fetchSettingsCompartmentsFromSheets({
@@ -1325,14 +1402,18 @@ export default function SettingsModal({
 
           const extraEffFields: Record<string, string> = {};
           const tKeys = [activeTid, activeTid.toLowerCase(), activeTid.toUpperCase()];
+          let needsFirestoreDbHeal = false;
           for (const f of EXTRA_SPREADSHEET_FIELDS) {
-            const effVal =
+            const remoteVal =
               validDb?.[f.key] ||
               validDb?.[f.urlKey] ||
               (validCompany as any)?.[f.key] ||
               (validCompany as any)?.[f.urlKey] ||
-              cachedExtraMap[f.key] ||
               '';
+            const effVal = remoteVal || cachedExtraMap[f.key] || '';
+            if (!remoteVal && effVal) {
+              needsFirestoreDbHeal = true;
+            }
             extraEffFields[f.key] = effVal;
             extraEffFields[f.urlKey as string] = effVal;
             if (effVal) {
@@ -1347,6 +1428,24 @@ export default function SettingsModal({
                   localStorage.removeItem(`defib_${tid}_${f.storageSuffix}`);
                 }
               } catch (_) {}
+            }
+          }
+
+          if (needsFirestoreDbHeal && activeTid !== 'demo') {
+            const healedDbPayload = {
+              ...(validDb || {}),
+              spreadsheetDefibrillateurs: effDefibs,
+              spreadsheetAutresMateriels: effAutres,
+              spreadsheetClients: effClients,
+              spreadsheetDefibrillateursUrl: effDefibs,
+              spreadsheetAutresMaterielsUrl: effAutres,
+              spreadsheetClientsUrl: effClients,
+              ...extraEffFields,
+              updatedAt: new Date().toISOString(),
+            };
+            saveCollectionToFirestore('tenantDatabases', healedDbPayload, activeTid).catch(() => {});
+            if (validCompany) {
+              saveCollectionToFirestore('companyInfo', { ...validCompany, ...healedDbPayload }, activeTid).catch(() => {});
             }
           }
 
@@ -2226,23 +2325,6 @@ export default function SettingsModal({
         ? [
             saveCollectionToFirestore('companyInfo', companyObj, effectiveTenantId).catch(() => {}),
             saveCollectionToFirestore('tenantDatabases', dbPayload, effectiveTenantId).catch(() => {}),
-            getRegisteredTenants(true)
-              .then((tenantsList) => {
-                if (!Array.isArray(tenantsList)) return;
-                const matched = findTenantInList(tenantsList, effectiveTenantId);
-                if (!matched) return;
-                const updatedTenants = tenantsList.map((t) => {
-                  if (t.id === matched.id || (t.shortEnvId && t.shortEnvId === matched.shortEnvId)) {
-                    return {
-                      ...t,
-                      ...dbPayload,
-                    };
-                  }
-                  return t;
-                });
-                return saveCollectionToFirestore('registered_tenants', updatedTenants, 'demo');
-              })
-              .catch(() => {}),
           ]
         : []),
     ]);
@@ -3691,10 +3773,10 @@ export default function SettingsModal({
                 </label>
                 <input
                   type="text"
-                  maxLength={15}
+                  maxLength={60}
                   disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.nomLogiciel ?? ''}
-                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('nomLogiciel', e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15))}
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('nomLogiciel', e.target.value.slice(0, 60))}
                   className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
                   placeholder={t("Ex: App360")}
@@ -4346,7 +4428,7 @@ export default function SettingsModal({
                   <div className="flex-1">
                     <input
                       type="text"
-                      maxLength={15}
+                      maxLength={80}
                       value={localLocationNames[loc] || ''}
                       onChange={(e) => {
                         setLocalLocationNames(prev => ({
@@ -6478,47 +6560,15 @@ export default function SettingsModal({
                       if (!data?.fromSpreadsheet || !Array.isArray(data.items)) return;
 
                       if (activeSection === 'emplacements') {
-                        const nextLocs = { ...(localLocationNames || {}) };
-                        for (const row of data.items) {
-                          if (!row || typeof row !== 'object') continue;
-                          if (row.emplacement && row.intitule !== undefined) {
-                            nextLocs[String(row.emplacement).trim()] = String(row.intitule);
-                          }
-                          for (const [k, v] of Object.entries(row)) {
-                            if (/^(?:Entrepôt|Véhicule)\s+[A-J]$/i.test(k) && v !== undefined && v !== null && String(v).trim() !== '') {
-                              nextLocs[k] = String(v).trim();
-                            }
-                          }
-                        }
-                        setLocalLocationNames(nextLocs);
-                        localStorage.setItem(`defib_${targetTenant}_custom_location_names`, JSON.stringify(nextLocs));
-                        if (onUpdateLocationNames) onUpdateLocationNames(nextLocs);
+                        applySpreadsheetDataToState('intituleEmplacements', data.items, targetTenant);
                       } else if (activeSection === 'membres') {
-                        const validMembers = data.items.filter((m: any) => m && (m.name || m.email));
-                        setLocalMembers(validMembers);
-                        onUpdateMembers(validMembers);
-                        localStorage.setItem(`defib_${targetTenant}_members`, JSON.stringify(validMembers));
-                      } else if (activeSection === 'reglages' || activeSection === 'pdf') {
-                        const firstRow = data.items[0];
-                        if (firstRow && typeof firstRow === 'object') {
-                          const cleanPatch: Record<string, any> = {};
-                          for (const [k, v] of Object.entries(firstRow)) {
-                            if (!k.startsWith('_') && k !== 'id' && v !== undefined && v !== '') {
-                              cleanPatch[k] = v;
-                            }
-                          }
-                          const nextCompany = { ...localCompany, ...cleanPatch } as CompanyInfo;
-                          setLocalCompany(nextCompany);
-                          onUpdateCompanyInfo(nextCompany);
-                          localStorage.setItem(`defib_${targetTenant}_company_info`, JSON.stringify(nextCompany));
-                        }
+                        applySpreadsheetDataToState('membresEnvironnement', data.items, targetTenant, members || []);
+                      } else if (activeSection === 'reglages') {
+                        applySpreadsheetDataToState('reglages', data.items, targetTenant);
+                      } else if (activeSection === 'pdf') {
+                        applySpreadsheetDataToState('apparenceRapportsPdf', data.items, targetTenant);
                       } else if (activeSection === 'communication') {
-                        const firstRow = data.items[0];
-                        if (firstRow && typeof firstRow === 'object') {
-                          const nextMsg = String(firstRow.communicationPortailClient ?? firstRow.message ?? '');
-                          setCommunicationPortailClient(nextMsg);
-                          localStorage.setItem(`defib_${targetTenant}_communication_portail_client`, nextMsg);
-                        }
+                        applySpreadsheetDataToState('communicationPortailClient', data.items, targetTenant);
                       } else if (activeSection === 'actions_suspectes') {
                         const mergedLogs = mergeSuspiciousLogsFromSheet(targetTenant, data.items);
                         setSuspiciousLogs(mergedLogs);

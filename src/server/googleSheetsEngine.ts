@@ -1508,12 +1508,12 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Intitulé', field: 'intitule', aliases: ['intitule', 'intitulepersonnalise', 'nompersonnalise', 'nom', 'valeur'] },
   ],
   membresEnvironnement: [
-    { header: 'Nom et prénom', field: 'name', aliases: ['nometprenom', 'nomprenom', 'nom', 'name', 'collaborateur', 'membre', 'utilisateur', 'prenometnom', 'nomcomplet'] },
-    { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'adresseemail', 'identifiant', 'adressemail', 'emailutilisateur', 'emailmembre', 'login'] },
-    { header: 'Rôle', field: 'role', aliases: ['role', 'profil', 'typeutilisateur', 'statutrole', 'typedecompte', 'typecompte', 'categorie', 'categoriedumembre', 'categoriemembre'] },
-    { header: 'PIN d’accès / Mot de passe', field: 'pin', aliases: ['pindaccesmotdepasse', 'pindacces', 'pinacces', 'motdepasse', 'pin', 'codepin', 'code', 'password', 'motdepassepindacces', 'motdepassepin', 'cledacces', 'cleacces', 'codedacces', 'codeacces', 'mdp'] },
-    { header: 'Métier / Type de rôle', field: 'adminSubRole', aliases: ['metiertypederole', 'metier', 'typederole', 'typerole', 'adminsubrole', 'fonction', 'service', 'sousrole', 'poste'] },
-    { header: 'Emplacement attribué', field: 'locationLink', aliases: ['emplacementattribue', 'emplacement', 'locationlink', 'vehicule', 'entrepot', 'emplacementstock', 'affectation'] },
+    { header: 'Nom et prénom', field: 'name', aliases: ['nometprenom', 'nomprenom', 'nom', 'prenom', 'name', 'collaborateur', 'membre', 'utilisateur', 'prenometnom', 'nomcomplet', 'nometprenomcollaborateur', 'nomdumembre', 'nomutilisateur', 'intervenant', 'technicien', 'administrateur'] },
+    { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'adresseemail', 'identifiant', 'adressemail', 'emailutilisateur', 'emailmembre', 'login', 'compte', 'adresse électronique', 'adresseelectronique', 'contact'] },
+    { header: 'Rôle', field: 'role', aliases: ['role', 'profil', 'typeutilisateur', 'statutrole', 'typedecompte', 'typecompte', 'categorie', 'categoriedumembre', 'categoriemembre', 'statut', 'acces', 'type'] },
+    { header: 'PIN d’accès / Mot de passe', field: 'pin', aliases: ['pindaccesmotdepasse', 'pindacces', 'pinacces', 'motdepasse', 'pin', 'codepin', 'code', 'password', 'motdepassepindacces', 'motdepassepin', 'cledacces', 'cleacces', 'codedacces', 'codeacces', 'mdp', 'secret'] },
+    { header: 'Métier / Type de rôle', field: 'adminSubRole', aliases: ['metiertypederole', 'metier', 'typederole', 'typerole', 'adminsubrole', 'fonction', 'service', 'sousrole', 'poste', 'specialite'] },
+    { header: 'Emplacement attribué', field: 'locationLink', aliases: ['emplacementattribue', 'emplacement', 'locationlink', 'vehicule', 'entrepot', 'emplacementstock', 'affectation', 'vehiculeattribue', 'entrepotattribue'] },
     { header: 'Compétences', field: 'competences', aliases: ['competences', 'competence', 'qualifications', 'habilitations'], type: 'array' },
     { header: 'Numéro et voie', field: 'startAddressStreet', aliases: ['numeroetvoie', 'numerovoie', 'numvoie', 'rue', 'startaddressstreet', 'adressededepart', 'adresse'] },
     { header: 'Ville', field: 'startAddressCity', aliases: ['ville', 'commune', 'startaddresscity', 'villedepart'] },
@@ -1585,24 +1585,24 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Objet. (support)', field: 'supportEmailSubject', aliases: ['objetsupport', 'supportemailsubject', 'objetemailsupport'] },
   ],
   apparenceRapportsPdf: [
-    { header: 'Image source d’entête pour illustration', field: 'pdfHeaderImg', aliases: ['imagesourcedentetepourillustration', 'imagesourceentete', 'imageentete', 'pdfheaderimg', 'illustrationentete'] },
-    { header: 'Texte d’entête de page', field: 'pdfPageHeaderText', aliases: ['textedentetedepage', 'texteentetedepage', 'texteentete', 'pdfpageheadertext', 'entetedepage'] },
-    { header: 'Texte de bas de page', field: 'pdfPageFooterText', aliases: ['textedebasdepage', 'textebasdepage', 'pieddepage', 'pdfpagefootertext', 'basdepage'] },
-    { header: 'Texte d’information dernière page', field: 'pdfLastPageInfoText', aliases: ['textedinformationdernierepage', 'texteinformationdernierepage', 'textedernierepage', 'pdflastpageinfotext', 'dernierepage'] },
-    { header: "Couleur d'arrière plan des entêtes des sections", field: 'pdfHeaderBgColor', aliases: ['couleurdarriereplandesentetesdessections', 'couleurarriereplanentetes', 'couleurentetes', 'pdfheaderbgcolor'] },
-    { header: 'Couleur de bordure des sections', field: 'pdfCardBorderColor', aliases: ['couleurdeborduredessections', 'couleurborduresections', 'couleurbordure', 'pdfcardbordercolor'] },
-    { header: "Couleur d'arrière plan des sections", field: 'pdfCardBgColor', aliases: ['couleurdarriereplandessections', 'couleurarriereplansections', 'couleurfondsections', 'pdfcardbgcolor'] },
-    { header: 'Couleur du texte des labels des champs', field: 'pdfLabelTextColor', aliases: ['couleurdutextedeslabelsdeschamps', 'couleurtextelabels', 'couleurlabels', 'pdflabeltextcolor'] },
+    { header: 'Image source d’entête pour illustration', field: 'pdfHeaderImg', aliases: ['imagesourcedentetepourillustration', 'imagesourceentete', 'imageentete', 'pdfheaderimg', 'illustrationentete', 'urlsourcedelimageentete', 'urlimageentete', 'logoentetepdf'] },
+    { header: 'Texte d’entête de page', field: 'pdfPageHeaderText', aliases: ['textedentetedepage', 'texteentetedepage', 'texteentete', 'pdfpageheadertext', 'entetedepage', 'entetepdf'] },
+    { header: 'Texte de bas de page', field: 'pdfPageFooterText', aliases: ['textedebasdepage', 'textebasdepage', 'pieddepage', 'pdfpagefootertext', 'basdepage', 'pieddepagepdf'] },
+    { header: 'Texte d’information dernière page', field: 'pdfLastPageInfoText', aliases: ['textedinformationdernierepage', 'texteinformationdernierepage', 'textedernierepage', 'pdflastpageinfotext', 'dernierepage', 'informationdernierepage', 'textedernierepagepdf'] },
+    { header: "Couleur d'arrière plan des entêtes des sections", field: 'pdfHeaderBgColor', aliases: ['couleurdarriereplandesentetesdessections', 'couleurdarriereplandesentetesdesection', 'couleurarriereplanentetes', 'couleurentetes', 'couleurentetessections', 'pdfheaderbgcolor'] },
+    { header: 'Couleur de bordure des sections', field: 'pdfCardBorderColor', aliases: ['couleurdeborduredessections', 'couleurdeborduredesection', 'couleurborduresections', 'couleurbordure', 'pdfcardbordercolor'] },
+    { header: "Couleur d'arrière plan des sections", field: 'pdfCardBgColor', aliases: ['couleurdarriereplandessections', 'couleurdarriereplandesection', 'couleurarriereplansections', 'couleurfondsections', 'pdfcardbgcolor'] },
+    { header: 'Couleur du texte des labels des champs', field: 'pdfLabelTextColor', aliases: ['couleurdutextedeslabelsdeschamps', 'couleurtextelabels', 'couleurlabels', 'couleurdeslabels', 'pdflabeltextcolor'] },
     { header: 'Masquer les champs concernant l’Électrode Adulte ou Mixte (A) de secours', field: 'pdfHideElectrodeSecoursA', aliases: ['masquerleschampsconcernantlelectrodeadulteoumixteadesecours', 'masquerelectrodeadultesecours', 'masquerelectrodeasecours', 'pdfhideelectrodesecoursa'], type: 'yesno' },
     { header: 'Masquer les champs concernant l’Électrode Pédiatrique (P) de secours', field: 'pdfHideElectrodeSecoursP', aliases: ['masquerleschampsconcernantlelectrodepediatriquepdesecours', 'masquerelectrodepediatriquesecours', 'masquerelectrodepsecours', 'pdfhideelectrodesecoursp'], type: 'yesno' },
-    { header: 'Masquer l’inventaire du Kit/Trousse de secours', field: 'pdfHideKitSecours', aliases: ['masquerlinventairedukittroussedesecours', 'masquerinventairekitsecours', 'masquerkitsecours', 'pdfhidekitsecours'], type: 'yesno' },
+    { header: 'Masquer l’inventaire du Kit/Trousse de secours', field: 'pdfHideKitSecours', aliases: ['masquerlinventairedukittroussedesecours', 'masquerinventairekitsecours', 'masquerkitsecours', 'masquertroussedesecours', 'pdfhidekitsecours'], type: 'yesno' },
     { header: 'Simplifier les champs du Coffret/Boîtier', field: 'pdfSimplifyCoffret', aliases: ['simplifierleschampsducoffretboitier', 'simplifiercoffretboitier', 'simplifiercoffret', 'pdfsimplifycoffret'], type: 'yesno' },
     { header: 'Masquer la section Vérifications techniques', field: 'pdfHideVerificationsTechniques', aliases: ['masquerlasectionverificationstechniques', 'masquerverificationstechniques', 'pdfhideverificationstechniques'], type: 'yesno' },
     { header: 'Masquer les horodatages de Début et Fin d’intervention à la section Diagnostic et Clôture', field: 'pdfHideHorodatagesDiagnostic', aliases: ['masquerleshorodatagesdedebutetfindinterventionalasectiondiagnosticetcloture', 'masquerhorodatagesdiagnostic', 'masquerhorodatages', 'pdfhidehorodatagesdiagnostic'], type: 'yesno' },
-    { header: 'Afficher les informations sur la demande de devis à la section Diagnostic et clôture', field: 'pdfShowDemandeDevisDetails', aliases: ['afficherlesinformationssurlademandededevisalasectiondiagnosticetcloture', 'afficherdemandededevis', 'pdfshowdemandedevisdetails'], type: 'yesno' },
+    { header: 'Afficher les informations sur la demande de devis à la section Diagnostic et clôture', field: 'pdfShowDemandeDevisDetails', aliases: ['afficherlesinformationssurlademandededevisalasectiondiagnosticetcloture', 'afficherdemandededevis', 'afficherinformationsdemandedevis', 'pdfshowdemandedevisdetails'], type: 'yesno' },
   ],
   communicationPortailClient: [
-    { header: 'Message à afficher', field: 'communicationPortailClient', aliases: ['messageaafficher', 'message', 'communicationportailclient', 'texte', 'annonce', 'communication', 'informationclient', 'messageportailclient'] },
+    { header: 'Message à afficher', field: 'communicationPortailClient', aliases: ['messageaafficher', 'message', 'communicationportailclient', 'texte', 'annonce', 'communication', 'informationclient', 'messageportailclient', 'texteportailclient', 'bandeaudinformation', 'bandeau', 'messageclient', 'infoclient', 'portailclient', 'communicationclient'] },
   ],
   observateurActionsSuspectes: [
     { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idtrace', 'reference'] },
@@ -2920,8 +2920,9 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
   const merged: any = {
     ...parsedJsonFallback,
     ...obj,
-    envId: obj.envId || parsedJsonFallback.envId || tenantId,
-    tenantId: obj.tenantId || parsedJsonFallback.tenantId || tenantId,
+    envId: tenantId,
+    tenantId: tenantId,
+    _fromSpreadsheet: true,
     _sheetRowNumber: rowIndexZeroBased + 2,
     _rawSheetRow: rawByHeader,
   };
@@ -3670,9 +3671,62 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         }
       }
     }
+    merged.name = String(
+      merged.name ||
+      merged.nom ||
+      merged.prenom ||
+      merged['Nom et prénom.'] ||
+      merged['Nom et prénom'] ||
+      merged['Nom complet'] ||
+      merged['Collaborateur'] ||
+      merged['Membre'] ||
+      ''
+    ).trim();
+    merged.email = String(
+      merged.email ||
+      merged['Email.'] ||
+      merged['Email'] ||
+      merged['Adresse email'] ||
+      merged['Courriel'] ||
+      ''
+    ).trim();
+
+    // Smart positional/content fallback if custom column headers prevented name or email extraction
+    if (!merged.name || !merged.email) {
+      const cellValues = (rawRowArray || [])
+        .map(c => String(c ?? '').trim())
+        .filter(c => c !== '' && !c.startsWith('{"') && !c.startsWith('[{'));
+      if (!merged.email) {
+        const emailCell = cellValues.find(c => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c));
+        if (emailCell) merged.email = emailCell;
+      }
+      if (!merged.name) {
+        const roleKeywords = new Set([
+          'administrateur', 'technicien', 'super-administrateur', 'propriétaire / admin',
+          'administration', 'planification', 'logistique', 'comptabilité', 'contrôleur',
+          'développeur', 'actif', 'inactif', 'oui', 'non'
+        ]);
+        const nameCandidate = cellValues.find(
+          c =>
+            c !== merged.email &&
+            !c.includes('@') &&
+            !/^\d+$/.test(c) &&
+            !/^(?:Entrepôt|Véhicule)\s+[A-J]$/i.test(c) &&
+            !roleKeywords.has(c.toLowerCase())
+        );
+        if (nameCandidate) merged.name = nameCandidate;
+      }
+      if (!merged.pin) {
+        const pinCandidate = cellValues.find(c => /^\d{4,8}$/.test(c) && c !== merged.startAddressZip);
+        if (pinCandidate) merged.pin = pinCandidate;
+      }
+      if (!merged.locationLink) {
+        const locCandidate = cellValues.find(c => /^(?:Entrepôt|Véhicule)\s+[A-J]$/i.test(c));
+        if (locCandidate) merged.locationLink = locCandidate;
+      }
+    }
+
     merged.id = merged.id || merged.email || merged.name || `mem_${rowIndexZeroBased + 2}`;
-    merged.name = String(merged.name || merged.nom || merged['Nom et prénom.'] || merged['Nom et prénom'] || merged['Nom complet'] || '').trim();
-    merged.email = String(merged.email || merged['Email.'] || merged['Email'] || '').trim();
     const rawRole = String(
       (merged.role && merged.role !== 'Collaborateur' ? merged.role : '') ||
       merged.categorie ||
@@ -3707,6 +3761,9 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.pin = merged.pin !== undefined && merged.pin !== null ? String(merged.pin).trim() : '';
     merged.status = merged.status || 'Actif';
     merged.lastActive = merged.lastActive || 'En ligne';
+    merged.envId = tenantId;
+    merged.tenantId = tenantId;
+    merged._fromSpreadsheet = true;
     if (merged.competences && !Array.isArray(merged.competences)) {
       merged.competences = String(merged.competences)
         .split(/[,;/|]/)
@@ -4295,22 +4352,101 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     }
   } else if (tabType === 'reglages') {
     merged.id = merged.id || 'tenant_reglages';
-    if (merged.name) merged.nomCommercial = merged.name;
+    const resolvedLang = String(merged.langue || merged.language || 'Français, France').trim();
+    merged.langue = resolvedLang;
+    merged.language = resolvedLang;
+    const resolvedName = String(merged.name ?? merged.nomCommercial ?? '').trim();
+    merged.name = resolvedName;
+    merged.nomCommercial = resolvedName;
+    merged.logo = String(merged.logo ?? '').trim();
+    merged.website = String(merged.website ?? '').trim();
+    merged.email = String(merged.email ?? '').trim();
+    merged.phone = String(merged.phone ?? '').trim();
+    merged.nomLogiciel = String(merged.nomLogiciel ?? '').trim();
+    merged.conditionsLegalesLink = String(merged.conditionsLegalesLink ?? '').trim();
+    merged.mentionsLegalesFactures = String(merged.mentionsLegalesFactures ?? '').trim();
+    merged.gmailPartageLocalisation = String(merged.gmailPartageLocalisation ?? '').trim();
     if (typeof merged.hiddenTabs === 'string') {
       merged.hiddenTabs = merged.hiddenTabs
         .split(/[,;|]/)
         .map((s: string) => s.trim())
         .filter(Boolean);
+    } else if (!Array.isArray(merged.hiddenTabs)) {
+      merged.hiddenTabs = [];
     }
   } else if (tabType === 'apparenceRapportsPdf') {
     merged.id = merged.id || 'tenant_pdf_template';
+    for (const [colIdx, def] of colToDef.entries()) {
+      const rawCell = String(row[colIdx] ?? '').trim();
+      if (rawCell === '') {
+        merged[def.field] = '';
+      }
+    }
+    merged.pdfHeaderImg = String(merged.pdfHeaderImg ?? '').trim();
+    merged.pdfPageHeaderText = String(merged.pdfPageHeaderText ?? '').trim();
+    merged.pdfPageFooterText = String(merged.pdfPageFooterText ?? '').trim();
+    merged.pdfLastPageInfoText = String(merged.pdfLastPageInfoText ?? '').trim();
+    merged.pdfHeaderBgColor = String(merged.pdfHeaderBgColor || '#7c2882').trim();
+    merged.pdfCardBorderColor = String(merged.pdfCardBorderColor || '#7d2882').trim();
+    merged.pdfCardBgColor = String(merged.pdfCardBgColor || '#fef2ff').trim();
+    merged.pdfLabelTextColor = String(merged.pdfLabelTextColor || '#9f71a2').trim();
+    merged.pdfHideElectrodeSecoursA = normalizeYesNo(merged.pdfHideElectrodeSecoursA, 'Non');
+    merged.pdfHideElectrodeSecoursP = normalizeYesNo(merged.pdfHideElectrodeSecoursP, 'Non');
+    merged.pdfHideKitSecours = normalizeYesNo(merged.pdfHideKitSecours, 'Non');
+    merged.pdfSimplifyCoffret = normalizeYesNo(merged.pdfSimplifyCoffret, 'Non');
+    merged.pdfHideVerificationsTechniques = normalizeYesNo(merged.pdfHideVerificationsTechniques, 'Non');
+    merged.pdfHideHorodatagesDiagnostic = normalizeYesNo(merged.pdfHideHorodatagesDiagnostic, 'Non');
+    merged.pdfShowDemandeDevisDetails = normalizeYesNo(merged.pdfShowDemandeDevisDetails, 'Non');
   } else if (tabType === 'reglagesCrm') {
     merged.id = merged.id || 'tenant_crm_settings';
   } else if (tabType === 'communicationPortailClient') {
     merged.id = merged.id || 'tenant_portal_com';
-    merged.communicationPortailClient = merged.communicationPortailClient || merged.message || '';
+    let msgVal: string | undefined = undefined;
+    for (const [colIdx, def] of colToDef.entries()) {
+      if (def.field === 'communicationPortailClient') {
+        msgVal = String(row[colIdx] ?? '').trim();
+        break;
+      }
+    }
+    if (msgVal === undefined) {
+      msgVal = merged.communicationPortailClient ?? merged.message;
+    }
+    if (msgVal === undefined) {
+      const firstCell = rawRowArray.find(c => c && c !== 'tenant_portal_com' && !c.startsWith('{'));
+      msgVal = firstCell ?? '';
+    }
+    merged.communicationPortailClient = String(msgVal ?? '').trim();
+    merged.message = merged.communicationPortailClient;
   } else if (tabType === 'intituleEmplacements') {
     merged.id = merged.id || merged.emplacement || 'emplacements_config';
+    const normalizeLocName = (rawKey: string): string | null => {
+      const cleaned = String(rawKey || '')
+        .replace(/\.+$/, '')
+        .trim();
+      const m = cleaned.match(/^(entrep[oô]t|v[eé]hicule)\s*([a-j])$/i);
+      if (!m) return null;
+      const prefix = m[1].toLowerCase().startsWith('entrep') ? 'Entrepôt' : 'Véhicule';
+      return `${prefix} ${m[2].toUpperCase()}`;
+    };
+    for (const [colIdx, def] of colToDef.entries()) {
+      const normLoc = normalizeLocName(def.field);
+      if (normLoc) {
+        merged[normLoc] = String(row[colIdx] ?? '').trim();
+      }
+    }
+    for (const [rk, rv] of Object.entries(rawByHeader)) {
+      const normLoc = normalizeLocName(rk);
+      if (normLoc && merged[normLoc] === undefined) {
+        merged[normLoc] = String(rv ?? '').trim();
+      }
+    }
+    const verticalLoc = normalizeLocName(merged.emplacement || row[0] || '');
+    if (verticalLoc) {
+      merged.emplacement = verticalLoc;
+      const intituleVal = String(merged.intitule ?? row[1] ?? '').trim();
+      merged.intitule = intituleVal;
+      merged[verticalLoc] = intituleVal;
+    }
   } else if (tabType === 'observateurActionsSuspectes') {
     merged.id = merged.id || `sus_${rowIndexZeroBased + 2}`;
     merged.timestamp = merged.timestamp || new Date().toISOString();
@@ -5852,7 +5988,7 @@ export async function fetchTenantSheetCollection(
         }
         if (GENERIC_CANONICAL_HEADERS[tabType]) {
           const matched = resolveGenericColumnFieldMap(row0, tabType);
-          return matched.size >= Math.min(2, GENERIC_CANONICAL_HEADERS[tabType]!.length);
+          return matched.size >= 1;
         }
         return true;
       };
@@ -5952,7 +6088,20 @@ export async function fetchTenantSheetCollection(
 
           baseItems.push(mapped);
         }
+      }
 
+      if (
+        rawMatrix &&
+        baseItems.length === 0 &&
+        (tabType === 'reglages' ||
+          tabType === 'apparenceRapportsPdf' ||
+          tabType === 'communicationPortailClient' ||
+          tabType === 'intituleEmplacements')
+      ) {
+        baseItems.push(mapRowToGenericRecord(headers, [], 0, tenantId, tabType));
+      }
+
+      if (effectiveRows.length > 0) {
         // Auto-generate and persist missing "Section 1 - Identifiant." / "Identifiant" for Défibrillateurs and Autres Matériels
         if ((tabType === 'defibrillateurs' || tabType === 'autresMateriels') && baseItems.length > 0) {
           const usedUpperIds = new Set<string>();

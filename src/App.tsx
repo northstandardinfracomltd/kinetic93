@@ -3586,14 +3586,25 @@ export default function App() {
             break;
           case 'intituleEmplacements': {
             const nextLocs: Record<string, string> = {};
+            const normalizeLocKey = (rawKey: string): string | null => {
+              const cleaned = String(rawKey || '').replace(/\.+$/, '').trim();
+              const m = cleaned.match(/^(entrep[oô]t|v[eé]hicule)\s*([a-j])$/i);
+              if (!m) return null;
+              const prefix = m[1].toLowerCase().startsWith('entrep') ? 'Entrepôt' : 'Véhicule';
+              return `${prefix} ${m[2].toUpperCase()}`;
+            };
             for (const row of items) {
               if (!row || typeof row !== 'object') continue;
               if (row.emplacement && row.intitule !== undefined) {
-                nextLocs[String(row.emplacement).trim()] = String(row.intitule);
+                const normLoc = normalizeLocKey(String(row.emplacement));
+                if (normLoc) {
+                  nextLocs[normLoc] = String(row.intitule).trim();
+                }
               }
               for (const [k, v] of Object.entries(row)) {
-                if (/^(?:Entrepôt|Véhicule)\s+[A-J]$/i.test(k) && v !== undefined && v !== null && String(v).trim() !== '') {
-                  nextLocs[k] = String(v).trim();
+                const normLoc = normalizeLocKey(k);
+                if (normLoc && v !== undefined && v !== null) {
+                  nextLocs[normLoc] = String(v).trim();
                 }
               }
             }
@@ -3652,6 +3663,11 @@ export default function App() {
                 }
               }
               if (Object.keys(cleanPatch).length > 0) {
+                const langVal = cleanPatch.langue || cleanPatch.language;
+                if (langVal) {
+                  setLanguage(String(langVal));
+                  safeSetLocalStorage(`defib_${activeTid}_lang`, String(langVal));
+                }
                 if (cleanPatch.enableOtherEquipments) {
                   setEnableOtherEquipments(cleanPatch.enableOtherEquipments);
                   safeSetLocalStorage(`defib_${activeTid}_enable_other_equipments`, cleanPatch.enableOtherEquipments);

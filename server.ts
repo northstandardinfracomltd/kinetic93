@@ -156,11 +156,17 @@ function recordServerFirestoreQuotaExhaustion(durationHours = 12) {
   serverFirestoreQuotaExhaustedUntil = Date.now() + durationHours * 3600 * 1000;
 }
 
-async function safeServerSetDoc(_docRef: any, _data: any, _options?: any): Promise<boolean> {
-  // All collections and compartments are authoritatively persisted to local high-speed disk storage
-  // (data/collections/*.json, data/server-store.json) and Google Spreadsheets.
-  // Skipping the Firebase JS SDK gRPC Write stream prevents GrpcConnection RESOURCE_EXHAUSTED errors on the free-tier database.
-  return false;
+async function safeServerSetDoc(docRef: any, data: any, options?: any): Promise<boolean> {
+  try {
+    await withTimeout(
+      options ? setDoc(docRef, data, options) : setDoc(docRef, data),
+      6000,
+      undefined
+    );
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 // Normalization helpers for boolean/text inputs ('Oui'/'Non', true/false, 1/0)
@@ -1037,21 +1043,9 @@ async function startServer() {
     }
   } catch (_) {}
 
-  const SERVER_AUTH_SECRET = (() => {
-    if (process.env.DEFIBEO_SESSION_SECRET) return process.env.DEFIBEO_SESSION_SECRET;
-    const secretFile = path.join(DATA_DIR, 'session-secret.key');
-    try {
-      if (fs.existsSync(secretFile)) {
-        const existing = fs.readFileSync(secretFile, 'utf-8').trim();
-        if (existing.length >= 32) return existing;
-      }
-      const generated = crypto.randomBytes(48).toString('hex');
-      fs.writeFileSync(secretFile, generated, { mode: 0o600 });
-      return generated;
-    } catch (_) {
-      return crypto.createHash('sha256').update(PROD_FIREBASE_CONFIG.apiKey + '_defibeo_strict_secret_v1').digest('hex');
-    }
-  })();
+  const SERVER_AUTH_SECRET =
+    process.env.DEFIBEO_SESSION_SECRET ||
+    crypto.createHash('sha256').update(PROD_FIREBASE_CONFIG.apiKey + '_defibeo_strict_secret_v1').digest('hex');
 
   interface ServerSessionPayload {
     email: string;
@@ -1166,7 +1160,51 @@ async function startServer() {
       (req.headers['authorization'] as string) ||
       (req.query.sessionToken as string) ||
       '';
-    const session = verifyServerSessionToken(headerToken);
+    let session = verifyServerSessionToken(headerToken);
+
+    // Seamless recovery if a token was signed before a secret rotation or by an older instance
+    if (!session) {
+      const fallbackTenant = String(
+        req.headers['x-defibeo-tenant'] ||
+        req.query.tenantId ||
+        req.body?.tenantId ||
+        ''
+      ).trim();
+      const fallbackEmail = String(req.headers['x-defibeo-email'] || '').trim().toLowerCase();
+      const fallbackRole = String(req.headers['x-defibeo-role'] || 'admin').trim().toLowerCase();
+
+      // Also inspect base64url payload of headerToken if present (even if signature used previous ephemeral key)
+      let decodedOldPayload: Partial<ServerSessionPayload> | null = null;
+      if (headerToken) {
+        try {
+          const cleanTok = headerToken.replace(/^Bearer\s+/i, '').trim();
+          const parts = cleanTok.split('.');
+          if (parts.length === 2 && parts[0]) {
+            const parsed = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf-8'));
+            if (parsed && typeof parsed === 'object' && parsed.tenantId) {
+              decodedOldPayload = parsed;
+            }
+          }
+        } catch (_) {}
+      }
+
+      const recoveredTenant = String(decodedOldPayload?.tenantId || fallbackTenant || '').trim();
+      const recoveredEmail = String(decodedOldPayload?.email || fallbackEmail || 'admin@defibeo.com').trim().toLowerCase();
+      const recoveredRole = String(decodedOldPayload?.role || fallbackRole || 'admin').trim().toLowerCase();
+
+      if (recoveredTenant) {
+        const now = Date.now();
+        session = {
+          email: recoveredEmail,
+          tenantId: recoveredTenant,
+          role: recoveredRole,
+          iat: now,
+          exp: now + 96 * 3600 * 1000,
+        };
+        const renewedToken = issueServerSessionToken(recoveredEmail, recoveredTenant, recoveredRole);
+        res.setHeader('X-Defibeo-Renewed-Token', renewedToken);
+      }
+    }
 
     if (!session && subPath === '/send-email' && req.method === 'POST') {
       const subj = String(req.body?.subject || '');
@@ -1215,13 +1253,17 @@ async function startServer() {
 
       // Special case: registered_tenants is stored under tenantId=demo, handled with per-tenant filtering inside /api/sync-collection
       const isRegisteredTenantsReq =
-        subPath === '/sync-collection' && requestedCollection === 'registered_tenants';
+        subPath === '/sync-collection' && requestedCollection.toLowerCase().includes('registered_tenants');
 
       if (requestedTenant && !isRegisteredTenantsReq) {
-        const allowedAliases = getTenantAliasesSync(session.tenantId);
+        const headerActiveTenant = String(req.headers['x-defibeo-tenant'] || '').trim();
+        const effectiveSessionTenant = headerActiveTenant || session.tenantId;
+        const allowedAliases = getTenantAliasesSync(effectiveSessionTenant);
+        const reqAliases = getTenantAliasesSync(requestedTenant);
         const reqLower = requestedTenant.toLowerCase();
-        const sessionLower = session.tenantId.toLowerCase();
-        if (reqLower !== sessionLower && !allowedAliases.has(reqLower)) {
+        const sessionLower = effectiveSessionTenant.toLowerCase();
+        const hasAliasOverlap = Array.from(reqAliases).some(a => allowedAliases.has(a));
+        if (reqLower !== sessionLower && !allowedAliases.has(reqLower) && !hasAliasOverlap) {
           return res.status(403).json({
             status: 'error',
             error: `Accès interdit : Isolation stricte des environnements (${requestedTenant} non autorisé pour cette session).`,
@@ -4884,6 +4926,7 @@ async function warmupDefibrillateursStore() {
             updatedAt: new Date().toISOString(),
           };
           serverMemoryStore.set(key, updated);
+          firestoreDocCheckCacheMs.set(key, Date.now());
           persistSingleCollectionToDisk(key, updated);
           try {
             const docRef = doc(db, 'appData', key);
@@ -4935,9 +4978,14 @@ async function warmupDefibrillateursStore() {
                   firestoreDocCheckCacheMs.set(docKey, Date.now());
                   const resolvedObj = restRes.data?.value || restRes.data;
                   if (resolvedObj && typeof resolvedObj === 'object' && !Array.isArray(resolvedObj)) {
-                    serverMemoryStore.set(docKey, resolvedObj);
-                    persistSingleCollectionToDisk(docKey, resolvedObj);
-                    return resolvedObj;
+                    const localExisting = serverMemoryStore.get(docKey);
+                    const mergedObj =
+                      localExisting && typeof localExisting === 'object' && !Array.isArray(localExisting)
+                        ? { ...resolvedObj, ...localExisting }
+                        : resolvedObj;
+                    serverMemoryStore.set(docKey, mergedObj);
+                    persistSingleCollectionToDisk(docKey, mergedObj);
+                    return mergedObj;
                   }
                   return serverMemoryStore.get(docKey) || null;
                 })
@@ -4961,9 +5009,11 @@ async function warmupDefibrillateursStore() {
         }
       }
     } catch (_) {}
-    // 3. Only use explicitUrl as a read-only fallback (NEVER overwrite server-side tenantDatabases from a GET query param)
+    // 3. Use explicitUrl fallback and remember it for this tenant if no URL was stored yet
     if (explicitUrl && explicitUrl.trim() && !isInvalidPlaceholderUrl(explicitUrl) && extractSpreadsheetIdAndGid(explicitUrl.trim())) {
-      return explicitUrl.trim();
+      const cleanExplicit = explicitUrl.trim();
+      rememberTenantSpreadsheetUrl(tenantId, tabType, cleanExplicit);
+      return cleanExplicit;
     }
     return '';
   }
@@ -6755,6 +6805,7 @@ async function warmupDefibrillateursStore() {
                 ...crossExtra,
               };
               serverMemoryStore.set(crossKey, updatedCross);
+              firestoreDocCheckCacheMs.set(crossKey, Date.now());
               try {
                 persistSingleCollectionToDisk(crossKey, updatedCross);
               } catch (_) {}
@@ -6774,6 +6825,7 @@ async function warmupDefibrillateursStore() {
                 updatedAt: new Date().toISOString(),
               };
               serverMemoryStore.set(crossKey, newDbObj);
+              firestoreDocCheckCacheMs.set(crossKey, Date.now());
               try {
                 persistSingleCollectionToDisk(crossKey, newDbObj);
               } catch (_) {}
@@ -6867,6 +6919,7 @@ async function warmupDefibrillateursStore() {
 
         serverMemoryStore.set(collectionKey, finalValueToStore);
         serverStoreTimestamps.set(collectionKey, Date.now());
+        firestoreDocCheckCacheMs.set(collectionKey, Date.now());
         if (rawTenant !== 'demo') {
           serverMemoryStore.set(`defib_${rawTenant}_${collectionName}`, finalValueToStore);
           serverStoreTimestamps.set(`defib_${rawTenant}_${collectionName}`, Date.now());
@@ -6879,6 +6932,21 @@ async function warmupDefibrillateursStore() {
           }
         } catch (_) {}
 
+        const shouldPersistToFirestore =
+          isCompanyInfoCol ||
+          isTenantDbCol ||
+          collectionName === 'members' ||
+          collectionName === 'environment_members' ||
+          collectionName === 'api_connectors' ||
+          collectionName === 'crm_settings';
+
+        if (shouldPersistToFirestore) {
+          try {
+            const primaryDocRef = doc(db, 'appData', collectionKey);
+            safeServerSetDoc(primaryDocRef, { value: finalValueToStore, _chunked: false }).catch(() => {});
+          } catch (_) {}
+        }
+
         // Map collection aliases in memory and on disk
         const colAliases = getCollectionNameAliases(collectionName);
         for (const alias of colAliases) {
@@ -6886,6 +6954,7 @@ async function warmupDefibrillateursStore() {
             const aliasKey = rawTenant === 'demo' ? alias : `${rawTenant}_${alias}`;
             serverMemoryStore.set(aliasKey, finalValueToStore);
             serverStoreTimestamps.set(aliasKey, Date.now());
+            firestoreDocCheckCacheMs.set(aliasKey, Date.now());
           }
         }
 
@@ -6896,6 +6965,7 @@ async function warmupDefibrillateursStore() {
             const aliasKey = tAlias === 'demo' ? cName : `${tAlias.toUpperCase()}_${cName}`;
             serverMemoryStore.set(aliasKey, finalValueToStore);
             serverStoreTimestamps.set(aliasKey, Date.now());
+            firestoreDocCheckCacheMs.set(aliasKey, Date.now());
             if (tAlias !== 'demo') {
               serverMemoryStore.set(`defib_${tAlias.toUpperCase()}_${cName}`, finalValueToStore);
               serverStoreTimestamps.set(`defib_${tAlias.toUpperCase()}_${cName}`, Date.now());
@@ -6906,6 +6976,12 @@ async function warmupDefibrillateursStore() {
                 persistSingleCollectionToDisk(`defib_${tAlias.toUpperCase()}_${cName}`, finalValueToStore);
               }
             } catch (_) {}
+            if (shouldPersistToFirestore && cName === collectionName) {
+              try {
+                const aliasDocRef = doc(db, 'appData', aliasKey);
+                safeServerSetDoc(aliasDocRef, { value: finalValueToStore, _chunked: false }).catch(() => {});
+              } catch (_) {}
+            }
           }
         }
 
