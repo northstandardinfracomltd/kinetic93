@@ -55,7 +55,6 @@ import { CrmTab } from './components/CrmTab';
 import PublicPortal from './components/PublicPortal';
 import ClientPortal from './components/ClientPortal';
 import Login from './components/Login';
-import MegaAdminDashboard from './components/MegaAdminDashboard';
 import StocksTab from './components/StocksTab';
 import StocksDistribuesTab from './components/StocksDistribuesTab';
 import GedTab from './components/GedTab';
@@ -11320,11 +11319,6 @@ export default function App() {
 
   if (!isLoggedIn) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
-  }
-
-  const loggedRole = localStorage.getItem('defib_logged_user_role') || '';
-  if (loggedRole === 'megaadmin') {
-    return <MegaAdminDashboard onLogout={handleLogout} />;
   }
 
   if (isBlockedByPrez) {

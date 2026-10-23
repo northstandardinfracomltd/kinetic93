@@ -368,7 +368,11 @@ export function getCollectionKey(collectionName: string, tenantId: string = curr
 }
 
 export const KNOWN_TENANTS_REGISTRY: Array<Partial<Tenant> & { id: string; shortEnvId: string; companyName: string }> = [
-  { id: 'demo', shortEnvId: 'D10', companyName: 'Défibeo Solutions', lang: 'Français' },
+  { id: 'demo', shortEnvId: 'D10', companyName: 'Défibeo Solutions', adminEmail: 'account@demo.com', companyEmail: 'contact@defibeo-solutions.com', lang: 'Français' },
+  { id: 'D27', shortEnvId: 'D58', companyName: 'UN DÉFI POUR LA VIE', adminEmail: 'copilotudplv@civilprom.com', companyEmail: 'copilotudplv@civilprom.com', lang: 'Français, France' },
+  { id: 'D28', shortEnvId: 'D19', companyName: "Le Cœur d'un Sam", adminEmail: 'lecoeurdunsam@civilprom.com', companyEmail: 'lecoeurdunsam@civilprom.com', lang: 'Français, France' },
+  { id: 'D26', shortEnvId: 'D67', companyName: 'DSG Test', adminEmail: 'dsg.test@civilprom.com', companyEmail: 'dsg.test@civilprom.com', lang: 'Français, France' },
+  { id: 'D7', shortEnvId: 'D28', companyName: 'JPM973', adminEmail: 'jpm973@civilprom.com', companyEmail: 'jpm973@civilprom.com', lang: 'Français, France' },
 ];
 
 export function findTenantInList<T extends { id?: string; shortEnvId?: string }>(tenants: T[], targetTenantId: string): T | undefined {
@@ -1992,9 +1996,9 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
 
   if (!bypassCache && typeof navigator !== 'undefined' && !navigator.onLine) {
     const cached = getFromLocalCache<Tenant[]>('registered_tenants') || [];
-    return addDemoIfNeeded(cached);
+    return addDemoIfNeeded(cached.length > 0 ? cached : (KNOWN_TENANTS_REGISTRY as Tenant[]));
   }
-  // 1. Primary strategy: fetch registered_tenants from fast server relay if available
+  // Fetch master tenants directly from server (which reads the Master Google Spreadsheet)
   try {
     if (typeof fetch !== 'undefined' && hasValidClientSession()) {
       const resp = await fetch('/api/sync-collection?collectionName=registered_tenants&tenantId=demo', {
@@ -2003,13 +2007,7 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
       if (resp.ok) {
         const json = await resp.json();
         if (Array.isArray(json?.value) && json.value.length > 0) {
-          let mergedServer = addDemoIfNeeded(json.value as Tenant[]);
-          const existingIds = new Set(mergedServer.map(t => t.id?.toLowerCase()));
-          for (const kt of KNOWN_TENANTS_REGISTRY) {
-            if (!existingIds.has(kt.id.toLowerCase())) {
-              mergedServer.push(kt as Tenant);
-            }
-          }
+          const mergedServer = addDemoIfNeeded(json.value as Tenant[]);
           saveToLocalCache('registered_tenants', mergedServer);
           return mergedServer;
         }
@@ -2017,50 +2015,11 @@ export async function getRegisteredTenants(bypassCache: boolean = false): Promis
     }
   } catch (_) {}
 
-  // 2. Secondary strategy: Firestore fallback when quota is not exhausted
-  if (!isFirestoreQuotaExhausted()) {
-    try {
-      const docRef = doc(db, 'appData', 'registered_tenants');
-      const snap = await getDocOptimistic(docRef, 'registered_tenants', 6000);
-      if (snap && snap.exists()) {
-        let tenants = (snap.data().value || []) as Tenant[];
-        tenants = addDemoIfNeeded(tenants);
-        let needsUpdate = false;
-        const existingShortCodes = tenants
-          .map(t => t.shortEnvId)
-          .filter((code): code is string => !!code);
-
-        const updatedTenants = tenants.map(t => {
-          if (!t.shortEnvId) {
-            const newCode = generateUniqueShortEnvId(existingShortCodes);
-            existingShortCodes.push(newCode);
-            needsUpdate = true;
-            return { ...t, shortEnvId: newCode };
-          }
-          return t;
-        });
-
-        if (needsUpdate) {
-          saveCollectionToFirestore('registered_tenants', updatedTenants, 'demo').catch(() => {});
-        }
-
-        saveToLocalCache('registered_tenants', updatedTenants);
-        return updatedTenants;
-      }
-    } catch (err) {
-      console.log('[Firestore Cache-First] Fallback to cache for registered_tenants:', err);
-    }
-  }
-
   const cached = getFromLocalCache<Tenant[]>('registered_tenants') || [];
-  const combined = [...cached];
-  const existingIds = new Set(combined.map(t => t.id?.toLowerCase()));
-  for (const kt of KNOWN_TENANTS_REGISTRY) {
-    if (!existingIds.has(kt.id.toLowerCase())) {
-      combined.push(kt as Tenant);
-    }
+  if (cached.length > 0) {
+    return addDemoIfNeeded(cached);
   }
-  return addDemoIfNeeded(combined);
+  return addDemoIfNeeded(KNOWN_TENANTS_REGISTRY as Tenant[]);
 }
 
 /**

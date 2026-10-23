@@ -23,6 +23,8 @@ import {
   deleteRecordsFromTenantSheet,
   extractSpreadsheetIdAndGid,
   isSheetCollectionCached,
+  fetchMasterTenantsFromSpreadsheet,
+  getCachedMasterTenantsSync,
 } from "./src/server/googleSheetsEngine";
 dotenv.config();
 
@@ -1958,30 +1960,23 @@ ${question}`;
     }
   });
 
-// Helper function to fetch registered tenants safely on the server
-let cachedTenantsList: any[] = [];
+// Helper function to fetch registered tenants directly from the Master Google Spreadsheet
+let cachedTenantsList: any[] = getCachedMasterTenantsSync();
 let lastTenantsFetchTime = 0;
 
 async function getRegisteredTenantsFromDb(forceRefresh = false): Promise<any[]> {
-  const now = Date.now();
-  if (!forceRefresh && cachedTenantsList.length > 0 && (now - lastTenantsFetchTime < 30000)) {
-    return cachedTenantsList;
-  }
   try {
-    const docRef = doc(db, 'appData', 'registered_tenants');
-    const snap = await withTimeout(getDoc(docRef), 8000, null);
-    if (snap && snap.exists()) {
-      const list = snap.data().value || [];
-      if (Array.isArray(list) && list.length > 0) {
-        cachedTenantsList = list;
-        lastTenantsFetchTime = now;
-        return list;
-      }
+    const list = await fetchMasterTenantsFromSpreadsheet(forceRefresh);
+    if (Array.isArray(list) && list.length > 0) {
+      cachedTenantsList = list;
+      lastTenantsFetchTime = Date.now();
+      serverMemoryStore.set('registered_tenants', list);
+      return list;
     }
   } catch (e) {
-    console.error("Error fetching registered tenants in server:", e);
+    console.error("Error fetching master tenants spreadsheet in server:", e);
   }
-  return cachedTenantsList;
+  return getCachedMasterTenantsSync();
 }
 
 // Comprehensive tenant resolver with prefix tolerance (D58 <-> 58) and document fallback
@@ -2833,73 +2828,22 @@ function formatDefibrillateurOutput(d: any): any {
 }
 
 const SERVER_KNOWN_TENANTS: any[] = [
-  { id: 'demo', shortEnvId: 'D10', companyName: 'Défibeo Solutions', companyEmail: 'contact@defibeo-solutions.com', companyPhone: '+33 1 47 20 00 01', adminName: 'Admin Démo', adminEmail: 'account@demo.com', lang: 'Français' },
-  { id: 'tenant_pvzvub57h_1781513640995', shortEnvId: 'D71', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv@civilprom.com', companyPhone: '0651517065', adminName: 'Jean-Luc Degont', adminEmail: 'udplv@civilprom.com', lang: 'Français, France' },
-  { id: 'D1', shortEnvId: 'D38', companyName: 'DemoTest', companyEmail: 'demottest@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'demottest@civilprom.com', lang: 'Français' },
-  { id: 'D2', shortEnvId: 'D90', companyName: 'Test', companyEmail: 'test@civilprom.com', companyPhone: '0651517065', adminName: 'Noor Jakub', adminEmail: 'test@civilprom.com', lang: 'Français' },
-  { id: 'D3', shortEnvId: 'D63', companyName: 'DEROESCH', companyEmail: 'deroesch@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'deroesch@civilprom.com', lang: 'Français' },
-  { id: 'D4', shortEnvId: 'D64', companyName: 'DemoTest', companyEmail: 'demotest@civilprom.com', companyPhone: '0651517065', adminName: 'Ronan Roesch', adminEmail: 'demotest@civilprom.com', lang: 'Français' },
-  { id: 'D5', shortEnvId: 'D52', companyName: 'MATEO', companyEmail: 'mateo@civilprom.com', companyPhone: '0651516087', adminName: 'Alban test', adminEmail: 'mateo@civilprom.com', lang: 'Français' },
-  { id: 'D6', shortEnvId: 'D53', companyName: 'cozy', companyEmail: 'cozy@civilprom.com', companyPhone: '0909090909', adminName: 'test mind', adminEmail: 'cozy@civilprom.com', lang: 'Français' },
-  { id: 'D7', shortEnvId: 'D28', companyName: 'JPM973', companyEmail: 'jpm973@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Pedro Maignan', adminEmail: 'jpm973@civilprom.com', lang: 'Français, France', nomLogiciel: 'JPM973' },
-  { id: 'D8', shortEnvId: 'D21', companyName: 'SAS Restenvie', companyEmail: 'restenvie@civilprom.com', companyPhone: '0600000000', adminName: 'Laurent Muller', adminEmail: 'restenvie@civilprom.com', lang: 'Français', nomLogiciel: 'Restenvie' },
-  { id: 'D9', shortEnvId: 'D11', companyName: 'DL France Defib', companyEmail: 'dlfrancedefib@civilprom.com', companyPhone: '0600000000', adminName: 'Denis Lamarche', adminEmail: 'dlfrancedefib@civilprom.com', lang: 'Français', nomLogiciel: 'DLFRANCEDEFIB' },
-  { id: 'D10', shortEnvId: 'D88', companyName: 'CardioPro', companyEmail: 'cardiopro@civilprom.com', companyPhone: '0600000000', adminName: 'Anthony Monaldi', adminEmail: 'cardiopro@civilprom.com', lang: 'Français', nomLogiciel: 'CardioPro' },
-  { id: 'D11', shortEnvId: 'D39', companyName: 'CardiaPulse', companyEmail: 'cardiapulse@civilprom.com', companyPhone: '0600000000', adminName: 'Georges Lanzi', adminEmail: 'cardiapulse@civilprom.com', lang: 'Français, France', nomLogiciel: 'CardiaPulse' },
-  { id: 'D12', shortEnvId: 'D22', companyName: 'CardiacSafe', companyEmail: 'cardiacsafe@civilprom.com', companyPhone: '0600000000', adminName: 'Ludovic Desvaux', adminEmail: 'cardiacsafe@civilprom.com', lang: 'Français', nomLogiciel: 'CardiacSafe' },
-  { id: 'D13', shortEnvId: 'D31', companyName: 'Urgence Secours Équipements', companyEmail: 'use@civilprom.com', companyPhone: '0600000000', adminName: 'Arthur Sallé', adminEmail: 'use@civilprom.com', lang: 'Français', nomLogiciel: 'USE' },
-  { id: 'D14', shortEnvId: 'D30', companyName: 'ExtraLife', companyEmail: 'extralife@civilprom.com', companyPhone: '0600000000', adminName: 'Thomas Christophe', adminEmail: 'extralife@civilprom.com', lang: 'Français', nomLogiciel: 'ExtraLife' },
-  { id: 'D15', shortEnvId: 'D62', companyName: 'Serenicoeur', companyEmail: 'serenicoeur@civilprom.com', companyPhone: '0600000000', adminName: 'Hubert Duverdier', adminEmail: 'serenicoeur@civilprom.com', lang: 'Français, France', nomLogiciel: 'Serenicoeur' },
-  { id: 'D16', shortEnvId: 'D85', companyName: 'Un Défi Pour La Vie', companyEmail: 'udplv.copilot@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Luc Degont', adminEmail: 'udplv.copilot@civilprom.com', lang: 'Français', nomLogiciel: 'Copilot' },
-  { id: 'D17', shortEnvId: 'D56', companyName: 'DLFranceDefib', companyEmail: 'dlfrancedefib2@civilprom.com', companyPhone: '0651517065', adminName: 'Demarche Denis', adminEmail: 'dlfrancedefib2@civilprom.com', lang: 'Français, France', nomLogiciel: 'DFranceDefib' },
-  { id: 'D18', shortEnvId: 'D83', companyName: 'DSECURITE GROUPE', companyEmail: 'dsecurite.test@civilprom.com', companyPhone: '0612345678', adminName: 'Jean Dupont', adminEmail: 'dsecurite.test@civilprom.com', lang: 'Français, France', nomLogiciel: 'DSECURITE' },
-  { id: 'D19', shortEnvId: 'D66', companyName: 'LION', companyEmail: 'lion@civilprom.com', companyPhone: '0651517065', adminName: 'Roesch Ronan', adminEmail: 'lion@civilprom.com', lang: 'Français, France', nomLogiciel: 'LION123' },
-  { id: 'D20', shortEnvId: 'D74', companyName: 'Moraira', companyEmail: 'moraira@civilprom.com', companyPhone: '0612345678', adminName: 'Roesch Ronan', adminEmail: 'moraira@civilprom.com', lang: 'Français', nomLogiciel: 'MorairaGo' },
-  { id: 'D21', shortEnvId: 'D86', companyName: 'Denia', companyEmail: 'denia@civilprom.com', companyPhone: '0787878787', adminName: 'Roesch Ronan', adminEmail: 'denia@civilprom.com', lang: 'Français, France', nomLogiciel: 'Denia123' },
-  { id: 'D22', shortEnvId: 'D13', companyName: 'Xabia', companyEmail: 'xabia@civilprom.com', companyPhone: '0909090909', adminName: 'Axel Ronan', adminEmail: 'xabia@civilprom.com', lang: 'Français, France', nomLogiciel: 'Xabia123' },
-  { id: 'D23', shortEnvId: 'D73', companyName: 'Tolede', companyEmail: 'tolede@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch RonanPDF', adminEmail: 'tolede@civilprom.com', lang: 'Français, France', nomLogiciel: 'ToledePDF' },
-  { id: 'D24', shortEnvId: 'D20', companyName: 'Hendaye', companyEmail: 'hendaye@civilprom.com', companyPhone: '0909090909', adminName: 'Roesch Ronan', adminEmail: 'hendaye@civilprom.com', lang: 'Français, France', nomLogiciel: 'Hendaye123' },
-  { id: 'D25', shortEnvId: 'D24', companyName: 'Test DSG', companyEmail: 'test.dsg@civilprom.com', companyPhone: '0612345678', adminName: 'Jérôme Sommet', adminEmail: 'test.dsg@civilprom.com', lang: 'Français, France', nomLogiciel: 'TestDSG' },
-  { id: 'D26', shortEnvId: 'D67', companyName: 'DSG Test', companyEmail: 'dsg.test@civilprom.com', companyPhone: '061234567890', adminName: 'Sommet Jérôme', adminEmail: 'dsg.test@civilprom.com', lang: 'Français, France', nomLogiciel: 'EssaiDSG' },
-  { id: 'D27', shortEnvId: 'D58', companyName: 'UN DÉFI POUR LA VIE', companyEmail: 'copilotudplv@civilprom.com', companyPhone: '0612345678', adminName: 'Jean-Luc Degont', adminEmail: 'copilotudplv@civilprom.com', lang: 'Français, France', nomLogiciel: 'Copilot' },
-  { id: 'D28', shortEnvId: 'D19', companyName: "Le Cœur d'un Sam", companyEmail: 'lecoeurdunsam@civilprom.com', companyPhone: '0765582200', adminName: 'Océane Chabrier', adminEmail: 'contact.lecoeurdunsam@gmail.com', lang: 'Français, France', nomLogiciel: 'lecoeurdunsam' }
+  { id: 'demo', shortEnvId: 'D10', code: 'D10', companyName: 'Défibeo Solutions', companyEmail: 'contact@defibeo-solutions.com', companyPhone: '+33 1 47 20 00 01', adminName: 'Admin Démo', adminEmail: 'account@demo.com', lang: 'Français', active: true, disabled: false },
+  { id: 'D27', shortEnvId: 'D58', code: 'D58', companyName: 'UN DÉFI POUR LA VIE', companyEmail: 'copilotudplv@civilprom.com', companyPhone: '0612345678', adminName: 'Jean-Luc Degont', adminEmail: 'copilotudplv@civilprom.com', lang: 'Français, France', nomLogiciel: 'Copilot', active: true, disabled: false },
+  { id: 'D28', shortEnvId: 'D19', code: 'D19', companyName: "Le Cœur d'un Sam", companyEmail: 'lecoeurdunsam@civilprom.com', companyPhone: '0765582200', adminName: 'Océane Chabrier', adminEmail: 'lecoeurdunsam@civilprom.com', lang: 'Français, France', nomLogiciel: 'lecoeurdunsam', active: true, disabled: false },
+  { id: 'D26', shortEnvId: 'D67', code: 'D67', companyName: 'DSG Test', companyEmail: 'dsg.test@civilprom.com', companyPhone: '061234567890', adminName: 'Sommet Jérôme', adminEmail: 'dsg.test@civilprom.com', lang: 'Français, France', nomLogiciel: 'EssaiDSG', active: true, disabled: false },
+  { id: 'D7', shortEnvId: 'D28', code: 'D28', companyName: 'JPM973', companyEmail: 'jpm973@civilprom.com', companyPhone: '0600000000', adminName: 'Jean Pedro Maignan', adminEmail: 'jpm973@civilprom.com', lang: 'Français, France', nomLogiciel: 'JPM973', active: true, disabled: false }
 ];
 
 function getAllServerRegisteredTenantsSync(): any[] {
-  let regTenants: any[] = [];
-  if (serverMemoryStore.has('registered_tenants')) {
-    regTenants = serverMemoryStore.get('registered_tenants');
+  if (Date.now() - lastTenantsFetchTime > 15000) {
+    getRegisteredTenantsFromDb(false).catch(() => {});
   }
-  if (!Array.isArray(regTenants) || regTenants.length === 0) {
-    try {
-      const diskPath = path.join(COLLECTIONS_DIR, 'registered_tenants.json');
-      if (fs.existsSync(diskPath)) {
-        regTenants = JSON.parse(fs.readFileSync(diskPath, 'utf-8'));
-      }
-    } catch (_) {}
+  const masterList = getCachedMasterTenantsSync();
+  if (Array.isArray(masterList) && masterList.length > 0) {
+    return masterList;
   }
-  if (!Array.isArray(regTenants) || regTenants.length === 0) {
-    try {
-      if (fs.existsSync(STORE_FILE)) {
-        const s = JSON.parse(fs.readFileSync(STORE_FILE, 'utf-8'));
-        if (Array.isArray(s.registered_tenants) && s.registered_tenants.length > 0) {
-          regTenants = s.registered_tenants;
-        }
-      }
-    } catch (_) {}
-  }
-  if (!Array.isArray(regTenants) || regTenants.length === 0) {
-    regTenants = [...SERVER_KNOWN_TENANTS];
-  } else {
-    regTenants = [...regTenants];
-    const existingIds = new Set(regTenants.map((t: any) => String(t.id || '').toLowerCase()));
-    for (const kt of SERVER_KNOWN_TENANTS) {
-      if (!existingIds.has(kt.id.toLowerCase())) {
-        regTenants.push(kt);
-      }
-    }
-  }
-  return regTenants;
+  return SERVER_KNOWN_TENANTS;
 }
 
 function findServerTenantInList(regTenants: any[], targetTenantId: string): any | null {
@@ -3355,7 +3299,7 @@ async function findSingleDefibrillateur(
 // Helper function to read a collection from Firestore with support for chunked documents, multiple aliases and memory caching
 async function fetchServerCollection(colName: string, tenantId: string, extraAliases: (string | undefined | null)[] = []): Promise<any[]> {
   if (colName === 'registered_tenants') {
-    return getAllServerRegisteredTenantsSync();
+    return await getRegisteredTenantsFromDb(false);
   }
   const activeTenant = (tenantId || 'demo').trim();
   const cleanTid = activeTenant.toLowerCase();
@@ -5444,28 +5388,7 @@ async function warmupDefibrillateursStore() {
         });
       };
 
-      // 1. Check Mega-Admin identifier on server (always requires 2FA)
-      const megaAdminId = (process.env.DEFIBEO_MEGAADMIN_ID || 'is/megaadmin98121928/').toLowerCase();
-      const megaAdminTargetEmail = process.env.DEFIBEO_MEGAADMIN_EMAIL || 'defibeo@gmail.com';
-      if (emailLower === megaAdminId || emailLower === 'megaadmin@defibeo.com') {
-        return await issueTwoFactorChallenge({
-          tenantId: 'megaadmin',
-          disabled: false,
-          targetEmail: megaAdminTargetEmail,
-          user: {
-            email: 'megaadmin@defibeo.com',
-            name: 'Mega Admin',
-            role: 'megaadmin',
-          },
-          member: {
-            email: 'megaadmin@defibeo.com',
-            name: 'Mega Admin',
-            role: 'megaadmin',
-          },
-        });
-      }
-
-      // 2. Built-in demo accounts check (passwordless, always requires 2FA)
+      // 1. Built-in demo accounts check (passwordless, always requires 2FA)
       if (loginRole === 'admin' && emailLower === 'account@demo.com') {
         return await issueTwoFactorChallenge({
           tenantId: 'demo',
@@ -5494,54 +5417,17 @@ async function warmupDefibrillateursStore() {
         });
       }
 
-      // Gather all known tenants and candidate tenant IDs
+      // 2. Fetch live tenant list directly from the Master Google Spreadsheet
+      const masterTenants = await getRegisteredTenantsFromDb(true);
       const tenantMap = new Map<string, any>();
-      const addTenantRecord = (t: any) => {
-        if (!t || typeof t !== 'object') return;
-        const id = String(t.id || t.tenantId || '').trim();
-        if (!id) return;
-        const existing = tenantMap.get(id.toLowerCase()) || {};
-        tenantMap.set(id.toLowerCase(), { ...existing, ...t, id: existing.id || id });
-      };
-
-      SERVER_KNOWN_TENANTS.forEach(addTenantRecord);
-
-      const memTenants = serverMemoryStore.get('registered_tenants');
-      if (Array.isArray(memTenants)) memTenants.forEach(addTenantRecord);
-
-      const diskTenantsFile = path.join(COLLECTIONS_DIR, 'registered_tenants.json');
-      if (fs.existsSync(diskTenantsFile)) {
-        try {
-          const parsed = JSON.parse(fs.readFileSync(diskTenantsFile, 'utf-8'));
-          if (Array.isArray(parsed)) parsed.forEach(addTenantRecord);
-        } catch (_) {}
+      for (const t of masterTenants) {
+        if (!t || typeof t !== 'object') continue;
+        const id = String(t.id || '').trim();
+        if (!id) continue;
+        tenantMap.set(id.toLowerCase(), t);
       }
-
-      try {
-        const files = fs.existsSync(COLLECTIONS_DIR) ? fs.readdirSync(COLLECTIONS_DIR) : [];
-        for (const f of files) {
-          const m = f.match(/^([a-zA-Z0-9_-]+)_(tenantDatabases|companyInfo|company_info|members)\.json$/);
-          if (m && m[1]) {
-            const tid = m[1];
-            if (!tenantMap.has(tid.toLowerCase())) {
-              tenantMap.set(tid.toLowerCase(), { id: tid });
-            }
-          }
-        }
-      } catch (_) {}
-
-      for (const k of serverMemoryStore.keys()) {
-        const m = k.match(/^([a-zA-Z0-9_-]+)_(tenantDatabases|companyInfo|company_info|members)$/);
-        if (m && m[1]) {
-          const tid = m[1];
-          if (!tenantMap.has(tid.toLowerCase())) {
-            tenantMap.set(tid.toLowerCase(), { id: tid });
-          }
-        }
-      }
-
       if (!tenantMap.has('demo')) {
-        tenantMap.set('demo', { id: 'demo' });
+        tenantMap.set('demo', { id: 'demo', disabled: false });
       }
 
       const isRoleMatch = (memberRoleRaw: any, targetLoginRole: string) => {
@@ -5559,8 +5445,7 @@ async function warmupDefibrillateursStore() {
 
       const candidateTenants = Array.from(tenantMap.values());
 
-      // Pass 1 (Admin role only): Prioritize exact primary tenant owner match (adminEmail / companyEmail)
-      // across all registered tenants before checking secondary member lists of other tenants.
+      // Pass 1 (Admin role only): Prioritize exact primary tenant owner match (Super-Admin Email. from master spreadsheet)
       if (loginRole === 'admin') {
         const primaryOwnerTenants = candidateTenants.filter(tnt => {
           const tAdminEmail = String(tnt.adminEmail || '').trim().toLowerCase();
@@ -5568,8 +5453,7 @@ async function warmupDefibrillateursStore() {
           return (tAdminEmail && tAdminEmail === emailLower) || (tCompanyEmail && tCompanyEmail === emailLower);
         });
         if (primaryOwnerTenants.length > 0) {
-          // Prefer non-disabled active tenant if multiple match
-          const chosenTenant = primaryOwnerTenants.find(t => !t.disabled) || primaryOwnerTenants[0];
+          const chosenTenant = primaryOwnerTenants[0];
           const tid = String(chosenTenant.id || 'demo').trim();
           const resolvedEmail = String(chosenTenant.adminEmail || chosenTenant.companyEmail || emailLower).trim();
           const resolvedName = chosenTenant.adminName || 'Administrateur';
@@ -5781,31 +5665,8 @@ async function warmupDefibrillateursStore() {
 
   // Safe Public Pre-Login Endpoints (Zero sensitive data exposure)
   const getSafePublicTenantsList = (): any[] => {
-    const map = new Map<string, any>();
-    map.set('demo', {
-      id: 'demo',
-      companyName: 'Défibeo Solutions',
-      companyEmail: 'contact@defibeo-solutions.com',
-      shortEnvId: 'D10',
-    });
-    const mem = serverMemoryStore.get('registered_tenants');
-    if (Array.isArray(mem)) {
-      for (const t of mem) {
-        if (t && t.id) map.set(String(t.id).toLowerCase(), t);
-      }
-    }
-    const diskFile = path.join(COLLECTIONS_DIR, 'registered_tenants.json');
-    if (fs.existsSync(diskFile)) {
-      try {
-        const parsed = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
-        if (Array.isArray(parsed)) {
-          for (const t of parsed) {
-            if (t && t.id) map.set(String(t.id).toLowerCase(), t);
-          }
-        }
-      } catch (_) {}
-    }
-    return Array.from(map.values());
+    const allTenants = getAllServerRegisteredTenantsSync();
+    return allTenants.filter((t: any) => t && t.id && !t.disabled);
   };
 
   app.post("/api/public/lookup-defib", async (req, res) => {

@@ -7423,3 +7423,189 @@ export async function deleteRecordsFromTenantSheet(
     return { success: true, deletedCount: normTargets.size, syncedToRemoteSheet };
   });
 }
+
+export const MASTER_TENANTS_SPREADSHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1ujVEcs0PaDVa2M9AQnI9CmQH9SbaBqvVPLNtJ3TX0iw/edit?usp=sharing';
+
+export interface MasterSheetTenantRecord {
+  id: string;
+  shortEnvId: string;
+  code: string;
+  adminEmail: string;
+  companyEmail: string;
+  companyName: string;
+  adminName: string;
+  companyPhone: string;
+  lang: string;
+  nomLogiciel?: string;
+  active: boolean;
+  disabled: boolean;
+}
+
+const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [
+  {
+    id: 'demo',
+    shortEnvId: 'D10',
+    code: 'D10',
+    companyName: 'Défibeo Solutions',
+    companyEmail: 'contact@defibeo-solutions.com',
+    companyPhone: '+33 1 47 20 00 01',
+    adminName: 'Admin Démo',
+    adminEmail: 'account@demo.com',
+    lang: 'Français',
+    active: true,
+    disabled: false,
+  },
+  {
+    id: 'D27',
+    shortEnvId: 'D58',
+    code: 'D58',
+    companyName: 'UN DÉFI POUR LA VIE',
+    companyEmail: 'copilotudplv@civilprom.com',
+    companyPhone: '0612345678',
+    adminName: 'Jean-Luc Degont',
+    adminEmail: 'copilotudplv@civilprom.com',
+    lang: 'Français, France',
+    nomLogiciel: 'Copilot',
+    active: true,
+    disabled: false,
+  },
+  {
+    id: 'D28',
+    shortEnvId: 'D19',
+    code: 'D19',
+    companyName: "Le Cœur d'un Sam",
+    companyEmail: 'lecoeurdunsam@civilprom.com',
+    companyPhone: '0765582200',
+    adminName: 'Océane Chabrier',
+    adminEmail: 'lecoeurdunsam@civilprom.com',
+    lang: 'Français, France',
+    nomLogiciel: 'lecoeurdunsam',
+    active: true,
+    disabled: false,
+  },
+  {
+    id: 'D26',
+    shortEnvId: 'D67',
+    code: 'D67',
+    companyName: 'DSG Test',
+    companyEmail: 'dsg.test@civilprom.com',
+    companyPhone: '061234567890',
+    adminName: 'Sommet Jérôme',
+    adminEmail: 'dsg.test@civilprom.com',
+    lang: 'Français, France',
+    nomLogiciel: 'EssaiDSG',
+    active: true,
+    disabled: false,
+  },
+  {
+    id: 'D7',
+    shortEnvId: 'D28',
+    code: 'D28',
+    companyName: 'JPM973',
+    companyEmail: 'jpm973@civilprom.com',
+    companyPhone: '0600000000',
+    adminName: 'Jean Pedro Maignan',
+    adminEmail: 'jpm973@civilprom.com',
+    lang: 'Français, France',
+    nomLogiciel: 'JPM973',
+    active: true,
+    disabled: false,
+  },
+];
+
+let cachedMasterTenants: MasterSheetTenantRecord[] = [...DEFAULT_MASTER_SHEET_TENANTS];
+let lastMasterTenantsFetchAt = 0;
+let masterTenantsInFlight: Promise<MasterSheetTenantRecord[]> | null = null;
+
+export function getCachedMasterTenantsSync(): MasterSheetTenantRecord[] {
+  return cachedMasterTenants.length > 0 ? cachedMasterTenants : DEFAULT_MASTER_SHEET_TENANTS;
+}
+
+export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = false): Promise<MasterSheetTenantRecord[]> {
+  const now = Date.now();
+  if (!forceRefresh && lastMasterTenantsFetchAt > 0 && now - lastMasterTenantsFetchAt < 15000 && cachedMasterTenants.length > 0) {
+    return cachedMasterTenants;
+  }
+  if (masterTenantsInFlight) {
+    return masterTenantsInFlight;
+  }
+
+  masterTenantsInFlight = (async () => {
+    try {
+      const matrix = await fetchRawSheetMatrix(MASTER_TENANTS_SPREADSHEET_URL);
+      if (matrix && Array.isArray(matrix.rows) && matrix.rows.length > 0) {
+        const headersNorm = (matrix.headers || []).map(h =>
+          String(h || '')
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]/g, '')
+        );
+
+        const activeColIdx = headersNorm.findIndex(h => h.includes('active') || h.includes('actif') || h.includes('statut'));
+        const emailColIdx = headersNorm.findIndex(h => h.includes('email') || h.includes('mail') || h.includes('superadmin'));
+        const idColIdx = headersNorm.findIndex(h => h === 'id' || h.includes('tenantid') || h.includes('identifiant'));
+        const codeColIdx = headersNorm.findIndex(h => h.includes('code') || h.includes('short'));
+
+        const colActive = activeColIdx >= 0 ? activeColIdx : 0;
+        const colEmail = emailColIdx >= 0 ? emailColIdx : 1;
+        const colId = idColIdx >= 0 ? idColIdx : 2;
+        const colCode = codeColIdx >= 0 ? codeColIdx : 3;
+
+        const parsedTenants: MasterSheetTenantRecord[] = [DEFAULT_MASTER_SHEET_TENANTS[0]]; // Always keep 'demo'
+
+        for (const row of matrix.rows) {
+          if (!Array.isArray(row) || row.every(cell => !String(cell ?? '').trim())) continue;
+          const rawActive = String(row[colActive] ?? '').trim();
+          const rawEmail = String(row[colEmail] ?? '').trim();
+          const rawId = String(row[colId] ?? '').trim();
+          const rawCode = String(row[colCode] ?? '').trim();
+
+          if (!rawId && !rawEmail) continue;
+
+          const isActive = rawActive === '1';
+          const effectiveId = rawId || rawCode;
+          const effectiveCode = rawCode || rawId;
+
+          const defaultMeta = DEFAULT_MASTER_SHEET_TENANTS.find(
+            d => d.id.toLowerCase() === effectiveId.toLowerCase()
+          );
+
+          const fallbackName =
+            defaultMeta?.companyName ||
+            (rawEmail.includes('@') ? rawEmail.split('@')[0].toUpperCase() : effectiveId);
+
+          parsedTenants.push({
+            id: effectiveId,
+            shortEnvId: effectiveCode,
+            code: effectiveCode,
+            adminEmail: rawEmail || defaultMeta?.adminEmail || '',
+            companyEmail: rawEmail || defaultMeta?.companyEmail || '',
+            companyName: fallbackName,
+            adminName: defaultMeta?.adminName || 'Super-Administrateur',
+            companyPhone: defaultMeta?.companyPhone || '',
+            lang: defaultMeta?.lang || 'Français, France',
+            nomLogiciel: defaultMeta?.nomLogiciel || fallbackName,
+            active: isActive,
+            disabled: !isActive,
+          });
+        }
+
+        if (parsedTenants.length > 1) {
+          cachedMasterTenants = parsedTenants;
+          lastMasterTenantsFetchAt = Date.now();
+          return cachedMasterTenants;
+        }
+      }
+    } catch (err) {
+      console.warn('[MasterTenantsSheet] Failed to fetch master tenants spreadsheet, using cached list:', err);
+    } finally {
+      masterTenantsInFlight = null;
+    }
+    return cachedMasterTenants;
+  })();
+
+  return masterTenantsInFlight;
+}
+
