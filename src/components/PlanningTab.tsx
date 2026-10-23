@@ -185,6 +185,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   enableExtendedView = false,
   onConsultMission,
   onRefresh,
+  onUpdateTours,
 }) => {
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());

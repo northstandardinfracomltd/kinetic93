@@ -137,7 +137,6 @@ export const CRM_CONFIGURABLE_COLUMNS: CrmColumnConfig[] = [
 
   // Non Commercial
   { id: 'ref_noncomm', label: 'Référence.', category: 'Non Commercial' },
-  { id: 'crit_noncomm', label: 'Criticité.', category: 'Non Commercial' },
   { id: 'ouv_noncomm', label: 'Ouverture.', category: 'Non Commercial' },
   { id: 'sit_noncomm', label: 'Situation.', category: 'Non Commercial' },
   { id: 'cp_noncomm', label: 'Indicatif Postal.', category: 'Non Commercial' },
@@ -231,9 +230,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     if (effectiveRefreshing) return;
     setIsLocalRefreshing(true);
     try {
-      if (onRefreshData) {
-        await onRefreshData();
-      }
+      await Promise.all([
+        onRefreshData ? Promise.resolve(onRefreshData()) : Promise.resolve(),
+        syncCrmSettingsFromSpreadsheet(true),
+      ]);
     } catch (err) {
       console.warn("Manual refresh error in CRM:", err);
     } finally {
@@ -453,61 +453,110 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
   };
 
-  // Load CRM settings from Firebase
-  useEffect(() => {
-    if (activeTenant) {
-      fetchCollectionFromFirestore<any>('crm_settings', activeTenant).then(data => {
-        if (data) {
-          let settingsObj: any = null;
-          if (typeof data === 'object' && !Array.isArray(data)) {
-            settingsObj = data;
-          } else if (Array.isArray(data) && data[0]) {
-            settingsObj = data[0];
-          }
-          if (settingsObj) {
-            if (settingsObj.relanceEmailBody) {
-              setRelanceEmailBody(settingsObj.relanceEmailBody);
-              localStorage.setItem(`defib_${activeTenant}_crm_relance_template`, settingsObj.relanceEmailBody);
-            }
-            if (settingsObj.relanceEmailReplyTo !== undefined) {
-              setRelanceEmailReplyTo(settingsObj.relanceEmailReplyTo || '');
-              localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto`, settingsObj.relanceEmailReplyTo || '');
-            }
-            if (settingsObj.relanceEmailBody2) {
-              setRelanceEmailBody2(settingsObj.relanceEmailBody2);
-              localStorage.setItem(`defib_${activeTenant}_crm_relance_template_2`, settingsObj.relanceEmailBody2);
-            }
-            if (settingsObj.relanceEmailReplyTo2 !== undefined) {
-              setRelanceEmailReplyTo2(settingsObj.relanceEmailReplyTo2 || '');
-              localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto_2`, settingsObj.relanceEmailReplyTo2 || '');
-            }
-            if (settingsObj.relanceEmailBody3) {
-              setRelanceEmailBody3(settingsObj.relanceEmailBody3);
-              localStorage.setItem(`defib_${activeTenant}_crm_relance_template_3`, settingsObj.relanceEmailBody3);
-            }
-            if (settingsObj.relanceEmailReplyTo3 !== undefined) {
-              setRelanceEmailReplyTo3(settingsObj.relanceEmailReplyTo3 || '');
-              localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto_3`, settingsObj.relanceEmailReplyTo3 || '');
-            }
-            if (settingsObj.supportEmailSubject) {
-              setSupportEmailSubject(settingsObj.supportEmailSubject);
-              localStorage.setItem(`defib_${activeTenant}_crm_support_subject`, settingsObj.supportEmailSubject);
-            }
-            if (settingsObj.supportEmailBody) {
-              setSupportEmailBody(settingsObj.supportEmailBody);
-              localStorage.setItem(`defib_${activeTenant}_crm_support_template`, settingsObj.supportEmailBody);
-            }
-            if (settingsObj.supportEmailReplyTo !== undefined) {
-              setSupportEmailReplyTo(settingsObj.supportEmailReplyTo || '');
-              localStorage.setItem(`defib_${activeTenant}_crm_support_replyto`, settingsObj.supportEmailReplyTo || '');
-            }
+  const crmSettingsSheetUrl = getTenantSpreadsheetUrl('spreadsheetReglagesCrm', companyInfo);
+
+  const applyCrmSettingsObject = (settingsObj: any) => {
+    if (!settingsObj || typeof settingsObj !== 'object') return;
+    if (settingsObj.relanceEmailBody !== undefined && String(settingsObj.relanceEmailBody).trim() !== '') {
+      setRelanceEmailBody(String(settingsObj.relanceEmailBody));
+      localStorage.setItem(`defib_${activeTenant}_crm_relance_template`, String(settingsObj.relanceEmailBody));
+    }
+    if (settingsObj.relanceEmailReplyTo !== undefined) {
+      setRelanceEmailReplyTo(String(settingsObj.relanceEmailReplyTo || ''));
+      localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto`, String(settingsObj.relanceEmailReplyTo || ''));
+    }
+    if (settingsObj.relanceEmailBody2 !== undefined && String(settingsObj.relanceEmailBody2).trim() !== '') {
+      setRelanceEmailBody2(String(settingsObj.relanceEmailBody2));
+      localStorage.setItem(`defib_${activeTenant}_crm_relance_template_2`, String(settingsObj.relanceEmailBody2));
+    }
+    if (settingsObj.relanceEmailReplyTo2 !== undefined) {
+      setRelanceEmailReplyTo2(String(settingsObj.relanceEmailReplyTo2 || ''));
+      localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto_2`, String(settingsObj.relanceEmailReplyTo2 || ''));
+    }
+    if (settingsObj.relanceEmailBody3 !== undefined && String(settingsObj.relanceEmailBody3).trim() !== '') {
+      setRelanceEmailBody3(String(settingsObj.relanceEmailBody3));
+      localStorage.setItem(`defib_${activeTenant}_crm_relance_template_3`, String(settingsObj.relanceEmailBody3));
+    }
+    if (settingsObj.relanceEmailReplyTo3 !== undefined) {
+      setRelanceEmailReplyTo3(String(settingsObj.relanceEmailReplyTo3 || ''));
+      localStorage.setItem(`defib_${activeTenant}_crm_relance_replyto_3`, String(settingsObj.relanceEmailReplyTo3 || ''));
+    }
+    if (settingsObj.supportEmailSubject !== undefined && String(settingsObj.supportEmailSubject).trim() !== '') {
+      setSupportEmailSubject(String(settingsObj.supportEmailSubject));
+      localStorage.setItem(`defib_${activeTenant}_crm_support_subject`, String(settingsObj.supportEmailSubject));
+    }
+    if (settingsObj.supportEmailBody !== undefined && String(settingsObj.supportEmailBody).trim() !== '') {
+      setSupportEmailBody(String(settingsObj.supportEmailBody));
+      localStorage.setItem(`defib_${activeTenant}_crm_support_template`, String(settingsObj.supportEmailBody));
+    }
+    if (settingsObj.supportEmailReplyTo !== undefined) {
+      setSupportEmailReplyTo(String(settingsObj.supportEmailReplyTo || ''));
+      localStorage.setItem(`defib_${activeTenant}_crm_support_replyto`, String(settingsObj.supportEmailReplyTo || ''));
+    }
+  };
+
+  const syncCrmSettingsFromSpreadsheet = async (force = false): Promise<any | null> => {
+    const resolvedUrl = getTenantSpreadsheetUrl('spreadsheetReglagesCrm', companyInfo);
+    if (resolvedUrl) {
+      try {
+        const res = await fetch(
+          `/api/sheets/sync?tenantId=${encodeURIComponent(activeTenant)}&tabType=reglagesCrm&spreadsheetUrl=${encodeURIComponent(resolvedUrl)}${force ? '&force=true' : ''}&_t=${Date.now()}`,
+          { cache: 'no-store' }
+        );
+        if (res.ok) {
+          const json = await res.json();
+          const items = Array.isArray(json?.items) ? json.items : [];
+          if (items[0] && typeof items[0] === 'object') {
+            applyCrmSettingsObject(items[0]);
+            return items[0];
           }
         }
-      }).catch((err) => {
-        console.log('[CRM] Notice: could not load crm_settings from Firestore, using local fallback:', err);
-      });
+      } catch (err) {
+        console.warn('[CRM] Error syncing reglagesCrm spreadsheet:', err);
+      }
     }
-  }, [activeTenant]);
+    try {
+      const data = await fetchCollectionFromFirestore<any>('crm_settings', activeTenant);
+      if (data) {
+        const settingsObj = typeof data === 'object' && !Array.isArray(data) ? data : (Array.isArray(data) && data[0] ? data[0] : null);
+        if (settingsObj) {
+          applyCrmSettingsObject(settingsObj);
+          return settingsObj;
+        }
+      }
+    } catch (err) {
+      console.log('[CRM] Notice: could not load crm_settings from Firestore, using local fallback:', err);
+    }
+    return null;
+  };
+
+  // Load CRM settings from Spreadsheet Réglages CRM (or Firebase fallback) immediately on mount, tenant change, or URL change
+  useEffect(() => {
+    if (activeTenant) {
+      syncCrmSettingsFromSpreadsheet(false);
+    }
+  }, [activeTenant, crmSettingsSheetUrl]);
+
+  // Also refresh CRM settings from spreadsheet whenever the side-pane "Modifier les réglages" is opened
+  useEffect(() => {
+    if (isSettingsPaneOpen && activeTenant) {
+      syncCrmSettingsFromSpreadsheet(true);
+    }
+  }, [isSettingsPaneOpen, activeTenant]);
+
+  // Listen to live updates dispatched when Spreadsheet Réglages CRM is saved or refreshed in App / SettingsModal
+  useEffect(() => {
+    const handleCrmSettingsEvent = (e: Event) => {
+      const detail = (e as CustomEvent)?.detail;
+      if (detail?.settings && (!detail.tenantId || detail.tenantId === activeTenant)) {
+        applyCrmSettingsObject(detail.settings);
+      } else {
+        syncCrmSettingsFromSpreadsheet(true);
+      }
+    };
+    window.addEventListener('defib-crm-settings-updated', handleCrmSettingsEvent);
+    return () => window.removeEventListener('defib-crm-settings-updated', handleCrmSettingsEvent);
+  }, [activeTenant, crmSettingsSheetUrl]);
 
   const persistAllCrmSettings = async () => {
     localStorage.setItem(`defib_${activeTenant}_crm_relance_template`, relanceEmailBody);
@@ -519,19 +568,33 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     localStorage.setItem(`defib_${activeTenant}_crm_support_subject`, supportEmailSubject);
     localStorage.setItem(`defib_${activeTenant}_crm_support_template`, supportEmailBody);
     localStorage.setItem(`defib_${activeTenant}_crm_support_replyto`, supportEmailReplyTo);
-    if (activeTenant) {
-      await saveCollectionToFirestore('crm_settings', {
-        relanceEmailBody,
-        relanceEmailReplyTo,
-        relanceEmailBody2,
-        relanceEmailReplyTo2,
-        relanceEmailBody3,
-        relanceEmailReplyTo3,
-        supportEmailSubject,
-        supportEmailBody,
-        supportEmailReplyTo
-      }, activeTenant);
-    }
+    const payload = {
+      id: 'tenant_crm_settings',
+      relanceEmailBody,
+      relanceEmailReplyTo,
+      relanceEmailBody2,
+      relanceEmailReplyTo2,
+      relanceEmailBody3,
+      relanceEmailReplyTo3,
+      supportEmailSubject,
+      supportEmailBody,
+      supportEmailReplyTo
+    };
+    localStorage.setItem(`defib_${activeTenant}_crm_settings`, JSON.stringify(payload));
+    const resolvedSheetUrl = getTenantSpreadsheetUrl('spreadsheetReglagesCrm', companyInfo);
+    await Promise.all([
+      activeTenant ? saveCollectionToFirestore('crm_settings', payload, activeTenant).catch(() => {}) : Promise.resolve(),
+      fetch('/api/sheets/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: activeTenant,
+          type: 'reglagesCrm',
+          spreadsheetUrl: resolvedSheetUrl || undefined,
+          record: payload,
+        }),
+      }).catch(() => {}),
+    ]);
   };
 
   const handleSaveRelanceSettings = async (templateIndex: 1 | 2 | 3 = 1) => {
@@ -607,6 +670,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       };
     });
   }, [clients]);
+  const [formPayeurId, setFormPayeurId] = useState('');
+  const [formClientId, setFormClientId] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formDescription, setFormDescription] = useState('');
 
@@ -636,6 +701,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formDateCommande, setFormDateCommande] = useState('');
   const [formLienDevis, setFormLienDevis] = useState('');
   const [formFichiersDevis, setFormFichiersDevis] = useState<CommercialFileAttachment[]>([]);
+  const [isAutreFichierToggle, setIsAutreFichierToggle] = useState<boolean>(false);
+  const [isDraggingFile, setIsDraggingFile] = useState<boolean>(false);
   const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(false);
   const [googleDriveAccessToken, setGoogleDriveAccessToken] = useState<string>('');
   const [isUploadingFile, setIsUploadingFile] = useState<boolean>(false);
@@ -693,6 +760,17 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     return `${day}/${month}/${year}`;
   };
 
+  const toHtmlDateInputValue = (val?: string): string => {
+    if (!val) return '';
+    const trimmed = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const dmy = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (dmy) {
+      return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+    }
+    return trimmed;
+  };
+
   const generateNextReference = (): string => {
     let envCode = (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null);
     if (!envCode) {
@@ -739,6 +817,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormCollaborateur(members.length > 0 ? members[0].name : 'Non attribué');
     setFormClientSelect('Autre');
     setFormCustomClientName('');
+    setFormPayeurId('');
+    setFormClientId('');
     setFormEmail('');
     setFormDescription('');
 
@@ -768,6 +848,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormDateCommande('');
     setFormLienDevis('');
     setFormFichiersDevis([]);
+    setIsAutreFichierToggle(false);
+    setIsDraggingFile(false);
     setFormCommercialEvents([]);
     setFormSupportMessages([]);
     setIsNewMessageOpen(false);
@@ -802,14 +884,20 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     if (foundClient) {
       setFormClientSelect(currentClientVal);
       setFormCustomClientName('');
+      setFormPayeurId(ticket.payeurId || foundClient.payeurId || '');
+      setFormClientId(ticket.clientId || foundClient.clientIdField || foundClient.id || '');
       setFormEmail(ticket.email || foundClient.email || foundClient.emailSite || '');
     } else if (currentClientVal) {
       setFormClientSelect('Autre');
       setFormCustomClientName(ticket.customClientName || currentClientVal);
+      setFormPayeurId(ticket.payeurId || '');
+      setFormClientId(ticket.clientId || '');
       setFormEmail(ticket.email || '');
     } else {
       setFormClientSelect('Autre');
       setFormCustomClientName('');
+      setFormPayeurId(ticket.payeurId || '');
+      setFormClientId(ticket.clientId || '');
       setFormEmail(ticket.email || '');
     }
 
@@ -835,14 +923,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormOrigineLead(ticket.origineLead || 'Service Client');
     setFormDescriptionOffreDevis(ticket.descriptionOffreDevis || '');
     setFormTypeVente(ticket.typeVente || '');
-    setFormDateDevis(ticket.dateDevis || '');
-    setFormDateDerniereRelance(ticket.dateDerniereRelance || '');
-    setFormDateProchaineRelance(ticket.dateProchaineRelance || '');
-    setFormDateCommande(ticket.dateCommande || '');
+    setFormDateDevis(toHtmlDateInputValue(ticket.dateDevis));
+    setFormDateDerniereRelance(toHtmlDateInputValue(ticket.dateDerniereRelance));
+    setFormDateProchaineRelance(toHtmlDateInputValue(ticket.dateProchaineRelance));
+    setFormDateCommande(toHtmlDateInputValue(ticket.dateCommande));
     setFormLienDevis(ticket.lienStockagePartageDevis || '');
     let initialFiles: CommercialFileAttachment[] = [];
     if (Array.isArray((ticket as any).fichiersDevis)) {
-      initialFiles = (ticket as any).fichiersDevis;
+      initialFiles = (ticket as any).fichiersDevis.slice(0, 3);
     } else if (ticket.lienStockagePartageDevis && ticket.lienStockagePartageDevis.trim()) {
       initialFiles = [{
         name: 'Fichier devis',
@@ -851,6 +939,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       }];
     }
     setFormFichiersDevis(initialFiles);
+    setIsAutreFichierToggle(false);
+    setIsDraggingFile(false);
     setFormCommercialEvents(Array.isArray(ticket.evenementsCommercial) ? ticket.evenementsCommercial : []);
 
     // Support messages
@@ -863,10 +953,103 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setIsPaneOpen(true);
   };
 
-  // Google Drive file upload handler
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // Helper to extract Référence Devis / Facture & Total Affaire HT from uploaded file
+  const extractDocumentRefAndTotalHT = async (file: File): Promise<{ ref?: string; totalHt?: string }> => {
+    let combinedText = `${file.name}\n`;
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuffer);
+      const latin1 = new TextDecoder('latin1').decode(uint8.slice(0, 500000));
+      combinedText += '\n' + latin1;
+
+      if (typeof DecompressionStream !== 'undefined') {
+        const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
+        let match: RegExpExecArray | null;
+        let streamCount = 0;
+        while ((match = streamRegex.exec(latin1)) !== null && streamCount < 25) {
+          streamCount++;
+          const rawStr = match[1];
+          if (rawStr.length > 2 && rawStr.length < 150000) {
+            const bytes = new Uint8Array(rawStr.length);
+            for (let i = 0; i < rawStr.length; i++) {
+              bytes[i] = rawStr.charCodeAt(i) & 0xff;
+            }
+            for (const fmt of ['deflate', 'deflate-raw'] as const) {
+              try {
+                const ds = new DecompressionStream(fmt);
+                const writer = ds.writable.getWriter();
+                writer.write(bytes).catch(() => {});
+                writer.close().catch(() => {});
+                const decompressedBuf = await new Response(ds.readable).arrayBuffer();
+                const decompressedStr = new TextDecoder('latin1').decode(decompressedBuf);
+                const textTokens = decompressedStr.match(/\(([^()]+)\)/g);
+                if (textTokens) {
+                  combinedText += '\n' + textTokens.map(t => t.slice(1, -1)).join(' ');
+                } else {
+                  combinedText += '\n' + decompressedStr;
+                }
+                break;
+              } catch {
+                // ignore non-deflate streams
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Fallback to filename only
+    }
+
+    const cleanText = combinedText.replace(/\\(\d{3})/g, ' ').replace(/\s+/g, ' ');
+
+    let detectedRef: string | undefined;
+    const refPatterns = [
+      /(?:devis|facture|offre|proposition|ref|réf|n°|no|numéro)\s*(?:devis|facture|n°|no|:|-|#)?\s*([A-Z]{0,5}[\-_\/]?\d{2,4}[\-_\/]?\d{2,8}[A-Z0-9\-_]*)/i,
+      /\b((?:DEV|FAC|FACT|DEVIS|OFFRE|PROP|CMD|BC)[\-_\/]?[0-9]{2,10}[A-Z0-9\-_]*)\b/i,
+      /\b([A-Z]{1,4}-\d{2,6}(?:-\d{1,6})?)\b/,
+    ];
+    for (const pat of refPatterns) {
+      const m = cleanText.match(pat);
+      if (m && m[1] && /\d/.test(m[1])) {
+        detectedRef = m[1].trim();
+        break;
+      }
+    }
+    if (!detectedRef) {
+      const baseName = file.name.replace(/\.[^/.]+$/, '').trim();
+      const nameMatch = baseName.match(/\b([A-Z0-9]{2,6}[\-_][A-Z0-9\-_]{2,15})\b/i);
+      if (nameMatch && /\d/.test(nameMatch[1])) {
+        detectedRef = nameMatch[1];
+      }
+    }
+
+    let detectedHt: string | undefined;
+    const htPatterns = [
+      /(?:total\s*(?:général\s*|net\s*)?h\.?t\.?|montant\s*(?:total\s*|net\s*)?h\.?t\.?|net\s*h\.?t\.?|sous[\-\s]*total\s*h\.?t\.?)\s*[:\-€]?\s*(\d{1,3}(?:[\s\u00A0.]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2})?)/i,
+      /(\d{1,3}(?:[\s\u00A0.]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))\s*€?\s*h\.?t\.?\b/i,
+    ];
+    for (const pat of htPatterns) {
+      const m = cleanText.match(pat);
+      if (m && m[1]) {
+        const normalizedNum = m[1].replace(/[\s\u00A0]/g, '').replace(',', '.');
+        const parsed = parseFloat(normalizedNum);
+        if (!isNaN(parsed) && parsed > 0) {
+          detectedHt = parsed.toFixed(2).replace(/\.00$/, '');
+          break;
+        }
+      }
+    }
+
+    return { ref: detectedRef, totalHt: detectedHt };
+  };
+
+  // Process a single dropped or selected file
+  const processUploadedFile = async (file: File) => {
     if (!file) return;
+    if (formFichiersDevis.length >= 3) {
+      alert("Vous pouvez ajouter au maximum 3 fichiers par ticket.");
+      return;
+    }
     let isActive = googleDriveActive;
     let token = googleDriveAccessToken;
     if (!isActive || !token) {
@@ -882,13 +1065,25 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     }
     setIsUploadingFile(true);
     try {
+      const isOtherFile = isAutreFichierToggle;
+      if (!isOtherFile) {
+        const extracted = await extractDocumentRefAndTotalHT(file);
+        if (extracted.ref) {
+          setFormReferenceDevis(extracted.ref);
+        }
+        if (extracted.totalHt) {
+          setFormTotalAffaireHT(extracted.totalHt);
+        }
+      }
+
       const driveUrl = await uploadFileToGoogleDrive(token, file, activeTenant);
       const newFile: CommercialFileAttachment = {
         name: file.name,
         url: driveUrl,
         dateAjout: getTodayFormatted(),
+        typeFichier: isOtherFile ? '' : 'Principal',
       };
-      setFormFichiersDevis(prev => [...prev, newFile]);
+      setFormFichiersDevis(prev => (prev.length >= 3 ? prev : [...prev, newFile]));
       setFormLienDevis(driveUrl);
     } catch (err: any) {
       console.error("Erreur d'upload Google Drive:", err);
@@ -901,13 +1096,22 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     }
   };
 
-  // Client dropdown change handler: auto-populate email & contact info
+  // Google Drive file upload handler
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processUploadedFile(file);
+  };
+
+  // Client dropdown change handler: auto-populate email, Payeur ID, Client ID & contact info
   const handleClientChange = (val: string) => {
     setFormClientSelect(val);
     if (val !== 'Autre') {
       setFormSituationInterlocuteur('Client');
       const found = clients.find(c => (c.denomination || (c as any).name || c.id) === val);
       if (found) {
+        setFormPayeurId(found.payeurId || '');
+        setFormClientId(found.clientIdField || found.id || '');
         const clientEmail = found.email || found.emailSite || '';
         if (clientEmail) {
           setFormEmail(clientEmail);
@@ -924,6 +1128,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       }
     } else {
       setFormSituationInterlocuteur('Prospect');
+      setFormPayeurId('');
+      setFormClientId('');
     }
   };
 
@@ -947,7 +1153,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   // Support Message Handlers (Technique / Réclamation / Sans Catégorie - max 5)
-  const handleOpenNewMessage = () => {
+  const handleOpenNewMessage = async () => {
     if (!isNewMessageOpen) {
       if (formSupportMessages.length >= 5) return;
       const clientName = formClientSelect === 'Autre' ? (formCustomClientName.trim() || 'Client') : formClientSelect;
@@ -955,13 +1161,20 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       const obj = formObjet || 'Assistance';
       const collab = formCollaborateur || '';
 
-      const filledSubject = supportEmailSubject
+      const latestSheetSettings = getTenantSpreadsheetUrl('spreadsheetReglagesCrm', companyInfo)
+        ? await syncCrmSettingsFromSpreadsheet(false)
+        : null;
+
+      const subjTemplate = latestSheetSettings?.supportEmailSubject || supportEmailSubject;
+      const bodyTemplate = latestSheetSettings?.supportEmailBody || supportEmailBody;
+
+      const filledSubject = subjTemplate
         .replace(/{Référence\.}|Référence\./g, ref)
         .replace(/{Client\.}|Client\./g, clientName)
         .replace(/{Objet\.}|Objet\./g, obj)
         .replace(/{Collaborateur\.}|Collaborateur\./g, collab);
 
-      const filledBody = supportEmailBody
+      const filledBody = bodyTemplate
         .replace(/{Référence\.}|Référence\./g, ref)
         .replace(/{Client\.}|Client\./g, clientName)
         .replace(/{Objet\.}|Objet\./g, obj)
@@ -1000,7 +1213,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
     setIsSendingSupportMessage(true);
     try {
-      const replyTo = supportEmailReplyTo.trim() || companyInfo?.email || 'contact@defibeo.com';
+      const latestSheetSettings = getTenantSpreadsheetUrl('spreadsheetReglagesCrm', companyInfo)
+        ? await syncCrmSettingsFromSpreadsheet(false)
+        : null;
+      const effectiveReplyTo = (latestSheetSettings?.supportEmailReplyTo ?? supportEmailReplyTo).trim();
+      const replyTo = effectiveReplyTo || companyInfo?.email || 'contact@defibeo.com';
       const senderName = getActiveTenantCommercialName(companyInfo?.name);
       await sendScriptEmail({
         to: targetEmail,
@@ -1115,6 +1332,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             objet: formObjet.trim().slice(0, 55),
             collaborateur: formCollaborateur,
             client: resolvedClientName,
+            payeurId: formPayeurId.trim(),
+            clientId: formClientId.trim(),
             isCustomClient: formClientSelect === 'Autre',
             customClientName: formClientSelect === 'Autre' ? formCustomClientName : '',
             email: formEmail.trim(),
@@ -1145,6 +1364,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         objet: formObjet.trim().slice(0, 55) || 'Sans objet',
         collaborateur: formCollaborateur,
         client: resolvedClientName,
+        payeurId: formPayeurId.trim(),
+        clientId: formClientId.trim(),
         isCustomClient: formClientSelect === 'Autre',
         customClientName: formClientSelect === 'Autre' ? formCustomClientName : '',
         email: formEmail.trim(),
@@ -1211,6 +1432,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           ...t,
           situationDevis: newSitDevis,
           dateDerniereActualisation: today,
+          ...(newSitDevis === 'Gagné' ? { dateCommande: t.dateCommande || today } : {}),
         };
       }
       return t;
@@ -1226,10 +1448,23 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     let missingEmailCount = 0;
     const sentTicketIds = new Set<string>();
 
+    // Ensure latest settings from Spreadsheet Réglages CRM are used for the request
+    const latestSheetSettings = getTenantSpreadsheetUrl('spreadsheetReglagesCrm', companyInfo)
+      ? await syncCrmSettingsFromSpreadsheet(false)
+      : null;
+
     const chosenTemplateBody =
-      templateIdx === 2 ? relanceEmailBody2 : templateIdx === 3 ? relanceEmailBody3 : relanceEmailBody;
+      templateIdx === 2
+        ? (latestSheetSettings?.relanceEmailBody2 || relanceEmailBody2)
+        : templateIdx === 3
+        ? (latestSheetSettings?.relanceEmailBody3 || relanceEmailBody3)
+        : (latestSheetSettings?.relanceEmailBody || relanceEmailBody);
     const chosenReplyTo =
-      templateIdx === 2 ? relanceEmailReplyTo2 : templateIdx === 3 ? relanceEmailReplyTo3 : relanceEmailReplyTo;
+      templateIdx === 2
+        ? (latestSheetSettings?.relanceEmailReplyTo2 ?? relanceEmailReplyTo2)
+        : templateIdx === 3
+        ? (latestSheetSettings?.relanceEmailReplyTo3 ?? relanceEmailReplyTo3)
+        : (latestSheetSettings?.relanceEmailReplyTo ?? relanceEmailReplyTo);
 
     for (const ticketId of selectedTicketIds) {
       const ticket = tickets.find(t => t.id === ticketId);
@@ -1670,6 +1905,118 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const scoreClosingVal = totalDeals > 0 ? (dealsGagnes / totalDeals) * 10 : null;
   const scoreClosingText = scoreClosingVal !== null ? `${scoreClosingVal.toFixed(1)}/10` : '—/10';
 
+  // Helper to parse any CRM date string (DD/MM/YYYY or YYYY-MM-DD) into a midnight timestamp
+  const parseCrmDateToMidnightTs = (raw?: string | number | null): number | null => {
+    if (raw === undefined || raw === null || raw === '') return null;
+    if (typeof raw === 'number') {
+      const d = new Date(raw > 1e11 ? raw : raw * 1000);
+      if (isNaN(d.getTime())) return null;
+      return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    }
+    const s = String(raw).trim();
+    if (!s) return null;
+    const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (dmy) {
+      const day = parseInt(dmy[1], 10);
+      const month = parseInt(dmy[2], 10) - 1;
+      const year = parseInt(dmy[3], 10);
+      const dt = new Date(year, month, day);
+      if (!isNaN(dt.getTime())) return dt.getTime();
+    }
+    const ymd = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (ymd) {
+      const year = parseInt(ymd[1], 10);
+      const month = parseInt(ymd[2], 10) - 1;
+      const day = parseInt(ymd[3], 10);
+      const dt = new Date(year, month, day);
+      if (!isNaN(dt.getTime())) return dt.getTime();
+    }
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+      return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime();
+    }
+    return null;
+  };
+
+  // Format duration in days as an/mois/semaines/jours (without hours or seconds)
+  const formatClosingDurationDays = (totalDays: number): string => {
+    const rounded = Math.max(0, Math.round(totalDays));
+    if (rounded === 0) return '0 jour';
+    let rem = rounded;
+    const years = Math.floor(rem / 365);
+    rem %= 365;
+    const months = Math.floor(rem / 30);
+    rem %= 30;
+    const weeks = Math.floor(rem / 7);
+    const days = rem % 7;
+
+    const parts: string[] = [];
+    if (years > 0) parts.push(`${years} ${years > 1 ? 'ans' : 'an'}`);
+    if (months > 0) parts.push(`${months} mois`);
+    if (weeks > 0) parts.push(`${weeks} ${weeks > 1 ? 'semaines' : 'semaine'}`);
+    if (days > 0) parts.push(`${days} ${days > 1 ? 'jours' : 'jour'}`);
+    return parts.join(' ');
+  };
+
+  // Bloc stat 5: « Temps closing » (durée moyenne entre l'ouverture du ticket et le moment où l'on clique sur Gagné)
+  const wonCommercialTickets = filteredPerfTickets.filter(
+    t => t.categorie === 'Commercial' && t.situationDevis === 'Gagné'
+  );
+  const closingDurationsInDays: number[] = [];
+  wonCommercialTickets.forEach(t => {
+    const startTs = parseCrmDateToMidnightTs(t.dateOuverture || t.ouverture || t.date || t.createdAt);
+    const endTs = parseCrmDateToMidnightTs(
+      t.dateDerniereActualisation || t.dateCommande || t.dateOuverture || t.date
+    );
+    if (startTs !== null && endTs !== null) {
+      const diffDays = Math.max(0, Math.round((endTs - startTs) / (1000 * 60 * 60 * 24)));
+      closingDurationsInDays.push(diffDays);
+    }
+  });
+  const statTempsClosingText =
+    closingDurationsInDays.length > 0
+      ? formatClosingDurationDays(
+          closingDurationsInDays.reduce((sum, d) => sum + d, 0) / closingDurationsInDays.length
+        )
+      : '—';
+
+  // Bloc stat 6: « Meilleur Closer » (user du tenant qui a le plus de tickets commerciaux marqués comme gagnés)
+  const statMeilleurCloserText = (() => {
+    const closerCounts = new Map<string, number>();
+    const pool = tickets.filter(t => {
+      if (t.categorie !== 'Commercial' || t.situationDevis !== 'Gagné') return false;
+      if (perfStartDate || perfEndDate) {
+        const ticketTime = parseCrmDateToMidnightTs(t.dateOuverture || t.date);
+        if (ticketTime === null) return false;
+        if (perfStartDate) {
+          const start = new Date(perfStartDate);
+          start.setHours(0, 0, 0, 0);
+          if (ticketTime < start.getTime()) return false;
+        }
+        if (perfEndDate) {
+          const end = new Date(perfEndDate);
+          end.setHours(23, 59, 59, 999);
+          if (ticketTime > end.getTime()) return false;
+        }
+      }
+      return true;
+    });
+    pool.forEach(t => {
+      const collab = (t.collaborateur || '').trim();
+      if (!collab || collab === 'Non attribué' || collab === 'Non attribué(s)') return;
+      closerCounts.set(collab, (closerCounts.get(collab) || 0) + 1);
+    });
+    let bestName = '';
+    let bestCount = 0;
+    closerCounts.forEach((count, name) => {
+      if (count > bestCount) {
+        bestCount = count;
+        bestName = name;
+      }
+    });
+    return bestName || '—';
+  })();
+
   // Export CSV
   const handleExportPerformanceCSV = () => {
     if (filteredPerfTickets.length === 0) return;
@@ -1692,6 +2039,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     csvContent += `Tickets fermés;${statTicketsFermes};;;;;;;;;;;;;;;\n`;
     csvContent += `Volume affaires;${statVolumeAffaires.toFixed(2)} €;;;;;;;;;;;;;;;\n`;
     csvContent += `Score closing;${scoreClosingText};;;;;;;;;;;;;;;\n`;
+    csvContent += `Temps closing;${statTempsClosingText};;;;;;;;;;;;;;;\n`;
+    csvContent += `Meilleur Closer;${statMeilleurCloserText};;;;;;;;;;;;;;;\n`;
     csvContent += ';;;;;;;;;;;;;;;\n';
 
     // Detailed table header
@@ -1946,7 +2295,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     <div className="space-y-6 animate-fadeIn" id="crm-tab-container">
       <style>{`
         #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-crm-input):not(.crm-event-date-input),
-        #crm-tab-container select:not(#crm-more-options-dropdown),
+        #crm-tab-container select:not(#crm-more-options-dropdown):not(.crm-file-type-select),
         #crm-tab-container textarea:not(#crm-embed-textarea):not(#crm-relance-email-textarea):not(.crm-event-textarea) {
           padding: 10px 12px !important;
           border: 1px solid #dadada !important;
@@ -1960,6 +2309,23 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           outline: none !important;
           transition: all 0s !important;
           width: 100% !important;
+        }
+        #crm-tab-container select.crm-file-type-select {
+          width: auto !important;
+          min-width: 130px !important;
+          padding: 6px 12px !important;
+          border: 1px solid #dadada !important;
+          border-radius: 10px !important;
+          font-size: 14px !important;
+          font-weight: 600 !important;
+          background-color: #ffffff !important;
+          color: #0f172a !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+          cursor: pointer !important;
+          appearance: auto !important;
+          -webkit-appearance: menulist !important;
+          -moz-appearance: menulist !important;
+          outline: none !important;
         }
         #crm-tab-container select#crm-more-options-dropdown {
           width: 100% !important;
@@ -2036,7 +2402,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           min-height: 38px !important;
           line-height: 1.4 !important;
         }
-        #crm-tab-container select:not(#crm-more-options-dropdown) {
+        #crm-tab-container select:not(#crm-more-options-dropdown):not(.crm-file-type-select) {
           appearance: none !important;
           -webkit-appearance: none !important;
           -moz-appearance: none !important;
@@ -2525,25 +2891,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             <span style={geluleStyle}>{refVal}</span>
                           </td>
                         );
-                      case 'crit_noncomm':
-                        return (
-                          <td key={colId} className="px-4 py-4 whitespace-nowrap">
-                            <span style={geluleStyle} className="inline-flex items-center gap-2">
-                              <span>{critVal}</span>
-                              <span
-                                className="inline-block rounded-full shrink-0"
-                                style={{
-                                  width: '10px',
-                                  height: '10px',
-                                  minWidth: '10px',
-                                  minHeight: '10px',
-                                  backgroundColor: getCriticiteColor(critVal),
-                                }}
-                                aria-hidden="true"
-                              />
-                            </span>
-                          </td>
-                        );
                       case 'sit_comm':
                       case 'sit_noncomm':
                         return (
@@ -2972,7 +3319,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
                     {/* Div parente du dessous : border-radius en haut à droite et en haut à gauche 0px */}
                     <div 
-                      className="grid grid-cols-3 gap-3"
+                      className="grid grid-cols-2 gap-3"
                       style={{
                         border: '1px solid rgb(218, 218, 218)',
                         borderTopLeftRadius: '0px',
@@ -3012,23 +3359,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         <option value="Commercial">Commercial</option>
                         <option value="Réclamation">Réclamation</option>
                         <option value="Sans Catégorie">Sans Catégorie</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label>Criticité.</label>
-                      <select
-                        id="crm-form-criticite-select"
-                        value={formCriticite}
-                        onChange={(e: any) => setFormCriticite(e.target.value)}
-                        style={{ ...selectStyle, textAlign: 'center', textAlignLast: 'center' }}
-                        className="text-center"
-                      >
-                        {CRITICITE_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
                       </select>
                     </div>
 
@@ -3104,6 +3434,28 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           />
                         </div>
                       )}
+                    </div>
+
+                    {/* Payeur ID. & Client ID. (50/50 disabled, auto-populated from selected client) */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label>Payeur ID.</label>
+                        <input
+                          type="text"
+                          value={formPayeurId}
+                          disabled
+                          placeholder="—"
+                        />
+                      </div>
+                      <div>
+                        <label>Client ID.</label>
+                        <input
+                          type="text"
+                          value={formClientId}
+                          disabled
+                          placeholder="—"
+                        />
+                      </div>
                     </div>
 
                     {/* Email. (distinct field auto-populated upon client selection, editable) */}
@@ -3361,8 +3713,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </div>
                       </div>
 
-                      {/* Score Potentiel Conversion à gauche & Référence Devis à droite */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 items-end">
+                      {/* Score Potentiel Conversion à gauche, Référence Devis au centre & Type Vente à droite */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-3 items-end">
                         {/* Score Potentiel Conversion (5 ronds 1 à 5 avec toggle select/deselect) */}
                         <div>
                           <label>Score Potentiel Conversion.</label>
@@ -3401,7 +3753,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           </div>
                         </div>
 
-                        {/* Référence Devis à droite */}
+                        {/* Référence Devis */}
                         <div>
                           <label>Référence Devis.</label>
                           <input
@@ -3410,6 +3762,21 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             value={formReferenceDevis}
                             onChange={(e) => setFormReferenceDevis(e.target.value)}
                           />
+                        </div>
+
+                        {/* Type Vente à droite de Référence Devis */}
+                        <div>
+                          <label>Type Vente.</label>
+                          <select
+                            value={formTypeVente}
+                            onChange={(e) => setFormTypeVente(e.target.value)}
+                            style={selectStyle}
+                          >
+                            <option value="">Sélectionner...</option>
+                            <option value="Achat">Achat</option>
+                            <option value="Location">Location</option>
+                            <option value="Revendeur">Revendeur</option>
+                          </select>
                         </div>
                       </div>
 
@@ -3446,32 +3813,120 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </select>
                       </div>
 
-                      {/* Full width en dessous : Bouton Télécharger un fichier + sub-divs */}
+                      {/* Full width en dessous : Zone de drop de document + toggle + sub-divs */}
                       <div className="space-y-2">
-                        <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            disabled={!googleDriveActive || isUploadingFile}
-                            onClick={() => fileInputRef.current?.click()}
-                            style={{
-                              backgroundColor: !googleDriveActive ? '#94a3b8' : '#2e54ff',
-                              color: '#ffffff',
-                              borderRadius: '12px',
-                              fontSize: '16px',
-                              padding: '10px 20px',
-                              fontWeight: 'bold',
-                              border: 'none',
-                              cursor: !googleDriveActive || isUploadingFile ? 'not-allowed' : 'pointer',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '8px'
-                            }}
-                            className={!googleDriveActive ? 'opacity-60 select-none' : 'hover:opacity-90 active:scale-95 transition-all cursor-pointer'}
-                            title={!googleDriveActive ? "Connecteur Google Drive inactif dans les réglages" : undefined}
+                        <div
+                          onClick={() => {
+                            if (!googleDriveActive || isUploadingFile || formFichiersDevis.length >= 3) return;
+                            fileInputRef.current?.click();
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!googleDriveActive || isUploadingFile || formFichiersDevis.length >= 3) return;
+                            setIsDraggingFile(true);
+                          }}
+                          onDragLeave={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsDraggingFile(false);
+                          }}
+                          onDrop={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsDraggingFile(false);
+                            if (!googleDriveActive || isUploadingFile || formFichiersDevis.length >= 3) return;
+                            const droppedFile = e.dataTransfer?.files?.[0];
+                            if (droppedFile) {
+                              await processUploadedFile(droppedFile);
+                            }
+                          }}
+                          style={{
+                            border: isDraggingFile ? '2px dashed #2e54ff' : '1.5px dashed #cbd5e1',
+                            backgroundColor: isDraggingFile ? '#eff6ff' : '#f8fafc',
+                            borderRadius: '14px',
+                            padding: '22px 16px',
+                            textAlign: 'center',
+                            cursor: !googleDriveActive || isUploadingFile || formFichiersDevis.length >= 3 ? 'not-allowed' : 'pointer',
+                            opacity: !googleDriveActive || formFichiersDevis.length >= 3 ? 0.65 : 1,
+                            transition: 'all 0.15s ease',
+                          }}
+                          title={
+                            !googleDriveActive
+                              ? "Connecteur Google Drive inactif dans les réglages"
+                              : formFichiersDevis.length >= 3
+                              ? "Maximum 3 fichiers autorisés par ticket"
+                              : "Cliquez ou glissez-déposez un document"
+                          }
+                        >
+                          <div
+                            className="font-sans font-semibold text-slate-900 select-none"
+                            style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                           >
-                            {isUploadingFile ? "Téléchargement en cours..." : "Télécharger un fichier"}
-                          </button>
+                            {isUploadingFile
+                              ? 'Téléchargement en cours...'
+                              : formFichiersDevis.length >= 3
+                              ? 'Déposez un fichier (Max. 3 fichiers atteint)'
+                              : 'Déposez un fichier'}
+                          </div>
+
+                          {/* Toggle ON/OFF : Il s'agit d'un autre fichier. */}
+                          <div
+                            className="mt-3 inline-flex items-center justify-center gap-2.5 select-none"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={isAutreFichierToggle}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsAutreFichierToggle(prev => !prev);
+                              }}
+                              style={{
+                                width: '42px',
+                                height: '24px',
+                                borderRadius: '9999px',
+                                backgroundColor: isAutreFichierToggle ? '#2e54ff' : '#cbd5e1',
+                                position: 'relative',
+                                border: 'none',
+                                cursor: 'pointer',
+                                transition: 'background-color 0.2s ease',
+                                padding: 0,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  width: '18px',
+                                  height: '18px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#ffffff',
+                                  transform: isAutreFichierToggle ? 'translateX(21px)' : 'translateX(3px)',
+                                  transition: 'transform 0.2s ease',
+                                  display: 'block',
+                                  boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                }}
+                              />
+                            </button>
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsAutreFichierToggle(prev => !prev);
+                              }}
+                              style={{
+                                fontSize: '15px',
+                                fontWeight: 500,
+                                color: '#334155',
+                                cursor: 'pointer',
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              }}
+                            >
+                              Il s'agit d'un autre fichier.
+                            </span>
+                          </div>
+
                           <input
                             type="file"
                             ref={fileInputRef}
@@ -3488,7 +3943,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               return (
                                 <div 
                                   key={idx}
-                                  className="flex items-center justify-between gap-3 p-3 bg-white rounded-xl shadow-xs"
+                                  className="flex items-center justify-between gap-3 p-3 bg-white rounded-xl shadow-xs flex-wrap"
                                   style={{ border: '1px solid #dadada' }}
                                 >
                                   <div className="flex items-center gap-4 text-[16px] text-black font-sans">
@@ -3500,6 +3955,22 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
+                                    <select
+                                      className="crm-file-type-select"
+                                      value={f.typeFichier || ''}
+                                      onChange={(e) => {
+                                        const newType = e.target.value as CommercialFileAttachment['typeFichier'];
+                                        setFormFichiersDevis(prev =>
+                                          prev.map((item, i) => (i === idx ? { ...item, typeFichier: newType } : item))
+                                        );
+                                      }}
+                                    >
+                                      <option value="" disabled hidden>Type Fichier.</option>
+                                      <option value="Principal" hidden>Principal</option>
+                                      <option value="Devis">Devis</option>
+                                      <option value="Facture">Facture</option>
+                                      <option value="Autre">Autre</option>
+                                    </select>
                                     <button
                                       type="button"
                                       onClick={() => window.open(f.url, '_blank', 'noopener,noreferrer')}
@@ -3546,27 +4017,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         )}
                       </div>
 
-                      {/* Description Offre Devis. (limité à max 55 caractères) & Type Vente. */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label>Description Offre Devis.</label>
-                          <input
-                            type="text"
-                            maxLength={55}
-                            placeholder="Entrez un résumé court de l’offre."
-                            value={formDescriptionOffreDevis}
-                            onChange={(e) => setFormDescriptionOffreDevis(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <label>Type Vente.</label>
-                          <input
-                            type="text"
-                            placeholder="Ex: Vente, Location, Maintenance..."
-                            value={formTypeVente}
-                            onChange={(e) => setFormTypeVente(e.target.value)}
-                          />
-                        </div>
+                      {/* Description Offre Devis. (limité à max 55 caractères) */}
+                      <div>
+                        <label>Description Offre Devis.</label>
+                        <input
+                          type="text"
+                          maxLength={55}
+                          placeholder="Entrez un résumé court de l’offre."
+                          value={formDescriptionOffreDevis}
+                          onChange={(e) => setFormDescriptionOffreDevis(e.target.value)}
+                        />
                       </div>
 
                       {/* Total Affaire / Famille / Indicatif Postal / Origine Lead (4 cols équitables sur la même ligne) */}
@@ -4056,36 +4516,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </select>
                 </div>
 
-                {/* 2. Sélection de la criticité */}
-                <div>
-                  <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                    Sélection de la criticité.
-                  </label>
-                  <select
-                    value={draftFilterCriticite}
-                    onChange={(e) => setDraftFilterCriticite(e.target.value)}
-                    style={{
-                      width: '100%',
-                      border: '1px solid #dedede',
-                      borderRadius: '13px',
-                      padding: '10px 14px',
-                      fontSize: '16px',
-                      color: '#000000',
-                      backgroundColor: '#ffffff',
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      outline: 'none',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <option value="Tous">Toutes</option>
-                    <option value="Urgent">Urgent</option>
-                    <option value="Semaine prochaine">Semaine prochaine</option>
-                    <option value="Ce mois">Ce mois</option>
-                    <option value="Mois prochain">Mois prochain</option>
-                    <option value="Non renseigné">Non renseigné</option>
-                  </select>
-                </div>
-
                 {/* 3. Sélection de la semaine */}
                 <div>
                   <label style={{ fontSize: '18px', fontWeight: 600, color: '#000000', marginBottom: '6px', display: 'block', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
@@ -4526,6 +4956,78 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         className="font-sans"
                       >
                         {scoreClosingText}
+                      </div>
+                    </div>
+
+                    {/* Bloc stat 5: « Temps closing » */}
+                    <div 
+                      className="p-4 rounded-2xl bg-white text-center flex flex-col items-center justify-center space-y-2"
+                      style={{
+                        border: '1px solid #dadada',
+                        boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
+                      }}
+                      id="stat-block-temps-closing"
+                    >
+                      <span 
+                        style={{
+                          cursor: 'default',
+                          fontSize: '18px',
+                          color: '#000000',
+                          paddingTop: '8px',
+                          fontWeight: 600,
+                        }}
+                        className="font-sans block"
+                      >
+                        Temps closing
+                      </span>
+                      <div 
+                        style={{
+                          cursor: 'default',
+                          fontSize: statTempsClosingText.length > 12 ? '26px' : '34px',
+                          lineHeight: '1.2',
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          paddingBottom: '8px',
+                        }}
+                        className="font-sans"
+                      >
+                        {statTempsClosingText}
+                      </div>
+                    </div>
+
+                    {/* Bloc stat 6: « Meilleur Closer » */}
+                    <div 
+                      className="p-4 rounded-2xl bg-white text-center flex flex-col items-center justify-center space-y-2"
+                      style={{
+                        border: '1px solid #dadada',
+                        boxShadow: '0 2px 8px -2px rgba(0, 0, 0, 0.06)',
+                      }}
+                      id="stat-block-meilleur-closer"
+                    >
+                      <span 
+                        style={{
+                          cursor: 'default',
+                          fontSize: '18px',
+                          color: '#000000',
+                          paddingTop: '8px',
+                          fontWeight: 600,
+                        }}
+                        className="font-sans block"
+                      >
+                        Meilleur Closer
+                      </span>
+                      <div 
+                        style={{
+                          cursor: 'default',
+                          fontSize: statMeilleurCloserText.length > 14 ? '26px' : '34px',
+                          lineHeight: '1.2',
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          paddingBottom: '8px',
+                        }}
+                        className="font-sans"
+                      >
+                        {statMeilleurCloserText}
                       </div>
                     </div>
                   </div>

@@ -1177,6 +1177,7 @@ export default function App() {
         stocksDistribues: 'spreadsheetStocksDistribues',
         historiqueNotifications: 'spreadsheetStocks',
         crm: 'spreadsheetCrm',
+        reglagesCrm: 'spreadsheetReglagesCrm',
         satisfaction: 'spreadsheetSatisfaction',
         commandes: 'spreadsheetCommandes',
         devisFactures: 'spreadsheetCommandes',
@@ -1863,6 +1864,11 @@ export default function App() {
   const [customDocPiecePrice, setCustomDocPiecePrice] = useState(0);
   const [customDocPieceQty, setCustomDocPieceQty] = useState(1);
   const [docSearchQuery, setDocSearchQuery] = useState('');
+  const [autresMaterielsSearchQuery, setAutresMaterielsSearchQuery] = useState('');
+  const [defibInitialSortFilter, setDefibInitialSortFilter] = useState<'recent' | 'closest_maintenance' | null>(null);
+  const [defibSortFilterTrigger, setDefibSortFilterTrigger] = useState(0);
+  const [autresMaterielsInitialSortFilter, setAutresMaterielsInitialSortFilter] = useState<'recent' | 'closest_maintenance' | null>(null);
+  const [autresMaterielsSortFilterTrigger, setAutresMaterielsSortFilterTrigger] = useState(0);
   const [docTypeFilter, setDocTypeFilter] = useState<'Tous' | 'Devis' | 'Facture' | 'Bon de commande' | 'Bon de livraison'>('Tous');
   const [pennylaneActive, setPennylaneActive] = useState(false);
   const [pennylaneAlertMessage, setPennylaneAlertMessage] = useState<string | null>(null);
@@ -3122,6 +3128,7 @@ export default function App() {
         missionsTournees: 'spreadsheetMissionsTournees',
         rapportsPdf: 'spreadsheetRapportsPdf',
         crm: 'spreadsheetCrm',
+        reglagesCrm: 'spreadsheetReglagesCrm',
         satisfaction: 'spreadsheetSatisfaction',
         commandes: 'spreadsheetCommandes',
         devisFactures: 'spreadsheetCommandes',
@@ -3660,6 +3667,58 @@ export default function App() {
             });
             break;
           }
+          case 'reglagesCrm': {
+            const firstRow = items[0];
+            if (firstRow && typeof firstRow === 'object') {
+              const crmSettingsObj = {
+                relanceEmailBody: firstRow.relanceEmailBody ?? '',
+                relanceEmailReplyTo: firstRow.relanceEmailReplyTo ?? '',
+                relanceEmailBody2: firstRow.relanceEmailBody2 ?? '',
+                relanceEmailReplyTo2: firstRow.relanceEmailReplyTo2 ?? '',
+                relanceEmailBody3: firstRow.relanceEmailBody3 ?? '',
+                relanceEmailReplyTo3: firstRow.relanceEmailReplyTo3 ?? '',
+                supportEmailBody: firstRow.supportEmailBody ?? '',
+                supportEmailReplyTo: firstRow.supportEmailReplyTo ?? '',
+                supportEmailSubject: firstRow.supportEmailSubject ?? '',
+              };
+              if (firstRow.relanceEmailBody !== undefined) {
+                safeSetLocalStorage(`defib_${activeTid}_crm_relance_template`, String(firstRow.relanceEmailBody || ''));
+              }
+              if (firstRow.relanceEmailReplyTo !== undefined) {
+                safeSetLocalStorage(`defib_${activeTid}_crm_relance_replyto`, String(firstRow.relanceEmailReplyTo || ''));
+              }
+              if (firstRow.relanceEmailBody2 !== undefined) {
+                safeSetLocalStorage(`defib_${activeTid}_crm_relance_template_2`, String(firstRow.relanceEmailBody2 || ''));
+              }
+              if (firstRow.relanceEmailReplyTo2 !== undefined) {
+                safeSetLocalStorage(`defib_${activeTid}_crm_relance_replyto_2`, String(firstRow.relanceEmailReplyTo2 || ''));
+              }
+              if (firstRow.relanceEmailBody3 !== undefined) {
+                safeSetLocalStorage(`defib_${activeTid}_crm_relance_template_3`, String(firstRow.relanceEmailBody3 || ''));
+              }
+              if (firstRow.relanceEmailReplyTo3 !== undefined) {
+                safeSetLocalStorage(`defib_${activeTid}_crm_relance_replyto_3`, String(firstRow.relanceEmailReplyTo3 || ''));
+              }
+              if (firstRow.supportEmailBody !== undefined) {
+                safeSetLocalStorage(`defib_${activeTid}_crm_support_template`, String(firstRow.supportEmailBody || ''));
+              }
+              if (firstRow.supportEmailReplyTo !== undefined) {
+                safeSetLocalStorage(`defib_${activeTid}_crm_support_replyto`, String(firstRow.supportEmailReplyTo || ''));
+              }
+              if (firstRow.supportEmailSubject !== undefined) {
+                safeSetLocalStorage(`defib_${activeTid}_crm_support_subject`, String(firstRow.supportEmailSubject || ''));
+              }
+              safeSetLocalStorage(`defib_${activeTid}_crm_settings`, JSON.stringify(crmSettingsObj));
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(
+                  new CustomEvent('defib-crm-settings-updated', {
+                    detail: { tenantId: activeTid, settings: firstRow },
+                  })
+                );
+              }
+            }
+            break;
+          }
           case 'observateurActionsSuspectes': {
             setSuspiciousActivityLogs(items);
             safeSetLocalStorage(`defib_${activeTid}_suspicious_activity_logs`, JSON.stringify(items));
@@ -3682,6 +3741,7 @@ export default function App() {
       spreadsheetMissionsTournees: 'missionsTournees',
       spreadsheetRapportsPdf: 'rapportsPdf',
       spreadsheetCrm: 'crm',
+      spreadsheetReglagesCrm: 'reglagesCrm',
       spreadsheetSatisfaction: 'satisfaction',
       spreadsheetCommandes: 'commandes',
       spreadsheetDevisFactures: 'devisFactures',
@@ -3729,6 +3789,7 @@ export default function App() {
       'tournees',
       'rapportsPdf',
       'crm',
+      'reglagesCrm',
       'satisfaction',
       'commandes',
       'stocksGlobaux',
@@ -3774,9 +3835,10 @@ export default function App() {
     if (!tenantId) return;
     setIsRefreshingCrm(true);
     try {
-      // 1. Refresh CRM and Membres from Google Spreadsheets if configured
+      // 1. Refresh CRM, CRM Settings, and Membres from Google Spreadsheets if configured
       await Promise.all([
         refreshGenericSheetCompartment('crm', true),
+        refreshGenericSheetCompartment('reglagesCrm', true),
         refreshGenericSheetCompartment('membresEnvironnement', true),
       ]);
 
@@ -8183,6 +8245,7 @@ export default function App() {
             { key: 'spreadsheetEmargements', storageSuffix: 'spreadsheet_emargements', tabType: 'emargements' },
             { key: 'spreadsheetRapportsPdf', storageSuffix: 'spreadsheet_rapports_pdf', tabType: 'rapportsPdf' },
             { key: 'spreadsheetCrm', storageSuffix: 'spreadsheet_crm', tabType: 'crm' },
+            { key: 'spreadsheetReglagesCrm', storageSuffix: 'spreadsheet_reglages_crm', tabType: 'reglagesCrm' },
             { key: 'spreadsheetSatisfaction', storageSuffix: 'spreadsheet_satisfaction', tabType: 'satisfaction' },
             { key: 'spreadsheetAchatsFournisseurs', storageSuffix: 'spreadsheet_achats_fournisseurs', tabType: 'achatsFournisseurs' },
             { key: 'spreadsheetTemps', storageSuffix: 'spreadsheet_temps', tabType: 'temps' },
@@ -11311,7 +11374,7 @@ export default function App() {
             }> = [
               {
                 id: 'materiels',
-                label: t('Matériels'),
+                label: t('Exploitation'),
                 iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/materielsgris.svg',
                 iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/materielsnoir.svg',
                 isActive: (activeTab === 'defibrillateurs' || activeTab === 'autres-materiels') && !isCanalMessagesOpen,
@@ -11735,6 +11798,21 @@ export default function App() {
               setActiveTab={setActiveTab}
               initialSearch={defibSearchQuery}
               onSearchChange={setDefibSearchQuery}
+              initialSortFilter={defibInitialSortFilter}
+              sortFilterTrigger={defibSortFilterTrigger}
+              onNavigateToAutresMateriels={(q, urgentOnly) => {
+                setAutresMaterielsSearchQuery(q);
+                setAutresMaterielsInitialSortFilter(urgentOnly ? 'closest_maintenance' : null);
+                setAutresMaterielsSortFilterTrigger(prev => prev + 1);
+                setActiveTab('autres-materiels');
+                setTimeout(() => {
+                  window.dispatchEvent(
+                    new CustomEvent('autres-materiels-external-filter', {
+                      detail: { search: q, sortFilter: urgentOnly ? 'closest_maintenance' : null },
+                    })
+                  );
+                }, 30);
+              }}
               onShowGmaoReports={(identifiant) => {
                 setActiveTab('gmao');
                 setGmaoSearchQuery(identifiant);
@@ -11767,6 +11845,10 @@ export default function App() {
               isReadOnly={isDeveloper}
               isRefreshing={isRefreshingAutresMateriels}
               onRefreshData={handleManualRefreshAutresMateriels}
+              initialSearch={autresMaterielsSearchQuery}
+              onSearchChange={setAutresMaterielsSearchQuery}
+              initialSortFilter={autresMaterielsInitialSortFilter}
+              sortFilterTrigger={autresMaterielsSortFilterTrigger}
             />
           )}
 
@@ -14822,6 +14904,191 @@ export default function App() {
                                             />
                                           </div>
 
+                                          {/* Même adresse postale avec Pro.Main. Urgente */}
+                                          {(() => {
+                                            const normalizeAddr = (val?: string | null) =>
+                                              String(val || '')
+                                                .normalize('NFD')
+                                                .replace(/[\u0300-\u036f]/g, '')
+                                                .toLowerCase()
+                                                .replace(/[^a-z0-9]+/g, ' ')
+                                                .trim();
+
+                                            const parseAnyDate = (raw?: string | null): Date | null => {
+                                              if (!raw || typeof raw !== 'string') return null;
+                                              const s = raw.trim();
+                                              if (!s) return null;
+                                              if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+                                                const [dd, mm, yyyy] = s.split('/').map(Number);
+                                                const d = new Date(yyyy, mm - 1, dd);
+                                                return isNaN(d.getTime()) ? null : d;
+                                              }
+                                              const d = new Date(s);
+                                              return isNaN(d.getTime()) ? null : d;
+                                            };
+
+                                            const today = new Date();
+                                            today.setHours(0, 0, 0, 0);
+                                            const todayTime = today.getTime();
+
+                                            const isDateUrgent = (raw?: string | null): boolean => {
+                                              const d = parseAnyDate(raw);
+                                              if (!d) return false;
+                                              d.setHours(0, 0, 0, 0);
+                                              const diffDays = Math.ceil((d.getTime() - todayTime) / (1000 * 60 * 60 * 24));
+                                              return diffDays <= 90;
+                                            };
+
+                                            const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                            const matchedOther = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                            const rawVoie = matchedDefib
+                                              ? ((matchedDefib as any).numeroVoie || matchedDefib.numVoie || '')
+                                              : matchedOther
+                                              ? (matchedOther.numeroVoie || (matchedOther as any).numVoie || '')
+                                              : (m.address || '');
+                                            const rawCp = matchedDefib
+                                              ? ((matchedDefib as any).codePostal || matchedDefib.cp || '')
+                                              : matchedOther
+                                              ? (matchedOther.codePostal || (matchedOther as any).cp || '')
+                                              : '';
+                                            const rawVille = matchedDefib
+                                              ? (matchedDefib.ville || '')
+                                              : matchedOther
+                                              ? (matchedOther.ville || '')
+                                              : '';
+
+                                            const normVoie = normalizeAddr(rawVoie);
+                                            const normCp = normalizeAddr(rawCp);
+                                            const normVille = normalizeAddr(rawVille);
+                                            const currentIdent = String(m.defibIdentifiant || '').trim().toLowerCase();
+
+                                            let urgentDefibsCount = 0;
+                                            let urgentMaterielsCount = 0;
+
+                                            if (normVoie) {
+                                              for (const df of defibrillateurs) {
+                                                if (!df) continue;
+                                                const dfIdent = String(df.identifiant || '').trim().toLowerCase();
+                                                if (currentIdent && dfIdent === currentIdent) continue;
+                                                if (matchedDefib && df.id === matchedDefib.id) continue;
+                                                const dfVoie = normalizeAddr((df as any).numeroVoie || df.numVoie || '');
+                                                if (!dfVoie || dfVoie !== normVoie) continue;
+                                                const dfCp = normalizeAddr((df as any).codePostal || df.cp || '');
+                                                const dfVille = normalizeAddr(df.ville || '');
+                                                if (normCp && dfCp && normCp !== dfCp) continue;
+                                                if (!normCp && normVille && dfVille && normVille !== dfVille) continue;
+
+                                                let proMain = (df as any).prochaineMaintenance || (df as any).prochaine_visite || (df as any).prochaine_v || '';
+                                                if (!proMain && df.derniereMaintenance) {
+                                                  const dm = parseAnyDate(df.derniereMaintenance);
+                                                  if (dm) {
+                                                    dm.setFullYear(dm.getFullYear() + 1);
+                                                    proMain = dm.toISOString().split('T')[0];
+                                                  }
+                                                }
+                                                const hasUrgent =
+                                                  isDateUrgent(proMain) ||
+                                                  isDateUrgent(df.peremptionElectrodeA) ||
+                                                  isDateUrgent(df.peremptionElectrodeP) ||
+                                                  isDateUrgent(df.peremptionBatterie);
+                                                if (hasUrgent) urgentDefibsCount++;
+                                              }
+
+                                              for (const eq of (otherEquipments || [])) {
+                                                if (!eq) continue;
+                                                const eqIdent = String(eq.identifiant || '').trim().toLowerCase();
+                                                if (currentIdent && eqIdent === currentIdent) continue;
+                                                if (matchedOther && eq.id === matchedOther.id) continue;
+                                                const eqVoie = normalizeAddr(eq.numeroVoie || (eq as any).numVoie || '');
+                                                if (!eqVoie || eqVoie !== normVoie) continue;
+                                                const eqCp = normalizeAddr(eq.codePostal || (eq as any).cp || '');
+                                                const eqVille = normalizeAddr(eq.ville || '');
+                                                if (normCp && eqCp && normCp !== eqCp) continue;
+                                                if (!normCp && normVille && eqVille && normVille !== eqVille) continue;
+
+                                                if (isDateUrgent(eq.prochaineMaintenance)) {
+                                                  urgentMaterielsCount++;
+                                                }
+                                              }
+                                            }
+
+                                            const searchAddressValue = String(rawVoie || '').trim() || [rawVoie, rawCp, rawVille].filter(Boolean).join(' ').trim();
+
+                                            return (
+                                              <div className="pt-1 flex flex-wrap items-center justify-between gap-2 bg-transparent">
+                                                <span className="text-slate-700 font-medium" style={{ fontSize: '15px' }}>
+                                                  À cette adresse postale, il y a {urgentDefibsCount} autre(s) défibrillateur(s) et {urgentMaterielsCount} autres matériels avec Pro.Main. Urgente.
+                                                </span>
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                  <button
+                                                    type="button"
+                                                    disabled={urgentDefibsCount === 0}
+                                                    onClick={() => {
+                                                      if (urgentDefibsCount === 0) return;
+                                                      setDefibSearchQuery(searchAddressValue);
+                                                      setDefibInitialSortFilter('closest_maintenance');
+                                                      setDefibSortFilterTrigger(prev => prev + 1);
+                                                      setActiveTab('defibrillateurs');
+                                                      setTimeout(() => {
+                                                        window.dispatchEvent(
+                                                          new CustomEvent('defib-external-filter', {
+                                                            detail: { search: searchAddressValue, sortFilter: 'closest_maintenance' },
+                                                          })
+                                                        );
+                                                      }, 30);
+                                                    }}
+                                                    style={{
+                                                      backgroundColor: '#0f172a',
+                                                      color: '#ffffff',
+                                                      borderRadius: '10px',
+                                                      padding: '7px 14px',
+                                                      fontSize: '14px',
+                                                      fontWeight: 100,
+                                                      border: 'none',
+                                                      opacity: urgentDefibsCount === 0 ? 0.4 : 1,
+                                                      cursor: urgentDefibsCount === 0 ? 'not-allowed' : 'pointer',
+                                                    }}
+                                                    className="transition-opacity select-none"
+                                                  >
+                                                    Voir les {urgentDefibsCount} défibrillateur(s)
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    disabled={urgentMaterielsCount === 0}
+                                                    onClick={() => {
+                                                      if (urgentMaterielsCount === 0) return;
+                                                      setAutresMaterielsSearchQuery(searchAddressValue);
+                                                      setAutresMaterielsInitialSortFilter('closest_maintenance');
+                                                      setAutresMaterielsSortFilterTrigger(prev => prev + 1);
+                                                      setActiveTab('autres-materiels');
+                                                      setTimeout(() => {
+                                                        window.dispatchEvent(
+                                                          new CustomEvent('autres-materiels-external-filter', {
+                                                            detail: { search: searchAddressValue, sortFilter: 'closest_maintenance' },
+                                                          })
+                                                        );
+                                                      }, 30);
+                                                    }}
+                                                    style={{
+                                                      backgroundColor: '#0f172a',
+                                                      color: '#ffffff',
+                                                      borderRadius: '10px',
+                                                      padding: '7px 14px',
+                                                      fontSize: '14px',
+                                                      fontWeight: 100,
+                                                      border: 'none',
+                                                      opacity: urgentMaterielsCount === 0 ? 0.4 : 1,
+                                                      cursor: urgentMaterielsCount === 0 ? 'not-allowed' : 'pointer',
+                                                    }}
+                                                    className="transition-opacity select-none"
+                                                  >
+                                                    Voir les {urgentMaterielsCount} autre(s) matériel(s).
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
+
                                           {/* Bottom row: Transférer & Supprimer */}
                                           <div className="pt-2 grid grid-cols-1 md:grid-cols-4 gap-3 w-full bg-transparent items-end">
                                             {/* Transférer section */}
@@ -16982,6 +17249,191 @@ export default function App() {
                                       style={{ minHeight: '48px', height: '48px', lineHeight: '28px' }}
                                     />
                                   </div>
+
+                                  {/* Même adresse postale avec Pro.Main. Urgente */}
+                                  {(() => {
+                                    const normalizeAddr = (val?: string | null) =>
+                                      String(val || '')
+                                        .normalize('NFD')
+                                        .replace(/[\u0300-\u036f]/g, '')
+                                        .toLowerCase()
+                                        .replace(/[^a-z0-9]+/g, ' ')
+                                        .trim();
+
+                                    const parseAnyDate = (raw?: string | null): Date | null => {
+                                      if (!raw || typeof raw !== 'string') return null;
+                                      const s = raw.trim();
+                                      if (!s) return null;
+                                      if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+                                        const [dd, mm, yyyy] = s.split('/').map(Number);
+                                        const d = new Date(yyyy, mm - 1, dd);
+                                        return isNaN(d.getTime()) ? null : d;
+                                      }
+                                      const d = new Date(s);
+                                      return isNaN(d.getTime()) ? null : d;
+                                    };
+
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+                                    const todayTime = today.getTime();
+
+                                    const isDateUrgent = (raw?: string | null): boolean => {
+                                      const d = parseAnyDate(raw);
+                                      if (!d) return false;
+                                      d.setHours(0, 0, 0, 0);
+                                      const diffDays = Math.ceil((d.getTime() - todayTime) / (1000 * 60 * 60 * 24));
+                                      return diffDays <= 90;
+                                    };
+
+                                    const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                    const matchedOther = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                    const rawVoie = matchedDefib
+                                      ? ((matchedDefib as any).numeroVoie || matchedDefib.numVoie || '')
+                                      : matchedOther
+                                      ? (matchedOther.numeroVoie || (matchedOther as any).numVoie || '')
+                                      : (m.address || '');
+                                    const rawCp = matchedDefib
+                                      ? ((matchedDefib as any).codePostal || matchedDefib.cp || '')
+                                      : matchedOther
+                                      ? (matchedOther.codePostal || (matchedOther as any).cp || '')
+                                      : '';
+                                    const rawVille = matchedDefib
+                                      ? (matchedDefib.ville || '')
+                                      : matchedOther
+                                      ? (matchedOther.ville || '')
+                                      : '';
+
+                                    const normVoie = normalizeAddr(rawVoie);
+                                    const normCp = normalizeAddr(rawCp);
+                                    const normVille = normalizeAddr(rawVille);
+                                    const currentIdent = String(m.defibIdentifiant || '').trim().toLowerCase();
+
+                                    let urgentDefibsCount = 0;
+                                    let urgentMaterielsCount = 0;
+
+                                    if (normVoie) {
+                                      for (const df of defibrillateurs) {
+                                        if (!df) continue;
+                                        const dfIdent = String(df.identifiant || '').trim().toLowerCase();
+                                        if (currentIdent && dfIdent === currentIdent) continue;
+                                        if (matchedDefib && df.id === matchedDefib.id) continue;
+                                        const dfVoie = normalizeAddr((df as any).numeroVoie || df.numVoie || '');
+                                        if (!dfVoie || dfVoie !== normVoie) continue;
+                                        const dfCp = normalizeAddr((df as any).codePostal || df.cp || '');
+                                        const dfVille = normalizeAddr(df.ville || '');
+                                        if (normCp && dfCp && normCp !== dfCp) continue;
+                                        if (!normCp && normVille && dfVille && normVille !== dfVille) continue;
+
+                                        let proMain = (df as any).prochaineMaintenance || (df as any).prochaine_visite || (df as any).prochaine_v || '';
+                                        if (!proMain && df.derniereMaintenance) {
+                                          const dm = parseAnyDate(df.derniereMaintenance);
+                                          if (dm) {
+                                            dm.setFullYear(dm.getFullYear() + 1);
+                                            proMain = dm.toISOString().split('T')[0];
+                                          }
+                                        }
+                                        const hasUrgent =
+                                          isDateUrgent(proMain) ||
+                                          isDateUrgent(df.peremptionElectrodeA) ||
+                                          isDateUrgent(df.peremptionElectrodeP) ||
+                                          isDateUrgent(df.peremptionBatterie);
+                                        if (hasUrgent) urgentDefibsCount++;
+                                      }
+
+                                      for (const eq of (otherEquipments || [])) {
+                                        if (!eq) continue;
+                                        const eqIdent = String(eq.identifiant || '').trim().toLowerCase();
+                                        if (currentIdent && eqIdent === currentIdent) continue;
+                                        if (matchedOther && eq.id === matchedOther.id) continue;
+                                        const eqVoie = normalizeAddr(eq.numeroVoie || (eq as any).numVoie || '');
+                                        if (!eqVoie || eqVoie !== normVoie) continue;
+                                        const eqCp = normalizeAddr(eq.codePostal || (eq as any).cp || '');
+                                        const eqVille = normalizeAddr(eq.ville || '');
+                                        if (normCp && eqCp && normCp !== eqCp) continue;
+                                        if (!normCp && normVille && eqVille && normVille !== eqVille) continue;
+
+                                        if (isDateUrgent(eq.prochaineMaintenance)) {
+                                          urgentMaterielsCount++;
+                                        }
+                                      }
+                                    }
+
+                                    const searchAddressValue = String(rawVoie || '').trim() || [rawVoie, rawCp, rawVille].filter(Boolean).join(' ').trim();
+
+                                    return (
+                                      <div className="pt-1 flex flex-wrap items-center justify-between gap-2 bg-transparent">
+                                        <span className="text-slate-700 font-medium" style={{ fontSize: '15px' }}>
+                                          À cette adresse postale, il y a {urgentDefibsCount} autre(s) défibrillateur(s) et {urgentMaterielsCount} autres matériels avec Pro.Main. Urgente.
+                                        </span>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <button
+                                            type="button"
+                                            disabled={urgentDefibsCount === 0}
+                                            onClick={() => {
+                                              if (urgentDefibsCount === 0) return;
+                                              setDefibSearchQuery(searchAddressValue);
+                                              setDefibInitialSortFilter('closest_maintenance');
+                                              setDefibSortFilterTrigger(prev => prev + 1);
+                                              setActiveTab('defibrillateurs');
+                                              setTimeout(() => {
+                                                window.dispatchEvent(
+                                                  new CustomEvent('defib-external-filter', {
+                                                    detail: { search: searchAddressValue, sortFilter: 'closest_maintenance' },
+                                                  })
+                                                );
+                                              }, 30);
+                                            }}
+                                            style={{
+                                              backgroundColor: '#0f172a',
+                                              color: '#ffffff',
+                                              borderRadius: '10px',
+                                              padding: '7px 14px',
+                                              fontSize: '14px',
+                                              fontWeight: 100,
+                                              border: 'none',
+                                              opacity: urgentDefibsCount === 0 ? 0.4 : 1,
+                                              cursor: urgentDefibsCount === 0 ? 'not-allowed' : 'pointer',
+                                            }}
+                                            className="transition-opacity select-none"
+                                          >
+                                            Voir les {urgentDefibsCount} défibrillateur(s)
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={urgentMaterielsCount === 0}
+                                            onClick={() => {
+                                              if (urgentMaterielsCount === 0) return;
+                                              setAutresMaterielsSearchQuery(searchAddressValue);
+                                              setAutresMaterielsInitialSortFilter('closest_maintenance');
+                                              setAutresMaterielsSortFilterTrigger(prev => prev + 1);
+                                              setActiveTab('autres-materiels');
+                                              setTimeout(() => {
+                                                window.dispatchEvent(
+                                                  new CustomEvent('autres-materiels-external-filter', {
+                                                    detail: { search: searchAddressValue, sortFilter: 'closest_maintenance' },
+                                                  })
+                                                );
+                                              }, 30);
+                                            }}
+                                            style={{
+                                              backgroundColor: '#0f172a',
+                                              color: '#ffffff',
+                                              borderRadius: '10px',
+                                              padding: '7px 14px',
+                                              fontSize: '14px',
+                                              fontWeight: 100,
+                                              border: 'none',
+                                              opacity: urgentMaterielsCount === 0 ? 0.4 : 1,
+                                              cursor: urgentMaterielsCount === 0 ? 'not-allowed' : 'pointer',
+                                            }}
+                                            className="transition-opacity select-none"
+                                          >
+                                            Voir les {urgentMaterielsCount} autre(s) matériel(s).
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
 
                                   {/* Bottom row: Situation, Soumettre au client, Supprimer & Mettre à trier (25% / 25% / 25% / 25%) */}
                                   <div className="pt-2 grid grid-cols-1 md:grid-cols-4 gap-3 w-full bg-transparent items-end">

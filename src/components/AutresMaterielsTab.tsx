@@ -196,6 +196,36 @@ interface AutresMaterielsTabProps {
   isReadOnly?: boolean;
   isRefreshing?: boolean;
   onRefreshData?: () => Promise<void> | void;
+  initialSearch?: string;
+  onSearchChange?: (search: string) => void;
+  initialSortFilter?: 'recent' | 'closest_maintenance' | null;
+  sortFilterTrigger?: number;
+}
+
+const FRENCH_DEPARTMENTS = [
+  "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
+  "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
+  "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
+  "31", "32", "33", "34", "35", "36", "37", "38", "39", "40",
+  "41", "42", "43", "44", "45", "46", "47", "48", "49", "50",
+  "51", "52", "53", "54", "55", "56", "57", "58", "59", "60",
+  "61", "62", "63", "64", "65", "66", "67", "68", "69", "70",
+  "71", "72", "73", "74", "75", "76", "77", "78", "79", "80",
+  "81", "82", "83", "84", "85", "86", "87", "88", "89", "90",
+  "91", "92", "93", "94", "95", "96", "97", "98", "99", "2A", "2B"
+];
+
+function parseEquipmentDate(dateStr?: string | null): Date | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(trimmed)) {
+    const [dd, mm, yyyy] = trimmed.split('/').map(Number);
+    const d = new Date(yyyy, mm - 1, dd);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const d = new Date(trimmed);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 // Custom Pink Radio Component
@@ -259,6 +289,10 @@ export default function AutresMaterielsTab({
   isReadOnly = false,
   isRefreshing = false,
   onRefreshData,
+  initialSearch,
+  onSearchChange,
+  initialSortFilter,
+  sortFilterTrigger,
 }: AutresMaterielsTabProps) {
   const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
   const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
@@ -370,7 +404,41 @@ export default function AutresMaterielsTab({
   const [isTourDropdownOpen, setIsTourDropdownOpen] = useState(false);
   const [selectedDraftId, setSelectedDraftId] = useState<string | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearch || '');
+  const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | null>(initialSortFilter || null);
+  const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialSearch !== undefined) {
+      setSearchQuery(initialSearch);
+    }
+  }, [initialSearch]);
+
+  useEffect(() => {
+    if (initialSortFilter !== undefined) {
+      setSortFilter(initialSortFilter);
+    }
+  }, [initialSortFilter, sortFilterTrigger]);
+
+  useEffect(() => {
+    const handleExternalNav = (e: Event) => {
+      const custom = e as CustomEvent<{ search?: string; sortFilter?: 'recent' | 'closest_maintenance' | null }>;
+      if (custom.detail) {
+        if (custom.detail.search !== undefined) {
+          setSearchQuery(custom.detail.search);
+          if (onSearchChange) onSearchChange(custom.detail.search);
+        }
+        if (custom.detail.sortFilter !== undefined) {
+          setSortFilter(custom.detail.sortFilter);
+        }
+        setCategoryFilter('Tous');
+        setIsFormOpen(false);
+      }
+    };
+    window.addEventListener('autres-materiels-external-filter', handleExternalNav);
+    return () => window.removeEventListener('autres-materiels-external-filter', handleExternalNav);
+  }, [onSearchChange]);
+
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -999,12 +1067,45 @@ export default function AutresMaterielsTab({
 
   // Filtered List
   const filteredList = useMemo(() => {
-    const baseList = otherEquipments.filter(item => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTime = today.getTime();
+
+    let baseList = otherEquipments.filter(item => {
       // 1. Category Filter
       const matchesCategory = categoryFilter === 'Tous' || item.categorie === categoryFilter;
       if (!matchesCategory) return false;
 
-      // 2. Search Query Filter
+      // 2. Department filter (Indicatif Postal)
+      if (selectedDepartment && selectedDepartment !== '__ALL__') {
+        const rawCp = ((item as any).codePostal || (item as any).cp || '').toString().trim().replace(/\s+/g, '').toUpperCase();
+        if (!rawCp) return false;
+        if (selectedDepartment === '2A') {
+          if (!rawCp.startsWith('2A') && !rawCp.startsWith('200') && !rawCp.startsWith('201')) {
+            return false;
+          }
+        } else if (selectedDepartment === '2B') {
+          if (!rawCp.startsWith('2B') && !rawCp.startsWith('202') && !rawCp.startsWith('206')) {
+            return false;
+          }
+        } else {
+          const normalized = /^\d{4}$/.test(rawCp) ? '0' + rawCp : rawCp;
+          if (!normalized.startsWith(selectedDepartment)) {
+            return false;
+          }
+        }
+      }
+
+      // 3. Pro.Main. Urgente filter (only considers Prochaine maintenance: expired or < 90 days)
+      if (sortFilter === 'closest_maintenance') {
+        const mDate = parseEquipmentDate(item.prochaineMaintenance);
+        if (!mDate) return false;
+        mDate.setHours(0, 0, 0, 0);
+        const diffDays = Math.ceil((mDate.getTime() - todayTime) / (1000 * 60 * 60 * 24));
+        if (diffDays > 90) return false;
+      }
+
+      // 4. Search Query Filter
       if (!searchQuery) return true;
       const lower = searchQuery.toLowerCase().trim();
       const resolvedCl = getLinkedClientForItem(item);
@@ -1028,6 +1129,29 @@ export default function AutresMaterielsTab({
       );
     });
 
+    if (sortFilter === 'recent') {
+      const totalLen = otherEquipments.length;
+      const indexMap = new Map(otherEquipments.map((it, idx) => [it.id, totalLen - idx]));
+      baseList = [...baseList].sort((a, b) => {
+        const tA = (a as any).updatedAt ? new Date((a as any).updatedAt).getTime() : (indexMap.get(a.id) ?? 0);
+        const tB = (b as any).updatedAt ? new Date((b as any).updatedAt).getTime() : (indexMap.get(b.id) ?? 0);
+        return tB - tA;
+      });
+    } else if (sortFilter === 'closest_maintenance') {
+      const dateMap = new Map<string, number>();
+      for (const item of baseList) {
+        const parsed = parseEquipmentDate(item.prochaineMaintenance);
+        dateMap.set(item.id, parsed ? parsed.getTime() : Infinity);
+      }
+      const indexMap = new Map(otherEquipments.map((it, idx) => [it.id, idx]));
+      baseList = [...baseList].sort((a, b) => {
+        const timeA = dateMap.get(a.id) ?? Infinity;
+        const timeB = dateMap.get(b.id) ?? Infinity;
+        if (timeA !== timeB) return timeA - timeB;
+        return (indexMap.get(a.id) ?? 0) - (indexMap.get(b.id) ?? 0);
+      });
+    }
+
     if (pinnedOtherIds.length > 0) {
       const pinnedSet = new Set(pinnedOtherIds);
       const pinnedItems = baseList.filter(item => pinnedSet.has(item.id));
@@ -1036,7 +1160,7 @@ export default function AutresMaterielsTab({
     }
 
     return baseList;
-  }, [otherEquipments, searchQuery, categoryFilter, clientMap, pinnedOtherIds]);
+  }, [otherEquipments, searchQuery, categoryFilter, clientMap, pinnedOtherIds, sortFilter, selectedDepartment]);
 
   // Color mappings for Category badge
   const getCategorieBadgeStyle = (cat: string) => {
@@ -1218,7 +1342,10 @@ export default function AutresMaterielsTab({
                     type="text"
                     id="search-materiels-input"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      if (onSearchChange) onSearchChange(e.target.value);
+                    }}
                     placeholder={t('Recherche rapide')}
                     className="w-full text-black placeholder:text-[rgb(222,222,222)] placeholder:font-light outline-none"
                     style={searchInputStyle}
@@ -1296,6 +1423,147 @@ export default function AutresMaterielsTab({
                 </button>
               );
             })}
+
+            <button
+              type="button"
+              onClick={() => {
+                triggerPillWave('recent');
+                setSortFilter(prev => prev === 'recent' ? null : 'recent');
+              }}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: sortFilter === 'recent' ? 'rgb(142 25 92)' : 'rgb(255 217 239)',
+                color: sortFilter === 'recent' ? '#fff' : 'rgb(142 25 92)',
+                border: 'none',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className={`relative overflow-hidden transition-all select-none ${clickedPill?.id === 'recent' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+            >
+              {t("Récemment")}
+            </button>
+
+            <button
+              type="button"
+              id="btn-filter-pro-main-urgente-autres"
+              onClick={() => {
+                triggerPillWave('closest_maintenance');
+                setSortFilter(prev => prev === 'closest_maintenance' ? null : 'closest_maintenance');
+              }}
+              style={{
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                backgroundColor: sortFilter === 'closest_maintenance' ? '#e21d1d' : 'rgb(255 219 219)',
+                color: sortFilter === 'closest_maintenance' ? '#fff' : 'rgb(210 55 32)',
+                border: 'none',
+                boxShadow: 'none',
+                transition: 'all 0.15s ease'
+              }}
+              className={`relative overflow-hidden transition-all select-none ${clickedPill?.id === 'closest_maintenance' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+            >
+              {t("Pro.Main. Urgente")}
+            </button>
+
+            {/* Filter: Indicatif postal court */}
+            {selectedDepartment ? (
+              <button
+                type="button"
+                id="filter-postal-court-select-autres"
+                onClick={() => {
+                  triggerPillWave('postal');
+                  setSelectedDepartment(null);
+                }}
+                style={{
+                  borderRadius: '1000px',
+                  padding: '8px 16px',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  backgroundColor: '#591690',
+                  color: '#fff',
+                  border: 'none',
+                  boxShadow: 'none',
+                  outline: 'none',
+                  textAlign: 'center',
+                  transition: 'all 0.15s ease'
+                }}
+                className={`relative overflow-hidden transition-all select-none ${clickedPill?.id === 'postal' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                title={`${t("Indicatif Postal")} (${selectedDepartment})`}
+              >
+                {`${t("Indicatif Postal")} (${selectedDepartment})`}
+              </button>
+            ) : (
+              <div
+                className={`relative inline-block overflow-hidden rounded-full ${clickedPill?.id === 'postal' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+              >
+                <style>{`
+                  #filter-postal-court-select-autres {
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    -moz-appearance: none !important;
+                    background-image: none !important;
+                  }
+                  #filter-postal-court-select-autres::-ms-expand {
+                    display: none !important;
+                  }
+                `}</style>
+                <select
+                  id="filter-postal-court-select-autres"
+                  value=""
+                  onMouseDown={() => triggerPillWave('postal')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val && val !== '__ALL__') {
+                      setSelectedDepartment(val);
+                    }
+                  }}
+                  style={{
+                    borderRadius: '1000px',
+                    padding: '8px 16px',
+                    fontSize: '18px',
+                    fontWeight: 100,
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    backgroundColor: 'rgb(230 197 255)',
+                    color: '#591690',
+                    border: 'none',
+                    boxShadow: 'none',
+                    outline: 'none',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'none',
+                    backgroundImage: 'none',
+                    textAlign: 'center',
+                    transition: 'all 0.15s ease'
+                  }}
+                  className="transition-all select-none"
+                  title={t("Indicatif Postal")}
+                >
+                  <option value="" disabled style={{ backgroundColor: '#ffffff', color: '#0f172a' }}>
+                    {t("Indicatif Postal")}
+                  </option>
+                  {FRENCH_DEPARTMENTS.map((dept) => (
+                    <option
+                      key={dept}
+                      value={dept}
+                      style={{ backgroundColor: '#ffffff', color: '#0f172a' }}
+                    >
+                      {dept}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <button
               type="button"

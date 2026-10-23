@@ -1159,6 +1159,14 @@ export default function GmaoCorrectionForm({
   const [isDevisDropdownOpen, setIsDevisDropdownOpen] = useState(false);
   const devisDropdownRef = useRef<HTMLDivElement>(null);
 
+  // Section 5 Dates - Préconisation de remplacement
+  const [preconisationRemplacement, setPreconisationRemplacement] = useState<boolean>(
+    () => Boolean(report?.preconisationRemplacement ?? report?.defibSnapshot?.preconisationRemplacement ?? false)
+  );
+  const [recommandationPreconisationRemplacement, setRecommandationPreconisationRemplacement] = useState<string>(
+    () => report?.recommandationPreconisationRemplacement || report?.defibSnapshot?.recommandationPreconisationRemplacement || ''
+  );
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (devisDropdownRef.current && !devisDropdownRef.current.contains(event.target as Node)) {
@@ -1303,6 +1311,8 @@ export default function GmaoCorrectionForm({
       setDevisArticlesSelectionnes(report.devisArticlesSelectionnes || []);
       setDevisAutreInfo(report.devisAutreInfo || '');
       setDevisPriorite(report.devisPriorite || 'Moyenne');
+      setPreconisationRemplacement(Boolean(report.preconisationRemplacement ?? report.defibSnapshot?.preconisationRemplacement ?? false));
+      setRecommandationPreconisationRemplacement(report.recommandationPreconisationRemplacement || report.defibSnapshot?.recommandationPreconisationRemplacement || '');
     }
   }, [report]);
 
@@ -2351,6 +2361,8 @@ export default function GmaoCorrectionForm({
     finalSnapshot.devisArticlesSelectionnes = devisArticlesSelectionnes;
     finalSnapshot.devisAutreInfo = devisAutreInfo;
     finalSnapshot.devisPriorite = devisPriorite;
+    (finalSnapshot as any).preconisationRemplacement = preconisationRemplacement;
+    (finalSnapshot as any).recommandationPreconisationRemplacement = preconisationRemplacement ? recommandationPreconisationRemplacement : '';
     finalSnapshot.installeExterieur = installeExterieur;
     finalSnapshot.exterieur = installeExterieur === 'Oui';
 
@@ -2512,6 +2524,8 @@ export default function GmaoCorrectionForm({
       devisArticlesSelectionnes,
       devisAutreInfo,
       devisPriorite,
+      preconisationRemplacement,
+      recommandationPreconisationRemplacement: preconisationRemplacement ? recommandationPreconisationRemplacement : '',
 
       // Draft invoice integration
       emettreFactureBrouillon,
@@ -4240,7 +4254,7 @@ export default function GmaoCorrectionForm({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-4">
               <div className="space-y-1">
                 <label htmlFor="snap-fabrication" className="block text-[11px] font-bold text-black uppercase">
                   Fabrication.
@@ -4254,31 +4268,112 @@ export default function GmaoCorrectionForm({
                   className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
                 />
               </div>
-              <div className="space-y-1">
-                <label htmlFor="snap-miseEnService" className="block text-[11px] font-bold text-black uppercase">
-                  Mise en service.
-                </label>
-                <input
-                  type="date"
-                  id="snap-miseEnService"
-                  value={snapshot.miseEnService || ''}
-                  onChange={(e) => handleSnapshotChange('miseEnService', e.target.value)}
-                  placeholder="Entrez une date."
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
-                />
+
+              {/* Toggle On/Off : Préconisation de remplacement. */}
+              <div className="space-y-2.5">
+                <div
+                  className="flex items-center justify-between py-3 px-4 rounded-xl"
+                  style={{
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #dadada',
+                  }}
+                >
+                  <span
+                    className="font-bold select-none text-black"
+                    style={{
+                      fontSize: '18px',
+                      color: '#000000',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    }}
+                  >
+                    Préconisation de remplacement.
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    id="toggle-preconisation-remplacement"
+                    aria-checked={preconisationRemplacement}
+                    onClick={() => setPreconisationRemplacement(!preconisationRemplacement)}
+                    style={{
+                      width: '46px',
+                      height: '24px',
+                      borderRadius: '9999px',
+                      backgroundColor: preconisationRemplacement ? '#2e54ff' : '#e5e5ea',
+                      transition: 'background-color 0.25s ease',
+                      position: 'relative',
+                      cursor: 'pointer',
+                      border: 'none',
+                      padding: 0,
+                      outline: 'none',
+                      flexShrink: 0,
+                      boxShadow: preconisationRemplacement ? 'none' : 'inset 0 0 0 1px rgba(0,0,0,0.06)',
+                    }}
+                    className="transition-colors cursor-pointer"
+                  >
+                    <span
+                      style={{
+                        display: 'block',
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        backgroundColor: '#ffffff',
+                        boxShadow: '0 3px 8px rgba(0, 0, 0, 0.15), 0 1px 1px rgba(0, 0, 0, 0.16), 0 3px 1px rgba(0, 0, 0, 0.1)',
+                        position: 'absolute',
+                        top: '2px',
+                        left: preconisationRemplacement ? '24px' : '2px',
+                        transition: 'left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                      }}
+                    />
+                  </button>
+                </div>
+
+                {preconisationRemplacement && (
+                  <div className="space-y-1 animate-fadeIn">
+                    <label
+                      htmlFor="input-recommandation-preconisation-remplacement"
+                      className="block text-[11px] font-bold text-black uppercase"
+                    >
+                      Recommandation ou observation pour la préconisation de remplacement.
+                    </label>
+                    <textarea
+                      id="input-recommandation-preconisation-remplacement"
+                      rows={3}
+                      value={recommandationPreconisationRemplacement}
+                      onChange={(e) => setRecommandationPreconisationRemplacement(e.target.value)}
+                      placeholder="Saisissez votre recommandation ou observation..."
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
+                    />
+                  </div>
+                )}
               </div>
-              <div className="space-y-1">
-                <label htmlFor="snap-finGarantie" className="block text-[11px] font-bold text-black uppercase">
-                  Fin de garantie.
-                </label>
-                <input
-                  type="date"
-                  id="snap-finGarantie"
-                  value={snapshot.finGarantie || ''}
-                  onChange={(e) => handleSnapshotChange('finGarantie', e.target.value)}
-                  placeholder="Entrez une date."
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
-                />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label htmlFor="snap-miseEnService" className="block text-[11px] font-bold text-black uppercase">
+                    Mise en service.
+                  </label>
+                  <input
+                    type="date"
+                    id="snap-miseEnService"
+                    value={snapshot.miseEnService || ''}
+                    onChange={(e) => handleSnapshotChange('miseEnService', e.target.value)}
+                    placeholder="Entrez une date."
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="snap-finGarantie" className="block text-[11px] font-bold text-black uppercase">
+                    Fin de garantie.
+                  </label>
+                  <input
+                    type="date"
+                    id="snap-finGarantie"
+                    value={snapshot.finGarantie || ''}
+                    onChange={(e) => handleSnapshotChange('finGarantie', e.target.value)}
+                    placeholder="Entrez une date."
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
+                  />
+                </div>
               </div>
             </div>
           </div>

@@ -309,6 +309,7 @@ export interface CommercialFileAttachment {
   name: string;
   url: string;
   dateAjout: string;
+  typeFichier?: 'Devis' | 'Facture' | 'Autre' | 'Principal' | string;
 }
 
 export interface SupportTicket {
@@ -323,6 +324,8 @@ export interface SupportTicket {
   objet: string;
   collaborateur?: string;
   client?: string;
+  payeurId?: string;
+  clientId?: string;
   isCustomClient?: boolean;
   customClientName?: string;
   description?: string;
@@ -355,7 +358,7 @@ export interface SupportTicket {
   indicatifPostal?: string;
   origineLead?: 'Service Client' | 'Direct' | 'Internet' | 'Planification' | 'Autre.' | string;
   descriptionOffreDevis?: string;
-  typeVente?: string;
+  typeVente?: 'Achat' | 'Location' | 'Revendeur' | string;
   dateDevis?: string;
   dateDerniereRelance?: string;
   dateProchaineRelance?: string;
@@ -520,6 +523,8 @@ export interface CompanyInfo {
   spreadsheetRapportsPdfUrl?: string;
   spreadsheetCrm?: string;
   spreadsheetCrmUrl?: string;
+  spreadsheetReglagesCrm?: string;
+  spreadsheetReglagesCrmUrl?: string;
   spreadsheetSatisfaction?: string;
   spreadsheetSatisfactionUrl?: string;
   spreadsheetCommandes?: string;
@@ -572,6 +577,7 @@ export type SpreadsheetFieldKey =
   | 'spreadsheetMissionsTournees'
   | 'spreadsheetRapportsPdf'
   | 'spreadsheetCrm'
+  | 'spreadsheetReglagesCrm'
   | 'spreadsheetSatisfaction'
   | 'spreadsheetCommandes'
   | 'spreadsheetStocks'
@@ -605,6 +611,7 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetMissionsTournees', urlKey: 'spreadsheetMissionsTourneesUrl', storageSuffix: 'spreadsheet_missions_tournees', label: 'Spreadsheet Missions des Tournées.', id: 'settings-db-spreadsheet-missions-tournees' },
   { key: 'spreadsheetRapportsPdf', urlKey: 'spreadsheetRapportsPdfUrl', storageSuffix: 'spreadsheet_rapports_pdf', label: 'Spreadsheet Rapports PDF.', id: 'settings-db-spreadsheet-rapports-pdf' },
   { key: 'spreadsheetCrm', urlKey: 'spreadsheetCrmUrl', storageSuffix: 'spreadsheet_crm', label: 'Spreadsheet CRM.', id: 'settings-db-spreadsheet-crm' },
+  { key: 'spreadsheetReglagesCrm', urlKey: 'spreadsheetReglagesCrmUrl', storageSuffix: 'spreadsheet_reglages_crm', label: 'Spreadsheet Réglages CRM.', id: 'settings-db-spreadsheet-reglages-crm' },
   { key: 'spreadsheetSatisfaction', urlKey: 'spreadsheetSatisfactionUrl', storageSuffix: 'spreadsheet_satisfaction', label: 'Spreadsheet Satisfaction.', id: 'settings-db-spreadsheet-satisfaction' },
   { key: 'spreadsheetCommandes', urlKey: 'spreadsheetCommandesUrl', storageSuffix: 'spreadsheet_commandes', label: 'Spreadsheet Commandes.', id: 'settings-db-spreadsheet-commandes' },
   { key: 'spreadsheetStocks', urlKey: 'spreadsheetStocksUrl', storageSuffix: 'spreadsheet_stocks', label: 'Spreadsheet Centrale des Stocks.', id: 'settings-db-spreadsheet-stocks' },

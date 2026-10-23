@@ -1113,6 +1113,8 @@ export async function fetchCollectionFromFirestore<T>(
     tickets: { type: 'crm', localKey: 'spreadsheet_crm', infoKey: 'spreadsheetCrm' },
     support_tickets: { type: 'crm', localKey: 'spreadsheet_crm', infoKey: 'spreadsheetCrm' },
     crm: { type: 'crm', localKey: 'spreadsheet_crm', infoKey: 'spreadsheetCrm' },
+    crm_settings: { type: 'reglagesCrm', localKey: 'spreadsheet_reglages_crm', infoKey: 'spreadsheetReglagesCrm' },
+    reglagesCrm: { type: 'reglagesCrm', localKey: 'spreadsheet_reglages_crm', infoKey: 'spreadsheetReglagesCrm' },
     customerReviews: { type: 'satisfaction', localKey: 'spreadsheet_satisfaction', infoKey: 'spreadsheetSatisfaction' },
     customer_reviews: { type: 'satisfaction', localKey: 'spreadsheet_satisfaction', infoKey: 'spreadsheetSatisfaction' },
     commercialDocs: { type: 'commandes', localKey: 'spreadsheet_commandes', infoKey: 'spreadsheetCommandes' },
@@ -1426,6 +1428,7 @@ export async function fetchCollectionFromFirestore<T>(
   }
 
   // 2. Secondary Strategy: High-availability backend server relay (/api/sync-collection)
+  let fallbackObjectVal: any = null;
   if (typeof fetch !== 'undefined' && hasValidClientSession()) {
     const isDefibCol = collectionName === 'defibrillateurs' || collectionName === 'defibs' || collectionName === 'devices';
 
@@ -1601,7 +1604,6 @@ export async function fetchCollectionFromFirestore<T>(
       }
     }
 
-    let fallbackObjectVal: any = null;
     try {
       const resp = await fetch(`/api/sync-collection?collectionName=${encodeURIComponent(collectionName)}&tenantId=${encodeURIComponent(activeTenantId)}&_t=${Date.now()}`, {
         cache: 'no-store',

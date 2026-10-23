@@ -10,6 +10,7 @@ export type SheetTabType =
   | 'missionsTournees'
   | 'rapportsPdf'
   | 'crm'
+  | 'reglagesCrm'
   | 'satisfaction'
   | 'commandes'
   | 'devisFactures'
@@ -1337,39 +1338,66 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Identifiant formation', field: 'formationId', aliases: ['identifiantformation', 'formationid', 'idformation'] },
   ],
   crm: [
-    { header: 'Référence', field: 'reference', aliases: ['reference', 'id', 'identifiantticket', 'numeroticket', 'refticket', 'ticketid'] },
-    { header: 'Date Ouverture', field: 'dateOuverture', aliases: ['dateouverture', 'datecreation', 'datedecreation', 'date', 'horodatage', 'createdat'] },
-    { header: 'Dernière Actualisation', field: 'dateDerniereActualisation', aliases: ['derniereactualisation', 'datederniereactualisation', 'updatedat', 'maj'] },
-    { header: 'Statut', field: 'situation', aliases: ['statut', 'situation', 'status', 'etat', 'avancement', 'situationticket'] },
-    { header: 'Catégorie', field: 'categorie', aliases: ['categorie', 'categorieduticket', 'typecrm', 'crmcategory', 'typedeticket', 'typeticket', 'compartiment', 'motif', 'raison'] },
-    { header: 'Criticité', field: 'criticite', aliases: ['criticite', 'priorite', 'urgence', 'niveau'] },
-    { header: 'Collaborateur', field: 'collaborateur', aliases: ['collaborateur', 'collaborateurassigne', 'assignea', 'responsable', 'agent', 'membre', 'technicien'] },
-    { header: 'Raison Sociale / Client', field: 'client', aliases: ['raisonsocialeclient', 'raisonsociale', 'cliententreprise', 'entreprise', 'client', 'denomination', 'societe', 'nomclient', 'clientlie'] },
-    { header: 'Client ID', field: 'clientId', aliases: ['clientid', 'idclient', 'identifiantclient'] },
-    { header: 'Prénom et Nom', field: 'prenomNom', aliases: ['prenometnom', 'prenomnom', 'contactnometprenom', 'contactnomprenom', 'nometprenom', 'nomprenom', 'contact', 'demandeur', 'interlocuteur'] },
-    { header: 'Situation Interlocuteur', field: 'situationInterlocuteur', aliases: ['situationinterlocuteur', 'statutinterlocuteur', 'typeinterlocuteur'] },
-    { header: 'Type Structure', field: 'typeStructure', aliases: ['typestructure', 'typedestructure', 'structure', 'typeclient'] },
-    { header: 'Fonction', field: 'fonction', aliases: ['fonction', 'poste', 'rolecontact'] },
-    { header: 'Téléphone', field: 'telephone', aliases: ['telephone', 'tel', 'phone', 'portable', 'telephonecontact'] },
-    { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'emailcontact', 'emailclient'] },
-    { header: 'Objet', field: 'objet', aliases: ['objet', 'sujet', 'titre', 'objetduticket', 'intitule'] },
-    { header: 'Description', field: 'description', aliases: ['description', 'messagedescription', 'message', 'contenu', 'demande', 'details'] },
-    { header: 'Marché Public', field: 'marchePublic', aliases: ['marchepublic', 'appeldoffre'] },
-    { header: 'Situation Devis', field: 'situationDevis', aliases: ['situationdevis', 'statutdevis', 'etatdevis'] },
-    { header: 'Score Conversion (1-5)', field: 'scorePotentielConversion', aliases: ['scoreconversion15', 'scoreconversion', 'scorepotentielconversion', 'probabilite', 'chances', 'tauxconversion'], type: 'number' },
-    { header: 'Référence Devis', field: 'referenceDevis', aliases: ['referencedevis', 'refdevis', 'numerodevis', 'devislie'] },
-    { header: 'Catégorie Devis', field: 'categorieDevis', aliases: ['categoriedevis', 'typedevis'] },
-    { header: 'Indicateur Temps Devis', field: 'indicateurTempsDevis', aliases: ['indicateurtempsdevis', 'delaidevis', 'horizon'] },
-    { header: 'Total Affaire HT (€)', field: 'totalAffaireHT', aliases: ['totalaffaireht', 'totalaffairehteuro', 'montantestimeht', 'montantestime', 'montant', 'montantht', 'budget', 'valeurht'], type: 'number' },
-    { header: 'Type Vente', field: 'typeVente', aliases: ['typevente', 'typedevente', 'vente'] },
-    { header: 'Famille', field: 'famille', aliases: ['famille', 'gamme'] },
-    { header: 'Indicatif Postal', field: 'indicatifPostal', aliases: ['indicatifpostal', 'departement', 'cp', 'codepostal'] },
-    { header: 'Origine Lead', field: 'origineLead', aliases: ['originelead', 'sourceopportunite', 'source', 'origine', 'canal'] },
+    { header: 'Type.', field: 'type', aliases: ['type', 'typeligne', 'recordtype'] },
+    { header: 'Statut.', field: 'situation', aliases: ['statut', 'situation', 'status', 'etat', 'avancement', 'situationticket'] },
+    { header: 'Référence.', field: 'reference', aliases: ['reference', 'id', 'identifiantticket', 'numeroticket', 'refticket', 'ticketid'] },
+    { header: 'Ouverture.', field: 'dateOuverture', aliases: ['ouverture', 'dateouverture', 'datecreation', 'datedecreation', 'date', 'horodatage', 'createdat'] },
+    { header: 'Actualisation.', field: 'dateDerniereActualisation', aliases: ['actualisation', 'derniereactualisation', 'datederniereactualisation', 'updatedat', 'maj'] },
+    { header: 'Catégorie.', field: 'categorie', aliases: ['categorie', 'categorieduticket', 'typecrm', 'crmcategory', 'typedeticket', 'typeticket', 'compartiment', 'motif', 'raison'] },
+    { header: 'Type Vente.', field: 'typeVente', aliases: ['typevente', 'typedevente', 'vente'] },
+    { header: 'Collaborateur.', field: 'collaborateur', aliases: ['collaborateur', 'collaborateurassigne', 'assignea', 'responsable', 'agent', 'membre', 'technicien'] },
+    { header: 'Client ou Prospect.', field: 'client', aliases: ['clientouprospect', 'raisonsocialeclient', 'raisonsociale', 'cliententreprise', 'entreprise', 'client', 'denomination', 'societe', 'nomclient', 'clientlie'] },
+    { header: 'Payeur ID.', field: 'payeurId', aliases: ['payeurid', 'idpayeur', 'identifiantpayeur'] },
+    { header: 'Client ID.', field: 'clientId', aliases: ['clientid', 'idclient', 'identifiantclient'] },
+    { header: 'Email.', field: 'email', aliases: ['email', 'mail', 'courriel', 'emailcontact', 'emailclient'] },
+    { header: 'Situation Interlocuteur.', field: 'situationInterlocuteur', aliases: ['situationinterlocuteur', 'statutinterlocuteur', 'typeinterlocuteur'] },
+    { header: 'Type Structure.', field: 'typeStructure', aliases: ['typestructure', 'typedestructure', 'structure', 'typeclient'] },
+    { header: 'Prénom Nom.', field: 'prenomNom', aliases: ['prenomnom', 'prenometnom', 'contactnometprenom', 'contactnomprenom', 'nometprenom', 'nomprenom', 'contact', 'demandeur', 'interlocuteur'] },
+    { header: 'Fonction.', field: 'fonction', aliases: ['fonction', 'poste', 'rolecontact'] },
+    { header: 'Téléphone.', field: 'telephone', aliases: ['telephone', 'tel', 'phone', 'portable', 'telephonecontact'] },
+    { header: 'Objet.', field: 'objet', aliases: ['objet', 'sujet', 'titre', 'objetduticket', 'intitule'] },
+    { header: 'Description.', field: 'description', aliases: ['description', 'messagedescription', 'message', 'contenu', 'demande', 'details'] },
+    { header: 'Marché Public.', field: 'marchePublic', aliases: ['marchepublic', 'appeldoffre'] },
+    { header: 'Situation Devis.', field: 'situationDevis', aliases: ['situationdevis', 'statutdevis', 'etatdevis'] },
+    { header: 'Score Potentiel Conversion.', field: 'scorePotentielConversion', aliases: ['scorepotentielconversion', 'scoreconversion15', 'scoreconversion', 'probabilite', 'chances', 'tauxconversion'], type: 'number' },
+    { header: 'Référence Devis.', field: 'referenceDevis', aliases: ['referencedevis', 'refdevis', 'numerodevis', 'devislie'] },
+    { header: 'Catégorie Devis.', field: 'categorieDevis', aliases: ['categoriedevis', 'typedevis'] },
+    { header: 'Indicateur Temps Devis.', field: 'indicateurTempsDevis', aliases: ['indicateurtempsdevis', 'delaidevis', 'horizon'] },
+    { header: 'URL Source Fichier. 1', field: '_file1_url', aliases: ['urlsourcefichier1', 'fichier1url', 'urlfichier1'] },
+    { header: 'Type Fichier. 1', field: '_file1_type', aliases: ['typefichier1', 'fichier1type'] },
+    { header: 'URL Source Fichier. 2', field: '_file2_url', aliases: ['urlsourcefichier2', 'fichier2url', 'urlfichier2'] },
+    { header: 'Type Fichier. 2', field: '_file2_type', aliases: ['typefichier2', 'fichier2type'] },
+    { header: 'URL Source Fichier. 3', field: '_file3_url', aliases: ['urlsourcefichier3', 'fichier3url', 'urlfichier3'] },
+    { header: 'Type Fichier. 3', field: '_file3_type', aliases: ['typefichier3', 'fichier3type'] },
     { header: 'Description Offre Devis', field: 'descriptionOffreDevis', aliases: ['descriptionoffredevis', 'offredevis', 'detaildevis', 'descriptioncourte'] },
-    { header: 'Date Devis', field: 'dateDevis', aliases: ['datedevis', 'dateemissiondevis'], type: 'date' },
-    { header: 'Date Dernière Relance', field: 'dateDerniereRelance', aliases: ['datederniererelance', 'derniererelance'], type: 'date' },
-    { header: 'Date Prochaine Relance', field: 'dateProchaineRelance', aliases: ['dateprochainerelance', 'daterelanceecheance', 'daterelance', 'echeance', 'relance', 'prochainerelance'], type: 'date' },
-    { header: 'Date Commande', field: 'dateCommande', aliases: ['datecommande', 'datesignature'], type: 'date' },
+    { header: 'Total Affaire HT.', field: 'totalAffaireHT', aliases: ['totalaffaireht', 'totalaffairehteuro', 'montantestimeht', 'montantestime', 'montant', 'montantht', 'budget', 'valeurht'], type: 'number' },
+    { header: 'Famille.', field: 'famille', aliases: ['famille', 'gamme'] },
+    { header: 'Indicatif Postal.', field: 'indicatifPostal', aliases: ['indicatifpostal', 'departement', 'cp', 'codepostal'] },
+    { header: 'Origine Lead.', field: 'origineLead', aliases: ['originelead', 'sourceopportunite', 'source', 'origine', 'canal'] },
+    { header: 'Date Devis.', field: 'dateDevis', aliases: ['datedevis', 'dateemissiondevis'], type: 'date' },
+    { header: 'Date Dernière Relance,', field: 'dateDerniereRelance', aliases: ['datederniererelance', 'derniererelance'], type: 'date' },
+    { header: 'Date Prochaine Relance.', field: 'dateProchaineRelance', aliases: ['dateprochainerelance', 'daterelanceecheance', 'daterelance', 'echeance', 'relance', 'prochainerelance'], type: 'date' },
+    { header: 'Date Commande.', field: 'dateCommande', aliases: ['datecommande', 'datesignature'], type: 'date' },
+    { header: 'Événement 1 - Date.', field: '_evt1_date', aliases: ['evenement1date'] },
+    { header: 'Événement 1 - Commentaire', field: '_evt1_commentaire', aliases: ['evenement1commentaire'] },
+    { header: 'Événement 2 - Date.', field: '_evt2_date', aliases: ['evenement2date'] },
+    { header: 'Événement 2 - Commentaire', field: '_evt2_commentaire', aliases: ['evenement2commentaire'] },
+    { header: 'Événement 3 - Date.', field: '_evt3_date', aliases: ['evenement3date'] },
+    { header: 'Événement 3 - Commentaire', field: '_evt3_commentaire', aliases: ['evenement3commentaire'] },
+    { header: 'Événement 4 - Date.', field: '_evt4_date', aliases: ['evenement4date'] },
+    { header: 'Événement 4 - Commentaire', field: '_evt4_commentaire', aliases: ['evenement4commentaire'] },
+    { header: 'Événement 5 - Date.', field: '_evt5_date', aliases: ['evenement5date'] },
+    { header: 'Événement 5 - Commentaire', field: '_evt5_commentaire', aliases: ['evenement5commentaire'] },
+    { header: 'Message au client 1 - Objet.', field: '_msg1_objet', aliases: ['messageauclient1objet'] },
+    { header: 'Message au client 1 - Message.', field: '_msg1_message', aliases: ['messageauclient1message'] },
+    { header: 'Message au client 2 - Objet.', field: '_msg2_objet', aliases: ['messageauclient2objet'] },
+    { header: 'Message au client 2 - Message.', field: '_msg2_message', aliases: ['messageauclient2message'] },
+    { header: 'Message au client 3 - Objet.', field: '_msg3_objet', aliases: ['messageauclient3objet'] },
+    { header: 'Message au client 3 - Message.', field: '_msg3_message', aliases: ['messageauclient3message'] },
+    { header: 'Message au client 4 - Objet.', field: '_msg4_objet', aliases: ['messageauclient4objet'] },
+    { header: 'Message au client 4 - Message.', field: '_msg4_message', aliases: ['messageauclient4message'] },
+    { header: 'Message au client 5 - Objet.', field: '_msg5_objet', aliases: ['messageauclient5objet', 'messageauclient4objet'] },
+    { header: 'Message au client 5 - Message.', field: '_msg5_message', aliases: ['messageauclient5message'] },
     { header: 'Lien Devis / Fichiers', field: 'lienStockagePartageDevis', aliases: ['liendevisfichiers', 'lienstockagepartagedevis', 'photographiepiecejointe', 'photodataurl', 'photo', 'piecejointe', 'image', 'fichier', 'telechargerunfichier', 'liengoogledrive', 'urlfichier'] },
     { header: 'Identifiant Matériel', field: 'identifiant', aliases: ['identifiantmateriel', 'identifiantequipement', 'identifiantdae', 'identifiantdefibrillateur', 'identifiant', 'materiellie', 'equipementlie'] },
     { header: 'Type de matériel', field: 'materialType', aliases: ['typedemateriel', 'typemateriel', 'typeequipement', 'materialtype'] },
@@ -1544,6 +1572,17 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Utiliser Commandes sur Defibeo', field: 'enableDevisFactures', aliases: ['utilisercommandessurdefibeo', 'utilisercommandes', 'enabledevisfactures', 'commandesdefibeo', 'devisetfactures'], type: 'yesno' },
     { header: 'Désactiver les aides et tutoriels', field: 'disableHelpsAndTutorials', aliases: ['desactiverlesaidesettutoriels', 'desactiveraidestutoriels', 'disablehelpsandtutorials', 'aidestutoriels'], type: 'yesno' },
     { header: 'Personnaliser la visibilité des onglets', field: 'hiddenTabs', aliases: ['personnaliserlavisibilitedesonglets', 'visibilitedesonglets', 'visibiliteonglets', 'ongletsmasques', 'hiddentabs', 'onglets'], type: 'array' },
+  ],
+  reglagesCrm: [
+    { header: 'Texte de l’email de relance. 1', field: 'relanceEmailBody', aliases: ['textedelemailderelance1', 'texteemailrelance1', 'textederelance1', 'relanceemailbody', 'relanceemailbody1', 'textedelemailderelance'] },
+    { header: 'Email de réponse. 1', field: 'relanceEmailReplyTo', aliases: ['emaildereponse1', 'emailreponse1', 'relanceemailreplyto', 'relanceemailreplyto1'] },
+    { header: 'Texte de l’email de relance. 2', field: 'relanceEmailBody2', aliases: ['textedelemailderelance2', 'texteemailrelance2', 'textederelance2', 'relanceemailbody2'] },
+    { header: 'Email de réponse. 2', field: 'relanceEmailReplyTo2', aliases: ['emaildereponse2', 'emailreponse2', 'relanceemailreplyto2'] },
+    { header: 'Texte de l’email de relance. 3', field: 'relanceEmailBody3', aliases: ['textedelemailderelance3', 'texteemailrelance3', 'textederelance3', 'relanceemailbody3'] },
+    { header: 'Email de réponse. 3', field: 'relanceEmailReplyTo3', aliases: ['emaildereponse3', 'emailreponse3', 'relanceemailreplyto3'] },
+    { header: 'Texte initial email de support.', field: 'supportEmailBody', aliases: ['texteinitialemaildesupport', 'texteemaildesupport', 'supportemailbody', 'textesupport'] },
+    { header: 'Email de réponse. (support)', field: 'supportEmailReplyTo', aliases: ['emaildereponsesupport', 'emailreponsesupport', 'supportemailreplyto'] },
+    { header: 'Objet. (support)', field: 'supportEmailSubject', aliases: ['objetsupport', 'supportemailsubject', 'objetemailsupport'] },
   ],
   apparenceRapportsPdf: [
     { header: 'Image source d’entête pour illustration', field: 'pdfHeaderImg', aliases: ['imagesourcedentetepourillustration', 'imagesourceentete', 'imageentete', 'pdfheaderimg', 'illustrationentete'] },
@@ -2397,6 +2436,18 @@ function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = 
         return canonical.filter(c => !c.field.startsWith('_')).map(c => c.header);
       }
       return canonical.map(c => c.header);
+    }
+    if (tabType === 'crm') {
+      const legacyCrmFields = new Set([
+        'lienStockagePartageDevis',
+        'identifiant',
+        'materialType',
+        'commentaireInterne',
+        'reponse',
+        'evenementsCommercial',
+        'messagesSupport',
+      ]);
+      return canonical.filter(c => !legacyCrmFields.has(c.field)).map(c => c.header);
     }
     return canonical.filter(c => !c.field.startsWith('_')).map(c => c.header);
   }
@@ -3429,9 +3480,93 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     }
     merged.dateProchaineRelance = merged.dateProchaineRelance || merged.dateRelance || '';
     merged.dateRelance = merged.dateRelance || merged.dateProchaineRelance || '';
+    merged.dateDerniereRelance = merged.dateDerniereRelance || '';
+    merged.typeVente = merged.typeVente || '';
+    merged.payeurId = merged.payeurId || '';
+    merged.clientId = merged.clientId || '';
     merged.origineLead = merged.origineLead || merged.sourceOpportunite || 'Service Client';
     merged.sourceOpportunite = merged.sourceOpportunite || merged.origineLead || '';
-    const sharedUrl = merged.lienStockagePartageDevis || merged.photoDataUrl || '';
+
+    // Reconstruct fichiersDevis from _file1..3_url and _file1..3_type if present
+    const slotFiles: any[] = [];
+    for (let idx = 1; idx <= 3; idx++) {
+      const fUrl = String(merged[`_file${idx}_url`] || '').trim();
+      const fType = String(merged[`_file${idx}_type`] || '').trim();
+      if (fUrl) {
+        const existingFile = Array.isArray(merged.fichiersDevis) ? merged.fichiersDevis[idx - 1] : undefined;
+        let inferredName = existingFile?.name || '';
+        if (!inferredName) {
+          try {
+            const urlPart = fUrl.split('?')[0].split('/').filter(Boolean).pop() || '';
+            inferredName = urlPart && !urlPart.startsWith('view') && urlPart.length <= 60 ? decodeURIComponent(urlPart) : `Fichier ${idx}`;
+          } catch {
+            inferredName = `Fichier ${idx}`;
+          }
+        }
+        slotFiles.push({
+          name: inferredName,
+          url: fUrl,
+          dateAjout: existingFile?.dateAjout || merged.dateDevis || merged.dateOuverture || new Date().toLocaleDateString('fr-FR'),
+          typeFichier: fType || existingFile?.typeFichier || '',
+        });
+      }
+      delete merged[`_file${idx}_url`];
+      delete merged[`_file${idx}_type`];
+    }
+    if (slotFiles.length > 0) {
+      merged.fichiersDevis = slotFiles;
+    }
+
+    // Reconstruct evenementsCommercial from _evt1..5_date and _evt1..5_commentaire if present
+    const slotEvents: any[] = [];
+    for (let idx = 1; idx <= 5; idx++) {
+      const eDate = String(merged[`_evt${idx}_date`] || '').trim();
+      const eComm = String(merged[`_evt${idx}_commentaire`] || '').trim();
+      if (eDate || eComm) {
+        const existingEvt = Array.isArray(merged.evenementsCommercial) ? merged.evenementsCommercial[idx - 1] : undefined;
+        slotEvents.push({
+          id: existingEvt?.id || `evt-${rowIndexZeroBased}-${idx}`,
+          date: eDate || existingEvt?.date || '',
+          commentaire: eComm || existingEvt?.commentaire || '',
+        });
+      }
+      delete merged[`_evt${idx}_date`];
+      delete merged[`_evt${idx}_commentaire`];
+    }
+    if (slotEvents.length > 0) {
+      merged.evenementsCommercial = slotEvents;
+    }
+
+    // Reconstruct messagesSupport from _msg1..5_objet and _msg1..5_message if present
+    const slotMsgs: any[] = [];
+    for (let idx = 1; idx <= 5; idx++) {
+      const mObj = String(merged[`_msg${idx}_objet`] || '').trim();
+      const mBody = String(merged[`_msg${idx}_message`] || '').trim();
+      if (mObj || mBody) {
+        const existingMsg = Array.isArray(merged.messagesSupport) ? merged.messagesSupport[idx - 1] : undefined;
+        slotMsgs.push({
+          id: existingMsg?.id || `msg-${rowIndexZeroBased}-${idx}`,
+          date: existingMsg?.date || merged.dateDerniereActualisation || merged.dateOuverture || '',
+          heure: existingMsg?.heure || '',
+          objet: mObj || existingMsg?.objet || '',
+          message: mBody || existingMsg?.message || '',
+          destinataire: existingMsg?.destinataire || merged.email || '',
+          expediteur: existingMsg?.expediteur || merged.collaborateur || '',
+        });
+      }
+      delete merged[`_msg${idx}_objet`];
+      delete merged[`_msg${idx}_message`];
+    }
+    if (slotMsgs.length > 0) {
+      merged.messagesSupport = slotMsgs;
+    }
+
+    const sharedUrl =
+      merged.lienStockagePartageDevis ||
+      merged.photoDataUrl ||
+      (Array.isArray(merged.fichiersDevis) && merged.fichiersDevis.length > 0
+        ? merged.fichiersDevis.map((f: any) => f?.url || '').filter(Boolean).join(', ')
+        : '');
     merged.lienStockagePartageDevis = sharedUrl;
     merged.photoDataUrl = merged.photoDataUrl || sharedUrl;
   } else if (tabType === 'satisfaction') {
@@ -4169,6 +4304,8 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     }
   } else if (tabType === 'apparenceRapportsPdf') {
     merged.id = merged.id || 'tenant_pdf_template';
+  } else if (tabType === 'reglagesCrm') {
+    merged.id = merged.id || 'tenant_crm_settings';
   } else if (tabType === 'communicationPortailClient') {
     merged.id = merged.id || 'tenant_portal_com';
     merged.communicationPortailClient = merged.communicationPortailClient || merged.message || '';
@@ -4846,6 +4983,7 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.pdfFileName = enriched.pdfFileName || enriched.pdfName || '';
     enriched.pdfDataUrl = enriched.pdfDataUrl || enriched.pdfUrl || '';
   } else if (tabType === 'crm') {
+    enriched.type = enriched.type || 'Ticket';
     enriched.reference = enriched.reference || enriched.id || '';
     enriched.id = enriched.id || enriched.reference || '';
     enriched.dateOuverture = enriched.dateOuverture || enriched.date || '';
@@ -4855,8 +4993,11 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.status = enriched.status || enriched.situation || 'Nouveau';
     enriched.categorie = enriched.categorie || enriched.crmCategory || 'Sans Catégorie';
     enriched.crmCategory = enriched.crmCategory || enriched.categorie || '';
+    enriched.typeVente = enriched.typeVente || '';
     enriched.client = enriched.client || enriched.entreprise || enriched.customClientName || '';
     enriched.entreprise = enriched.entreprise || enriched.client || '';
+    enriched.payeurId = enriched.payeurId || '';
+    enriched.clientId = enriched.clientId || '';
     enriched.prenomNom = enriched.prenomNom || enriched.nomPrenom || '';
     enriched.nomPrenom = enriched.nomPrenom || enriched.prenomNom || '';
     enriched.telephone = enriched.telephone || enriched.phone || '';
@@ -4866,12 +5007,34 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.montantEstime = enriched.montantEstime ?? enriched.totalAffaireHT ?? '';
     enriched.scorePotentielConversion = enriched.scorePotentielConversion ?? enriched.probabilite ?? '';
     enriched.probabilite = enriched.probabilite ?? enriched.scorePotentielConversion ?? '';
+    enriched.dateDerniereRelance = enriched.dateDerniereRelance || '';
     enriched.dateProchaineRelance = enriched.dateProchaineRelance || enriched.dateRelance || '';
     enriched.dateRelance = enriched.dateRelance || enriched.dateProchaineRelance || '';
     enriched.origineLead = enriched.origineLead || enriched.sourceOpportunite || '';
     enriched.sourceOpportunite = enriched.sourceOpportunite || enriched.origineLead || '';
     enriched.lienStockagePartageDevis = enriched.lienStockagePartageDevis || enriched.photoDataUrl || '';
     enriched.photoDataUrl = enriched.photoDataUrl || enriched.lienStockagePartageDevis || '';
+
+    const filesList = Array.isArray(enriched.fichiersDevis) ? enriched.fichiersDevis : [];
+    for (let idx = 1; idx <= 3; idx++) {
+      const f = filesList[idx - 1];
+      enriched[`_file${idx}_url`] = f?.url || (idx === 1 && !filesList.length ? (enriched.lienStockagePartageDevis || '') : '');
+      enriched[`_file${idx}_type`] = f?.typeFichier || '';
+    }
+
+    const evtsList = Array.isArray(enriched.evenementsCommercial) ? enriched.evenementsCommercial : [];
+    for (let idx = 1; idx <= 5; idx++) {
+      const ev = evtsList[idx - 1];
+      enriched[`_evt${idx}_date`] = ev?.date || '';
+      enriched[`_evt${idx}_commentaire`] = ev?.commentaire || '';
+    }
+
+    const msgsList = Array.isArray(enriched.messagesSupport) ? enriched.messagesSupport : [];
+    for (let idx = 1; idx <= 5; idx++) {
+      const msg = msgsList[idx - 1];
+      enriched[`_msg${idx}_objet`] = msg?.objet || '';
+      enriched[`_msg${idx}_message`] = msg?.message || '';
+    }
   } else if (tabType === 'ticketsCaisse') {
     enriched.user = enriched.user || enriched.techName || '';
     enriched.techName = enriched.techName || enriched.user || '';
@@ -5124,7 +5287,7 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
-  if (tabType === 'reglages' || tabType === 'apparenceRapportsPdf' || tabType === 'communicationPortailClient') {
+  if (tabType === 'reglages' || tabType === 'reglagesCrm' || tabType === 'apparenceRapportsPdf' || tabType === 'communicationPortailClient') {
     return [item.id || `singleton_${tabType}`, 'row_2']
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
@@ -5912,6 +6075,7 @@ export async function fetchTenantSheetCollection(
 
       const isSettingsTab =
         tabType === 'reglages' ||
+        tabType === 'reglagesCrm' ||
         tabType === 'apparenceRapportsPdf' ||
         tabType === 'intituleEmplacements' ||
         tabType === 'communicationPortailClient' ||
@@ -6451,6 +6615,7 @@ async function fetchLightweightSheetContextForColdUpsert(
 
     const isSingletonTab =
       tabType === 'reglages' ||
+      tabType === 'reglagesCrm' ||
       tabType === 'apparenceRapportsPdf' ||
       tabType === 'communicationPortailClient' ||
       (tabType === 'intituleEmplacements' && records.length === 1 && !records[0]?.emplacement);
@@ -6750,6 +6915,7 @@ export async function upsertRecordsToTenantSheet(
 
     const isSingletonTab =
       tabType === 'reglages' ||
+      tabType === 'reglagesCrm' ||
       tabType === 'apparenceRapportsPdf' ||
       tabType === 'communicationPortailClient' ||
       (tabType === 'intituleEmplacements' && effectiveRecords.length === 1 && !effectiveRecords[0]?.emplacement);

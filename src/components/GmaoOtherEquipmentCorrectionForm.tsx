@@ -315,6 +315,12 @@ export default function GmaoOtherEquipmentCorrectionForm({
   // Section 3 - Dates
   const [expirationGarantie, setExpirationGarantie] = useState(otherEquipment?.expirationGarantie || '');
   const [fabrication, setFabrication] = useState(otherEquipment?.fabrication || '');
+  const [preconisationRemplacement, setPreconisationRemplacement] = useState<boolean>(
+    Boolean(otherEquipment?.preconisationRemplacement)
+  );
+  const [recommandationPreconisationRemplacement, setRecommandationPreconisationRemplacement] = useState<string>(
+    otherEquipment?.recommandationPreconisationRemplacement || ''
+  );
   const [miseEnService, setMiseEnService] = useState(otherEquipment?.miseEnService || '');
   const [derniereMaintenance, setDerniereMaintenance] = useState(otherEquipment?.derniereMaintenance || '');
   const [sortieUsine, setSortieUsine] = useState(otherEquipment?.sortieUsine || '');
@@ -669,6 +675,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
       installeExterieur,
       expirationGarantie,
       fabrication,
+      preconisationRemplacement,
+      recommandationPreconisationRemplacement: preconisationRemplacement ? recommandationPreconisationRemplacement : '',
       miseEnService,
       derniereMaintenance: interventionDate,
       sortieUsine,
@@ -1166,6 +1174,50 @@ export default function GmaoOtherEquipmentCorrectionForm({
               <div className="space-y-1">
                 <label className="block text-[11px] font-bold text-slate-500">Date de fabrication.</label>
                 <input type="date" value={fabrication} onChange={(e) => setFabrication(e.target.value)} />
+                <div className="pt-2 space-y-2">
+                  <div
+                    onClick={() => setPreconisationRemplacement(!preconisationRemplacement)}
+                    className="flex items-center justify-between px-3 py-2 bg-white rounded-xl cursor-pointer transition-colors hover:bg-slate-50"
+                    style={{ border: '1px solid #dadada' }}
+                  >
+                    <span className="font-bold text-slate-900 select-none text-[13px]">
+                      Préconisation de remplacement.
+                    </span>
+                    <div
+                      className="relative flex items-center transition-colors duration-200 flex-shrink-0"
+                      style={{
+                        width: '44px',
+                        height: '22px',
+                        borderRadius: '999px',
+                        backgroundColor: preconisationRemplacement ? '#2e54ff' : '#e5e5ea',
+                        padding: '2px'
+                      }}
+                    >
+                      <div
+                        className="bg-white rounded-full shadow-sm transition-transform duration-200"
+                        style={{
+                          width: '18px',
+                          height: '18px',
+                          transform: preconisationRemplacement ? 'translateX(22px)' : 'translateX(0px)'
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {preconisationRemplacement && (
+                    <div className="space-y-1 pt-1">
+                      <label className="block text-[11px] font-bold text-slate-500">
+                        Recommandation ou observation pour la préconisation de remplacement.
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={recommandationPreconisationRemplacement}
+                        onChange={(e) => setRecommandationPreconisationRemplacement(e.target.value)}
+                        placeholder="Saisissez votre recommandation ou observation..."
+                        className="w-full"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="block text-[11px] font-bold text-slate-500">Mise en service.</label>

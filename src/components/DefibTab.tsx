@@ -408,6 +408,9 @@ interface DefibTabProps {
     distinctElectrodes?: string[];
     distinctBatteries?: string[];
   } | null;
+  initialSortFilter?: 'recent' | 'closest_maintenance' | null;
+  sortFilterTrigger?: number;
+  onNavigateToAutresMateriels?: (searchQuery: string, urgentOnly?: boolean) => void;
 }
 
 const getPostalIndicatif = (rawCp: any): number | null => {
@@ -573,6 +576,9 @@ export default function DefibTab({
   isRefreshing = false,
   onRefreshData,
   sheetStats,
+  initialSortFilter,
+  sortFilterTrigger,
+  onNavigateToAutresMateriels,
 }: DefibTabProps) {
   const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
   const [remoteQueriedDefibs, setRemoteQueriedDefibs] = useState<Defibrillateur[]>([]);
@@ -2160,7 +2166,7 @@ export default function DefibTab({
     if (bulkFields.length === 0) return false;
     return bulkFields.every(item => Boolean(item.field && item.value !== undefined && item.value.trim() !== ''));
   }, [bulkFields]);
-  const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | null>(null);
+  const [sortFilter, setSortFilter] = useState<'recent' | 'closest_maintenance' | null>(initialSortFilter || null);
   const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
   const [maintenanceFilter, setMaintenanceFilter] = useState<'all' | 'oui' | 'non'>('all');
   const [clickedPill, setClickedPill] = useState<{ id: string; key: number } | null>(null);
@@ -2170,6 +2176,31 @@ export default function DefibTab({
       setClickedPill({ id, key: Date.now() });
     });
   };
+
+  useEffect(() => {
+    if (initialSortFilter !== undefined) {
+      setSortFilter(initialSortFilter);
+    }
+  }, [initialSortFilter, sortFilterTrigger]);
+
+  useEffect(() => {
+    const handleExternalDefibFilter = (e: Event) => {
+      const custom = e as CustomEvent<{ search?: string; sortFilter?: 'recent' | 'closest_maintenance' | null }>;
+      if (custom.detail) {
+        if (custom.detail.search !== undefined) {
+          setSearch(custom.detail.search);
+          if (onSearchChange) onSearchChange(custom.detail.search);
+        }
+        if (custom.detail.sortFilter !== undefined) {
+          setSortFilter(custom.detail.sortFilter);
+        }
+        setIsFormOpen(false);
+        setEditingDefib(null);
+      }
+    };
+    window.addEventListener('defib-external-filter', handleExternalDefibFilter);
+    return () => window.removeEventListener('defib-external-filter', handleExternalDefibFilter);
+  }, [onSearchChange]);
 
   // Ensure 100% of MAIN OUI defibrillators from the tenant's Spreadsheet are loaded when the Plan map is opened
   useEffect(() => {
@@ -2614,7 +2645,7 @@ export default function DefibTab({
   // List search & filters computation - highly optimized for datasets of 18,000+ items across all browsers
   const filteredDefibs = useMemo(() => {
     const searchLower = (search || '').toLowerCase().trim();
-    const needDates = activeFilters.action3To6 || activeFilters.actionUnder3 || activeFilters.actionExpired;
+    const needDates = activeFilters.action3To6 || activeFilters.actionUnder3 || activeFilters.actionExpired || sortFilter === 'closest_maintenance';
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayTime = today.getTime();
@@ -2728,6 +2759,14 @@ export default function DefibTab({
         if (ePDate) { ePDate.setHours(0, 0, 0, 0); timesToCheck.push(ePDate.getTime()); }
         const bDate = parseDateHelper(df.peremptionBatterie);
         if (bDate) { bDate.setHours(0, 0, 0, 0); timesToCheck.push(bDate.getTime()); }
+
+        if (sortFilter === 'closest_maintenance') {
+          const hasUrgentOrExpired = timesToCheck.some(t => {
+            const diffDays = Math.ceil((t - todayTime) / (1000 * 60 * 60 * 24));
+            return diffDays <= 90;
+          });
+          if (!hasUrgentOrExpired) return false;
+        }
 
         if (activeFilters.actionExpired) {
           const hasExpired = timesToCheck.some(t => t < todayTime);
@@ -6906,6 +6945,127 @@ export default function DefibTab({
                     </div>
 
                     {/* Localisation fields */}
+                    {(() => {
+                      const normalizeAddr = (val?: string | null) =>
+                        String(val || '')
+                          .normalize('NFD')
+                          .replace(/[\u0300-\u036f]/g, '')
+                          .toLowerCase()
+                          .replace(/[^a-z0-9]+/g, ' ')
+                          .trim();
+
+                      const normVoie = normalizeAddr(numVoie);
+                      const normCp = normalizeAddr(cp);
+                      const normVille = normalizeAddr(ville);
+                      const currentId = String(editingDefib?.id || '').trim().toLowerCase();
+                      const currentIdentifiant = String(editingDefib?.identifiant || identifiant || '').trim().toLowerCase();
+
+                      let otherDefibsCount = 0;
+                      let otherMaterielsCount = 0;
+
+                      if (normVoie) {
+                        for (const df of mergedDefibrillateurs) {
+                          if (!df) continue;
+                          const dfId = String(df.id || '').trim().toLowerCase();
+                          const dfIdent = String(df.identifiant || '').trim().toLowerCase();
+                          if ((currentId && dfId === currentId) || (currentIdentifiant && dfIdent === currentIdentifiant)) {
+                            continue;
+                          }
+                          const dfVoie = normalizeAddr((df as any).numeroVoie || df.numVoie || '');
+                          if (!dfVoie || dfVoie !== normVoie) continue;
+                          const dfCp = normalizeAddr((df as any).codePostal || df.cp || '');
+                          const dfVille = normalizeAddr(df.ville || '');
+                          if (normCp && dfCp && normCp !== dfCp) continue;
+                          if (!normCp && normVille && dfVille && normVille !== dfVille) continue;
+                          otherDefibsCount++;
+                        }
+
+                        for (const eq of (otherEquipments || [])) {
+                          if (!eq) continue;
+                          const eqVoie = normalizeAddr(eq.numeroVoie || (eq as any).numVoie || '');
+                          if (!eqVoie || eqVoie !== normVoie) continue;
+                          const eqCp = normalizeAddr(eq.codePostal || (eq as any).cp || '');
+                          const eqVille = normalizeAddr(eq.ville || '');
+                          if (normCp && eqCp && normCp !== eqCp) continue;
+                          if (!normCp && normVille && eqVille && normVille !== eqVille) continue;
+                          otherMaterielsCount++;
+                        }
+                      }
+
+                      const searchAddressValue = numVoie.trim() || [numVoie.trim(), cp.trim(), ville.trim()].filter(Boolean).join(' ');
+
+                      return (
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+                          <span className="text-xs font-medium text-slate-700" style={{ fontSize: '14px' }}>
+                            À cette adresse postale, il y a {otherDefibsCount} autre(s) défibrillateur(s) et {otherMaterielsCount} autres matériels.
+                          </span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              disabled={otherDefibsCount === 0}
+                              onClick={() => {
+                                if (otherDefibsCount === 0) return;
+                                const q = searchAddressValue;
+                                setIsFormOpen(false);
+                                setEditingDefib(null);
+                                setSearch(q);
+                                if (onSearchChange) onSearchChange(q);
+                              }}
+                              style={{
+                                backgroundColor: '#0f172a',
+                                color: '#ffffff',
+                                borderRadius: '10px',
+                                padding: '6px 14px',
+                                fontSize: '13px',
+                                fontWeight: 100,
+                                border: 'none',
+                                opacity: otherDefibsCount === 0 ? 0.4 : 1,
+                                cursor: otherDefibsCount === 0 ? 'not-allowed' : 'pointer',
+                              }}
+                              className="transition-opacity select-none"
+                            >
+                              Voir les {otherDefibsCount} défibrillateur(s)
+                            </button>
+                            <button
+                              type="button"
+                              disabled={otherMaterielsCount === 0}
+                              onClick={() => {
+                                if (otherMaterielsCount === 0) return;
+                                const q = searchAddressValue;
+                                setIsFormOpen(false);
+                                setEditingDefib(null);
+                                if (onNavigateToAutresMateriels) {
+                                  onNavigateToAutresMateriels(q, false);
+                                } else if (setActiveTab) {
+                                  setActiveTab('autres-materiels', true);
+                                  setTimeout(() => {
+                                    window.dispatchEvent(
+                                      new CustomEvent('autres-materiels-external-filter', {
+                                        detail: { search: q, sortFilter: null },
+                                      })
+                                    );
+                                  }, 30);
+                                }
+                              }}
+                              style={{
+                                backgroundColor: '#0f172a',
+                                color: '#ffffff',
+                                borderRadius: '10px',
+                                padding: '6px 14px',
+                                fontSize: '13px',
+                                fontWeight: 100,
+                                border: 'none',
+                                opacity: otherMaterielsCount === 0 ? 0.4 : 1,
+                                cursor: otherMaterielsCount === 0 ? 'not-allowed' : 'pointer',
+                              }}
+                              className="transition-opacity select-none"
+                            >
+                              Voir les {otherMaterielsCount} autre(s) matériel(s).
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div className="space-y-1 sm:col-span-3">
                         <label htmlFor="form-voie" className="block text-[10px] font-bold text-slate-400 uppercase">Numéro et voie.</label>
