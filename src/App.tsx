@@ -464,8 +464,8 @@ export default function App() {
     setLocationNames({});
     setTenantMessages([]);
     setTeamWorkGroups([]);
-    setFsmCo2History({});
-    setFsmMissionCounts({});
+    setFsmCo2History([]);
+    setFsmMissionCounts([]);
     setDefibSheetStats({ total: 0, synced: true });
     lastLoadedSheetUrlsRef.current = { tenant: '', defibs: '', autres: '', clients: '' };
     activeSheetBatchRunRef.current = {
@@ -611,8 +611,8 @@ export default function App() {
     setLocationNames({});
     setTenantMessages([]);
     setTeamWorkGroups([]);
-    setFsmCo2History({});
-    setFsmMissionCounts({});
+    setFsmCo2History([]);
+    setFsmMissionCounts([]);
     setDefibSheetStats({ total: 0, synced: true });
     lastLoadedSheetUrlsRef.current = { tenant: '', defibs: '', autres: '', clients: '' };
     activeSheetBatchRunRef.current = {
@@ -4537,7 +4537,10 @@ export default function App() {
   }[]>(() => {
     try {
       const raw = localStorage.getItem(`defib_${tenantId}_fsm_co2_history`) || localStorage.getItem('defib_fsm_co2_history');
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      }
     } catch (e) {
       console.warn("Failed to parse fsmCo2History:", e);
     }
@@ -4549,7 +4552,8 @@ export default function App() {
     try {
       const raw = localStorage.getItem(`defib_${tenantId}_fsm_co2_history`);
       if (raw) {
-        setFsmCo2History(JSON.parse(raw));
+        const parsed = JSON.parse(raw);
+        setFsmCo2History(Array.isArray(parsed) ? parsed : []);
       } else {
         setFsmCo2History([]);
       }
@@ -4568,7 +4572,8 @@ export default function App() {
     status?: string;
   }) => {
     setFsmCo2History(prev => {
-      const filtered = prev.filter(r => r.tourId !== record.tourId);
+      const safePrev = Array.isArray(prev) ? prev : [];
+      const filtered = safePrev.filter(r => r.tourId !== record.tourId);
       const updated = [...filtered, record];
       try {
         localStorage.setItem(`defib_${tenantId}_fsm_co2_history`, JSON.stringify(updated));
@@ -4590,7 +4595,10 @@ export default function App() {
   }[]>(() => {
     try {
       const raw = localStorage.getItem(`defib_${tenantId}_fsm_mission_counts`) || localStorage.getItem('defib_fsm_mission_counts');
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      }
     } catch (e) {
       console.warn("Failed to parse fsmMissionCounts:", e);
     }
@@ -4602,7 +4610,8 @@ export default function App() {
     try {
       const raw = localStorage.getItem(`defib_${tenantId}_fsm_mission_counts`);
       if (raw) {
-        setFsmMissionCounts(JSON.parse(raw));
+        const parsed = JSON.parse(raw);
+        setFsmMissionCounts(Array.isArray(parsed) ? parsed : []);
       } else {
         setFsmMissionCounts([]);
       }
@@ -4615,9 +4624,10 @@ export default function App() {
   const recordMissionOutcome = (monthKey: string, outcome: 'effectue' | 'rejet', eventId: string) => {
     if (!monthKey) return;
     setFsmMissionCounts(prev => {
+      const safePrev = Array.isArray(prev) ? prev : [];
       const month = monthKey;
-      let monthIdx = prev.findIndex(item => item.monthKey === month);
-      let existing = monthIdx !== -1 ? { ...prev[monthIdx] } : {
+      let monthIdx = safePrev.findIndex(item => item && item.monthKey === month);
+      let existing = monthIdx !== -1 ? { ...safePrev[monthIdx] } : {
         monthKey: month,
         effectueesCount: 0,
         rejeteesCount: 0,
@@ -4626,7 +4636,7 @@ export default function App() {
 
       const recordedEvents = Array.isArray(existing.recordedEvents) ? [...existing.recordedEvents] : [];
       if (eventId && recordedEvents.includes(eventId)) {
-        return prev;
+        return safePrev;
       }
       if (eventId) {
         recordedEvents.push(eventId);
@@ -4639,12 +4649,12 @@ export default function App() {
         recordedEvents
       };
 
-      let updated: typeof prev;
+      let updated: typeof safePrev;
       if (monthIdx !== -1) {
-        updated = [...prev];
+        updated = [...safePrev];
         updated[monthIdx] = updatedItem;
       } else {
-        updated = [...prev, updatedItem];
+        updated = [...safePrev, updatedItem];
       }
 
       try {
@@ -4659,11 +4669,12 @@ export default function App() {
 
   // Auto-synchronisation des missions effectuées et rejetées dans le comptage persistant fsmMissionCounts
   useEffect(() => {
-    if (!fsmTours || fsmTours.length === 0) return;
+    if (!Array.isArray(fsmTours) || fsmTours.length === 0) return;
 
     setFsmMissionCounts(prevCounts => {
+      const safePrevCounts = Array.isArray(prevCounts) ? prevCounts : [];
       let hasChanges = false;
-      const nextCounts = [...prevCounts];
+      const nextCounts = [...safePrevCounts];
 
       fsmTours.forEach(tour => {
         if (!tour || tour.id === 'a-trier') return;
@@ -4763,25 +4774,25 @@ export default function App() {
     }
 
     // Ajouter les mois présents dans fsmTours
-    (fsmTours || []).forEach(t => {
+    (Array.isArray(fsmTours) ? fsmTours : []).forEach(t => {
       const k = getTourMonthKey(t);
       if (k) addMonth(k);
     });
 
     // Ajouter les mois présents dans generatedReports
-    (generatedReports || []).forEach(r => {
+    (Array.isArray(generatedReports) ? generatedReports : []).forEach(r => {
       const k = getReportMonthKey(r);
       if (k) addMonth(k);
     });
 
     // Ajouter les mois présents dans l'historique
-    (fsmCo2History || []).forEach(h => {
-      if (h.monthKey) addMonth(h.monthKey);
+    (Array.isArray(fsmCo2History) ? fsmCo2History : []).forEach(h => {
+      if (h && h.monthKey) addMonth(h.monthKey);
     });
 
     // Ajouter les mois présents dans l'historique de comptage des missions
-    (fsmMissionCounts || []).forEach(mc => {
-      if (mc.monthKey) addMonth(mc.monthKey);
+    (Array.isArray(fsmMissionCounts) ? fsmMissionCounts : []).forEach(mc => {
+      if (mc && mc.monthKey) addMonth(mc.monthKey);
     });
 
     const entries = Array.from(monthsMap.entries()).map(([key, label]) => ({ key, label }));
@@ -4793,7 +4804,7 @@ export default function App() {
   // Basé sur le calcul des divs bleues des missions (1.2 kg par mission)
   // Conserve en mémoire les tournées supprimées si elles ont été faites
   const totalPreservedCo2 = useMemo(() => {
-    const activeToursInMonth = (fsmTours || []).filter(t => {
+    const activeToursInMonth = (Array.isArray(fsmTours) ? fsmTours : []).filter(t => {
       if (t.id === 'a-trier') return false;
       const mKey = getTourMonthKey(t);
       return mKey === selectedFsmMonth;
@@ -4806,8 +4817,8 @@ export default function App() {
     }, 0);
 
     // Tournées supprimées mais qui ont été effectuées et conservées en historique
-    const archivedCo2 = (fsmCo2History || [])
-      .filter(rec => rec.monthKey === selectedFsmMonth && !activeTourIds.has(rec.tourId))
+    const archivedCo2 = (Array.isArray(fsmCo2History) ? fsmCo2History : [])
+      .filter(rec => rec && rec.monthKey === selectedFsmMonth && !activeTourIds.has(rec.tourId))
       .reduce((sum, rec) => sum + (rec.co2Saved || 0), 0);
 
     return Number((activeCo2 + archivedCo2).toFixed(2));
@@ -4823,12 +4834,12 @@ export default function App() {
   const missionCompletionRateStr = useMemo(() => {
     if (!selectedFsmMonth) return "N/A";
 
-    const monthRecord = (fsmMissionCounts || []).find(r => r.monthKey === selectedFsmMonth);
+    const monthRecord = (Array.isArray(fsmMissionCounts) ? fsmMissionCounts : []).find(r => r && r.monthKey === selectedFsmMonth);
     let effectuees = monthRecord?.effectueesCount || 0;
     let rejetees = monthRecord?.rejeteesCount || 0;
 
     // Compter également les missions actuelles des tournées actives du mois
-    const activeToursInMonth = (fsmTours || []).filter(t => {
+    const activeToursInMonth = (Array.isArray(fsmTours) ? fsmTours : []).filter(t => {
       if (!t || t.id === 'a-trier') return false;
       return getTourMonthKey(t) === selectedFsmMonth;
     });
@@ -7857,9 +7868,9 @@ export default function App() {
         });
         setFsmTours(prev => (isSwitchingTenant ? cachedTours : (prev.length > 0 ? prev : cachedTours)));
         const baseCo2History = getLocalTenantValue<any[]>('fsm_co2_history', []);
-        setFsmCo2History(baseCo2History);
+        setFsmCo2History(Array.isArray(baseCo2History) ? baseCo2History : []);
         const baseMissionCounts = getLocalTenantValue<any[]>('fsm_mission_counts', []);
-        setFsmMissionCounts(baseMissionCounts);
+        setFsmMissionCounts(Array.isArray(baseMissionCounts) ? baseMissionCounts : []);
         const cachedExpenses = getLocalTenantValue<any[]>('expenses', []);
         setExpenses(prev => (isSwitchingTenant ? cachedExpenses : (prev.length > 0 ? prev : cachedExpenses)));
         setOtherEquipments(prev => (isSwitchingTenant ? [] : prev));

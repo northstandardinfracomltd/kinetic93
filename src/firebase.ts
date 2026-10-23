@@ -703,8 +703,11 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
       const k = localStorage.key(i);
       if (!k) continue;
 
-      // Preserve only device fingerprint ID
+      // Preserve device fingerprint ID, and preserve active session token when switching/logging into a target tenant
       if (k === 'defib_device_id') {
+        continue;
+      }
+      if (targetTenantId && (k === 'defib_session_token' || k === 'defib_keep_logged_in')) {
         continue;
       }
 
