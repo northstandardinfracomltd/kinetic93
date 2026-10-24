@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { t } from '../utils/translate';
-import { Variable, StockRecord, DistributedStockLocation, Member, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
+import { Variable, StockRecord, DistributedStockLocation, Member, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { getLocationCustomName } from '../utils';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
-import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
 import { logDeleteDistributedStock } from '../services/suspiciousActivityService';
 
@@ -167,6 +167,38 @@ export default function StocksDistribuesTab({
   const [attentionFilterActive, setAttentionFilterActive] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [exportLocation, setExportLocation] = useState('');
+  const [isFilterSidePaneOpen, setIsFilterSidePaneOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [clickedPill, setClickedPill] = useState<string | null>(null);
+  const [spreadsheetVersion, setSpreadsheetVersion] = useState(0);
+
+  useEffect(() => {
+    const handleSpreadsheetUpdated = () => setSpreadsheetVersion((v) => v + 1);
+    window.addEventListener('defib-tenant-spreadsheets-updated', handleSpreadsheetUpdated);
+    window.addEventListener('storage', handleSpreadsheetUpdated);
+    return () => {
+      window.removeEventListener('defib-tenant-spreadsheets-updated', handleSpreadsheetUpdated);
+      window.removeEventListener('storage', handleSpreadsheetUpdated);
+    };
+  }, []);
+
+  const resolvedSpreadsheetUrl = useMemo(() => {
+    return getTenantSpreadsheetUrl('spreadsheetStocksDistribues', companyInfo);
+  }, [companyInfo, spreadsheetVersion]);
+
+  const handleRefreshDistributedStocks = () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      window.dispatchEvent(
+        new CustomEvent('defib-manual-refresh-spreadsheet', {
+          detail: { spreadsheetKey: 'spreadsheetStocksDistribues', idSuffix: 'stocks-distribues' },
+        })
+      );
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
 
   // Search input state highlights
   const [isSearchHovered, setIsSearchHovered] = useState(false);
@@ -735,9 +767,16 @@ export default function StocksDistribuesTab({
     fontWeight: 100,
     letterSpacing: 'normal',
     textTransform: 'none',
-    color: '#000000',
+    color: 'rgb(80 97 122)',
+    fontSize: '16px',
     cursor: 'default',
     whiteSpace: 'nowrap',
+    position: 'relative',
+    top: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+    borderTop: '0px solid transparent',
+    borderBottom: '0px solid transparent',
   };
 
   const searchInputStyle: React.CSSProperties = {
@@ -817,6 +856,30 @@ export default function StocksDistribuesTab({
           cursor: not-allowed !important;
           opacity: 0.82 !important;
         }
+        #stocks-distribues-tab-container-harmonized #stocks-distribues-record-table,
+        #stocks-distribues-tab-container-harmonized #stocks-distribues-record-table thead,
+        #stocks-distribues-tab-container-harmonized #stocks-distribues-record-table tbody,
+        #stocks-distribues-tab-container-harmonized #stocks-distribues-record-table tr,
+        #stocks-distribues-tab-container-harmonized #stocks-distribues-record-table th,
+        #stocks-distribues-tab-container-harmonized #stocks-distribues-record-table td {
+          border: 0px solid transparent !important;
+          border-top: 0px solid transparent !important;
+          border-bottom: 0px solid transparent !important;
+          border-left: 0px solid transparent !important;
+          border-right: 0px solid transparent !important;
+        }
+        #stocks-distribues-tab-container-harmonized #stocks-distribues-record-table thead th {
+          background-color: #ffffff !important;
+          color: rgb(80 97 122) !important;
+          font-size: 16px !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+          letter-spacing: normal !important;
+          text-transform: none !important;
+        }
+        #stocks-distribues-tab-container-harmonized #stocks-distribues-record-table tbody tr:hover {
+          background-color: #f5f7fa !important;
+        }
       `}</style>
 
       {!showForm ? (
@@ -881,9 +944,93 @@ export default function StocksDistribuesTab({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 bg-white">
+              <div className="flex flex-wrap items-center gap-2.5 bg-white">
+                {/* 3 Dots More Options Dropdown */}
+                <div
+                  className="relative inline-flex items-center justify-center shrink-0 hover:opacity-80 transition-all select-none cursor-pointer"
+                  style={{
+                    background: '#f5f7fa',
+                    borderRadius: '100px',
+                    padding: '12px',
+                    cursor: 'pointer',
+                  }}
+                  title={t("Plus")}
+                >
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                    alt={t("Plus")}
+                    style={{ width: '18px', height: '18px', display: 'block', pointerEvents: 'none' }}
+                    referrerPolicy="no-referrer"
+                  />
+                  <select
+                    id="stocks-distribues-more-options-dropdown"
+                    aria-label={t("Plus")}
+                    value=""
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'open-filters') {
+                        setIsFilterSidePaneOpen(true);
+                      } else if (val === 'export-inv-traca') {
+                        handleExportInvTraca();
+                      } else if (val === 'spreadsheet-editor') {
+                        if (resolvedSpreadsheetUrl) {
+                          openTenantSpreadsheetUrl(resolvedSpreadsheetUrl);
+                        }
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                    style={{ WebkitAppearance: 'menulist-button', appearance: 'auto', border: 'none', outline: 'none' }}
+                  >
+                    <option value="" disabled hidden></option>
+                    <option value="open-filters">
+                      {t("Appliquer des filtres")}
+                    </option>
+                    <option value="export-inv-traca">
+                      {t("Export inventaire traçabilité")}
+                    </option>
+                    <option value="spreadsheet-editor" disabled={!resolvedSpreadsheetUrl}>
+                      {t("Ouvrir l’éditeur SpreadSheets")}
+                    </option>
+                  </select>
+                </div>
+
+                {/* Actualiser les données Pill Button */}
+                <button
+                  type="button"
+                  id="btn-refresh-data-stocks-distribues"
+                  onClick={() => {
+                    setClickedPill('refresh-stocks-distribues');
+                    setTimeout(() => setClickedPill((prev) => (prev === 'refresh-stocks-distribues' ? null : prev)), 480);
+                    handleRefreshDistributedStocks();
+                  }}
+                  disabled={isRefreshing}
+                  className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill === 'refresh-stocks-distribues' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                  style={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    borderRadius: '1000px',
+                    padding: '8px 16px',
+                    fontSize: '18px',
+                    fontWeight: 100,
+                    cursor: isRefreshing ? 'wait' : 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    backgroundColor: 'rgb(192 248 252)',
+                    color: 'rgb(5 112 114)',
+                    border: 'none',
+                    boxShadow: 'none',
+                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={t("Actualiser les données")}
+                >
+                  <span>{isRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
+                </button>
+
                 {/* Field recherche (Search input) */}
-                <div className="relative w-full sm:w-80 bg-white">
+                <div className="relative w-full sm:w-56 bg-white">
                   <input
                     type="text"
                     id="search-distributed-input"
@@ -899,38 +1046,8 @@ export default function StocksDistribuesTab({
                   />
                 </div>
 
-                {/* Attention requise button */}
-                <button
-                  type="button"
-                  onClick={() => setAttentionFilterActive(!attentionFilterActive)}
-                  style={{
-                    ...customButtonStyle,
-                    backgroundColor: attentionFilterActive ? '#2e54ff' : '#0f172a',
-                    color: '#ffffff',
-                    border: 'none',
-                  }}
-                  className="font-sans transition-all select-none"
-                >
-                  {t("Attention requise")}
-                </button>
-
-                {/* Export inv. traça. button */}
-                <button
-                  type="button"
-                  onClick={() => handleExportInvTraca()}
-                  style={{
-                    ...customButtonStyle,
-                    backgroundColor: '#0f172a',
-                    color: '#ffffff',
-                    border: 'none',
-                  }}
-                  className="font-sans transition-all select-none"
-                >
-                  {t("Export inv. traça.")}
-                </button>
-
                 {(() => {
-                  const hasDistStocksSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetStocksDistribues', companyInfo));
+                  const hasDistStocksSpreadsheet = Boolean(resolvedSpreadsheetUrl);
                   return (
                     <button
                       type="button"
@@ -941,6 +1058,8 @@ export default function StocksDistribuesTab({
                       }}
                       style={{
                         ...customButtonStyle,
+                        backgroundColor: 'rgb(46, 84, 255)',
+                        boxShadow: 'none',
                         opacity: !hasDistStocksSpreadsheet ? 0.45 : 1,
                         cursor: !hasDistStocksSpreadsheet ? 'not-allowed' : 'pointer',
                       }}
@@ -955,55 +1074,12 @@ export default function StocksDistribuesTab({
             </div>
           </div>
 
-          {/* Filters Pills Row - identical style to Centrale des stocks */}
-          <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-5" id="stocks-distributed-storage-pills">
-            {['Tous', ...ALL_LOCATIONS]
-              .filter((loc) => loc === 'Tous' || (countMap[loc] || 0) > 0)
-              .map((loc) => {
-                const count = countMap[loc] || 0;
-                const isSelected = locationFilter === loc;
-                return (
-                <button
-                  key={loc}
-                  type="button"
-                  onClick={() => setLocationFilter(loc)}
-                  style={{
-                    borderRadius: '1000px',
-                    padding: '10px 20px',
-                    fontSize: '15px',
-                    fontWeight: 100,
-                    cursor: 'pointer',
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
-                    color: isSelected ? '#ffffff' : '#000000',
-                    border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
-                    boxShadow: 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                  className="transition-all"
-                >
-                  {loc === 'Tous' ? loc : (() => {
-                    const assignedTech = members.find(m => m.role === 'Technicien' && m.locationLink === loc);
-                    const customName = getLocationCustomName(loc);
-                    return assignedTech ? `${assignedTech.name} — ${customName}` : customName;
-                  })()} ({count})
-                </button>
-              );
-            })}
-          </div>
-
-          <TableSubHeaderButtons
-            spreadsheetKey="spreadsheetStocksDistribues"
-            idSuffix="stocks-distribues"
-            companyInfo={companyInfo}
-          />
-
-          {/* Distributed Stock Table List - identical to Centrale des stocks table */}
+          {/* Distributed Stock Table List */}
           <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
             <div className="overflow-x-auto">
-              <table className="w-full text-left font-sans border-collapse text-xs" id="stocks-distribues-record-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+              <table className="w-full text-left font-sans border-collapse text-xs" id="stocks-distribues-record-table" style={{ border: '0px solid transparent', borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
                 <thead>
-                  <tr className="bg-transparent">
+                  <tr className="bg-white" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
                     <th className="px-4 py-3.5 w-14 text-left whitespace-nowrap" style={thStyle}>Miniature.</th>
                     <th className="px-4 py-3.5" style={thStyle}>UGS</th>
                     <th className="px-4 py-3.5" style={thStyle}>Pièce ou service.</th>
@@ -1078,7 +1154,7 @@ export default function StocksDistribuesTab({
                       return (
                         <tr
                           key={item.id}
-                          className="group hover:bg-[#ecefff] transition-all cursor-pointer"
+                          className="group hover:bg-[#f5f7fa] transition-all cursor-pointer"
                           onClick={(e) => {
                             if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
                             handleEditClick(item);
@@ -1098,12 +1174,12 @@ export default function StocksDistribuesTab({
                             </div>
                           </td>
                           {/* UGS */}
-                          <td className="px-4 py-5 whitespace-nowrap font-sans text-slate-800" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', fontSize: '16px', color: '#000000' }}>
+                          <td className="px-4 py-5 whitespace-nowrap font-sans uppercase tracking-wide" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             {ugsCode || '-'}
                           </td>
                           {/* Pièce ou service */}
-                          <td className="px-4 py-5 whitespace-nowrap font-sans text-black" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>
-                            <span className="font-semibold">{pieceName}</span> <span className="text-black font-normal">({pieceCat})</span>
+                          <td className="px-4 py-5 whitespace-nowrap font-sans text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', fontSize: '16px', color: '#000000', fontWeight: 100, whiteSpace: 'nowrap' }}>
+                            <span className="font-semibold text-slate-950">{pieceName}</span> <span className="text-black font-normal">({pieceCat})</span>
                           </td>
                           {/* Emplacement */}
                           <td className="px-4 py-5 text-center whitespace-nowrap">
@@ -1116,9 +1192,9 @@ export default function StocksDistribuesTab({
                                 backgroundColor: '#ffffff',
                                 border: '1px solid rgb(231, 231, 231)',
                                 color: '#000000',
-                                fontSize: '15px',
+                                fontSize: '16px',
                                 fontWeight: 100,
-                                padding: '6px 18px',
+                                padding: '4px 12px',
                                 whiteSpace: 'nowrap',
                                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                               }}
@@ -1131,27 +1207,27 @@ export default function StocksDistribuesTab({
                             </span>
                           </td>
                           {/* Qté disponible */}
-                          <td className="px-4 py-5 text-center whitespace-nowrap font-semibold" style={{ fontSize: '15px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {item.volumeDisponible}
                           </td>
                           {/* Qté réservée */}
-                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {item.volumeReserve}
                           </td>
                           {/* Qté entrante */}
-                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {item.volumeEntrant}
                           </td>
                           {/* Sortant Sem */}
-                          <td className="px-4 py-5 text-center whitespace-nowrap font-semibold" style={{ fontSize: '15px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {rowStats.week1.vol}
                           </td>
                           {/* Sortant Sem Pro */}
-                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {rowStats.week2.vol}
                           </td>
                           {/* Sortant 7 à 30 jours */}
-                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {rowStats.next30.vol}
                           </td>
                           {/* Actions */}
@@ -1967,6 +2043,170 @@ export default function StocksDistribuesTab({
           return l.includes(q) || s.includes(q) || b.includes(q) || ugs.includes(q) || cat.includes(q);
         }}
       />
+
+      {/* Side Pane Filters for Stocks Distribués */}
+      {isFilterSidePaneOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[99990] flex justify-end"
+          id="stocks-distributed-filter-side-pane-container"
+        >
+          {/* Backdrop */}
+          <div
+            onClick={() => setIsFilterSidePaneOpen(false)}
+            className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs"
+          />
+
+          {/* Side Pane */}
+          <div
+            className="relative w-full sm:w-[460px] bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out z-10"
+            id="stocks-distributed-filter-side-pane"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              borderLeft: '1px solid #e2e8f0',
+            }}
+          >
+            <div className="flex-1 overflow-y-auto p-6 pt-8">
+              <div className="flex flex-wrap gap-2.5 items-center" id="stocks-distributed-storage-pills">
+                {/* Tous pill */}
+                {(() => {
+                  const isSelected = !attentionFilterActive && locationFilter === 'Tous';
+                  const count = countMap['Tous'] || 0;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClickedPill('dist-filter-tous');
+                        setTimeout(() => setClickedPill((prev) => (prev === 'dist-filter-tous' ? null : prev)), 480);
+                        setAttentionFilterActive(false);
+                        setLocationFilter('Tous');
+                      }}
+                      style={{
+                        borderRadius: '1000px',
+                        padding: '10px 20px',
+                        fontSize: '15px',
+                        fontWeight: 100,
+                        cursor: 'pointer',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
+                        color: isSelected ? '#ffffff' : '#000000',
+                        border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
+                        boxShadow: 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                      className={`relative overflow-hidden transition-all select-none cursor-pointer ${clickedPill === 'dist-filter-tous' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                    >
+                      {t("Tous")} ({count})
+                    </button>
+                  );
+                })()}
+
+                {/* Attention requise pill */}
+                {(() => {
+                  const isSelected = attentionFilterActive;
+                  const attentionCount = distributedStocks.filter(item => {
+                    const rowStats = getPieceOutgoingStats(item.denominationPieceId);
+                    const totalNeeded = rowStats.week1.vol + rowStats.week2.vol + rowStats.next30.vol;
+                    return item.volumeDisponible < totalNeeded;
+                  }).length;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClickedPill('dist-filter-attention');
+                        setTimeout(() => setClickedPill((prev) => (prev === 'dist-filter-attention' ? null : prev)), 480);
+                        setAttentionFilterActive(!attentionFilterActive);
+                      }}
+                      style={{
+                        borderRadius: '1000px',
+                        padding: '10px 20px',
+                        fontSize: '15px',
+                        fontWeight: 100,
+                        cursor: 'pointer',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
+                        color: isSelected ? '#ffffff' : '#000000',
+                        border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
+                        boxShadow: 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                      className={`relative overflow-hidden transition-all select-none cursor-pointer ${clickedPill === 'dist-filter-attention' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                    >
+                      {t("Attention requise")} ({attentionCount})
+                    </button>
+                  );
+                })()}
+
+                {/* Location pills (if any distributed stock exists in locations) */}
+                {ALL_LOCATIONS
+                  .filter((loc) => (countMap[loc] || 0) > 0)
+                  .map((loc) => {
+                    const count = countMap[loc] || 0;
+                    const isSelected = locationFilter === loc && !attentionFilterActive;
+                    return (
+                      <button
+                        key={loc}
+                        type="button"
+                        onClick={() => {
+                          setClickedPill(`dist-filter-loc-${loc}`);
+                          setTimeout(() => setClickedPill((prev) => (prev === `dist-filter-loc-${loc}` ? null : prev)), 480);
+                          setAttentionFilterActive(false);
+                          setLocationFilter(loc);
+                        }}
+                        style={{
+                          borderRadius: '1000px',
+                          padding: '10px 20px',
+                          fontSize: '15px',
+                          fontWeight: 100,
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
+                          color: isSelected ? '#ffffff' : '#000000',
+                          border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
+                          boxShadow: 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                        className={`relative overflow-hidden transition-all select-none cursor-pointer ${clickedPill === `dist-filter-loc-${loc}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                      >
+                        {(() => {
+                          const assignedTech = members.find(m => m.role === 'Technicien' && m.locationLink === loc);
+                          const customName = getLocationCustomName(loc);
+                          return assignedTech ? `${assignedTech.name} — ${customName}` : customName;
+                        })()} ({count})
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {/* Bottom Fermer Button */}
+            <div className="p-5 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsFilterSidePaneOpen(false)}
+                style={{
+                  backgroundColor: '#0f172a',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  borderRadius: '13px',
+                  padding: '14px 20px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                }}
+                className="w-full text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+              >
+                {t("Fermer")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
     </div>
   );

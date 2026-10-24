@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { t } from '../utils/translate';
-import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, StockTraceability, Member, LogisticsNotification, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
+import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, StockTraceability, Member, LogisticsNotification, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { getLocationCustomName, generateRandomShortCode } from '../utils';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
-import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { Check, X } from 'lucide-react';
 import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
 import { logDeleteStockCenter } from '../services/suspiciousActivityService';
@@ -154,7 +154,39 @@ export default function StocksTab({
   companyInfo,
 }: StocksTabProps) {
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState<boolean>(false);
+  const [isFilterSidePaneOpen, setIsFilterSidePaneOpen] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [clickedPill, setClickedPill] = useState<string | null>(null);
+  const [spreadsheetVersion, setSpreadsheetVersion] = useState<number>(0);
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleSpreadsheetUpdated = () => setSpreadsheetVersion((v) => v + 1);
+    window.addEventListener('defib-tenant-spreadsheets-updated', handleSpreadsheetUpdated);
+    window.addEventListener('storage', handleSpreadsheetUpdated);
+    return () => {
+      window.removeEventListener('defib-tenant-spreadsheets-updated', handleSpreadsheetUpdated);
+      window.removeEventListener('storage', handleSpreadsheetUpdated);
+    };
+  }, []);
+
+  const resolvedSpreadsheetUrl = useMemo(() => {
+    return getTenantSpreadsheetUrl('spreadsheetStocks', companyInfo);
+  }, [companyInfo, spreadsheetVersion]);
+
+  const handleRefreshStocks = () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      window.dispatchEvent(
+        new CustomEvent('defib-manual-refresh-spreadsheet', {
+          detail: { spreadsheetKey: 'spreadsheetStocks', idSuffix: 'stocks' },
+        })
+      );
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
   const [showFormInfoBanner, setShowFormInfoBanner] = useState<boolean>(() => {
     return localStorage.getItem('defib_hide_stocks_form_info_banner') !== 'true';
   });
@@ -1291,9 +1323,16 @@ export default function StocksTab({
     fontWeight: 100,
     letterSpacing: 'normal',
     textTransform: 'none',
-    color: '#000000',
+    color: 'rgb(80 97 122)',
+    fontSize: '16px',
     cursor: 'default',
     whiteSpace: 'nowrap',
+    position: 'relative',
+    top: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+    borderTop: '0px solid transparent',
+    borderBottom: '0px solid transparent',
   };
 
   const searchInputStyle: React.CSSProperties = {
@@ -1413,6 +1452,30 @@ export default function StocksTab({
           cursor: not-allowed !important;
           opacity: 0.82 !important;
         }
+        #stocks-tab-container-harmonized #stocks-record-table,
+        #stocks-tab-container-harmonized #stocks-record-table thead,
+        #stocks-tab-container-harmonized #stocks-record-table tbody,
+        #stocks-tab-container-harmonized #stocks-record-table tr,
+        #stocks-tab-container-harmonized #stocks-record-table th,
+        #stocks-tab-container-harmonized #stocks-record-table td {
+          border: 0px solid transparent !important;
+          border-top: 0px solid transparent !important;
+          border-bottom: 0px solid transparent !important;
+          border-left: 0px solid transparent !important;
+          border-right: 0px solid transparent !important;
+        }
+        #stocks-tab-container-harmonized #stocks-record-table thead th {
+          background-color: #ffffff !important;
+          color: rgb(80 97 122) !important;
+          font-size: 16px !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+          letter-spacing: normal !important;
+          text-transform: none !important;
+        }
+        #stocks-tab-container-harmonized #stocks-record-table tbody tr:hover {
+          background-color: #f5f7fa !important;
+        }
       `}</style>
       
       {!showStockForm ? (
@@ -1493,9 +1556,88 @@ export default function StocksTab({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 bg-white">
+              <div className="flex flex-wrap items-center gap-2.5 bg-white">
+                {/* 3 Dots More Options Dropdown */}
+                <div
+                  className="relative inline-flex items-center justify-center shrink-0 hover:opacity-80 transition-all select-none cursor-pointer"
+                  style={{
+                    background: '#f5f7fa',
+                    borderRadius: '100px',
+                    padding: '12px',
+                    cursor: 'pointer',
+                  }}
+                  title={t("Plus")}
+                >
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                    alt={t("Plus")}
+                    style={{ width: '18px', height: '18px', display: 'block', pointerEvents: 'none' }}
+                    referrerPolicy="no-referrer"
+                  />
+                  <select
+                    id="stocks-more-options-dropdown"
+                    aria-label={t("Plus")}
+                    value=""
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'open-filters') {
+                        setIsFilterSidePaneOpen(true);
+                      } else if (val === 'spreadsheet-editor') {
+                        if (resolvedSpreadsheetUrl) {
+                          openTenantSpreadsheetUrl(resolvedSpreadsheetUrl);
+                        }
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                    style={{ WebkitAppearance: 'menulist-button', appearance: 'auto', border: 'none', outline: 'none' }}
+                  >
+                    <option value="" disabled hidden></option>
+                    <option value="open-filters">
+                      {t("Appliquer des filtres")}
+                    </option>
+                    <option value="spreadsheet-editor" disabled={!resolvedSpreadsheetUrl}>
+                      {t("Ouvrir l’éditeur SpreadSheets")}
+                    </option>
+                  </select>
+                </div>
+
+                {/* Actualiser les données Pill Button */}
+                <button
+                  type="button"
+                  id="btn-refresh-data-stocks"
+                  onClick={() => {
+                    setClickedPill('refresh-stocks');
+                    setTimeout(() => setClickedPill((prev) => (prev === 'refresh-stocks' ? null : prev)), 480);
+                    handleRefreshStocks();
+                  }}
+                  disabled={isRefreshing}
+                  className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill === 'refresh-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                  style={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    borderRadius: '1000px',
+                    padding: '8px 16px',
+                    fontSize: '18px',
+                    fontWeight: 100,
+                    cursor: isRefreshing ? 'wait' : 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    backgroundColor: 'rgb(192 248 252)',
+                    color: 'rgb(5 112 114)',
+                    border: 'none',
+                    boxShadow: 'none',
+                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={t("Actualiser les données")}
+                >
+                  <span>{isRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
+                </button>
+
                 {/* Field recherche (Search input) */}
-                <div className="relative w-full sm:w-80 bg-white">
+                <div className="relative w-full sm:w-56 bg-white">
                   <input
                     type="text"
                     id="search-stock-input"
@@ -1512,7 +1654,7 @@ export default function StocksTab({
                 </div>
 
                 {(() => {
-                  const hasStocksSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetStocks', companyInfo));
+                  const hasStocksSpreadsheet = Boolean(resolvedSpreadsheetUrl);
                   return (
                     <button
                       type="button"
@@ -1523,6 +1665,8 @@ export default function StocksTab({
                       }}
                       style={{
                         ...customButtonStyle,
+                        backgroundColor: 'rgb(46, 84, 255)',
+                        boxShadow: 'none',
                         opacity: !hasStocksSpreadsheet ? 0.45 : 1,
                         cursor: !hasStocksSpreadsheet ? 'not-allowed' : 'pointer',
                       }}
@@ -1565,69 +1709,12 @@ export default function StocksTab({
             </div>
           </div>
 
-          {/* Filters Pills Row */}
-          <div className="px-4 flex flex-wrap gap-2.5 justify-center sm:justify-start pt-3" id="stocks-storage-pills">
-            {[
-              { value: 'Tous', label: 'Tous' },
-              { value: 'ReqPrev2M', label: 'Besoin 2 mois' },
-              { value: 'ReqPrev2to6M', label: 'Besoin 2 à 6 mois' }
-            ].map((opt) => {
-              let count = 0;
-              if (opt.value === 'Tous') {
-                count = stocks.length;
-              } else if (opt.value === 'ReqPrev2M') {
-                count = stocks.filter(s => {
-                  const prev = getPrevoianceForVariable(s.denominationPieceId, s.quantite);
-                  const val = s.besoinProjete2Mois !== undefined ? Math.max(s.besoinProjete2Mois, prev.bis2M) : prev.bis2M;
-                  return val >= 1;
-                }).length;
-              } else if (opt.value === 'ReqPrev2to6M') {
-                count = stocks.filter(s => {
-                  const prev = getPrevoianceForVariable(s.denominationPieceId, s.quantite);
-                  const val = s.besoinProjete2a6Mois !== undefined ? Math.max(s.besoinProjete2a6Mois, prev.bis2to6M) : prev.bis2to6M;
-                  return val >= 1;
-                }).length;
-              }
-              
-              const isSelected = stockStorageFilter === opt.value;
-              return (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setStockStorageFilter(opt.value as any)}
-                  style={{
-                    borderRadius: '1000px',
-                    padding: '10px 20px',
-                    fontSize: '15px',
-                    fontWeight: 100,
-                    cursor: 'pointer',
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
-                    color: isSelected ? '#ffffff' : '#000000',
-                    border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
-                    boxShadow: 'none',
-                    transition: 'all 0.15s ease'
-                  }}
-                  className="transition-all"
-                >
-                  {opt.label} ({count})
-                </button>
-              );
-            })}
-          </div>
-
-          <TableSubHeaderButtons
-            spreadsheetKey="spreadsheetStocks"
-            idSuffix="stocks"
-            companyInfo={companyInfo}
-          />
-
           {/* Stock Table List */}
           <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
             <div className="overflow-x-auto">
-              <table className="w-full text-left font-sans border-collapse text-xs" id="stocks-record-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+              <table className="w-full text-left font-sans border-collapse text-xs" id="stocks-record-table" style={{ border: '0px solid transparent', borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
                 <thead>
-                  <tr className="bg-transparent">
+                  <tr className="bg-white" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
                     <th className="px-4 py-3.5 w-14 text-left whitespace-nowrap" style={thStyle}>Miniature.</th>
                     <th className="px-4 py-3.5" style={thStyle}>UGS</th>
                     <th className="px-4 py-3.5" style={thStyle}>Pièce ou service.</th>
@@ -1669,7 +1756,7 @@ export default function StocksTab({
                       return (
                         <tr
                           key={st.id}
-                          className="group hover:bg-[#ecefff] transition-all cursor-pointer"
+                          className="group hover:bg-[#f5f7fa] transition-all cursor-pointer"
                           onClick={(e) => {
                             if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
                             setEditingStockId(st.id);
@@ -1711,33 +1798,47 @@ export default function StocksTab({
                               ) : null}
                             </div>
                           </td>
-                          <td className="px-4 py-5 whitespace-nowrap font-sans text-xs font-bold text-slate-800 uppercase tracking-wide" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', fontSize: '15px' }}>
+                          <td className="px-4 py-5 whitespace-nowrap font-sans uppercase tracking-wide" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             {st.ugs || '0001'}
                           </td>
-                          <td className="px-4 py-5 whitespace-nowrap">
-                            <div className="flex flex-col">
-                              <span className="font-sans font-semibold text-[#000000] text-sm">{rawName}</span>
-                            </div>
+                          <td className="px-4 py-5 whitespace-nowrap font-sans" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', fontSize: '16px', color: '#000000', fontWeight: 100 }}>
+                            <span className="font-semibold text-slate-950">{rawName}</span>
                           </td>
-                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                            {st.traceabilityEnabled ? 'Oui' : 'Non'}
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: '1000px',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid rgb(231, 231, 231)',
+                                color: '#000000',
+                                fontSize: '16px',
+                                fontWeight: 100,
+                                padding: '4px 12px',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {st.traceabilityEnabled ? 'Oui' : 'Non'}
+                            </span>
                           </td>
-                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {st.quantite}
                           </td>
-                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {st.quantiteReservee ?? 0}
                           </td>
-                          <td className="px-4 py-5 text-center whitespace-nowrap font-sans font-bold text-slate-900" style={{ fontSize: '14px' }}>
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {besoin2M}
                           </td>
-                          <td className="px-4 py-5 text-center whitespace-nowrap font-sans font-bold text-slate-700" style={{ fontSize: '14px' }}>
+                          <td className="px-4 py-5 text-center whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {besoin2to6M}
                           </td>
-                          <td className="px-4 py-5 text-right whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <td className="px-4 py-5 text-right whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {(st.valeurAchat ?? 0).toFixed(2)} €
                           </td>
-                          <td className="px-4 py-5 text-right font-black whitespace-nowrap" style={{ fontSize: '16px', fontWeight: 105, color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                          <td className="px-4 py-5 text-right whitespace-nowrap" style={{ fontSize: '16px', fontWeight: 100, color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                             {(st.prixVenteHt ?? 0).toFixed(2)} €
                           </td>
                           <td className="px-4 py-5 text-right whitespace-nowrap bg-transparent" onClick={(e) => e.stopPropagation()}>
@@ -3635,6 +3736,113 @@ export default function StocksTab({
           return l.includes(q) || s.includes(q) || b.includes(q) || nom.includes(q) || ident.includes(q) || ref.includes(q) || marque.includes(q);
         }}
       />
+
+      {/* Side Pane Filters for Centrale des Stocks */}
+      {isFilterSidePaneOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[99990] flex justify-end"
+          id="stocks-filter-side-pane-container"
+        >
+          {/* Backdrop */}
+          <div
+            onClick={() => setIsFilterSidePaneOpen(false)}
+            className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs"
+          />
+
+          {/* Side Pane */}
+          <div
+            className="relative w-full sm:w-[460px] bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out z-10"
+            id="stocks-filter-side-pane"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              borderLeft: '1px solid #e2e8f0',
+            }}
+          >
+            <div className="flex-1 overflow-y-auto p-6 pt-8">
+              <div className="flex flex-wrap gap-2.5 items-center" id="stocks-storage-pills">
+                {[
+                  { value: 'Tous', label: 'Tous' },
+                  { value: 'ReqPrev2M', label: 'Besoin à 2 mois' },
+                  { value: 'ReqPrev2to6M', label: 'Besoin 2 à 6 mois' }
+                ].map((opt) => {
+                  let count = 0;
+                  if (opt.value === 'Tous') {
+                    count = stocks.length;
+                  } else if (opt.value === 'ReqPrev2M') {
+                    count = stocks.filter(s => {
+                      const prev = getPrevoianceForVariable(s.denominationPieceId, s.quantite);
+                      const val = s.besoinProjete2Mois !== undefined ? Math.max(s.besoinProjete2Mois, prev.bis2M) : prev.bis2M;
+                      return val >= 1;
+                    }).length;
+                  } else if (opt.value === 'ReqPrev2to6M') {
+                    count = stocks.filter(s => {
+                      const prev = getPrevoianceForVariable(s.denominationPieceId, s.quantite);
+                      const val = s.besoinProjete2a6Mois !== undefined ? Math.max(s.besoinProjete2a6Mois, prev.bis2to6M) : prev.bis2to6M;
+                      return val >= 1;
+                    }).length;
+                  }
+
+                  const isSelected = stockStorageFilter === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setClickedPill(`filter-${opt.value}`);
+                        setTimeout(() => setClickedPill((prev) => (prev === `filter-${opt.value}` ? null : prev)), 480);
+                        setStockStorageFilter(opt.value as any);
+                      }}
+                      style={{
+                        borderRadius: '1000px',
+                        padding: '10px 20px',
+                        fontSize: '15px',
+                        fontWeight: 100,
+                        cursor: 'pointer',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
+                        color: isSelected ? '#ffffff' : '#000000',
+                        border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
+                        boxShadow: 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                      className={`relative overflow-hidden transition-all select-none cursor-pointer ${clickedPill === `filter-${opt.value}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                    >
+                      {t(opt.label)} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bottom Fermer Button */}
+            <div className="p-5 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsFilterSidePaneOpen(false)}
+                style={{
+                  backgroundColor: '#0f172a',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  borderRadius: '13px',
+                  padding: '14px 20px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                }}
+                className="w-full text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+              >
+                {t("Fermer")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
     </div>
   );
