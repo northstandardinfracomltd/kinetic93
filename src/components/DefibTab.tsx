@@ -5324,12 +5324,15 @@ export default function DefibTab({
                         }
                       }}
                       id="select-all-radio-checkbox"
-                      className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
+                      className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                         isAllSelected
                           ? 'border-[#2e54ff] bg-transparent'
-                          : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                          : 'bg-white hover:border-[#2e54ff]'
                       }`}
-                      style={{ borderWidth: '2.5px' }}
+                      style={{
+                        borderWidth: '1px',
+                        borderColor: isAllSelected ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                      }}
                       role="checkbox"
                       aria-checked={isAllSelected}
                     >
@@ -5430,12 +5433,15 @@ export default function DefibTab({
                           type="button"
                           onClick={(e) => handleSelectRow(df.id, e)}
                           id={`radio-checkbox-row-${df.id}`}
-                          className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
+                          className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                             isChecked
                               ? 'border-[#2e54ff] bg-transparent'
-                              : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                              : 'bg-white hover:border-[#2e54ff]'
                           }`}
-                          style={{ borderWidth: '2.5px' }}
+                          style={{
+                            borderWidth: '1px',
+                            borderColor: isChecked ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                          }}
                           role="checkbox"
                           aria-checked={isChecked}
                         >
@@ -5447,7 +5453,7 @@ export default function DefibTab({
 
                       {/* Miniature thumbnail column */}
                       <td className="px-4 py-3.5">
-                        <div className="w-14 h-14 rounded-md bg-white border border-slate-200 overflow-hidden relative flex items-center justify-center p-1.5" style={{ backgroundColor: '#ffffff' }}>
+                        <div className="w-14 h-14 rounded-md bg-white border overflow-hidden relative flex items-center justify-center p-1.5" style={{ backgroundColor: '#ffffff', borderColor: 'oklch(0.92 0.01 258.78)', borderWidth: '1px' }}>
                           {linkedModel?.imageUrl ? (
                             <img
                               src={linkedModel.imageUrl}
@@ -5477,7 +5483,7 @@ export default function DefibTab({
                                 display: 'inline-flex', 
                                 alignItems: 'center', 
                                 gap: '8px',
-                                border: '1px solid rgb(231, 231, 231)',
+                                border: '1px solid oklch(0.92 0.01 258.78)',
                                 borderRadius: '1000px',
                                 padding: '4px 12px',
                                 backgroundColor: '#ffffff',
@@ -5605,7 +5611,7 @@ export default function DefibTab({
                                 gap: '8px',
                                 borderRadius: '1000px',
                                 backgroundColor: '#ffffff',
-                                border: '1px solid rgb(231, 231, 231)',
+                                border: '1px solid oklch(0.92 0.01 258.78)',
                                 color: '#000000',
                                 fontSize: '16px',
                                 fontWeight: 100,
@@ -5707,7 +5713,7 @@ export default function DefibTab({
                                       alignItems: 'center',
                                       borderRadius: '1000px',
                                       backgroundColor: '#ffffff',
-                                      border: '1px solid rgb(231, 231, 231)',
+                                      border: '1px solid oklch(0.92 0.01 258.78)',
                                       color: '#000000',
                                       fontSize: '16px',
                                       fontWeight: 100,
@@ -6077,9 +6083,9 @@ export default function DefibTab({
                 -webkit-appearance: none !important;
                 width: 18px !important;
                 height: 18px !important;
-                border: 2px solid #DCE1EA !important;
+                border: 1px solid oklch(0.92 0.01 258.78) !important;
                 border-radius: 50% !important;
-                background-color: #ffffff !important;
+                background-color: transparent !important;
                 outline: none !important;
                 cursor: pointer !important;
                 display: inline-flex !important;
@@ -6745,7 +6751,7 @@ export default function DefibTab({
 
                     {/* Trousse de secours / Kit container */}
                     <div 
-                      className="p-4 space-y-3 mt-3"
+                      className="p-0 space-y-3 mt-3"
                       style={{
                         backgroundColor: '#f5f7fa',
                         border: 'none',
@@ -6765,7 +6771,7 @@ export default function DefibTab({
                           textTransform: 'none',
                         }}
                         >
-                          {t("Trousse de secours")}
+                          {t("3.1 — Trousse de secours")}
                         </span>
                       </div>
 
@@ -6795,7 +6801,14 @@ export default function DefibTab({
                               className="inline-flex items-center cursor-pointer gap-2 select-none"
                               style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
                             >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitCiseauxPresents === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                              <span
+                                className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                                style={{
+                                  borderWidth: '1px',
+                                  borderColor: kitCiseauxPresents === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                  backgroundColor: 'transparent',
+                                }}
+                              >
                                 {kitCiseauxPresents === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                               </span>
                               Oui
@@ -6806,7 +6819,14 @@ export default function DefibTab({
                               className="inline-flex items-center cursor-pointer gap-2 select-none"
                               style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
                             >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitCiseauxPresents === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                              <span
+                                className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                                style={{
+                                  borderWidth: '1px',
+                                  borderColor: kitCiseauxPresents === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                  backgroundColor: 'transparent',
+                                }}
+                              >
                                 {kitCiseauxPresents === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                               </span>
                               Non
@@ -6826,7 +6846,14 @@ export default function DefibTab({
                               className="inline-flex items-center cursor-pointer gap-2 select-none"
                               style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
                             >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitMasquePresent === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                              <span
+                                className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                                style={{
+                                  borderWidth: '1px',
+                                  borderColor: kitMasquePresent === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                  backgroundColor: 'transparent',
+                                }}
+                              >
                                 {kitMasquePresent === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                               </span>
                               Oui
@@ -6840,7 +6867,14 @@ export default function DefibTab({
                               className="inline-flex items-center cursor-pointer gap-2 select-none"
                               style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
                             >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitMasquePresent === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                              <span
+                                className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                                style={{
+                                  borderWidth: '1px',
+                                  borderColor: kitMasquePresent === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                  backgroundColor: 'transparent',
+                                }}
+                              >
                                 {kitMasquePresent === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                               </span>
                               Non
@@ -6874,7 +6908,14 @@ export default function DefibTab({
                               className="inline-flex items-center cursor-pointer gap-2 select-none"
                               style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
                             >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitServiettesPresentes === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                              <span
+                                className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                                style={{
+                                  borderWidth: '1px',
+                                  borderColor: kitServiettesPresentes === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                  backgroundColor: 'transparent',
+                                }}
+                              >
                                 {kitServiettesPresentes === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                               </span>
                               Oui
@@ -6888,7 +6929,14 @@ export default function DefibTab({
                               className="inline-flex items-center cursor-pointer gap-2 select-none"
                               style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
                             >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitServiettesPresentes === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                              <span
+                                className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                                style={{
+                                  borderWidth: '1px',
+                                  borderColor: kitServiettesPresentes === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                  backgroundColor: 'transparent',
+                                }}
+                              >
                                 {kitServiettesPresentes === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                               </span>
                               Non
@@ -6922,7 +6970,14 @@ export default function DefibTab({
                               className="inline-flex items-center cursor-pointer gap-2 select-none"
                               style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
                             >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitGantsPresents === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                              <span
+                                className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                                style={{
+                                  borderWidth: '1px',
+                                  borderColor: kitGantsPresents === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                  backgroundColor: 'transparent',
+                                }}
+                              >
                                 {kitGantsPresents === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                               </span>
                               Oui
@@ -6933,7 +6988,14 @@ export default function DefibTab({
                               className="inline-flex items-center cursor-pointer gap-2 select-none"
                               style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
                             >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitGantsPresents === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                              <span
+                                className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                                style={{
+                                  borderWidth: '1px',
+                                  borderColor: kitGantsPresents === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                  backgroundColor: 'transparent',
+                                }}
+                              >
                                 {kitGantsPresents === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                               </span>
                               Non
@@ -6953,7 +7015,14 @@ export default function DefibTab({
                               className="inline-flex items-center cursor-pointer gap-2 select-none"
                               style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
                             >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitRasoirPresent === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                              <span
+                                className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                                style={{
+                                  borderWidth: '1px',
+                                  borderColor: kitRasoirPresent === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                  backgroundColor: 'transparent',
+                                }}
+                              >
                                 {kitRasoirPresent === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                               </span>
                               Oui
@@ -6964,7 +7033,14 @@ export default function DefibTab({
                               className="inline-flex items-center cursor-pointer gap-2 select-none"
                               style={{ fontSize: '15px', color: '#000', fontWeight: '500' }}
                             >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${kitRasoirPresent === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                              <span
+                                className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                                style={{
+                                  borderWidth: '1px',
+                                  borderColor: kitRasoirPresent === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                  backgroundColor: 'transparent',
+                                }}
+                              >
                                 {kitRasoirPresent === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                               </span>
                               Non
@@ -7053,7 +7129,7 @@ export default function DefibTab({
 
                       return (
                         <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
-                          <span className="text-xs font-medium text-slate-700" style={{ fontSize: '14px' }}>
+                          <span className="font-medium" style={{ fontSize: '16px', color: '#000', cursor: 'default' }}>
                             À cette adresse postale, il y a {otherDefibsCount} autre(s) défibrillateur(s) et {otherMaterielsCount} autres matériels.
                           </span>
                           <div className="flex flex-wrap items-center gap-2">
@@ -7072,8 +7148,8 @@ export default function DefibTab({
                                 backgroundColor: '#0f172a',
                                 color: '#ffffff',
                                 borderRadius: '10px',
-                                padding: '6px 14px',
-                                fontSize: '13px',
+                                padding: '10px 16px',
+                                fontSize: '16px',
                                 fontWeight: 100,
                                 border: 'none',
                                 opacity: otherDefibsCount === 0 ? 0.4 : 1,
@@ -7108,8 +7184,8 @@ export default function DefibTab({
                                 backgroundColor: '#0f172a',
                                 color: '#ffffff',
                                 borderRadius: '10px',
-                                padding: '6px 14px',
-                                fontSize: '13px',
+                                padding: '10px 16px',
+                                fontSize: '16px',
                                 fontWeight: 100,
                                 border: 'none',
                                 opacity: otherMaterielsCount === 0 ? 0.4 : 1,
@@ -7297,7 +7373,14 @@ export default function DefibTab({
                               onClick={() => handleUpdateScheduleField(schIdx, 'fermetureMidi', !sch.fermetureMidi)}
                               className="inline-flex items-center gap-2 cursor-pointer select-none"
                             >
-                              <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sch.fermetureMidi ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                              <span
+                                className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                                style={{
+                                  borderWidth: '1px',
+                                  borderColor: sch.fermetureMidi ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                  backgroundColor: 'transparent',
+                                }}
+                              >
                                 {sch.fermetureMidi && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                               </span>
                               <span className="font-semibold text-black font-sans" style={{ fontSize: '16px' }}>
@@ -7427,7 +7510,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${exterieur === true ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: exterieur === true ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {exterieur === true && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -7438,7 +7528,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${exterieur === false ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: exterieur === false ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {exterieur === false && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -7720,7 +7817,14 @@ export default function DefibTab({
                           className="inline-flex items-center cursor-pointer gap-2 select-none"
                           style={{ fontSize: '16px', color: '#000' }}
                         >
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${hasElectrodeASecours === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                          <span
+                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                            style={{
+                              borderWidth: '1px',
+                              borderColor: hasElectrodeASecours === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                              backgroundColor: 'transparent',
+                            }}
+                          >
                             {hasElectrodeASecours === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                           </span>
                           Oui
@@ -7731,7 +7835,14 @@ export default function DefibTab({
                           className="inline-flex items-center cursor-pointer gap-2 select-none"
                           style={{ fontSize: '16px', color: '#000' }}
                         >
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${hasElectrodeASecours === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                          <span
+                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                            style={{
+                              borderWidth: '1px',
+                              borderColor: hasElectrodeASecours === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                              backgroundColor: 'transparent',
+                            }}
+                          >
                             {hasElectrodeASecours === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                           </span>
                           Non
@@ -7830,7 +7941,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none font-semibold"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${hasPadpakA === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: hasPadpakA === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {hasPadpakA === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -7841,7 +7959,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none font-semibold"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${hasPadpakA === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: hasPadpakA === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {hasPadpakA === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8042,7 +8167,14 @@ export default function DefibTab({
                           className="inline-flex items-center cursor-pointer gap-2 select-none"
                           style={{ fontSize: '16px', color: '#000' }}
                         >
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${hasElectrodePSecours === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                          <span
+                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                            style={{
+                              borderWidth: '1px',
+                              borderColor: hasElectrodePSecours === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                              backgroundColor: 'transparent',
+                            }}
+                          >
                             {hasElectrodePSecours === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                           </span>
                           Oui
@@ -8053,7 +8185,14 @@ export default function DefibTab({
                           className="inline-flex items-center cursor-pointer gap-2 select-none"
                           style={{ fontSize: '16px', color: '#000' }}
                         >
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${hasElectrodePSecours === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                          <span
+                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                            style={{
+                              borderWidth: '1px',
+                              borderColor: hasElectrodePSecours === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                              backgroundColor: 'transparent',
+                            }}
+                          >
                             {hasElectrodePSecours === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                           </span>
                           Non
@@ -8152,7 +8291,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none font-semibold"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${hasPadpakP === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: hasPadpakP === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {hasPadpakP === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8163,7 +8309,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none font-semibold"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${hasPadpakP === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: hasPadpakP === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {hasPadpakP === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8373,7 +8526,14 @@ export default function DefibTab({
                           className="inline-flex items-center cursor-pointer gap-2 select-none"
                           style={{ fontSize: '16px', color: '#000' }}
                         >
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${hasBatterieSecours === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                          <span
+                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                            style={{
+                              borderWidth: '1px',
+                              borderColor: hasBatterieSecours === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                              backgroundColor: 'transparent',
+                            }}
+                          >
                             {hasBatterieSecours === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                           </span>
                           Oui
@@ -8384,7 +8544,14 @@ export default function DefibTab({
                           className="inline-flex items-center cursor-pointer gap-2 select-none"
                           style={{ fontSize: '16px', color: '#000' }}
                         >
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${hasBatterieSecours === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                          <span
+                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                            style={{
+                              borderWidth: '1px',
+                              borderColor: hasBatterieSecours === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                              backgroundColor: 'transparent',
+                            }}
+                          >
                             {hasBatterieSecours === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                           </span>
                           Non
@@ -8524,7 +8691,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${loue === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: loue === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {loue === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8535,7 +8709,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${loue === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: loue === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {loue === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8553,7 +8734,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${prete === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: prete === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {prete === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8564,7 +8752,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${prete === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: prete === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {prete === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8582,7 +8777,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stocke === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: stocke === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {stocke === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8593,7 +8795,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${stocke === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: stocke === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {stocke === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8611,7 +8820,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${archive === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: archive === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {archive === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8622,7 +8838,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${archive === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: archive === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {archive === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8642,7 +8865,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${conforme === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: conforme === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {conforme === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8653,7 +8883,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${conforme === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: conforme === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {conforme === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8671,7 +8908,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sousTraitance === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: sousTraitance === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {sousTraitance === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8682,7 +8926,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sousTraitance === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: sousTraitance === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {sousTraitance === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8700,7 +8951,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${fsmAutorise === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: fsmAutorise === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {fsmAutorise === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8711,7 +8969,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${fsmAutorise === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: fsmAutorise === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {fsmAutorise === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8733,7 +8998,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${rappelMensuelAuto === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: rappelMensuelAuto === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {rappelMensuelAuto === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8744,7 +9016,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${rappelMensuelAuto === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: rappelMensuelAuto === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {rappelMensuelAuto === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8766,7 +9045,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${rappelHebdoAuto === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: rappelHebdoAuto === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {rappelHebdoAuto === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8777,7 +9063,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${rappelHebdoAuto === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: rappelHebdoAuto === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {rappelHebdoAuto === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8799,7 +9092,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${rappelJournalierAuto === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: rappelJournalierAuto === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {rappelJournalierAuto === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8810,7 +9110,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${rappelJournalierAuto === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: rappelJournalierAuto === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {rappelJournalierAuto === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non
@@ -8828,7 +9135,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${victimeSurvie === 'Oui' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: victimeSurvie === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {victimeSurvie === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Oui
@@ -8839,7 +9153,14 @@ export default function DefibTab({
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
-                            <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${victimeSurvie === 'Non' ? 'border-[#2e54ff]' : 'border-[#DCE1EA] bg-white'}`}>
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: victimeSurvie === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
                               {victimeSurvie === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                             </span>
                             Non

@@ -624,9 +624,9 @@ export const CLIENTS_CANONICAL_HEADERS: Array<{ header: string; field: string; a
   { header: 'Nom et prénom', field: 'nomPrenom', aliases: ['nometprenom', 'nomprenom', 'contact', 'interlocuteur', 'responsable'] },
   { header: 'Téléphone', field: 'phone', aliases: ['telephone', 'phone', 'tel', 'telephoneprincipal'] },
   { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'emailprincipal'] },
-  { header: 'Nom et prénom sur site', field: 'nomPrenomSite', aliases: ['nometprenomsursite', 'nomprenomsite', 'contactsursite', 'contactsite', 'contact1contact1'] },
-  { header: 'Téléphone portable sur site', field: 'telephoneSite', aliases: ['telephoneportablesursite', 'telephonesursite', 'telephonesite', 'telsite', 'contact1telephoneducontact1'] },
-  { header: 'Email sur site', field: 'emailSite', aliases: ['emailsursite', 'emailsite', 'mailsite', 'contact1emailducontact1'] },
+  { header: 'Nom et prénom sur site', field: 'nomPrenomSite', aliases: ['nometprenomsursite', 'nomprenomsite', 'contactsursite', 'contactsite', 'contact1contact1', 'contact1'] },
+  { header: 'Téléphone portable sur site', field: 'telephoneSite', aliases: ['telephoneportablesursite', 'telephonesursite', 'telephonesite', 'telsite', 'contact1telephoneducontact1', 'telephoneducontact1'] },
+  { header: 'Email sur site', field: 'emailSite', aliases: ['emailsursite', 'emailsite', 'mailsite', 'contact1emailducontact1', 'emailducontact1', 'contact5emailducontact1'] },
   { header: 'Contrat', field: 'contrat', aliases: ['contrat', 'aveccontrat', 'souscontrat', 'contratactif', 'contratencours'], type: 'yesno' },
   { header: 'Nom du contrat', field: 'nomContrat', aliases: ['nomducontrat', 'nomcontrat', 'typecontrat', 'titreducontrat', 'categorieducontact', 'categorieducontrat'] },
   { header: 'Référence contrat', field: 'referenceContrat', aliases: ['referencecontrat', 'refcontrat', 'numerocontrat', 'referenceducontrat'] },
@@ -639,6 +639,52 @@ export const CLIENTS_CANONICAL_HEADERS: Array<{ header: string; field: string; a
   { header: 'Identifiant Portail', field: 'identifiantPortail', aliases: ['identifiantportail', 'loginportail', 'identifiantunique'] },
   { header: 'Mot de passe Portail', field: 'motDePassePortail', aliases: ['motdepasseportail', 'passwordportail', 'motdepasse'] },
   { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'notes', 'observation'] },
+
+  // Contacts 1 to 5 extra fields
+  { header: 'Section 2 - Contact 1 - Type.', field: 'typeContact1', aliases: ['contact1type', 'typecontact1'] },
+  { header: 'Section 2 - Contact 2 - Type.', field: 'typeContact2', aliases: ['contact2type', 'typecontact2'] },
+  { header: 'Section 2 - Contact 2 - Contact 2.', field: 'nomContact2', aliases: ['contact2contact2', 'contact2', 'nomcontact2'] },
+  { header: 'Section 2 - Contact 2 - Téléphone du contact 2.', field: 'telephoneSite2', aliases: ['contact2telephoneducontact2', 'telephoneducontact2', 'telephonesite2'] },
+  { header: 'Section 2 - Contact 2 - Email du contact 2.', field: 'emailSite2', aliases: ['contact2emailducontact2', 'emailducontact2', 'emailsite2'] },
+  { header: 'Section 2 - Contact 3 - Type.', field: 'typeContact3', aliases: ['contact3type', 'typecontact3'] },
+  { header: 'Section 2 - Contact 3 - Contact 3.', field: 'nomContact3', aliases: ['contact3contact3', 'contact3', 'nomcontact3'] },
+  { header: 'Section 2 - Contact 3 - Téléphone du contact 3.', field: 'telephoneSite3', aliases: ['contact3telephoneducontact3', 'telephoneducontact3', 'telephonesite3'] },
+  { header: 'Section 2 - Contact 3 - Email du contact 3.', field: 'emailSite3', aliases: ['contact3emailducontact3', 'emailducontact3', 'emailsite3'] },
+  { header: 'Section 2 - Contact 4 - Type.', field: 'typeContact4', aliases: ['contact4type', 'typecontact4'] },
+  { header: 'Section 2 - Contact 4 - Contact 4.', field: 'nomContact4', aliases: ['contact4contact4', 'contact4', 'nomcontact4'] },
+  { header: 'Section 2 - Contact 4 - Téléphone du contact 4.', field: 'telephoneSite4', aliases: ['contact4telephoneducontact4', 'telephoneducontact4', 'telephonesite4'] },
+  { header: 'Section 2 - Contact 4 - Email du contact 4.', field: 'emailSite4', aliases: ['contact4emailducontact4', 'emailducontact4', 'emailsite4'] },
+  { header: 'Section 2 - Contact 5 - Type.', field: 'typeContact5', aliases: ['contact5type', 'typecontact5'] },
+  { header: 'Section 2 - Contact 5 - Contact 5.', field: 'nomContact5', aliases: ['contact5contact5', 'contact5', 'nomcontact5'] },
+  { header: 'Section 2 - Contact 5 - Téléphone du contact 5.', field: 'telephoneSite5', aliases: ['contact5telephoneducontact5', 'telephoneducontact5', 'telephonesite5'] },
+  { header: 'Section 2 - Contact 5 - Email du contact 5.', field: 'emailSite5', aliases: ['contact5emailducontact5', 'emailducontact5', 'emailsite5'] },
+
+  // Section 3 - Contrat
+  { header: 'Section 3 - Catégorie du contact.', field: 'nomContrat', aliases: ['categorieducontact', 'categorieducontrat'] },
+  { header: 'Section 3 - Référence du contrat.', field: 'referenceContrat', aliases: ['referenceducontrat'] },
+  { header: 'Section 3 - Valeur du contrat.', field: 'valeurContrat', aliases: ['valeurducontrat', 'valeurducontrateuro', 'valeurcontrat'] },
+  { header: 'Section 3 - Début.', field: 'debutContrat', aliases: ['debut'], type: 'date' },
+  { header: 'Section 3 - Expiration.', field: 'finContrat', aliases: ['expiration'], type: 'date' },
+  { header: 'Section 3 - Numéro du marché.', field: 'numeroMarche', aliases: ['numerodumarche', 'numerodemarche', 'numeromarche'] },
+  { header: 'Section 3 - Rédaction du contrat.', field: 'redactionContrat', aliases: ['redactionducontrat', 'redactioncontrat'] },
+  { header: 'Section 3 - Date de signature.', field: 'dateSignatureContrat', aliases: ['datedesignature', 'datesignaturecontrat'], type: 'date' },
+  { header: 'Section 3 - Signé par.', field: 'signeParContrat', aliases: ['signepar', 'signeparcontrat'] },
+
+  // Autre contrat 1
+  { header: 'Autre contrat 1. - Intitulé du contrat.', field: '_autreContrat1_intitule', aliases: ['autrecontrat1intituleducontrat', 'autrecontrat1intitule', 'autrecontrat1nomducontrat'] },
+  { header: 'Autre contrat 1. - Référence du contrat.', field: '_autreContrat1_reference', aliases: ['autrecontrat1referenceducontrat', 'autrecontrat1reference', 'autrecontrat1referencecontrat'] },
+  { header: 'Autre contrat 1. - Numéro de marché.', field: '_autreContrat1_numeroMarche', aliases: ['autrecontrat1numerodemarche', 'autrecontrat1numerodumarche', 'autrecontrat1numeromarche'] },
+  { header: 'Autre contrat 1. - Début.', field: '_autreContrat1_debut', aliases: ['autrecontrat1debut', 'autrecontrat1debutducontrat'], type: 'date' },
+  { header: 'Autre contrat 1. - Expiration.', field: '_autreContrat1_expiration', aliases: ['autrecontrat1expiration', 'autrecontrat1expirationducontrat', 'autrecontrat1finducontrat', 'autrecontrat1fin'], type: 'date' },
+  { header: 'Autre contrat 1. - Fichier (URL source).', field: '_autreContrat1_fichierUrl', aliases: ['autrecontrat1fichierurlsource', 'autrecontrat1fichier', 'autrecontrat1urlsource', 'autrecontrat1url'] },
+
+  // Autre contrat 2
+  { header: 'Autre contrat 2. - Intitulé du contrat.', field: '_autreContrat2_intitule', aliases: ['autrecontrat2intituleducontrat', 'autrecontrat2intitule', 'autrecontrat2nomducontrat'] },
+  { header: 'Autre contrat 2. - Référence du contrat.', field: '_autreContrat2_reference', aliases: ['autrecontrat2referenceducontrat', 'autrecontrat2reference', 'autrecontrat2referencecontrat'] },
+  { header: 'Autre contrat 2. - Numéro de marché.', field: '_autreContrat2_numeroMarche', aliases: ['autrecontrat2numerodemarche', 'autrecontrat2numerodumarche', 'autrecontrat2numeromarche'] },
+  { header: 'Autre contrat 2. - Début.', field: '_autreContrat2_debut', aliases: ['autrecontrat2debut', 'autrecontrat2debutducontrat'], type: 'date' },
+  { header: 'Autre contrat 2. - Expiration.', field: '_autreContrat2_expiration', aliases: ['autrecontrat2expiration', 'autrecontrat2expirationducontrat', 'autrecontrat2finducontrat', 'autrecontrat2fin'], type: 'date' },
+  { header: 'Autre contrat 2. - Fichier (URL source).', field: '_autreContrat2_fichierUrl', aliases: ['autrecontrat2fichierurlsource', 'autrecontrat2fichier', 'autrecontrat2urlsource', 'autrecontrat2url'] },
 ];
 
 function normalizeSituationFromSheet(val: string): 'Vert' | 'Orange' | 'Rouge' {
@@ -1196,13 +1242,82 @@ export function mapRowToClient(
     const { colIdx, def } = colMatches[m];
     const rawVal = row[colIdx] !== undefined ? String(row[colIdx]).trim() : '';
     if (def.type === 'yesno') {
-      obj[def.field] = normalizeYesNo(rawVal, 'Non');
+      if (rawVal !== '') {
+        obj[def.field] = normalizeYesNo(rawVal, 'Non');
+      }
     } else if (def.type === 'date') {
       const dStr = normalizeDateStr(rawVal);
       if (dStr) obj[def.field] = dStr;
     } else if (rawVal !== '') {
       obj[def.field] = rawVal;
     }
+  }
+
+  // Reconstruct autresContrats (up to 2 additional contracts)
+  const parsedAutresContrats: any[] = [];
+  const hasAc1 = Boolean(
+    obj._autreContrat1_intitule ||
+    obj._autreContrat1_reference ||
+    obj._autreContrat1_numeroMarche ||
+    obj._autreContrat1_debut ||
+    obj._autreContrat1_expiration ||
+    obj._autreContrat1_fichierUrl
+  );
+  if (hasAc1) {
+    parsedAutresContrats.push({
+      id: `contract_1_${rowIndex + 2}`,
+      intitule: obj._autreContrat1_intitule || '',
+      reference: obj._autreContrat1_reference || '',
+      numeroMarche: obj._autreContrat1_numeroMarche || '',
+      debut: obj._autreContrat1_debut || '',
+      expiration: obj._autreContrat1_expiration || '',
+      fichierUrl: obj._autreContrat1_fichierUrl || '',
+    });
+  }
+  const hasAc2 = Boolean(
+    obj._autreContrat2_intitule ||
+    obj._autreContrat2_reference ||
+    obj._autreContrat2_numeroMarche ||
+    obj._autreContrat2_debut ||
+    obj._autreContrat2_expiration ||
+    obj._autreContrat2_fichierUrl
+  );
+  if (hasAc2) {
+    parsedAutresContrats.push({
+      id: `contract_2_${rowIndex + 2}`,
+      intitule: obj._autreContrat2_intitule || '',
+      reference: obj._autreContrat2_reference || '',
+      numeroMarche: obj._autreContrat2_numeroMarche || '',
+      debut: obj._autreContrat2_debut || '',
+      expiration: obj._autreContrat2_expiration || '',
+      fichierUrl: obj._autreContrat2_fichierUrl || '',
+    });
+  }
+  if (parsedAutresContrats.length > 0) {
+    obj.autresContrats = parsedAutresContrats;
+  }
+  delete obj._autreContrat1_intitule;
+  delete obj._autreContrat1_reference;
+  delete obj._autreContrat1_numeroMarche;
+  delete obj._autreContrat1_debut;
+  delete obj._autreContrat1_expiration;
+  delete obj._autreContrat1_fichierUrl;
+  delete obj._autreContrat2_intitule;
+  delete obj._autreContrat2_reference;
+  delete obj._autreContrat2_numeroMarche;
+  delete obj._autreContrat2_debut;
+  delete obj._autreContrat2_expiration;
+  delete obj._autreContrat2_fichierUrl;
+
+  if (
+    obj.contrat === 'Non' &&
+    ((obj.nomContrat && obj.nomContrat !== 'Sans contrat de maintenance') ||
+      (obj.referenceContrat && obj.referenceContrat !== '-') ||
+      obj.valeurContrat ||
+      obj.debutContrat ||
+      obj.finContrat)
+  ) {
+    obj.contrat = 'Oui';
   }
 
   if (!obj.denomination && row[0] !== undefined && !isPlaceholderClientValue(String(row[0]).trim())) {
@@ -1284,12 +1399,31 @@ export function mapClientToRow(headers: string[], client: any, existingRow?: str
     return '';
   });
 
+  const acList = Array.isArray(client?.autresContrats) ? client.autresContrats.slice(0, 2) : [];
+  const ac1 = acList[0] || {};
+  const ac2 = acList[1] || {};
+  const expandedClient: Record<string, any> = {
+    ...client,
+    _autreContrat1_intitule: ac1.intitule ?? '',
+    _autreContrat1_reference: ac1.reference ?? '',
+    _autreContrat1_numeroMarche: ac1.numeroMarche ?? '',
+    _autreContrat1_debut: ac1.debut ?? '',
+    _autreContrat1_expiration: ac1.expiration ?? '',
+    _autreContrat1_fichierUrl: ac1.fichierUrl ?? '',
+    _autreContrat2_intitule: ac2.intitule ?? '',
+    _autreContrat2_reference: ac2.reference ?? '',
+    _autreContrat2_numeroMarche: ac2.numeroMarche ?? '',
+    _autreContrat2_debut: ac2.debut ?? '',
+    _autreContrat2_expiration: ac2.expiration ?? '',
+    _autreContrat2_fichierUrl: ac2.fichierUrl ?? '',
+  };
+
   for (const def of CLIENTS_CANONICAL_HEADERS) {
     for (let i = 0; i < normHeaders.length; i++) {
       if (!def.aliases.includes(normHeaders[i])) continue;
-      let val = client[def.field];
-      if (def.field === 'clientIdField' && !val && client.id && !String(client.id).startsWith('cli_') && !String(client.id).startsWith('sheet_cli_')) {
-        val = client.id;
+      let val = expandedClient[def.field];
+      if (def.field === 'clientIdField' && !val && expandedClient.id && !String(expandedClient.id).startsWith('cli_') && !String(expandedClient.id).startsWith('sheet_cli_')) {
+        val = expandedClient.id;
       }
       if (val !== undefined && val !== null) {
         outRow[i] = String(val);
@@ -7056,7 +7190,9 @@ export async function upsertRecordsToTenantSheet(
     if (warmCached && warmCached.headers.length > 0) {
       headers = warmCached.headers;
       hasRemoteHeaders = warmCached.hasRemoteHeaders === true;
-      if (!hasRemoteHeaders && accessToken) {
+      const clientMissingAutreContratHeaders =
+        tabType === 'clients' && !headers.some(h => normalizeHeaderKey(h).includes('autrecontrat1'));
+      if ((!hasRemoteHeaders || clientMissingAutreContratHeaders) && accessToken) {
         const lightCtx = await fetchLightweightSheetContextForColdUpsert(
           extracted.spreadsheetId,
           extracted.gid,
@@ -7065,9 +7201,11 @@ export async function upsertRecordsToTenantSheet(
           records,
           accessToken
         );
-        hasRemoteHeaders = lightCtx.hasRemoteHeaders;
+        hasRemoteHeaders = lightCtx.hasRemoteHeaders || hasRemoteHeaders;
         if (lightCtx.hasRemoteHeaders && lightCtx.headers.length > 0) {
           headers = lightCtx.headers;
+          warmCached.headers = headers;
+          warmCached.hasRemoteHeaders = true;
         }
         coldMatchedByRecordIdx = lightCtx.matchedByRecordIdx;
       }

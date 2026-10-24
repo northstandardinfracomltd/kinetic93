@@ -307,7 +307,7 @@ export default function ClientTab({
   const [autresContrats, setAutresContrats] = useState<ClientContract[]>([]);
 
   const handleAddAutresContrat = () => {
-    if (autresContrats.length >= 3) return;
+    if (autresContrats.length >= 2) return;
     const newContract: ClientContract = {
       id: 'contract_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
       intitule: '',
@@ -1058,6 +1058,9 @@ export default function ClientTab({
     return displayedClients.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [displayedClients, currentPage]);
 
+  const [selectedClientIds, setSelectedClientIds] = useState<string[]>([]);
+  const isAllClientsSelected = paginatedClients.length > 0 && paginatedClients.every(c => selectedClientIds.includes(c.id));
+
   const openAddModal = () => {
     setEditingClient(null);
     setDenomination('');
@@ -1134,7 +1137,7 @@ export default function ClientTab({
     setDebutContrat(client.debutContrat || '');
     setFinContrat(client.finContrat || '');
     setNumeroMarche(client.numeroMarche || '');
-    setAutresContrats(client.autresContrats ? JSON.parse(JSON.stringify(client.autresContrats)) : []);
+    setAutresContrats(client.autresContrats ? JSON.parse(JSON.stringify(client.autresContrats)).slice(0, 2) : []);
     setContractFile(null);
     setError('');
 
@@ -1457,9 +1460,9 @@ export default function ClientTab({
                -webkit-appearance: none !important;
                width: 18px !important;
                height: 18px !important;
-               border: 2px solid #DCE1EA !important;
+               border: 1px solid oklch(0.92 0.01 258.78) !important;
                border-radius: 50% !important;
-               background-color: #ffffff !important;
+               background-color: transparent !important;
                outline: none !important;
                cursor: pointer !important;
                display: inline-flex !important;
@@ -1488,9 +1491,9 @@ export default function ClientTab({
                -webkit-appearance: none !important;
                width: 18px !important;
                height: 18px !important;
-               border: 2px solid #DCE1EA !important;
+               border: 1px solid oklch(0.92 0.01 258.78) !important;
                border-radius: 4px !important;
-               background-color: #ffffff !important;
+               background-color: transparent !important;
                outline: none !important;
                cursor: pointer !important;
                display: inline-flex !important;
@@ -1630,7 +1633,7 @@ export default function ClientTab({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label htmlFor="input-client-payeur-id" className="block text-[11px] font-bold text-slate-500 uppercase">
                       {t("Payeur ID.")}
@@ -1657,17 +1660,12 @@ export default function ClientTab({
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label htmlFor="input-client-unique-id" className="block text-[11px] font-bold text-slate-500 uppercase">
-                      {t("Identifiant unique.")}
-                    </label>
-                    <input
-                      type="text"
-                      id="input-client-unique-id"
-                      value={editingClient ? editingClient.id : 'Nouveau (généré automatiquement)'}
-                      disabled
-                    />
-                  </div>
+                  <input
+                    type="hidden"
+                    id="input-client-unique-id"
+                    value={editingClient ? editingClient.id : 'Nouveau (généré automatiquement)'}
+                    readOnly
+                  />
                 </div>
 
                 <div className="space-y-1">
@@ -1676,10 +1674,21 @@ export default function ClientTab({
                   </label>
                   <textarea
                     id="input-client-commentaire"
+                    ref={(el) => {
+                      if (el) {
+                        el.style.height = 'auto';
+                        el.style.height = `${Math.max(80, el.scrollHeight)}px`;
+                      }
+                    }}
                     value={commentaire}
-                    onChange={(e) => setCommentaire(e.target.value)}
+                    onChange={(e) => {
+                      setCommentaire(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = `${Math.max(80, e.target.scrollHeight)}px`;
+                    }}
                     placeholder="Entrez un commentaire."
                     rows={3}
+                    style={{ overflow: 'hidden', resize: 'none' }}
                     className="font-sans"
                   />
                 </div>
@@ -2259,7 +2268,7 @@ export default function ClientTab({
                         style={{ fontSize: '16px' }}
                         id="btn-generate-contract-ia"
                       >
-                        Générer le texte avec l'IA Textelp.
+                        Générer un texte avec Defibeo Intelligence.
                       </span>
                     </div>
                     <textarea
@@ -2352,11 +2361,11 @@ export default function ClientTab({
                     </button>
                   </div>
 
-                  {/* Section 3 Autres Contrats (Jusqu'à 3 contrats supplémentaires) */}
+                  {/* Section 3 Autres Contrats (Jusqu'à 2 contrats supplémentaires) */}
                   <div className="space-y-4 mt-6" id="section-autres-contrats">
                     {autresContrats.length > 0 && (
                       <div className="space-y-4">
-                        {autresContrats.map((ctr, idx) => (
+                        {autresContrats.slice(0, 2).map((ctr, idx) => (
                           <div 
                             key={ctr.id || idx} 
                             className="p-4 space-y-3 relative"
@@ -2472,7 +2481,7 @@ export default function ClientTab({
                       </div>
                     )}
 
-                    {autresContrats.length < 3 && (
+                    {autresContrats.length < 2 && (
                       <button
                         type="button"
                         onClick={handleAddAutresContrat}
@@ -2533,9 +2542,7 @@ export default function ClientTab({
                 value=""
                 onChange={(e) => {
                   const val = e.target.value;
-                  if (val === 'refresh-data') {
-                    handleRefreshClick();
-                  } else if (val === 'spreadsheet-editor') {
+                  if (val === 'spreadsheet-editor') {
                     handleOpenSpreadsheetEditor();
                   }
                 }}
@@ -2543,9 +2550,6 @@ export default function ClientTab({
               >
                 <option value="" disabled>
                   —
-                </option>
-                <option value="refresh-data" disabled={effectiveRefreshing}>
-                  {t("Actualiser les données")}
                 </option>
                 <option value="spreadsheet-editor" disabled={!resolvedSpreadsheetUrl}>
                   {t("Ouvrir l’éditeur SpreadSheets")}
@@ -2670,6 +2674,34 @@ export default function ClientTab({
             <table className="w-full text-left font-sans border-collapse text-xs" id="clients-table" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
               <thead>
                 <tr className="bg-transparent" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
+                  <th className="px-4 py-3.5 w-12 text-center select-none" style={thStyle}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isAllClientsSelected) {
+                          setSelectedClientIds([]);
+                        } else {
+                          setSelectedClientIds(paginatedClients.map(c => c.id));
+                        }
+                      }}
+                      id="select-all-radio-checkbox"
+                      className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
+                        isAllClientsSelected
+                          ? 'border-[#2e54ff] bg-transparent'
+                          : 'bg-white hover:border-[#2e54ff]'
+                      }`}
+                      style={{
+                        borderWidth: '1px',
+                        borderColor: isAllClientsSelected ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                      }}
+                      role="checkbox"
+                      aria-checked={isAllClientsSelected}
+                    >
+                      {isAllClientsSelected && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
+                      )}
+                    </button>
+                  </th>
                   <th className="px-4 py-3.5 w-12 text-center whitespace-nowrap" style={thStyle}>Volume.</th>
                   <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Entreprise.</th>
                   <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Numéro fiscal.</th>
@@ -2678,19 +2710,64 @@ export default function ClientTab({
                 </tr>
               </thead>
               <tbody className="text-slate-700 text-xs">
-                {paginatedClients.map((client) => (
+                {paginatedClients.map((client) => {
+                  const isClientChecked = selectedClientIds.includes(client.id);
+                  return (
                   <tr
                     key={client.id}
                     id={`client-row-${client.id}`}
                     onClick={() => openEditModal(client)}
-                    className="group hover:bg-[#f5f7fa] transition-all cursor-pointer"
+                    className={`group hover:bg-[#f5f7fa] transition-all cursor-pointer ${
+                      isClientChecked ? 'bg-[#ecefff]/60' : ''
+                    }`}
                   >
+                    {/* Checkbox column */}
+                    <td className="px-4 py-5 text-center relative" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedClientIds((prev) =>
+                            prev.includes(client.id)
+                              ? prev.filter((id) => id !== client.id)
+                              : [...prev, client.id]
+                          );
+                        }}
+                        id={`radio-checkbox-row-${client.id}`}
+                        className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
+                          isClientChecked
+                            ? 'border-[#2e54ff] bg-transparent'
+                            : 'bg-white hover:border-[#2e54ff]'
+                        }`}
+                        style={{
+                          borderWidth: '1px',
+                          borderColor: isClientChecked ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                        }}
+                        role="checkbox"
+                        aria-checked={isClientChecked}
+                      >
+                        {isClientChecked && (
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
+                        )}
+                      </button>
+                    </td>
+
                     {/* Defib count pill */}
                     <td className="px-4 py-5 text-center whitespace-nowrap">
                       {(() => {
                         const count = getClientDefibVolume(client);
                         return (
-                          <span className="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1 text-[11px] font-black text-white bg-[#2e54ff] rounded-full font-sans">
+                          <span
+                            className="inline-flex items-center justify-center rounded-full font-sans"
+                            style={{
+                              background: '#3ddc84',
+                              color: '#156337',
+                              fontSize: '18px',
+                              padding: '11px 10px 9px 10px',
+                              width: '30px',
+                              height: '30px',
+                            }}
+                          >
                             {count}
                           </span>
                         );
@@ -2713,7 +2790,7 @@ export default function ClientTab({
                           display: 'inline-flex', 
                           alignItems: 'center', 
                           gap: '8px',
-                          border: '1px solid rgb(231, 231, 231)',
+                          border: '1px solid oklch(0.92 0.01 258.78)',
                           borderRadius: '1000px',
                           padding: '4px 12px',
                           backgroundColor: '#ffffff'
@@ -2788,7 +2865,8 @@ export default function ClientTab({
                       })()}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

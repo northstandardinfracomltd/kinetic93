@@ -2477,6 +2477,21 @@ export default function PublicPortal({
     }
   };
 
+  const hasAutoRefreshedAfterLoginRef = useRef<string | null>(null);
+  useEffect(() => {
+    const userKey = authenticatedUser?.id || authenticatedUser?.name || "";
+    if (!userKey) {
+      hasAutoRefreshedAfterLoginRef.current = null;
+      return;
+    }
+    if (hasAutoRefreshedAfterLoginRef.current !== userKey) {
+      hasAutoRefreshedAfterLoginRef.current = userKey;
+      if (["interventions", "rapports", "planning", "stocks"].includes(activeTab)) {
+        handleRefreshWebappData();
+      }
+    }
+  }, [authenticatedUser]);
+
   useEffect(() => {
     const handleConsultEvent = (e: any) => {
       if (e.detail?.tour && e.detail?.mission) {
@@ -5909,7 +5924,7 @@ export default function PublicPortal({
             isSlidingUp ? "pointer-events-none" : "pointer-events-auto"
           }`}
           style={{
-            background: currentTechTheme.color,
+            background: "rgb(46, 84, 255)",
             borderRadius: "0px",
             borderBottomLeftRadius: "0px",
             borderBottomRightRadius: "0px",
@@ -8024,8 +8039,8 @@ export default function PublicPortal({
               </div>
             )}
 
-            {/* Fixed top bar "Actualiser les données" on Interventions, Rapports, Messages, Planning, Temps, Stocks, Réglages */}
-            {["interventions", "rapports", "messages", "planning", "temps", "stocks", "localisation"].includes(activeTab) && (
+            {/* Fixed top bar "Actualiser les données" on Messages, Temps, Réglages */}
+            {["messages", "temps", "localisation"].includes(activeTab) && (
               <button
                 type="button"
                 disabled={isRefreshingWebappData}
@@ -8053,7 +8068,7 @@ export default function PublicPortal({
                 onClick={() => setActiveTab("temps")}
                 className="text-white text-center font-semibold select-none shadow-xs font-sans shrink-0 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
                 style={{
-                  background: "#3556ec",
+                  background: "#0f172a",
                   fontSize: "14px",
                   padding: "12px 0px",
                   cursor: "pointer",
@@ -8067,264 +8082,145 @@ export default function PublicPortal({
               </div>
             )}
 
-            {/* Top Bar Navigation and Tab Selector Wrapper with Theme Color */}
-            <div style={{ background: currentTechTheme.color, padding: "6px 0px", borderRadius: "0px 0px 13px 13px", overflow: "hidden" }}>
-              {/* TAB SELECTOR: Horizontal capsule switch toggle layout with dynamic fades */}
-              <nav
-                className="py-0 px-0 relative shrink-0 overflow-hidden"
-                id="nav-tabs"
-                style={{ background: "transparent" }}
-              >
+            {/* Top Header with SVG illustration, Tenant Commercial Name Pill, and 3-dots Tab Selector + Active Tab Pill */}
+            {(() => {
+              const commercialTenantName =
+                companyInfo?.nomLogiciel?.trim() ||
+                companyInfo?.name?.trim() ||
+                "Défibeo";
+
+              const tabOptions: Array<{ value: typeof activeTab; label: string }> = [
+                { value: "interventions", label: t("Interventions") },
+                { value: "rapports", label: t("Rapports") },
+                { value: "messages", label: t("Messages") },
+                { value: "planning", label: t("Planning") },
+                ...(!hidePointage && !companyInfo?.hiddenTabs?.includes("Temps (Webapp)")
+                  ? [{ value: "temps" as const, label: t("Temps") }]
+                  : []),
+                ...(!isStocksHidden
+                  ? [{ value: "stocks" as const, label: t("Stocks") }]
+                  : []),
+                ...(!isFraisHidden
+                  ? [{ value: "frais" as const, label: t("Frais") }]
+                  : []),
+                ...(!companyInfo?.hiddenTabs?.includes("Relevé Concurrentiel (Webapp)")
+                  ? [{ value: "veille" as const, label: t("Relevé Concurrentiel") }]
+                  : []),
+                { value: "localisation", label: t("Réglages") },
+              ];
+
+              const activeTabLabel =
+                tabOptions.find((opt) => opt.value === activeTab)?.label ||
+                (activeTab === "temps"
+                  ? t("Temps")
+                  : activeTab === "stocks"
+                  ? t("Stocks")
+                  : activeTab === "frais"
+                  ? t("Frais")
+                  : activeTab === "veille"
+                  ? t("Relevé Concurrentiel")
+                  : activeTab === "localisation"
+                  ? t("Réglages")
+                  : t("Interventions"));
+
+              const greenPillStyle: React.CSSProperties = {
+                backgroundColor: "#3ddc84",
+                color: "#136437",
+                fontSize: "18px",
+                fontWeight: 400,
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                padding: "10px 17px",
+                borderRadius: "1000px",
+                lineHeight: 1.2,
+                cursor: "default",
+              };
+
+              return (
                 <div
-                  ref={navRef}
-                  onScroll={handleNavScroll}
-                  onTouchStart={() => setIsHeaderNudging(false)}
-                  onMouseDown={() => setIsHeaderNudging(false)}
-                  className={`flex py-1 px-2.5 gap-3.5 shrink-0 overflow-x-auto no-scrollbar scroll-smooth min-w-full ${
-                    isHeaderNudging ? "animate-header-menu-nudge" : ""
-                  }`}
-                  style={{ background: "transparent" }}
+                  className="relative w-full overflow-hidden shrink-0 select-none"
+                  style={{ backgroundColor: "#e9edf1" }}
+                  id="nav-tabs"
                 >
-                  <button
-                    onClick={() => {
-                      setActiveTab("interventions");
-                      const contentArea = document.getElementById("tab-content-area");
-                      if (contentArea) {
-                        contentArea.scrollTop = 0;
-                      }
-                    }}
-                    style={
-                      activeTab === "interventions"
-                        ? {
-                            background: "rgb(53, 86, 236)",
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                            borderRadius: "12px",
-                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                          }
-                        : {
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                          }
-                    }
-                    className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <span>Interventions</span>
-                  </button>
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/svgentete.svg"
+                    alt=""
+                    className="w-[280px] max-w-none h-auto block select-none pointer-events-none"
+                    referrerPolicy="no-referrer"
+                  />
 
-                  <button
-                    onClick={() => setActiveTab("rapports")}
-                    style={
-                      activeTab === "rapports"
-                        ? {
-                            background: "rgb(53, 86, 236)",
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                            borderRadius: "12px",
-                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                          }
-                        : {
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                          }
-                    }
-                    className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <span>Rapports</span>
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("messages")}
-                    id="webapp-tab-messages"
-                    style={
-                      activeTab === "messages"
-                        ? {
-                            background: "rgb(53, 86, 236)",
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                            borderRadius: "12px",
-                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                          }
-                        : {
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                          }
-                    }
-                    className="px-5 py-2.5 rounded-[12px] flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <span>Messages</span>
-                    <span
-                      className="inline-flex items-center justify-center rounded-full shrink-0 font-bold"
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: '1px solid #ffffff38',
-                        color: 'rgb(255 255 255)',
-                        marginLeft: '-2px',
-                        fontSize: '14px',
-                        width: '25px',
-                        height: '25px',
-                        padding: '3.5px',
-                        lineHeight: 1,
-                      }}
+                  <div className="absolute bottom-2.5 right-3 flex flex-col items-end gap-2 max-w-[calc(100%-24px)]">
+                    {/* Top Pill: Commercial Tenant Name (non-clickable) */}
+                    <div
+                      className="flex items-center justify-center rounded-full truncate max-w-full"
+                      style={greenPillStyle}
+                      title={commercialTenantName}
                     >
-                      {tenantMessages?.length || 0}
-                    </span>
-                  </button>
+                      <span className="truncate">{commercialTenantName}</span>
+                    </div>
 
-                  <button
-                    onClick={() => setActiveTab("planning")}
-                    style={
-                      activeTab === "planning"
-                        ? {
-                            background: "rgb(53, 86, 236)",
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                            borderRadius: "12px",
-                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                          }
-                        : {
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                          }
-                    }
-                    className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <span>Planning</span>
-                  </button>
+                    {/* Bottom Row: 3-dots system dropdown + Active Tab Name Pill (non-clickable) */}
+                    <div className="flex items-center justify-end gap-2.5 max-w-full">
+                      <div
+                        className="relative inline-flex items-center justify-center p-1.5 cursor-pointer transition-opacity hover:opacity-80 shrink-0"
+                        title={t("Changer d’onglet")}
+                      >
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                          alt={t("Navigation")}
+                          style={{ width: "18px", height: "18px" }}
+                          className="w-[18px] h-[18px] object-contain shrink-0 pointer-events-none"
+                          referrerPolicy="no-referrer"
+                        />
+                        <select
+                          id="webapp-nav-tabs-dropdown"
+                          aria-label={t("Navigation")}
+                          value={activeTab}
+                          onChange={(e) => {
+                            const nextTab = e.target.value as typeof activeTab;
+                            setActiveTab(nextTab);
+                            if (["interventions", "rapports", "planning", "stocks"].includes(nextTab)) {
+                              handleRefreshWebappData();
+                            }
+                            const contentArea = document.getElementById("tab-content-area");
+                            if (contentArea) {
+                              contentArea.scrollTop = 0;
+                            }
+                          }}
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            width: "100%",
+                            height: "100%",
+                            opacity: 0,
+                            cursor: "pointer",
+                            border: "none",
+                            outline: "none",
+                            padding: 0,
+                            margin: 0,
+                            background: "transparent",
+                            zIndex: 20,
+                          }}
+                        >
+                          {tabOptions.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                  {!hidePointage && !companyInfo?.hiddenTabs?.includes("Temps (Webapp)") && (
-                    <button
-                      onClick={() => setActiveTab("temps")}
-                      style={
-                        activeTab === "temps"
-                          ? {
-                              background: "rgb(53, 86, 236)",
-                              color: "#ffffff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                              borderRadius: "12px",
-                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                            }
-                          : {
-                              color: "#ffffff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                            }
-                      }
-                      className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
-                    >
-                      <span>Temps</span>
-                    </button>
-                  )}
-
-                  {!isStocksHidden && (
-                    <button
-                      onClick={() => setActiveTab("stocks")}
-                      style={
-                        activeTab === "stocks"
-                          ? {
-                              background: "rgb(53, 86, 236)",
-                              color: "#ffffff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                              borderRadius: "12px",
-                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                            }
-                          : {
-                              color: "#ffffff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                            }
-                      }
-                      className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
-                    >
-                      <span>Stocks</span>
-                    </button>
-                  )}
-
-                  {!isFraisHidden && (
-                    <button
-                      onClick={() => setActiveTab("frais")}
-                      style={
-                        activeTab === "frais"
-                          ? {
-                              background: "rgb(53, 86, 236)",
-                              color: "#ffffff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                              borderRadius: "12px",
-                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                            }
-                          : {
-                              color: "#ffffff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                            }
-                      }
-                      className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
-                    >
-                      <span>Frais</span>
-                    </button>
-                  )}
-
-                  {!companyInfo?.hiddenTabs?.includes("Relevé Concurrentiel (Webapp)") && (
-                    <button
-                      onClick={() => setActiveTab("veille")}
-                      style={
-                        activeTab === "veille"
-                          ? {
-                              background: "rgb(53, 86, 236)",
-                              color: "#ffffff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                              borderRadius: "12px",
-                              boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                            }
-                          : {
-                              color: "#ffffff",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                            }
-                      }
-                      className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
-                    >
-                      <span>Relevé Concurrentiel</span>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => setActiveTab("localisation")}
-                    style={
-                      activeTab === "localisation"
-                        ? {
-                            background: "rgb(53, 86, 236)",
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                            borderRadius: "12px",
-                            boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                          }
-                        : {
-                            color: "#ffffff",
-                            fontSize: "18px",
-                            fontWeight: "bold",
-                          }
-                    }
-                    className="px-5 py-2.5 rounded-[12px] flex items-center justify-center transition-all cursor-pointer whitespace-nowrap shrink-0"
-                  >
-                    <span>Réglages</span>
-                  </button>
+                      <div
+                        className="flex items-center justify-center rounded-full truncate"
+                        style={greenPillStyle}
+                        title={activeTabLabel}
+                      >
+                        <span className="truncate">{activeTabLabel}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </nav>
-            </div>
+              );
+            })()}
 
             {/* Scrollable Contents Body */}
             <div
@@ -8362,9 +8258,11 @@ export default function PublicPortal({
                           type="text"
                           readOnly
                           value={authenticatedUser?.name || ""}
-                          className="w-full bg-white text-black transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center"
+                          className="w-full transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center"
                           style={{
-                            border: "1px solid rgb(201, 190, 205)",
+                            backgroundColor: "#f5f7fa",
+                            color: "rgb(80, 97, 122)",
+                            border: "none",
                             borderRadius: "14px",
                             padding: "14px 20px",
                             fontSize: "18px",
@@ -8386,9 +8284,11 @@ export default function PublicPortal({
                               playTechSound2();
                             }
                           }}
-                          className="w-full bg-white text-black cursor-pointer appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center"
+                          className="w-full cursor-pointer appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center"
                           style={{
-                            border: "1px solid rgb(201, 190, 205)",
+                            backgroundColor: "#f5f7fa",
+                            color: "rgb(80, 97, 122)",
+                            border: "none",
                             borderRadius: "14px",
                             padding: "14px 20px",
                             fontSize: "18px",
@@ -8414,9 +8314,10 @@ export default function PublicPortal({
                       {/* Toggle "Suspendre pour pause" - Hors de la div de la tournée */}
                       <div className="px-1" id="pause-toggle-block">
                         <div
-                          className="bg-white border px-4 py-4 space-y-3 flex flex-col justify-center"
+                          className="px-4 py-4 space-y-3 flex flex-col justify-center"
                           style={{
-                            borderColor: "rgb(201, 190, 205)",
+                            backgroundColor: "#f5f7fa",
+                            border: "none",
                             borderRadius: "14px",
                           }}
                         >
@@ -8437,7 +8338,10 @@ export default function PublicPortal({
                             </div>
                           )}
                           <div className="flex items-center justify-between">
-                            <span className="text-[18px] font-bold text-black font-sans">
+                            <span
+                              className="text-[18px] font-bold font-sans"
+                              style={{ color: "rgb(80, 97, 122)" }}
+                            >
                               {t("Suspendre pour pause.")}
                             </span>
                             <button
@@ -8479,8 +8383,8 @@ export default function PublicPortal({
                                 </div>
                               )}
                               <div
-                                className="font-bold text-black font-sans"
-                                style={{ fontSize: "16px", color: "#000000" }}
+                                className="font-bold font-sans"
+                                style={{ fontSize: "16px", color: "rgb(80, 97, 122)" }}
                                 id="pause-start-timestamp"
                               >
                                 {t("Début Pause :")} {formatPauseTimestamp(pauseStartTime || Date.now())}
@@ -8489,9 +8393,10 @@ export default function PublicPortal({
                                 <select
                                   value={pauseReason}
                                   onChange={(e) => updateTourPauseState(true, e.target.value)}
-                                  className="w-full bg-white text-black font-semibold transition-all duration-150 focus:outline-none cursor-pointer"
+                                  className="w-full bg-white font-semibold transition-all duration-150 focus:outline-none cursor-pointer"
                                   style={{
-                                    border: "1px solid rgb(201, 190, 205)",
+                                    color: "rgb(80, 97, 122)",
+                                    border: "none",
                                     borderRadius: "14px",
                                     padding: "10px 14px",
                                     fontSize: "16px",
@@ -8510,11 +8415,47 @@ export default function PublicPortal({
                         </div>
                       </div>
 
-                      {/* Div-Info */}
-                      <HelpBubble
-                        cacheKey="help_webapp_interventions_no_tour"
-                        text="Seules les tournées marquées « À faire » et attribuées au technicien peuvent être sélectionnées."
-                      />
+                      {/* Div-Info with Actualiser les données button */}
+                      <div className="px-1">
+                        <div
+                          className="p-4 flex flex-col gap-3 select-none font-sans"
+                          style={{
+                            backgroundColor: "#f5f7fa",
+                            border: "none",
+                            borderRadius: "14px",
+                          }}
+                        >
+                          <div
+                            className="font-medium leading-snug"
+                            style={{ fontSize: "16px", color: "rgb(80, 97, 122)" }}
+                          >
+                            {t("Seules les tournées marquées « À faire » et attribuées au technicien peuvent être sélectionnées.")}
+                          </div>
+                          <div>
+                            <button
+                              type="button"
+                              disabled={isRefreshingWebappData}
+                              onClick={handleRefreshWebappData}
+                              className={`font-sans font-bold transition-all focus:outline-none ${
+                                isRefreshingWebappData
+                                  ? "animate-webapp-refresh-wave cursor-not-allowed opacity-85"
+                                  : "hover:opacity-90 active:scale-[0.98] cursor-pointer"
+                              }`}
+                              style={{
+                                backgroundColor: "#0f172a",
+                                color: "#ffffff",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                padding: "10px 20px",
+                                border: "none",
+                                cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
+                              }}
+                            >
+                              {isRefreshingWebappData ? t("Actualisation...") : t("Actualiser les données")}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
 
                       {/* List of stacked tournées */}
                       {selectedTourId &&
@@ -8556,9 +8497,10 @@ export default function PublicPortal({
                                   return (
                                     <div
                                       key={p.num}
-                                      className="bg-white p-4 space-y-3.5"
+                                      className="p-4 space-y-3.5"
                                       style={{
-                                        border: "1px solid rgb(201, 190, 205)",
+                                        backgroundColor: "#f5f7fa",
+                                        border: "none",
                                         borderRadius: "14px",
                                         boxShadow: "none",
                                       }}
@@ -8600,7 +8542,10 @@ export default function PublicPortal({
                                               />
                                             )}
                                           </span>
-                                          <span className="font-semibold text-black">
+                                          <span
+                                            className="font-semibold"
+                                            style={{ color: "rgb(80, 97, 122)" }}
+                                          >
                                             {isCompleted
                                               ? "Effectué"
                                               : "À faire"}
@@ -8682,23 +8627,23 @@ export default function PublicPortal({
                                           })()}
                                         </div>
 
-                                        {/* Textes de la div en font color black */}
+                                        {/* Textes de la div */}
                                         <div
                                           className="space-y-1.5"
                                           style={{
                                             fontSize: "16px",
-                                            color: "#000000",
+                                            color: "rgb(80, 97, 122)",
                                             fontFamily:
                                               "var(--font-sans), sans-serif",
                                           }}
                                         >
                                           {/* Site */}
                                           {!isFormationMission && (
-                                            <p style={{ color: "#000000" }}>
+                                            <p style={{ color: "rgb(80, 97, 122)" }}>
                                               <span style={{ color: "#9f9f9f" }}>Site :</span>{" "}
                                               <span
                                                 className="font-semibold"
-                                                style={{ color: "#000000" }}
+                                                style={{ color: "rgb(80, 97, 122)" }}
                                               >
                                                 {(() => {
                                                   const siteVal = matchedDefib ? (matchedDefib.nomSite || "") : (matchedOther ? (matchedOther.nomPrenomSite || "") : "");
@@ -8709,11 +8654,11 @@ export default function PublicPortal({
                                           )}
 
                                           {/* Client */}
-                                          <p style={{ color: "#000000" }}>
+                                          <p style={{ color: "rgb(80, 97, 122)" }}>
                                             <span style={{ color: "#9f9f9f" }}>Client :</span>{" "}
                                             <span
                                               className="font-semibold"
-                                              style={{ color: "#000000" }}
+                                              style={{ color: "rgb(80, 97, 122)" }}
                                             >
                                               {(() => {
                                                 const clientObj = clients?.find(c => 
@@ -8730,11 +8675,11 @@ export default function PublicPortal({
 
                                           {/* Matériel */}
                                           {!isFormationMission && (
-                                            <p style={{ color: "#000000" }}>
+                                            <p style={{ color: "rgb(80, 97, 122)" }}>
                                               <span style={{ color: "#9f9f9f" }}>Matériel :</span>{" "}
                                               <span
                                                 className="font-semibold"
-                                                style={{ color: "#000000" }}
+                                                style={{ color: "rgb(80, 97, 122)" }}
                                               >
                                                 {p.equipmentType ||
                                                   "Défibrillateur"}
@@ -8744,11 +8689,11 @@ export default function PublicPortal({
 
                                           {/* Modèle */}
                                           {!isFormationMission && (
-                                            <p style={{ color: "#000000" }}>
+                                            <p style={{ color: "rgb(80, 97, 122)" }}>
                                               <span style={{ color: "#9f9f9f" }}>Modèle :</span>{" "}
                                               <span
                                                 className="font-semibold"
-                                                style={{ color: "#000000" }}
+                                                style={{ color: "rgb(80, 97, 122)" }}
                                               >
                                                 {p.model}
                                               </span>
@@ -8756,11 +8701,11 @@ export default function PublicPortal({
                                           )}
 
                                           {/* Localisation */}
-                                          <p style={{ color: "#000000" }}>
+                                          <p style={{ color: "rgb(80, 97, 122)" }}>
                                             <span style={{ color: "#9f9f9f" }}>Localisation :</span>{" "}
                                             <span
                                               className="font-semibold"
-                                              style={{ color: "#000000" }}
+                                              style={{ color: "rgb(80, 97, 122)" }}
                                             >
                                               {(() => {
                                                 if (p.address && p.address !== "Non renseigné" && p.address !== p.clientName) return p.address;
@@ -8788,7 +8733,7 @@ export default function PublicPortal({
                                                 className="relative overflow-hidden space-y-1.5 transition-all"
                                                 style={{ maxHeight: isUnrolled ? "none" : "68px" }}
                                               >
-                                                <p style={{ color: "#000000" }}>
+                                                <p style={{ color: "rgb(80, 97, 122)" }}>
                                                   <span style={{ color: "#9f9f9f" }}>Téléphone :</span>{" "}
                                             {equipmentPhone && equipmentPhone !== "Non renseigné" ? (
                                               <a
@@ -8807,32 +8752,32 @@ export default function PublicPortal({
                                             )}
                                           </p>
 
-                                          <p style={{ color: "#000000" }}>
+                                          <p style={{ color: "rgb(80, 97, 122)" }}>
                                             <span style={{ color: "#9f9f9f" }}>Référence intervention :</span>{" "}
                                             <span
                                               className="font-semibold"
-                                              style={{ color: "#000000" }}
+                                              style={{ color: "rgb(80, 97, 122)" }}
                                             >
                                               {p.interventionReference || ""}
                                             </span>
                                           </p>
 
-                                          <p style={{ color: "#000000" }}>
+                                          <p style={{ color: "rgb(80, 97, 122)" }}>
                                             <span style={{ color: "#9f9f9f" }}>Autre référence :</span>{" "}
                                             <span
                                               className="font-semibold"
-                                              style={{ color: "#000000" }}
+                                              style={{ color: "rgb(80, 97, 122)" }}
                                             >
                                               {p.autreReference || ""}
                                             </span>
                                           </p>
 
                                           {/* Bon de commande */}
-                                          <p style={{ color: "#000000" }}>
+                                          <p style={{ color: "rgb(80, 97, 122)" }}>
                                             <span style={{ color: "#9f9f9f" }}>Bon de commande :</span>{" "}
                                             <span
                                               className="font-semibold"
-                                              style={{ color: "#000000" }}
+                                              style={{ color: "rgb(80, 97, 122)" }}
                                             >
                                               {(() => {
                                                 const lbl = getBonCommandeLabel(p);
@@ -8843,7 +8788,7 @@ export default function PublicPortal({
 
                                           {/* Coordonnées GPS */}
                                           {!isFormationMission && (
-                                            <p style={{ color: "#000000" }}>
+                                            <p style={{ color: "rgb(80, 97, 122)" }}>
                                               <span style={{ color: "#9f9f9f" }}>Coordonnées GPS :</span>{" "}
                                               {(() => {
                                                 const lat = matchedDefib?.latitude || matchedOther?.latitude || "";
@@ -8867,11 +8812,11 @@ export default function PublicPortal({
                                             </p>
                                           )}
 
-                                          <p style={{ color: "#000000" }}>
+                                          <p style={{ color: "rgb(80, 97, 122)" }}>
                                             <span style={{ color: "#9f9f9f" }}>Date estimée :</span>{" "}
                                             <span
                                               className="font-semibold"
-                                              style={{ color: "#000000" }}
+                                              style={{ color: "rgb(80, 97, 122)" }}
                                             >
                                               {(() => {
                                                 if (!p.estimatedDate) return "";
@@ -8892,11 +8837,11 @@ export default function PublicPortal({
                                               })()}
                                             </span>
                                           </p>
-                                          <p style={{ color: "#000000" }}>
+                                          <p style={{ color: "rgb(80, 97, 122)" }}>
                                             <span style={{ color: "#9f9f9f" }}>Créneau estimé :</span>{" "}
                                             <span
                                               className="font-semibold"
-                                              style={{ color: "#000000" }}
+                                              style={{ color: "rgb(80, 97, 122)" }}
                                             >
                                               {p.estimatedSlot && p.estimatedSlot !== "Non renseigné" && p.estimatedSlot !== "--" ? p.estimatedSlot : ""}
                                             </span>
@@ -8904,11 +8849,11 @@ export default function PublicPortal({
                                           
                                           {/* Pièce(s) requise(s) */}
                                           {!isFormationMission && (
-                                            <p style={{ color: "#000000" }}>
+                                            <p style={{ color: "rgb(80, 97, 122)" }}>
                                               <span style={{ color: "#9f9f9f" }}>Pièce(s) requise(s) :</span>{" "}
                                               <span
                                                 className="font-semibold"
-                                                style={{ color: "#000000" }}
+                                                style={{ color: "rgb(80, 97, 122)" }}
                                               >
                                                 {(() => {
                                                   if (!p.requiredParts || p.requiredParts.length === 0) return "";
@@ -8930,7 +8875,7 @@ export default function PublicPortal({
                                             <p
                                               style={{
                                                 fontSize: "20px",
-                                                color: "rgb(31, 41, 55)",
+                                                color: "rgb(80, 97, 122)",
                                                 fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
                                                 marginTop: "2px",
                                               }}
@@ -8948,7 +8893,7 @@ export default function PublicPortal({
                                                     className="absolute inset-x-0 bottom-0 h-full flex items-end justify-center pb-1 pointer-events-auto"
                                                     style={{
                                                       background:
-                                                        "linear-gradient(to bottom, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.6) 20%, rgba(255, 255, 255, 0.95) 55%, #ffffff 80%, #ffffff 100%)",
+                                                        "linear-gradient(to bottom, rgba(245, 247, 250, 0) 0%, rgba(245, 247, 250, 0.6) 20%, rgba(245, 247, 250, 0.95) 55%, #f5f7fa 80%, #f5f7fa 100%)",
                                                     }}
                                                   >
                                                     <button
@@ -9389,9 +9334,11 @@ export default function PublicPortal({
                       id="select-report-technician-filter"
                       value={selectedReportTech}
                       onChange={(e) => setSelectedReportTech(e.target.value)}
-                      className="w-full bg-white text-black cursor-pointer appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center"
+                      className="w-full cursor-pointer appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center"
                       style={{
-                        border: "1px solid rgb(201, 190, 205)",
+                        backgroundColor: "#f5f7fa",
+                        color: "rgb(80, 97, 122)",
+                        border: "none",
                         borderRadius: "14px",
                         padding: "14px 20px",
                         fontSize: "18px",
@@ -9448,13 +9395,38 @@ export default function PublicPortal({
                     Nouveau rapport spontané
                   </button>
 
+                  <button
+                    type="button"
+                    disabled={isRefreshingWebappData}
+                    onClick={handleRefreshWebappData}
+                    style={{
+                      backgroundColor: "#0f172a",
+                      color: "#ffffff",
+                      fontSize: "18px",
+                      fontWeight: "bold",
+                      borderRadius: "12px",
+                      padding: "14px 20px",
+                      border: "none",
+                      cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
+                      width: "100%",
+                    }}
+                    className={`transition-all flex items-center justify-center gap-2 font-bold ${
+                      isRefreshingWebappData
+                        ? "animate-webapp-refresh-wave cursor-not-allowed opacity-85"
+                        : "hover:opacity-90 active:scale-[0.99]"
+                    }`}
+                  >
+                    {isRefreshingWebappData ? t("Actualisation...") : t("Actualiser les données")}
+                  </button>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-0">
                     {sortedAndLimitedReports.length === 0 && (
                       <div
-                        className="col-span-1 md:col-span-2 text-center py-10 px-4 bg-white rounded-[14px]"
+                        className="col-span-1 md:col-span-2 text-center py-10 px-4 rounded-[14px]"
                         style={{
-                          border: "1px solid rgb(201, 190, 205)",
-                          color: "#000000",
+                          backgroundColor: "#f5f7fa",
+                          border: "none",
+                          color: "rgb(80, 97, 122)",
                           fontSize: "16px",
                           fontWeight: "bold",
                         }}
@@ -9485,9 +9457,10 @@ export default function PublicPortal({
                       return (
                         <div
                           key={rep.id}
-                          className="p-5 bg-white rounded-[14px] space-y-4"
+                          className="p-5 rounded-[14px] space-y-4"
                           style={{
-                            border: "1px solid rgb(201, 190, 205)",
+                            backgroundColor: "#f5f7fa",
+                            border: "none",
                             boxShadow: "none",
                           }}
                           id={`report-card-${rep.id}`}
@@ -9577,7 +9550,7 @@ export default function PublicPortal({
                             className="space-y-1.5"
                             style={{
                               fontSize: "16px",
-                              color: "#000000",
+                              color: "rgb(80, 97, 122)",
                               fontFamily: "var(--font-sans), sans-serif",
                             }}
                           >
@@ -9614,74 +9587,74 @@ export default function PublicPortal({
 
                               return (
                                 <>
-                                  <p style={{ color: "#000000" }}>
+                                  <p style={{ color: "rgb(80, 97, 122)" }}>
                                     <span style={{ color: "#9f9f9f" }}>Document :</span>{" "}
                                     <span
                                       className="font-semibold"
-                                      style={{ color: "#000000" }}
+                                      style={{ color: "rgb(80, 97, 122)" }}
                                     >
                                       {rep.title || "RAPPORT D’INTERVENTION"}
                                     </span>
                                   </p>
-                                  <p style={{ color: "#000000" }}>
+                                  <p style={{ color: "rgb(80, 97, 122)" }}>
                                     <span style={{ color: "#9f9f9f" }}>Identifiant :</span>{" "}
                                     <span
                                       className="font-semibold"
-                                      style={{ color: "#000000" }}
+                                      style={{ color: "rgb(80, 97, 122)" }}
                                     >
                                       {isReal(identifiantVal) ? identifiantVal : ""}
                                     </span>
                                   </p>
-                                  <p style={{ color: "#000000" }}>
+                                  <p style={{ color: "rgb(80, 97, 122)" }}>
                                     <span style={{ color: "#9f9f9f" }}>Série :</span>{" "}
                                     <span
                                       className="font-semibold"
-                                      style={{ color: "#000000" }}
+                                      style={{ color: "rgb(80, 97, 122)" }}
                                     >
                                       {isReal(serieVal) ? serieVal : ""}
                                     </span>
                                   </p>
-                                  <p style={{ color: "#000000" }}>
+                                  <p style={{ color: "rgb(80, 97, 122)" }}>
                                     <span style={{ color: "#9f9f9f" }}>Site :</span>{" "}
                                     <span
                                       className="font-semibold"
-                                      style={{ color: "#000000" }}
+                                      style={{ color: "rgb(80, 97, 122)" }}
                                     >
                                       {isReal(siteVal) ? formatToNormalCase(siteVal) : ""}
                                     </span>
                                   </p>
-                                  <p style={{ color: "#000000" }}>
+                                  <p style={{ color: "rgb(80, 97, 122)" }}>
                                     <span style={{ color: "#9f9f9f" }}>Client :</span>{" "}
                                     <span
                                       className="font-semibold"
-                                      style={{ color: "#000000" }}
+                                      style={{ color: "rgb(80, 97, 122)" }}
                                     >
                                       {isReal(clientVal) ? formatToNormalCase(clientVal) : ""}
                                     </span>
                                   </p>
-                                  <p style={{ color: "#000000" }}>
+                                  <p style={{ color: "rgb(80, 97, 122)" }}>
                                     <span style={{ color: "#9f9f9f" }}>Matériel :</span>{" "}
                                     <span
                                       className="font-semibold"
-                                      style={{ color: "#000000" }}
+                                      style={{ color: "rgb(80, 97, 122)" }}
                                     >
                                       {isReal(materielVal) ? materielVal : ""}
                                     </span>
                                   </p>
-                                  <p style={{ color: "#000000" }}>
+                                  <p style={{ color: "rgb(80, 97, 122)" }}>
                                     <span style={{ color: "#9f9f9f" }}>Technicien :</span>{" "}
                                     <span
                                       className="font-semibold"
-                                      style={{ color: "#000000" }}
+                                      style={{ color: "rgb(80, 97, 122)" }}
                                     >
                                       {isReal(techVal) ? techVal : ""}
                                     </span>
                                   </p>
-                                  <p style={{ color: "#000000" }}>
+                                  <p style={{ color: "rgb(80, 97, 122)" }}>
                                     <span style={{ color: "#9f9f9f" }}>Localisation :</span>{" "}
                                     <span
                                       className="font-semibold"
-                                      style={{ color: "#000000" }}
+                                      style={{ color: "rgb(80, 97, 122)" }}
                                     >
                                       {isReal(locVal) ? locVal : ""}
                                     </span>
@@ -9869,35 +9842,28 @@ export default function PublicPortal({
                       line-height: normal !important;
                     }
                   `}</style>
-                  <HelpBubble
-                    cacheKey="help_webapp_stocks_improvement"
-                    text="Cette page est en cours d'amélioration. Un peu de patience : votre onglet sera bientôt encore plus intuitif et agréable à utiliser !"
-                  />
-
                   {/* Info: Emplacement (Disabled Input en premier, hors d'une div) */}
                   <input
                     type="text"
                     value={techLocationLink || "Aucun emplacement spécifié"}
                     disabled
                     style={{
-                      color: "#000000",
+                      color: "rgb(80, 97, 122)",
                       fontSize: "18px",
                       textAlign: "center",
-                      borderColor: "#D5D5D5",
-                      borderWidth: "1px",
-                      borderStyle: "solid",
-                      borderRadius: "13px",
-                      padding: "12px 14px",
-                      backgroundColor: "#ffffff",
+                      border: "none",
+                      borderRadius: "14px",
+                      padding: "14px 20px",
+                      backgroundColor: "#f5f7fa",
                       width: "100%",
                       boxSizing: "border-box",
                       opacity: 1,
-                      WebkitTextFillColor: "#000000",
+                      WebkitTextFillColor: "rgb(80, 97, 122)",
                     }}
-                    className="font-sans font-semibold mb-2"
+                    className="font-sans font-bold mb-2"
                   />
 
-                  {/* Piece / Material Select (hors d'une div, sans titre, style text noir, 18px, center, border D5D5D5, bg white) */}
+                  {/* Piece / Material Select */}
                   <select
                     value={selectedTechDistributedStockId}
                     onChange={(e) => {
@@ -9906,16 +9872,14 @@ export default function PublicPortal({
                       setShowNewDistribStockForm(false);
                     }}
                     style={{
-                      color: "#000000",
+                      color: "rgb(80, 97, 122)",
                       fontSize: "18px",
                       textAlign: "center",
                       textAlignLast: "center",
-                      borderColor: "#D5D5D5",
-                      borderWidth: "1px",
-                      borderStyle: "solid",
-                      borderRadius: "13px",
-                      padding: "12px 14px",
-                      backgroundColor: "#ffffff",
+                      border: "none",
+                      borderRadius: "14px",
+                      padding: "14px 20px",
+                      backgroundColor: "#f5f7fa",
                       width: "100%",
                       boxSizing: "border-box",
                       appearance: "none",
@@ -9923,7 +9887,7 @@ export default function PublicPortal({
                       MozAppearance: "none",
                       outline: "none",
                     }}
-                    className="font-sans font-semibold mb-2 cursor-pointer"
+                    className="font-sans font-bold mb-2 cursor-pointer"
                   >
                     <option value="">Sélection d’un stock distribué.</option>
                     {techActiveStocks.map((item) => {
@@ -9993,18 +9957,44 @@ export default function PublicPortal({
                         cursor: "pointer",
                         width: "100%",
                       }}
-                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 font-bold mb-4"
+                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 font-bold mb-2"
                     >
                       Nouveau stock distribué
                     </button>
                   )}
 
+                  {/* Button: Actualiser les données */}
+                  <button
+                    type="button"
+                    disabled={isRefreshingWebappData}
+                    onClick={handleRefreshWebappData}
+                    style={{
+                      backgroundColor: "#0f172a",
+                      color: "#ffffff",
+                      fontSize: "18px",
+                      fontWeight: "bold",
+                      borderRadius: "12px",
+                      padding: "14px 20px",
+                      border: "none",
+                      cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
+                      width: "100%",
+                    }}
+                    className={`transition-all flex items-center justify-center gap-2 font-bold mb-4 ${
+                      isRefreshingWebappData
+                        ? "animate-webapp-refresh-wave cursor-not-allowed opacity-85"
+                        : "hover:opacity-90 active:scale-[0.99]"
+                    }`}
+                  >
+                    {isRefreshingWebappData ? t("Actualisation...") : t("Actualiser les données")}
+                  </button>
+
                   {/* Form for Nouveau stock distribué */}
                   {showNewDistribStockForm && !selectedTechStock && (
                     <div
-                      className="bg-white p-5 space-y-4 my-4 animate-fadeIn"
+                      className="p-5 space-y-4 my-4 animate-fadeIn"
                       style={{
-                        border: "1px solid rgb(218, 218, 218)",
+                        backgroundColor: "#f5f7fa",
+                        border: "none",
                         borderRadius: "18px",
                         width: "100%",
                         boxSizing: "border-box",
@@ -10024,7 +10014,7 @@ export default function PublicPortal({
 
                       {/* 1. Équipement de la centrale des stocks */}
                       <div className="flex flex-col gap-1">
-                        <label className="font-bold font-sans" style={{ color: "#000000", fontSize: "16px" }}>
+                        <label className="font-bold font-sans" style={{ color: "rgb(80, 97, 122)", fontSize: "16px" }}>
                           Équipement de la centrale des stocks *
                         </label>
                         <select
@@ -10079,7 +10069,7 @@ export default function PublicPortal({
 
                       {/* 2. Emplacement (auto-selected & disabled) */}
                       <div className="flex flex-col gap-1">
-                        <label className="font-bold font-sans" style={{ color: "#000000", fontSize: "16px" }}>
+                        <label className="font-bold font-sans" style={{ color: "rgb(80, 97, 122)", fontSize: "16px" }}>
                           Emplacement *
                         </label>
                         <input
@@ -10087,7 +10077,7 @@ export default function PublicPortal({
                           value={techLocationLink || "Aucun emplacement spécifié"}
                           disabled
                           style={{
-                            color: "#000000",
+                            color: "rgb(80, 97, 122)",
                             fontSize: "18px",
                             borderColor: "#D5D5D5",
                             borderWidth: "1px",
@@ -10098,7 +10088,7 @@ export default function PublicPortal({
                             width: "100%",
                             boxSizing: "border-box",
                             opacity: 1,
-                            WebkitTextFillColor: "#000000",
+                            WebkitTextFillColor: "rgb(80, 97, 122)",
                             textAlign: "center",
                           }}
                           className="font-sans cursor-not-allowed"
@@ -10107,7 +10097,7 @@ export default function PublicPortal({
 
                       {/* 3. Volume total disponible */}
                       <div className="flex flex-col gap-1">
-                        <label className="font-bold font-sans" style={{ color: "#000000", fontSize: "16px" }}>
+                        <label className="font-bold font-sans" style={{ color: "rgb(80, 97, 122)", fontSize: "16px" }}>
                           Volume total disponible *
                         </label>
                         <input
@@ -10116,7 +10106,7 @@ export default function PublicPortal({
                           value={newDistribVolumeDisponible}
                           onChange={(e) => setNewDistribVolumeDisponible(Math.max(0, Number(e.target.value)))}
                           style={{
-                            color: "#000000",
+                            color: "rgb(80, 97, 122)",
                             fontSize: "18px",
                             borderColor: "#D5D5D5",
                             borderWidth: "1px",
@@ -10136,10 +10126,10 @@ export default function PublicPortal({
 
                       {/* 4. Activer la traçabilité des pièces */}
                       <div
-                        className="flex items-center justify-between p-3 border rounded-xl bg-slate-50"
-                        style={{ borderColor: "#D5D5D5", borderRadius: "13px" }}
+                        className="flex items-center justify-between p-3 rounded-xl bg-white"
+                        style={{ border: "none", borderRadius: "13px" }}
                       >
-                        <span className="font-bold text-black font-sans text-[16px]">
+                        <span className="font-bold font-sans text-[16px]" style={{ color: "rgb(80, 97, 122)" }}>
                           Activer la traçabilité des pièces
                         </span>
                         <button
@@ -11133,13 +11123,17 @@ export default function PublicPortal({
                       {/* Toggle: Activer la traçabilité des pièces */}
                       {matchedStockRecord && (
                         <div
-                          className="flex items-center justify-between p-4 bg-white border mt-4"
+                          className="flex items-center justify-between p-4 mt-4"
                           style={{
-                            borderColor: "rgb(201, 190, 205)",
+                            backgroundColor: "#f5f7fa",
+                            border: "none",
                             borderRadius: "14px",
                           }}
                         >
-                          <span className="font-bold text-black font-sans text-[16px]">
+                          <span
+                            className="font-bold font-sans text-[16px]"
+                            style={{ color: "rgb(80, 97, 122)" }}
+                          >
                             Activer la traçabilité des pièces
                           </span>
                           <button
@@ -13982,7 +13976,6 @@ export default function PublicPortal({
                         { key: "localisation", label: "Localisation" },
                         { key: "adresse", label: "Adresse" },
                         { key: "signature", label: "Signature" },
-                        { key: "apparence", label: "Apparence" },
                         { key: "installer", label: "Installer l’app" },
                         { key: "google-calendar", label: "Google Calendar" },
                       ].map((sec) => {
@@ -14650,194 +14643,6 @@ export default function PublicPortal({
                         className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
                       >
                         <span>Enregistrer</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {/* SECTION 5: APPARENCE */}
-                  {activeSettingsSection === "apparence" && (
-                    <div className="space-y-5 pt-2 text-left animate-fadeIn">
-                      {/* Section: Choix du thème pour la session technicien */}
-                      <div
-                        className="space-y-3 text-left"
-                        id="webapp-section-software-theme"
-                      >
-                        <h3
-                          className="font-bold font-sans"
-                          style={{ fontSize: "18px", color: "#000000" }}
-                        >
-                          {t("Apparence du logiciel pour votre session.")}
-                        </h3>
-                        <p
-                          style={{
-                            fontSize: "16px",
-                            color: "#000000",
-                            lineHeight: "1.5",
-                          }}
-                          className="font-sans font-normal"
-                        >
-                          {t(
-                            "Thème du logiciel (conforme accessibilité ISO/IEC 40500)."
-                          )}
-                        </p>
-
-                        <div className="flex flex-col gap-2.5 pt-1">
-                          {APP_THEMES.map((theme) => {
-                            const isSelected =
-                              currentTechTheme.id === theme.id;
-                            return (
-                              <div
-                                key={theme.id}
-                                onClick={() => handleThemeSelect(theme.id)}
-                                style={{
-                                  border: "1px solid #c9bfcd",
-                                  borderRadius: "13px",
-                                }}
-                                className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
-                                id={`webapp-theme-card-${theme.id}`}
-                              >
-                                <span
-                                  className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                                  style={{
-                                    border: isSelected
-                                      ? "2.5px solid #fe4eba"
-                                      : "2.5px solid #cbd5e1",
-                                    width: "20px",
-                                    height: "20px",
-                                    minWidth: "20px",
-                                    minHeight: "20px",
-                                    backgroundColor: "#ffffff",
-                                  }}
-                                >
-                                  {isSelected && (
-                                    <span
-                                      className="rounded-full bg-[#fe4eba]"
-                                      style={{
-                                        width: "9px",
-                                        height: "9px",
-                                      }}
-                                    />
-                                  )}
-                                </span>
-                                <span
-                                  className="font-medium text-black cursor-pointer select-none font-sans"
-                                  style={{
-                                    fontSize: "18px",
-                                    color: "#000000",
-                                  }}
-                                >
-                                  {t(theme.name)}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Section: Choix du favicon pour la session technicien */}
-                      <div
-                        className="pt-2 space-y-3 text-left"
-                        id="webapp-section-software-favicon"
-                      >
-                        <h3
-                          className="font-bold font-sans"
-                          style={{ fontSize: "18px", color: "#000000" }}
-                        >
-                          {t("Choix du favicon du logiciel.")}
-                        </h3>
-                        <p
-                          style={{
-                            fontSize: "16px",
-                            color: "#000000",
-                            lineHeight: "1.5",
-                          }}
-                          className="font-sans font-normal"
-                        >
-                          {t(
-                            "Il s’agit de l’icône montré dans l’onglet de votre navigateur."
-                          )}
-                        </p>
-
-                        <div className="flex flex-col gap-2.5 pt-1">
-                          {APP_FAVICONS.map((fav) => {
-                            const isSelected =
-                              currentTechFavicon.id === fav.id;
-                            return (
-                              <div
-                                key={fav.id}
-                                onClick={() => handleFaviconSelect(fav.id)}
-                                style={{
-                                  border: "1px solid #c9bfcd",
-                                  borderRadius: "13px",
-                                }}
-                                className="flex items-center gap-3 p-3.5 cursor-pointer select-none bg-white"
-                                id={`webapp-favicon-card-${fav.id}`}
-                              >
-                                <span
-                                  className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
-                                  style={{
-                                    border: isSelected
-                                      ? "2.5px solid #fe4eba"
-                                      : "2.5px solid #cbd5e1",
-                                    width: "20px",
-                                    height: "20px",
-                                    minWidth: "20px",
-                                    minHeight: "20px",
-                                    backgroundColor: "#ffffff",
-                                  }}
-                                >
-                                  {isSelected && (
-                                    <span
-                                      className="rounded-full bg-[#fe4eba]"
-                                      style={{
-                                        width: "9px",
-                                        height: "9px",
-                                      }}
-                                    />
-                                  )}
-                                </span>
-                                <img
-                                  src={fav.url}
-                                  alt={fav.name}
-                                  className="w-5 h-5 object-contain shrink-0"
-                                  referrerPolicy="no-referrer"
-                                />
-                                <span
-                                  className="font-medium text-black cursor-pointer select-none font-sans"
-                                  style={{
-                                    fontSize: "18px",
-                                    color: "#000000",
-                                  }}
-                                >
-                                  {t(fav.name)}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveSettingsSection(null);
-                        }}
-                        style={{
-                          backgroundColor: "rgb(53, 86, 236)",
-                          color: "#fff",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderRadius: "12px",
-                          padding: "14px 20px",
-                          border: "none",
-                          boxShadow:
-                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                          cursor: "pointer",
-                          width: "100%",
-                        }}
-                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
-                      >
-                        <span>Appliquer</span>
                       </button>
                     </div>
                   )}

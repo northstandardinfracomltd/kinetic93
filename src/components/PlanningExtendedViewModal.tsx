@@ -718,7 +718,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <div
             className="px-4 py-0 text-neutral-950 min-w-[200px] text-center select-none"
             style={{
-              fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif",
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
               fontSize: '24px',
               lineHeight: '1.2'
             }}

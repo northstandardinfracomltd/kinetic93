@@ -807,9 +807,11 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             userManuallySelectedRef.current = true;
             setSelectedTech(e.target.value);
           }}
-          className="w-full bg-white text-black appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center cursor-pointer"
+          className="w-full appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center cursor-pointer"
           style={{
-            border: "1px solid rgb(201, 190, 205)",
+            backgroundColor: "#f5f7fa",
+            color: "rgb(80, 97, 122)",
+            border: "none",
             borderRadius: "14px",
             padding: "14px 12px",
             fontSize: "18px",
@@ -836,9 +838,11 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
         <select
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(Number(e.target.value))}
-          className="w-full bg-white text-black appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center cursor-pointer"
+          className="w-full appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center cursor-pointer"
           style={{
-            border: "1px solid rgb(201, 190, 205)",
+            backgroundColor: "#f5f7fa",
+            color: "rgb(80, 97, 122)",
+            border: "none",
             borderRadius: "14px",
             padding: "14px 12px",
             fontSize: "18px",
@@ -881,12 +885,36 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             borderRadius: "14px",
             padding: "14px 12px",
             fontSize: "18px",
-            border: isTechSelected ? "none" : "1px solid rgb(209, 213, 219)",
+            border: "none",
             boxShadow: "none",
             cursor: isTechSelected ? "pointer" : "not-allowed",
           }}
         >
           {isSpontaneousFormOpen ? "Enregistrer" : "Ajouter événement spontané"}
+        </button>
+
+        {/* Bouton Actualiser les données */}
+        <button
+          type="button"
+          disabled={isRefreshing}
+          onClick={handleRefreshCalendar}
+          className={`w-full font-bold transition-all duration-150 focus:outline-none text-center flex items-center justify-center select-none text-white ${
+            isRefreshing
+              ? "animate-webapp-refresh-wave cursor-not-allowed opacity-85"
+              : "cursor-pointer hover:opacity-95 active:scale-[0.99]"
+          }`}
+          style={{
+            backgroundColor: "#0f172a",
+            color: "#ffffff",
+            borderRadius: "14px",
+            padding: "14px 12px",
+            fontSize: "18px",
+            border: "none",
+            boxShadow: "none",
+            cursor: isRefreshing ? "not-allowed" : "pointer",
+          }}
+        >
+          {isRefreshing ? (t ? t("Actualisation...") : "Actualisation...") : (t ? t("Actualiser les données") : "Actualiser les données")}
         </button>
 
         {/* Mini Form Evénement spontané */}

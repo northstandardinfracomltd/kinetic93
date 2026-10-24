@@ -1045,16 +1045,17 @@ export default function App() {
   useEffect(() => {
     setSelectedFsmMissionIds([]);
     setIsFsmBulkTourDropdownOpen(false);
+    setFsmClickedPill(null);
   }, [fsmDateFilter, fsmLastSelectedTourId, activeTab]);
 
-  // FSM Stats hidden state (saved in localStorage)
-  const [isFsmStatsHidden, setIsFsmStatsHidden] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('defib_hide_fsm_stats') === 'true';
-    } catch {
-      return false;
+  // FSM Stats hidden state (always hidden initially when opening the tab)
+  const [isFsmStatsHidden, setIsFsmStatsHidden] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (activeTab === 'fsm') {
+      setIsFsmStatsHidden(true);
     }
-  });
+  }, [activeTab]);
 
   // FSM System Info Message
   const [fsmSystemInfoMessage, setFsmSystemInfoMessage] = useState<string | null>(null);
@@ -4423,6 +4424,9 @@ export default function App() {
     requestAnimationFrame(() => {
       setFsmClickedPill({ id, key: Date.now() });
     });
+    setTimeout(() => {
+      setFsmClickedPill(prev => (prev?.id === id ? null : prev));
+    }, 450);
   };
 
   // Helper pour extraire le mois YYYY-MM d'un rapport
@@ -11531,6 +11535,8 @@ export default function App() {
                 onClick: () => {
                   setIsCanalMessagesOpen(false);
                   setIsSidebarMoreOpen(false);
+                  setFsmClickedPill(null);
+                  setIsFsmStatsHidden(true);
                   setActiveTab('fsm');
                 },
               },
@@ -12348,7 +12354,7 @@ export default function App() {
               <div className="space-y-6 animate-fadeIn" id="fsm-tab-container">
                 <style>{`
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-fsm-input),
-                  #fsm-tab-container select,
+                  #fsm-tab-container select:not(#select-fsm-tour-manage),
                   #fsm-tab-container textarea {
                     padding: 12px !important;
                     border: 1px solid #dedede !important;
@@ -12364,8 +12370,8 @@ export default function App() {
                   }
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-fsm-input),
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-fsm-input),
-                  #fsm-tab-container select:hover:not(:disabled):not(#fsm-more-options-dropdown),
-                  #fsm-tab-container select:focus:not(:disabled):not(#fsm-more-options-dropdown),
+                  #fsm-tab-container select:hover:not(:disabled):not(#fsm-more-options-dropdown):not(#select-fsm-tour-manage),
+                  #fsm-tab-container select:focus:not(:disabled):not(#fsm-more-options-dropdown):not(#select-fsm-tour-manage),
                   #fsm-tab-container textarea:hover:not(:disabled),
                   #fsm-tab-container textarea:focus:not(:disabled),
                   #fsm-tab-container #search-fsm-input:hover,
@@ -12411,25 +12417,19 @@ export default function App() {
                     background-image: none !important;
                   }
                   #fsm-tab-container select#select-fsm-tour-manage {
-                    border-radius: 9999px !important;
-                    -webkit-border-radius: 9999px !important;
-                    -moz-border-radius: 9999px !important;
-                    padding: 0 20px !important;
-                    font-size: 15px !important;
-                    font-weight: 500 !important;
-                    height: 44px !important;
-                    line-height: 44px !important;
-                    border: 1px solid rgb(218, 218, 218) !important;
-                    background-color: #ffffff !important;
-                    color: #000000 !important;
+                    border-radius: 1000px !important;
+                    -webkit-border-radius: 1000px !important;
+                    -moz-border-radius: 1000px !important;
+                    padding: 8px 16px !important;
+                    font-size: 18px !important;
+                    font-weight: 100 !important;
+                    height: auto !important;
+                    line-height: normal !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    font-family: "DefibeoMain", "Civilprom", sans-serif !important;
                     box-sizing: border-box !important;
-                  }
-                  #fsm-tab-container button#btn-fsm-to-sort-adv:hover:not(:disabled),
-                  #fsm-tab-container select#select-fsm-tour-manage:hover:not(:disabled),
-                  #fsm-tab-container select#select-fsm-tour-manage:focus:not(:disabled) {
                     outline: none !important;
-                    border-color: #2e54ff !important;
-                    box-shadow: 0 0 0 2.5px rgba(250, 83, 213, 0.35) !important;
                   }
                   #fsm-stats-wrapper {
                     width: 100% !important;
@@ -12544,6 +12544,8 @@ export default function App() {
                                   setIsFsmFilterSidePaneOpen(true);
                                 } else if (val === 'open-groups') {
                                   setIsFsmTeamPaneOpen(true);
+                                } else if (val === 'avisage-form-template') {
+                                  openTenantSpreadsheetUrl('https://consoledefibeo.deroesch.com/validation-passage?ref=demo&tenant=D');
                                 }
                               }}
                               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
@@ -12566,6 +12568,9 @@ export default function App() {
                               <option value="open-groups">
                                 {translate("Gérer les groupes et zones")}
                               </option>
+                              <option value="avisage-form-template">
+                                {translate("Consulter le modèle du formulaire d’avisage")}
+                              </option>
                             </select>
                           </div>
                         );
@@ -12573,10 +12578,10 @@ export default function App() {
 
                       {/* Bouton Actualiser les données */}
                       <button
+                        key="btn-refresh-data-fsm"
                         type="button"
                         id="btn-refresh-data-fsm"
                         onClick={() => {
-                          triggerFsmPillWave('refresh-fsm');
                           handleManualRefreshFsm();
                         }}
                         disabled={isRefreshingFsm}
@@ -12591,9 +12596,8 @@ export default function App() {
                           color: 'rgb(5 112 114)',
                           border: 'none',
                           boxShadow: 'none',
-                          transition: 'all 0.15s ease'
                         }}
-                        className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${fsmClickedPill?.id === 'refresh-fsm' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                        className="relative overflow-hidden hover:opacity-80 select-none cursor-pointer"
                         title={translate("Actualiser les données")}
                       >
                         {isRefreshingFsm ? translate("Actualisation...") : translate("Actualiser les données")}
@@ -12601,10 +12605,10 @@ export default function App() {
 
                       {/* Bouton Plannings (style Indicatif Postal) */}
                       <button
+                        key="btn-fsm-plannings"
                         type="button"
                         id="btn-fsm-plannings"
                         onClick={() => {
-                          triggerFsmPillWave('plannings-fsm');
                           setFsmPlanningSidePaneOpen(true);
                         }}
                         style={{
@@ -12618,9 +12622,8 @@ export default function App() {
                           color: '#591690',
                           border: 'none',
                           boxShadow: 'none',
-                          transition: 'all 0.15s ease'
                         }}
-                        className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${fsmClickedPill?.id === 'plannings-fsm' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                        className="relative overflow-hidden hover:opacity-80 select-none cursor-pointer"
                         title={translate("Plannings")}
                       >
                         {translate("Plannings")}
@@ -12698,8 +12701,15 @@ export default function App() {
                     >
                       <div className="flex items-center gap-2">
                         <span 
-                          className="w-6 h-6 text-white rounded-full flex items-center justify-center text-xs font-bold font-sans shrink-0"
-                          style={{ backgroundColor: '#2e54ff' }}
+                          className="rounded-full flex items-center justify-center font-bold font-sans shrink-0"
+                          style={{
+                            background: '#3ddc84',
+                            color: '#156337',
+                            fontSize: '18px',
+                            padding: '11px 10px 9px 10px',
+                            width: '30px',
+                            height: '30px',
+                          }}
                         >
                           {selectedFsmMissionIds.length}
                         </span>
@@ -12723,7 +12733,7 @@ export default function App() {
                             border: '1px solid #000000',
                             borderRadius: '13px',
                             padding: '9px 18px',
-                            fontSize: '16px',
+                            fontSize: '18px',
                             fontWeight: '600',
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                             cursor: 'pointer',
@@ -12751,7 +12761,7 @@ export default function App() {
                               border: '1px solid #000000',
                               borderRadius: '13px',
                               padding: '9px 18px',
-                              fontSize: '16px',
+                              fontSize: '18px',
                               fontWeight: '600',
                               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                               cursor: 'pointer',
@@ -12846,7 +12856,7 @@ export default function App() {
                             border: '1px solid #dc2626',
                             borderRadius: '13px',
                             padding: '9px 18px',
-                            fontSize: '16px',
+                            fontSize: '18px',
                             fontWeight: '600',
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                             cursor: 'pointer',
@@ -13818,24 +13828,23 @@ export default function App() {
                             }}
                             style={{
                               borderRadius: '1000px',
-                              padding: '0 20px',
-                              height: '44px',
+                              padding: '8px 16px',
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               boxSizing: 'border-box',
-                              fontSize: '15px',
-                              fontWeight: 500,
+                              fontSize: '18px',
+                              fontWeight: 100,
                               cursor: 'pointer',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              backgroundColor: activeDateFilter === 'A trier' ? '#2e54ff' : '#ffffff',
-                              color: activeDateFilter === 'A trier' ? '#ffffff' : '#000000',
-                              border: activeDateFilter === 'A trier' ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
-                              transition: 'all 0.15s ease',
+                              backgroundColor: activeDateFilter === 'A trier' ? 'rgb(46, 84, 255)' : 'rgb(232, 236, 255)',
+                              color: activeDateFilter === 'A trier' ? '#fff' : 'rgb(46, 84, 255)',
+                              border: 'none',
+                              boxShadow: 'none',
                               whiteSpace: 'nowrap',
                               flexShrink: 0
                             }}
-                            className="transition-all flex-shrink-0"
+                            className="hover:opacity-85 transition-opacity flex-shrink-0"
                           >
                             <span>{translate("À trier / Ordres ADV")}</span>
                             <span
@@ -13857,7 +13866,9 @@ export default function App() {
                         );
                       })()}
 
-                      {scheduledTours.length > 0 && (
+                      {scheduledTours.length > 0 && (() => {
+                        const isTourSelectActive = activeDateFilter !== 'A trier' && activeDateFilter !== 'none' && scheduledTours.some((st: any) => st.id === activeDateFilter);
+                        return (
                         <div className="flex-1 min-w-0 flex flex-col justify-end">
                           <div className="flex items-center justify-between mb-1">
                             <label 
@@ -13896,23 +13907,22 @@ export default function App() {
                                 appearance: 'none',
                                 WebkitAppearance: 'none',
                                 MozAppearance: 'none',
-                                border: '1px solid rgb(218, 218, 218)',
-                                borderRadius: '9999px',
-                                WebkitBorderRadius: '9999px',
-                                MozBorderRadius: '9999px',
-                                padding: '0 20px',
-                                fontSize: '15px',
-                                fontWeight: 500,
+                                border: 'none',
+                                borderRadius: '1000px',
+                                WebkitBorderRadius: '1000px',
+                                MozBorderRadius: '1000px',
+                                padding: '8px 16px',
+                                fontSize: '18px',
+                                fontWeight: 100,
                                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                backgroundColor: '#ffffff',
-                                color: '#000000',
+                                backgroundColor: isTourSelectActive ? 'rgb(46, 84, 255)' : 'rgb(232, 236, 255)',
+                                color: isTourSelectActive ? '#fff' : 'rgb(46, 84, 255)',
                                 cursor: 'pointer',
                                 outline: 'none',
-                                height: '44px',
-                                lineHeight: '44px',
+                                boxShadow: 'none',
                                 boxSizing: 'border-box',
                               }}
-                              className="w-full truncate focus:outline-none"
+                              className="w-full truncate focus:outline-none hover:opacity-85 transition-opacity"
                             >
                               <option value="none">
                                 {translate("Aucune tournée sélectionnée")}
@@ -13962,7 +13972,8 @@ export default function App() {
                           </select>
                         </div>
                       </div>
-                    )}
+                      );
+                    })()}
                     </div>
                   );
                 })()}
@@ -13981,9 +13992,9 @@ export default function App() {
                     {filteredTours.map((t) => {
                       if (t.id === 'a-trier') {
                         return (
-                          <div key={t.id} className="bg-white relative space-y-6 animate-fadeIn" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px', maxWidth: '98%', margin: '24px auto', backgroundColor: '#ffffff', overflow: 'hidden' }}>
+                          <div key={t.id} className="relative space-y-6 animate-fadeIn" style={{ border: 'none', borderRadius: '18px', maxWidth: '98%', margin: '24px auto', backgroundColor: '#f5f7fa', overflow: 'hidden' }}>
                             {/* THE INTERCALAIRE TOUR HEADER */}
-                            <div className="bg-white px-5 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans" style={{ borderRadius: '17px 17px 0px 0px', backgroundColor: '#ffffff' }}>
+                            <div className="px-5 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans" style={{ borderRadius: '17px 17px 0px 0px', backgroundColor: 'transparent' }}>
                               <div>
                                 <span style={{ fontSize: '18px', color: '#000000' }}>
                                   Mission(s) à affecter : {t.missions.length}.
@@ -14048,7 +14059,7 @@ export default function App() {
                                   Aucune mission à trier.
                                 </div>
                               ) : (
-                                <div className="space-y-4 bg-white">
+                                <div className="space-y-4 bg-transparent">
                                   {/* Radio check pour sélectionner toutes les missions de la tournée */}
                                   {(() => {
                                     const tourMissionIds = (t.missions || []).map((m: any) => m.id);
@@ -14068,12 +14079,12 @@ export default function App() {
                                           type="button"
                                           onClick={handleToggleSelectAllTourMissions}
                                           id={`radio-check-select-all-${t.id}`}
-                                          className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
+                                          className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
                                             isAllTourMissionsSelected
                                               ? 'border-[#2e54ff] bg-transparent'
                                               : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                                           }`}
-                                          style={{ borderWidth: '2.5px' }}
+                                          style={{ borderWidth: '1px' }}
                                           role="checkbox"
                                           aria-checked={isAllTourMissionsSelected}
                                           title="Sélectionner toutes les missions"
@@ -14098,7 +14109,7 @@ export default function App() {
                                     const isExpanded = !!fsmExpandedMissions[missionKey];
 
                                     return (
-                                      <div key={m.id} className="rounded-xl p-4 shadow-3xs transition-shadow space-y-4 font-sans" style={{ border: '1px solid rgb(229, 229, 229)', backgroundColor: 'rgb(245, 245, 245)' }}>
+                                      <div key={m.id} className="rounded-xl p-4 shadow-3xs transition-shadow space-y-4 font-sans" style={{ border: 'none', backgroundColor: 'rgb(233 235 239)' }}>
                                         {/* Row 1: Gélules & Bouton Dérouler / Réduire */}
                                         <div className="flex flex-wrap items-center justify-between gap-2 bg-transparent pb-0.5">
                                           <div className="flex flex-wrap items-center gap-2 bg-transparent flex-1">
@@ -14110,12 +14121,12 @@ export default function App() {
                                               toggleSelectFsmMission(m.id);
                                             }}
                                             id={`radio-check-mission-${m.id}`}
-                                            className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
+                                            className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
                                               selectedFsmMissionIds.includes(m.id)
                                                 ? 'border-[#2e54ff] bg-transparent'
                                                 : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                                             }`}
-                                            style={{ borderWidth: '2.5px' }}
+                                            style={{ borderWidth: '1px' }}
                                             role="checkbox"
                                             aria-checked={selectedFsmMissionIds.includes(m.id)}
                                             title="Sélectionner la mission"
@@ -14126,10 +14137,10 @@ export default function App() {
                                           </button>
                                           <span
                                             style={{
-                                              backgroundColor: 'rgb(77, 21, 83)',
-                                              color: 'rgb(255, 255, 255)',
+                                              backgroundColor: 'rgb(61 220 132)',
+                                              color: 'rgb(19 100 55)',
                                               borderRadius: '1000px',
-                                              padding: '4px 12px',
+                                              padding: '8px 16px',
                                               fontSize: '15px',
                                               fontWeight: 700,
                                               border: 'none',
@@ -14234,13 +14245,13 @@ export default function App() {
                                             onClick={() => toggleFsmMissionExpanded(missionKey)}
                                             style={{
                                               color: '#fff',
-                                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97 28 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                              background: 'rgb(96 28 104)',
+                                              boxShadow: 'none',
+                                              background: '#0f172a',
                                               borderRadius: '13px',
                                               marginLeft: '40px',
                                               marginRight: '10px',
                                               padding: '8px 18px',
-                                              fontSize: '16px',
+                                              fontSize: '18px',
                                               fontWeight: 700,
                                               border: 'none',
                                               cursor: 'pointer',
@@ -15346,71 +15357,66 @@ export default function App() {
                       const tourRegion = draft.region !== undefined ? draft.region : (t.region || '');
                       const tourPlannerName = draft.plannerName !== undefined ? draft.plannerName : (t.plannerName || '');
 
+                      const tourMissionsForStats = t.missions || [];
+                      const totalTourMissions = tourMissionsForStats.length;
+                      const planifL1Count = tourMissionsForStats.filter((m: any) => {
+                        const sit = (m.status || 'Brouillon').toLowerCase();
+                        return sit.includes('accepté') || sit.includes('accepte') || sit === 'à faire' || sit === 'a faire';
+                      }).length;
+                      const planifL1Percent = totalTourMissions > 0 ? Math.round((planifL1Count / totalTourMissions) * 100) : 0;
+
+                      const compL1Count = tourMissionsForStats.filter((m: any) => {
+                        const sit = (m.status || 'Brouillon').toLowerCase();
+                        return sit.includes('effectué') || sit.includes('effectue') || sit.includes('terminé') || sit.includes('termine');
+                      }).length;
+                      const compL1Percent = totalTourMissions > 0 ? Math.round((compL1Count / totalTourMissions) * 100) : 0;
+
                       return (
-                        <div key={t.id} className="bg-white relative space-y-6 animate-fadeIn" style={{ border: '1px solid rgb(218, 218, 218)', borderRadius: '18px', maxWidth: '98%', margin: '24px auto', backgroundColor: '#ffffff', overflow: 'hidden' }}>
+                        <div key={t.id} className="relative space-y-6 animate-fadeIn" style={{ border: 'none', borderRadius: '18px', maxWidth: '98%', margin: '24px auto', backgroundColor: '#f5f7fa', overflow: 'hidden' }}>
                           {/* THE INTERCALAIRE TOUR HEADER */}
-                          <div className="bg-white px-5 pt-5 pb-2.5 flex flex-col gap-3 font-sans" style={{ borderBottom: 'none', borderRadius: '17px 17px 0px 0px', backgroundColor: '#ffffff' }}>
-                            {/* Row 1: Titre de la tournée + Identifiant de la tournée + Action Buttons */}
-                            <div className="flex flex-col md:flex-row md:items-end gap-3 w-full">
-                              <div className="flex-1">
-                                <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Titre de la tournée.</label>
-                                <input
-                                  type="text"
-                                  value={tourTitle}
-                                  onChange={(e) => {
-                                    setFsmTourDrafts(prev => ({
-                                      ...prev,
-                                      [t.id]: {
-                                        ...(prev[t.id] || {}),
-                                        title: e.target.value
-                                      }
-                                    }));
-                                  }}
+                          <div className="px-5 pt-5 pb-2.5 flex flex-col gap-3 font-sans" style={{ borderBottom: 'none', borderRadius: '17px 17px 0px 0px', backgroundColor: 'transparent' }}>
+                            {/* Row 1: Gélules progression + Action Buttons (Supprimer, Calculer, Avisage, Enregistrer) */}
+                            <div className="flex flex-wrap items-center justify-end gap-2 w-full">
+                              {/* Gélule n% Planifiée(s) */}
+                              <div
                                 style={{
-                                  border: '1px solid #dedede',
-                                  borderRadius: '13px',
-                                  padding: '12px',
-                                  fontSize: '16px',
-                                  fontWeight: '100',
-                                  color: '#000000',
-                                  backgroundColor: '#ffffff',
-                                  width: '100%'
+                                  backgroundColor: '#3ddc84',
+                                  color: '#156337',
+                                  borderRadius: '1000px',
+                                  padding: '9px 19px',
+                                  fontSize: '18px',
+                                  fontWeight: 100,
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  border: 'none',
+                                  boxShadow: 'none',
+                                  cursor: 'default',
+                                  whiteSpace: 'nowrap',
                                 }}
-                                className="font-sans focus:outline-none"
-                                placeholder="Entrez un titre."
-                              />
-                            </div>
+                                className="inline-flex items-center justify-center select-none"
+                              >
+                                {planifL1Percent}% Planifiée(s)
+                              </div>
 
-                            <div className="w-full md:w-[205px] shrink-0">
-                              <label className="block mb-1.5 fsm-label-style whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Identifiant de la tournée.</label>
-                              <input
-                                type="text"
-                                value={(() => {
-                                  const visualPrefix = getTenantTourPrefix(tenantId);
-                                  const rawId = String(t.tourIdentifiant || '').trim();
-                                  const m = rawId.match(/^([A-Z0-9_-]+)-TOUR-(\d{4,})$/i);
-                                  if (m) return `${visualPrefix}-TOUR-${m[2]}`;
-                                  return rawId || `${visualPrefix}-TOUR-0001`;
-                                })()}
-                                disabled
-                                readOnly
+                              {/* Gélule n% Effectuées */}
+                              <div
                                 style={{
-                                  border: '1px solid #dedede',
-                                  borderRadius: '13px',
-                                  padding: '12px',
-                                  fontSize: '16px',
-                                  fontWeight: '100',
-                                  color: '#000000',
-                                  backgroundColor: '#f9fafb',
-                                  width: '100%',
-                                  cursor: 'not-allowed',
-                                  opacity: 0.75
+                                  backgroundColor: '#3ddc84',
+                                  color: '#156337',
+                                  borderRadius: '1000px',
+                                  padding: '9px 19px',
+                                  fontSize: '18px',
+                                  fontWeight: 100,
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  border: 'none',
+                                  boxShadow: 'none',
+                                  cursor: 'default',
+                                  whiteSpace: 'nowrap',
                                 }}
-                                className="font-sans focus:outline-none"
-                              />
-                            </div>
+                                className="inline-flex items-center justify-center select-none"
+                              >
+                                {compL1Percent}% Effectuées
+                              </div>
 
-                            <div className="flex items-center gap-2 shrink-0 w-full md:w-auto">
                               {/* Supprimer button */}
                               {(() => {
                                 const missions = t.missions || [];
@@ -15644,771 +15650,639 @@ export default function App() {
                                 Enregistrer
                               </button>
                             </div>
-                          </div>
 
-                          {/* Indication of missions and estimated travel duration (Masqué selon la demande utilisateur) */}
-                          {(() => {
-                            if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
-                              return null;
-                            }
-                            const mLength = t.missions ? t.missions.length : 0;
-                            const daysEstimate = Math.ceil(mLength / 6);
-                            return (
-                              <div 
-                                style={{
-                                  display: 'none',
-                                  color: '#3b5bf0',
-                                  backgroundColor: '#e7ebff',
-                                  border: 'none',
-                                  cursor: 'default'
-                                }}
-                                className="hidden font-semibold text-sm px-4 py-3 rounded-xl items-center gap-2.5 mx-0.5"
-                              >
-                                <span>
-                                  La tournée comporte <strong className="font-extrabold">{mLength} {mLength > 1 ? 'missions' : 'mission'}</strong>, nous estimons à <strong className="font-extrabold">{daysEstimate} {daysEstimate > 1 ? 'jours' : 'jour'}</strong> la durée du déplacement. <strong className="font-extrabold">{(mLength * 1.2).toFixed(1).replace('.', ',')} kg d’émissions de CO₂ (dioxyde de carbone)</strong> ont été évités grâce à l’optimisation du trajet (Source: MyClimate).
-                                </span>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Row 2: Technicien, Véhicule, Date, Région, Planificateur, Situation */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 w-full">
-                            {/* Technicien */}
-                            <div className="w-full">
-                              <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Technicien.</label>
-                              <select
-                                value={tourTechName}
-                                onChange={(e) => {
-                                  const selectedTechName = e.target.value;
-                                  const matchingMember = members.find(m => m.name.trim().toLowerCase() === selectedTechName.trim().toLowerCase());
-                                  const assignedVehicle = matchingMember?.locationLink || 'Aucun';
-                                  setFsmTourDrafts(prev => ({
-                                    ...prev,
-                                    [t.id]: {
-                                      ...(prev[t.id] || {}),
-                                      techName: selectedTechName,
-                                      vehicule: assignedVehicle
-                                    }
-                                  }));
-                                }}
-                                style={{
-                                  border: '1px solid #dedede',
-                                  borderRadius: '13px',
-                                  padding: '12px',
-                                  fontSize: '16px',
-                                  fontWeight: '100',
-                                  color: '#000000',
-                                  backgroundColor: '#ffffff',
-                                  width: '100%'
-                                }}
-                                className="font-sans cursor-pointer focus:outline-none"
-                              >
-                                <option value="">Sélectionnez un technicien.</option>
-                                {(() => {
-                                  let techOptions = members
-                                    .filter(m => isTechnicianMember(m))
-                                    .map(m => m.name);
-
-                                  // Uniquement à partir du moment où on a au moins 1 groupe de créé
-                                  if (teamWorkGroups && teamWorkGroups.length > 0) {
-                                    const currentRegion = (tourRegion || '').trim();
-                                    if (currentRegion) {
-                                      // Proposer uniquement les techniciens disponibles dans cette région selon les groupes
-                                      const matchingGroups = teamWorkGroups.filter(g =>
-                                        (g.regions || []).some(r => r.trim().toLowerCase() === currentRegion.toLowerCase())
-                                      );
-                                      const availableTechsForRegion = matchingGroups.flatMap(g => g.technicians || []);
-                                      const regionFiltered = techOptions.filter(tName =>
-                                        availableTechsForRegion.some(at => at.trim().toLowerCase() === tName.trim().toLowerCase())
-                                      );
-                                      if (regionFiltered.length > 0) {
-                                        techOptions = regionFiltered;
-                                      }
-                                    }
-                                  }
-
-                                  const uniqueTechOptions = Array.from(new Set<string>([
-                                    ...techOptions,
-                                    ...(tourTechName ? [tourTechName] : [])
-                                  ])).filter((name: string) => name && name.trim() !== '');
-
-                                  return uniqueTechOptions.map((name: string) => (
-                                    <option key={name} value={name}>
-                                      {name}
-                                    </option>
-                                  ));
-                                })()}
-                              </select>
-                            </div>
-
-                            {/* Véhicule */}
-                            <div className="w-full">
-                              <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Véhicule.</label>
-                              <select
-                                value={tourVehicule}
-                                onChange={() => {}} // No-op to satisfy React warning
-                                style={{
-                                  border: '1px solid #dedede',
-                                  borderRadius: '13px',
-                                  padding: '12px',
-                                  fontSize: '16px',
-                                  fontWeight: '100',
-                                  color: '#64748b',
-                                  backgroundColor: '#ffffff',
-                                  width: '100%',
-                                  opacity: 1,
-                                  pointerEvents: 'none',
-                                }}
-                                className="font-sans cursor-not-allowed focus:outline-none bg-white"
-                              >
-                                {['Aucun', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'].map((veh) => (
-                                  <option key={veh} value={veh}>
-                                    {veh === 'Aucun' ? veh : getLocationCustomName(veh)}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-
-                            {/* Date */}
-                            <div className="w-full">
-                              <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Date période.</label>
-                              <input
-                                type="date"
-                                value={tourStartDate}
-                                onChange={(e) => {
-                                  setFsmTourDrafts(prev => ({
-                                    ...prev,
-                                    [t.id]: {
-                                      ...(prev[t.id] || {}),
-                                      startDate: e.target.value
-                                    }
-                                  }));
-                                }}
-                                style={{
-                                  border: '1px solid #dedede',
-                                  borderRadius: '13px',
-                                  padding: '12px',
-                                  fontSize: '16px',
-                                  fontWeight: '100',
-                                  color: '#000000',
-                                  backgroundColor: '#ffffff',
-                                  width: '100%'
-                                }}
-                                className="font-sans cursor-pointer focus:outline-none"
-                              />
-                            </div>
-
-                            {/* Région */}
-                            <div className="w-full">
-                              <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Région.</label>
-                              <select
-                                value={tourRegion}
-                                onChange={(e) => {
-                                  setFsmTourDrafts(prev => ({
-                                    ...prev,
-                                    [t.id]: {
-                                      ...(prev[t.id] || {}),
-                                      region: e.target.value
-                                    }
-                                  }));
-                                }}
-                                style={{
-                                  border: '1px solid #dedede',
-                                  borderRadius: '13px',
-                                  padding: '12px',
-                                  fontSize: '16px',
-                                  fontWeight: '100',
-                                  color: '#000000',
-                                  backgroundColor: '#ffffff',
-                                  width: '100%'
-                                }}
-                                className="font-sans cursor-pointer focus:outline-none"
-                              >
-                                <option value="">Sélectionnez une région.</option>
-                                {(() => {
-                                  const regionList = Array.from(new Set([
-                                    ...getRegionsForCountry('France'),
-                                    tourRegion
-                                  ].filter(Boolean).filter((r: any) => typeof r === 'string' && r.trim() !== '')));
-                                  return regionList.map((r) => (
-                                    <option key={r} value={r}>
-                                      {r}
-                                    </option>
-                                  ));
-                                })()}
-                              </select>
-                            </div>
-
-                            {/* Planificateur */}
-                            <div className="w-full">
-                              <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Planificateur.</label>
-                              <select
-                                value={tourPlannerName}
-                                onChange={(e) => {
-                                  setFsmTourDrafts(prev => ({
-                                    ...prev,
-                                    [t.id]: {
-                                      ...(prev[t.id] || {}),
-                                      plannerName: e.target.value
-                                    }
-                                  }));
-                                }}
-                                style={{
-                                  border: '1px solid #dedede',
-                                  borderRadius: '13px',
-                                  padding: '12px',
-                                  fontSize: '16px',
-                                  fontWeight: '100',
-                                  color: '#000000',
-                                  backgroundColor: '#ffffff',
-                                  width: '100%'
-                                }}
-                                className="font-sans cursor-pointer focus:outline-none"
-                              >
-                                <option value="">Sélectionnez un planificateur.</option>
-                                {(() => {
-                                  const nonTechMembers = members
-                                    .filter(m => !isTechnicianMember(m))
-                                    .map(m => m.name);
-                                  const plannerOptions = Array.from(new Set([
-                                    ...nonTechMembers,
-                                    tourPlannerName
-                                  ].filter(Boolean).filter((n: any) => typeof n === 'string' && n.trim() !== '')));
-                                  return plannerOptions.map((name) => (
-                                    <option key={name} value={name}>
-                                      {name}
-                                    </option>
-                                  ));
-                                })()}
-                              </select>
-                            </div>
-
-                            {/* Situation. */}
-                            <div className="w-full">
-                              <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Situation.</label>
-                              <div className="relative flex items-center">
-                                <div 
-                                  style={{
-                                    position: 'absolute',
-                                    left: '11px',
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    width: '10px',
-                                    height: '10px',
-                                    borderRadius: '50%',
-                                    backgroundColor: 
-                                      tourStatus === 'Brouillon' ? '#94a3b8' : 
-                                      tourStatus === 'À faire' ? '#3b82f6' :  
-                                      tourStatus === 'En cours' ? '#ef4444' :  
-                                      tourStatus === 'Effectué' ? '#22c55e' :  
-                                      '#94a3b8',
-                                    zIndex: 10,
-                                    pointerEvents: 'none'
-                                  }}
-                                />
-                                <select
-                                  value={tourStatus}
+                            {/* Row 2: Titre de la tournée, Identifiant de la tournée, Situation (équilibrés) */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full">
+                              <div className="w-full">
+                                <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Titre de la tournée.</label>
+                                <input
+                                  type="text"
+                                  value={tourTitle}
                                   onChange={(e) => {
-                                    const nextStatus = e.target.value;
-                                    if (nextStatus === 'À faire' || nextStatus === 'En cours' || nextStatus === 'Effectué') {
-                                      if (!tourMissionsHaveDatesAndSlots(t)) {
-                                        alert("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
-                                        return;
-                                      }
-                                    }
                                     setFsmTourDrafts(prev => ({
                                       ...prev,
                                       [t.id]: {
                                         ...(prev[t.id] || {}),
-                                        status: nextStatus
+                                        title: e.target.value
                                       }
                                     }));
                                   }}
                                   style={{
                                     border: '1px solid #dedede',
                                     borderRadius: '13px',
-                                    paddingLeft: '34px',
-                                    paddingRight: '12px',
-                                    paddingTop: '12px',
-                                    paddingBottom: '12px',
+                                    padding: '12px',
                                     fontSize: '16px',
                                     fontWeight: '100',
-                                    backgroundColor: '#ffffff',
                                     color: '#000000',
+                                    backgroundColor: '#ffffff',
                                     width: '100%'
                                   }}
-                                  className="font-sans padding-with-dot cursor-pointer focus:outline-none"
+                                  className="font-sans focus:outline-none"
+                                  placeholder="Entrez un titre."
+                                />
+                              </div>
+
+                              <div className="w-full">
+                                <label className="block mb-1.5 fsm-label-style whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Identifiant de la tournée.</label>
+                                <input
+                                  type="text"
+                                  value={(() => {
+                                    const visualPrefix = getTenantTourPrefix(tenantId);
+                                    const rawId = String(t.tourIdentifiant || '').trim();
+                                    const m = rawId.match(/^([A-Z0-9_-]+)-TOUR-(\d{4,})$/i);
+                                    if (m) return `${visualPrefix}-TOUR-${m[2]}`;
+                                    return rawId || `${visualPrefix}-TOUR-0001`;
+                                  })()}
+                                  disabled
+                                  readOnly
+                                  style={{
+                                    border: '1px solid #dedede',
+                                    borderRadius: '13px',
+                                    padding: '12px',
+                                    fontSize: '16px',
+                                    fontWeight: '100',
+                                    color: '#000000',
+                                    backgroundColor: '#f9fafb',
+                                    width: '100%',
+                                    cursor: 'not-allowed',
+                                    opacity: 0.75
+                                  }}
+                                  className="font-sans focus:outline-none"
+                                />
+                              </div>
+
+                              {/* Situation. */}
+                              <div className="w-full">
+                                <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Situation.</label>
+                                <div className="relative flex items-center">
+                                  <div 
+                                    style={{
+                                      position: 'absolute',
+                                      left: '11px',
+                                      top: '50%',
+                                      transform: 'translateY(-50%)',
+                                      width: '10px',
+                                      height: '10px',
+                                      borderRadius: '50%',
+                                      backgroundColor: 
+                                        tourStatus === 'Brouillon' ? '#94a3b8' : 
+                                        tourStatus === 'À faire' ? '#3b82f6' :  
+                                        tourStatus === 'En cours' ? '#ef4444' :  
+                                        tourStatus === 'Effectué' ? '#22c55e' :  
+                                        '#94a3b8',
+                                      zIndex: 10,
+                                      pointerEvents: 'none'
+                                    }}
+                                  />
+                                  <select
+                                    value={tourStatus}
+                                    onChange={(e) => {
+                                      const nextStatus = e.target.value;
+                                      if (nextStatus === 'À faire' || nextStatus === 'En cours' || nextStatus === 'Effectué') {
+                                        if (!tourMissionsHaveDatesAndSlots(t)) {
+                                          alert("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
+                                          return;
+                                        }
+                                      }
+                                      setFsmTourDrafts(prev => ({
+                                        ...prev,
+                                        [t.id]: {
+                                          ...(prev[t.id] || {}),
+                                          status: nextStatus
+                                        }
+                                      }));
+                                    }}
+                                    style={{
+                                      border: '1px solid #dedede',
+                                      borderRadius: '13px',
+                                      paddingLeft: '34px',
+                                      paddingRight: '12px',
+                                      paddingTop: '12px',
+                                      paddingBottom: '12px',
+                                      fontSize: '16px',
+                                      fontWeight: '100',
+                                      backgroundColor: '#ffffff',
+                                      color: '#000000',
+                                      width: '100%'
+                                    }}
+                                    className="font-sans padding-with-dot cursor-pointer focus:outline-none"
+                                  >
+                                    <option value="Brouillon">Brouillon</option>
+                                    <option value="À faire">À faire</option>
+                                    <option value="En cours">En cours</option>
+                                    <option value="Effectué">Effectué</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Indication of missions and estimated travel duration (Masqué selon la demande utilisateur) */}
+                            {(() => {
+                              if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
+                                return null;
+                              }
+                              const mLength = t.missions ? t.missions.length : 0;
+                              const daysEstimate = Math.ceil(mLength / 6);
+                              return (
+                                <div 
+                                  style={{
+                                    display: 'none',
+                                    color: '#3b5bf0',
+                                    backgroundColor: '#e7ebff',
+                                    border: 'none',
+                                    cursor: 'default'
+                                  }}
+                                  className="hidden font-semibold text-sm px-4 py-3 rounded-xl items-center gap-2.5 mx-0.5"
                                 >
-                                  <option value="Brouillon">Brouillon</option>
-                                  <option value="À faire">À faire</option>
-                                  <option value="En cours">En cours</option>
-                                  <option value="Effectué">Effectué</option>
+                                  <span>
+                                    La tournée comporte <strong className="font-extrabold">{mLength} {mLength > 1 ? 'missions' : 'mission'}</strong>, nous estimons à <strong className="font-extrabold">{daysEstimate} {daysEstimate > 1 ? 'jours' : 'jour'}</strong> la durée du déplacement. <strong className="font-extrabold">{(mLength * 1.2).toFixed(1).replace('.', ',')} kg d’émissions de CO₂ (dioxyde de carbone)</strong> ont été évités grâce à l’optimisation du trajet (Source: MyClimate).
+                                  </span>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Row 3: Technicien, Véhicule, Date, Région, Planificateur (5 fields équilibrés) */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 w-full">
+                              {/* Technicien */}
+                              <div className="w-full">
+                                <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Technicien.</label>
+                                <select
+                                  value={tourTechName}
+                                  onChange={(e) => {
+                                    const selectedTechName = e.target.value;
+                                    const matchingMember = members.find(m => m.name.trim().toLowerCase() === selectedTechName.trim().toLowerCase());
+                                    const assignedVehicle = matchingMember?.locationLink || 'Aucun';
+                                    setFsmTourDrafts(prev => ({
+                                      ...prev,
+                                      [t.id]: {
+                                        ...(prev[t.id] || {}),
+                                        techName: selectedTechName,
+                                        vehicule: assignedVehicle
+                                      }
+                                    }));
+                                  }}
+                                  style={{
+                                    border: '1px solid #dedede',
+                                    borderRadius: '13px',
+                                    padding: '12px',
+                                    fontSize: '16px',
+                                    fontWeight: '100',
+                                    color: '#000000',
+                                    backgroundColor: '#ffffff',
+                                    width: '100%'
+                                  }}
+                                  className="font-sans cursor-pointer focus:outline-none"
+                                >
+                                  <option value="">Sélectionnez un technicien.</option>
+                                  {(() => {
+                                    let techOptions = members
+                                      .filter(m => isTechnicianMember(m))
+                                      .map(m => m.name);
+
+                                    // Uniquement à partir du moment où on a au moins 1 groupe de créé
+                                    if (teamWorkGroups && teamWorkGroups.length > 0) {
+                                      const currentRegion = (tourRegion || '').trim();
+                                      if (currentRegion) {
+                                        // Proposer uniquement les techniciens disponibles dans cette région selon les groupes
+                                        const matchingGroups = teamWorkGroups.filter(g =>
+                                          (g.regions || []).some(r => r.trim().toLowerCase() === currentRegion.toLowerCase())
+                                        );
+                                        const availableTechsForRegion = matchingGroups.flatMap(g => g.technicians || []);
+                                        const regionFiltered = techOptions.filter(tName =>
+                                          availableTechsForRegion.some(at => at.trim().toLowerCase() === tName.trim().toLowerCase())
+                                        );
+                                        if (regionFiltered.length > 0) {
+                                          techOptions = regionFiltered;
+                                        }
+                                      }
+                                    }
+
+                                    const uniqueTechOptions = Array.from(new Set<string>([
+                                      ...techOptions,
+                                      ...(tourTechName ? [tourTechName] : [])
+                                    ])).filter((name: string) => name && name.trim() !== '');
+
+                                    return uniqueTechOptions.map((name: string) => (
+                                      <option key={name} value={name}>
+                                        {name}
+                                      </option>
+                                    ));
+                                  })()}
+                                </select>
+                              </div>
+
+                              {/* Véhicule */}
+                              <div className="w-full">
+                                <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Véhicule.</label>
+                                <select
+                                  value={tourVehicule}
+                                  onChange={() => {}} // No-op to satisfy React warning
+                                  style={{
+                                    border: '1px solid #dedede',
+                                    borderRadius: '13px',
+                                    padding: '12px',
+                                    fontSize: '16px',
+                                    fontWeight: '100',
+                                    color: '#64748b',
+                                    backgroundColor: '#ffffff',
+                                    width: '100%',
+                                    opacity: 1,
+                                    pointerEvents: 'none',
+                                  }}
+                                  className="font-sans cursor-not-allowed focus:outline-none bg-white"
+                                >
+                                  {['Aucun', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'].map((veh) => (
+                                    <option key={veh} value={veh}>
+                                      {veh === 'Aucun' ? veh : getLocationCustomName(veh)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Date */}
+                              <div className="w-full">
+                                <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Date période.</label>
+                                <input
+                                  type="date"
+                                  value={tourStartDate}
+                                  onChange={(e) => {
+                                    setFsmTourDrafts(prev => ({
+                                      ...prev,
+                                      [t.id]: {
+                                        ...(prev[t.id] || {}),
+                                        startDate: e.target.value
+                                      }
+                                    }));
+                                  }}
+                                  style={{
+                                    border: '1px solid #dedede',
+                                    borderRadius: '13px',
+                                    padding: '12px',
+                                    fontSize: '16px',
+                                    fontWeight: '100',
+                                    color: '#000000',
+                                    backgroundColor: '#ffffff',
+                                    width: '100%'
+                                  }}
+                                  className="font-sans cursor-pointer focus:outline-none"
+                                />
+                              </div>
+
+                              {/* Région */}
+                              <div className="w-full">
+                                <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Région.</label>
+                                <select
+                                  value={tourRegion}
+                                  onChange={(e) => {
+                                    setFsmTourDrafts(prev => ({
+                                      ...prev,
+                                      [t.id]: {
+                                        ...(prev[t.id] || {}),
+                                        region: e.target.value
+                                      }
+                                    }));
+                                  }}
+                                  style={{
+                                    border: '1px solid #dedede',
+                                    borderRadius: '13px',
+                                    padding: '12px',
+                                    fontSize: '16px',
+                                    fontWeight: '100',
+                                    color: '#000000',
+                                    backgroundColor: '#ffffff',
+                                    width: '100%'
+                                  }}
+                                  className="font-sans cursor-pointer focus:outline-none"
+                                >
+                                  <option value="">Sélectionnez une région.</option>
+                                  {(() => {
+                                    const regionList = Array.from(new Set([
+                                      ...getRegionsForCountry('France'),
+                                      tourRegion
+                                    ].filter(Boolean).filter((r: any) => typeof r === 'string' && r.trim() !== '')));
+                                    return regionList.map((r) => (
+                                      <option key={r} value={r}>
+                                        {r}
+                                      </option>
+                                    ));
+                                  })()}
+                                </select>
+                              </div>
+
+                              {/* Planificateur */}
+                              <div className="w-full">
+                                <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Planificateur.</label>
+                                <select
+                                  value={tourPlannerName}
+                                  onChange={(e) => {
+                                    setFsmTourDrafts(prev => ({
+                                      ...prev,
+                                      [t.id]: {
+                                        ...(prev[t.id] || {}),
+                                        plannerName: e.target.value
+                                      }
+                                    }));
+                                  }}
+                                  style={{
+                                    border: '1px solid #dedede',
+                                    borderRadius: '13px',
+                                    padding: '12px',
+                                    fontSize: '16px',
+                                    fontWeight: '100',
+                                    color: '#000000',
+                                    backgroundColor: '#ffffff',
+                                    width: '100%'
+                                  }}
+                                  className="font-sans cursor-pointer focus:outline-none"
+                                >
+                                  <option value="">Sélectionnez un planificateur.</option>
+                                  {(() => {
+                                    const nonTechMembers = members
+                                      .filter(m => !isTechnicianMember(m))
+                                      .map(m => m.name);
+                                    const plannerOptions = Array.from(new Set([
+                                      ...nonTechMembers,
+                                      tourPlannerName
+                                    ].filter(Boolean).filter((n: any) => typeof n === 'string' && n.trim() !== '')));
+                                    return plannerOptions.map((name) => (
+                                      <option key={name} value={name}>
+                                        {name}
+                                      </option>
+                                    ));
+                                  })()}
                                 </select>
                               </div>
                             </div>
+
+                            {/* Technician skills line */}
+                            {(() => {
+                              if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
+                                return null;
+                              }
+                              const selectedMember = members.find(m => m.name.trim().toLowerCase() === tourTechName.trim().toLowerCase());
+                              if (!selectedMember) return null;
+                              const comps = selectedMember?.competences || [];
+                              const compsStr = comps.length > 0 ? comps.join(', ') : 'Aucune';
+                              return (
+                                <div 
+                                  style={{
+                                    color: 'rgb(80 97 122)',
+                                    backgroundColor: 'rgb(233 237 241)',
+                                    border: 'none',
+                                    cursor: 'default'
+                                  }}
+                                  className="font-semibold text-sm px-4 py-3 rounded-xl flex items-center gap-2.5 mx-0.5"
+                                >
+                                  <span>
+                                    Compétences : {compsStr}
+                                  </span>
+                                </div>
+                              );
+                            })()}
+
+                            {/* Pause banner if tour is paused */}
+                            {(() => {
+                              if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
+                                return null;
+                              }
+                              const isPaused = t.status !== "Terminé" && (
+                                t.isPaused || 
+                                t.pauseEnabled || 
+                                (
+                                  typeof window !== "undefined" && 
+                                  localStorage.getItem("defib_pause_enabled") === "true" && 
+                                  (() => {
+                                    try {
+                                      const activeUserRaw = localStorage.getItem("defib_active_tech_session");
+                                      if (activeUserRaw) {
+                                        const activeUser = JSON.parse(activeUserRaw);
+                                        if (activeUser?.name && String(activeUser.name).trim().toLowerCase() === tourTechName.trim().toLowerCase()) {
+                                          return true;
+                                        }
+                                      }
+                                    } catch (_) {}
+                                    return localStorage.getItem("defib_selected_tour_id") === t.id;
+                                  })()
+                                )
+                              );
+                              const reason = t.pauseReason || (typeof window !== "undefined" ? localStorage.getItem("defib_pause_reason") : null) || "Nuit Hôtel";
+                              if (!isPaused) return null;
+                              return (
+                                <div
+                                  style={{
+                                    backgroundColor: "rgb(255, 232, 247)",
+                                    borderRadius: "13px",
+                                    color: "#2e54ff",
+                                    fontSize: "16px",
+                                    cursor: "not-allowed",
+                                  }}
+                                  className="w-full font-bold p-4 text-[16px] text-center select-none my-2 font-sans"
+                                >
+                                  Technicien en pause : {reason}.
+                                </div>
+                              );
+                            })()}
                           </div>
 
-                          {/* Technician skills line */}
+                          {/* Persistent CTT violation alert inside tour card */}
                           {(() => {
-                            if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
-                              return null;
-                            }
-                            const selectedMember = members.find(m => m.name.trim().toLowerCase() === tourTechName.trim().toLowerCase());
-                            if (!selectedMember) return null;
-                            const comps = selectedMember?.competences || [];
-                            const compsStr = comps.length > 0 ? comps.join(', ') : 'Aucune';
+                            const tourViolations = checkTourCttViolations(t, cttGlobalRules, variables, fsmTours);
+                            if (tourViolations.length === 0) return null;
                             return (
                               <div 
-                                style={{
-                                  color: 'rgb(143 51 151)',
-                                  backgroundColor: 'rgb(253 229 255)',
-                                  border: 'none',
-                                  cursor: 'default'
-                                }}
-                                className="font-semibold text-sm px-4 py-3 rounded-xl flex items-center gap-2.5 mx-0.5"
+                                className="mx-5 my-3 p-4 rounded-xl border border-red-300 bg-red-50 text-red-950 space-y-2 font-sans animate-fadeIn shadow-xs"
+                                style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                                id={`tour-ctt-violations-${t.id}`}
                               >
-                                <span>
-                                  Compétences : {compsStr}
-                                </span>
+                                <div className="flex items-center gap-2 font-bold text-red-800 text-[16px]">
+                                  <span className="text-xl">⚠️</span>
+                                  <span>{translate("Alerte de conformité CTT (Garde-fous temps de travail & repos)")}</span>
+                                </div>
+                                <div className="space-y-1.5 pl-7">
+                                  {tourViolations.map((v, vIdx) => (
+                                    <div key={vIdx} className="text-sm">
+                                      <p className="text-red-950 font-bold text-[15px]">{v.message}</p>
+                                      {v.details && <p className="text-red-800 text-xs font-normal mt-0.5">{v.details}</p>}
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             );
                           })()}
 
-                          {/* Pause banner if tour is paused */}
-                          {(() => {
-                            if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
-                              return null;
-                            }
-                            const isPaused = t.status !== "Terminé" && (
-                              t.isPaused || 
-                              t.pauseEnabled || 
-                              (
-                                typeof window !== "undefined" && 
-                                localStorage.getItem("defib_pause_enabled") === "true" && 
-                                (() => {
-                                  try {
-                                    const activeUserRaw = localStorage.getItem("defib_active_tech_session");
-                                    if (activeUserRaw) {
-                                      const activeUser = JSON.parse(activeUserRaw);
-                                      if (activeUser?.name && String(activeUser.name).trim().toLowerCase() === tourTechName.trim().toLowerCase()) {
-                                        return true;
-                                      }
+                          {/* TOUR MISSIONS LIST */}
+                          <div className="p-4 space-y-4">
+                            {t.missions.length === 0 ? (
+                              <div className="py-6 text-center font-sans bg-white rounded-xl border border-slate-205" style={{ color: '#000000', fontSize: '16px', border: 'none' }}>
+                                Aucune mission.
+                              </div>
+                            ) : (
+                              <div className="space-y-4 bg-transparent">
+                                {/* Radio check pour sélectionner toutes les missions de la tournée */}
+                                {(() => {
+                                  const tourMissionIds = (t.missions || []).map((m: any) => m.id);
+                                  const isAllTourMissionsSelected = tourMissionIds.length > 0 && tourMissionIds.every((id: string) => selectedFsmMissionIds.includes(id));
+                                  
+                                  const handleToggleSelectAllTourMissions = () => {
+                                    if (isAllTourMissionsSelected) {
+                                      setSelectedFsmMissionIds(prev => prev.filter(id => !tourMissionIds.includes(id)));
+                                    } else {
+                                      setSelectedFsmMissionIds(prev => Array.from(new Set([...prev, ...tourMissionIds])));
                                     }
-                                  } catch (_) {}
-                                  return localStorage.getItem("defib_selected_tour_id") === t.id;
-                                })()
-                              )
-                            );
-                            const reason = t.pauseReason || (typeof window !== "undefined" ? localStorage.getItem("defib_pause_reason") : null) || "Nuit Hôtel";
-                            if (!isPaused) return null;
-                            return (
-                              <div
-                                style={{
-                                  backgroundColor: "rgb(255, 232, 247)",
-                                  borderRadius: "13px",
-                                  color: "#2e54ff",
-                                  fontSize: "16px",
-                                  cursor: "not-allowed",
-                                }}
-                                className="w-full font-bold p-4 text-[16px] text-center select-none my-2 font-sans"
-                              >
-                                Technicien en pause : {reason}.
-                              </div>
-                            );
-                          })()}
-                        </div>
+                                  };
 
-                        {/* Persistent CTT violation alert inside tour card */}
-                        {(() => {
-                          const tourViolations = checkTourCttViolations(t, cttGlobalRules, variables, fsmTours);
-                          if (tourViolations.length === 0) return null;
-                          return (
-                            <div 
-                              className="mx-5 my-3 p-4 rounded-xl border border-red-300 bg-red-50 text-red-950 space-y-2 font-sans animate-fadeIn shadow-xs"
-                              style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                              id={`tour-ctt-violations-${t.id}`}
-                            >
-                              <div className="flex items-center gap-2 font-bold text-red-800 text-[16px]">
-                                <span className="text-xl">⚠️</span>
-                                <span>{translate("Alerte de conformité CTT (Garde-fous temps de travail & repos)")}</span>
-                              </div>
-                              <div className="space-y-1.5 pl-7">
-                                {tourViolations.map((v, vIdx) => (
-                                  <div key={vIdx} className="text-sm">
-                                    <p className="text-red-950 font-bold text-[15px]">{v.message}</p>
-                                    {v.details && <p className="text-red-800 text-xs font-normal mt-0.5">{v.details}</p>}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })()}
+                                  return (
+                                    <div className="flex items-center gap-2.5 pb-1 select-none">
+                                      <button
+                                        type="button"
+                                        onClick={handleToggleSelectAllTourMissions}
+                                        id={`radio-check-select-all-${t.id}`}
+                                        className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
+                                          isAllTourMissionsSelected
+                                            ? 'border-[#2e54ff] bg-transparent'
+                                            : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                                        }`}
+                                        style={{ borderWidth: '1px' }}
+                                        role="checkbox"
+                                        aria-checked={isAllTourMissionsSelected}
+                                        title="Sélectionner toutes les missions"
+                                      >
+                                        {isAllTourMissionsSelected && (
+                                          <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
+                                        )}
+                                      </button>
+                                      <span
+                                        onClick={handleToggleSelectAllTourMissions}
+                                        className="text-[15px] font-sans font-normal text-black cursor-pointer hover:opacity-85 select-none"
+                                        style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                                      >
+                                        Sélectionner toutes les missions.
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
 
-                        {/* INDICATEURS DE PROGRESSION */}
-                        {(() => {
-                          const tourMissions = t.missions || [];
-                          const total = tourMissions.length;
+                                {t.missions.map((m: any, idx: number) => {
+                                  const calculatedDate = (() => {
+                                    if (!tourStartDate) return '';
+                                    const d = new Date(tourStartDate);
+                                    if (isNaN(d.getTime())) return tourStartDate;
+                                    const daysToAdd = Math.floor(idx / 6);
+                                    d.setDate(d.getDate() + daysToAdd);
+                                    return d.toISOString().split('T')[0];
+                                  })();
+                                  const estimatedDateValue = m.estimatedDate || (t.calculated ? calculatedDate : '');
+                                  const missionKey = `${t.id}-${m.id || idx}`;
+                                  const isExpanded = !!fsmExpandedMissions[missionKey];
 
-                          // 1. Progression de planification
-                          // Layer bleu 1 (avec %): Accepté client / À faire
-                          const planifL1Count = tourMissions.filter((m: any) => {
-                            const sit = (m.status || 'Brouillon').toLowerCase();
-                            return sit.includes('accepté') || sit.includes('accepte') || sit === 'à faire' || sit === 'a faire';
-                          }).length;
+                                  return (
+                                    <div key={m.id} className="rounded-xl p-4 shadow-3xs transition-shadow space-y-4 font-sans" style={{ border: 'none', backgroundColor: 'rgb(233 235 239)' }}>
+                                        {/* Ligne 1: Numéro de passage & Gélules & Bouton Dérouler / Réduire */}
+                                        <div className="flex flex-wrap items-center justify-between gap-2 bg-transparent pb-0.5">
+                                          <div className="flex flex-wrap items-center gap-2 bg-transparent flex-1">
+                                          {/* Radio-check pour sélectionner la mission */}
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleSelectFsmMission(m.id);
+                                            }}
+                                            id={`radio-check-mission-${m.id}`}
+                                            className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
+                                              selectedFsmMissionIds.includes(m.id)
+                                                ? 'border-[#2e54ff] bg-transparent'
+                                                : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                                            }`}
+                                            style={{ borderWidth: '1px' }}
+                                            role="checkbox"
+                                            aria-checked={selectedFsmMissionIds.includes(m.id)}
+                                            title="Sélectionner la mission"
+                                          >
+                                            {selectedFsmMissionIds.includes(m.id) && (
+                                              <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
+                                            )}
+                                          </button>
 
-                          // Layer 2 semi-opaque bleu (sans %): Attente client / Refusé / Attente (cumulative with L1)
-                          const planifL2Count = tourMissions.filter((m: any) => {
-                            const sit = (m.status || 'Brouillon').toLowerCase();
-                            return (
-                              sit.includes('accepté') || sit.includes('accepte') || sit === 'à faire' || sit === 'a faire' ||
-                              sit.includes('attente') || sit.includes('refusé') || sit.includes('refuse')
-                            );
-                          }).length;
+                                          {/* Pictogramme situation style Rapports PDF avec '!' selon la Situation */}
+                                          {(() => {
+                                            const sitNorm = (m.status || "Brouillon").toLowerCase().trim();
+                                            let borderColor = "#B8B8B8";
+                                            if (sitNorm === "brouillon") borderColor = "#B8B8B8";
+                                            else if (sitNorm === "attente client") borderColor = "#B1C400";
+                                            else if (sitNorm === "accepté client" || sitNorm === "accepte client") borderColor = "#67CF11";
+                                            else if (sitNorm === "refusé client" || sitNorm === "refuse client") borderColor = "#CF2411";
+                                            else if (sitNorm === "rejet mission" || sitNorm === "rejet") borderColor = "#CF6011";
+                                            else if (sitNorm === "à faire" || sitNorm === "a faire") borderColor = "#1176CF";
+                                            else if (sitNorm === "attente") borderColor = "#CCCF11";
+                                            else if (sitNorm === "effectué" || sitNorm === "effectue" || sitNorm === "effectuée") borderColor = "#9611CF";
 
-                          const planifL1Percent = total > 0 ? Math.round((planifL1Count / total) * 100) : 0;
-                          const planifL2Percent = total > 0 ? Math.round((planifL2Count / total) * 100) : 0;
-
-                          // 2. Progression de complétion
-                          // Layer rose 1 (avec %): Effectué
-                          const compL1Count = tourMissions.filter((m: any) => {
-                            const sit = (m.status || 'Brouillon').toLowerCase();
-                            return sit.includes('effectué') || sit.includes('effectue') || sit.includes('terminé') || sit.includes('termine');
-                          }).length;
-
-                          // Layer 2 semi-opaque bleu (sans %): Accepté client / À faire / Rejet mission (cumulative with L1)
-                          const compL2Count = tourMissions.filter((m: any) => {
-                            const sit = (m.status || 'Brouillon').toLowerCase();
-                            return (
-                              sit.includes('effectué') || sit.includes('effectue') || sit.includes('terminé') || sit.includes('termine') ||
-                              sit.includes('accepté') || sit.includes('accepte') || sit === 'à faire' || sit === 'a faire' ||
-                              sit.includes('rejet')
-                            );
-                          }).length;
-
-                          const compL1Percent = total > 0 ? Math.round((compL1Count / total) * 100) : 0;
-                          const compL2Percent = total > 0 ? Math.round((compL2Count / total) * 100) : 0;
-
-                          return (
-                            <div 
-                              className="px-5 pt-0 pb-3 flex flex-col gap-2.5 select-none"
-                              style={{ 
-                                borderBottom: '1px solid rgb(218, 218, 218)',
-                                backgroundColor: '#ffffff'
-                              }}
-                            >
-                              {/* Barre 1 : Progression de planification */}
-                              <div className="w-full flex items-center gap-3">
-                                <span 
-                                  style={{ 
-                                    fontSize: '15px', 
-                                    fontWeight: 600, 
-                                    color: '#000000', 
-                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                    cursor: 'default',
-                                    whiteSpace: 'nowrap',
-                                    minWidth: '225px'
-                                  }}
-                                >
-                                  {translate("Progression de planification")}
-                                </span>
-
-                                <div 
-                                  className="relative flex-1 overflow-hidden select-none" 
-                                  style={{ 
-                                    height: '22px', 
-                                    backgroundColor: '#e5e7eb', 
-                                    borderRadius: '11px',
-                                    boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.06)'
-                                  }}
-                                >
-                                  {/* Layer 2 : semi-opaque bleu */}
-                                  <div 
-                                    style={{ 
-                                      position: 'absolute',
-                                      top: 0,
-                                      left: 0,
-                                      height: '100%',
-                                      width: `${planifL2Percent}%`, 
-                                      backgroundColor: 'rgba(53, 86, 236, 0.35)', 
-                                      borderRadius: '11px',
-                                      transition: 'width 0.4s ease-in-out',
-                                      zIndex: 1
-                                    }}
-                                  />
-                                  {/* Layer 1 : bleu (#2e54ff) avec pourcentage */}
-                                  <div 
-                                    style={{ 
-                                      position: 'absolute',
-                                      top: 0,
-                                      left: 0,
-                                      height: '100%',
-                                      width: `${planifL1Percent}%`, 
-                                      backgroundColor: '#2e54ff', 
-                                      borderRadius: '11px',
-                                      transition: 'width 0.4s ease-in-out',
-                                      zIndex: 2
-                                    }}
-                                  />
-                                  <div 
-                                    className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
-                                    style={{ 
-                                      zIndex: 3,
-                                      fontSize: '13px', 
-                                      fontWeight: 700, 
-                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                      color: planifL1Percent >= 50 ? '#ffffff' : '#0f172a',
-                                      textShadow: planifL1Percent >= 50 ? '0 1px 2px rgba(0,0,0,0.25)' : 'none'
-                                    }}
-                                  >
-                                    {planifL1Percent}%
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Barre 2 : Progression de complétion */}
-                              <div className="w-full flex items-center gap-3">
-                                <span 
-                                  style={{ 
-                                    fontSize: '15px', 
-                                    fontWeight: 600, 
-                                    color: '#000000', 
-                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                    cursor: 'default',
-                                    whiteSpace: 'nowrap',
-                                    minWidth: '225px'
-                                  }}
-                                >
-                                  {translate("Progression de complétion")}
-                                </span>
-
-                                <div 
-                                  className="relative flex-1 overflow-hidden select-none" 
-                                  style={{ 
-                                    height: '22px', 
-                                    backgroundColor: '#e5e7eb', 
-                                    borderRadius: '11px',
-                                    boxShadow: 'inset 0 1px 2px rgba(0, 0, 0, 0.06)'
-                                  }}
-                                >
-                                  {/* Layer 2 : semi-opaque bleu */}
-                                  <div 
-                                    style={{ 
-                                      position: 'absolute',
-                                      top: 0,
-                                      left: 0,
-                                      height: '100%',
-                                      width: `${compL2Percent}%`, 
-                                      backgroundColor: 'rgba(53, 86, 236, 0.35)', 
-                                      borderRadius: '11px',
-                                      transition: 'width 0.4s ease-in-out',
-                                      zIndex: 1
-                                    }}
-                                  />
-                                  {/* Layer 1 : rose (#2e54ff) avec pourcentage */}
-                                  <div 
-                                    style={{ 
-                                      position: 'absolute',
-                                      top: 0,
-                                      left: 0,
-                                      height: '100%',
-                                      width: `${compL1Percent}%`, 
-                                      backgroundColor: '#2e54ff', 
-                                      borderRadius: '11px',
-                                      transition: 'width 0.4s ease-in-out',
-                                      zIndex: 2
-                                    }}
-                                  />
-                                  <div 
-                                    className="absolute inset-0 flex items-center justify-center pointer-events-none select-none"
-                                    style={{ 
-                                      zIndex: 3,
-                                      fontSize: '13px', 
-                                      fontWeight: 700, 
-                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                      color: compL1Percent >= 50 ? '#ffffff' : '#0f172a',
-                                      textShadow: compL1Percent >= 50 ? '0 1px 2px rgba(0,0,0,0.25)' : 'none'
-                                    }}
-                                  >
-                                    {compL1Percent}%
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })()}
-
-                        {/* TOUR MISSIONS LIST */}
-                        <div className="p-4 space-y-4">
-                          {t.missions.length === 0 ? (
-                            <div className="py-6 text-center font-sans bg-white rounded-xl border border-slate-205" style={{ color: '#000000', fontSize: '16px', border: 'none' }}>
-                              Aucune mission.
-                            </div>
-                          ) : (
-                            <div className="space-y-4 bg-white">
-                              {/* Radio check pour sélectionner toutes les missions de la tournée */}
-                              {(() => {
-                                const tourMissionIds = (t.missions || []).map((m: any) => m.id);
-                                const isAllTourMissionsSelected = tourMissionIds.length > 0 && tourMissionIds.every((id: string) => selectedFsmMissionIds.includes(id));
-                                
-                                const handleToggleSelectAllTourMissions = () => {
-                                  if (isAllTourMissionsSelected) {
-                                    setSelectedFsmMissionIds(prev => prev.filter(id => !tourMissionIds.includes(id)));
-                                  } else {
-                                    setSelectedFsmMissionIds(prev => Array.from(new Set([...prev, ...tourMissionIds])));
-                                  }
-                                };
-
-                                return (
-                                  <div className="flex items-center gap-2.5 pb-1 select-none">
-                                    <button
-                                      type="button"
-                                      onClick={handleToggleSelectAllTourMissions}
-                                      id={`radio-check-select-all-${t.id}`}
-                                      className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
-                                        isAllTourMissionsSelected
-                                          ? 'border-[#2e54ff] bg-transparent'
-                                          : 'border-slate-400 bg-white hover:border-[#2e54ff]'
-                                      }`}
-                                      style={{ borderWidth: '2.5px' }}
-                                      role="checkbox"
-                                      aria-checked={isAllTourMissionsSelected}
-                                      title="Sélectionner toutes les missions"
-                                    >
-                                      {isAllTourMissionsSelected && (
-                                        <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
-                                      )}
-                                    </button>
-                                    <span
-                                      onClick={handleToggleSelectAllTourMissions}
-                                      className="text-[15px] font-sans font-normal text-black cursor-pointer hover:opacity-85 select-none"
-                                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
-                                    >
-                                      Sélectionner toutes les missions.
-                                    </span>
-                                  </div>
-                                );
-                              })()}
-
-                              {t.missions.map((m: any, idx: number) => {
-                                const calculatedDate = (() => {
-                                  if (!tourStartDate) return '';
-                                  const d = new Date(tourStartDate);
-                                  if (isNaN(d.getTime())) return tourStartDate;
-                                  const daysToAdd = Math.floor(idx / 6);
-                                  d.setDate(d.getDate() + daysToAdd);
-                                  return d.toISOString().split('T')[0];
-                                })();
-                                const estimatedDateValue = m.estimatedDate || (t.calculated ? calculatedDate : '');
-                                const missionKey = `${t.id}-${m.id || idx}`;
-                                const isExpanded = !!fsmExpandedMissions[missionKey];
-
-                                return (
-                                  <div key={m.id} className="rounded-xl p-4 shadow-3xs transition-shadow space-y-4 font-sans" style={{ border: '1px solid rgb(229, 229, 229)', backgroundColor: 'rgb(245, 245, 245)' }}>
-                                      {/* Ligne 1: Numéro de passage & Gélules & Bouton Dérouler / Réduire */}
-                                      <div className="flex flex-wrap items-center justify-between gap-2 bg-transparent pb-0.5">
-                                        <div className="flex flex-wrap items-center gap-2 bg-transparent flex-1">
-                                        {/* Radio-check pour sélectionner la mission */}
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            toggleSelectFsmMission(m.id);
-                                          }}
-                                          id={`radio-check-mission-${m.id}`}
-                                          className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
-                                            selectedFsmMissionIds.includes(m.id)
-                                              ? 'border-[#2e54ff] bg-transparent'
-                                              : 'border-slate-400 bg-white hover:border-[#2e54ff]'
-                                          }`}
-                                          style={{ borderWidth: '2.5px' }}
-                                          role="checkbox"
-                                          aria-checked={selectedFsmMissionIds.includes(m.id)}
-                                          title="Sélectionner la mission"
-                                        >
-                                          {selectedFsmMissionIds.includes(m.id) && (
-                                            <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
-                                          )}
-                                        </button>
-
-                                        {/* Pictogramme situation style Rapports PDF avec '!' selon la Situation */}
-                                        {(() => {
-                                          const sitNorm = (m.status || "Brouillon").toLowerCase().trim();
-                                          let borderColor = "#B8B8B8";
-                                          if (sitNorm === "brouillon") borderColor = "#B8B8B8";
-                                          else if (sitNorm === "attente client") borderColor = "#B1C400";
-                                          else if (sitNorm === "accepté client" || sitNorm === "accepte client") borderColor = "#67CF11";
-                                          else if (sitNorm === "refusé client" || sitNorm === "refuse client") borderColor = "#CF2411";
-                                          else if (sitNorm === "rejet mission" || sitNorm === "rejet") borderColor = "#CF6011";
-                                          else if (sitNorm === "à faire" || sitNorm === "a faire") borderColor = "#1176CF";
-                                          else if (sitNorm === "attente") borderColor = "#CCCF11";
-                                          else if (sitNorm === "effectué" || sitNorm === "effectue" || sitNorm === "effectuée") borderColor = "#9611CF";
-
-                                          return (
-                                            <div
-                                              className="relative inline-flex items-center justify-center shrink-0"
-                                              style={{ width: '20px', height: '20px' }}
-                                              title={`Situation : ${m.status || 'Brouillon'}`}
-                                            >
+                                            return (
                                               <div
-                                                className="absolute inset-0"
-                                                style={{
-                                                  border: `3px solid ${borderColor}`,
-                                                  backgroundColor: 'transparent',
-                                                  transform: 'rotate(45deg)',
-                                                  borderRadius: '6px',
-                                                }}
-                                              />
-                                              <span
-                                                className="relative z-10 font-bold leading-none select-none"
-                                                style={{
-                                                  fontSize: '16px',
-                                                  color: '#000000',
-                                                  fontFamily: 'sans-serif',
-                                                }}
+                                                className="relative inline-flex items-center justify-center shrink-0"
+                                                style={{ width: '20px', height: '20px' }}
+                                                title={`Situation : ${m.status || 'Brouillon'}`}
                                               >
-                                                !
-                                              </span>
-                                            </div>
-                                          );
-                                        })()}
-                                        <div
-                                          style={{
-                                            backgroundColor: '#2e54ff',
-                                            color: '#ffffff',
-                                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                            fontWeight: 610,
-                                            width: '28px',
-                                            height: '28px',
-                                            borderRadius: '50%',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            fontSize: '14px',
-                                            cursor: 'default'
-                                          }}
-                                        >
-                                          {!t.calculated ? '?' : (idx + 1)}
-                                        </div>
-                                        <span
-                                          style={{
-                                            backgroundColor: 'rgb(77, 21, 83)',
-                                            color: 'rgb(255, 255, 255)',
-                                            borderRadius: '1000px',
-                                            padding: '4px 12px',
-                                            fontSize: '15px',
-                                            fontWeight: 700,
-                                            border: 'none',
-                                            cursor: 'default'
-                                          }}
-                                        >
-                                          {(m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) ? 'Formation' : (m.equipmentType || (() => {
-                                            const isDefib = defibrillateurs.some((d: any) => d.identifiant === m.defibIdentifiant);
-                                            if (isDefib) return 'Défibrillateur';
-                                            const other = otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant);
-                                            if (other) return other.categorie;
-                                            return m.reason?.toLowerCase().includes('autre') ? 'Autre matériel' : 'Défibrillateur';
-                                          })())}
-                                        </span>
+                                                <div
+                                                  className="absolute inset-0"
+                                                  style={{
+                                                    border: `3px solid ${borderColor}`,
+                                                    backgroundColor: 'transparent',
+                                                    transform: 'rotate(45deg)',
+                                                    borderRadius: '6px',
+                                                  }}
+                                                />
+                                                <span
+                                                  className="relative z-10 font-bold leading-none select-none"
+                                                  style={{
+                                                    fontSize: '16px',
+                                                    color: '#000000',
+                                                    fontFamily: 'sans-serif',
+                                                  }}
+                                                >
+                                                  !
+                                                </span>
+                                              </div>
+                                            );
+                                          })()}
+                                          <div
+                                            style={{
+                                              background: '#3ddc84',
+                                              color: '#156337',
+                                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                              fontWeight: 610,
+                                              fontSize: '18px',
+                                              padding: '11px 10px 9px 10px',
+                                              width: '30px',
+                                              height: '30px',
+                                              borderRadius: '50%',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              cursor: 'default'
+                                            }}
+                                          >
+                                            {!t.calculated ? '?' : (idx + 1)}
+                                          </div>
+                                          <span
+                                            style={{
+                                              backgroundColor: 'rgb(61 220 132)',
+                                              color: 'rgb(19 100 55)',
+                                              borderRadius: '1000px',
+                                              padding: '8px 16px',
+                                              fontSize: '15px',
+                                              fontWeight: 700,
+                                              border: 'none',
+                                              cursor: 'default'
+                                            }}
+                                          >
+                                            {(m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) ? 'Formation' : (m.equipmentType || (() => {
+                                              const isDefib = defibrillateurs.some((d: any) => d.identifiant === m.defibIdentifiant);
+                                              if (isDefib) return 'Défibrillateur';
+                                              const other = otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant);
+                                              if (other) return other.categorie;
+                                              return m.reason?.toLowerCase().includes('autre') ? 'Autre matériel' : 'Défibrillateur';
+                                            })())}
+                                          </span>
 
                                         {/* CTT Violation Pill on mission */}
                                         {(() => {
@@ -16530,13 +16404,13 @@ export default function App() {
                                           onClick={() => toggleFsmMissionExpanded(missionKey)}
                                           style={{
                                             color: '#fff',
-                                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97 28 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                            background: 'rgb(96 28 104)',
+                                            boxShadow: 'none',
+                                            background: '#0f172a',
                                             borderRadius: '13px',
                                             marginLeft: '40px',
                                             marginRight: '10px',
                                             padding: '8px 18px',
-                                            fontSize: '16px',
+                                            fontSize: '18px',
                                             fontWeight: 700,
                                             border: 'none',
                                             cursor: 'pointer',
@@ -17489,7 +17363,7 @@ export default function App() {
 
                                     return (
                                       <div className="pt-1 flex flex-wrap items-center justify-between gap-2 bg-transparent">
-                                        <span className="text-slate-700 font-medium" style={{ fontSize: '15px' }}>
+                                        <span className="font-medium" style={{ fontSize: '16px', color: '#000', cursor: 'default' }}>
                                           À cette adresse postale, il y a {urgentDefibsCount} autre(s) défibrillateur(s) et {urgentMaterielsCount} autres matériels avec Pro.Main. Urgente.
                                         </span>
                                         <div className="flex flex-wrap items-center gap-2">
@@ -17514,8 +17388,8 @@ export default function App() {
                                               backgroundColor: '#0f172a',
                                               color: '#ffffff',
                                               borderRadius: '10px',
-                                              padding: '7px 14px',
-                                              fontSize: '14px',
+                                              padding: '10px 16px',
+                                              fontSize: '16px',
                                               fontWeight: 100,
                                               border: 'none',
                                               opacity: urgentDefibsCount === 0 ? 0.4 : 1,
@@ -17546,8 +17420,8 @@ export default function App() {
                                               backgroundColor: '#0f172a',
                                               color: '#ffffff',
                                               borderRadius: '10px',
-                                              padding: '7px 14px',
-                                              fontSize: '14px',
+                                              padding: '10px 16px',
+                                              fontSize: '16px',
                                               fontWeight: 100,
                                               border: 'none',
                                               opacity: urgentMaterielsCount === 0 ? 0.4 : 1,
@@ -18546,7 +18420,102 @@ export default function App() {
                   style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
                 >
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
-                    <div />
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* 3-item Segmented Toggle for 'À venir' / 'Modération' / 'Validés' */}
+                      <div 
+                        className="flex items-center p-1 bg-white select-none" 
+                        style={{ 
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          borderRadius: '15px',
+                          border: '1px solid #dadada',
+                          backgroundColor: '#ffffff',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setGmaoFilter('upcoming')}
+                          style={{
+                            fontSize: '18px',
+                            borderRadius: '13px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: gmaoFilter === 'upcoming' ? '#2e54ff' : 'transparent',
+                            color: gmaoFilter === 'upcoming' ? '#ffffff' : '#000000',
+                            transition: 'none',
+                          }}
+                          className={`px-4 py-1.5 font-bold ${
+                            gmaoFilter === 'upcoming' ? 'shadow-sm' : ''
+                          }`}
+                        >
+                          {t("À venir")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGmaoFilter('moderation')}
+                          style={{
+                            fontSize: '18px',
+                            borderRadius: '13px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: gmaoFilter === 'moderation' ? '#2e54ff' : 'transparent',
+                            color: gmaoFilter === 'moderation' ? '#ffffff' : '#000000',
+                            transition: 'none',
+                          }}
+                          className={`px-4 py-1.5 font-bold ${
+                            gmaoFilter === 'moderation' ? 'shadow-sm' : ''
+                          }`}
+                        >
+                          {t("Modération")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setGmaoFilter('validated')}
+                          style={{
+                            fontSize: '18px',
+                            borderRadius: '13px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            backgroundColor: gmaoFilter === 'validated' ? '#2e54ff' : 'transparent',
+                            color: gmaoFilter === 'validated' ? '#ffffff' : '#000000',
+                            transition: 'none',
+                          }}
+                          className={`px-4 py-1.5 font-bold ${
+                            gmaoFilter === 'validated' ? 'shadow-sm' : ''
+                          }`}
+                        >
+                          {t("Validés")}
+                        </button>
+                      </div>
+
+                      {/* Apple-style toggle ON/OFF: Inclure Autres Matériels */}
+                      <label 
+                        className="inline-flex items-center gap-2 cursor-pointer select-none ml-1"
+                        style={{ cursor: 'pointer' }}
+                        title={t("Inclure Autres Matériels")}
+                      >
+                        <span 
+                          style={{ 
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", 
+                            fontSize: '16px', 
+                            fontWeight: 100, 
+                            color: '#000000',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {t("Inclure Autres Matériels")}
+                        </span>
+                        <div className="relative inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            id="toggle-gmao-include-autres-materiels"
+                            checked={gmaoIncludeAutresMateriels}
+                            onChange={(e) => setGmaoIncludeAutresMateriels(e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" />
+                        </div>
+                      </label>
+                    </div>
 
                     <div className="flex flex-wrap items-center gap-3">
                       {/* 3-dots Native System Dropdown */}
@@ -18659,101 +18628,6 @@ export default function App() {
                           }}
                         />
                       </div>
-
-                      {/* 3-item Segmented Toggle for 'À venir' / 'Modération' / 'Validés' */}
-                      <div 
-                        className="flex items-center p-1 bg-white select-none" 
-                        style={{ 
-                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                          borderRadius: '15px',
-                          border: '1px solid #dadada',
-                          backgroundColor: '#ffffff',
-                        }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setGmaoFilter('upcoming')}
-                          style={{
-                            fontSize: '18px',
-                            borderRadius: '13px',
-                            border: 'none',
-                            cursor: 'pointer',
-                            backgroundColor: gmaoFilter === 'upcoming' ? '#2e54ff' : 'transparent',
-                            color: gmaoFilter === 'upcoming' ? '#ffffff' : '#000000',
-                            transition: 'none',
-                          }}
-                          className={`px-4 py-1.5 font-bold ${
-                            gmaoFilter === 'upcoming' ? 'shadow-sm' : ''
-                          }`}
-                        >
-                          {t("À venir")}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setGmaoFilter('moderation')}
-                          style={{
-                            fontSize: '18px',
-                            borderRadius: '13px',
-                            border: 'none',
-                            cursor: 'pointer',
-                            backgroundColor: gmaoFilter === 'moderation' ? '#2e54ff' : 'transparent',
-                            color: gmaoFilter === 'moderation' ? '#ffffff' : '#000000',
-                            transition: 'none',
-                          }}
-                          className={`px-4 py-1.5 font-bold ${
-                            gmaoFilter === 'moderation' ? 'shadow-sm' : ''
-                          }`}
-                        >
-                          {t("Modération")}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setGmaoFilter('validated')}
-                          style={{
-                            fontSize: '18px',
-                            borderRadius: '13px',
-                            border: 'none',
-                            cursor: 'pointer',
-                            backgroundColor: gmaoFilter === 'validated' ? '#2e54ff' : 'transparent',
-                            color: gmaoFilter === 'validated' ? '#ffffff' : '#000000',
-                            transition: 'none',
-                          }}
-                          className={`px-4 py-1.5 font-bold ${
-                            gmaoFilter === 'validated' ? 'shadow-sm' : ''
-                          }`}
-                        >
-                          {t("Validés")}
-                        </button>
-                      </div>
-
-                      {/* Apple-style toggle ON/OFF: Inclure Autres Matériels */}
-                      <label 
-                        className="inline-flex items-center gap-2 cursor-pointer select-none ml-1"
-                        style={{ cursor: 'pointer' }}
-                        title={t("Inclure Autres Matériels")}
-                      >
-                        <span 
-                          style={{ 
-                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", 
-                            fontSize: '16px', 
-                            fontWeight: 100, 
-                            color: '#000000',
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          {t("Inclure Autres Matériels")}
-                        </span>
-                        <div className="relative inline-flex items-center">
-                          <input
-                            type="checkbox"
-                            id="toggle-gmao-include-autres-materiels"
-                            checked={gmaoIncludeAutresMateriels}
-                            onChange={(e) => setGmaoIncludeAutresMateriels(e.target.checked)}
-                            className="sr-only peer"
-                          />
-                          <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" />
-                        </div>
-                      </label>
                     </div>
                   </div>
                 </div>
@@ -18959,7 +18833,7 @@ export default function App() {
 
                                   return (
                                     <td className="px-4 py-3.5">
-                                      <div className="w-14 h-14 rounded-md bg-white border border-slate-200 overflow-hidden relative flex items-center justify-center p-1.5" style={{ backgroundColor: '#ffffff' }}>
+                                      <div className="w-14 h-14 rounded-md bg-white border overflow-hidden relative flex items-center justify-center p-1.5" style={{ backgroundColor: '#ffffff', borderColor: 'oklch(0.92 0.01 258.78)', borderWidth: '1px' }}>
                                         {isDefib && defibThumbUrl ? (
                                           <img
                                             src={defibThumbUrl}
@@ -18985,7 +18859,7 @@ export default function App() {
                                       display: 'inline-flex', 
                                       alignItems: 'center', 
                                       gap: '8px',
-                                      border: '1px solid rgb(231, 231, 231)',
+                                      border: '1px solid oklch(0.92 0.01 258.78)',
                                       borderRadius: '1000px',
                                       padding: '4px 12px',
                                       backgroundColor: '#ffffff',
@@ -19037,7 +18911,7 @@ export default function App() {
                                           display: 'inline-flex', 
                                           alignItems: 'center', 
                                           gap: '8px',
-                                          border: '1px solid rgb(231, 231, 231)',
+                                          border: '1px solid oklch(0.92 0.01 258.78)',
                                           borderRadius: '1000px',
                                           padding: '4px 12px',
                                           backgroundColor: '#ffffff',
@@ -19060,7 +18934,7 @@ export default function App() {
                                         display: 'inline-flex', 
                                         alignItems: 'center', 
                                         gap: '8px',
-                                        border: '1px solid rgb(231, 231, 231)',
+                                        border: '1px solid oklch(0.92 0.01 258.78)',
                                         borderRadius: '1000px',
                                         padding: '4px 12px',
                                         backgroundColor: '#ffffff',
@@ -19081,7 +18955,7 @@ export default function App() {
                                         display: 'inline-flex', 
                                         alignItems: 'center', 
                                         gap: '8px',
-                                        border: '1px solid rgb(231, 231, 231)',
+                                        border: '1px solid oklch(0.92 0.01 258.78)',
                                         borderRadius: '1000px',
                                         padding: '4px 12px',
                                         backgroundColor: '#ffffff',
@@ -19111,7 +18985,7 @@ export default function App() {
                                         display: 'inline-flex', 
                                         alignItems: 'center', 
                                         gap: '8px',
-                                        border: '1px solid rgb(231, 231, 231)',
+                                        border: '1px solid oklch(0.92 0.01 258.78)',
                                         borderRadius: '1000px',
                                         padding: '4px 12px',
                                         backgroundColor: '#ffffff',
@@ -19150,7 +19024,7 @@ export default function App() {
                                           display: 'inline-flex', 
                                           alignItems: 'center', 
                                           gap: '8px',
-                                          border: '1px solid rgb(231, 231, 231)',
+                                          border: '1px solid oklch(0.92 0.01 258.78)',
                                           borderRadius: '1000px',
                                           padding: '4px 12px',
                                           backgroundColor: '#ffffff',
@@ -19290,7 +19164,7 @@ export default function App() {
                                           display: 'inline-flex', 
                                           alignItems: 'center', 
                                           gap: '8px',
-                                          border: '1px solid rgb(231, 231, 231)',
+                                          border: '1px solid oklch(0.92 0.01 258.78)',
                                           borderRadius: '1000px',
                                           padding: '4px 12px',
                                           backgroundColor: '#ffffff',

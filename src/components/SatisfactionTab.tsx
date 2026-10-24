@@ -455,7 +455,7 @@ export default function SatisfactionTab({
     width: '30px',
     height: '30px',
     borderRadius: '50%',
-    backgroundColor: '#2e54ff',
+    backgroundColor: '#0f172a',
     color: '#ffffff',
     fontWeight: 'bold',
     fontSize: '11px',
@@ -473,10 +473,11 @@ export default function SatisfactionTab({
     height: '42px',
     fontSize: '13.5px',
     letterSpacing: '-0.3px',
-    outline: '#8f1961 solid 3px',
-    outlineOffset: '3px',
+    outline: 'none',
+    border: 'none',
     marginLeft: '10px',
-    backgroundColor: '#8f1961',
+    backgroundColor: 'rgb(247, 252, 192)',
+    color: 'rgb(105, 114, 5)',
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
@@ -824,6 +825,8 @@ export default function SatisfactionTab({
                     if (resolvedSpreadsheetUrl) {
                       openTenantSpreadsheetUrl(resolvedSpreadsheetUrl);
                     }
+                  } else if (val === 'form-template') {
+                    openTenantSpreadsheetUrl('https://consoledefibeo.deroesch.com/satisfaction');
                   }
                 }}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -841,6 +844,9 @@ export default function SatisfactionTab({
                 </option>
                 <option value="spreadsheet" disabled={!resolvedSpreadsheetUrl}>
                   {t("Ouvrir l’éditeur Spreadsheets")}
+                </option>
+                <option value="form-template">
+                  {t("Consulter le modèle du formulaire")}
                 </option>
               </select>
             </div>
@@ -956,12 +962,15 @@ export default function SatisfactionTab({
                     type="button"
                     onClick={handleToggleSelectAll}
                     id="select-all-radio-checkbox"
-                    className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
+                    className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                       isAllSelected
                         ? 'border-[#2e54ff] bg-transparent'
-                        : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                        : 'bg-white hover:border-[#2e54ff]'
                     }`}
-                    style={{ borderWidth: '2.5px' }}
+                    style={{
+                      borderWidth: '1px',
+                      borderColor: isAllSelected ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                    }}
                     role="checkbox"
                     aria-checked={isAllSelected}
                   >
@@ -1109,12 +1118,15 @@ export default function SatisfactionTab({
                             handleToggleSelectRow(rev.id);
                           }}
                           id={`radio-checkbox-row-${rev.id}`}
-                          className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
+                          className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                             isChecked
                               ? 'border-[#2e54ff] bg-transparent'
-                              : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                              : 'bg-white hover:border-[#2e54ff]'
                           }`}
-                          style={{ borderWidth: '2.5px' }}
+                          style={{
+                            borderWidth: '1px',
+                            borderColor: isChecked ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                          }}
                           role="checkbox"
                           aria-checked={isChecked}
                         >

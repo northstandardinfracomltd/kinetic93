@@ -247,7 +247,7 @@ function FormRadio({
       <span 
         className="rounded-full relative transition-all bg-white"
         style={{
-          border: checked ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
+          border: checked ? '1px solid #2e54ff' : '1px solid #cbd5e1',
           width: '20px',
           height: '20px',
           minWidth: '20px',
@@ -2546,38 +2546,29 @@ export default function GmaoCorrectionForm({
 
   return (
     <div 
-      className={isWebapp || forceSmartphoneLayout ? `w-full ${isReduced ? 'space-y-0 pb-0 min-h-0' : 'min-h-full flex-1 flex flex-col justify-between space-y-6'} font-sans animate-fadeIn max-w-full text-black px-0 bg-white relative overflow-x-hidden` : `w-full ${isReduced ? 'space-y-0 pb-0 min-h-0' : 'min-h-full flex-1 flex flex-col justify-between space-y-6'} font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl overflow-x-hidden`} 
+      className={isWebapp || forceSmartphoneLayout ? `w-full ${isReduced ? 'space-y-0 pb-0 min-h-0' : 'min-h-full flex-1 flex flex-col justify-between space-y-0'} font-sans animate-fadeIn max-w-full text-black px-0 bg-white relative overflow-x-hidden` : `w-full ${isReduced ? 'space-y-0 pb-0 min-h-0' : 'min-h-full flex-1 flex flex-col justify-between space-y-0'} font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl overflow-x-hidden`} 
       id="gmao-correction-layout"
       style={{ overflowX: 'hidden', maxWidth: '100%', width: '100%', overscrollBehaviorX: 'none', ...(isReduced ? {} : { minHeight: '100%' }) }}
     >
-      {shouldShowChronoAndReduce && !isReduced && (
-        <div 
-          className="fixed top-0 right-0 z-[60] flex items-center px-3.5 py-1.5 text-white font-sans pointer-events-auto select-none shadow-sm"
-          style={{
-            backgroundColor: '#2e54ff',
-            border: 'none',
-            boxShadow: 'none',
-            borderBottomLeftRadius: '13px',
-            borderTopRightRadius: '0px',
-            borderTopLeftRadius: '0px',
-            borderBottomRightRadius: '0px',
-            fontWeight: 100,
-            fontSize: '16px'
-          }}
-        >
-          {chronoText}
-        </div>
-      )}
-
-      {/* Action Buttons Group: Annuler + Réduire / Agrandir (collé / sans espace, flux normal non-sticky) */}
-      <div className="w-full flex flex-col !m-0 !p-0 !space-y-0 shrink-0 relative" style={{ position: 'relative' }}>
+      {/* Action Buttons Group: Annuler + Réduire / Agrandir + Chrono (33.33% / 33.33% / 33.33% sur la même ligne) */}
+      <div className="w-full flex flex-row items-stretch !m-0 !p-0 shrink-0 relative" style={{ position: 'relative' }}>
         {/* Button Annuler */}
         <button
           type="button"
           onClick={onCancel}
           id="btn-close-gmao-modal"
-          style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#0f172a', color: '#ffffff', margin: 0, position: 'relative' }}
-          className="transition-colors cursor-pointer font-sans select-none block w-full"
+          style={{
+            ...rowActionButton18Style,
+            width: shouldShowChronoAndReduce ? '33.3333%' : '100%',
+            borderRadius: '0px',
+            padding: '14px 8px',
+            backgroundColor: '#0f172a',
+            color: '#ffffff',
+            border: 'none',
+            margin: 0,
+            position: 'relative',
+          }}
+          className="transition-colors cursor-pointer font-sans select-none flex items-center justify-center text-center"
         >
           Annuler
         </button>
@@ -2589,26 +2580,50 @@ export default function GmaoCorrectionForm({
             onClick={handleToggleReduce}
             id="btn-toggle-reduce-gmao"
             style={{
-              width: '100%',
+              width: '33.3333%',
               borderRadius: '0px',
-              padding: '14px 20px',
+              padding: '14px 8px',
               backgroundColor: '#e5e7eb',
               color: '#000000',
               fontSize: '18px',
               fontWeight: 'bold',
               border: 'none',
-              borderTop: '1px solid #d1d5db',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
               margin: 0,
-              position: 'relative'
+              position: 'relative',
             }}
-            className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none block w-full !mt-0"
+            className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none !mt-0"
           >
             {isReduced ? "Agrandir" : "Réduire"}
           </button>
+        )}
+
+        {/* Chrono */}
+        {shouldShowChronoAndReduce && (
+          <div
+            style={{
+              width: '33.3333%',
+              borderRadius: '0px',
+              padding: '14px 8px',
+              backgroundColor: '#2e54ff',
+              color: '#ffffff',
+              fontSize: '18px',
+              fontWeight: 100,
+              border: 'none',
+              boxShadow: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: 0,
+              position: 'relative',
+            }}
+            className="font-sans select-none text-center"
+          >
+            {chronoText}
+          </div>
         )}
       </div>
 
@@ -2680,7 +2695,7 @@ export default function GmaoCorrectionForm({
       )}
 
       {/* Main core form */}
-      <form onSubmit={handleSubmit} id="gmao-correction-form" noValidate className="space-y-6 w-full max-w-full overflow-x-hidden flex-1 pb-44" style={{ overflowX: 'hidden', maxWidth: '100%', width: '100%' }}>
+      <form onSubmit={handleSubmit} id="gmao-correction-form" noValidate className="space-y-0 w-full max-w-full overflow-x-hidden flex-1 pb-0" style={{ overflowX: 'hidden', maxWidth: '100%', width: '100%' }}>
         <style>{`
           #report-form-overlay,
           #gmao-correction-layout,
@@ -2800,7 +2815,7 @@ export default function GmaoCorrectionForm({
             -webkit-appearance: none !important;
             width: 18px !important;
             height: 18px !important;
-            border: 2px solid #cbd5e1 !important;
+            border: 1px solid #cbd5e1 !important;
             border-radius: 50% !important;
             background-color: #ffffff !important;
             outline: none !important;
@@ -2876,32 +2891,18 @@ export default function GmaoCorrectionForm({
         `}</style>
         
         {/* Stacked Layout: Sections layered one on top of the other, identical to DefibTab.tsx */}
-        <div className="space-y-0" style={{ maxWidth: '100%', margin: '12px auto 0px' }}>
+        <div className="space-y-0" style={{ maxWidth: '100%', margin: '0px auto 0px' }}>
           
           {/* Section 0 - Document Configuration & Lookup */}
           <div 
             id="gmao-sec-0"
             className="bg-white p-5 relative space-y-3"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              border: 'none',
               borderRadius: '0px',
               display: activeSection === 0 ? 'block' : 'none',
             }}
           >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                0 — Configuration
-              </span>
-            </div>
 
             {/* Point 0: Référence intervention */}
             <div className="space-y-1 bg-white">
@@ -3165,25 +3166,11 @@ export default function GmaoCorrectionForm({
             id="gmao-sec-1"
             className="bg-white p-5 relative space-y-3"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              border: 'none',
               borderRadius: '0px',
               display: activeSection === 1 ? 'block' : 'none',
             }}
           >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                1 — Identification et photos
-              </span>
-            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -3654,25 +3641,11 @@ export default function GmaoCorrectionForm({
             id="gmao-sec-2"
             className="bg-white p-5 relative space-y-3"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              border: 'none',
               borderRadius: '0px',
               display: activeSection === 2 ? 'block' : 'none',
             }}
           >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                2 — Client
-              </span>
-            </div>
 
             <div className="space-y-1">
               <label htmlFor="snap-clientId" className="block text-[11px] font-bold text-black uppercase">
@@ -3902,25 +3875,11 @@ export default function GmaoCorrectionForm({
             id="gmao-sec-3"
             className="bg-white p-5 relative space-y-3"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              border: 'none',
               borderRadius: '0px',
               display: activeSection === 3 ? 'block' : 'none',
             }}
           >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                3 — Coffret
-              </span>
-            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -4083,25 +4042,11 @@ export default function GmaoCorrectionForm({
             id="gmao-sec-4"
             className="bg-white p-5 relative space-y-3"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              border: 'none',
               borderRadius: '0px',
               display: activeSection === 4 ? 'block' : 'none',
             }}
           >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                4 — Accès
-              </span>
-            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -4234,25 +4179,11 @@ export default function GmaoCorrectionForm({
             id="gmao-sec-5"
             className="bg-white p-5 relative space-y-3"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              border: 'none',
               borderRadius: '0px',
               display: activeSection === 5 ? 'block' : 'none',
             }}
           >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                5 — Dates
-              </span>
-            </div>
 
             <div className="space-y-4">
               <div className="space-y-1">
@@ -4383,25 +4314,11 @@ export default function GmaoCorrectionForm({
             id="gmao-sec-6"
             className="bg-white p-5 relative space-y-3"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              border: 'none',
               borderRadius: '0px',
               display: activeSection === 6 ? 'block' : 'none',
             }}
           >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                6 — Électrode Adulte (A)
-              </span>
-            </div>
 
             <div className="space-y-1">
               <label htmlFor="snap-modeleElectrodeAId" className="block text-[11px] font-bold text-black uppercase">
@@ -4765,25 +4682,11 @@ export default function GmaoCorrectionForm({
             id="gmao-sec-7"
             className="bg-white p-5 relative space-y-3"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              border: 'none',
               borderRadius: '0px',
               display: activeSection === 7 ? 'block' : 'none',
             }}
           >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                7 — Électrode Pédiatrique (P)
-              </span>
-            </div>
 
             <div className="space-y-1">
               <label htmlFor="snap-modeleElectrodePId" className="block text-[11px] font-bold text-black uppercase">
@@ -5149,25 +5052,11 @@ export default function GmaoCorrectionForm({
             id="gmao-sec-8"
             className="bg-white p-5 relative space-y-3"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              border: 'none',
               borderRadius: '0px',
               display: activeSection === 8 ? 'block' : 'none',
             }}
           >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                8 — Batterie (B)
-              </span>
-            </div>
 
             <div className="space-y-1">
               <label htmlFor="snap-modeleBatterieId" className="block text-[11px] font-bold text-black uppercase">
@@ -5424,25 +5313,11 @@ export default function GmaoCorrectionForm({
               id="gmao-sec-9"
               className="bg-white p-5 relative space-y-3"
               style={{
-                border: '1px solid rgb(218, 218, 218)',
+                border: 'none',
                 borderRadius: '0px',
                 display: activeSection === 9 ? 'block' : 'none',
               }}
             >
-              <div className="mb-2 bg-transparent">
-                <span 
-                  className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                  style={{
-                    backgroundColor: '#2e54ff',
-                    borderRadius: '1000px',
-                    cursor: 'default',
-                    fontWeight: 100,
-                    textTransform: 'none',
-                  }}
-                >
-                  9 — Vérifications techniques
-                </span>
-              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
                 {/* Conforme à mon arrivée (Full width span) */}
@@ -5572,25 +5447,11 @@ export default function GmaoCorrectionForm({
             id="gmao-sec-10"
             className="bg-white p-5 relative space-y-3"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              border: 'none',
               borderRadius: '0px',
               display: activeSection === 10 ? 'block' : 'none',
             }}
           >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                10 — Vérifications du kit de secours
-              </span>
-            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
               {/* Left Column: Trousse presence & Péremption */}
@@ -5799,25 +5660,11 @@ export default function GmaoCorrectionForm({
             id="gmao-sec-11"
             className="bg-white p-5 relative space-y-3"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              border: 'none',
               borderRadius: '0px',
               display: activeSection === 11 ? 'block' : 'none',
             }}
           >
-            <div className="mb-2 bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                11 — Diagnostics et clôture
-              </span>
-            </div>
 
             <div className="bg-white">
               <div className="space-y-1 bg-white">
@@ -6520,8 +6367,11 @@ export default function GmaoCorrectionForm({
 
       {/* Fixed Error Code Helper Box */}
       <div 
-        className="sticky bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-2.5 px-3 z-40 space-y-2 w-full max-w-full overflow-x-hidden shrink-0 animate-fade-in !mt-0" 
+        className="sticky bottom-0 left-0 right-0 bg-[#f5f7fa] border-none p-2.5 px-3 z-40 space-y-2 w-full max-w-full overflow-x-hidden shrink-0 animate-fade-in !mt-0" 
         style={{ 
+          backgroundColor: '#f5f7fa',
+          border: 'none',
+          borderTop: 'none',
           boxShadow: 'none',
           maxWidth: isWebapp || forceSmartphoneLayout ? '100%' : '1000px',
           marginLeft: 'auto',
@@ -6536,10 +6386,10 @@ export default function GmaoCorrectionForm({
         {/* Horizontal Sections Carousel Selector */}
         <div className="relative w-full max-w-full overflow-hidden">
           {/* Left Fade Overlay */}
-          <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-white to-transparent pointer-events-none z-10" />
+          <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-[#f5f7fa] to-transparent pointer-events-none z-10" />
           
           {/* Right Fade Overlay */}
-          <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-white to-transparent pointer-events-none z-10" />
+          <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[#f5f7fa] to-transparent pointer-events-none z-10" />
 
           <div 
             ref={pillsContainerRef}
@@ -6560,8 +6410,8 @@ export default function GmaoCorrectionForm({
                   onClick={() => scrollToSection(sec.id)}
                   className="px-4 py-1.5 text-[14px] rounded-full font-medium transition-all duration-200 shrink-0 select-none cursor-pointer"
                   style={{
-                    backgroundColor: isActive ? '#3B5BEE' : '#2e54ff',
-                    color: '#FFFFFF',
+                    backgroundColor: isActive ? '#3ddc84' : '#2e54ff',
+                    color: isActive ? '#136437' : '#FFFFFF',
                     border: 'none',
                     transform: isActive ? 'scale(1.03)' : 'scale(1)',
                     fontWeight: isActive ? '600' : '500',

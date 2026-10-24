@@ -277,15 +277,13 @@ export default function SettingsModal({
 
   const SETTINGS_SECTIONS: { key: SettingsSectionKey; label: string }[] = [
     { key: 'reglages', label: 'Réglages' },
+    { key: 'connecteurs', label: 'Connecteurs' },
     { key: 'pdf', label: 'Apparence des rapports PDF' },
     { key: 'emplacements', label: 'Intitulés des emplacements' },
-    { key: 'connecteurs', label: 'Connecteurs' },
-    { key: 'bases_de_donnees', label: 'Bases de données' },
-    { key: 'boutique', label: 'Boutique' },
-    { key: 'assistance', label: 'Assistance Defibeo' },
-    { key: 'parrainage', label: 'Parrainage' },
-    { key: 'membres', label: 'Membres de l’environnement' },
     { key: 'communication', label: 'Communication portail client' },
+    { key: 'bases_de_donnees', label: 'Bases de données' },
+    { key: 'membres', label: 'Membres de l’environnement' },
+    { key: 'assistance', label: 'Assistance Defibeo' },
     { key: 'actions_suspectes', label: 'Observateur des actions suspectes' },
   ];
 
@@ -784,7 +782,7 @@ export default function SettingsModal({
         }
       }
     }
-  }, [isOpen, isPage, propTenantId, companyInfo, members]);
+  }, [isOpen, isPage, propTenantId]);
 
   React.useEffect(() => {
     setEnableOtherEquipments(propEnableOtherEquipments);
@@ -921,6 +919,15 @@ export default function SettingsModal({
     ).trim();
   }, []);
 
+  const onUpdateCompanyInfoRef = React.useRef(onUpdateCompanyInfo);
+  const onUpdateMembersRef = React.useRef(onUpdateMembers);
+  const onUpdateLocationNamesRef = React.useRef(onUpdateLocationNames);
+  const onUpdateOtherEquipmentsRef = React.useRef(onUpdateOtherEquipments);
+  onUpdateCompanyInfoRef.current = onUpdateCompanyInfo;
+  onUpdateMembersRef.current = onUpdateMembers;
+  onUpdateLocationNamesRef.current = onUpdateLocationNames;
+  onUpdateOtherEquipmentsRef.current = onUpdateOtherEquipments;
+
   // Apply fresh data fetched from a dedicated Google Spreadsheet to local states
   const applySpreadsheetDataToState = React.useCallback((tabType: string, items: any[], activeTid: string, baseFbMembers?: Member[]) => {
     if (!Array.isArray(items)) return;
@@ -952,7 +959,6 @@ export default function SettingsModal({
       }
       if (cleanPatch.enableOtherEquipments === 'Oui' || cleanPatch.enableOtherEquipments === 'Non') {
         setEnableOtherEquipments(cleanPatch.enableOtherEquipments);
-        if (onUpdateOtherEquipments) onUpdateOtherEquipments(cleanPatch.enableOtherEquipments);
       }
       if (cleanPatch.disableHelpsAndTutorials === 'Oui' || cleanPatch.disableHelpsAndTutorials === 'Non') {
         setDisableHelpsAndTutorials(cleanPatch.disableHelpsAndTutorials);
@@ -978,11 +984,6 @@ export default function SettingsModal({
         try {
           localStorage.setItem(`defib_${activeTid}_company_info`, JSON.stringify(nextComp));
         } catch (_) {}
-        setTimeout(() => {
-          try {
-            onUpdateCompanyInfo(nextComp);
-          } catch (_) {}
-        }, 0);
         return nextComp;
       });
     } else if (tabType === 'apparenceRapportsPdf') {
@@ -1021,11 +1022,6 @@ export default function SettingsModal({
         try {
           localStorage.setItem(`defib_${activeTid}_company_info`, JSON.stringify(nextComp));
         } catch (_) {}
-        setTimeout(() => {
-          try {
-            onUpdateCompanyInfo(nextComp);
-          } catch (_) {}
-        }, 0);
         return nextComp;
       });
     } else if (tabType === 'intituleEmplacements') {
@@ -1060,7 +1056,6 @@ export default function SettingsModal({
         }
       }
       setLocalLocationNames(nextLocs);
-      if (onUpdateLocationNames) onUpdateLocationNames(nextLocs);
       try {
         localStorage.setItem(`defib_${activeTid}_custom_location_names`, JSON.stringify(nextLocs));
       } catch (_) {}
@@ -1074,11 +1069,6 @@ export default function SettingsModal({
         try {
           localStorage.setItem(`defib_${activeTid}_company_info`, JSON.stringify(nextComp));
         } catch (_) {}
-        setTimeout(() => {
-          try {
-            onUpdateCompanyInfo(nextComp);
-          } catch (_) {}
-        }, 0);
         return nextComp;
       });
     } else if (tabType === 'communicationPortailClient') {
@@ -1098,11 +1088,6 @@ export default function SettingsModal({
         try {
           localStorage.setItem(`defib_${activeTid}_company_info`, JSON.stringify(nextComp));
         } catch (_) {}
-        setTimeout(() => {
-          try {
-            onUpdateCompanyInfo(nextComp);
-          } catch (_) {}
-        }, 0);
         return nextComp;
       });
     } else if (tabType === 'membresEnvironnement') {
@@ -1110,10 +1095,9 @@ export default function SettingsModal({
       const mixed = mergeFirebaseAndSpreadsheetMembers(fbSource, items, activeTid);
       lastPropsMembersRef.current = mixed;
       setLocalMembers(mixed);
-      onUpdateMembers(mixed);
       localStorage.setItem(`defib_${activeTid}_members`, JSON.stringify(mixed));
     }
-  }, [mergeFirebaseAndSpreadsheetMembers, onUpdateOtherEquipments, onUpdateLocationNames, onUpdateMembers, onUpdateCompanyInfo, setLanguage]);
+  }, [mergeFirebaseAndSpreadsheetMembers, setLanguage]);
 
   // Force GET from dedicated Google Spreadsheets for the 5 settings compartments
   const fetchSettingsCompartmentsFromSheets = React.useCallback(async (compOverride?: any, onlySection?: SettingsSectionKey | null) => {
@@ -1138,7 +1122,6 @@ export default function SettingsModal({
               const ensuredRemote = ensureTenantMembersClient(Array.isArray(remoteMembers) ? remoteMembers : latestMembersRef.current, activeTid);
               if (ensuredRemote.length > 0) {
                 setLocalMembers(ensuredRemote);
-                onUpdateMembers(ensuredRemote);
               }
             } catch (_) {}
           }
@@ -1167,104 +1150,25 @@ export default function SettingsModal({
         } catch (_) {}
       })
     );
-  }, [propTenantId, resolveSettingsSheetUrl, applySpreadsheetDataToState, onUpdateMembers]);
+  }, [propTenantId, resolveSettingsSheetUrl, applySpreadsheetDataToState]);
 
+  // Only refresh once when opening a specific tab (when activeSection changes)
+  const lastFetchedTabRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
-    const ensured = ensureTenantMembersClient(members, activeTid);
-    if (JSON.stringify(ensured) !== JSON.stringify(lastPropsMembersRef.current)) {
-      setLocalMembers(prev => mergeFirebaseAndSpreadsheetMembers(ensured, prev, activeTid));
-      lastPropsMembersRef.current = ensured;
+    if (!isOpen && !isPage) {
+      lastFetchedTabRef.current = null;
+      return;
     }
-  }, [members, propTenantId, mergeFirebaseAndSpreadsheetMembers]);
-
-  React.useEffect(() => {
-    const activeTid = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
-    const tenantChanged = propTenantId !== lastPropTenantIdRef.current;
-    if (tenantChanged || JSON.stringify(companyInfo) !== JSON.stringify(lastPropsCompanyRef.current)) {
-      lastPropTenantIdRef.current = propTenantId;
-      const cleanDefault = getCleanTenantDefaultCompany(activeTid);
-      const hasReglagesSheet = Boolean(resolveSettingsSheetUrl('spreadsheetReglages', 'spreadsheetReglagesUrl', 'spreadsheet_reglages', activeTid, companyInfo));
-      const hasPdfSheet = Boolean(resolveSettingsSheetUrl('spreadsheetApparenceRapportsPdf', 'spreadsheetApparenceRapportsPdfUrl', 'spreadsheet_apparence_rapports_pdf', activeTid, companyInfo));
-      const hasEmplacementsSheet = Boolean(resolveSettingsSheetUrl('spreadsheetIntituleEmplacements', 'spreadsheetIntituleEmplacementsUrl', 'spreadsheet_intitule_emplacements', activeTid, companyInfo));
-      const hasComSheet = Boolean(resolveSettingsSheetUrl('spreadsheetCommunicationPortailClient', 'spreadsheetCommunicationPortailClientUrl', 'spreadsheet_communication_portail_client', activeTid, companyInfo));
-
-      setLocalCompany(prev => {
-        const basePrev = tenantChanged ? cleanDefault : prev;
-        if (!companyInfo) return basePrev;
-        const effDefibs = companyInfo.spreadsheetDefibrillateurs || companyInfo.spreadsheetDefibrillateursUrl || (!tenantChanged ? basePrev.spreadsheetDefibrillateurs : '') || '';
-        const effAutres = companyInfo.spreadsheetAutresMateriels || companyInfo.spreadsheetAutresMaterielsUrl || (!tenantChanged ? basePrev.spreadsheetAutresMateriels : '') || '';
-        const effClients = companyInfo.spreadsheetClients || companyInfo.spreadsheetClientsUrl || (!tenantChanged ? basePrev.spreadsheetClients : '') || '';
-        const extraEff: Record<string, string> = {};
-        for (const f of EXTRA_SPREADSHEET_FIELDS) {
-          const val = (companyInfo as any)[f.key] || (companyInfo as any)[f.urlKey] || (!tenantChanged ? (basePrev as any)[f.key] : '') || '';
-          extraEff[f.key] = val;
-          extraEff[f.urlKey as string] = val;
-        }
-        const nextComp: CompanyInfo = {
-          ...cleanDefault,
-          ...basePrev,
-          ...(hasReglagesSheet ? {} : {
-            name: companyInfo.name || basePrev.name,
-            nomCommercial: companyInfo.nomCommercial || companyInfo.name || basePrev.nomCommercial,
-            logo: companyInfo.logo !== undefined ? companyInfo.logo : basePrev.logo,
-            website: companyInfo.website !== undefined ? companyInfo.website : basePrev.website,
-            email: companyInfo.email || basePrev.email,
-            phone: companyInfo.phone !== undefined ? companyInfo.phone : basePrev.phone,
-            nomLogiciel: companyInfo.nomLogiciel !== undefined ? companyInfo.nomLogiciel : basePrev.nomLogiciel,
-            gmailPartageLocalisation: companyInfo.gmailPartageLocalisation !== undefined ? companyInfo.gmailPartageLocalisation : basePrev.gmailPartageLocalisation,
-            hiddenTabs: companyInfo.hiddenTabs !== undefined ? companyInfo.hiddenTabs : basePrev.hiddenTabs,
-          }),
-          ...(hasPdfSheet ? {} : {
-            pdfHeaderImg: companyInfo.pdfHeaderImg !== undefined ? companyInfo.pdfHeaderImg : basePrev.pdfHeaderImg,
-            pdfPageHeaderText: companyInfo.pdfPageHeaderText !== undefined ? companyInfo.pdfPageHeaderText : basePrev.pdfPageHeaderText,
-            pdfPageFooterText: companyInfo.pdfPageFooterText !== undefined ? companyInfo.pdfPageFooterText : basePrev.pdfPageFooterText,
-            pdfLastPageInfoText: companyInfo.pdfLastPageInfoText !== undefined ? companyInfo.pdfLastPageInfoText : basePrev.pdfLastPageInfoText,
-            pdfHeaderBgColor: companyInfo.pdfHeaderBgColor !== undefined ? companyInfo.pdfHeaderBgColor : basePrev.pdfHeaderBgColor,
-            pdfCardBorderColor: companyInfo.pdfCardBorderColor !== undefined ? companyInfo.pdfCardBorderColor : basePrev.pdfCardBorderColor,
-            pdfCardBgColor: companyInfo.pdfCardBgColor !== undefined ? companyInfo.pdfCardBgColor : basePrev.pdfCardBgColor,
-            pdfLabelTextColor: companyInfo.pdfLabelTextColor !== undefined ? companyInfo.pdfLabelTextColor : basePrev.pdfLabelTextColor,
-            pdfHideElectrodeSecoursA: companyInfo.pdfHideElectrodeSecoursA !== undefined ? companyInfo.pdfHideElectrodeSecoursA : basePrev.pdfHideElectrodeSecoursA,
-            pdfHideElectrodeSecoursP: companyInfo.pdfHideElectrodeSecoursP !== undefined ? companyInfo.pdfHideElectrodeSecoursP : basePrev.pdfHideElectrodeSecoursP,
-            pdfHideKitSecours: companyInfo.pdfHideKitSecours !== undefined ? companyInfo.pdfHideKitSecours : basePrev.pdfHideKitSecours,
-            pdfSimplifyCoffret: companyInfo.pdfSimplifyCoffret !== undefined ? companyInfo.pdfSimplifyCoffret : basePrev.pdfSimplifyCoffret,
-            pdfHideVerificationsTechniques: companyInfo.pdfHideVerificationsTechniques !== undefined ? companyInfo.pdfHideVerificationsTechniques : basePrev.pdfHideVerificationsTechniques,
-            pdfHideHorodatagesDiagnostic: companyInfo.pdfHideHorodatagesDiagnostic !== undefined ? companyInfo.pdfHideHorodatagesDiagnostic : basePrev.pdfHideHorodatagesDiagnostic,
-            pdfShowDemandeDevisDetails: companyInfo.pdfShowDemandeDevisDetails !== undefined ? companyInfo.pdfShowDemandeDevisDetails : basePrev.pdfShowDemandeDevisDetails,
-          }),
-          spreadsheetDefibrillateurs: effDefibs,
-          spreadsheetAutresMateriels: effAutres,
-          spreadsheetClients: effClients,
-          spreadsheetDefibrillateursUrl: effDefibs,
-          spreadsheetAutresMaterielsUrl: effAutres,
-          spreadsheetClientsUrl: effClients,
-          ...extraEff,
-        };
-        return nextComp;
-      });
-      if (!hasEmplacementsSheet && companyInfo?.customLocationNames) {
-        setLocalLocationNames(ensureTenantCustomLocationNames(companyInfo.customLocationNames, activeTid, members));
+    if (activeSection && ['reglages', 'pdf', 'emplacements', 'communication', 'membres'].includes(activeSection)) {
+      const fetchKey = `${propTenantId || 'default'}_${activeSection}`;
+      if (lastFetchedTabRef.current !== fetchKey) {
+        lastFetchedTabRef.current = fetchKey;
+        fetchSettingsCompartmentsFromSheets(undefined, activeSection);
       }
-      if (!hasReglagesSheet) {
-        setEnableAutoEmails(companyInfo?.enableAutoEmails || 'Oui');
-        setEnableSatisfactionAvis(companyInfo?.enableSatisfactionAvis || 'Oui');
-        setEnableDevisFactures(companyInfo?.enableDevisFactures || 'Oui');
-        setDisableHelpsAndTutorials(companyInfo?.disableHelpsAndTutorials || 'Non');
-        setEnableOtherEquipments(companyInfo?.enableOtherEquipments || 'Non');
-      }
-      if (!hasComSheet && companyInfo?.communicationPortailClient !== undefined) {
-        setCommunicationPortailClient(companyInfo.communicationPortailClient);
-      }
-      lastPropsCompanyRef.current = companyInfo;
+    } else {
+      lastFetchedTabRef.current = activeSection;
     }
-  }, [companyInfo, propTenantId, members, getCleanTenantDefaultCompany, resolveSettingsSheetUrl]);
-
-  // Whenever activeSection changes to one of the 5 spreadsheet-backed tabs, force a fresh GET from the dedicated Spreadsheet
-  React.useEffect(() => {
-    if ((isOpen || isPage) && activeSection && ['reglages', 'pdf', 'emplacements', 'communication', 'membres'].includes(activeSection)) {
-      fetchSettingsCompartmentsFromSheets(undefined, activeSection);
-    }
-  }, [activeSection, isOpen, isPage, fetchSettingsCompartmentsFromSheets]);
+  }, [activeSection, isOpen, isPage, propTenantId, fetchSettingsCompartmentsFromSheets]);
 
   React.useEffect(() => {
     if (isOpen || isPage) {
@@ -1362,12 +1266,6 @@ export default function SettingsModal({
 
       const cachedCom = localStorage.getItem(`defib_${activeTid}_communication_portail_client`);
       setCommunicationPortailClient(cachedCom !== null ? cachedCom : (comp?.communicationPortailClient ?? ''));
-
-      // Immediately trigger GET from dedicated spreadsheets for all configured compartments
-      fetchSettingsCompartmentsFromSheets({
-        ...comp,
-        ...extraInitMerged,
-      });
 
       // Discover spreadsheet URLs from Firestore tenantDatabases & companyInfo in case localStorage was empty, and trigger spreadsheet GET
       if (activeTid) {
@@ -1500,12 +1398,6 @@ export default function SettingsModal({
           if (validCompany && !resolvedHasComSheet && validCompany.communicationPortailClient !== undefined) {
             setCommunicationPortailClient(validCompany.communicationPortailClient);
           }
-
-          // Always fetch from dedicated spreadsheets using discovered URLs
-          fetchSettingsCompartmentsFromSheets({
-            ...(validCompany || {}),
-            ...extraEffFields,
-          });
         }).catch(() => {});
       }
 
@@ -2743,11 +2635,6 @@ export default function SettingsModal({
         setIsAddingMember(false);
         return;
       }
-      if (newMemberPin.length !== 4) {
-        setNewMemberError("Le code PIN doit comporter exactement 4 chiffres.");
-        setIsAddingMember(false);
-        return;
-      }
 
       const candidateEmail = newMemberEmail.trim().toLowerCase();
 
@@ -2789,7 +2676,7 @@ export default function SettingsModal({
         name: newMemberName.trim(),
         email: newMemberEmail.trim(),
         role: newMemberRole,
-        pin: newMemberPin,
+        pin: newMemberPin || '1234',
         status: 'Inactif',
         lastActive: 'Jamais',
         locationLink: newMemberRole === 'Technicien' ? (newMemberLocation || undefined) : undefined,
@@ -3417,22 +3304,10 @@ export default function SettingsModal({
 
   const [sectionSavedKey, setSectionSavedKey] = React.useState<string | null>(null);
 
-  const renderSectionSaveHeader = (title: string, sectionKey: SettingsSectionKey, requireSuperAdmin = false) => {
+  const renderSectionSaveHeader = (_title: string, _sectionKey: SettingsSectionKey, requireSuperAdmin = false) => {
     const isDisabled = isSaving || isDeveloper || isReadOnly || (requireSuperAdmin && !isCurrentUserSuperAdmin);
     return (
-      <div className="flex items-center justify-between w-full mb-3 select-none bg-transparent">
-        <span
-          className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-          style={{
-            backgroundColor: '#2e54ff',
-            borderRadius: '1000px',
-            cursor: 'default',
-            fontWeight: 100,
-            textTransform: 'none',
-          }}
-        >
-          {title}
-        </span>
+      <div className="flex items-center justify-end w-full mb-3 select-none bg-transparent">
         <button
           type="button"
           disabled={isDisabled}
@@ -3892,148 +3767,6 @@ export default function SettingsModal({
               </div>
             </div>
 
-            {/* OTHER EQUIPMENTS INTEGRATION */}
-            <div className="space-y-2 mt-4">
-            <label className="block text-[16px] font-bold text-black font-sans leading-tight">
-              {t("Activer l'infogérance et la maintenance de d'autres types d'équipements")}.
-            </label>
-            <div className="flex items-center space-x-6 py-1 font-sans">
-              <button
-                type="button"
-                disabled={!isCurrentUserSuperAdmin}
-                onClick={() => {
-                  if (!isCurrentUserSuperAdmin) return;
-                  setEnableOtherEquipments("Oui");
-                  localStorage.setItem(`defib_${myTenantId}_enable_other_equipments`, 'Oui');
-                  onUpdateOtherEquipments?.("Oui");
-                  setShowDisableOtherEquipmentsConfirmation(false);
-                }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <span 
-                  className="rounded-full flex items-center justify-center transition-all bg-white"
-                  style={{
-                    border: enableOtherEquipments === "Oui" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
-                    width: '20px',
-                    height: '20px',
-                    minWidth: '20px',
-                    minHeight: '20px',
-                    backgroundColor: '#ffffff'
-                  }}
-                >
-                  {enableOtherEquipments === "Oui" && (
-                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
-                  )}
-                </span>
-                <span className="text-[15px] font-semibold text-black">Oui</span>
-              </button>
-
-              <button
-                type="button"
-                disabled={!isCurrentUserSuperAdmin}
-                onClick={() => {
-                  if (!isCurrentUserSuperAdmin) return;
-                  if (enableOtherEquipments === "Oui" && (otherEquipments || []).length > 0) {
-                    setShowDisableOtherEquipmentsConfirmation(true);
-                  } else {
-                    setEnableOtherEquipments("Non");
-                    localStorage.setItem(`defib_${myTenantId}_enable_other_equipments`, 'Non');
-                    onUpdateOtherEquipments?.("Non");
-                    setShowDisableOtherEquipmentsConfirmation(false);
-                  }
-                }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <span 
-                  className="rounded-full flex items-center justify-center transition-all bg-white"
-                  style={{
-                    border: enableOtherEquipments === "Non" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
-                    width: '20px',
-                    height: '20px',
-                    minWidth: '20px',
-                    minHeight: '20px',
-                    backgroundColor: '#ffffff'
-                  }}
-                >
-                  {enableOtherEquipments === "Non" && (
-                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
-                  )}
-                </span>
-                <span className="text-[15px] font-semibold text-black">Non</span>
-              </button>
-            </div>
-
-            {showDisableOtherEquipmentsConfirmation && (
-              <div 
-                className="mt-3 p-5 rounded-[13px] space-y-4 transition-all animate-fadeIn"
-                style={{
-                  backgroundColor: '#fde5ff',
-                  border: 'none',
-                  maxHeight: '205px',
-                }}
-              >
-                <p 
-                  style={{ 
-                    fontSize: '18px', 
-                    lineHeight: '1.4',
-                    color: '#973e9e',
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  }}
-                  className="font-bold"
-                >
-                  {t("Souhaitez-vous faire clôture votre extension, cela engendre la suppression de ces données")}
-                </p>
-                <div className="flex gap-2.5">
-                  <button
-                    type="button"
-                    disabled={!isCurrentUserSuperAdmin}
-                    onClick={() => {
-                      setShowDisableOtherEquipmentsConfirmation(false);
-                    }}
-                    style={{
-                      backgroundColor: '#0f172a',
-                      color: '#ffffff',
-                      border: 'none',
-                      fontSize: '18px',
-                      borderRadius: '13px',
-                      padding: '10px 20px',
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      cursor: 'pointer',
-                    }}
-                    className="font-bold select-none transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {t("Annuler")}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!isCurrentUserSuperAdmin}
-                    onClick={() => {
-                      if (!isCurrentUserSuperAdmin) return;
-                      setEnableOtherEquipments("Non");
-                      localStorage.setItem('defib_enable_other_equipments', 'Non');
-                      onUpdateOtherEquipments?.("Non");
-                      onClearOtherEquipments?.();
-                      setShowDisableOtherEquipmentsConfirmation(false);
-                    }}
-                    style={{
-                      backgroundColor: '#0f172a',
-                      color: '#ffffff',
-                      border: 'none',
-                      fontSize: '18px',
-                      borderRadius: '13px',
-                      padding: '10px 20px',
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      cursor: 'pointer',
-                    }}
-                    className="font-bold select-none transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-                  >
-                    {t("Confirmer")}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* AUTOMATIC CLIENT EMAILS */}
           <div className="space-y-2 mt-4">
             <label className="block text-[16px] font-bold text-black font-sans leading-tight">
@@ -4092,68 +3825,6 @@ export default function SettingsModal({
                   )}
                 </span>
                 <span className="text-[15px] font-semibold text-black">Non</span>
-              </button>
-            </div>
-          </div>
-
-          {/* DEVIS & FACTURES OPTION */}
-          <div className="space-y-2 mt-4">
-            <label className="block text-[16px] font-bold text-black font-sans leading-tight">
-              {t("Utiliser Commandes sur Defibeo.")}
-            </label>
-            <div className="flex items-center space-x-6 py-1 font-sans">
-              <button
-                type="button"
-                disabled={!isCurrentUserSuperAdmin}
-                onClick={() => {
-                  if (!isCurrentUserSuperAdmin) return;
-                  setEnableDevisFactures("Oui");
-                }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <span 
-                  className="rounded-full flex items-center justify-center transition-all bg-white"
-                  style={{
-                    border: enableDevisFactures === "Oui" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
-                    width: '20px',
-                    height: '20px',
-                    minWidth: '20px',
-                    minHeight: '20px',
-                    backgroundColor: '#ffffff'
-                  }}
-                >
-                  {enableDevisFactures === "Oui" && (
-                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
-                  )}
-                </span>
-                <span className="text-[15px] font-semibold text-black">{t("Oui")}</span>
-              </button>
-
-              <button
-                type="button"
-                disabled={!isCurrentUserSuperAdmin}
-                onClick={() => {
-                  if (!isCurrentUserSuperAdmin) return;
-                  setEnableDevisFactures("Non");
-                }}
-                className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <span 
-                  className="rounded-full flex items-center justify-center transition-all bg-white"
-                  style={{
-                    border: enableDevisFactures === "Non" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
-                    width: '20px',
-                    height: '20px',
-                    minWidth: '20px',
-                    minHeight: '20px',
-                    backgroundColor: '#ffffff'
-                  }}
-                >
-                  {enableDevisFactures === "Non" && (
-                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
-                  )}
-                </span>
-                <span className="text-[15px] font-semibold text-black">{t("Non")}</span>
               </button>
             </div>
           </div>
@@ -4455,12 +4126,12 @@ export default function SettingsModal({
           
         {/* SECTION 6: MEMBRES DE L'ENVIRONNEMENT */}
         {activeSection === 'membres' && (
-          <div className="rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-members" style={{ order: 98, backgroundColor: 'rgb(245 247 250)', border: 'none' }}>
+          <div className="rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-members" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }}>
             {renderSectionSaveHeader(t("Membres de l’environnement"), 'membres')}
             {/* Formulaire d'ajout rapide de collaborateur */}
             <form onSubmit={handleAddMemberSubmit} className="space-y-4">
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="space-y-1">
                   <label className="block text-[16px] font-bold text-black font-sans">{t("Nom et prénom")}.</label>
                   <input
@@ -4475,7 +4146,7 @@ export default function SettingsModal({
                 <div className="space-y-1">
                   <label className="block text-[16px] font-bold text-black font-sans">{t("Email")}.</label>
                   <input
-                    type="type"
+                    type="text"
                     value={newMemberEmail}
                     onChange={(e) => { setNewMemberEmail(e.target.value); setNewMemberError(null); }}
                     placeholder=""
@@ -4493,20 +4164,6 @@ export default function SettingsModal({
                     <option value="Administrateur">{t("Administrateur")}</option>
                     <option value="Technicien">{t("Technicien")}</option>
                   </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-[16px] font-bold text-black font-sans">
-                    {newMemberRole === 'Administrateur' ? `${t("Mot de passe")}.` : `${t("PIN d’accès")}.`}
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={4}
-                    value={newMemberPin}
-                    onChange={(e) => { setNewMemberPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 4)); setNewMemberError(null); }}
-                    placeholder={t("Entrez un code.")}
-                    className="w-full text-black text-center font-mono font-bold text-xs"
-                  />
                 </div>
 
                 {newMemberRole === 'Administrateur' && (
@@ -4574,8 +4231,8 @@ export default function SettingsModal({
               </div>
             </form>
 
-            {/* Liste des membres - full width horizontal dividers via -mx-5 and border-t */}
-            <div className="bg-white overflow-hidden mt-6 animate-fadeIn -mx-5 border-t border-slate-200" style={{ boxShadow: 'none' }}>
+            {/* Liste des membres */}
+            <div className="bg-transparent overflow-hidden mt-6 animate-fadeIn -mx-5" style={{ boxShadow: 'none' }}>
               <table className="w-full text-left font-sans border-collapse text-xs" style={{ borderTop: 'none', borderBottom: 'none' }}>
                 <tbody className="text-slate-700 text-xs text-black">
                   {localMembers.map((m, idx) => {
@@ -4604,7 +4261,7 @@ export default function SettingsModal({
                     const canEditThisMember = isOwnSession || isCurrentUserSuperAdmin || (isTech && isCurrentUserAdminOrSuperAdmin);
 
                     return (
-                      <tr key={idx} className="group transition-all border-b border-slate-200 last:border-b-0">
+                      <tr key={idx} className="group transition-all">
                         
                         {/* Column 1: Nom & Prenom with pills beneath */}
                         <td className="px-5 py-5 font-sans align-top" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
@@ -4736,55 +4393,21 @@ export default function SettingsModal({
                               />
                             </div>
 
-                            {/* Rôle & PIN / Mot de passe */}
-                            {!isSuperAdmin ? (
-                              <div className="grid grid-cols-2 gap-3 items-end w-full">
-                                <div className="space-y-1">
-                                  <span className="text-[16px] font-bold text-black block font-sans" style={{ fontSize: '16px', textTransform: 'none', color: '#000000' }}>{t("Rôle")}.</span>
-                                  <select
-                                    value={isTech ? 'Technicien' : 'Administrateur'}
-                                    disabled={!canEditThisMember || isTech}
-                                    onChange={(e) => handleRoleChange(idx, e.target.value)}
-                                    className="w-full font-sans text-xs bg-white text-black cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                                    style={{ height: '36px', padding: '6px 10px' }}
-                                  >
-                                    <option value="Administrateur">{t("Administrateur")}</option>
-                                    <option value="Technicien">{t("Technicien")}</option>
-                                  </select>
-                                </div>
-
-                                <div className="space-y-1">
-                                  <span className="text-[16px] font-bold text-black block font-sans text-left" style={{ fontSize: '16px', textTransform: 'none', color: '#000000' }}>
-                                    {isTech ? `${t("PIN d’accès")}.` : `${t("Mot de passe")}.`}
-                                  </span>
-                                  <input
-                                    type="text"
-                                    value={m.pin || ''}
-                                    disabled={!canEditThisMember}
-                                    onChange={(e) => handlePinChange(idx, e.target.value)}
-                                    placeholder={t("Entrez un code.")}
-                                    className="w-full text-left font-mono font-bold text-xs bg-white text-black disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
-                                    style={{ height: '36px', padding: '6px 10px' }}
-                                  />
-                                </div>
+                            {/* Rôle */}
+                            {!isSuperAdmin && (
+                              <div className="space-y-1 w-full">
+                                <span className="text-[16px] font-bold text-black block font-sans" style={{ fontSize: '16px', textTransform: 'none', color: '#000000' }}>{t("Rôle")}.</span>
+                                <select
+                                  value={isTech ? 'Technicien' : 'Administrateur'}
+                                  disabled={!canEditThisMember || isTech}
+                                  onChange={(e) => handleRoleChange(idx, e.target.value)}
+                                  className="w-full font-sans text-xs bg-white text-black cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                                  style={{ height: '36px', padding: '6px 10px' }}
+                                >
+                                  <option value="Administrateur">{t("Administrateur")}</option>
+                                  <option value="Technicien">{t("Technicien")}</option>
+                                </select>
                               </div>
-                            ) : (
-                              Boolean((localCompany.spreadsheetMembresEnvironnement || localCompany.spreadsheetMembresEnvironnementUrl || companyInfo?.spreadsheetMembresEnvironnement || '').trim() || m.pin) && (
-                                <div className="space-y-1 w-full">
-                                  <span className="text-[16px] font-bold text-black block font-sans text-left" style={{ fontSize: '16px', textTransform: 'none', color: '#000000' }}>
-                                    {`${t("Mot de passe")}.`}
-                                  </span>
-                                  <input
-                                    type="text"
-                                    value={m.pin || ''}
-                                    disabled={!canEditThisMember}
-                                    onChange={(e) => handlePinChange(idx, e.target.value)}
-                                    placeholder={t("Entrez un code.")}
-                                    className="w-full text-left font-mono font-bold text-xs bg-white text-black disabled:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-400"
-                                    style={{ height: '36px', padding: '6px 10px' }}
-                                  />
-                                </div>
-                              )
                             )}
 
                             {/* Emplacement attribué (exclusive dropdown for Technicians) */}
@@ -5416,7 +5039,7 @@ export default function SettingsModal({
 
         {/* SECTION: COMMUNICATION PORTAIL CLIENT */}
         {activeSection === 'communication' && (
-          <div className="rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-communication-portail" style={{ order: 99, backgroundColor: 'rgb(245 247 250)', border: 'none' }}>
+          <div className="rounded-2xl p-5 space-y-4 pb-6 mt-4 text-left animate-fadeIn" id="settings-section-communication-portail" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }}>
             {renderSectionSaveHeader(t("Communication portail client"), 'communication')}
             <div className="space-y-2">
               <label htmlFor="settings-communication-portail" className="block text-[14px] font-bold text-black font-sans">
@@ -5437,19 +5060,7 @@ export default function SettingsModal({
         {/* SECTION 3: CONNECTIONS */}
         {activeSection === 'connecteurs' && (
           <div className="rounded-2xl p-5 space-y-4 animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-connectors">
-            <div className="flex items-center justify-between w-full mb-3 select-none bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                Connecteurs
-              </span>
+            <div className="flex items-center justify-end w-full mb-3 select-none bg-transparent">
               <button
                 type="button"
                 disabled={connectorsSaveStatus === 'saving'}
@@ -5479,13 +5090,13 @@ export default function SettingsModal({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               
-              {/* DEROESCH DATA */}
+              {/* ENTREPÔT DE DONNÉES CIVILPROM FRANCE */}
               <div style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between md:col-span-2">
                 <div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div>
-                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>DEROESCH hébergement datacenter & redondance (Anglet, France)</h5>
+                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Entrepôt de données Civilprom France</h5>
                         <div className="select-none font-sans flex items-center mt-1">
                           <span
                             style={{
@@ -5516,373 +5127,6 @@ export default function SettingsModal({
                       </label>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* API DEFIBEO */}
-              <div style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between md:col-span-2">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>API Defibeo</h5>
-                        <div className="select-none font-sans flex items-center mt-1">
-                          <span
-                            style={{
-                              backgroundColor: 'rgb(185, 28, 28)',
-                              boxShadow: 'none',
-                              color: '#ffffff',
-                              fontSize: '16px',
-                              borderRadius: '100px',
-                              padding: '2px 10px',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            }}
-                            className="font-bold select-none"
-                          >
-                            {t("Indisponible")}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center select-none cursor-not-allowed opacity-50" style={{ cursor: 'not-allowed' }}>
-                        <input
-                          type="checkbox"
-                          checked={false}
-                          disabled
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-not-allowed peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" style={{ cursor: 'not-allowed' }}></div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {false && apiDefibeoActive && (
-                    <div className="mt-4 space-y-4 animate-slideUp">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {/* Environment ID */}
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-bold text-slate-500 uppercase">ID Environnement</label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={envIdDisplay}
-                              readOnly
-                              disabled
-                              className="w-full text-black font-mono text-xs bg-slate-100 p-2 rounded-lg border border-slate-300"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(envIdDisplay, 'envId')}
-                              style={{ backgroundColor: '#0f172a', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
-                              className="whitespace-nowrap transition-opacity hover:opacity-80"
-                            >
-                              {apiDefibeoCopied === 'envId' ? 'Copié !' : 'Copier'}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Base URL */}
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-bold text-slate-500 uppercase">URL Endpoint de base</label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value="https://consoledefibeo.deroesch.com/v1"
-                              readOnly
-                              disabled
-                              className="w-full text-black font-mono text-xs bg-slate-100 p-2 rounded-lg border border-slate-300"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard('https://consoledefibeo.deroesch.com/v1', 'endpoint')}
-                              style={{ backgroundColor: '#0f172a', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
-                              className="whitespace-nowrap transition-opacity hover:opacity-80"
-                            >
-                              {apiDefibeoCopied === 'endpoint' ? 'Copié !' : 'Copier'}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* API Key */}
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-bold text-slate-500 uppercase">Clé d'accès (API Key)</label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={apiDefibeoApiKey}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setApiDefibeoApiKey(val);
-                                persistApiDefibeoConnectorState(apiDefibeoActive, val, apiDefibeoSecretKey);
-                              }}
-                              className="w-full text-black font-mono text-xs bg-white p-2 rounded-lg border border-slate-300"
-                              placeholder="dfb_live_..."
-                            />
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(apiDefibeoApiKey, 'apiKey')}
-                              style={{ backgroundColor: '#0f172a', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
-                              className="whitespace-nowrap transition-opacity hover:opacity-80"
-                            >
-                              {apiDefibeoCopied === 'apiKey' ? 'Copié !' : 'Copier'}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Secret Key */}
-                        <div className="space-y-1">
-                          <label className="block text-[11px] font-bold text-slate-500 uppercase">Clé secrète (Secret Token)</label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={apiDefibeoSecretKey}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setApiDefibeoSecretKey(val);
-                                persistApiDefibeoConnectorState(apiDefibeoActive, apiDefibeoApiKey, val);
-                              }}
-                              className="w-full text-black font-mono text-xs bg-white p-2 rounded-lg border border-slate-300"
-                              placeholder="dfb_sec_..."
-                            />
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(apiDefibeoSecretKey, 'secretKey')}
-                              style={{ backgroundColor: '#0f172a', color: 'rgb(255, 255, 255)', fontSize: '18px', fontWeight: 'bold', border: 'none', borderRadius: '13px', padding: '10px 20px', cursor: 'pointer' }}
-                              className="whitespace-nowrap transition-opacity hover:opacity-80"
-                            >
-                              {apiDefibeoCopied === 'secretKey' ? 'Copié !' : 'Copier'}
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={generateApiDefibeoKeys}
-                          style={{
-                            color: 'rgb(255, 255, 255)',
-                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                            background: '#2e54ff',
-                            borderRadius: '13px',
-                            padding: '9px',
-                            fontSize: '18px',
-                            fontWeight: '100',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            border: 'none',
-                            cursor: 'pointer',
-                            width: '100%',
-                            textAlign: 'center',
-                          }}
-                          className="transition-opacity hover:opacity-90"
-                        >
-                          Générer de nouvelles clés
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setIsApiDocOpen(true)}
-                          style={{
-                            color: 'rgb(255, 255, 255)',
-                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                            background: '#2e54ff',
-                            borderRadius: '13px',
-                            padding: '9px',
-                            fontSize: '18px',
-                            fontWeight: '100',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            border: 'none',
-                            cursor: 'pointer',
-                            width: '100%',
-                            textAlign: 'center',
-                          }}
-                          className="transition-opacity hover:opacity-90"
-                        >
-                          Consulter la documentation
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* DROPBOX */}
-              <div style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Dropbox</h5>
-                        <div className="select-none font-sans flex items-center mt-1">
-                          <span
-                            style={{
-                              backgroundColor: dropboxActive ? '#2e54ff' : 'rgb(57, 169, 143)',
-                              boxShadow: 'none',
-                              color: '#ffffff',
-                              fontSize: '16px',
-                              borderRadius: '100px',
-                              padding: '2px 10px',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            }}
-                            className="font-bold select-none"
-                          >
-                            {dropboxActive ? t("Activé") : t("Disponible")}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={dropboxActive}
-                          onChange={(e) => {
-                            setDropboxActive(e.target.checked);
-                          }}
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" style={{ cursor: 'pointer' }}></div>
-                      </label>
-                    </div>
-                  </div>
-
-                   {dropboxActive && (
-                    <div className="mt-4 space-y-3 animate-slideUp">
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("App Key")}</label>
-                        <input
-                          type="text"
-                          value={dropboxAppKey}
-                          onChange={(e) => {
-                            setDropboxAppKey(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez l'App Key.")}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("App Secret Key")}</label>
-                        <input
-                          type="text"
-                          value={dropboxAppSecret}
-                          onChange={(e) => {
-                            setDropboxAppSecret(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez l'App Secret Key.")}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Access Token")}</label>
-                        <input
-                          type="text"
-                          value={dropboxAccessToken}
-                          onChange={(e) => {
-                            setDropboxAccessToken(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez l'Access Token.")}
-                        />
-                      </div>
-                      {dropboxError && (
-                        <div className="space-y-2 mt-2">
-                          <div className="text-red-600 font-sans font-light text-sm text-left">
-                            {dropboxError}
-                          </div>
-                          {(dropboxError.includes("Autorisation insuffisante") || dropboxError.includes("401") || dropboxError.includes("expiré")) && (
-                            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-800 space-y-2">
-                              <p className="font-bold text-red-900">💡 Guide de configuration & génération de Token Dropbox :</p>
-                              <ol className="list-decimal list-inside space-y-1 text-[11px] text-red-700">
-                                <li>Connectez-vous sur la <a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener noreferrer" className="underline font-bold hover:text-red-900">Console Dropbox Developer</a>.</li>
-                                <li>Cliquez sur votre application liée au projet (ou créez-en une de type "Scoped App").</li>
-                                <li>Accédez à l'onglet <strong className="font-bold">Permissions</strong> dans le menu supérieur.</li>
-                                <li>Sous la section <strong className="font-bold">Files and folders</strong>, cochez la case <strong className="font-bold">files.content.write</strong> (ainsi que <strong className="font-bold">files.content.read</strong>).</li>
-                                <li>Faites défiler vers le bas et cliquez sur le bouton <strong className="font-bold">Submit</strong> pour valider les modifications de permissions.</li>
-                                <li>Revenez à l'onglet <strong className="font-bold">Settings</strong>, localisez la section <strong className="font-bold">Generated access token</strong> et cliquez sur <strong className="font-bold">Generate</strong> pour obtenir un nouveau token d'accès contenant ces droits.</li>
-                                <li>Copiez ce nouveau token dans le champ ci-dessus et cliquez sur Enregistrer.</li>
-                              </ol>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-               {/* TEXTELP */}
-              <div id="connector-block-textelp" style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div>
-                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Textelp</h5>
-                        <div className="select-none font-sans flex items-center mt-1">
-                          <span
-                            style={{
-                              backgroundColor: 'rgb(57, 169, 143)',
-                              boxShadow: 'none',
-                              color: '#ffffff',
-                              fontSize: '16px',
-                              borderRadius: '100px',
-                              padding: '2px 10px',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            }}
-                            className="font-bold select-none"
-                          >
-                            {t("Disponible")}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Toggle switch */}
-                    <div className="flex items-center gap-2">
-                      <label className="relative inline-flex items-center cursor-pointer select-none" style={{ cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          id="toggle-textelp-active"
-                          checked={textelpActive}
-                          onChange={(e) => {
-                            setTextelpActive(e.target.checked);
-                          }}
-                          className="sr-only peer"
-                        />
-                        <div className="w-9 h-5 bg-[#dbdbdb] rounded-full cursor-pointer peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#dbdbdb] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2e54ff]" style={{ cursor: 'pointer' }}></div>
-                      </label>
-                    </div>
-                  </div>
-
-                  {textelpActive && (
-                    <div className="mt-4 space-y-3 animate-slideUp">
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("ID de l’environnement.")}</label>
-                        <input
-                          type="text"
-                          id="input-textelp-env-id"
-                          value={textelpEnvId}
-                          onChange={(e) => {
-                            setTextelpEnvId(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez l'ID de l’environnement.")}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Identifiant secret.")}</label>
-                        <input
-                          type="text"
-                          id="input-textelp-secret-id"
-                          value={textelpSecretId}
-                          onChange={(e) => {
-                            setTextelpSecretId(e.target.value);
-                          }}
-                          className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez l'identifiant secret.")}
-                        />
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -6043,19 +5287,7 @@ export default function SettingsModal({
         {/* SECTION: BASES DE DONNÉES */}
         {activeSection === 'bases_de_donnees' && (
           <div className="rounded-2xl p-5 space-y-4 text-left animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-databases">
-            <div className="flex items-center justify-between w-full mb-3 select-none bg-transparent">
-              <span 
-                className="text-white px-3 py-1 text-[13px] inline-block font-sans"
-                style={{
-                  backgroundColor: '#2e54ff',
-                  borderRadius: '1000px',
-                  cursor: 'default',
-                  fontWeight: 100,
-                  textTransform: 'none',
-                }}
-              >
-                {t("Bases de données")}
-              </span>
+            <div className="flex items-center justify-end w-full mb-3 select-none bg-transparent">
               <button
                 type="button"
                 disabled={databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin}
@@ -6088,14 +5320,40 @@ export default function SettingsModal({
               <label className="block text-[16px] font-bold text-black font-sans">
                 {t("Spreadsheet Défibrillateurs.")}
               </label>
-              <input
-                type="url"
-                disabled={!isCurrentUserSuperAdmin}
-                value={localCompany.spreadsheetDefibrillateurs ?? ''}
-                onChange={(e) => handleDbSpreadsheetChange('spreadsheetDefibrillateurs', e.target.value)}
-                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
-                placeholder={t("https://docs.google.com/spreadsheets/d/...")}
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="url"
+                  disabled={!isCurrentUserSuperAdmin}
+                  value={localCompany.spreadsheetDefibrillateurs ?? ''}
+                  onChange={(e) => handleDbSpreadsheetChange('spreadsheetDefibrillateurs', e.target.value)}
+                  className="flex-1 w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  placeholder={t("https://docs.google.com/spreadsheets/d/...")}
+                />
+                <button
+                  type="button"
+                  disabled={!String(localCompany.spreadsheetDefibrillateurs ?? '').trim()}
+                  onClick={() => openTenantSpreadsheetUrl(String(localCompany.spreadsheetDefibrillateurs ?? '').trim())}
+                  style={{
+                    backgroundColor: '#0f172a',
+                    color: '#ffffff',
+                    boxShadow: 'none',
+                    borderRadius: '0.75rem',
+                    fontSize: '16px',
+                    padding: '9px 18px',
+                    fontWeight: '100',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: !String(localCompany.spreadsheetDefibrillateurs ?? '').trim() ? 'not-allowed' : 'pointer',
+                    opacity: !String(localCompany.spreadsheetDefibrillateurs ?? '').trim() ? 0.45 : 1,
+                    border: 'none',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    flexShrink: 0,
+                  }}
+                >
+                  {t("Ouvrir")}
+                </button>
+              </div>
             </div>
 
             {/* Div 2: Spreadsheet Autres Matériels. */}
@@ -6103,14 +5361,40 @@ export default function SettingsModal({
               <label className="block text-[16px] font-bold text-black font-sans">
                 {t("Spreadsheet Autres Matériels.")}
               </label>
-              <input
-                type="url"
-                disabled={!isCurrentUserSuperAdmin}
-                value={localCompany.spreadsheetAutresMateriels ?? ''}
-                onChange={(e) => handleDbSpreadsheetChange('spreadsheetAutresMateriels', e.target.value)}
-                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
-                placeholder={t("https://docs.google.com/spreadsheets/d/...")}
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="url"
+                  disabled={!isCurrentUserSuperAdmin}
+                  value={localCompany.spreadsheetAutresMateriels ?? ''}
+                  onChange={(e) => handleDbSpreadsheetChange('spreadsheetAutresMateriels', e.target.value)}
+                  className="flex-1 w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  placeholder={t("https://docs.google.com/spreadsheets/d/...")}
+                />
+                <button
+                  type="button"
+                  disabled={!String(localCompany.spreadsheetAutresMateriels ?? '').trim()}
+                  onClick={() => openTenantSpreadsheetUrl(String(localCompany.spreadsheetAutresMateriels ?? '').trim())}
+                  style={{
+                    backgroundColor: '#0f172a',
+                    color: '#ffffff',
+                    boxShadow: 'none',
+                    borderRadius: '0.75rem',
+                    fontSize: '16px',
+                    padding: '9px 18px',
+                    fontWeight: '100',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: !String(localCompany.spreadsheetAutresMateriels ?? '').trim() ? 'not-allowed' : 'pointer',
+                    opacity: !String(localCompany.spreadsheetAutresMateriels ?? '').trim() ? 0.45 : 1,
+                    border: 'none',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    flexShrink: 0,
+                  }}
+                >
+                  {t("Ouvrir")}
+                </button>
+              </div>
             </div>
 
             {/* Div 3: Spreadsheet Clients. */}
@@ -6118,83 +5402,86 @@ export default function SettingsModal({
               <label className="block text-[16px] font-bold text-black font-sans">
                 {t("Spreadsheet Clients.")}
               </label>
-              <input
-                type="url"
-                disabled={!isCurrentUserSuperAdmin}
-                value={localCompany.spreadsheetClients ?? ''}
-                onChange={(e) => handleDbSpreadsheetChange('spreadsheetClients', e.target.value)}
-                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
-                placeholder={t("https://docs.google.com/spreadsheets/d/...")}
-              />
-            </div>
-
-            {EXTRA_SPREADSHEET_FIELDS.map((field) => (
-              <div key={field.key} className="space-y-1.5" id={field.id}>
-                <label className="block text-[16px] font-bold text-black font-sans">
-                  {t(field.label)}
-                </label>
+              <div className="flex items-center gap-2">
                 <input
                   type="url"
                   disabled={!isCurrentUserSuperAdmin}
-                  value={(localCompany as any)[field.key] ?? ''}
-                  onChange={(e) => handleDbSpreadsheetChange(field.key, e.target.value)}
-                  className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                  value={localCompany.spreadsheetClients ?? ''}
+                  onChange={(e) => handleDbSpreadsheetChange('spreadsheetClients', e.target.value)}
+                  className="flex-1 w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   placeholder={t("https://docs.google.com/spreadsheets/d/...")}
                 />
+                <button
+                  type="button"
+                  disabled={!String(localCompany.spreadsheetClients ?? '').trim()}
+                  onClick={() => openTenantSpreadsheetUrl(String(localCompany.spreadsheetClients ?? '').trim())}
+                  style={{
+                    backgroundColor: '#0f172a',
+                    color: '#ffffff',
+                    boxShadow: 'none',
+                    borderRadius: '0.75rem',
+                    fontSize: '16px',
+                    padding: '9px 18px',
+                    fontWeight: '100',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: !String(localCompany.spreadsheetClients ?? '').trim() ? 'not-allowed' : 'pointer',
+                    opacity: !String(localCompany.spreadsheetClients ?? '').trim() ? 0.45 : 1,
+                    border: 'none',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    flexShrink: 0,
+                  }}
+                >
+                  {t("Ouvrir")}
+                </button>
               </div>
-            ))}
-          </div>
-        )}
+            </div>
 
-        {/* BANNIÈRE BOUTIQUE EN LIGNE */}
-        {activeSection === 'boutique' && (
-          <div 
-            className="p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left"
-            style={{
-              border: 'none',
-              backgroundColor: 'rgb(245 247 250)',
-              boxShadow: 'none',
-              width: '100%',
-              margin: '0 auto',
-            }}
-          >
-            <p 
-              className="font-sans leading-relaxed flex-1"
-              style={{ 
-                fontSize: '16px', 
-                fontWeight: 400, 
-                color: '#000000', 
-                cursor: 'default' 
-              }}
-            >
-              {t("Imprimantes à codes-barres, tablettes, plaquettes d’intervention pour véhicules… Retrouvez tous les équipements optionnels sur la boutique en ligne Defibeo.")}
-            </p>
-            <button
-              type="button"
-              onClick={() => setIsShopDrawerOpen(true)}
-              style={{
-                backgroundColor: '#2e54ff',
-                color: '#ffffff',
-                boxShadow: 'none',
-                borderRadius: '0.75rem',
-                fontSize: '18px',
-                padding: '11px 22px',
-                fontWeight: '100',
-                transition: 'all 0s ease-in-out',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                cursor: 'pointer',
-                border: 'none',
-                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                whiteSpace: 'nowrap',
-                flexShrink: 0
-              }}
-              className="transition-all hover:opacity-95 shrink-0"
-            >
-              {t("Ouvrir la boutique")}
-            </button>
+            {EXTRA_SPREADSHEET_FIELDS.map((field) => {
+              const fieldUrl = String((localCompany as any)[field.key] ?? '').trim();
+              return (
+                <div key={field.key} className="space-y-1.5" id={field.id}>
+                  <label className="block text-[16px] font-bold text-black font-sans">
+                    {t(field.label)}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      disabled={!isCurrentUserSuperAdmin}
+                      value={(localCompany as any)[field.key] ?? ''}
+                      onChange={(e) => handleDbSpreadsheetChange(field.key, e.target.value)}
+                      className="flex-1 w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                      placeholder={t("https://docs.google.com/spreadsheets/d/...")}
+                    />
+                    <button
+                      type="button"
+                      disabled={!fieldUrl}
+                      onClick={() => openTenantSpreadsheetUrl(fieldUrl)}
+                      style={{
+                        backgroundColor: '#0f172a',
+                        color: '#ffffff',
+                        boxShadow: 'none',
+                        borderRadius: '0.75rem',
+                        fontSize: '16px',
+                        padding: '9px 18px',
+                        fontWeight: '100',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: !fieldUrl ? 'not-allowed' : 'pointer',
+                        opacity: !fieldUrl ? 0.45 : 1,
+                        border: 'none',
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {t("Ouvrir")}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -6204,7 +5491,8 @@ export default function SettingsModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* SECTION 2: SUBSCRIPTION */}
               <div 
-                className="rounded-2xl p-5 space-y-3 bg-[#311833] text-white flex flex-col justify-between animate-fadeIn" 
+                className="rounded-2xl p-5 space-y-3 text-white flex flex-col justify-between animate-fadeIn" 
+                style={{ backgroundColor: '#0f172a' }}
                 id="settings-section-subscription"
               >
                 <div className="space-y-4">
@@ -6251,7 +5539,7 @@ export default function SettingsModal({
               </div>
 
               {/* SECTION 3: ASSISTANCE SUPPORT */}
-              <div className="flex flex-col justify-between bg-white animate-fadeIn" id="settings-section-support">
+              <div className="flex flex-col justify-between bg-transparent animate-fadeIn" id="settings-section-support">
                 <div className="space-y-2">
                   <p className="text-[16px] text-black leading-relaxed font-sans">
                     {t("L'assistance Defibeo est disponible tous les jours, y compris les jours fériés, en Français et en Anglais par email à")}{' '}
@@ -6318,24 +5606,20 @@ export default function SettingsModal({
               </div>
 
             </div>
-          </div>
-        )}
 
-        {/* SECTION: PARRAINAGE */}
-        {activeSection === 'parrainage' && (
-          <div 
-            className="p-5 rounded-xl flex flex-col gap-4 mt-4 text-left animate-fadeIn"
-            style={{
-              border: 'none',
-              backgroundColor: 'rgb(245 247 250)',
-              boxShadow: 'none',
-              maxWidth: '100%',
-              margin: '16px 0px 16px 0px',
-            }}
-          >
-            <div className="space-y-2">
+            {/* BANNIÈRE BOUTIQUE EN LIGNE */}
+            <div 
+              className="p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left mt-4"
+              style={{
+                border: 'none',
+                backgroundColor: 'rgb(245 247 250)',
+                boxShadow: 'none',
+                width: '100%',
+                margin: '0 auto',
+              }}
+            >
               <p 
-                className="font-sans leading-relaxed"
+                className="font-sans leading-relaxed flex-1"
                 style={{ 
                   fontSize: '16px', 
                   fontWeight: 400, 
@@ -6343,64 +5627,35 @@ export default function SettingsModal({
                   cursor: 'default' 
                 }}
               >
-                {t("Parrainez une nouvelle entreprise et obtenez 4 mois d’abonnement gratuits. Indiquez-nous l'entreprise à laquelle vous avez recommandé Defibeo afin que nous puissions suivre son inscription et vous attribuer votre récompense.")}
+                {t("Imprimantes à codes-barres, tablettes, plaquettes d’intervention pour véhicules… Retrouvez tous les équipements optionnels sur la boutique en ligne Defibeo.")}
               </p>
+              <button
+                type="button"
+                onClick={() => setIsShopDrawerOpen(true)}
+                style={{
+                  backgroundColor: '#2e54ff',
+                  color: '#ffffff',
+                  boxShadow: 'none',
+                  borderRadius: '0.75rem',
+                  fontSize: '18px',
+                  padding: '11px 22px',
+                  fontWeight: '100',
+                  transition: 'all 0s ease-in-out',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  cursor: 'pointer',
+                  border: 'none',
+                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
+                }}
+                className="transition-all hover:opacity-95 shrink-0"
+              >
+                {t("Ouvrir la boutique")}
+              </button>
             </div>
-            
-            <div className="space-y-1 w-full">
-              <label className="block text-sm font-bold text-black font-sans">
-                {t("Entreprise filleul.")}
-              </label>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full">
-                <input
-                  type="text"
-                  value={referralCompany}
-                  onChange={(e) => {
-                    setReferralCompany(e.target.value);
-                    if (referralSent) setReferralSent(false);
-                  }}
-                  className="flex-1 w-full text-black placeholder-[#747474] font-sans text-sm"
-                  placeholder={t("Entrez un texte.")}
-                  style={{
-                    border: 'none',
-                    borderRadius: '13px',
-                    padding: '12px',
-                    height: '48px',
-                    boxSizing: 'border-box',
-                    outline: 'none'
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={handleSendReferral}
-                  disabled={isSendingReferral || !referralCompany.trim()}
-                  className="font-sans font-semibold active:scale-95 transition-all cursor-pointer shrink-0"
-                  style={{
-                    backgroundColor: '#0f172a',
-                    color: '#ffffff',
-                    fontSize: '18px',
-                    borderRadius: '13px',
-                    padding: '0px 24px',
-                    opacity: (!referralCompany.trim() || isSendingReferral) ? 0.5 : 1,
-                    cursor: (!referralCompany.trim() || isSendingReferral) ? 'not-allowed' : 'pointer',
-                    height: '48px',
-                    border: '1px solid #000000',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  {isSendingReferral ? t("Envoi...") : t("Valider")}
-                </button>
-              </div>
-            </div>
-
-            {referralSent && (
-              <p className="text-emerald-600 font-sans text-sm font-medium mt-1">
-                {t("Merci ! Votre demande de parrainage a été envoyée avec succès.")}
-              </p>
-            )}
           </div>
         )}
 
@@ -6417,43 +5672,8 @@ export default function SettingsModal({
             }}
             id="settings-section-actions-suspectes"
           >
-            {/* Bouton Télécharger les traces */}
-            <div className="flex justify-end pb-2">
-              <button
-                type="button"
-                onClick={() => exportSuspiciousActivityToCsv(suspiciousLogs, myTenantId)}
-                style={{
-                  ...rowActionButtonStyle,
-                  backgroundColor: '#0f172a',
-                  color: '#ffffff',
-                  fontSize: '18px',
-                  padding: '11px 20px',
-                  borderRadius: '12px',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  fontWeight: 600,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  border: 'none',
-                  boxShadow: 'none'
-                }}
-                className="hover:opacity-90 active:scale-[0.98] transition-all"
-                title={t("Télécharger le fichier CSV de toutes les traces")}
-              >
-                <span>{t("Télécharger les traces")}</span>
-              </button>
-            </div>
-
             {/* List of up to 30 suspicious action notifications */}
-            {suspiciousLogs.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                <ShieldCheck className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                <p className="font-semibold text-slate-600 font-sans">{t("Aucune action suspecte enregistrée")}</p>
-                <p className="text-xs mt-1 text-slate-400 font-sans">
-                  {t("Les événements de connexion, modifications, exports et suppressions apparaîtront ici.")}
-                </p>
-              </div>
-            ) : (
+            {suspiciousLogs.length > 0 && (
               <div className="space-y-3">
                 {suspiciousLogs.slice(0, 30).map((log, index) => {
                   let formattedDate = log.timestamp;
@@ -6541,7 +5761,7 @@ export default function SettingsModal({
               (localCompany as any)[`${sectionSheetKey}Url`] ||
               getTenantSpreadsheetUrl(sectionSheetKey, companyInfo);
             return (
-              <div className="pt-2 w-full grid grid-cols-2 gap-3 animate-fadeIn" style={{ order: 98 }}>
+              <div className="pt-2 w-full grid grid-cols-2 gap-3 animate-fadeIn" style={{ order: 99 }}>
                 <button
                   type="button"
                   id={`btn-settings-refresh-${activeSection}`}

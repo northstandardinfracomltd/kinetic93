@@ -238,7 +238,14 @@ const CustomPinkRadio = ({ value, currentValue, onChange, label }: { value: stri
       className="inline-flex items-center cursor-pointer gap-2 select-none"
       style={{ fontSize: '16px', color: '#000' }}
     >
-      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${isChecked ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
+      <span
+        className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+        style={{
+          borderWidth: '1px',
+          borderColor: isChecked ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+          backgroundColor: 'transparent',
+        }}
+      >
         {isChecked && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
       </span>
       {label}
@@ -1282,7 +1289,7 @@ export default function AutresMaterielsTab({
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
               <div>
                 <div 
-                  className="flex items-center p-1 bg-white select-none" 
+                  className="relative inline-grid grid-cols-2 items-center p-1 bg-white select-none overflow-hidden" 
                   id="autres-materiels-nav-toggle"
                   style={{ 
                     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -1291,10 +1298,45 @@ export default function AutresMaterielsTab({
                     backgroundColor: '#ffffff',
                   }}
                 >
+                  <div
+                    id="autres-materiels-nav-active-slider"
+                    ref={(el) => {
+                      if (el && !el.dataset.initialized) {
+                        el.dataset.initialized = 'true';
+                        requestAnimationFrame(() => {
+                          el.style.transform = 'translateX(100%)';
+                        });
+                      }
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: '4px',
+                      bottom: '4px',
+                      left: '4px',
+                      width: 'calc(50% - 4px)',
+                      borderRadius: '13px',
+                      backgroundColor: '#2e54ff',
+                      transform: 'translateX(0%)',
+                      transition: 'transform 0.16s cubic-bezier(0.22, 1, 0.36, 1)',
+                      zIndex: 0,
+                      pointerEvents: 'none',
+                    }}
+                    className="shadow-sm"
+                  />
                   <button
                     type="button"
                     id="toggle-nav-defibrillateurs-from-autres"
-                    onClick={() => setActiveTab && setActiveTab('defibrillateurs')}
+                    onClick={() => {
+                      const slider = document.getElementById('autres-materiels-nav-active-slider');
+                      const btnDefib = document.getElementById('toggle-nav-defibrillateurs-from-autres');
+                      const btnAutres = document.getElementById('toggle-nav-autres-materiels-active');
+                      if (slider) slider.style.transform = 'translateX(0%)';
+                      if (btnDefib) btnDefib.style.color = '#ffffff';
+                      if (btnAutres) btnAutres.style.color = '#000000';
+                      setTimeout(() => {
+                        setActiveTab && setActiveTab('defibrillateurs');
+                      }, 140);
+                    }}
                     style={{
                       fontSize: '18px',
                       borderRadius: '13px',
@@ -1302,9 +1344,11 @@ export default function AutresMaterielsTab({
                       cursor: 'pointer',
                       backgroundColor: 'transparent',
                       color: '#000000',
-                      transition: 'none',
+                      transition: 'color 0.14s ease',
+                      position: 'relative',
+                      zIndex: 1,
                     }}
-                    className="px-4 py-1.5 font-bold"
+                    className="px-4 py-1.5 font-bold text-center whitespace-nowrap"
                   >
                     {t("Défibrillateurs")}
                   </button>
@@ -1317,11 +1361,13 @@ export default function AutresMaterielsTab({
                       borderRadius: '13px',
                       border: 'none',
                       cursor: 'pointer',
-                      backgroundColor: '#2e54ff',
+                      backgroundColor: 'transparent',
                       color: '#ffffff',
-                      transition: 'none',
+                      transition: 'color 0.14s ease',
+                      position: 'relative',
+                      zIndex: 1,
                     }}
-                    className="px-4 py-1.5 font-bold shadow-sm"
+                    className="px-4 py-1.5 font-bold text-center whitespace-nowrap"
                   >
                     {t("Autres Matériels")}
                   </button>
@@ -1854,12 +1900,17 @@ export default function AutresMaterielsTab({
                           }
                         }}
                         id="select-all-radio-checkbox"
-                        className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
+                        className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                           (filteredList.length > 0 && selectedIds.length === filteredList.length)
-                            ? 'border-[#2e54ff] bg-transparent'
-                            : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                            ? 'bg-transparent'
+                            : 'bg-white hover:border-[#2e54ff]'
                         }`}
-                        style={{ borderWidth: '2.5px' }}
+                        style={{
+                          borderWidth: '1px',
+                          borderColor: (filteredList.length > 0 && selectedIds.length === filteredList.length)
+                            ? '#2e54ff'
+                            : 'oklch(0.92 0.01 258.78)',
+                        }}
                         role="checkbox"
                         aria-checked={filteredList.length > 0 && selectedIds.length === filteredList.length}
                       >
@@ -1911,12 +1962,15 @@ export default function AutresMaterielsTab({
                               type="button"
                               onClick={(e) => handleSelectRow(item.id, e)}
                               id={`radio-checkbox-row-${item.id}`}
-                              className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
+                              className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                                 isRowChecked
-                                  ? 'border-[#2e54ff] bg-transparent'
-                                  : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                                  ? 'bg-transparent'
+                                  : 'bg-white hover:border-[#2e54ff]'
                               }`}
-                              style={{ borderWidth: '2.5px' }}
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: isRowChecked ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                              }}
                               role="checkbox"
                               aria-checked={isRowChecked}
                             >
@@ -1934,7 +1988,7 @@ export default function AutresMaterielsTab({
                                   justifyContent: 'center',
                                   borderRadius: '1000px',
                                   backgroundColor: '#ffffff',
-                                  border: '1px solid rgb(231, 231, 231)',
+                                  border: '1px solid oklch(0.92 0.01 258.78)',
                                   color: '#000000',
                                   fontSize: '16px',
                                   fontWeight: 100,
@@ -1979,7 +2033,7 @@ export default function AutresMaterielsTab({
                                       justifyContent: 'center',
                                       borderRadius: '1000px',
                                       backgroundColor: '#ffffff',
-                                      border: '1px solid rgb(231, 231, 231)',
+                                      border: '1px solid oklch(0.92 0.01 258.78)',
                                       color: '#000000',
                                       fontSize: '16px',
                                       fontWeight: 100,
@@ -2486,6 +2540,127 @@ export default function AutresMaterielsTab({
                   </span>
                 </div>
 
+                {(() => {
+                  const normalizeAddr = (val?: string | null) =>
+                    String(val || '')
+                      .normalize('NFD')
+                      .replace(/[\u0300-\u036f]/g, '')
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]+/g, ' ')
+                      .trim();
+
+                  const normVoie = normalizeAddr(numeroVoie);
+                  const normCp = normalizeAddr(codePostal);
+                  const normVille = normalizeAddr(ville);
+                  const currentId = String(editingItem?.id || '').trim().toLowerCase();
+                  const currentIdentifiant = String(editingItem?.identifiant || identifiant || '').trim().toLowerCase();
+
+                  let otherDefibsCount = 0;
+                  let otherMaterielsCount = 0;
+
+                  if (normVoie) {
+                    for (const df of (defibrillateurs || [])) {
+                      if (!df) continue;
+                      const dfVoie = normalizeAddr((df as any).numeroVoie || df.numVoie || '');
+                      if (!dfVoie || dfVoie !== normVoie) continue;
+                      const dfCp = normalizeAddr((df as any).codePostal || df.cp || '');
+                      const dfVille = normalizeAddr(df.ville || '');
+                      if (normCp && dfCp && normCp !== dfCp) continue;
+                      if (!normCp && normVille && dfVille && normVille !== dfVille) continue;
+                      otherDefibsCount++;
+                    }
+
+                    for (const eq of (otherEquipments || [])) {
+                      if (!eq) continue;
+                      const eqId = String(eq.id || '').trim().toLowerCase();
+                      const eqIdent = String(eq.identifiant || '').trim().toLowerCase();
+                      if ((currentId && eqId === currentId) || (currentIdentifiant && eqIdent === currentIdentifiant)) {
+                        continue;
+                      }
+                      const eqVoie = normalizeAddr(eq.numeroVoie || (eq as any).numVoie || '');
+                      if (!eqVoie || eqVoie !== normVoie) continue;
+                      const eqCp = normalizeAddr(eq.codePostal || (eq as any).cp || '');
+                      const eqVille = normalizeAddr(eq.ville || '');
+                      if (normCp && eqCp && normCp !== eqCp) continue;
+                      if (!normCp && normVille && eqVille && normVille !== eqVille) continue;
+                      otherMaterielsCount++;
+                    }
+                  }
+
+                  const searchAddressValue = numeroVoie.trim() || [numeroVoie.trim(), codePostal.trim(), ville.trim()].filter(Boolean).join(' ');
+
+                  return (
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+                      <span className="font-medium" style={{ fontSize: '16px', color: '#000', cursor: 'default' }}>
+                        À cette adresse postale, il y a {otherDefibsCount} autre(s) défibrillateur(s) et {otherMaterielsCount} autres matériels.
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={otherDefibsCount === 0}
+                          onClick={() => {
+                            if (otherDefibsCount === 0) return;
+                            const q = searchAddressValue;
+                            setIsFormOpen(false);
+                            setEditingItem(null);
+                            if (setActiveTab) {
+                              setActiveTab('defibrillateurs', true);
+                              setTimeout(() => {
+                                window.dispatchEvent(
+                                  new CustomEvent('defib-external-filter', {
+                                    detail: { search: q, sortFilter: 'closest_maintenance' },
+                                  })
+                                );
+                              }, 30);
+                            }
+                          }}
+                          style={{
+                            backgroundColor: '#0f172a',
+                            color: '#ffffff',
+                            borderRadius: '10px',
+                            padding: '10px 16px',
+                            fontSize: '16px',
+                            fontWeight: 100,
+                            border: 'none',
+                            opacity: otherDefibsCount === 0 ? 0.4 : 1,
+                            cursor: otherDefibsCount === 0 ? 'not-allowed' : 'pointer',
+                          }}
+                          className="transition-opacity select-none"
+                        >
+                          Voir les {otherDefibsCount} défibrillateur(s)
+                        </button>
+                        <button
+                          type="button"
+                          disabled={otherMaterielsCount === 0}
+                          onClick={() => {
+                            if (otherMaterielsCount === 0) return;
+                            const q = searchAddressValue;
+                            setIsFormOpen(false);
+                            setEditingItem(null);
+                            setSearchQuery(q);
+                            if (onSearchChange) onSearchChange(q);
+                            setSortFilter('closest_maintenance');
+                          }}
+                          style={{
+                            backgroundColor: '#0f172a',
+                            color: '#ffffff',
+                            borderRadius: '10px',
+                            padding: '10px 16px',
+                            fontSize: '16px',
+                            fontWeight: 100,
+                            border: 'none',
+                            opacity: otherMaterielsCount === 0 ? 0.4 : 1,
+                            cursor: otherMaterielsCount === 0 ? 'not-allowed' : 'pointer',
+                          }}
+                          className="transition-opacity select-none"
+                        >
+                          Voir les {otherMaterielsCount} autre(s) matériel(s).
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Numéro et voie */}
                   <div className="space-y-1 md:col-span-2">
@@ -2650,7 +2825,14 @@ export default function AutresMaterielsTab({
                           onClick={() => handleUpdateScheduleField(schIdx, 'fermetureMidi', !sch.fermetureMidi)}
                           className="inline-flex items-center gap-2 cursor-pointer select-none"
                         >
-                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${sch.fermetureMidi ? 'border-[#2e54ff]' : 'border-slate-300 bg-white'}`}>
+                          <span
+                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                            style={{
+                              borderWidth: '1px',
+                              borderColor: sch.fermetureMidi ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                              backgroundColor: 'transparent',
+                            }}
+                          >
                             {sch.fermetureMidi && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                           </span>
                           <span className="font-semibold text-black font-sans" style={{ fontSize: '16px' }}>

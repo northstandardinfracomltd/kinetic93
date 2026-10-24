@@ -192,7 +192,10 @@ const CustomPinkRadio = ({ value, currentValue, onChange, label }: { value: stri
       className="inline-flex items-center cursor-pointer gap-2 select-none"
       style={{ fontSize: '16px', color: '#000' }}
     >
-      <span className={`w-5 h-5 rounded-full border-2 relative transition-all bg-white col-span-1 shrink-0 ${isChecked ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
+      <span
+        className={`w-5 h-5 rounded-full border relative transition-all bg-white col-span-1 shrink-0 ${isChecked ? 'border-[#2e54ff]' : 'border-slate-300'}`}
+        style={{ borderWidth: '1px' }}
+      >
         {isChecked && (
           <span 
             className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] absolute" 
@@ -718,33 +721,24 @@ export default function GmaoOtherEquipmentCorrectionForm({
 
   return (
     <div className={isWebapp ? `w-full ${isReduced ? 'space-y-0 pb-0' : 'space-y-6 pb-12'} font-sans animate-fadeIn max-w-full text-black px-2 sm:px-4 bg-white relative` : "w-full space-y-6 font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black pb-12 px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl"} id="gmao-other-eq-correction-layout">
-      {isWebapp && !isReduced && (
-        <div 
-          className="fixed top-0 right-0 z-[60] flex items-center px-3.5 py-1.5 text-white font-sans pointer-events-auto select-none shadow-sm"
-          style={{
-            backgroundColor: '#2e54ff',
-            border: 'none',
-            boxShadow: 'none',
-            borderBottomLeftRadius: '13px',
-            borderTopRightRadius: '0px',
-            borderTopLeftRadius: '0px',
-            borderBottomRightRadius: '0px',
-            fontWeight: 100,
-            fontSize: '16px'
-          }}
-        >
-          {chronoText}
-        </div>
-      )}
-
       {isWebapp && (
-        <div className="w-full flex flex-col !m-0 !p-0 !space-y-0 shrink-0 relative" style={{ position: 'relative' }}>
+        <div className="w-full flex flex-row items-stretch !m-0 !p-0 shrink-0 relative" style={{ position: 'relative' }}>
           <button
             type="button"
             onClick={onCancel}
             id="btn-close-other-eq-modal"
-            style={{ ...rowActionButton18Style, width: '100%', borderRadius: '0px', padding: '14px 20px', backgroundColor: '#0f172a', color: '#ffffff', margin: 0, position: 'relative' }}
-            className="transition-colors cursor-pointer font-sans select-none block w-full"
+            style={{
+              ...rowActionButton18Style,
+              width: '33.3333%',
+              borderRadius: '0px',
+              padding: '14px 8px',
+              backgroundColor: '#0f172a',
+              color: '#ffffff',
+              border: 'none',
+              margin: 0,
+              position: 'relative',
+            }}
+            className="transition-colors cursor-pointer font-sans select-none flex items-center justify-center text-center"
           >
             Annuler
           </button>
@@ -754,26 +748,47 @@ export default function GmaoOtherEquipmentCorrectionForm({
             onClick={handleToggleReduce}
             id="btn-toggle-reduce-other-eq"
             style={{
-              width: '100%',
+              width: '33.3333%',
               borderRadius: '0px',
-              padding: '14px 20px',
+              padding: '14px 8px',
               backgroundColor: '#e5e7eb',
               color: '#000000',
               fontSize: '18px',
               fontWeight: 'bold',
               border: 'none',
-              borderTop: '1px solid #d1d5db',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
               margin: 0,
-              position: 'relative'
+              position: 'relative',
             }}
-            className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none block w-full !mt-0"
+            className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none !mt-0"
           >
             {isReduced ? "Agrandir" : "Réduire"}
           </button>
+
+          <div
+            style={{
+              width: '33.3333%',
+              borderRadius: '0px',
+              padding: '14px 8px',
+              backgroundColor: '#2e54ff',
+              color: '#ffffff',
+              fontSize: '18px',
+              fontWeight: 100,
+              border: 'none',
+              boxShadow: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: 0,
+              position: 'relative',
+            }}
+            className="font-sans select-none text-center"
+          >
+            {chronoText}
+          </div>
         </div>
       )}
 
