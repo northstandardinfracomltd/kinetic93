@@ -1723,45 +1723,17 @@ export default function App() {
   }, [loggedUser, members]);
 
   const currentFavicon = useMemo(() => {
-    const userEmail = loggedUser?.email?.trim().toLowerCase() || '';
-    const safeMembers = Array.isArray(members) ? members : [];
+    return {
+      id: 'defibeo_2027',
+      name: 'Defibeo 2027',
+      url: DEFAULT_FAVICON_URL,
+    };
+  }, [faviconRefreshTrigger]);
 
-    // 1. From currentLoggedInMember faviconPreference
-    if (currentLoggedInMember?.faviconPreference) {
-      const found = APP_FAVICONS.find(f => f.id === currentLoggedInMember.faviconPreference || f.url === currentLoggedInMember.faviconPreference);
-      if (found) return found;
-    }
-
-    // 2. From members list matching userEmail
-    if (userEmail) {
-      const mem = safeMembers.find(m => m && m.email?.trim().toLowerCase() === userEmail);
-      if (mem?.faviconPreference) {
-        const found = APP_FAVICONS.find(f => f.id === mem.faviconPreference || f.url === mem.faviconPreference);
-        if (found) return found;
-      }
-      const tenantKey = tenantId || 'demo';
-      const userFavicon = localStorage.getItem(`defib_${tenantKey}_user_${userEmail}_favicon`) || localStorage.getItem(`defib_user_favicon_${userEmail}`);
-      if (userFavicon) {
-        const found = APP_FAVICONS.find(f => f.id === userFavicon || f.url === userFavicon);
-        if (found) return found;
-      }
-    }
-
-    // 3. Fallback to localStorage
-    const tenantKey = tenantId || 'demo';
-    const savedFavicon = localStorage.getItem(`defib_${tenantKey}_favicon`) || localStorage.getItem('defib_current_user_favicon');
-    if (savedFavicon) {
-      const found = APP_FAVICONS.find(f => f.id === savedFavicon || f.url === savedFavicon);
-      if (found) return found;
-    }
-
-    // 4. Default: serious_blue
-    return APP_FAVICONS.find(f => f.id === 'serious_blue') || APP_FAVICONS[1] || APP_FAVICONS[0];
-  }, [currentLoggedInMember, loggedUser, members, tenantId, faviconRefreshTrigger]);
-
-  // Effect to update document favicon dynamically
+  // Effect to update document favicon dynamically across all pages (Logiciel Principal & Web App Technicien)
   useEffect(() => {
-    if (typeof document !== 'undefined' && currentFavicon?.url) {
+    if (typeof document !== 'undefined') {
+      const targetUrl = DEFAULT_FAVICON_URL;
       let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
       if (!link) {
         link = document.createElement('link');
@@ -1769,9 +1741,9 @@ export default function App() {
         document.getElementsByTagName('head')[0].appendChild(link);
       }
       link.type = 'image/png';
-      link.href = currentFavicon.url;
+      link.href = targetUrl;
     }
-  }, [currentFavicon]);
+  }, [currentFavicon, isPublicPortalOpen, isClientPortalOpen, isLoggedIn, activeTab]);
 
   const currentSidebarTheme = useMemo(() => {
     const userEmail = loggedUser?.email?.trim().toLowerCase() || '';
@@ -11678,48 +11650,71 @@ export default function App() {
                     referrerPolicy="no-referrer"
                   />
                   {!isSidebarCollapsed ? (
-                    <div
-                      className="absolute bottom-2.5 right-2.5 flex items-center justify-center rounded-full truncate"
-                      style={{
-                        backgroundColor: '#3ddc84',
-                        color: '#136437',
-                        fontSize: '18px',
-                        fontWeight: 400,
-                        fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                        padding: '10px 17px',
-                        maxWidth: 'calc(100% - 20px)',
-                        lineHeight: 1.2,
-                        textTransform: 'capitalize',
-                      }}
-                      title={tenantDisplayName}
-                    >
-                      <span id="sidebar-tenant-pill-text" className="truncate">
-                        {tenantDisplayName.toLowerCase()}
-                      </span>
+                    <div className="absolute bottom-2.5 right-2.5 flex flex-col items-end gap-2.5 max-w-[calc(100%-20px)] z-10">
+                      <div
+                        className="sidebar-nav-item-bounce inline-flex items-center justify-center shrink-0 cursor-default"
+                        onMouseEnter={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setHoveredSidebarItem({
+                            id: 'logo-defibeo',
+                            label: 'Logiciel Defibeo',
+                            centerY: rect.top + rect.height / 2,
+                          });
+                        }}
+                        onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'logo-defibeo' ? null : prev))}
+                      >
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027iconlogo.svg"
+                          alt="Logiciel Defibeo"
+                          className="sidebar-nav-icon-bounce w-[46px] h-[46px] object-contain block select-none pointer-events-none shrink-0"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                      <div
+                        className="flex items-center justify-center rounded-full truncate max-w-full"
+                        style={{
+                          backgroundColor: '#3ddc84',
+                          color: '#136437',
+                          fontSize: '18px',
+                          fontWeight: 400,
+                          fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                          padding: '10px 17px',
+                          lineHeight: 1.2,
+                          textTransform: 'capitalize',
+                        }}
+                        title={tenantDisplayName}
+                      >
+                        <span id="sidebar-tenant-pill-text" className="truncate">
+                          {tenantDisplayName.toLowerCase()}
+                        </span>
+                      </div>
                     </div>
                   ) : (
                     <>
                       <div
                         className="absolute inset-0 pointer-events-none"
                         style={{
-                          background: 'linear-gradient(1deg, #3ddc84, transparent)',
+                          background: 'linear-gradient(1deg, rgb(245 247 250), transparent)',
                         }}
                       />
                       <div
-                        className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center justify-center rounded-full z-10"
-                        style={{
-                          width: '38px',
-                          height: '38px',
-                          backgroundColor: '#3ddc84',
-                          color: '#136437',
-                          fontSize: '18px',
-                          fontWeight: 400,
-                          fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                          lineHeight: 1,
+                        className="sidebar-nav-item-bounce absolute bottom-2.5 left-1/2 -translate-x-1/2 inline-flex items-center justify-center z-10 cursor-default"
+                        onMouseEnter={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setHoveredSidebarItem({
+                            id: 'logo-defibeo',
+                            label: 'Logiciel Defibeo',
+                            centerY: rect.top + rect.height / 2,
+                          });
                         }}
-                        title={tenantDisplayName}
+                        onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'logo-defibeo' ? null : prev))}
                       >
-                        {tenantInitial}
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027iconlogo.svg"
+                          alt="Logiciel Defibeo"
+                          className="sidebar-nav-icon-bounce w-[46px] h-[46px] object-contain block select-none pointer-events-none shrink-0"
+                          referrerPolicy="no-referrer"
+                        />
                       </div>
                     </>
                   )}
@@ -11855,12 +11850,12 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Floating black pill label when sidebar is collapsed and an item is hovered */}
-                {isSidebarCollapsed && hoveredSidebarItem && !isSidebarMoreOpen && (
+                {/* Floating black pill label when sidebar is collapsed (or when logo icon is hovered) */}
+                {(isSidebarCollapsed || hoveredSidebarItem?.id === 'logo-defibeo') && hoveredSidebarItem && !isSidebarMoreOpen && (
                   <div
                     className="fixed z-[9999] pointer-events-none select-none shadow-md"
                     style={{
-                      left: '92px',
+                      left: isSidebarCollapsed ? '92px' : '288px',
                       top: `${hoveredSidebarItem.centerY}px`,
                       transform: 'translateY(-50%)',
                       backgroundColor: '#0f172a',
