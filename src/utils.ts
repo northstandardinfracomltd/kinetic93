@@ -1119,7 +1119,7 @@ export function getLocationCustomName(originalName: any, customMap?: Record<stri
 }
 
 export function getCapsuleBgColor(dateStr: string): string {
-  if (!dateStr) return 'black';
+  if (!dateStr) return '#0f172a';
   let date: Date | null = null;
   const partsDash = dateStr.split('-');
   if (partsDash.length === 3) {
@@ -1133,7 +1133,7 @@ export function getCapsuleBgColor(dateStr: string): string {
     }
   }
 
-  if (!date || isNaN(date.getTime())) return 'black';
+  if (!date || isNaN(date.getTime())) return '#0f172a';
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -1152,7 +1152,7 @@ export function getCapsuleBgColor(dateStr: string): string {
   } else if (diffTime <= sixMonthsMs) {
     return '#2563eb'; // Between 3 and 6 months -> bleu
   } else {
-    return 'black'; // Above 6 months -> noir
+    return '#0f172a'; // Above 6 months -> #0f172a
   }
 }
 

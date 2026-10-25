@@ -1276,10 +1276,11 @@ export default function ClientTab({
     if (editingClient) {
       onUpdateClient({
         id: editingClient.id,
+        ...((editingClient as any)._sheetRowNumber ? { _sheetRowNumber: (editingClient as any)._sheetRowNumber } : {}),
         ...payload,
         signaturePins: editingClient.signaturePins,
         updatedAt: nowIso,
-      });
+      } as any);
       recordRecentClientChange(editingClient.id);
     } else {
       const newId = 'c_' + Date.now();

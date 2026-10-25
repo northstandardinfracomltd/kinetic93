@@ -2244,9 +2244,46 @@ export default function DefibTab({
     };
   }, [activeTenantId, resolvedSpreadsheetUrl, refreshTrigger, isMapOpen, defibrillateurs.length]);
 
+  const getCleanClientIdFromClient = (c?: Client | null, fallbackField?: string): string => {
+    if (c) {
+      const raw = String(c.clientIdField || '').trim();
+      const siret = String(c.siret || '').trim();
+      const cleanSiretAlnum = siret.replace(/[^a-z0-9]/gi, '').toLowerCase();
+      if (
+        raw &&
+        !isPlaceholderClientVal(raw) &&
+        raw !== siret &&
+        raw.replace(/\s+/g, '') !== siret.replace(/\s+/g, '') &&
+        !raw.startsWith('sheet_cli_') &&
+        !(cleanSiretAlnum && raw.toLowerCase().startsWith('cli_') && raw.toLowerCase().endsWith(cleanSiretAlnum))
+      ) {
+        return raw;
+      }
+      return '';
+    }
+    const fb = String(fallbackField || '').trim();
+    if (
+      fb &&
+      !isPlaceholderClientVal(fb) &&
+      !fb.startsWith('sheet_cli_') &&
+      !/^\d{9,14}$/.test(fb.replace(/\s+/g, ''))
+    ) {
+      return fb;
+    }
+    return '';
+  };
+
   // --- LOOKUP INDEXES ---
   const clientMap = useMemo(() => {
     const map = new Map<string, Client>();
+    const shouldReplaceEntry = (existing: Client | undefined, candidate: Client): boolean => {
+      if (!existing) return true;
+      const existingHasCif = Boolean(getCleanClientIdFromClient(existing));
+      const candidateHasCif = Boolean(getCleanClientIdFromClient(candidate));
+      if (candidateHasCif && !existingHasCif) return true;
+      if (!candidateHasCif && existingHasCif) return false;
+      return true;
+    };
     for (const c of (clients || [])) {
       if (!c) continue;
       if (c.id && !isPlaceholderClientVal(c.id)) {
@@ -2255,12 +2292,18 @@ export default function DefibTab({
       }
       if (c.clientIdField && !isPlaceholderClientVal(c.clientIdField)) {
         const cif = c.clientIdField.trim();
-        if (!map.has(cif)) map.set(cif, c);
-        if (!map.has(cif.toLowerCase())) map.set(cif.toLowerCase(), c);
+        map.set(cif, c);
+        map.set(cif.toLowerCase(), c);
+      }
+      if (c.siret && !isPlaceholderClientVal(c.siret)) {
+        const siretKey = `siret:${c.siret.trim().toLowerCase()}`;
+        if (shouldReplaceEntry(map.get(siretKey), c)) {
+          map.set(siretKey, c);
+        }
       }
       if (c.denomination && c.denomination.trim()) {
         const denomKey = c.denomination.trim().toLowerCase();
-        if (!map.has(denomKey)) {
+        if (shouldReplaceEntry(map.get(denomKey), c)) {
           map.set(denomKey, c);
         }
         const normDenomKey = denomKey
@@ -2269,13 +2312,13 @@ export default function DefibTab({
           .replace(/&#0*39;/g, "'")
           .replace(/[^a-z0-9]+/g, ' ')
           .trim();
-        if (normDenomKey && !map.has(normDenomKey)) {
+        if (normDenomKey && shouldReplaceEntry(map.get(normDenomKey), c)) {
           map.set(normDenomKey, c);
         }
       }
       if ((c as any).nomSite && (c as any).nomSite.trim()) {
         const siteKey = (c as any).nomSite.trim().toLowerCase();
-        if (!map.has(siteKey)) {
+        if (shouldReplaceEntry(map.get(siteKey), c)) {
           map.set(siteKey, c);
         }
       }
@@ -2307,6 +2350,14 @@ export default function DefibTab({
         .trim();
       if (normNom && clientMap.has(normNom)) return clientMap.get(normNom);
     }
+    if (rawId && !isPlaceholderClientVal(rawId)) {
+      const bySiret = clientMap.get(`siret:${rawId.toLowerCase()}`);
+      if (bySiret) return bySiret;
+    }
+    if (rawField && !isPlaceholderClientVal(rawField)) {
+      const bySiret = clientMap.get(`siret:${rawField.toLowerCase()}`);
+      if (bySiret) return bySiret;
+    }
     if (df.nomSite && String(df.nomSite).trim()) {
       const rawSite = String(df.nomSite).trim().toLowerCase();
       const bySite = clientMap.get(rawSite);
@@ -2323,10 +2374,13 @@ export default function DefibTab({
   };
 
   useEffect(() => {
-    if (isFormOpen && editingDefib && !clientId && clients.length > 0) {
+    if (isFormOpen && editingDefib && clients.length > 0) {
       const resolved = getLinkedClientForDefib(editingDefib);
       if (resolved?.id) {
-        setClientId(resolved.id);
+        if (!clientId) {
+          setClientId(resolved.id);
+        }
+        setClientIdField(getCleanClientIdFromClient(resolved, editingDefib.clientIdField));
       }
     }
   }, [isFormOpen, editingDefib, clientId, clients.length, clientMap]);
@@ -2527,7 +2581,8 @@ export default function DefibTab({
         )
       : undefined;
     if (linkedClient) {
-      setClientSearchQuery(`${linkedClient.denomination || ''}${linkedClient.siret && !isPlaceholderClientVal(linkedClient.siret) ? ` (${linkedClient.siret})` : ''}`);
+      const cleanLinkedClientId = getCleanClientIdFromClient(linkedClient);
+      setClientSearchQuery(`${linkedClient.denomination || ''}${cleanLinkedClientId ? ` (${cleanLinkedClientId})` : ''}`);
       setNomSite((linkedClient as any).nomSite || linkedClient.denomination || '');
       const rawContact =
         linkedClient.nomPrenomSite ||
@@ -2553,7 +2608,7 @@ export default function DefibTab({
       setDebutContrat(toISODateOnly(linkedClient.debutContrat || ''));
       setFinContrat(toISODateOnly(linkedClient.finContrat || ''));
       setPayeurId(linkedClient.payeurId || '');
-      setClientIdField(!isPlaceholderClientVal(linkedClient.clientIdField) ? linkedClient.clientIdField || '' : '');
+      setClientIdField(cleanLinkedClientId);
     } else {
       setClientSearchQuery('');
       setNomSite('');
@@ -3797,8 +3852,9 @@ export default function DefibTab({
 
     const resolvedLinkedClient = getLinkedClientForDefib(df);
     const effClientId = resolvedLinkedClient?.id || (!isPlaceholderClientVal(df.clientId) && clientMap.has(df.clientId) ? df.clientId : '');
+    const cleanResolvedClientId = getCleanClientIdFromClient(resolvedLinkedClient, df.clientIdField);
     setClientId(effClientId);
-    setClientSearchQuery(resolvedLinkedClient ? `${resolvedLinkedClient.denomination}${resolvedLinkedClient.siret && !isPlaceholderClientVal(resolvedLinkedClient.siret) ? ` (${resolvedLinkedClient.siret})` : ''}` : ((df as any).clientNom || ''));
+    setClientSearchQuery(resolvedLinkedClient ? `${resolvedLinkedClient.denomination}${cleanResolvedClientId ? ` (${cleanResolvedClientId})` : ''}` : ((df as any).clientNom || ''));
     setNomSite(df.nomSite || anyDf.nom_site || (resolvedLinkedClient as any)?.nomSite || '');
     setCategorieEtablissement(df.categorieEtablissement || anyDf.categorie_etablissement || '');
     setNomPrenomSite(df.nomPrenomSite || anyDf.nom_prenom || anyDf.contact || anyDf.nom_prenom_site || anyDf.contact_site || resolvedLinkedClient?.nomPrenomSite || (resolvedLinkedClient as any)?.responsable || (resolvedLinkedClient as any)?.contact || '');
@@ -3810,7 +3866,7 @@ export default function DefibTab({
     setDebutContrat(toISODateOnly(df.debutContrat || anyDf.debut_contrat || resolvedLinkedClient?.debutContrat || ''));
     setFinContrat(toISODateOnly(df.finContrat || anyDf.fin_contrat || resolvedLinkedClient?.finContrat || ''));
     setPayeurId(df.payeurId || anyDf.payeur_id || resolvedLinkedClient?.payeurId || '');
-    setClientIdField((!isPlaceholderClientVal(df.clientIdField) ? df.clientIdField : '') || resolvedLinkedClient?.clientIdField || '');
+    setClientIdField(cleanResolvedClientId);
 
     setModeleCoffretId(resolveModelSelectValue(df.modeleCoffretId || anyDf.modeleCoffret || anyDf.boitier_modele || anyDf.modele_coffret || anyDf.coffret_modele, modelesCoffret));
     setNumeroLotCoffret(df.numeroLotCoffret || anyDf.boitier_lot || anyDf.lot_coffret || anyDf.lotCoffret || '');
@@ -4558,7 +4614,7 @@ export default function DefibTab({
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
               <div>
                 <div 
-                  className="flex items-center p-1 bg-white select-none" 
+                  className="relative inline-flex items-center p-1 bg-white select-none overflow-hidden" 
                   id="defib-materiels-nav-toggle"
                   style={{ 
                     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -4580,7 +4636,7 @@ export default function DefibTab({
                       color: '#ffffff',
                       transition: 'none',
                     }}
-                    className="px-4 py-1.5 font-bold shadow-sm"
+                    className="px-4 py-1.5 font-bold shadow-sm text-center whitespace-nowrap"
                   >
                     {t("Défibrillateurs")}
                   </button>
@@ -4597,7 +4653,7 @@ export default function DefibTab({
                       color: '#000000',
                       transition: 'none',
                     }}
-                    className="px-4 py-1.5 font-bold"
+                    className="px-4 py-1.5 font-bold text-center whitespace-nowrap"
                   >
                     {t("Autres Matériels")}
                   </button>
@@ -6428,11 +6484,14 @@ export default function DefibTab({
                           className="w-full px-3 py-1.5 border border-slate-200 hover:border-slate-300 focus:border-slate-400 rounded-lg text-xs bg-white text-slate-800 font-semibold"
                         >
                           <option value="">Sélectionnez un client...</option>
-                          {sortedClientsForFilter.map(c => (
-                            <option key={c.id} value={c.id}>
-                              {c.denomination}{c.siret && !isPlaceholderClientVal(c.siret) ? ` (${c.siret})` : ''}
-                            </option>
-                          ))}
+                          {sortedClientsForFilter.map(c => {
+                            const cleanCid = getCleanClientIdFromClient(c);
+                            return (
+                              <option key={c.id} value={c.id}>
+                                {c.denomination}{cleanCid ? ` (${cleanCid})` : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
 

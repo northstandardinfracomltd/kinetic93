@@ -4420,13 +4420,10 @@ export default function App() {
   });
   const [fsmClickedPill, setFsmClickedPill] = useState<{ id: string; key: number } | null>(null);
   const triggerFsmPillWave = (id: string) => {
-    setFsmClickedPill(null);
-    requestAnimationFrame(() => {
-      setFsmClickedPill({ id, key: Date.now() });
-    });
+    setFsmClickedPill({ id, key: Date.now() });
     setTimeout(() => {
       setFsmClickedPill(prev => (prev?.id === id ? null : prev));
-    }, 450);
+    }, 480);
   };
 
   // Helper pour extraire le mois YYYY-MM d'un rapport
@@ -10346,7 +10343,7 @@ export default function App() {
     const newClient: Client = {
       id: generatedId,
       ...clientData,
-      clientIdField: clientData.clientIdField || generatedId,
+      clientIdField: clientData.clientIdField ?? '',
       createdAt: nowIso,
       updatedAt: nowIso,
     };
@@ -10382,7 +10379,7 @@ export default function App() {
     }
     const withUpdated: Client = {
       ...updated,
-      clientIdField: updated.clientIdField || updated.id,
+      clientIdField: updated.clientIdField ?? '',
       updatedAt: new Date().toISOString()
     };
     saveClients(clients.map((c) => (c.id === updated.id ? withUpdated : c)));
@@ -12362,7 +12359,7 @@ export default function App() {
               <div className="space-y-6 animate-fadeIn" id="fsm-tab-container">
                 <style>{`
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-fsm-input),
-                  #fsm-tab-container select:not(#select-fsm-tour-manage),
+                  #fsm-tab-container select:not(#select-fsm-tour-manage):not(#fsm-bulk-assign-tour-dropdown),
                   #fsm-tab-container textarea {
                     padding: 12px !important;
                     border: 1px solid #DCE1EA !important;
@@ -12385,8 +12382,8 @@ export default function App() {
                   }
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-fsm-input),
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-fsm-input),
-                  #fsm-tab-container select:hover:not(:disabled):not(#fsm-more-options-dropdown):not(#select-fsm-tour-manage),
-                  #fsm-tab-container select:focus:not(:disabled):not(#fsm-more-options-dropdown):not(#select-fsm-tour-manage),
+                  #fsm-tab-container select:hover:not(:disabled):not(#fsm-more-options-dropdown):not(#select-fsm-tour-manage):not(#fsm-bulk-assign-tour-dropdown),
+                  #fsm-tab-container select:focus:not(:disabled):not(#fsm-more-options-dropdown):not(#select-fsm-tour-manage):not(#fsm-bulk-assign-tour-dropdown),
                   #fsm-tab-container textarea:hover:not(:disabled),
                   #fsm-tab-container textarea:focus:not(:disabled),
                   #fsm-tab-container #search-fsm-input:hover,
@@ -12463,7 +12460,8 @@ export default function App() {
                     box-sizing: border-box !important;
                   }
                   #fsm-tab-container select#select-fsm-month-stats,
-                  #fsm-tab-container select#fsm-more-options-dropdown {
+                  #fsm-tab-container select#fsm-more-options-dropdown,
+                  #fsm-tab-container select#fsm-bulk-assign-tour-dropdown {
                     width: 100% !important;
                     height: 100% !important;
                     opacity: 0 !important;
@@ -12729,13 +12727,21 @@ export default function App() {
                   </div>
 
                   {/* Bulk Selection Action Status Bar */}
-                  {selectedFsmMissionIds.length > 0 && (
+                  {selectedFsmMissionIds.length > 0 && (() => {
+                    const isInATrier = activeDateFilter === 'A trier' || (() => {
+                      const aTrierTour = fsmTours.find((t: any) => t.id === 'a-trier');
+                      const aTrierMissionIds = new Set((aTrierTour?.missions || []).map((m: any) => m.id));
+                      return selectedFsmMissionIds.length > 0 && selectedFsmMissionIds.every(id => aTrierMissionIds.has(id));
+                    })();
+                    const draftToursForLookup = fsmTours.filter(t => isDraftTour(t));
+
+                    return (
                     <div 
                       className="p-4 flex flex-wrap items-center justify-between gap-4 animate-fadeIn w-full" 
                       id="fsm-bulk-actions-status-bar"
                       style={{
-                        backgroundColor: '#ffffff',
-                        border: '1px solid rgb(231, 231, 231)',
+                        backgroundColor: 'rgb(245 247 250)',
+                        border: 'none',
                         borderRadius: '16px',
                         marginTop: '12px',
                       }}
@@ -12763,21 +12769,27 @@ export default function App() {
                       </div>
                       
                       <div className="flex flex-wrap items-center gap-2">
-                        {/* Placer: À trier / Ordres ADV */}
+                        {/* À trier */}
                         <button
                           type="button"
-                          onClick={bulkMoveFsmMissionsToATrier}
+                          disabled={isInATrier}
+                          onClick={() => {
+                            if (isInATrier) return;
+                            bulkMoveFsmMissionsToATrier();
+                          }}
                           id="btn-bulk-a-trier"
                           style={{
-                            backgroundColor: '#0f172a',
+                            backgroundColor: 'rgb(15, 23, 42)',
+                            background: 'rgb(15, 23, 42)',
                             color: '#ffffff',
-                            border: '1px solid #000000',
+                            border: 'none',
                             borderRadius: '13px',
                             padding: '9px 18px',
                             fontSize: '18px',
                             fontWeight: '600',
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                            cursor: 'pointer',
+                            cursor: isInATrier ? 'not-allowed' : 'pointer',
+                            opacity: isInATrier ? 0.45 : 1,
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -12785,21 +12797,21 @@ export default function App() {
                             boxSizing: 'border-box',
                             lineHeight: '1.25',
                           }}
-                          className="hover:opacity-90 transition-opacity"
+                          className={`${isInATrier ? 'cursor-not-allowed opacity-45' : 'hover:opacity-90'} transition-opacity`}
                         >
-                          Placer: À trier / Ordres ADV
+                          À trier
                         </button>
                         
-                        {/* Attribuer à une tournée */}
+                        {/* Transférer (System Lookup Dropdown des tournées existantes en statut brouillon) */}
                         <div className="relative inline-flex items-center">
                           <button
                             type="button"
-                            onClick={() => setIsFsmBulkTourDropdownOpen(!isFsmBulkTourDropdownOpen)}
                             id="btn-bulk-assign-tour"
                             style={{
-                              backgroundColor: '#0f172a',
+                              backgroundColor: 'rgb(15, 23, 42)',
+                              background: 'rgb(15, 23, 42)',
                               color: '#ffffff',
-                              border: '1px solid #000000',
+                              border: 'none',
                               borderRadius: '13px',
                               padding: '9px 18px',
                               fontSize: '18px',
@@ -12813,88 +12825,45 @@ export default function App() {
                               boxSizing: 'border-box',
                               lineHeight: '1.25',
                             }}
-                            className="hover:opacity-90 transition-opacity"
+                            className="hover:opacity-90 transition-opacity pointer-events-none"
                           >
-                            Attribuer à une tournée
+                            Transférer
                           </button>
-
-                          {isFsmBulkTourDropdownOpen && (
-                            <div 
-                              className="absolute right-0 top-full mt-1 w-72 bg-white rounded-xl z-50 py-2.5 font-sans animate-fadeIn"
-                              style={{ 
-                                fontSize: '16px',
-                                border: '1px solid rgb(218 218 218)',
-                                boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
-                              }}
-                            >
-                              <div className="px-3 pb-2 bg-transparent flex flex-col gap-2">
-                                {(() => {
-                                  const hasFsmSpreadsheet = Boolean(
-                                    getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo) ||
-                                      getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo)
-                                  );
-                                  return (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (!hasFsmSpreadsheet) return;
-                                        bulkCreateTourWithMissions();
-                                      }}
-                                      disabled={!hasFsmSpreadsheet}
-                                      style={{
-                                        backgroundColor: '#ffffff',
-                                        color: '#000000',
-                                        border: '1px solid #dedede',
-                                        borderRadius: '10px',
-                                        padding: '8px 12px',
-                                        fontSize: '15px',
-                                        fontWeight: '600',
-                                        cursor: hasFsmSpreadsheet ? 'pointer' : 'not-allowed',
-                                        opacity: hasFsmSpreadsheet ? 1 : 0.45,
-                                      }}
-                                      className="w-full text-center transition-colors hover:bg-neutral-50"
-                                    >
-                                      Nouvelle Tournée
-                                    </button>
-                                  );
-                                })()}
-                              </div>
-
-                              <div className="px-3 py-1 font-semibold text-xs text-neutral-500 uppercase tracking-wider">
-                                Tournées existantes
-                              </div>
-                              <div className="max-h-48 overflow-y-auto px-2 space-y-1">
-                                {fsmTours.filter(t => isDraftTour(t)).length === 0 ? (
-                                  <div className="px-3 py-2 text-xs text-neutral-400 text-center">
-                                    Aucune tournée en brouillon disponible
-                                  </div>
-                                ) : (
-                                  fsmTours.filter(t => isDraftTour(t)).map(t => (
-                                    <button
-                                      key={t.id}
-                                      type="button"
-                                      onClick={() => bulkAssignFsmMissionsToTour(t.id)}
-                                      className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-neutral-100 transition-colors truncate block font-sans"
-                                      title={t.title || `Tournée ${t.id}`}
-                                    >
-                                      {t.title || `Tournée ${t.id}`} ({t.startDate || 'Date non définie'})
-                                    </button>
-                                  ))
-                                )}
-                              </div>
-                            </div>
-                          )}
+                          <select
+                            id="fsm-bulk-assign-tour-dropdown"
+                            aria-label="Transférer"
+                            value=""
+                            onChange={(e) => {
+                              const targetTourId = e.target.value;
+                              if (targetTourId) {
+                                bulkAssignFsmMissionsToTour(targetTourId);
+                              }
+                            }}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                          >
+                            <option value="" disabled>
+                              {draftToursForLookup.length === 0
+                                ? 'Aucune tournée en brouillon disponible'
+                                : 'Sélectionner une tournée en brouillon'}
+                            </option>
+                            {draftToursForLookup.map(t => (
+                              <option key={t.id} value={t.id}>
+                                {t.title || `Tournée ${t.id}`} ({t.startDate || 'Date non définie'})
+                              </option>
+                            ))}
+                          </select>
                         </div>
 
-                        {/* Annuler et supprimer l’intervention */}
+                        {/* Supprimer */}
                         <button
                           type="button"
                           onClick={bulkCancelFsmMissions}
                           id="btn-bulk-cancel-intervention"
                           style={{
-                            backgroundColor: '#dc2626',
+                            backgroundColor: 'rgb(15, 23, 42)',
+                            background: 'rgb(15, 23, 42)',
                             color: '#ffffff',
-                            border: '1px solid #dc2626',
+                            border: 'none',
                             borderRadius: '13px',
                             padding: '9px 18px',
                             fontSize: '18px',
@@ -12910,11 +12879,12 @@ export default function App() {
                           }}
                           className="hover:opacity-90 transition-opacity"
                         >
-                          Annuler et supprimer l’intervention
+                          Supprimer
                         </button>
                       </div>
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* Side-pane popup pour le planning */}
@@ -14068,13 +14038,7 @@ export default function App() {
                         return (
                           <div key={t.id} className="relative space-y-6 animate-fadeIn" style={{ border: 'none', borderRadius: '18px', maxWidth: '98%', margin: '24px auto', backgroundColor: '#f5f7fa', overflow: 'hidden' }}>
                             {/* THE INTERCALAIRE TOUR HEADER */}
-                            <div className="px-5 py-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans" style={{ borderRadius: '17px 17px 0px 0px', backgroundColor: 'transparent' }}>
-                              <div>
-                                <span style={{ fontSize: '18px', color: '#000000' }}>
-                                  Mission(s) à affecter : {t.missions.length}.
-                                </span>
-                              </div>
-
+                            <div className="px-5 py-5 flex flex-col sm:flex-row sm:items-center justify-end gap-4 font-sans" style={{ borderRadius: '17px 17px 0px 0px', backgroundColor: 'transparent' }}>
                               <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
                                 {/* Enregistrer button */}
                                 {(() => {
@@ -14083,6 +14047,10 @@ export default function App() {
                                     <button
                                       type="button"
                                       disabled={isSaveDisabled}
+                                      onMouseDown={() => {
+                                        if (isSaveDisabled) return;
+                                        triggerFsmPillWave(`save-tour-atrier-${t.id}`);
+                                      }}
                                       onClick={() => {
                                         if (isSaveDisabled) return;
                                         triggerFsmPillWave(`save-tour-atrier-${t.id}`);
@@ -14092,7 +14060,9 @@ export default function App() {
 
                                         // Save fsmTours
                                         saveFsmTours([...fsmTours]);
-                                        alert("Les missions à trier ont été enregistrées avec succès !");
+                                        setTimeout(() => {
+                                          alert("Les missions à trier ont été enregistrées avec succès !");
+                                        }, 480);
 
                                         // Re-enable after 3 seconds
                                         setTimeout(() => {
@@ -14120,7 +14090,7 @@ export default function App() {
                                         pointerEvents: isSaveDisabled ? 'none' : 'auto',
                                         cursor: isSaveDisabled ? 'not-allowed' : 'pointer'
                                       }}
-                                      className={`relative overflow-hidden ${isSaveDisabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer'} sm:w-auto flex-1 sm:flex-initial ${!isSaveDisabled && fsmClickedPill?.id === `save-tour-atrier-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                                      className={`relative overflow-hidden ${isSaveDisabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer'} sm:w-auto flex-1 sm:flex-initial ${fsmClickedPill?.id === `save-tour-atrier-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                     >
                                       Enregistrer
                                     </button>
@@ -15674,6 +15644,10 @@ export default function App() {
                               <button
                                 type="button"
                                 disabled={!!savingTourIds[t.id]}
+                                onMouseDown={() => {
+                                  if (savingTourIds[t.id]) return;
+                                  triggerFsmPillWave(`save-tour-${t.id}`);
+                                }}
                                 onClick={() => {
                                   if (savingTourIds[t.id]) return;
                                   triggerFsmPillWave(`save-tour-${t.id}`);
@@ -15729,7 +15703,9 @@ export default function App() {
                                   } else {
                                     saveFsmTours([...fsmTours]);
                                   }
-                                  alert("La tournée a été enregistrée avec succès !");
+                                  setTimeout(() => {
+                                    alert("La tournée a été enregistrée avec succès !");
+                                  }, 480);
 
                                   // Re-enable after 3 seconds
                                   setTimeout(() => {
@@ -15757,7 +15733,7 @@ export default function App() {
                                   opacity: savingTourIds[t.id] ? 0.7 : 1,
                                   pointerEvents: savingTourIds[t.id] ? 'none' : 'auto'
                                 }}
-                                className={`relative overflow-hidden ${savingTourIds[t.id] ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} shrink-0 ${!savingTourIds[t.id] && fsmClickedPill?.id === `save-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                                className={`relative overflow-hidden ${savingTourIds[t.id] ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} shrink-0 ${fsmClickedPill?.id === `save-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                               >
                                 Enregistrer
                               </button>
@@ -17735,8 +17711,9 @@ export default function App() {
                                             }}
                                             style={{
                                               color: '#fff',
-                                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(185, 28, 28) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                              background: 'rgb(220, 38, 38)',
+                                              boxShadow: 'none',
+                                              background: '#2e54ff',
+                                              backgroundColor: '#2e54ff',
                                               borderRadius: '13px',
                                               border: 'none',
                                               fontSize: '18px',

@@ -1324,12 +1324,24 @@ export function mapRowToClient(
     obj.denomination = String(row[0]).trim();
   }
 
-  // Handle legacy 35-column Clients sheet alignment where Col 11 is Contact 1 Name, Col 12 is Contact 1 Phone, Col 13 is Contact 1 Email, Col 2 is Email, and Col 3 is Phone
+  // Handle legacy 35-column Clients sheet alignment where Col 11 is Contact 1 Name, Col 12 is Contact 1 Phone, Col 13 is Contact 1 Email, Col 2 is Email, Col 3 is Phone, Col 5 is Code PIN, Col 6 is Payeur ID, and Col 7 is Client ID
   const col11 = row[11] !== undefined ? String(row[11]).trim() : '';
   const col12 = row[12] !== undefined ? String(row[12]).trim() : '';
   const col13 = row[13] !== undefined ? String(row[13]).trim() : '';
   const col2 = row[2] !== undefined ? String(row[2]).trim() : '';
   const col3 = row[3] !== undefined ? String(row[3]).trim() : '';
+  const col5 = row[5] !== undefined ? String(row[5]).trim() : '';
+  const col6 = row[6] !== undefined ? String(row[6]).trim() : '';
+  const col7 = row[7] !== undefined ? String(row[7]).trim() : '';
+  const col8 = row[8] !== undefined ? String(row[8]).trim() : '';
+  const col9 = row[9] !== undefined ? String(row[9]).trim() : '';
+  const isLegacy35ColRow =
+    !col8 &&
+    !col9 &&
+    ((col2 && col2.includes('@')) ||
+      (col13 && col13.includes('@')) ||
+      (col11 && !isPlaceholderClientValue(col11) && /[a-zA-ZÀ-ÿ]{2,}/.test(col11) && !/^\+?[\d\s.\-()]+$/.test(col11)));
+
   if (
     !obj.nomPrenomSite &&
     col11 &&
@@ -1353,17 +1365,41 @@ export function mapRowToClient(
       obj.emailSite = col2;
     }
   }
+  if (isLegacy35ColRow) {
+    if (col3 && !isPlaceholderClientValue(col3) && /^\+?[\d\s.\-()]{6,}$/.test(col3)) {
+      if (!obj.phone) obj.phone = col3;
+      if (obj.adresse === col3) obj.adresse = '';
+    }
+    if (col5 && /^[A-Z0-9]{6}$/.test(col5)) {
+      if (!obj.signaturePin) obj.signaturePin = col5;
+      if (obj.ville === col5) obj.ville = '';
+    }
+    if (col6 && col6.toLowerCase() !== 'france' && !isPlaceholderClientValue(col6)) {
+      if (!obj.payeurId) obj.payeurId = col6;
+      if (obj.pays === col6) obj.pays = 'France';
+    }
+    if (col7 && !isPlaceholderClientValue(col7)) {
+      if (!obj.clientIdField && col7 !== String(obj.siret || '').trim()) {
+        obj.clientIdField = col7;
+      }
+      if (obj.nomPrenom === col7) obj.nomPrenom = '';
+    }
+  }
   if (obj.tvaIntra && String(obj.tvaIntra).includes('@')) {
     if (!obj.email) obj.email = obj.tvaIntra;
     if (!obj.emailSite) obj.emailSite = obj.tvaIntra;
     obj.tvaIntra = '';
   }
 
-  const cleanClientId = String(obj.clientIdField || '').trim();
   const cleanSiret = String(obj.siret || '').trim();
-  const cleanDenom = String(obj.denomination || '').trim();
-  const validClientId = !isPlaceholderClientValue(cleanClientId) ? cleanClientId : '';
   const validSiret = !isPlaceholderClientValue(cleanSiret) ? cleanSiret : '';
+  const cleanClientId = String(obj.clientIdField || '').trim();
+  const cleanDenom = String(obj.denomination || '').trim();
+  const validClientId =
+    !isPlaceholderClientValue(cleanClientId) &&
+    (!validSiret || cleanClientId !== validSiret)
+      ? cleanClientId
+      : '';
   const slugDenom = cleanDenom
     ? cleanDenom
         .normalize('NFD')
@@ -1422,9 +1458,6 @@ export function mapClientToRow(headers: string[], client: any, existingRow?: str
     for (let i = 0; i < normHeaders.length; i++) {
       if (!def.aliases.includes(normHeaders[i])) continue;
       let val = expandedClient[def.field];
-      if (def.field === 'clientIdField' && !val && expandedClient.id && !String(expandedClient.id).startsWith('cli_') && !String(expandedClient.id).startsWith('sheet_cli_')) {
-        val = expandedClient.id;
-      }
       if (val !== undefined && val !== null) {
         outRow[i] = String(val);
       }
@@ -7332,7 +7365,15 @@ export async function upsertRecordsToTenantSheet(
             ...(resolvedRowNum ? { _sheetRowNumber: resolvedRowNum } : {}),
           };
 
-      if (tabType === 'clients' && !mergedItem.clientIdField && mergedItem.id) {
+      if (
+        tabType === 'clients' &&
+        !mergedItem.clientIdField &&
+        mergedItem.id &&
+        !String(mergedItem.id).startsWith('cli_') &&
+        !String(mergedItem.id).startsWith('sheet_cli_') &&
+        !String(mergedItem.id).startsWith('c_') &&
+        !String(mergedItem.id).startsWith('cl_')
+      ) {
         mergedItem.clientIdField = mergedItem.id;
       }
       if (tabType === 'autresMateriels' && !mergedItem.identifiant && mergedItem.id) {

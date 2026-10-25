@@ -1359,7 +1359,7 @@ export default function AutresMaterielsTab({
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap">
               <div>
                 <div 
-                  className="relative inline-grid grid-cols-2 items-center p-1 bg-white select-none overflow-hidden" 
+                  className="relative inline-flex items-center p-1 bg-white select-none overflow-hidden" 
                   id="autres-materiels-nav-toggle"
                   style={{ 
                     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -1373,9 +1373,19 @@ export default function AutresMaterielsTab({
                     ref={(el) => {
                       if (el && !el.dataset.initialized) {
                         el.dataset.initialized = 'true';
-                        requestAnimationFrame(() => {
-                          el.style.transform = 'translateX(100%)';
-                        });
+                        const btnDefib = document.getElementById('toggle-nav-defibrillateurs-from-autres');
+                        const btnAutres = document.getElementById('toggle-nav-autres-materiels-active');
+                        if (btnDefib && btnAutres) {
+                          el.style.transition = 'none';
+                          el.style.left = `${btnDefib.offsetLeft}px`;
+                          el.style.width = `${btnDefib.offsetWidth}px`;
+                          void el.offsetWidth;
+                          el.style.transition = 'left 0.16s cubic-bezier(0.22, 1, 0.36, 1), width 0.16s cubic-bezier(0.22, 1, 0.36, 1)';
+                          requestAnimationFrame(() => {
+                            el.style.left = `${btnAutres.offsetLeft}px`;
+                            el.style.width = `${btnAutres.offsetWidth}px`;
+                          });
+                        }
                       }
                     }}
                     style={{
@@ -1386,8 +1396,7 @@ export default function AutresMaterielsTab({
                       width: 'calc(50% - 4px)',
                       borderRadius: '13px',
                       backgroundColor: '#2e54ff',
-                      transform: 'translateX(0%)',
-                      transition: 'transform 0.16s cubic-bezier(0.22, 1, 0.36, 1)',
+                      transition: 'left 0.16s cubic-bezier(0.22, 1, 0.36, 1), width 0.16s cubic-bezier(0.22, 1, 0.36, 1)',
                       zIndex: 0,
                       pointerEvents: 'none',
                     }}
@@ -1400,12 +1409,15 @@ export default function AutresMaterielsTab({
                       const slider = document.getElementById('autres-materiels-nav-active-slider');
                       const btnDefib = document.getElementById('toggle-nav-defibrillateurs-from-autres');
                       const btnAutres = document.getElementById('toggle-nav-autres-materiels-active');
-                      if (slider) slider.style.transform = 'translateX(0%)';
+                      if (slider && btnDefib) {
+                        slider.style.left = `${btnDefib.offsetLeft}px`;
+                        slider.style.width = `${btnDefib.offsetWidth}px`;
+                      }
                       if (btnDefib) btnDefib.style.color = '#ffffff';
                       if (btnAutres) btnAutres.style.color = '#000000';
                       setTimeout(() => {
                         setActiveTab && setActiveTab('defibrillateurs');
-                      }, 140);
+                      }, 150);
                     }}
                     style={{
                       fontSize: '18px',
@@ -1499,9 +1511,9 @@ export default function AutresMaterielsTab({
 
           {/* Filters Pills Row */}
           <div 
-            className="px-4 flex flex-wrap items-center gap-2.5 justify-center sm:justify-start pt-5" 
+            className="flex flex-wrap items-center gap-2.5 justify-start" 
             id="autres-materiels-category-pills"
-            style={{ maxWidth: '98%', margin: '0 auto' }}
+            style={{ maxWidth: '98%', margin: '0 auto', marginTop: '14px', padding: '0px' }}
           >
             {(['Tous', 'Extincteur', "Boucle d'induction magnétique portable (BIMP)", 'Purificateur d’air', 'Signalisation', 'Éclairage de secours', 'Systèmes hydrants', 'Détecteur de fumée', 'Détection incendie (SSI)', 'Désenfumage'] as const).map((filterOpt) => {
               let count = 0;
