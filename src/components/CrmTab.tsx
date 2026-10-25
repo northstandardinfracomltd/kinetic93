@@ -2942,18 +2942,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               <span>{ouvVal}</span>
                               {weekNum && (
                                 <span 
-                                  className="inline-flex items-center justify-center rounded-full font-bold font-sans select-none shrink-0"
                                   style={{ 
-                                    background: '#3ddc84',
+                                    ...geluleStyle,
+                                    backgroundColor: '#3ddc84',
                                     color: '#156337',
-                                    fontSize: '18px',
-                                    padding: '11px 10px 9px 10px',
-                                    width: '60px', 
-                                    height: '60px', 
-                                    marginLeft: '10px', 
                                     border: 'none',
-                                    outline: 'none',
-                                    boxShadow: 'none'
+                                    marginLeft: '10px',
                                   }}
                                   title={`Semaine ${weekNum}`}
                                 >

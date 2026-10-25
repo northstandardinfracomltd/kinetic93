@@ -11491,7 +11491,7 @@ export default function App() {
           style={{ backgroundColor: '#f5f7fa' }}
         >
           {(() => {
-            const tenantDisplayName = companyInfo?.name?.trim() || (tenantId === 'demo' ? 'Défibeo Solutions' : 'Défibeo');
+            const tenantDisplayName = (companyInfo?.name?.trim() || (tenantId === 'demo' ? 'Défibeo Solutions' : 'Défibeo')).slice(0, 25);
             const tenantInitial = (tenantDisplayName.charAt(0) || 'D').toUpperCase();
 
             const mainNavItems: Array<{
@@ -11701,22 +11701,30 @@ export default function App() {
                       </span>
                     </div>
                   ) : (
-                    <div
-                      className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center justify-center rounded-full"
-                      style={{
-                        width: '38px',
-                        height: '38px',
-                        backgroundColor: '#3ddc84',
-                        color: '#136437',
-                        fontSize: '18px',
-                        fontWeight: 400,
-                        fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                        lineHeight: 1,
-                      }}
-                      title={tenantDisplayName}
-                    >
-                      {tenantInitial}
-                    </div>
+                    <>
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          background: 'linear-gradient(1deg, #3ddc84, transparent)',
+                        }}
+                      />
+                      <div
+                        className="absolute bottom-2.5 left-1/2 -translate-x-1/2 flex items-center justify-center rounded-full z-10"
+                        style={{
+                          width: '38px',
+                          height: '38px',
+                          backgroundColor: '#3ddc84',
+                          color: '#136437',
+                          fontSize: '18px',
+                          fontWeight: 400,
+                          fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                          lineHeight: 1,
+                        }}
+                        title={tenantDisplayName}
+                      >
+                        {tenantInitial}
+                      </div>
+                    </>
                   )}
                 </div>
 
@@ -13812,23 +13820,12 @@ export default function App() {
                 {/* Info message système lors de la création d'une tournée */}
                 {fsmSystemInfoMessage && (
                   <div 
-                    className="mx-4 mt-3 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-blue-900 font-sans animate-fadeIn shadow-xs"
-                    style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                    className="mx-4 mt-3 px-4 py-3 rounded-xl flex items-center font-sans animate-fadeIn"
+                    style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif', backgroundColor: '#f5f7fa', border: 'none' }}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Info className="w-5 h-5 text-[#2e54ff] shrink-0" />
-                      <span className="text-[15px] font-semibold text-black">
-                        {fsmSystemInfoMessage}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setFsmSystemInfoMessage(null)}
-                      className="text-neutral-400 hover:text-black p-1 transition-colors cursor-pointer"
-                      title="Fermer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    <span className="font-semibold" style={{ fontSize: '18px', color: '#50617a' }}>
+                      {fsmSystemInfoMessage}
+                    </span>
                   </div>
                 )}
 
@@ -14052,7 +14049,14 @@ export default function App() {
                   <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                 ) : activeDateFilter === 'none' ? (
                   <div className="p-16 text-center font-sans lg:py-24 bg-white rounded-2xl border border-neutral-200 m-4">
-                    <p className="text-lg font-bold text-black mb-1">{translate("Aucune tournée sélectionnée")}</p>
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
+                      alt=""
+                      className="mx-auto mb-4 block select-none pointer-events-none"
+                      style={{ width: '200px', height: 'auto' }}
+                      referrerPolicy="no-referrer"
+                    />
+                    <p className="text-lg font-bold text-black mb-1">{translate("Aucune tournée sélectionnée.")}</p>
                     <p className="text-sm text-neutral-500">{translate("Veuillez sélectionner une tournée dans le menu déroulant ci-dessus.")}</p>
                   </div>
                 ) : filteredTours.length === 0 ? (
@@ -16222,6 +16226,13 @@ export default function App() {
                           <div className="p-4 space-y-4">
                             {t.missions.length === 0 ? (
                               <div className="py-6 text-center font-sans bg-white rounded-xl border border-slate-205" style={{ color: '#000000', fontSize: '16px', border: 'none' }}>
+                                <img
+                                  src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
+                                  alt=""
+                                  className="mx-auto mb-4 block select-none pointer-events-none"
+                                  style={{ width: '200px', height: 'auto' }}
+                                  referrerPolicy="no-referrer"
+                                />
                                 Aucune mission.
                               </div>
                             ) : (

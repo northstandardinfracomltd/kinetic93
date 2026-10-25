@@ -5254,7 +5254,7 @@ export default function DefibTab({
                 src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
                 alt=""
                 className="mx-auto mb-4 block select-none pointer-events-none"
-                style={{ width: '160px', height: 'auto' }}
+                style={{ width: '200px', height: 'auto' }}
                 referrerPolicy="no-referrer"
               />
               <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>

@@ -6034,7 +6034,7 @@ export default function PublicPortal({
             className="text-white font-bold text-center px-4"
             style={{ fontSize: "22px" }}
           >
-            {companyInfo?.nomLogiciel || "Défibeo"}
+            {(companyInfo?.nomLogiciel || "Défibeo").slice(0, 25)}
           </span>
 
           {/* Bottom Swipe text */}
@@ -8171,10 +8171,11 @@ export default function PublicPortal({
 
             {/* Top Header with SVG illustration, Tenant Commercial Name Pill, and 3-dots Tab Selector + Active Tab Pill */}
             {(() => {
-              const commercialTenantName =
+              const commercialTenantName = (
                 companyInfo?.nomLogiciel?.trim() ||
                 companyInfo?.name?.trim() ||
-                "Défibeo";
+                "Défibeo"
+              ).slice(0, 25);
 
               const tabOptions: Array<{ value: typeof activeTab; label: string }> = [
                 { value: "interventions", label: t("Interventions") },
@@ -8421,7 +8422,7 @@ export default function PublicPortal({
                             src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
                             alt=""
                             className="mx-auto mb-4 select-none pointer-events-none"
-                            style={{ width: "140px", height: "auto", objectFit: "contain" }}
+                            style={{ width: "200px", height: "auto", objectFit: "contain" }}
                           />
                           <p
                             className="font-bold font-sans"
@@ -9523,7 +9524,7 @@ export default function PublicPortal({
                         src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
                         alt=""
                         className="mx-auto mb-4 select-none pointer-events-none"
-                        style={{ width: "140px", height: "auto", objectFit: "contain" }}
+                        style={{ width: "200px", height: "auto", objectFit: "contain" }}
                       />
                       <p
                         className="font-bold font-sans"

@@ -1483,8 +1483,8 @@ export default function AutresMaterielsTab({
                     id="btn-add-materiel"
                     style={{
                       ...customButtonStyle,
-                      backgroundColor: '#2e54ff',
-                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                      backgroundColor: 'rgb(46 84 255)',
+                      boxShadow: 'none',
                       opacity: !resolvedSpreadsheetUrl ? 0.45 : 1,
                       cursor: !resolvedSpreadsheetUrl ? 'not-allowed' : 'pointer',
                     }}
@@ -1947,7 +1947,7 @@ export default function AutresMaterielsTab({
                     src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
                     alt=""
                     className="mx-auto mb-4 block select-none pointer-events-none"
-                    style={{ width: '160px', height: 'auto' }}
+                    style={{ width: '200px', height: 'auto' }}
                     referrerPolicy="no-referrer"
                   />
                   <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>

@@ -757,11 +757,12 @@ export default function VariableTab({
              #variable-form select,
              #variable-form textarea {
                padding: 12px !important;
-               border: 1px solid #dedede !important;
+               border: 1px solid #dce1ea !important;
                border-radius: 13px !important;
                font-size: 16px !important;
                font-weight: 100 !important;
-               background: #ffffff !important;
+               background: #fff !important;
+               background-color: #fff !important;
                color: #000000 !important;
                font-family: "DefibeoMain", "Civilprom", sans-serif !important;
                box-sizing: border-box !important;
@@ -781,7 +782,21 @@ export default function VariableTab({
              }
              #variable-form input:not([type="radio"]):not([type="checkbox"])::placeholder,
              #variable-form textarea::placeholder {
-               color: #8c8c8c !important;
+               color: #becadb !important;
+               opacity: 1 !important;
+               font-weight: 100 !important;
+               font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+             }
+             #variable-form input:not([type="radio"]):not([type="checkbox"])::-webkit-input-placeholder,
+             #variable-form textarea::-webkit-input-placeholder {
+               color: #becadb !important;
+               opacity: 1 !important;
+               font-weight: 100 !important;
+               font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+             }
+             #variable-form input:not([type="radio"]):not([type="checkbox"])::-moz-placeholder,
+             #variable-form textarea::-moz-placeholder {
+               color: #becadb !important;
                opacity: 1 !important;
                font-weight: 100 !important;
                font-family: "DefibeoMain", "Civilprom", sans-serif !important;
@@ -798,10 +813,12 @@ export default function VariableTab({
                font-family: "DefibeoMain", "Civilprom", sans-serif !important;
              }
              #variable-form input:disabled {
-               background: #f1f5f9 !important;
+               background: #fff !important;
+               background-color: #fff !important;
+               border: 1px solid #dce1ea !important;
                color: #64748b !important;
                cursor: not-allowed !important;
-               opacity: 0.8 !important;
+               opacity: 1 !important;
              }
              #variable-form input:disabled:hover,
              #variable-form input:disabled:focus {
@@ -829,9 +846,10 @@ export default function VariableTab({
 
             <div className="space-y-6" style={{ maxWidth: '98%', margin: 'auto' }}>
               <div 
-                className="bg-white p-5 space-y-4"
+                className="p-5 space-y-4"
                 style={{
-                  border: '1px solid rgb(218, 218, 218)',
+                  backgroundColor: '#f5f7fa',
+                  border: 'none',
                   borderRadius: '18px',
                 }}
               >
@@ -1086,17 +1104,20 @@ export default function VariableTab({
               {/* Section Gérer les champs visibles */}
               {category === 'Modèle Défibrillateur' && (
                 <div 
-                  className="bg-white p-5 space-y-4 animate-fadeIn"
+                  className="p-5 space-y-4 animate-fadeIn"
                   style={{
-                    border: '1px solid rgb(218, 218, 218)',
+                    backgroundColor: '#f5f7fa',
+                    border: 'none',
                     borderRadius: '18px',
                   }}
                 >
                   <div className="mb-2 bg-transparent">
                     <span 
-                      className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                      className="px-3 py-1 inline-block font-sans"
                       style={{
-                        backgroundColor: '#7b2882',
+                        backgroundColor: 'rgb(61, 220, 132)',
+                        color: 'rgb(17, 88, 48)',
+                        fontSize: '18px',
                         borderRadius: '1000px',
                         cursor: 'default',
                         fontWeight: 100,
@@ -1177,17 +1198,20 @@ export default function VariableTab({
               {/* Section Rappel ou alerte */}
               {!hideRappelAlerte && (
                 <div 
-                  className="bg-white p-5 space-y-4 animate-fadeIn"
+                  className="p-5 space-y-4 animate-fadeIn"
                   style={{
-                    border: '1px solid rgb(218, 218, 218)',
+                    backgroundColor: '#f5f7fa',
+                    border: 'none',
                     borderRadius: '18px',
                   }}
                 >
                   <div className="mb-2 bg-transparent">
                     <span 
-                      className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                      className="px-3 py-1 inline-block font-sans"
                       style={{
-                        backgroundColor: '#7b2882',
+                        backgroundColor: 'rgb(61, 220, 132)',
+                        color: 'rgb(17, 88, 48)',
+                        fontSize: '18px',
                         borderRadius: '1000px',
                         cursor: 'default',
                         fontWeight: 100,
@@ -1551,7 +1575,7 @@ export default function VariableTab({
                             justifyContent: 'flex-start',
                             borderRadius: '1000px',
                             backgroundColor: '#ffffff',
-                            border: '1px solid rgb(231, 231, 231)',
+                            border: '1px solid #E0E5EC',
                             color: '#000000',
                             fontSize: '16px',
                             fontWeight: 100,

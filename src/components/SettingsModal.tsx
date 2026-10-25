@@ -3694,9 +3694,10 @@ export default function SettingsModal({
                 </label>
                 <input
                   type="text"
+                  maxLength={25}
                   disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.name}
-                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('name', e.target.value)}
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('name', e.target.value.slice(0, 25))}
                   className="w-full text-black placeholder-[#747474] font-sans text-sm disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   placeholder={t("Entrez un nom commercial")}
                 />
@@ -3758,10 +3759,10 @@ export default function SettingsModal({
                 </label>
                 <input
                   type="text"
-                  maxLength={60}
+                  maxLength={25}
                   disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.nomLogiciel ?? ''}
-                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('nomLogiciel', e.target.value.slice(0, 60))}
+                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('nomLogiciel', e.target.value.slice(0, 25))}
                   className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                   style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
                   placeholder={t("Ex: App360")}

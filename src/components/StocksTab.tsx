@@ -1452,16 +1452,38 @@ export default function StocksTab({
         #stocks-tab-container-harmonized select,
         #stocks-tab-container-harmonized textarea {
           padding: 12px !important;
-          border: 1px solid #dedede !important;
+          border: 1px solid #dce1ea !important;
           border-radius: 13px !important;
           font-size: 16px !important;
           font-weight: 100 !important;
-          background: #ffffff !important;
+          background: #fff !important;
+          background-color: #fff !important;
           color: #000000 !important;
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
           box-sizing: border-box !important;
           outline: none !important;
           transition: all 0s !important;
+        }
+        #stocks-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-stock-input)::placeholder,
+        #stocks-tab-container-harmonized textarea::placeholder {
+          color: #becadb !important;
+          opacity: 1 !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+        }
+        #stocks-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-stock-input)::-webkit-input-placeholder,
+        #stocks-tab-container-harmonized textarea::-webkit-input-placeholder {
+          color: #becadb !important;
+          opacity: 1 !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+        }
+        #stocks-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-stock-input)::-moz-placeholder,
+        #stocks-tab-container-harmonized textarea::-moz-placeholder {
+          color: #becadb !important;
+          opacity: 1 !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
         }
         #stocks-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-stock-input),
         #stocks-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-stock-input),
@@ -1504,10 +1526,12 @@ export default function StocksTab({
         }
         #stocks-tab-container-harmonized input:disabled,
         #stocks-tab-container-harmonized select:disabled {
-          background-color: #f1f5f9 !important;
+          background: #fff !important;
+          background-color: #fff !important;
+          border: 1px solid #dce1ea !important;
           color: #555555 !important;
           cursor: not-allowed !important;
-          opacity: 0.82 !important;
+          opacity: 1 !important;
         }
         #stocks-tab-container-harmonized #stocks-record-table,
         #stocks-tab-container-harmonized #stocks-record-table thead,
@@ -1907,7 +1931,7 @@ export default function StocksTab({
                                 justifyContent: 'center',
                                 borderRadius: '1000px',
                                 backgroundColor: '#ffffff',
-                                border: '1px solid rgb(231, 231, 231)',
+                                border: '1px solid #E0E5EC',
                                 color: '#000000',
                                 fontSize: '16px',
                                 fontWeight: 100,
@@ -2183,7 +2207,6 @@ export default function StocksTab({
                   onChange={(e) => setNewUgs(e.target.value)}
                   placeholder="Ex: 0001"
                   className="focus:outline-none w-full font-sans"
-                  style={{ minHeight: '38px', padding: '0 10px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
                   required
                 />
               </div>

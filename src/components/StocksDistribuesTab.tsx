@@ -801,16 +801,38 @@ export default function StocksDistribuesTab({
         #stocks-distribues-tab-container-harmonized select,
         #stocks-distribues-tab-container-harmonized textarea {
           padding: 12px !important;
-          border: 1px solid #dedede !important;
+          border: 1px solid #dce1ea !important;
           border-radius: 13px !important;
           font-size: 16px !important;
           font-weight: 100 !important;
-          background: #ffffff !important;
+          background: #fff !important;
+          background-color: #fff !important;
           color: #000000 !important;
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
           box-sizing: border-box !important;
           outline: none !important;
           transition: all 0s !important;
+        }
+        #stocks-distribues-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-distributed-input)::placeholder,
+        #stocks-distribues-tab-container-harmonized textarea::placeholder {
+          color: #becadb !important;
+          opacity: 1 !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+        }
+        #stocks-distribues-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-distributed-input)::-webkit-input-placeholder,
+        #stocks-distribues-tab-container-harmonized textarea::-webkit-input-placeholder {
+          color: #becadb !important;
+          opacity: 1 !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+        }
+        #stocks-distribues-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-distributed-input)::-moz-placeholder,
+        #stocks-distribues-tab-container-harmonized textarea::-moz-placeholder {
+          color: #becadb !important;
+          opacity: 1 !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
         }
         #stocks-distribues-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-distributed-input),
         #stocks-distribues-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-distributed-input),
@@ -852,10 +874,12 @@ export default function StocksDistribuesTab({
         }
         #stocks-distribues-tab-container-harmonized input:disabled,
         #stocks-distribues-tab-container-harmonized select:disabled {
-          background-color: #f1f5f9 !important;
+          background: #fff !important;
+          background-color: #fff !important;
+          border: 1px solid #dce1ea !important;
           color: #555555 !important;
           cursor: not-allowed !important;
-          opacity: 0.82 !important;
+          opacity: 1 !important;
         }
         #stocks-distribues-tab-container-harmonized #stocks-distribues-record-table,
         #stocks-distribues-tab-container-harmonized #stocks-distribues-record-table thead,
@@ -1214,7 +1238,7 @@ export default function StocksDistribuesTab({
                                 justifyContent: 'center',
                                 borderRadius: '1000px',
                                 backgroundColor: '#ffffff',
-                                border: '1px solid rgb(231, 231, 231)',
+                                border: '1px solid #E0E5EC',
                                 color: '#000000',
                                 fontSize: '16px',
                                 fontWeight: 100,
