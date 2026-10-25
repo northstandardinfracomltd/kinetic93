@@ -25,6 +25,7 @@ import {
   isSheetCollectionCached,
   fetchMasterTenantsFromSpreadsheet,
   getCachedMasterTenantsSync,
+  fetchTutorialVideosFromSpreadsheet,
 } from "./src/server/googleSheetsEngine";
 dotenv.config();
 
@@ -1138,6 +1139,13 @@ async function startServer() {
         req.socket?.remoteAddress ||
         '127.0.0.1';
       return res.json({ ip });
+    }
+    if (subPath === '/public/tutorial-videos' && req.method === 'GET') {
+      const forceRefresh = req.query.refresh === 'true';
+      fetchTutorialVideosFromSpreadsheet(forceRefresh)
+        .then(videos => res.json({ videos }))
+        .catch(() => res.json({ videos: [] }));
+      return;
     }
     if (
       subPath === '/health' ||

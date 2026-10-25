@@ -143,6 +143,13 @@ export default function LocalisationsTab({ members }: LocalisationsTabProps) {
         <div className="overflow-x-auto">
           {filteredMembers.length === 0 ? (
             <div className="p-16 text-center font-sans lg:py-24" id="no-members-view">
+              <img
+                src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
+                alt=""
+                className="mx-auto mb-4 block select-none pointer-events-none"
+                style={{ width: '160px', height: 'auto' }}
+                referrerPolicy="no-referrer"
+              />
               <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100, marginBottom: '8px' }}>
                 {search ? "Aucun résultat." : "Aucun technicien enregistré"}
               </p>

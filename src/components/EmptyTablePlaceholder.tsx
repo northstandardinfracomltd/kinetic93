@@ -28,6 +28,13 @@ export const EmptyTablePlaceholder: React.FC<EmptyTablePlaceholderProps> = ({
 
   return (
     <div className={className}>
+      <img
+        src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
+        alt=""
+        className="mx-auto mb-4 block select-none pointer-events-none"
+        style={{ width: '160px', height: 'auto' }}
+        referrerPolicy="no-referrer"
+      />
       <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>{message}</p>
       <p
         style={{

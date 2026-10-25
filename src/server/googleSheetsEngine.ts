@@ -7954,3 +7954,76 @@ export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = 
   return masterTenantsInFlight;
 }
 
+export const TUTORIAL_VIDEOS_SPREADSHEET_URL =
+  'https://docs.google.com/spreadsheets/d/14i40vhQZyn3dVWSF3dluo4Razd14g3UmzIzba4ADb_4/edit?usp=sharing';
+
+export interface TutorialVideoRecord {
+  title: string;
+  url: string;
+}
+
+let cachedTutorialVideos: TutorialVideoRecord[] = [];
+let lastTutorialVideosFetchAt = 0;
+
+export async function fetchTutorialVideosFromSpreadsheet(forceRefresh: boolean = false): Promise<TutorialVideoRecord[]> {
+  const now = Date.now();
+  if (!forceRefresh && lastTutorialVideosFetchAt > 0 && now - lastTutorialVideosFetchAt < 10000) {
+    return cachedTutorialVideos;
+  }
+  try {
+    const matrix = await fetchRawSheetMatrix(TUTORIAL_VIDEOS_SPREADSHEET_URL);
+    if (matrix) {
+      const headers = Array.isArray(matrix.headers) ? matrix.headers : [];
+      const rows = Array.isArray(matrix.rows) ? matrix.rows : [];
+      const headersNorm = headers.map(h =>
+        String(h || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]/g, '')
+      );
+
+      const titleIdx = headersNorm.findIndex(h => h.includes('titre') || h.includes('title') || h.includes('nom'));
+      const urlIdx = headersNorm.findIndex(h => h.includes('url') || h.includes('lien') || h.includes('link') || h.includes('video') && h !== headersNorm[titleIdx]);
+
+      const colTitle = titleIdx >= 0 ? titleIdx : 0;
+      const colUrl = urlIdx >= 0 && urlIdx !== colTitle ? urlIdx : (colTitle === 0 ? 1 : 0);
+
+      const videos: TutorialVideoRecord[] = [];
+
+      // If row 1 (headers) was actually data rather than column headers
+      if (headers.length >= 2 && titleIdx < 0 && urlIdx < 0) {
+        const hTitle = String(headers[0] ?? '').trim();
+        const hUrl = String(headers[1] ?? '').trim();
+        const hTitleNorm = hTitle.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (hTitle && hUrl && !hTitleNorm.includes('titre de la video') && !hUrl.toLowerCase().includes('url de la video')) {
+          videos.push({ title: hTitle, url: hUrl });
+        }
+      }
+
+      for (const row of rows) {
+        if (!Array.isArray(row)) continue;
+        const rawTitle = String(row[colTitle] ?? '').trim();
+        const rawUrl = String(row[colUrl] ?? '').trim();
+        if (!rawTitle && !rawUrl) continue;
+        const normT = rawTitle.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const normU = rawUrl.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (normT === 'titre de la video.' || normT === 'titre de la video' || normU === 'url de la video.' || normU === 'url de la video') {
+          continue;
+        }
+        videos.push({
+          title: rawTitle || rawUrl,
+          url: rawUrl,
+        });
+      }
+
+      cachedTutorialVideos = videos;
+      lastTutorialVideosFetchAt = Date.now();
+      return cachedTutorialVideos;
+    }
+  } catch (err) {
+    console.warn('[TutorialVideosSheet] Failed to fetch tutorial videos spreadsheet:', err);
+  }
+  return cachedTutorialVideos;
+}
+

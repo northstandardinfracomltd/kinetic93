@@ -171,6 +171,7 @@ export default function StocksDistribuesTab({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [clickedPill, setClickedPill] = useState<string | null>(null);
   const [spreadsheetVersion, setSpreadsheetVersion] = useState(0);
+  const [slidingNavTab, setSlidingNavTab] = useState<'stocks' | 'stocks-distribues'>('stocks-distribues');
 
   useEffect(() => {
     const handleSpreadsheetUpdated = () => setSpreadsheetVersion((v) => v + 1);
@@ -892,7 +893,7 @@ export default function StocksDistribuesTab({
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
               <div>
                 <div 
-                  className="flex items-center p-1 bg-white select-none" 
+                  className="relative inline-grid grid-cols-2 items-center p-1 bg-white select-none overflow-hidden" 
                   id="stocks-distribues-nav-toggle"
                   style={{ 
                     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -901,15 +902,35 @@ export default function StocksDistribuesTab({
                     backgroundColor: '#ffffff',
                   }}
                 >
+                  {/* Animated sliding pill indicator */}
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      top: '4px',
+                      bottom: '4px',
+                      left: '4px',
+                      width: 'calc((100% - 8px) / 2)',
+                      backgroundColor: '#2e54ff',
+                      borderRadius: '13px',
+                      transform: slidingNavTab === 'stocks' ? 'translateX(0%)' : 'translateX(100%)',
+                      transition: 'transform 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+                      pointerEvents: 'none',
+                      zIndex: 0,
+                    }}
+                  />
                   <button
                     type="button"
                     id="toggle-nav-centrale-stocks-from-distribues"
                     onClick={() => {
-                      if (setActiveTab) {
-                        setActiveTab('stocks');
-                      } else if (onNavigateToCentraleStocks) {
-                        onNavigateToCentraleStocks('');
-                      }
+                      setSlidingNavTab('stocks');
+                      setTimeout(() => {
+                        if (setActiveTab) {
+                          setActiveTab('stocks');
+                        } else if (onNavigateToCentraleStocks) {
+                          onNavigateToCentraleStocks('');
+                        }
+                      }, 150);
                     }}
                     style={{
                       fontSize: '18px',
@@ -917,27 +938,30 @@ export default function StocksDistribuesTab({
                       border: 'none',
                       cursor: 'pointer',
                       backgroundColor: 'transparent',
-                      color: '#000000',
-                      transition: 'none',
+                      color: slidingNavTab === 'stocks' ? '#ffffff' : '#000000',
+                      transition: 'color 0.15s ease',
                     }}
-                    className="px-4 py-1.5 font-bold"
+                    className="relative z-10 px-4 py-1.5 font-bold text-center whitespace-nowrap"
                   >
-                    {t("Centrale des stocks")}
+                    {t("Centrale des Stocks")}
                   </button>
                   <button
                     type="button"
                     id="toggle-nav-stocks-distribues-active"
-                    onClick={() => setActiveTab && setActiveTab('stocks-distribues')}
+                    onClick={() => {
+                      setSlidingNavTab('stocks-distribues');
+                      if (setActiveTab) setActiveTab('stocks-distribues');
+                    }}
                     style={{
                       fontSize: '18px',
                       borderRadius: '13px',
                       border: 'none',
                       cursor: 'pointer',
-                      backgroundColor: '#2e54ff',
-                      color: '#ffffff',
-                      transition: 'none',
+                      backgroundColor: 'transparent',
+                      color: slidingNavTab === 'stocks-distribues' ? '#ffffff' : '#000000',
+                      transition: 'color 0.15s ease',
                     }}
-                    className="px-4 py-1.5 font-bold shadow-sm"
+                    className="relative z-10 px-4 py-1.5 font-bold text-center whitespace-nowrap"
                   >
                     {t("Stocks Distribués")}
                   </button>
@@ -2055,17 +2079,21 @@ export default function StocksDistribuesTab({
 
           {/* Side Pane */}
           <div
-            className="relative w-full sm:w-[460px] bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out z-10"
+            className="relative w-full sm:w-[460px] shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out z-10"
             id="stocks-distributed-filter-side-pane"
             onClick={(e) => e.stopPropagation()}
             style={{
               height: '100vh',
               minHeight: '100dvh',
               maxHeight: '100dvh',
-              borderLeft: '1px solid #e2e8f0',
+              borderLeft: 'none',
+              borderRadius: '0px',
+              backgroundColor: '#F5F7FA',
+              color: '#50617A',
+              fontSize: '18px',
             }}
           >
-            <div className="flex-1 overflow-y-auto p-6 pt-8">
+            <div className="flex-1 overflow-y-auto p-6 pt-8" style={{ color: '#50617A', fontSize: '18px' }}>
               <div className="flex flex-wrap gap-2.5 items-center" id="stocks-distributed-storage-pills">
                 {/* Tous pill */}
                 {(() => {
@@ -2083,12 +2111,12 @@ export default function StocksDistribuesTab({
                       style={{
                         borderRadius: '1000px',
                         padding: '10px 20px',
-                        fontSize: '15px',
+                        fontSize: '18px',
                         fontWeight: 100,
                         cursor: 'pointer',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
-                        color: isSelected ? '#ffffff' : '#000000',
+                        color: isSelected ? '#ffffff' : '#50617A',
                         border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
                         boxShadow: 'none',
                         transition: 'all 0.15s ease'
@@ -2119,12 +2147,12 @@ export default function StocksDistribuesTab({
                       style={{
                         borderRadius: '1000px',
                         padding: '10px 20px',
-                        fontSize: '15px',
+                        fontSize: '18px',
                         fontWeight: 100,
                         cursor: 'pointer',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
-                        color: isSelected ? '#ffffff' : '#000000',
+                        color: isSelected ? '#ffffff' : '#50617A',
                         border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
                         boxShadow: 'none',
                         transition: 'all 0.15s ease'
@@ -2155,12 +2183,12 @@ export default function StocksDistribuesTab({
                         style={{
                           borderRadius: '1000px',
                           padding: '10px 20px',
-                          fontSize: '15px',
+                          fontSize: '18px',
                           fontWeight: 100,
                           cursor: 'pointer',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                           backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
-                          color: isSelected ? '#ffffff' : '#000000',
+                          color: isSelected ? '#ffffff' : '#50617A',
                           border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
                           boxShadow: 'none',
                           transition: 'all 0.15s ease'
@@ -2179,7 +2207,7 @@ export default function StocksDistribuesTab({
             </div>
 
             {/* Bottom Fermer Button */}
-            <div className="p-5 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-center gap-3">
+            <div className="p-5 shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-center gap-3" style={{ background: 'transparent' }}>
               <button
                 type="button"
                 onClick={() => setIsFilterSidePaneOpen(false)}

@@ -364,8 +364,95 @@ export default function PublicPortal({
   const [isReportOverlayOpen, setIsReportOverlayOpen] = useState(false);
   const [isReportOverlayMinimized, setIsReportOverlayMinimized] = useState(false);
   const [activeSettingsSection, setActiveSettingsSection] = useState<string | null>(null);
+  const [tutorialVideos, setTutorialVideos] = useState<{ title: string; url: string }[]>([]);
   const [emargementModalRecordId, setEmargementModalRecordId] = useState<string | null>(null);
   const [isEmargementOverlayOpen, setIsEmargementOverlayOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const parseCsvLine = (line: string): string[] => {
+      const result: string[] = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+          if (ch === '"') {
+            if (i + 1 < line.length && line[i + 1] === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = false;
+            }
+          } else {
+            current += ch;
+          }
+        } else {
+          if (ch === '"') {
+            inQuotes = true;
+          } else if (ch === ",") {
+            result.push(current);
+            current = "";
+          } else {
+            current += ch;
+          }
+        }
+      }
+      result.push(current);
+      return result;
+    };
+
+    const loadVideos = async () => {
+      try {
+        const res = await fetch("/api/public/tutorial-videos");
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && Array.isArray(data?.videos) && data.videos.length > 0) {
+            setTutorialVideos(data.videos);
+            return;
+          }
+        }
+      } catch (_) {}
+
+      try {
+        const csvUrl =
+          "https://docs.google.com/spreadsheets/d/14i40vhQZyn3dVWSF3dluo4Razd14g3UmzIzba4ADb_4/export?format=csv";
+        const csvRes = await fetch(csvUrl);
+        if (csvRes.ok) {
+          const csvText = await csvRes.text();
+          const lines = csvText
+            .replace(/\r\n/g, "\n")
+            .replace(/\r/g, "\n")
+            .split("\n")
+            .filter((l) => l.trim().length > 0);
+          if (lines.length > 1) {
+            const parsedVideos: { title: string; url: string }[] = [];
+            for (let i = 1; i < lines.length; i++) {
+              const cols = parseCsvLine(lines[i]);
+              const title = (cols[0] || "").trim();
+              const url = (cols[1] || "").trim();
+              if (title || url) {
+                parsedVideos.push({ title: title || url, url });
+              }
+            }
+            if (!cancelled) {
+              setTutorialVideos(parsedVideos);
+              return;
+            }
+          }
+        }
+      } catch (_) {}
+
+      if (!cancelled) {
+        setTutorialVideos([]);
+      }
+    };
+
+    loadVideos();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSettingsSection]);
 
   // Accordion collapse/expand states for the 9 sections of the report form
   const [openSection1, setOpenSection1] = useState(true);
@@ -8132,7 +8219,7 @@ export default function PublicPortal({
                 padding: "10px 17px",
                 borderRadius: "1000px",
                 lineHeight: 1.2,
-                cursor: "default",
+                cursor: "pointer",
               };
 
               return (
@@ -8149,28 +8236,52 @@ export default function PublicPortal({
                   />
 
                   <div className="absolute bottom-2.5 right-3 flex flex-col items-end gap-2 max-w-[calc(100%-24px)]">
-                    {/* Top Pill: Commercial Tenant Name (non-clickable) */}
+                    {/* Top Pill: Commercial Tenant Name (clickable system dropdown for logout) */}
                     <div
-                      className="flex items-center justify-center rounded-full truncate max-w-full"
+                      className="relative flex items-center justify-center rounded-full truncate max-w-full hover:opacity-90 transition-opacity"
                       style={greenPillStyle}
                       title={commercialTenantName}
                     >
-                      <span className="truncate">{commercialTenantName}</span>
+                      <span className="truncate pointer-events-none">{commercialTenantName}</span>
+                      <select
+                        id="webapp-tenant-session-dropdown"
+                        aria-label={commercialTenantName}
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value === "logout") {
+                            handleLogout();
+                          }
+                        }}
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          width: "100%",
+                          height: "100%",
+                          opacity: 0,
+                          cursor: "pointer",
+                          border: "none",
+                          outline: "none",
+                          padding: 0,
+                          margin: 0,
+                          background: "transparent",
+                          zIndex: 20,
+                        }}
+                      >
+                        <option value="" disabled>
+                          {commercialTenantName}
+                        </option>
+                        <option value="logout">Quitter la session</option>
+                      </select>
                     </div>
 
-                    {/* Bottom Row: 3-dots system dropdown + Active Tab Name Pill (non-clickable) */}
-                    <div className="flex items-center justify-end gap-2.5 max-w-full">
+                    {/* Bottom Row: Active Tab Name Pill (clickable system dropdown to switch tab) */}
+                    <div className="flex items-center justify-end max-w-full">
                       <div
-                        className="relative inline-flex items-center justify-center p-1.5 cursor-pointer transition-opacity hover:opacity-80 shrink-0"
-                        title={t("Changer d’onglet")}
+                        className="relative flex items-center justify-center rounded-full truncate hover:opacity-90 transition-opacity"
+                        style={greenPillStyle}
+                        title={activeTabLabel}
                       >
-                        <img
-                          src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
-                          alt={t("Navigation")}
-                          style={{ width: "18px", height: "18px" }}
-                          className="w-[18px] h-[18px] object-contain shrink-0 pointer-events-none"
-                          referrerPolicy="no-referrer"
-                        />
+                        <span className="truncate pointer-events-none">{activeTabLabel}</span>
                         <select
                           id="webapp-nav-tabs-dropdown"
                           aria-label={t("Navigation")}
@@ -8207,14 +8318,6 @@ export default function PublicPortal({
                             </option>
                           ))}
                         </select>
-                      </div>
-
-                      <div
-                        className="flex items-center justify-center rounded-full truncate"
-                        style={greenPillStyle}
-                        title={activeTabLabel}
-                      >
-                        <span className="truncate">{activeTabLabel}</span>
                       </div>
                     </div>
                   </div>
@@ -8311,6 +8414,24 @@ export default function PublicPortal({
                         </select>
                       </div>
 
+                      {/* Illustration & message when no tour is selected */}
+                      {(!selectedTourId || !getSortedTours().some((t) => t.id === selectedTourId)) && (
+                        <div className="px-1 py-4 flex flex-col items-center justify-center text-center select-none">
+                          <img
+                            src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
+                            alt=""
+                            className="mx-auto mb-4 select-none pointer-events-none"
+                            style={{ width: "140px", height: "auto", objectFit: "contain" }}
+                          />
+                          <p
+                            className="font-bold font-sans"
+                            style={{ fontSize: "18px", color: "rgb(80, 97, 122)" }}
+                          >
+                            {t("Sélectionnez une tournée pour afficher les missions.")}
+                          </p>
+                        </div>
+                      )}
+
                       {/* Toggle "Suspendre pour pause" - Hors de la div de la tournée */}
                       <div className="px-1" id="pause-toggle-block">
                         <div
@@ -8356,7 +8477,7 @@ export default function PublicPortal({
                               className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${!pauseEnabled && isReportOverlayOpen && isReportOverlayMinimized ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                               style={{
                                 backgroundColor: pauseEnabled
-                                  ? "#fe4eba"
+                                  ? "rgb(46, 84, 255)"
                                   : "#cbd5e1",
                               }}
                               title={!pauseEnabled && isReportOverlayOpen && isReportOverlayMinimized ? "Impossible d’activer une pause lorsqu'un rapport d'intervention est en cours (réduit)" : undefined}
@@ -8431,15 +8552,15 @@ export default function PublicPortal({
                           >
                             {t("Seules les tournées marquées « À faire » et attribuées au technicien peuvent être sélectionnées.")}
                           </div>
-                          <div>
+                          <div className="w-full">
                             <button
                               type="button"
                               disabled={isRefreshingWebappData}
                               onClick={handleRefreshWebappData}
-                              className={`font-sans font-bold transition-all focus:outline-none ${
+                              className={`w-full font-sans font-bold transition-opacity focus:outline-none ${
                                 isRefreshingWebappData
-                                  ? "animate-webapp-refresh-wave cursor-not-allowed opacity-85"
-                                  : "hover:opacity-90 active:scale-[0.98] cursor-pointer"
+                                  ? "cursor-not-allowed opacity-50"
+                                  : "hover:opacity-90 cursor-pointer"
                               }`}
                               style={{
                                 backgroundColor: "#0f172a",
@@ -8448,10 +8569,11 @@ export default function PublicPortal({
                                 borderRadius: "13px",
                                 padding: "10px 20px",
                                 border: "none",
+                                width: "100%",
                                 cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
                               }}
                             >
-                              {isRefreshingWebappData ? t("Actualisation...") : t("Actualiser les données")}
+                              {t("Actualiser les données")}
                             </button>
                           </div>
                         </div>
@@ -9395,6 +9517,23 @@ export default function PublicPortal({
                     Nouveau rapport spontané
                   </button>
 
+                  {sortedAndLimitedReports.length === 0 && (
+                    <div className="px-1 py-4 flex flex-col items-center justify-center text-center select-none">
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
+                        alt=""
+                        className="mx-auto mb-4 select-none pointer-events-none"
+                        style={{ width: "140px", height: "auto", objectFit: "contain" }}
+                      />
+                      <p
+                        className="font-bold font-sans"
+                        style={{ fontSize: "18px", color: "rgb(80, 97, 122)" }}
+                      >
+                        {t("Aucun rapport disponible.")}
+                      </p>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     disabled={isRefreshingWebappData}
@@ -9410,30 +9549,16 @@ export default function PublicPortal({
                       cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
                       width: "100%",
                     }}
-                    className={`transition-all flex items-center justify-center gap-2 font-bold ${
+                    className={`w-full transition-opacity flex items-center justify-center gap-2 font-bold ${
                       isRefreshingWebappData
-                        ? "animate-webapp-refresh-wave cursor-not-allowed opacity-85"
-                        : "hover:opacity-90 active:scale-[0.99]"
+                        ? "cursor-not-allowed opacity-50"
+                        : "hover:opacity-90 cursor-pointer"
                     }`}
                   >
-                    {isRefreshingWebappData ? t("Actualisation...") : t("Actualiser les données")}
+                    {t("Actualiser les données")}
                   </button>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-0">
-                    {sortedAndLimitedReports.length === 0 && (
-                      <div
-                        className="col-span-1 md:col-span-2 text-center py-10 px-4 rounded-[14px]"
-                        style={{
-                          backgroundColor: "#f5f7fa",
-                          border: "none",
-                          color: "rgb(80, 97, 122)",
-                          fontSize: "16px",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        Aucun rapport effectué en attente de modération{selectedReportTech && selectedReportTech !== "all" ? ` pour ${selectedReportTech}` : ""}.
-                      </div>
-                    )}
                     {sortedAndLimitedReports.map((rep) => {
                       const snapshot =
                         rep.defibSnapshot ||
@@ -13963,6 +14088,7 @@ export default function PublicPortal({
                         { key: "signature", label: "Signature" },
                         { key: "installer", label: "Installer l’app" },
                         { key: "google-calendar", label: "Google Calendar" },
+                        { key: "videos-tutoriels", label: "Vidéos Tutoriels" },
                       ].map((sec) => {
                         const isSelected = activeSettingsSection === sec.key;
                         return (
@@ -15091,7 +15217,94 @@ export default function PublicPortal({
                     </div>
                   )}
 
-                  {/* Actualiser les données button - Right above Quitter la session */}
+                  {/* SECTION 7: VIDÉOS TUTORIELS */}
+                  {activeSettingsSection === "videos-tutoriels" && (
+                    <div
+                      className="p-6 rounded-xl space-y-4 animate-fadeIn text-left"
+                      style={{
+                        border: "none",
+                        backgroundColor: "rgb(245 247 250)",
+                        boxShadow: "none",
+                        maxWidth: "100%",
+                      }}
+                      id="webapp-settings-section-videos-tutoriels"
+                    >
+                      {tutorialVideos.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-8 text-center">
+                          <img
+                            src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_videodefibeo.svg"
+                            alt=""
+                            className="mx-auto mb-4 select-none pointer-events-none"
+                            style={{ width: "160px", height: "auto", objectFit: "contain" }}
+                          />
+                          <p
+                            className="font-bold text-black select-none"
+                            style={{
+                              fontSize: "18px",
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            }}
+                          >
+                            {t("Aucune vidéo disponible.")}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {tutorialVideos.map((video, idx) => {
+                            const rawHref = (video.url || "").trim();
+                            const safeHref =
+                              rawHref && !/^https?:\/\//i.test(rawHref)
+                                ? `https://${rawHref}`
+                                : rawHref || "#";
+                            return (
+                              <div
+                                key={`${video.title}-${idx}`}
+                                className="p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/60 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs text-left"
+                              >
+                                <p
+                                  className="font-medium text-black leading-snug flex-1"
+                                  style={{
+                                    fontSize: "18px",
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  }}
+                                >
+                                  {video.title}
+                                </p>
+                                <a
+                                  href={safeHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    backgroundColor: "#2e54ff",
+                                    color: "#ffffff",
+                                    boxShadow: "none",
+                                    borderRadius: "0.75rem",
+                                    fontSize: "18px",
+                                    padding: "11px 22px",
+                                    fontWeight: "bold",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "0.5rem",
+                                    cursor: "pointer",
+                                    border: "none",
+                                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                    whiteSpace: "nowrap",
+                                    flexShrink: 0,
+                                    textDecoration: "none",
+                                  }}
+                                  className="transition-all hover:opacity-95 shrink-0"
+                                >
+                                  {t("Regarder la vidéo")}
+                                </a>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Actualiser les données button */}
                   <button
                     type="button"
                     disabled={isRefreshingWebappData}
@@ -15107,33 +15320,13 @@ export default function PublicPortal({
                       cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
                       width: "100%",
                     }}
-                    className={`transition-all flex items-center justify-center gap-2 font-bold mt-4 ${
+                    className={`w-full transition-opacity flex items-center justify-center gap-2 font-bold mt-4 ${
                       isRefreshingWebappData
-                        ? "animate-webapp-refresh-wave cursor-not-allowed opacity-85"
-                        : "hover:opacity-90 active:scale-[0.99]"
+                        ? "cursor-not-allowed opacity-50"
+                        : "hover:opacity-90 cursor-pointer"
                     }`}
                   >
-                    <span>{isRefreshingWebappData ? t("Actualisation...") : t("Actualiser les données")}</span>
-                  </button>
-
-                  {/* Quitter la session button - Always at the bottom */}
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    style={{
-                      backgroundColor: "#dc2626",
-                      color: "#ffffff",
-                      fontSize: "18px",
-                      fontWeight: "bold",
-                      borderRadius: "12px",
-                      padding: "14px 20px",
-                      border: "none",
-                      cursor: "pointer",
-                      width: "100%",
-                    }}
-                    className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-3"
-                  >
-                    <span>Quitter la session</span>
+                    <span>{t("Actualiser les données")}</span>
                   </button>
                 </div>
               )}

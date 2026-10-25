@@ -1146,12 +1146,12 @@ export default function MapModal({
                     : "Associer à une tournée"
                 }
                 style={{
-                  backgroundColor: '#0f172a',
+                  backgroundColor: '#F5F7FA',
                   borderRadius: '12px',
                   fontSize: '18px',
                   padding: '9px 19px',
                   fontWeight: 'normal',
-                  color: '#ffffff',
+                  color: '#50617A',
                   border: 'none',
                   cursor: isAnySelectedInTour ? 'not-allowed' : 'pointer',
                   opacity: isAnySelectedInTour ? 0.6 : 1,
@@ -1164,12 +1164,17 @@ export default function MapModal({
               >
                 <span
                   style={{
-                    backgroundColor: '#2e54ff',
-                    color: '#ffffff',
+                    backgroundColor: 'rgb(61 220 132)',
+                    color: '#156337',
+                    height: '30px',
+                    width: '30px',
                     borderRadius: '9999px',
-                    padding: '2px 8px',
-                    fontSize: '14px',
-                    fontWeight: 'bold'
+                    padding: '2px 6px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                 >
                   {selectedIds.length}
@@ -1356,7 +1361,7 @@ export default function MapModal({
             id="btn-map-close"
             style={{
               backgroundColor: '#2e54ff',
-              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+              boxShadow: 'none',
               borderRadius: '12px',
               fontSize: '18px',
               padding: '9px 19px',

@@ -11,6 +11,7 @@ import MapModal from './MapModal';
 import HelpBubble from './HelpBubble';
 import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
 import { logDeleteOtherEquipment } from '../services/suspiciousActivityService';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 
 const CODE39_PATTERNS: Record<string, string> = {
   '0': '000110100', '1': '100100001', '2': '001100001', '3': '101100000',
@@ -123,14 +124,14 @@ function Code39Barcode({ value }: { value: string }) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center w-full bg-white max-w-full p-2">
+    <div className="flex flex-col items-center justify-center w-full max-w-full p-2" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
       <svg
         viewBox={`0 0 ${totalWidth} 74`}
         className="max-h-16 mb-2"
-        style={{ display: 'block', width: '100%', maxWidth: `${totalWidth}px` }}
+        style={{ display: 'block', width: '100%', maxWidth: `${totalWidth}px`, backgroundColor: 'rgb(245, 247, 250)' }}
         shapeRendering="crispEdges"
       >
-        <rect width={totalWidth} height={74} fill="white" />
+        <rect width={totalWidth} height={74} fill="rgb(245, 247, 250)" />
         {rects}
         <text
           x={totalWidth / 2}
@@ -871,6 +872,45 @@ export default function AutresMaterielsTab({
     saveOtherEquipments(updated);
   };
 
+  const RECENT_OTHER_TTL_MS = 30 * 60 * 1000;
+  const [recentOtherTimestamps, setRecentOtherTimestamps] = useState<Record<string, number>>(() => {
+    try {
+      const saved =
+        sessionStorage.getItem(`defib_${activeTenantId}_recent_autres_timestamps`) ||
+        localStorage.getItem(`defib_${activeTenantId}_recent_autres_timestamps`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const now = Date.now();
+        const valid: Record<string, number> = {};
+        for (const [k, ts] of Object.entries(parsed)) {
+          if (typeof ts === 'number' && now - ts < RECENT_OTHER_TTL_MS) {
+            valid[k.toLowerCase()] = ts;
+          }
+        }
+        return valid;
+      }
+    } catch (_) {}
+    return {};
+  });
+
+  const recordRecentOtherChange = (keys: (string | undefined | null)[]) => {
+    const cleanKeys = keys.filter(Boolean).map(k => String(k).trim().toLowerCase());
+    if (cleanKeys.length === 0) return;
+    const now = Date.now();
+    setRecentOtherTimestamps(prev => {
+      const updated = { ...prev };
+      cleanKeys.forEach((k, idx) => {
+        updated[k] = now - idx;
+      });
+      try {
+        const str = JSON.stringify(updated);
+        sessionStorage.setItem(`defib_${activeTenantId}_recent_autres_timestamps`, str);
+        localStorage.setItem(`defib_${activeTenantId}_recent_autres_timestamps`, str);
+      } catch (_) {}
+      return updated;
+    });
+  };
+
   // Submit Action
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -924,6 +964,7 @@ export default function AutresMaterielsTab({
       updatedList = [...otherEquipments, itemData];
     }
 
+    recordRecentOtherChange([itemData.id, itemData.identifiant]);
     saveOtherEquipments(updatedList);
     setIsFormOpen(false);
   };
@@ -1072,6 +1113,15 @@ export default function AutresMaterielsTab({
     }
   };
 
+  const isInitialView = useMemo(() => {
+    return (
+      !searchQuery.trim() &&
+      categoryFilter === 'Tous' &&
+      selectedDepartment === null &&
+      sortFilter === null
+    );
+  }, [searchQuery, categoryFilter, selectedDepartment, sortFilter]);
+
   // Filtered List
   const filteredList = useMemo(() => {
     const today = new Date();
@@ -1136,7 +1186,25 @@ export default function AutresMaterielsTab({
       );
     });
 
-    if (sortFilter === 'recent') {
+    if (isInitialView) {
+      const now = Date.now();
+      const getCacheTs = (item: OtherEquipment): number => {
+        const k1 = item.id ? item.id.trim().toLowerCase() : '';
+        const k2 = item.identifiant ? item.identifiant.trim().toLowerCase() : '';
+        const ts =
+          (k1 && recentOtherTimestamps[k1]) ||
+          (k2 && recentOtherTimestamps[k2]) ||
+          0;
+        return ts && now - ts < RECENT_OTHER_TTL_MS ? ts : 0;
+      };
+      const cachedRecent = baseList.filter(it => getCacheTs(it) > 0);
+      cachedRecent.sort((a, b) => getCacheTs(b) - getCacheTs(a));
+      if (cachedRecent.length > 0) {
+        baseList = cachedRecent;
+      } else {
+        baseList = [];
+      }
+    } else if (sortFilter === 'recent') {
       const totalLen = otherEquipments.length;
       const indexMap = new Map(otherEquipments.map((it, idx) => [it.id, totalLen - idx]));
       baseList = [...baseList].sort((a, b) => {
@@ -1159,7 +1227,7 @@ export default function AutresMaterielsTab({
       });
     }
 
-    if (pinnedOtherIds.length > 0) {
+    if (pinnedOtherIds.length > 0 && (!isInitialView || baseList.length > 0)) {
       const pinnedSet = new Set(pinnedOtherIds);
       const pinnedItems = baseList.filter(item => pinnedSet.has(item.id));
       const unpinnedItems = baseList.filter(item => !pinnedSet.has(item.id));
@@ -1167,7 +1235,7 @@ export default function AutresMaterielsTab({
     }
 
     return baseList;
-  }, [otherEquipments, searchQuery, categoryFilter, clientMap, pinnedOtherIds, sortFilter, selectedDepartment]);
+  }, [otherEquipments, searchQuery, categoryFilter, clientMap, pinnedOtherIds, sortFilter, selectedDepartment, isInitialView, recentOtherTimestamps]);
 
   // Color mappings for Category badge
   const getCategorieBadgeStyle = (cat: string) => {
@@ -1234,6 +1302,8 @@ export default function AutresMaterielsTab({
     outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
     outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
     transition: 'all 0s',
+    width: '100%',
+    boxSizing: 'border-box',
   };
 
   const customButtonStyle: React.CSSProperties = {
@@ -1376,8 +1446,8 @@ export default function AutresMaterielsTab({
 
               {/* Both search and buttons are placed directly next to the title */}
               <div className="flex flex-wrap items-center gap-3">
-                {/* Field recherche (Search input) with size reduced */}
-                <div className="relative w-full sm:w-64">
+                {/* Field recherche (Search input) */}
+                <div className="relative w-full sm:w-64" style={{ width: '256px', minWidth: '256px', maxWidth: '256px' }}>
                   <style>{`
                     #search-materiels-input::placeholder {
                       color: rgb(222, 222, 222) !important;
@@ -1871,6 +1941,25 @@ export default function AutresMaterielsTab({
               className={isTableFitView ? "overflow-x-hidden" : "overflow-x-auto"}
               style={isTableFitView ? { width: '100%', overflowX: 'hidden' } : undefined}
             >
+              {isInitialView && filteredList.length === 0 ? (
+                <div className="p-16 text-center font-sans lg:py-24">
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
+                    alt=""
+                    className="mx-auto mb-4 block select-none pointer-events-none"
+                    style={{ width: '160px', height: 'auto' }}
+                    referrerPolicy="no-referrer"
+                  />
+                  <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
+                    {t("Recherchez un/des matériel(s) pour le/les afficher.")}
+                  </p>
+                  <p style={{ color: '#000000', fontSize: '14px', fontWeight: 100, marginTop: '6px' }}>
+                    {`Vous avez ${otherEquipments.length} autres matériel(s) sur Defibeo.`}
+                  </p>
+                </div>
+              ) : filteredList.length === 0 ? (
+                <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
+              ) : (
               <table 
                 className="w-full text-left font-sans border-collapse text-xs" 
                 style={{ 
@@ -1930,13 +2019,7 @@ export default function AutresMaterielsTab({
                   </tr>
                 </thead>
                 <tbody className="text-slate-700 text-xs">
-                  {filteredList.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="text-center py-10 font-sans" style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
-                        Aucun résultat.
-                      </td>
-                    </tr>
-                  ) : (
+                  {(
                     filteredList.map((item, rowIdx) => {
                       const clientData = getLinkedClientForItem(item);
                       const isRowChecked = selectedIds.includes(item.id);
@@ -2074,6 +2157,7 @@ export default function AutresMaterielsTab({
                   )}
                 </tbody>
               </table>
+              )}
             </div>
             
           </div>
@@ -2084,11 +2168,11 @@ export default function AutresMaterielsTab({
         </>
       ) : (
         /* FORM VIEW */
-        <div className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto" id="materiel-form-overlay">
+        <div className="w-full max-w-[1000px] space-y-6 font-sans animate-fadeIn mx-auto" id="materiel-form-overlay">
           {/* Header */}
           <div 
             className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
-            style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
+            style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
             id="materiel-form-header-box"
           >
             <div />
@@ -2209,22 +2293,26 @@ export default function AutresMaterielsTab({
             `}</style>
             
             <form onSubmit={handleFormSubmit} id="materiel-core-form">
-              <div className="space-y-0" style={{ maxWidth: '98%', margin: 'auto' }}>
+              <div className="space-y-0" style={{ width: '98%', maxWidth: '98%', margin: 'auto' }}>
               
               {/* SECTION 1 - CATÉGORIE ET IDENTIFIANT */}
               <div 
-                className="bg-white p-5 relative space-y-3"
+                className="p-5 relative space-y-3"
                 style={{
-                  border: '1px solid rgb(218, 218, 218)',
+                  backgroundColor: 'rgb(245, 247, 250)',
+                  border: 'none',
                   borderRadius: '18px 18px 0px 0px',
                 }}
               >
                 <div className="mb-2 bg-transparent">
                   <span 
-                    className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                    className="inline-block font-sans"
                     style={{
-                      backgroundColor: '#2e54ff',
+                      backgroundColor: 'rgb(61, 220, 132)',
+                      color: 'rgb(17, 88, 48)',
+                      fontSize: '18px',
                       borderRadius: '1000px',
+                      padding: '7px 15px',
                       cursor: 'default',
                       fontWeight: 100,
                       textTransform: 'none',
@@ -2235,7 +2323,7 @@ export default function AutresMaterielsTab({
                 </div>
 
                 {identifiant && (
-                  <div className="mb-4">
+                  <div className="mb-4" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
                     <Code39Barcode value={identifiant} />
                   </div>
                 )}
@@ -2295,19 +2383,22 @@ export default function AutresMaterielsTab({
 
               {/* SECTION 2 - CLIENT */}
               <div 
-                className="bg-white p-5 relative space-y-3"
+                className="p-5 relative space-y-3"
                 style={{
-                  border: '1px solid rgb(218, 218, 218)',
-                  borderTop: 'none',
+                  backgroundColor: 'rgb(245, 247, 250)',
+                  border: 'none',
                   borderRadius: '0px',
                 }}
               >
                 <div className="mb-2 bg-transparent">
                   <span 
-                    className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                    className="inline-block font-sans"
                     style={{
-                      backgroundColor: '#2e54ff',
+                      backgroundColor: 'rgb(61, 220, 132)',
+                      color: 'rgb(17, 88, 48)',
+                      fontSize: '18px',
                       borderRadius: '1000px',
+                      padding: '7px 15px',
                       cursor: 'default',
                       fontWeight: 100,
                       textTransform: 'none',
@@ -2518,19 +2609,22 @@ export default function AutresMaterielsTab({
 
               {/* SECTION 3 - LOCALISATION */}
               <div 
-                className="bg-white p-5 relative space-y-3"
+                className="p-5 relative space-y-3"
                 style={{
-                  border: '1px solid rgb(218, 218, 218)',
-                  borderTop: 'none',
+                  backgroundColor: 'rgb(245, 247, 250)',
+                  border: 'none',
                   borderRadius: '0px',
                 }}
               >
                 <div className="mb-2 bg-transparent">
                   <span 
-                    className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                    className="inline-block font-sans"
                     style={{
-                      backgroundColor: '#2e54ff',
+                      backgroundColor: 'rgb(61, 220, 132)',
+                      color: 'rgb(17, 88, 48)',
+                      fontSize: '18px',
                       borderRadius: '1000px',
+                      padding: '7px 15px',
                       cursor: 'default',
                       fontWeight: 100,
                       textTransform: 'none',
@@ -2805,7 +2899,7 @@ export default function AutresMaterielsTab({
                   </div>
 
                   {schedules.map((sch, schIdx) => (
-                    <div key={schIdx} style={{ borderRadius: '13px', border: '1px solid #d7d7d7' }} className="p-3 bg-white relative space-y-3">
+                    <div key={schIdx} style={{ borderRadius: '13px', border: 'none', backgroundColor: 'rgb(245, 247, 250)' }} className="p-3 relative space-y-3">
                       {schedules.length > 1 && (
                         <button
                           type="button"
@@ -2965,19 +3059,22 @@ export default function AutresMaterielsTab({
 
               {/* SECTION 4 - DATES */}
               <div 
-                className="bg-white p-5 relative space-y-3"
+                className="p-5 relative space-y-3"
                 style={{
-                  border: '1px solid rgb(218, 218, 218)',
-                  borderTop: 'none',
+                  backgroundColor: 'rgb(245, 247, 250)',
+                  border: 'none',
                   borderRadius: '0px',
                 }}
               >
                 <div className="mb-2 bg-transparent">
                   <span 
-                    className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                    className="inline-block font-sans"
                     style={{
-                      backgroundColor: '#2e54ff',
+                      backgroundColor: 'rgb(61, 220, 132)',
+                      color: 'rgb(17, 88, 48)',
+                      fontSize: '18px',
                       borderRadius: '1000px',
+                      padding: '7px 15px',
                       cursor: 'default',
                       fontWeight: 100,
                       textTransform: 'none',
@@ -3025,19 +3122,22 @@ export default function AutresMaterielsTab({
 
               {/* SECTION 5 - CHAMPS SPÉCIFIQUES PROFESSIONNELS DYNAMIQUES */}
               <div 
-                className="bg-white p-5 relative space-y-3"
+                className="p-5 relative space-y-3"
                 style={{
-                  border: '1px solid rgb(218, 218, 218)',
-                  borderTop: 'none',
+                  backgroundColor: 'rgb(245, 247, 250)',
+                  border: 'none',
                   borderRadius: '0px 0px 18px 18px',
                 }}
               >
                 <div className="mb-2 bg-transparent">
                   <span 
-                    className="text-white px-3 py-1 text-[13px] inline-block font-sans"
+                    className="inline-block font-sans"
                     style={{
-                      backgroundColor: '#2e54ff',
+                      backgroundColor: 'rgb(61, 220, 132)',
+                      color: 'rgb(17, 88, 48)',
+                      fontSize: '18px',
                       borderRadius: '1000px',
+                      padding: '7px 15px',
                       cursor: 'default',
                       fontWeight: 100,
                       textTransform: 'none',

@@ -12357,7 +12357,7 @@ export default function App() {
                   #fsm-tab-container select:not(#select-fsm-tour-manage),
                   #fsm-tab-container textarea {
                     padding: 12px !important;
-                    border: 1px solid #dedede !important;
+                    border: 1px solid #DCE1EA !important;
                     border-radius: 13px !important;
                     font-size: 16px !important;
                     font-weight: 100 !important;
@@ -12367,6 +12367,13 @@ export default function App() {
                     box-sizing: border-box !important;
                     outline: none !important;
                     transition: all 0s !important;
+                  }
+                  #fsm-tab-container .fsm-card input::placeholder,
+                  #fsm-tab-container .fsm-card textarea::placeholder,
+                  #fsm-tab-container input:not(#search-fsm-input)::placeholder,
+                  #fsm-tab-container textarea::placeholder {
+                    color: #BECADB !important;
+                    opacity: 1 !important;
                   }
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-fsm-input),
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-fsm-input),
@@ -12420,7 +12427,8 @@ export default function App() {
                     border-radius: 1000px !important;
                     -webkit-border-radius: 1000px !important;
                     -moz-border-radius: 1000px !important;
-                    padding: 12px 24px !important;
+                    padding: 12px 20px !important;
+                    max-height: 45px !important;
                     font-size: 18px !important;
                     font-weight: 100 !important;
                     height: auto !important;
@@ -12492,13 +12500,28 @@ export default function App() {
                     opacity: 0.82 !important;
                   }
                   #fsm-planning-side-pane,
-                  #fsm-planning-side-pane-body,
+                  #fsm-planning-side-pane-body {
+                    background-color: #ffffff !important;
+                    background: #ffffff !important;
+                  }
                   #fsm-filter-side-pane,
                   #fsm-filter-side-pane-body,
                   #fsm-team-side-pane,
                   #fsm-team-side-pane-body {
-                    background-color: #ffffff !important;
-                    background: #ffffff !important;
+                    background-color: #F5F7FA !important;
+                    background: #F5F7FA !important;
+                    border-left: none !important;
+                    border-radius: 0px !important;
+                  }
+                  #fsm-filter-side-pane label,
+                  #fsm-filter-side-pane h3,
+                  #fsm-filter-side-pane span,
+                  #fsm-team-side-pane label,
+                  #fsm-team-side-pane h4,
+                  #fsm-team-side-pane span,
+                  #fsm-team-side-pane div:not(button) {
+                    color: #50617A !important;
+                    font-size: 18px !important;
                   }
                 `}</style>
 
@@ -12969,32 +12992,32 @@ export default function App() {
                   >
                     <div 
                       id="fsm-filter-side-pane"
-                      className="relative w-full max-w-md bg-white flex flex-col overflow-hidden animate-slideLeft"
+                      className="relative w-full max-w-md flex flex-col overflow-hidden animate-slideLeft"
                       onClick={(e) => e.stopPropagation()}
                       style={{
                         height: '100vh',
-                        backgroundColor: '#ffffff',
-                        background: '#ffffff',
+                        backgroundColor: '#F5F7FA',
+                        background: '#F5F7FA',
                         boxShadow: 'none',
                         borderRadius: '0px',
-                        borderLeft: '1px solid #e2e8f0',
+                        borderLeft: 'none',
                       }}
                     >
                       {/* Body side-pane : Filtres */}
                       <div
                         id="fsm-filter-side-pane-body"
-                        className="flex-1 overflow-y-auto p-6 bg-white space-y-6 pb-28 font-sans"
-                        style={{ backgroundColor: '#ffffff', background: '#ffffff' }}
+                        className="flex-1 overflow-y-auto p-6 space-y-6 pb-28 font-sans"
+                        style={{ backgroundColor: '#F5F7FA', background: '#F5F7FA', color: '#50617A', fontSize: '18px' }}
                       >
                         <div>
-                          <h3 style={{ fontSize: '22px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', color: '#000000' }}>
+                          <h3 style={{ fontSize: '18px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', color: '#50617A' }}>
                             Filtres
                           </h3>
                         </div>
 
                         {/* Filter: Région */}
                         <div>
-                          <label className="block text-[16px] font-semibold text-black mb-1.5 font-sans">
+                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#50617A', fontSize: '18px' }}>
                             Région
                           </label>
                           <select
@@ -13021,7 +13044,7 @@ export default function App() {
 
                         {/* Filter: Technicien */}
                         <div>
-                          <label className="block text-[16px] font-semibold text-black mb-1.5 font-sans">
+                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#50617A', fontSize: '18px' }}>
                             Technicien
                           </label>
                           <select
@@ -13052,7 +13075,7 @@ export default function App() {
 
                         {/* Filter: Employé */}
                         <div>
-                          <label className="block text-[16px] font-semibold text-black mb-1.5 font-sans">
+                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#50617A', fontSize: '18px' }}>
                             Employé
                           </label>
                           <select
@@ -13087,7 +13110,7 @@ export default function App() {
 
                         {/* Filter: Client. */}
                         <div>
-                          <label className="block text-[16px] font-semibold text-black mb-1.5 font-sans">
+                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#50617A', fontSize: '18px' }}>
                             Client.
                           </label>
                           <select
@@ -13114,8 +13137,8 @@ export default function App() {
 
                         {/* Filter: Rejeté Technicien ou Refus Client (Apple-like toggle) */}
                         <div className="pt-2">
-                          <label className="flex items-center justify-between cursor-pointer select-none">
-                            <span className="text-[16px] text-black font-sans font-semibold">
+                          <label className="flex items-center justify-between cursor-pointer select-none" style={{ color: '#50617A', fontSize: '18px' }}>
+                            <span className="text-[18px] font-sans font-semibold" style={{ color: '#50617A', fontSize: '18px' }}>
                               Rejeté Technicien ou Refus Client
                             </span>
                             <div
@@ -13139,14 +13162,15 @@ export default function App() {
                             className={`flex items-center justify-between select-none ${
                               teamWorkGroups.length > 0 ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                             }`}
+                            style={{ color: '#50617A', fontSize: '18px' }}
                             title={teamWorkGroups.length === 0 ? "Aucune zone/groupe créée dans les Réglages de l'équipe" : undefined}
                           >
                             <div className="flex flex-col pr-2">
-                              <span className="text-[16px] text-black font-sans font-semibold">
+                              <span className="text-[18px] font-sans font-semibold" style={{ color: '#50617A', fontSize: '18px' }}>
                                 Données de ma zone/groupe uniquement
                               </span>
                               {teamWorkGroups.length === 0 && (
-                                <span className="text-[12px] text-neutral-400">
+                                <span className="text-[18px]" style={{ color: '#50617A', fontSize: '18px' }}>
                                   Désactivé (aucune zone configurée)
                                 </span>
                               )}
@@ -13195,7 +13219,8 @@ export default function App() {
                                   localStorage.removeItem(`defib_${curTenant}_fsm_only_my_zone`);
                                 } catch (_) {}
                               }}
-                              className="w-full text-center py-2 text-sm text-neutral-500 hover:text-black cursor-pointer font-sans underline"
+                              className="w-full text-center py-2 text-[18px] cursor-pointer font-sans underline"
+                              style={{ color: '#50617A', fontSize: '18px' }}
                             >
                               Réinitialiser tous les filtres
                             </button>
@@ -13244,33 +13269,36 @@ export default function App() {
                   >
                     <div 
                       id="fsm-team-side-pane"
-                      className="relative w-full max-w-lg bg-white flex flex-col overflow-hidden animate-slideLeft"
+                      className="relative w-full max-w-lg flex flex-col overflow-hidden animate-slideLeft"
                       onClick={(e) => e.stopPropagation()}
                       style={{
                         height: '100vh',
-                        backgroundColor: '#ffffff',
-                        background: '#ffffff',
+                        backgroundColor: '#F5F7FA',
+                        background: '#F5F7FA',
                         boxShadow: 'none',
                         borderRadius: '0px',
-                        borderLeft: '1px solid #e2e8f0',
+                        borderLeft: 'none',
                       }}
                     >
                       {/* Body side-pane : Réglages de l’équipe */}
                       <div
                         id="fsm-team-side-pane-body"
-                        className="flex-1 overflow-y-auto p-6 bg-white space-y-6 pb-32 font-sans"
-                        style={{ backgroundColor: '#ffffff', background: '#ffffff' }}
+                        className="flex-1 overflow-y-auto p-6 space-y-6 pb-32 font-sans"
+                        style={{ backgroundColor: '#F5F7FA', background: '#F5F7FA', color: '#50617A', fontSize: '18px' }}
                       >
                         {/* If in creation or edit mode, show form */}
                         {(isCreatingGroup || editingGroupId) ? (
-                          <div className="space-y-5 bg-neutral-50 p-5 rounded-2xl border border-neutral-200 animate-fadeIn">
-                            <h4 style={{ fontSize: '18px', fontWeight: 'bold', color: '#000000', fontFamily: "'Civilprom', 'DefibeoMain', sans-serif" }}>
+                          <div
+                            className="space-y-5 p-5 rounded-2xl animate-fadeIn"
+                            style={{ background: '#E9EBEF', backgroundColor: '#E9EBEF', border: 'none' }}
+                          >
+                            <h4 style={{ fontSize: '18px', fontWeight: 'bold', color: '#50617A', fontFamily: "'Civilprom', 'DefibeoMain', sans-serif" }}>
                               {editingGroupId ? "Modifier le groupe" : "Nouveau groupe et zone"}
                             </h4>
 
                             {/* Titre du groupe (one line max 20 car.) */}
                             <div>
-                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans" style={{ cursor: 'default' }}>
+                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
                                 Titre du groupe.
                               </label>
                               <input
@@ -13289,21 +13317,21 @@ export default function App() {
                                   fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                                 }}
                               />
-                              <div className="text-right text-xs text-neutral-400 mt-1" style={{ cursor: 'default' }}>
+                              <div className="text-right mt-1" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
                                 {groupTitle.length} / 20
                               </div>
                             </div>
 
                             {/* Planificateur(s) (exclure techniciens) */}
                             <div>
-                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans" style={{ cursor: 'default' }}>
+                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
                                 Planificateur(s)
                               </label>
                               {(() => {
                                 const nonTechMembers = members.filter(m => !isTechnicianMember(m));
                                 if (nonTechMembers.length === 0) {
                                   return (
-                                    <div className="text-xs text-neutral-400 italic" style={{ cursor: 'default' }}>
+                                    <div className="italic" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
                                       Aucun planificateur disponible
                                     </div>
                                   );
@@ -13344,14 +13372,14 @@ export default function App() {
 
                             {/* Technicien(s) (exclure membres classiques) */}
                             <div>
-                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans" style={{ cursor: 'default' }}>
+                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
                                 Technicien(s)
                               </label>
                               {(() => {
                                 const techMembers = members.filter(m => isTechnicianMember(m));
                                 if (techMembers.length === 0) {
                                   return (
-                                    <div className="text-xs text-neutral-400 italic" style={{ cursor: 'default' }}>
+                                    <div className="italic" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
                                       Aucun technicien disponible
                                     </div>
                                   );
@@ -13392,7 +13420,7 @@ export default function App() {
 
                             {/* Région(s) */}
                             <div>
-                              <label className="block text-[15px] font-semibold text-black mb-1.5 font-sans" style={{ cursor: 'default' }}>
+                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
                                 Région(s)
                               </label>
                               <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-1 bg-white border border-neutral-200 rounded-xl">
@@ -13457,14 +13485,17 @@ export default function App() {
                             teamWorkGroups.map((g) => (
                               <div
                                 key={g.id}
-                                className="p-4 rounded-xl border border-neutral-200 bg-white space-y-3 font-sans select-none"
+                                className="p-4 rounded-xl space-y-3 font-sans select-none"
                                 style={{
-                                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+                                  background: '#E9EBEF',
+                                  backgroundColor: '#E9EBEF',
+                                  border: 'none',
+                                  boxShadow: 'none',
                                   cursor: 'default'
                                 }}
                               >
                                 <div className="flex items-center justify-between gap-2" style={{ cursor: 'default' }}>
-                                  <h4 style={{ fontSize: '17px', fontWeight: 'bold', color: '#000000', cursor: 'default' }}>
+                                  <h4 style={{ fontSize: '18px', fontWeight: 'bold', color: '#50617A', cursor: 'default' }}>
                                     {g.title}
                                   </h4>
                                   <div className="flex items-center gap-2">
@@ -13507,18 +13538,18 @@ export default function App() {
                                   </div>
                                 </div>
 
-                                <div className="space-y-1.5 text-neutral-700" style={{ cursor: 'default', fontSize: '16px' }}>
-                                  <div style={{ cursor: 'default', fontSize: '16px' }}>
-                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default', fontSize: '16px' }}>Planificateur(s) : </span>
-                                    <span style={{ cursor: 'default', fontSize: '16px' }}>{g.planners && g.planners.length > 0 ? g.planners.join(', ') : 'Aucun'}</span>
+                                <div className="space-y-1.5" style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>
+                                  <div style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>
+                                    <span className="font-semibold" style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>Planificateur(s) : </span>
+                                    <span style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>{g.planners && g.planners.length > 0 ? g.planners.join(', ') : 'Aucun'}</span>
                                   </div>
-                                  <div style={{ cursor: 'default', fontSize: '16px' }}>
-                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default', fontSize: '16px' }}>Technicien(s) : </span>
-                                    <span style={{ cursor: 'default', fontSize: '16px' }}>{g.technicians && g.technicians.length > 0 ? g.technicians.join(', ') : 'Aucun'}</span>
+                                  <div style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>
+                                    <span className="font-semibold" style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>Technicien(s) : </span>
+                                    <span style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>{g.technicians && g.technicians.length > 0 ? g.technicians.join(', ') : 'Aucun'}</span>
                                   </div>
-                                  <div style={{ cursor: 'default', fontSize: '16px' }}>
-                                    <span className="font-semibold text-neutral-900" style={{ cursor: 'default', fontSize: '16px' }}>Région(s) : </span>
-                                    <span style={{ cursor: 'default', fontSize: '16px' }}>{g.regions && g.regions.length > 0 ? g.regions.join(', ') : 'Aucune'}</span>
+                                  <div style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>
+                                    <span className="font-semibold" style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>Région(s) : </span>
+                                    <span style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>{g.regions && g.regions.length > 0 ? g.regions.join(', ') : 'Aucune'}</span>
                                   </div>
                                 </div>
                               </div>
@@ -13845,6 +13876,7 @@ export default function App() {
                             type="button"
                             id="btn-fsm-to-sort-adv"
                             onClick={() => {
+                              triggerFsmPillWave('btn-fsm-to-sort-adv');
                               if (activeDateFilter === 'A trier') {
                                 const returnTourId = fsmLastSelectedTourId || (displayedTour ? displayedTour.id : (scheduledTours[0] ? scheduledTours[0].id : 'none'));
                                 setFsmDateFilter(returnTourId);
@@ -13858,8 +13890,11 @@ export default function App() {
                               }
                             }}
                             style={{
+                              position: 'relative',
+                              overflow: 'hidden',
                               borderRadius: '1000px',
-                              padding: '12px 24px',
+                              padding: '10px 20px',
+                              maxHeight: '45px',
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -13875,15 +13910,15 @@ export default function App() {
                               whiteSpace: 'nowrap',
                               flexShrink: 0
                             }}
-                            className="hover:opacity-85 transition-opacity flex-shrink-0"
+                            className={`relative overflow-hidden hover:opacity-85 transition-opacity flex-shrink-0 ${fsmClickedPill?.id === 'btn-fsm-to-sort-adv' ? 'sidebar-nav-click-shrink-wave' : ''}`}
                           >
                             <span>{translate("À trier / Ordres ADV")}</span>
                             <span
                               className="inline-flex items-center justify-center rounded-full shrink-0 font-bold ml-2.5"
                               style={{
-                                backgroundColor: 'rgb(255 255 255)',
-                                color: '#000',
-                                border: '1px solid #80808080',
+                                backgroundColor: 'rgb(248 249 255)',
+                                color: '#2e54ff',
+                                border: 'none',
                                 fontSize: '15px',
                                 minWidth: '26px',
                                 height: '26px',
@@ -13918,7 +13953,10 @@ export default function App() {
                               Rechercher
                             </button>
                           </div>
-                          <div className="relative w-full">
+                          <div
+                            className={`relative w-full overflow-hidden rounded-full ${fsmClickedPill?.id === 'select-fsm-tour-manage' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                            onMouseDown={() => triggerFsmPillWave('select-fsm-tour-manage')}
+                          >
                             <select
                               id="select-fsm-tour-manage"
                               value={
@@ -13942,7 +13980,8 @@ export default function App() {
                                 borderRadius: '1000px',
                                 WebkitBorderRadius: '1000px',
                                 MozBorderRadius: '1000px',
-                                padding: '12px 24px',
+                                padding: '12px 20px',
+                                maxHeight: '45px',
                                 fontSize: '18px',
                                 fontWeight: 100,
                                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -13953,7 +13992,7 @@ export default function App() {
                                 boxShadow: 'none',
                                 boxSizing: 'border-box',
                               }}
-                              className="w-full truncate focus:outline-none hover:opacity-85 transition-opacity"
+                              className={`w-full truncate focus:outline-none hover:opacity-85 transition-opacity ${fsmClickedPill?.id === 'select-fsm-tour-manage' ? 'sidebar-nav-click-shrink-wave' : ''}`}
                             >
                               <option value="none">
                                 {translate("Aucune tournée sélectionnée")}
@@ -14042,6 +14081,7 @@ export default function App() {
                                       disabled={isSaveDisabled}
                                       onClick={() => {
                                         if (isSaveDisabled) return;
+                                        triggerFsmPillWave(`save-tour-atrier-${t.id}`);
 
                                         // Disable button and lower opacity
                                         setSavingTourIds(prev => ({ ...prev, [t.id]: true }));
@@ -14061,11 +14101,13 @@ export default function App() {
                                       }}
                                       style={{
                                         ...blueButtonStyle,
-                                        padding: '12px 24px',
+                                        position: 'relative',
+                                        overflow: 'hidden',
+                                        padding: '12px 20px',
+                                        maxHeight: '45px',
                                         borderRadius: '13px',
                                         fontSize: '18px',
                                         fontWeight: '100',
-                                        height: '50px',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
@@ -14074,7 +14116,7 @@ export default function App() {
                                         pointerEvents: isSaveDisabled ? 'none' : 'auto',
                                         cursor: isSaveDisabled ? 'not-allowed' : 'pointer'
                                       }}
-                                      className={`${isSaveDisabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer'} sm:w-auto flex-1 sm:flex-initial`}
+                                      className={`relative overflow-hidden ${isSaveDisabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer'} sm:w-auto flex-1 sm:flex-initial ${!isSaveDisabled && fsmClickedPill?.id === `save-tour-atrier-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                     >
                                       Enregistrer
                                     </button>
@@ -14085,11 +14127,7 @@ export default function App() {
 
                             {/* Tour missions list */}
                             <div className="p-4 space-y-4">
-                              {t.missions.length === 0 ? (
-                                <div className="py-12 text-center font-sans bg-white rounded-xl" style={{ color: '#000000', fontSize: '16px', border: 'none' }}>
-                                  Aucune mission à trier.
-                                </div>
-                              ) : (
+                              {t.missions.length === 0 ? null : (
                                 <div className="space-y-4 bg-transparent">
                                   {/* Radio check pour sélectionner toutes les missions de la tournée */}
                                   {(() => {
@@ -14113,9 +14151,9 @@ export default function App() {
                                           className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
                                             isAllTourMissionsSelected
                                               ? 'border-[#2e54ff] bg-transparent'
-                                              : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                                              : 'border-slate-400 bg-transparent hover:border-[#2e54ff]'
                                           }`}
-                                          style={{ borderWidth: '1px' }}
+                                          style={{ borderWidth: '1px', backgroundColor: 'transparent' }}
                                           role="checkbox"
                                           aria-checked={isAllTourMissionsSelected}
                                           title="Sélectionner toutes les missions"
@@ -14155,9 +14193,9 @@ export default function App() {
                                             className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
                                               selectedFsmMissionIds.includes(m.id)
                                                 ? 'border-[#2e54ff] bg-transparent'
-                                                : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                                                : 'border-slate-400 bg-transparent hover:border-[#2e54ff]'
                                             }`}
-                                            style={{ borderWidth: '1px' }}
+                                            style={{ borderWidth: '1px', backgroundColor: 'transparent' }}
                                             role="checkbox"
                                             aria-checked={selectedFsmMissionIds.includes(m.id)}
                                             title="Sélectionner la mission"
@@ -14172,7 +14210,7 @@ export default function App() {
                                               color: 'rgb(19 100 55)',
                                               borderRadius: '1000px',
                                               padding: '8px 16px',
-                                              fontSize: '15px',
+                                              fontSize: '18px',
                                               fontWeight: 700,
                                               border: 'none',
                                               cursor: 'default'
@@ -14273,8 +14311,13 @@ export default function App() {
                                           {/* Bouton Dérouler / Réduire */}
                                           <button
                                             type="button"
-                                            onClick={() => toggleFsmMissionExpanded(missionKey)}
+                                            onClick={() => {
+                                              triggerFsmPillWave(`toggle-expand-${missionKey}`);
+                                              toggleFsmMissionExpanded(missionKey);
+                                            }}
                                             style={{
+                                              position: 'relative',
+                                              overflow: 'hidden',
                                               color: '#fff',
                                               boxShadow: 'none',
                                               background: '#0f172a',
@@ -14290,7 +14333,7 @@ export default function App() {
                                               alignItems: 'center',
                                               gap: '6px'
                                             }}
-                                            className="shrink-0 select-none"
+                                            className={`relative overflow-hidden shrink-0 select-none ${fsmClickedPill?.id === `toggle-expand-${missionKey}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                           >
                                             {isExpanded ? 'Réduire' : 'Dérouler'}
                                           </button>
@@ -15211,7 +15254,7 @@ export default function App() {
                                                       color: '#ffffff',
                                                       borderRadius: '10px',
                                                       padding: '7px 14px',
-                                                      fontSize: '14px',
+                                                      fontSize: '18px',
                                                       fontWeight: 100,
                                                       border: 'none',
                                                       opacity: urgentDefibsCount === 0 ? 0.4 : 1,
@@ -15243,7 +15286,7 @@ export default function App() {
                                                       color: '#ffffff',
                                                       borderRadius: '10px',
                                                       padding: '7px 14px',
-                                                      fontSize: '14px',
+                                                      fontSize: '18px',
                                                       fontWeight: 100,
                                                       border: 'none',
                                                       opacity: urgentMaterielsCount === 0 ? 0.4 : 1,
@@ -15251,7 +15294,7 @@ export default function App() {
                                                     }}
                                                     className="transition-opacity select-none"
                                                   >
-                                                    Voir les {urgentMaterielsCount} autre(s) matériel(s).
+                                                    Voir les {urgentMaterielsCount} autre(s) matériel(s)
                                                   </button>
                                                 </div>
                                               </div>
@@ -15267,7 +15310,7 @@ export default function App() {
                                                 <select
                                                   id={`transfer-select-${m.id}`}
                                                   style={{
-                                                    border: '1px solid #dedede',
+                                                    border: '1px solid #DCE1EA',
                                                     borderRadius: '13px',
                                                     padding: '12px',
                                                     fontSize: '16px',
@@ -15345,10 +15388,13 @@ export default function App() {
                                             <div className="bg-transparent flex flex-col justify-end md:col-span-1">
                                               <button
                                                 type="button"
-                                                onClick={() => deleteFsmMission(t.id, m.id)}
+                                                onClick={() => {
+                                                  triggerFsmPillWave(`del-mission-atrier-${m.id}`);
+                                                  deleteFsmMission(t.id, m.id);
+                                                }}
                                                 style={{
                                                   color: '#fff',
-                                                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                                  boxShadow: 'none',
                                                   background: '#2e54ff',
                                                   borderRadius: '13px',
                                                   border: 'none',
@@ -15358,9 +15404,11 @@ export default function App() {
                                                   width: '100%',
                                                   display: 'flex',
                                                   justifyContent: 'center',
-                                                  alignItems: 'center'
+                                                  alignItems: 'center',
+                                                  position: 'relative',
+                                                  overflow: 'hidden'
                                                 }}
-                                                className="cursor-pointer"
+                                                className={`cursor-pointer ${fsmClickedPill?.id === `del-mission-atrier-${m.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                               >
                                                 Supprimer
                                               </button>
@@ -15414,11 +15462,11 @@ export default function App() {
                               {/* Gélule n% Planifiée(s) */}
                               <div
                                 style={{
-                                  backgroundColor: '#3ddc84',
-                                  color: '#156337',
+                                  backgroundColor: 'rgb(233 237 241)',
+                                  color: 'rgb(80 97 122)',
                                   borderRadius: '1000px',
-                                  padding: '12px 20px',
-                                  height: '50px',
+                                  padding: '10px 18px',
+                                  maxHeight: '45px',
                                   fontSize: '18px',
                                   fontWeight: 100,
                                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -15437,11 +15485,11 @@ export default function App() {
                               {/* Gélule n% Effectuées */}
                               <div
                                 style={{
-                                  backgroundColor: '#3ddc84',
-                                  color: '#156337',
+                                  backgroundColor: 'rgb(233 237 241)',
+                                  color: 'rgb(80 97 122)',
                                   borderRadius: '1000px',
-                                  padding: '12px 20px',
-                                  height: '50px',
+                                  padding: '10px 18px',
+                                  maxHeight: '45px',
                                   fontSize: '18px',
                                   fontWeight: 100,
                                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -15476,15 +15524,18 @@ export default function App() {
                                     disabled={!isDeleteEnabled}
                                     onClick={() => {
                                       if (!isDeleteEnabled) return;
+                                      triggerFsmPillWave(`del-tour-${t.id}`);
                                       deleteFsmTour(t.id);
                                     }}
                                     style={{
                                       ...rowActionButtonStyle,
-                                      padding: '12px 24px',
+                                      position: 'relative',
+                                      overflow: 'hidden',
+                                      padding: '12px 20px',
+                                      maxHeight: '45px',
                                       borderRadius: '13px',
                                       fontSize: '18px',
                                       fontWeight: '100',
-                                      height: '50px',
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
@@ -15493,7 +15544,7 @@ export default function App() {
                                       opacity: isDeleteEnabled ? 1 : 0.4,
                                       cursor: isDeleteEnabled ? 'pointer' : 'not-allowed'
                                     }}
-                                    className={`${isDeleteEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} shrink-0`}
+                                    className={`relative overflow-hidden ${isDeleteEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} shrink-0 ${isDeleteEnabled && fsmClickedPill?.id === `del-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                     title={!isDeleteEnabled ? "Le bouton Supprimer est désactivé (une ou plusieurs missions ne sont pas en situation Brouillon, Effectué ou Rejet mission)" : undefined}
                                   >
                                     Supprimer
@@ -15506,6 +15557,8 @@ export default function App() {
                                 type="button"
                                 disabled={(t.missions ? t.missions.length : 0) <= 1}
                                 onClick={async () => {
+                                  if ((t.missions ? t.missions.length : 0) <= 1) return;
+                                  triggerFsmPillWave(`calc-tour-${t.id}`);
                                   const draftVal = fsmTourDrafts[t.id] || {};
                                   const finalTitle = draftVal.title !== undefined ? draftVal.title : (t.title || '');
                                   const finalTech = draftVal.techName !== undefined ? draftVal.techName : (t.techName || '');
@@ -15554,11 +15607,13 @@ export default function App() {
                                 }}
                                 style={{
                                   ...rowActionButtonStyle,
-                                  padding: '12px 24px',
+                                  position: 'relative',
+                                  overflow: 'hidden',
+                                  padding: '12px 20px',
+                                  maxHeight: '45px',
                                   borderRadius: '13px',
                                   fontSize: '18px',
                                   fontWeight: '100',
-                                  height: '50px',
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
@@ -15567,7 +15622,7 @@ export default function App() {
                                   opacity: (t.missions ? t.missions.length : 0) <= 1 ? 0.5 : 1,
                                   cursor: (t.missions ? t.missions.length : 0) <= 1 ? 'not-allowed' : 'pointer'
                                 }}
-                                className={`${(t.missions ? t.missions.length : 0) <= 1 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} shrink-0`}
+                                className={`relative overflow-hidden ${(t.missions ? t.missions.length : 0) <= 1 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} shrink-0 ${(t.missions ? t.missions.length : 0) > 1 && fsmClickedPill?.id === `calc-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                               >
                                 Calculer
                               </button>
@@ -15582,14 +15637,20 @@ export default function App() {
                                   <button
                                     type="button"
                                     disabled={!isAvisageEnabled}
-                                    onClick={() => setAvisageConfirmTour(t)}
+                                    onClick={() => {
+                                      if (!isAvisageEnabled) return;
+                                      triggerFsmPillWave(`avisage-tour-${t.id}`);
+                                      setAvisageConfirmTour(t);
+                                    }}
                                     style={{
                                       ...rowActionButtonStyle,
-                                      padding: '12px 24px',
+                                      position: 'relative',
+                                      overflow: 'hidden',
+                                      padding: '12px 20px',
+                                      maxHeight: '45px',
                                       borderRadius: '13px',
                                       fontSize: '18px',
                                       fontWeight: '100',
-                                      height: '50px',
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
@@ -15598,7 +15659,7 @@ export default function App() {
                                       opacity: isAvisageEnabled ? 1 : 0.4,
                                       cursor: isAvisageEnabled ? 'pointer' : 'not-allowed'
                                     }}
-                                    className={`${isAvisageEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} shrink-0`}
+                                    className={`relative overflow-hidden ${isAvisageEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} shrink-0 ${isAvisageEnabled && fsmClickedPill?.id === `avisage-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                   >
                                     Avisage
                                   </button>
@@ -15611,6 +15672,7 @@ export default function App() {
                                 disabled={!!savingTourIds[t.id]}
                                 onClick={() => {
                                   if (savingTourIds[t.id]) return;
+                                  triggerFsmPillWave(`save-tour-${t.id}`);
 
                                   const draftVal = fsmTourDrafts[t.id] || {};
                                   const finalTitle = draftVal.title !== undefined ? draftVal.title : (t.title || '');
@@ -15676,11 +15738,13 @@ export default function App() {
                                 }}
                                 style={{
                                   ...blueButtonStyle,
-                                  padding: '12px 24px',
+                                  position: 'relative',
+                                  overflow: 'hidden',
+                                  padding: '12px 20px',
+                                  maxHeight: '45px',
                                   borderRadius: '13px',
                                   fontSize: '18px',
                                   fontWeight: '100',
-                                  height: '50px',
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
@@ -15689,7 +15753,7 @@ export default function App() {
                                   opacity: savingTourIds[t.id] ? 0.7 : 1,
                                   pointerEvents: savingTourIds[t.id] ? 'none' : 'auto'
                                 }}
-                                className={`${savingTourIds[t.id] ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} shrink-0`}
+                                className={`relative overflow-hidden ${savingTourIds[t.id] ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} shrink-0 ${!savingTourIds[t.id] && fsmClickedPill?.id === `save-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                               >
                                 Enregistrer
                               </button>
@@ -16184,9 +16248,9 @@ export default function App() {
                                         className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
                                           isAllTourMissionsSelected
                                             ? 'border-[#2e54ff] bg-transparent'
-                                            : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                                            : 'border-slate-400 bg-transparent hover:border-[#2e54ff]'
                                         }`}
-                                        style={{ borderWidth: '1px' }}
+                                        style={{ borderWidth: '1px', backgroundColor: 'transparent' }}
                                         role="checkbox"
                                         aria-checked={isAllTourMissionsSelected}
                                         title="Sélectionner toutes les missions"
@@ -16235,9 +16299,9 @@ export default function App() {
                                             className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden cursor-pointer shrink-0 ${
                                               selectedFsmMissionIds.includes(m.id)
                                                 ? 'border-[#2e54ff] bg-transparent'
-                                                : 'border-slate-400 bg-white hover:border-[#2e54ff]'
+                                                : 'border-slate-400 bg-transparent hover:border-[#2e54ff]'
                                             }`}
-                                            style={{ borderWidth: '1px' }}
+                                            style={{ borderWidth: '1px', backgroundColor: 'transparent' }}
                                             role="checkbox"
                                             aria-checked={selectedFsmMissionIds.includes(m.id)}
                                             title="Sélectionner la mission"
@@ -16313,7 +16377,7 @@ export default function App() {
                                               color: 'rgb(19 100 55)',
                                               borderRadius: '1000px',
                                               padding: '8px 16px',
-                                              fontSize: '15px',
+                                              fontSize: '18px',
                                               fontWeight: 700,
                                               border: 'none',
                                               cursor: 'default'
@@ -16445,7 +16509,10 @@ export default function App() {
                                         {/* Bouton Dérouler / Réduire */}
                                         <button
                                           type="button"
-                                          onClick={() => toggleFsmMissionExpanded(missionKey)}
+                                          onClick={() => {
+                                            triggerFsmPillWave(`toggle-expand-tour-${missionKey}`);
+                                            toggleFsmMissionExpanded(missionKey);
+                                          }}
                                           style={{
                                             color: '#fff',
                                             boxShadow: 'none',
@@ -16460,9 +16527,11 @@ export default function App() {
                                             cursor: 'pointer',
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: '6px'
+                                            gap: '6px',
+                                            position: 'relative',
+                                            overflow: 'hidden'
                                           }}
-                                          className="shrink-0 select-none"
+                                          className={`shrink-0 select-none ${fsmClickedPill?.id === `toggle-expand-tour-${missionKey}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                         >
                                           {isExpanded ? 'Réduire' : 'Dérouler'}
                                         </button>
@@ -17433,7 +17502,7 @@ export default function App() {
                                               color: '#ffffff',
                                               borderRadius: '10px',
                                               padding: '10px 16px',
-                                              fontSize: '16px',
+                                              fontSize: '18px',
                                               fontWeight: 100,
                                               border: 'none',
                                               opacity: urgentDefibsCount === 0 ? 0.4 : 1,
@@ -17465,7 +17534,7 @@ export default function App() {
                                               color: '#ffffff',
                                               borderRadius: '10px',
                                               padding: '10px 16px',
-                                              fontSize: '16px',
+                                              fontSize: '18px',
                                               fontWeight: 100,
                                               border: 'none',
                                               opacity: urgentMaterielsCount === 0 ? 0.4 : 1,
@@ -17473,7 +17542,7 @@ export default function App() {
                                             }}
                                             className="transition-opacity select-none"
                                           >
-                                            Voir les {urgentMaterielsCount} autre(s) matériel(s).
+                                            Voir les {urgentMaterielsCount} autre(s) matériel(s)
                                           </button>
                                         </div>
                                       </div>
@@ -17528,7 +17597,7 @@ export default function App() {
                                             paddingTop: "12px",
                                             paddingBottom: "12px",
                                             width: "100%",
-                                            border: "1px solid #dedede",
+                                            border: "1px solid #DCE1EA",
                                             borderRadius: "13px",
                                             fontSize: "16px",
                                             backgroundColor: "#ffffff"
@@ -17576,10 +17645,14 @@ export default function App() {
                                           <button
                                             type="button"
                                             disabled={!canSubmitToClient}
-                                            onClick={() => handleSoumettreAuClient(m, t)}
+                                            onClick={() => {
+                                              if (!canSubmitToClient) return;
+                                              triggerFsmPillWave(`avisage-client-mission-${m.id}`);
+                                              handleSoumettreAuClient(m, t);
+                                            }}
                                             style={{
                                               color: '#fff',
-                                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                              boxShadow: 'none',
                                               background: '#2e54ff',
                                               borderRadius: '13px',
                                               border: 'none',
@@ -17591,9 +17664,11 @@ export default function App() {
                                               justifyContent: 'center',
                                               alignItems: 'center',
                                               opacity: canSubmitToClient ? 1 : 0.4,
-                                              cursor: canSubmitToClient ? 'pointer' : 'not-allowed'
+                                              cursor: canSubmitToClient ? 'pointer' : 'not-allowed',
+                                              position: 'relative',
+                                              overflow: 'hidden'
                                             }}
-                                            className={canSubmitToClient ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'}
+                                            className={`${canSubmitToClient ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} ${canSubmitToClient && fsmClickedPill?.id === `avisage-client-mission-${m.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                           >
                                             Avisage email au client
                                           </button>
@@ -17605,10 +17680,13 @@ export default function App() {
                                     <div className="bg-transparent flex flex-col justify-end">
                                       <button
                                         type="button"
-                                        onClick={() => deleteFsmMission(t.id, m.id)}
+                                        onClick={() => {
+                                          triggerFsmPillWave(`del-mission-tour-${m.id}`);
+                                          deleteFsmMission(t.id, m.id);
+                                        }}
                                         style={{
                                           color: '#fff',
-                                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                          boxShadow: 'none',
                                           background: '#2e54ff',
                                           borderRadius: '13px',
                                           border: 'none',
@@ -17618,9 +17696,11 @@ export default function App() {
                                           width: '100%',
                                           display: 'flex',
                                           justifyContent: 'center',
-                                          alignItems: 'center'
+                                          alignItems: 'center',
+                                          position: 'relative',
+                                          overflow: 'hidden'
                                         }}
-                                        className="cursor-pointer"
+                                        className={`cursor-pointer ${fsmClickedPill?.id === `del-mission-tour-${m.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                       >
                                         Supprimer
                                       </button>
@@ -17637,7 +17717,11 @@ export default function App() {
                                           <button
                                             type="button"
                                             disabled={isMettreATrierDisabled}
-                                            onClick={() => moveFsmMissionToATrier(t.id, m.id)}
+                                            onClick={() => {
+                                              if (isMettreATrierDisabled) return;
+                                              triggerFsmPillWave(`mettre-a-trier-mission-${m.id}`);
+                                              moveFsmMissionToATrier(t.id, m.id);
+                                            }}
                                             style={{
                                               color: '#fff',
                                               boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(185, 28, 28) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
@@ -17652,9 +17736,11 @@ export default function App() {
                                               justifyContent: 'center',
                                               alignItems: 'center',
                                               opacity: isMettreATrierDisabled ? 0.4 : 1,
-                                              cursor: isMettreATrierDisabled ? 'not-allowed' : 'pointer'
+                                              cursor: isMettreATrierDisabled ? 'not-allowed' : 'pointer',
+                                              position: 'relative',
+                                              overflow: 'hidden'
                                             }}
-                                            className={isMettreATrierDisabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'}
+                                            className={`${isMettreATrierDisabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'} ${!isMettreATrierDisabled && fsmClickedPill?.id === `mettre-a-trier-mission-${m.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                             title={
                                               isMettreATrierDisabled
                                                 ? "Impossible de mettre à trier si la tournée est 'À faire' / 'Effectué' ou si la mission est 'Accepté client' / 'Effectué'"
@@ -18445,6 +18531,20 @@ export default function App() {
                     color: #000000 !important;
                     font-weight: 600 !important;
                     font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+                  }
+                  #gmao-tab-container #gmao-filter-side-pane,
+                  #gmao-tab-container #gmao-manage-side-pane {
+                    background-color: #F5F7FA !important;
+                    border-left: none !important;
+                    border-radius: 0px !important;
+                  }
+                  #gmao-tab-container #gmao-filter-side-pane label,
+                  #gmao-tab-container #gmao-filter-side-pane .gmao-label-style,
+                  #gmao-tab-container #gmao-manage-side-pane label,
+                  #gmao-tab-container #gmao-manage-side-pane .gmao-label-style,
+                  #gmao-tab-container #gmao-manage-side-pane .gmao-sidepane-text {
+                    color: #50617A !important;
+                    font-size: 18px !important;
                   }
                   #gmao-tab-container select.padding-with-dot {
                     padding-left: 27px !important;
@@ -19454,19 +19554,22 @@ export default function App() {
                       onClick={() => setManagingReportId(null)}
                     >
                       <div 
-                        className="relative w-full max-w-xl bg-white flex flex-col overflow-hidden animate-slideLeft h-full"
+                        id="gmao-manage-side-pane"
+                        className="relative w-full max-w-xl flex flex-col overflow-hidden animate-slideLeft h-full"
                         onClick={(e) => e.stopPropagation()}
                         style={{
                           boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
-                          borderLeft: '1px solid #e2e8f0',
+                          borderLeft: 'none',
+                          borderRadius: '0px',
+                          backgroundColor: '#F5F7FA',
                         }}
                       >
                         {/* Drawer Body without inner padding/border div */}
-                        <div className="flex-1 overflow-y-auto p-6 pb-28 space-y-6 bg-white font-sans">
+                        <div className="flex-1 overflow-y-auto p-6 pb-28 space-y-6 bg-transparent font-sans" style={{ color: '#50617A', fontSize: '18px' }}>
                           {/* 1. Field: Drapeau ou indicateur */}
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <label className="block text-[16px] font-medium text-[#000]">
+                              <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
                                 Drapeau ou indicateur.
                               </label>
                               <button
@@ -19475,8 +19578,8 @@ export default function App() {
                                   setManagingReportId(null);
                                   setActiveTab('variables');
                                 }}
-                                style={{ fontSize: '16px', textDecoration: 'none' }}
-                                className="text-[16px] text-blue-600 hover:text-blue-800 cursor-pointer bg-transparent border-0 p-0 font-medium font-sans no-underline hover:no-underline"
+                                style={{ fontSize: '18px', textDecoration: 'none' }}
+                                className="text-[18px] text-blue-600 hover:text-blue-800 cursor-pointer bg-transparent border-0 p-0 font-medium font-sans no-underline hover:no-underline"
                               >
                                 Nouvelle variable drapeau
                               </button>
@@ -19532,7 +19635,7 @@ export default function App() {
                                         );
                                         saveReports(updatedReports);
                                       }}
-                                      className="inline-flex items-center px-4 py-2 rounded-full text-[18px] font-medium cursor-pointer transition-colors select-none hover:!bg-[#851010] hover:!text-white"
+                                      className="flag-pill inline-flex items-center px-4 py-2 rounded-full text-[18px] font-medium cursor-pointer transition-colors select-none hover:!bg-[#851010] hover:!text-white"
                                       style={{
                                         backgroundColor: hex || '#f1f5f9',
                                         color: txtColor,
@@ -19550,7 +19653,7 @@ export default function App() {
 
                           {/* 2. Field: Situation. */}
                           <div className="space-y-1.5 pt-1">
-                            <label className="block text-[16px] font-medium text-[#000]">
+                            <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
                               Situation.
                             </label>
                             <select
@@ -19579,7 +19682,7 @@ export default function App() {
                           {/* Field: Raison de rejet (visible if situation is Rejet mission or intervention impossible) */}
                           {(managingReport.missionStatus === 'Rejet mission' || managingReport.conforme === 'Intervention impossible' || managingReport.statutMaintenance === 'IMPOSSIBLE') && (
                             <div className="space-y-1.5 pt-1">
-                              <label className="block text-[16px] font-medium text-[#000]">
+                              <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
                                 Raison de rejet de mission.
                               </label>
                               <input
@@ -19601,7 +19704,7 @@ export default function App() {
 
                           {/* 3. Field: Commentaire du technicien. (Disabled textarea showing section 11 Commentaire interne) */}
                           <div className="space-y-2 pt-1">
-                            <label className="block text-[16px] font-medium text-[#000]">
+                            <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
                               Commentaire du technicien.
                             </label>
                             <textarea
@@ -19614,7 +19717,7 @@ export default function App() {
 
                           {/* 4. Field: Commentaire interne */}
                           <div className="space-y-1.5 pt-1">
-                            <label className="block text-[16px] font-medium text-[#000]">
+                            <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
                               Commentaire interne.
                             </label>
                             <textarea
@@ -19646,7 +19749,7 @@ export default function App() {
 
                           {/* 5. Toggle: Désactiver l'email au client. */}
                           <div className="flex items-center justify-between pt-1">
-                            <span className="block text-[16px] font-medium text-[#000]">
+                            <span className="gmao-sidepane-text block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
                               Désactiver l’email au client.
                             </span>
                             <button
@@ -19675,13 +19778,34 @@ export default function App() {
                           </div>
                         </div>
 
-                        {/* Boutons floating en bas côtes à côtes */}
+                        {/* Boutons floating en bas côtes à côtes (Fermer à gauche, Enregistrer à droite) */}
                         <div 
-                          className="absolute bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-xs border-t border-slate-200 z-50 flex items-center gap-3 font-sans"
+                          className="absolute bottom-0 left-0 right-0 p-4 bg-transparent z-50 flex items-center gap-3 font-sans"
                           style={{
-                            boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.08)'
+                            backgroundColor: 'transparent',
+                            boxShadow: 'none',
+                            borderTop: 'none',
+                            border: 'none',
                           }}
                         >
+                          <button
+                            type="button"
+                            onClick={() => setManagingReportId(null)}
+                            style={{
+                              backgroundColor: '#0f172a',
+                              color: '#ffffff',
+                              fontSize: '18px',
+                              fontWeight: '600',
+                              borderRadius: '12px',
+                              height: '48px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              boxShadow: 'none'
+                            }}
+                            className="flex-1 py-3 px-4 hover:bg-slate-800 transition-all flex items-center justify-center font-sans"
+                          >
+                            Fermer
+                          </button>
                           <button
                             type="button"
                             onClick={() => {
@@ -19702,25 +19826,7 @@ export default function App() {
                             }}
                             style={{
                               backgroundColor: '#2e54ff',
-                              color: '#ffffff',
-                              fontSize: '18px',
-                              fontWeight: '600',
-                              borderRadius: '12px',
-                              height: '48px',
-                              border: 'none',
-                              cursor: 'pointer',
-                              boxShadow: '0 4px 12px rgba(53, 86, 236, 0.25)'
-                            }}
-                            className="flex-1 py-3 px-4 hover:brightness-110 transition-all flex items-center justify-center font-sans"
-                          >
-                            Enregistrer
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setManagingReportId(null)}
-                            style={{
-                              backgroundColor: '#0f172a',
-                              color: '#ffffff',
+                              color: '#fff',
                               fontSize: '18px',
                               fontWeight: '600',
                               borderRadius: '12px',
@@ -19729,9 +19835,9 @@ export default function App() {
                               cursor: 'pointer',
                               boxShadow: 'none'
                             }}
-                            className="flex-1 py-3 px-4 hover:bg-slate-800 transition-all flex items-center justify-center font-sans"
+                            className="flex-1 py-3 px-4 hover:brightness-110 transition-all flex items-center justify-center font-sans"
                           >
-                            Fermer
+                            Enregistrer
                           </button>
                         </div>
                       </div>
@@ -19922,25 +20028,30 @@ export default function App() {
                 {/* 🧭 GMAO FILTER SIDE PANE / DRAWER 🧭 */}
                 {isGmaoFilterPaneOpen && (
                   <div 
-                    className="fixed inset-y-0 right-0 w-80 sm:w-96 bg-white shadow-2xl z-[9999] flex flex-col border-l border-slate-200 transform transition-transform" 
+                    className="fixed inset-y-0 right-0 w-80 sm:w-96 shadow-2xl z-[9999] flex flex-col transform transition-transform" 
                     id="gmao-filter-side-pane"
-                    style={{ height: '100%' }}
+                    style={{
+                      height: '100%',
+                      borderLeft: 'none',
+                      borderRadius: '0px',
+                      backgroundColor: '#F5F7FA',
+                    }}
                   >
                     {/* Scroll Area containing all fields */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6" style={{ color: '#50617A', fontSize: '18px' }}>
                       {/* Filter 1: Client */}
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-start pb-1">
                           <button
                             type="button"
                             onClick={() => setIsGmaoSearchClientOpen(true)}
-                            className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline font-sans"
-                            style={{ textDecoration: 'none', background: 'transparent', border: 'none', padding: 0 }}
+                            className="text-[18px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline font-sans"
+                            style={{ textDecoration: 'none', background: 'transparent', border: 'none', padding: 0, fontSize: '18px' }}
                           >
                             Rechercher
                           </button>
                         </div>
-                        <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                        <label className="block text-[18px] font-semibold text-[#50617A]" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", color: '#50617A', fontSize: '18px' }}>
                           Client.
                         </label>
                         <div className="relative">
@@ -19962,7 +20073,7 @@ export default function App() {
 
                       {/* Filter 2: Technicien */}
                       <div className="space-y-1.5">
-                        <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                        <label className="block text-[18px] font-semibold text-[#50617A]" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", color: '#50617A', fontSize: '18px' }}>
                           Technicien.
                         </label>
                         <div className="relative">
@@ -19982,12 +20093,12 @@ export default function App() {
 
                       {/* Filter 3: Plage (date début et fin) */}
                       <div className="space-y-1.5">
-                        <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                        <label className="block text-[18px] font-semibold text-[#50617A]" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", color: '#50617A', fontSize: '18px' }}>
                           Plage.
                         </label>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="block mb-1 font-sans" style={{ color: '#000', fontSize: '16px', fontWeight: 500 }}>
+                            <label className="block mb-1 font-sans" style={{ color: '#50617A', fontSize: '18px', fontWeight: 500 }}>
                               Date début.
                             </label>
                             <input
@@ -19999,7 +20110,7 @@ export default function App() {
                             />
                           </div>
                           <div>
-                            <label className="block mb-1 font-sans" style={{ color: '#000', fontSize: '16px', fontWeight: 500 }}>
+                            <label className="block mb-1 font-sans" style={{ color: '#50617A', fontSize: '18px', fontWeight: 500 }}>
                               Date fin.
                             </label>
                             <input
@@ -20015,7 +20126,7 @@ export default function App() {
 
                       {/* Filter 4: Drapeau */}
                       <div className="space-y-1.5">
-                        <label className="block text-[15px] font-semibold text-black" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                        <label className="block text-[18px] font-semibold text-[#50617A]" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", color: '#50617A', fontSize: '18px' }}>
                           Drapeau.
                         </label>
                         <div className="relative">
@@ -20037,7 +20148,7 @@ export default function App() {
                     </div>
 
                     {/* Footer Actions */}
-                    <div className="p-6 bg-white flex gap-4 shrink-0 border-0 border-t-0" style={{ borderTop: 'none', border: 'none', boxShadow: 'none' }}>
+                    <div className="p-6 bg-transparent flex gap-4 shrink-0 border-0 border-t-0" style={{ backgroundColor: 'transparent', borderTop: 'none', border: 'none', boxShadow: 'none' }}>
                       <button
                         type="button"
                         onClick={() => {
@@ -20078,8 +20189,8 @@ export default function App() {
                         }}
                         style={{
                           backgroundColor: '#2e54ff',
-                          color: 'rgb(255, 255, 255)',
-                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                          color: '#fff',
+                          boxShadow: 'none',
                           fontSize: '18px',
                           fontWeight: 'bold',
                           borderRadius: '13px',
@@ -21938,8 +22049,10 @@ export default function App() {
       {avisageConfirmTour && (
         <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn">
           <div
-            className="bg-white p-6 w-full flex flex-col gap-4 text-left"
+            className="p-6 w-full flex flex-col gap-4 text-left"
             style={{
+              background: '#f5f7fa',
+              backgroundColor: '#f5f7fa',
               borderRadius: '13px',
               boxShadow: 'none',
               textAlign: 'left',
@@ -21949,7 +22062,7 @@ export default function App() {
             <p
               className="leading-relaxed"
               style={{
-                color: '#000',
+                color: '#50617A',
                 fontSize: '16px',
                 cursor: 'default',
               }}
@@ -21964,8 +22077,9 @@ export default function App() {
                 style={{
                   padding: '9px 22px',
                   color: '#fff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                  background: '#2e54ff',
+                  boxShadow: 'none',
+                  fontSize: '18px',
+                  background: '#0f172a',
                   border: 'none',
                   borderRadius: '13px',
                 }}
@@ -21979,7 +22093,8 @@ export default function App() {
                 style={{
                   padding: '9px 22px',
                   color: '#fff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                  fontSize: '18px',
+                  boxShadow: 'none',
                   background: '#2e54ff',
                   border: 'none',
                   borderRadius: '13px',

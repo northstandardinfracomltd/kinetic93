@@ -271,9 +271,99 @@ export default function SettingsModal({
     | 'parrainage'
     | 'membres'
     | 'communication'
-    | 'actions_suspectes';
+    | 'actions_suspectes'
+    | 'videos_tutoriels';
 
   const [activeSection, setActiveSection] = React.useState<SettingsSectionKey | null>(null);
+
+  const [tutorialVideos, setTutorialVideos] = React.useState<{ title: string; url: string }[]>([]);
+  const [isLoadingTutorialVideos, setIsLoadingTutorialVideos] = React.useState<boolean>(false);
+
+  const fetchTutorialVideos = React.useCallback(async (forceRefresh: boolean = false) => {
+    setIsLoadingTutorialVideos(true);
+    try {
+      const res = await fetch(`/api/public/tutorial-videos${forceRefresh ? '?refresh=true' : ''}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.videos) && data.videos.length > 0) {
+          setTutorialVideos(data.videos);
+          setIsLoadingTutorialVideos(false);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    // Direct CSV export fallback from the fixed public Google Spreadsheet
+    try {
+      const csvRes = await fetch(
+        'https://docs.google.com/spreadsheets/d/14i40vhQZyn3dVWSF3dluo4Razd14g3UmzIzba4ADb_4/gviz/tq?tqx=out:csv'
+      );
+      if (csvRes.ok) {
+        const csvText = await csvRes.text();
+        if (csvText && !csvText.trim().startsWith('<!DOCTYPE') && !csvText.trim().startsWith('<html')) {
+          const lines = csvText
+            .split(/\r?\n/)
+            .map(l => l.trim())
+            .filter(Boolean);
+          const parsed: { title: string; url: string }[] = [];
+          for (let i = 0; i < lines.length; i++) {
+            const cells: string[] = [];
+            let cur = '';
+            let inQuotes = false;
+            for (let c = 0; c < lines[i].length; c++) {
+              const ch = lines[i][c];
+              if (ch === '"') {
+                if (inQuotes && lines[i][c + 1] === '"') {
+                  cur += '"';
+                  c++;
+                } else {
+                  inQuotes = !inQuotes;
+                }
+              } else if (ch === ',' && !inQuotes) {
+                cells.push(cur.trim());
+                cur = '';
+              } else {
+                cur += ch;
+              }
+            }
+            cells.push(cur.trim());
+            const rawTitle = (cells[0] || '').trim();
+            const rawUrl = (cells[1] || '').trim();
+            if (!rawTitle && !rawUrl) continue;
+            const normT = rawTitle.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            const normU = rawUrl.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            if (
+              normT === 'titre de la video.' ||
+              normT === 'titre de la video' ||
+              normU === 'url de la video.' ||
+              normU === 'url de la video'
+            ) {
+              continue;
+            }
+            parsed.push({ title: rawTitle || rawUrl, url: rawUrl });
+          }
+          setTutorialVideos(parsed);
+          setIsLoadingTutorialVideos(false);
+          return;
+        }
+      }
+    } catch (_) {}
+
+    setTutorialVideos([]);
+    setIsLoadingTutorialVideos(false);
+  }, []);
+
+  React.useEffect(() => {
+    if (isOpen || isPage) {
+      fetchTutorialVideos(false);
+    }
+  }, [isOpen, isPage, fetchTutorialVideos]);
+
+  React.useEffect(() => {
+    if (activeSection === 'videos_tutoriels') {
+      fetchTutorialVideos(true);
+    }
+  }, [activeSection, fetchTutorialVideos]);
 
   const SETTINGS_SECTIONS: { key: SettingsSectionKey; label: string }[] = [
     { key: 'reglages', label: 'Réglages' },
@@ -285,6 +375,7 @@ export default function SettingsModal({
     { key: 'membres', label: 'Membres de l’environnement' },
     { key: 'assistance', label: 'Assistance Defibeo' },
     { key: 'actions_suspectes', label: 'Observateur des actions suspectes' },
+    { key: 'videos_tutoriels', label: 'Vidéos Tutoriels' },
   ];
 
   const isCurrentUserSuperAdmin = React.useMemo(() => {
@@ -3387,7 +3478,7 @@ export default function SettingsModal({
         #settings-tab-container-harmonized select {
           height: 48px !important;
           padding: 12px !important;
-          border: none !important;
+          border: 1px solid #dce1ea !important;
           border-radius: 13px !important;
           font-size: 16px !important;
           font-weight: 100 !important;
@@ -3403,7 +3494,7 @@ export default function SettingsModal({
         }
         #settings-tab-container-harmonized textarea {
           padding: 12px !important;
-          border: none !important;
+          border: 1px solid #dce1ea !important;
           border-radius: 13px !important;
           font-size: 16px !important;
           font-weight: 100 !important;
@@ -3440,17 +3531,24 @@ export default function SettingsModal({
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
-        #settings-tab-container-harmonized input:disabled {
+        #settings-tab-container-harmonized input:disabled,
+        #settings-tab-container-harmonized select:disabled,
+        #settings-tab-container-harmonized textarea:disabled {
           background-color: #ffffff !important;
           color: #555555 !important;
           cursor: not-allowed !important;
-          border: none !important;
+          border: 1px solid #dce1ea !important;
           opacity: 0.7 !important;
         }
         #settings-section-company button > span.rounded-full,
-        #settings-section-pdf button > span.rounded-full {
+        #settings-section-pdf button > span.rounded-full,
+        #settings-section-members button > span.rounded-full {
           border-width: 1px !important;
           border-style: solid !important;
+        }
+        #settings-section-members .member-role-pill {
+          background-color: rgb(233 237 241) !important;
+          color: #50617a !important;
         }
       `}</style>
 
@@ -3726,7 +3824,7 @@ export default function SettingsModal({
                   className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <span 
-                    className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
+                    className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white shrink-0"
                     style={{
                       border: enableSatisfactionAvis === "Oui" ? '1px solid #2e54ff' : '1px solid #cbd5e1',
                       borderWidth: '1px',
@@ -3736,11 +3834,14 @@ export default function SettingsModal({
                       height: '20px',
                       minWidth: '20px',
                       minHeight: '20px',
+                      boxSizing: 'border-box',
+                      padding: 0,
+                      lineHeight: 0,
                       backgroundColor: '#ffffff'
                     }}
                   >
                     {enableSatisfactionAvis === "Oui" && (
-                      <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] block shrink-0" style={{ width: '10px', height: '10px', minWidth: '10px', minHeight: '10px' }} />
                     )}
                   </span>
                   <span className="text-[15px] font-semibold text-black">{t("Oui")}</span>
@@ -3756,7 +3857,7 @@ export default function SettingsModal({
                   className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <span 
-                    className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
+                    className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white shrink-0"
                     style={{
                       border: enableSatisfactionAvis === "Non" ? '1px solid #2e54ff' : '1px solid #cbd5e1',
                       borderWidth: '1px',
@@ -3766,11 +3867,14 @@ export default function SettingsModal({
                       height: '20px',
                       minWidth: '20px',
                       minHeight: '20px',
+                      boxSizing: 'border-box',
+                      padding: 0,
+                      lineHeight: 0,
                       backgroundColor: '#ffffff'
                     }}
                   >
                     {enableSatisfactionAvis === "Non" && (
-                      <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] block shrink-0" style={{ width: '10px', height: '10px', minWidth: '10px', minHeight: '10px' }} />
                     )}
                   </span>
                   <span className="text-[15px] font-semibold text-black">{t("Non")}</span>
@@ -3794,7 +3898,7 @@ export default function SettingsModal({
                 className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
-                  className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
+                  className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white shrink-0"
                   style={{
                     border: enableAutoEmails === "Oui" ? '1px solid #2e54ff' : '1px solid #cbd5e1',
                     borderWidth: '1px',
@@ -3804,11 +3908,14 @@ export default function SettingsModal({
                     height: '20px',
                     minWidth: '20px',
                     minHeight: '20px',
+                    boxSizing: 'border-box',
+                    padding: 0,
+                    lineHeight: 0,
                     backgroundColor: '#ffffff'
                   }}
                 >
                   {enableAutoEmails === "Oui" && (
-                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] block shrink-0" style={{ width: '10px', height: '10px', minWidth: '10px', minHeight: '10px' }} />
                   )}
                 </span>
                 <span className="text-[15px] font-semibold text-black">Oui</span>
@@ -3824,7 +3931,7 @@ export default function SettingsModal({
                 className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
-                  className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
+                  className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white shrink-0"
                   style={{
                     border: enableAutoEmails === "Non" ? '1px solid #2e54ff' : '1px solid #cbd5e1',
                     borderWidth: '1px',
@@ -3834,11 +3941,14 @@ export default function SettingsModal({
                     height: '20px',
                     minWidth: '20px',
                     minHeight: '20px',
+                    boxSizing: 'border-box',
+                    padding: 0,
+                    lineHeight: 0,
                     backgroundColor: '#ffffff'
                   }}
                 >
                   {enableAutoEmails === "Non" && (
-                    <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] block shrink-0" style={{ width: '10px', height: '10px', minWidth: '10px', minHeight: '10px' }} />
                   )}
                 </span>
                 <span className="text-[15px] font-semibold text-black">Non</span>
@@ -3909,9 +4019,22 @@ export default function SettingsModal({
                   maxLength={2500}
                   disabled={!isCurrentUserSuperAdmin}
                   value={localCompany.pdfLastPageInfoText ?? ''}
-                  onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('pdfLastPageInfoText', e.target.value)}
+                  onChange={(e) => {
+                    if (isCurrentUserSuperAdmin) {
+                      handleCompanyChange('pdfLastPageInfoText', e.target.value);
+                    }
+                    e.currentTarget.style.height = 'auto';
+                    e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                  }}
+                  ref={(el) => {
+                    if (el) {
+                      el.style.height = 'auto';
+                      el.style.height = `${el.scrollHeight}px`;
+                    }
+                  }}
                   placeholder={t("Entrez un texte max 2500 caractères")}
-                  rows={4}
+                  rows={1}
+                  style={{ overflow: 'hidden', resize: 'none' }}
                   className="w-full p-3 border border-slate-200 rounded-lg text-sm bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 font-sans disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                 />
               </div>
@@ -4058,7 +4181,7 @@ export default function SettingsModal({
                           className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           <span 
-                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
+                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white shrink-0"
                             style={{
                               border: currentValue === 'Oui' ? '1px solid #2e54ff' : '1px solid #cbd5e1',
                               borderWidth: '1px',
@@ -4068,11 +4191,14 @@ export default function SettingsModal({
                               height: '20px',
                               minWidth: '20px',
                               minHeight: '20px',
+                              boxSizing: 'border-box',
+                              padding: 0,
+                              lineHeight: 0,
                               backgroundColor: '#ffffff'
                             }}
                           >
                             {currentValue === 'Oui' && (
-                              <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
+                              <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] block shrink-0" style={{ width: '10px', height: '10px', minWidth: '10px', minHeight: '10px' }} />
                             )}
                           </span>
                           <span className="text-[15px] font-semibold text-black">Oui</span>
@@ -4088,7 +4214,7 @@ export default function SettingsModal({
                           className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           <span 
-                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
+                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white shrink-0"
                             style={{
                               border: currentValue === 'Non' ? '1px solid #2e54ff' : '1px solid #cbd5e1',
                               borderWidth: '1px',
@@ -4098,11 +4224,14 @@ export default function SettingsModal({
                               height: '20px',
                               minWidth: '20px',
                               minHeight: '20px',
+                              boxSizing: 'border-box',
+                              padding: 0,
+                              lineHeight: 0,
                               backgroundColor: '#ffffff'
                             }}
                           >
                             {currentValue === 'Non' && (
-                              <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
+                              <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] block shrink-0" style={{ width: '10px', height: '10px', minWidth: '10px', minHeight: '10px' }} />
                             )}
                           </span>
                           <span className="text-[15px] font-semibold text-black">Non</span>
@@ -4319,14 +4448,14 @@ export default function SettingsModal({
                             />
                             <div className="flex flex-wrap gap-1.5 mt-1">
                               {isSuperAdmin && (
-                                <span style={{
+                                <span className="member-role-pill" style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   borderRadius: '1000px',
-                                  backgroundColor: '#2e54ff',
+                                  backgroundColor: 'rgb(233 237 241)',
                                   border: 'none',
-                                  color: '#ffffff',
+                                  color: '#50617a',
                                   fontSize: '18px',
                                   fontWeight: '600',
                                   padding: '4px 12px',
@@ -4337,14 +4466,14 @@ export default function SettingsModal({
                                 }}>{t("Super-Administrateur")}</span>
                               )}
                               {isOwnSession && (
-                                <span style={{
+                                <span className="member-role-pill" style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   borderRadius: '1000px',
-                                  backgroundColor: '#2e54ff',
+                                  backgroundColor: 'rgb(233 237 241)',
                                   border: 'none',
-                                  color: 'rgb(255 255 255)',
+                                  color: '#50617a',
                                   fontSize: '18px',
                                   fontWeight: '600',
                                   padding: '4px 10px',
@@ -4355,14 +4484,14 @@ export default function SettingsModal({
                                 }}>{t("Votre session en cours")}</span>
                               )}
                               {!isTech && !isSuperAdmin && (
-                                <span style={{
+                                <span className="member-role-pill" style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   borderRadius: '1000px',
-                                  backgroundColor: '#2e54ff',
+                                  backgroundColor: 'rgb(233 237 241)',
                                   border: 'none',
-                                  color: '#ffffff',
+                                  color: '#50617a',
                                   fontSize: '18px',
                                   fontWeight: '600',
                                   padding: '4px 12px',
@@ -4375,14 +4504,14 @@ export default function SettingsModal({
                                 </span>
                               )}
                               {isTech && !isSuperAdmin && (
-                                <span style={{
+                                <span className="member-role-pill" style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   borderRadius: '1000px',
-                                  backgroundColor: '#2e54ff',
+                                  backgroundColor: 'rgb(233 237 241)',
                                   border: 'none',
-                                  color: '#ffffff',
+                                  color: '#50617a',
                                   fontSize: '18px',
                                   fontWeight: '600',
                                   padding: '4px 12px',
@@ -4701,18 +4830,24 @@ export default function SettingsModal({
                                         className={`flex items-center gap-2.5 cursor-pointer select-none py-1 ${!canEditThisMember ? 'opacity-60 cursor-not-allowed' : ''}`}
                                       >
                                         <span 
-                                          className="rounded-full flex items-center justify-center transition-all bg-white"
+                                          className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white shrink-0"
                                           style={{
                                             border: hasComp ? '1px solid #2e54ff' : '1px solid #cbd5e1',
+                                            borderWidth: '1px',
+                                            borderStyle: 'solid',
+                                            borderColor: hasComp ? '#2e54ff' : '#cbd5e1',
                                             width: '20px',
                                             height: '20px',
                                             minWidth: '20px',
                                             minHeight: '20px',
+                                            boxSizing: 'border-box',
+                                            padding: 0,
+                                            lineHeight: 0,
                                             backgroundColor: '#ffffff'
                                           }}
                                         >
                                           {hasComp && (
-                                            <span className="rounded-full bg-[#2e54ff]" style={{ width: '9px', height: '9px' }} />
+                                            <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] block shrink-0" style={{ width: '10px', height: '10px', minWidth: '10px', minHeight: '10px' }} />
                                           )}
                                         </span>
                                         <span className="font-medium leading-tight select-none" style={{ fontSize: '16px', color: '#000000' }}>{t(comp)}</span>
@@ -4780,8 +4915,24 @@ export default function SettingsModal({
                                           onClick={() => handleUpdateMemberScheduleField(idx, schIdx, 'fermetureMidi', !sch.fermetureMidi)}
                                           className="inline-flex items-center gap-2 cursor-pointer select-none disabled:opacity-50"
                                         >
-                                          <span className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${sch.fermetureMidi ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
-                                            {sch.fermetureMidi && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
+                                          <span
+                                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white shrink-0"
+                                            style={{
+                                              border: sch.fermetureMidi ? '1px solid #2e54ff' : '1px solid #cbd5e1',
+                                              borderWidth: '1px',
+                                              borderStyle: 'solid',
+                                              borderColor: sch.fermetureMidi ? '#2e54ff' : '#cbd5e1',
+                                              width: '20px',
+                                              height: '20px',
+                                              minWidth: '20px',
+                                              minHeight: '20px',
+                                              boxSizing: 'border-box',
+                                              padding: 0,
+                                              lineHeight: 0,
+                                              backgroundColor: '#ffffff'
+                                            }}
+                                          >
+                                            {sch.fermetureMidi && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] block shrink-0" style={{ width: '10px', height: '10px', minWidth: '10px', minHeight: '10px' }} />}
                                           </span>
                                           <span className="font-semibold text-black font-sans" style={{ fontSize: '16px' }}>
                                             {t("Fermeture le midi (4 plages)")}
@@ -4794,8 +4945,24 @@ export default function SettingsModal({
                                           onClick={() => handleUpdateMemberScheduleField(idx, schIdx, 'openForMissions', sch.openForMissions === undefined ? false : !sch.openForMissions)}
                                           className="inline-flex items-center gap-2 cursor-pointer select-none disabled:opacity-50"
                                         >
-                                          <span className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${(sch.openForMissions ?? true) ? 'border-[#3b82f6]' : 'border-slate-300'}`}>
-                                            {(sch.openForMissions ?? true) && <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]" />}
+                                          <span
+                                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white shrink-0"
+                                            style={{
+                                              border: (sch.openForMissions ?? true) ? '1px solid #2e54ff' : '1px solid #cbd5e1',
+                                              borderWidth: '1px',
+                                              borderStyle: 'solid',
+                                              borderColor: (sch.openForMissions ?? true) ? '#2e54ff' : '#cbd5e1',
+                                              width: '20px',
+                                              height: '20px',
+                                              minWidth: '20px',
+                                              minHeight: '20px',
+                                              boxSizing: 'border-box',
+                                              padding: 0,
+                                              lineHeight: 0,
+                                              backgroundColor: '#ffffff'
+                                            }}
+                                          >
+                                            {(sch.openForMissions ?? true) && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] block shrink-0" style={{ width: '10px', height: '10px', minWidth: '10px', minHeight: '10px' }} />}
                                           </span>
                                           <span className="font-semibold text-black font-sans" style={{ fontSize: '16px' }}>
                                             {t("Ouvert pour missions.")}
@@ -5071,9 +5238,20 @@ export default function SettingsModal({
               <textarea
                 id="settings-communication-portail"
                 value={communicationPortailClient}
-                onChange={(e) => setCommunicationPortailClient(e.target.value)}
+                onChange={(e) => {
+                  setCommunicationPortailClient(e.target.value);
+                  e.currentTarget.style.height = 'auto';
+                  e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                }}
+                ref={(el) => {
+                  if (el) {
+                    el.style.height = 'auto';
+                    el.style.height = `${el.scrollHeight}px`;
+                  }
+                }}
                 placeholder={t("Entrez le message d’information pour les clients...")}
-                rows={4}
+                rows={1}
+                style={{ overflow: 'hidden', resize: 'none' }}
                 className="w-full p-3 rounded-lg text-sm bg-white text-slate-800 focus:outline-none font-sans"
               />
             </div>
@@ -5756,6 +5934,86 @@ export default function SettingsModal({
                           </span>
                         )}
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SECTION: VIDÉOS TUTORIELS */}
+        {activeSection === 'videos_tutoriels' && (
+          <div
+            className="p-5 rounded-2xl flex flex-col gap-4 mt-4 text-left animate-fadeIn"
+            style={{
+              border: 'none',
+              backgroundColor: 'rgb(245 247 250)',
+              boxShadow: 'none',
+              maxWidth: '100%',
+              margin: '16px 0px 16px 0px',
+            }}
+            id="settings-section-videos-tutoriels"
+          >
+            {tutorialVideos.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <img
+                  src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_videodefibeo.svg"
+                  alt=""
+                  className="mx-auto mb-4 select-none pointer-events-none"
+                  style={{ width: '160px', height: 'auto', objectFit: 'contain' }}
+                />
+                <p
+                  className="font-bold text-black select-none"
+                  style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                >
+                  {t("Aucune vidéo disponible.")}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {tutorialVideos.map((video, idx) => {
+                  const rawHref = (video.url || '').trim();
+                  const safeHref =
+                    rawHref && !/^https?:\/\//i.test(rawHref) ? `https://${rawHref}` : rawHref || '#';
+                  return (
+                    <div
+                      key={`${video.title}-${idx}`}
+                      className="p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/60 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs text-left"
+                    >
+                      <p
+                        className="font-medium text-black leading-snug flex-1"
+                        style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                      >
+                        {video.title}
+                      </p>
+                      <a
+                        href={safeHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          backgroundColor: '#2e54ff',
+                          color: '#ffffff',
+                          boxShadow: 'none',
+                          borderRadius: '0.75rem',
+                          fontSize: '18px',
+                          padding: '11px 22px',
+                          fontWeight: '100',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.5rem',
+                          cursor: 'pointer',
+                          border: 'none',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                          textDecoration: 'none',
+                        }}
+                        className="transition-all hover:opacity-95 shrink-0"
+                      >
+                        {t("Regarder la vidéo")}
+                      </a>
                     </div>
                   );
                 })}

@@ -1127,7 +1127,7 @@ export default function ClientTab({
     setCommentaire(client.commentaire || '');
     setPayeurId(client.payeurId || '');
     setClientIdField(client.clientIdField || '');
-    setNomPrenomSite(client.nomPrenomSite || '');
+    setNomPrenomSite(client.nomPrenomSite === 'Représentant Standard' ? '' : (client.nomPrenomSite || ''));
     setTelephoneSite(client.telephoneSite || '');
     setEmailSite(client.emailSite || '');
     setContrat(client.contrat || 'Non');
@@ -1232,7 +1232,7 @@ export default function ClientTab({
       commentaire: commentaire.trim(),
       payeurId: payeurId.trim(),
       clientIdField: clientIdField.trim(),
-      nomPrenomSite: nomPrenomSite.trim() || 'Représentant Standard',
+      nomPrenomSite: nomPrenomSite.trim(),
       telephoneSite: telephoneSite.trim() || phone.trim(),
       emailSite: emailSite.trim() || email.trim(),
       contrat: (hasContract ? 'Oui' : 'Non') as 'Oui' | 'Non',
@@ -2659,6 +2659,13 @@ export default function ClientTab({
         <div className="overflow-x-auto">
           {!isSearchActive && !showRecentModifiedPill ? (
             <div className="p-16 text-center font-sans lg:py-24">
+              <img
+                src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
+                alt=""
+                className="mx-auto mb-4 block select-none pointer-events-none"
+                style={{ width: '160px', height: 'auto' }}
+                referrerPolicy="no-referrer"
+              />
               <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
                 {search.trim().length === 1 
                   ? t("Saisissez au moins 2 caractères pour rechercher.") 
@@ -2674,34 +2681,6 @@ export default function ClientTab({
             <table className="w-full text-left font-sans border-collapse text-xs" id="clients-table" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
               <thead>
                 <tr className="bg-transparent" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
-                  <th className="px-4 py-3.5 w-12 text-center select-none" style={thStyle}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (isAllClientsSelected) {
-                          setSelectedClientIds([]);
-                        } else {
-                          setSelectedClientIds(paginatedClients.map(c => c.id));
-                        }
-                      }}
-                      id="select-all-radio-checkbox"
-                      className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
-                        isAllClientsSelected
-                          ? 'border-[#2e54ff] bg-transparent'
-                          : 'bg-white hover:border-[#2e54ff]'
-                      }`}
-                      style={{
-                        borderWidth: '1px',
-                        borderColor: isAllClientsSelected ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
-                      }}
-                      role="checkbox"
-                      aria-checked={isAllClientsSelected}
-                    >
-                      {isAllClientsSelected && (
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
-                      )}
-                    </button>
-                  </th>
                   <th className="px-4 py-3.5 w-12 text-center whitespace-nowrap" style={thStyle}>Volume.</th>
                   <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Entreprise.</th>
                   <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>Numéro fiscal.</th>
@@ -2711,47 +2690,13 @@ export default function ClientTab({
               </thead>
               <tbody className="text-slate-700 text-xs">
                 {paginatedClients.map((client) => {
-                  const isClientChecked = selectedClientIds.includes(client.id);
                   return (
                   <tr
                     key={client.id}
                     id={`client-row-${client.id}`}
                     onClick={() => openEditModal(client)}
-                    className={`group hover:bg-[#f5f7fa] transition-all cursor-pointer ${
-                      isClientChecked ? 'bg-[#ecefff]/60' : ''
-                    }`}
+                    className="group hover:bg-[#f5f7fa] transition-all cursor-pointer"
                   >
-                    {/* Checkbox column */}
-                    <td className="px-4 py-5 text-center relative" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedClientIds((prev) =>
-                            prev.includes(client.id)
-                              ? prev.filter((id) => id !== client.id)
-                              : [...prev, client.id]
-                          );
-                        }}
-                        id={`radio-checkbox-row-${client.id}`}
-                        className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-hidden focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
-                          isClientChecked
-                            ? 'border-[#2e54ff] bg-transparent'
-                            : 'bg-white hover:border-[#2e54ff]'
-                        }`}
-                        style={{
-                          borderWidth: '1px',
-                          borderColor: isClientChecked ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
-                        }}
-                        role="checkbox"
-                        aria-checked={isClientChecked}
-                      >
-                        {isClientChecked && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
-                        )}
-                      </button>
-                    </td>
-
                     {/* Defib count pill */}
                     <td className="px-4 py-5 text-center whitespace-nowrap">
                       {(() => {
@@ -2763,7 +2708,9 @@ export default function ClientTab({
                               background: '#3ddc84',
                               color: '#156337',
                               fontSize: '18px',
-                              padding: '11px 10px 9px 10px',
+                              padding: '0px',
+                              lineHeight: 1,
+                              textAlign: 'center',
                               width: '30px',
                               height: '30px',
                             }}

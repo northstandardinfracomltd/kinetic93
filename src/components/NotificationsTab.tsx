@@ -135,6 +135,13 @@ export default function NotificationsTab({
         <div className="overflow-x-auto">
           {filtered.length === 0 ? (
             <div className="p-16 text-center font-sans lg:py-24" id="no-notifications-view">
+              <img
+                src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
+                alt=""
+                className="mx-auto mb-4 block select-none pointer-events-none"
+                style={{ width: '160px', height: 'auto' }}
+                referrerPolicy="no-referrer"
+              />
               <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100 }}>
                 {t("Aucun résultat.")}
               </p>

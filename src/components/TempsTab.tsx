@@ -1572,7 +1572,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           padding: 10px 14px !important;
           border: 1px solid #c9bfcd !important;
           border-radius: 13px !important;
-          font-size: 16px !important;
+          font-size: 18px !important;
           font-weight: 400 !important;
           background: #ffffff !important;
           color: #000000 !important;
@@ -1871,15 +1871,25 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
 
           {/* Drawer Container */}
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-10" id="temps-settings-pane">
-            <div className="w-screen max-w-md sm:max-w-xl bg-white shadow-2xl flex flex-col p-6 overflow-y-auto">
+            <div
+              className="w-screen max-w-md sm:max-w-xl shadow-2xl flex flex-col p-6 overflow-y-auto"
+              style={{
+                borderLeft: 'none',
+                borderRadius: '0px',
+                backgroundColor: '#F5F7FA',
+                color: '#50617A',
+                fontSize: '18px',
+              }}
+            >
               {/* Parameters List */}
               <div className="space-y-5 flex-1 pt-2 pb-2">
                 {/* LOT 1: Amplitude maximale journalière */}
                 <div
-                  className="space-y-3 p-4 bg-white"
+                  className="space-y-3 p-4"
                   style={{
-                    border: '1px solid #dadada',
+                    border: 'none',
                     borderRadius: '13px',
+                    backgroundColor: '#e9edf1',
                   }}
                   id="lot-max-daily-amplitude"
                 >
@@ -1888,7 +1898,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     <label
                       className="select-none font-bold"
                       style={{
-                        color: '#000',
+                        color: '#50617A',
                         fontSize: '18px',
                         paddingRight: '15px',
                         cursor: 'default',
@@ -1918,7 +1928,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
                     >
                       {t("Valeur horaire (h).")} {draftGlobalRules.maxDailyAmplitudeEnabled && <span className="text-red-500">*</span>}
                     </label>
@@ -1954,7 +1964,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
                     >
                       {t("Texture du message d’erreur.")} {draftGlobalRules.maxDailyAmplitudeEnabled && <span className="text-red-500">*</span>}
                     </label>
@@ -1972,17 +1982,13 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   </div>
                 </div>
 
-                {/* Line divider between Lot 1 and Lot 2 */}
-                <div className="pt-1 pb-1">
-                  <div style={{ borderBottom: '1px solid #dadada', width: '100%' }} />
-                </div>
-
                 {/* LOT 2: Amplitude minimale de repos entre 2 jours consécutifs */}
                 <div
-                  className="space-y-3 p-4 bg-white"
+                  className="space-y-3 p-4"
                   style={{
-                    border: '1px solid #dadada',
+                    border: 'none',
                     borderRadius: '13px',
+                    backgroundColor: '#e9edf1',
                   }}
                   id="lot-min-consecutive-rest"
                 >
@@ -1991,7 +1997,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     <label
                       className="select-none font-bold"
                       style={{
-                        color: '#000',
+                        color: '#50617A',
                         fontSize: '18px',
                         paddingRight: '15px',
                         cursor: 'default',
@@ -2021,7 +2027,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
                     >
                       {t("Valeur horaire (h).")} {draftGlobalRules.minConsecutiveRestEnabled && <span className="text-red-500">*</span>}
                     </label>
@@ -2057,7 +2063,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
                     >
                       {t("Texture du message d’erreur.")} {draftGlobalRules.minConsecutiveRestEnabled && <span className="text-red-500">*</span>}
                     </label>
@@ -2075,17 +2081,13 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   </div>
                 </div>
 
-                {/* Line divider between Lot 2 and Lot 3 */}
-                <div className="pt-1 pb-1">
-                  <div style={{ borderBottom: '1px solid #dadada', width: '100%' }} />
-                </div>
-
                 {/* LOT 3: Amplitude minimale de repos pendant un pointage en cours */}
                 <div
-                  className="space-y-3 p-4 bg-white"
+                  className="space-y-3 p-4"
                   style={{
-                    border: '1px solid #dadada',
+                    border: 'none',
                     borderRadius: '13px',
+                    backgroundColor: '#e9edf1',
                   }}
                   id="lot-min-break-rest"
                 >
@@ -2094,7 +2096,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     <label
                       className="select-none font-bold"
                       style={{
-                        color: '#000',
+                        color: '#50617A',
                         fontSize: '18px',
                         paddingRight: '15px',
                         cursor: 'default',
@@ -2124,7 +2126,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
                     >
                       {t("Valeur horaire (mins).")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
                     </label>
@@ -2160,7 +2162,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
                     >
                       {t("Texture du message d’erreur.")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
                     </label>
@@ -2181,7 +2183,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
                     >
                       {t("Texture du message d’erreur pour le technicien.")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
                     </label>
@@ -2199,11 +2201,6 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   </div>
                 </div>
 
-                {/* Line divider separating the 3 lots from the rest of the parameters */}
-                <div className="pt-2 pb-2">
-                  <div style={{ borderBottom: '1px solid #dadada', width: '100%' }} />
-                </div>
-
                 {draftSettings.map((param, idx) => {
                   const ruleConflicts = draftConflicts.filter(
                     (c) => c.ruleIndexA === idx || c.ruleIndexB === idx
@@ -2213,16 +2210,20 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       key={param.id}
                       className="space-y-4 p-4 relative"
                       style={{
-                        border: '1px solid rgb(203 193 205)',
+                        border: 'none',
                         borderRadius: '13px',
-                        backgroundColor: '#ffffff',
+                        backgroundColor: '#e9edf1',
                       }}
                     >
                       {/* Parameter Header */}
                       <div className="flex items-center justify-between">
                         <span
-                          className="font-bold text-black"
-                          style={{ fontFamily: '"Gochi", cursive, sans-serif', fontSize: '22px' }}
+                          className="font-bold"
+                          style={{
+                            fontFamily: '"Gochi", cursive, sans-serif',
+                            fontSize: '18px',
+                            color: '#50617A',
+                          }}
                         >
                           {`Paramètre ${idx + 1}`}
                         </span>
@@ -2268,7 +2269,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       <div>
                         <label
                           className="block mb-1 font-sans font-bold"
-                          style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                          style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
                         >
                           {t("Titre du paramètre.")}
                         </label>
@@ -2279,7 +2280,10 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                           onChange={(e) => handleUpdateParam(idx, { setting0: e.target.value })}
                           placeholder={t("Nom ou repère (max 30 car.)")}
                         />
-                        <div className="text-right text-[11px] text-slate-400 mt-1 font-sans">
+                        <div
+                          className="text-right mt-1 font-sans"
+                          style={{ color: '#50617A', fontSize: '18px' }}
+                        >
                           {param.setting0.length}/30
                         </div>
                       </div>
@@ -2288,7 +2292,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       <div>
                         <label
                           className="block mb-1 font-sans font-bold"
-                          style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                          style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
                         >
                           {t("Appliquer aux jours.")}
                         </label>
@@ -2305,11 +2309,12 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                                   fontSize: '18px',
                                   padding: '7px 15px',
                                   borderColor: isSelected ? '#000000' : '#d7d7d7',
+                                  color: isSelected ? '#ffffff' : '#50617A',
                                 }}
                                 className={`font-semibold border transition-all select-none font-sans cursor-pointer ${
                                   isSelected
                                     ? 'bg-[#0f172a] text-white shadow-sm'
-                                    : 'bg-white text-black hover:border-black'
+                                    : 'bg-white hover:border-black'
                                 }`}
                               >
                                 {dayLabel}
@@ -2327,14 +2332,14 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                           style={{
                             padding: '20px 25px',
                             borderRadius: '13px',
-                            border: '1px solid #cac0cd',
-                            backgroundColor: '#ffffff',
+                            border: 'none',
+                            backgroundColor: '#e9edf1',
                           }}
                         >
                           <span
                             className="select-none font-semibold"
                             style={{
-                              color: '#000',
+                              color: '#50617A',
                               fontSize: '18px',
                               paddingRight: '20px',
                               cursor: 'default',
@@ -2365,14 +2370,14 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                           style={{
                             padding: '20px 25px',
                             borderRadius: '13px',
-                            border: '1px solid #cac0cd',
-                            backgroundColor: '#ffffff',
+                            border: 'none',
+                            backgroundColor: '#e9edf1',
                           }}
                         >
                           <span
                             className="select-none font-semibold"
                             style={{
-                              color: '#000',
+                              color: '#50617A',
                               fontSize: '18px',
                               paddingRight: '20px',
                               cursor: 'default',
@@ -2402,7 +2407,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       <div>
                         <label
                           className="block mb-1 font-sans font-bold"
-                          style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                          style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
                         >
                           {t("Colonne attribuée.")}
                         </label>
@@ -2422,7 +2427,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       <div>
                         <label
                           className="block mb-1 font-sans font-bold"
-                          style={{ color: '#000', fontSize: '18px', cursor: 'default' }}
+                          style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
                         >
                           {t("Valeur (Mins).")}
                         </label>
@@ -2456,7 +2461,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
               </div>
 
               {/* Bottom Actions: Ajouter un paramètre, Enregistrer & Fermer */}
-              <div className="pt-4 space-y-2 mt-auto shrink-0">
+              <div className="pt-4 space-y-2 mt-auto shrink-0" style={{ borderTop: 'none' }}>
                 {draftConflicts.length > 0 && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-sans space-y-1">
                     <div className="font-bold">⚠️ {t("Conflit de règles détecté :")}</div>
