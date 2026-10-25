@@ -12420,7 +12420,7 @@ export default function App() {
                     border-radius: 1000px !important;
                     -webkit-border-radius: 1000px !important;
                     -moz-border-radius: 1000px !important;
-                    padding: 8px 16px !important;
+                    padding: 12px 24px !important;
                     font-size: 18px !important;
                     font-weight: 100 !important;
                     height: auto !important;
@@ -12481,7 +12481,8 @@ export default function App() {
                     font-family: "DefibeoMain", "Civilprom", sans-serif !important;
                   }
                   #fsm-tab-container select.padding-with-dot {
-                    padding-left: 27px !important;
+                    padding-left: 12px !important;
+                    padding-right: 34px !important;
                   }
                   #fsm-tab-container input:disabled,
                   #fsm-tab-container select:disabled {
@@ -12489,6 +12490,15 @@ export default function App() {
                     color: #555555 !important;
                     cursor: not-allowed !important;
                     opacity: 0.82 !important;
+                  }
+                  #fsm-planning-side-pane,
+                  #fsm-planning-side-pane-body,
+                  #fsm-filter-side-pane,
+                  #fsm-filter-side-pane-body,
+                  #fsm-team-side-pane,
+                  #fsm-team-side-pane-body {
+                    background-color: #ffffff !important;
+                    background: #ffffff !important;
                   }
                 `}</style>
 
@@ -12884,17 +12894,24 @@ export default function App() {
                     onClick={() => setFsmPlanningSidePaneOpen(false)}
                   >
                     <div 
+                      id="fsm-planning-side-pane"
                       className="relative w-full max-w-4xl bg-white flex flex-col overflow-hidden animate-slideLeft"
                       onClick={(e) => e.stopPropagation()}
                       style={{
                         height: '100vh',
+                        backgroundColor: '#ffffff',
+                        background: '#ffffff',
                         boxShadow: 'none',
                         borderRadius: '0px',
                         borderLeft: '1px solid #e2e8f0',
                       }}
                     >
                       {/* Body side-pane : Vue Planning */}
-                      <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white pb-28">
+                      <div
+                        id="fsm-planning-side-pane-body"
+                        className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white pb-28"
+                        style={{ backgroundColor: '#ffffff', background: '#ffffff' }}
+                      >
                         <PlanningTab
                           companyInfo={companyInfo}
                           fsmTours={fsmTours}
@@ -12951,17 +12968,24 @@ export default function App() {
                     onClick={() => setIsFsmFilterSidePaneOpen(false)}
                   >
                     <div 
+                      id="fsm-filter-side-pane"
                       className="relative w-full max-w-md bg-white flex flex-col overflow-hidden animate-slideLeft"
                       onClick={(e) => e.stopPropagation()}
                       style={{
                         height: '100vh',
+                        backgroundColor: '#ffffff',
+                        background: '#ffffff',
                         boxShadow: 'none',
                         borderRadius: '0px',
                         borderLeft: '1px solid #e2e8f0',
                       }}
                     >
                       {/* Body side-pane : Filtres */}
-                      <div className="flex-1 overflow-y-auto p-6 bg-white space-y-6 pb-28 font-sans">
+                      <div
+                        id="fsm-filter-side-pane-body"
+                        className="flex-1 overflow-y-auto p-6 bg-white space-y-6 pb-28 font-sans"
+                        style={{ backgroundColor: '#ffffff', background: '#ffffff' }}
+                      >
                         <div>
                           <h3 style={{ fontSize: '22px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', color: '#000000' }}>
                             Filtres
@@ -13219,17 +13243,24 @@ export default function App() {
                     }}
                   >
                     <div 
+                      id="fsm-team-side-pane"
                       className="relative w-full max-w-lg bg-white flex flex-col overflow-hidden animate-slideLeft"
                       onClick={(e) => e.stopPropagation()}
                       style={{
                         height: '100vh',
+                        backgroundColor: '#ffffff',
+                        background: '#ffffff',
                         boxShadow: 'none',
                         borderRadius: '0px',
                         borderLeft: '1px solid #e2e8f0',
                       }}
                     >
                       {/* Body side-pane : Réglages de l’équipe */}
-                      <div className="flex-1 overflow-y-auto p-6 bg-white space-y-6 pb-32 font-sans">
+                      <div
+                        id="fsm-team-side-pane-body"
+                        className="flex-1 overflow-y-auto p-6 bg-white space-y-6 pb-32 font-sans"
+                        style={{ backgroundColor: '#ffffff', background: '#ffffff' }}
+                      >
                         {/* If in creation or edit mode, show form */}
                         {(isCreatingGroup || editingGroupId) ? (
                           <div className="space-y-5 bg-neutral-50 p-5 rounded-2xl border border-neutral-200 animate-fadeIn">
@@ -13828,7 +13859,7 @@ export default function App() {
                             }}
                             style={{
                               borderRadius: '1000px',
-                              padding: '8px 16px',
+                              padding: '12px 24px',
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -13911,7 +13942,7 @@ export default function App() {
                                 borderRadius: '1000px',
                                 WebkitBorderRadius: '1000px',
                                 MozBorderRadius: '1000px',
-                                padding: '8px 16px',
+                                padding: '12px 24px',
                                 fontSize: '18px',
                                 fontWeight: 100,
                                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -15376,14 +15407,18 @@ export default function App() {
                           {/* THE INTERCALAIRE TOUR HEADER */}
                           <div className="px-5 pt-5 pb-2.5 flex flex-col gap-3 font-sans" style={{ borderBottom: 'none', borderRadius: '17px 17px 0px 0px', backgroundColor: 'transparent' }}>
                             {/* Row 1: Gélules progression + Action Buttons (Supprimer, Calculer, Avisage, Enregistrer) */}
-                            <div className="flex flex-wrap items-center justify-end gap-2 w-full">
+                            <div
+                              className="flex flex-nowrap items-center justify-end gap-2 w-full overflow-x-auto"
+                              style={{ display: 'flex', flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', width: '100%' }}
+                            >
                               {/* Gélule n% Planifiée(s) */}
                               <div
                                 style={{
                                   backgroundColor: '#3ddc84',
                                   color: '#156337',
                                   borderRadius: '1000px',
-                                  padding: '9px 19px',
+                                  padding: '12px 20px',
+                                  height: '50px',
                                   fontSize: '18px',
                                   fontWeight: 100,
                                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -15391,8 +15426,10 @@ export default function App() {
                                   boxShadow: 'none',
                                   cursor: 'default',
                                   whiteSpace: 'nowrap',
+                                  width: 'auto',
+                                  flexShrink: 0,
                                 }}
-                                className="inline-flex items-center justify-center select-none"
+                                className="inline-flex items-center justify-center select-none shrink-0"
                               >
                                 {planifL1Percent}% Planifiée(s)
                               </div>
@@ -15403,7 +15440,8 @@ export default function App() {
                                   backgroundColor: '#3ddc84',
                                   color: '#156337',
                                   borderRadius: '1000px',
-                                  padding: '9px 19px',
+                                  padding: '12px 20px',
+                                  height: '50px',
                                   fontSize: '18px',
                                   fontWeight: 100,
                                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -15411,10 +15449,12 @@ export default function App() {
                                   boxShadow: 'none',
                                   cursor: 'default',
                                   whiteSpace: 'nowrap',
+                                  width: 'auto',
+                                  flexShrink: 0,
                                 }}
-                                className="inline-flex items-center justify-center select-none"
+                                className="inline-flex items-center justify-center select-none shrink-0"
                               >
-                                {compL1Percent}% Effectuées
+                                {compL1Percent}% Effectuée(s)
                               </div>
 
                               {/* Supprimer button */}
@@ -15445,14 +15485,15 @@ export default function App() {
                                       fontSize: '18px',
                                       fontWeight: '100',
                                       height: '50px',
-                                      display: 'flex',
+                                      display: 'inline-flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
-                                      width: '100%',
+                                      width: 'auto',
+                                      whiteSpace: 'nowrap',
                                       opacity: isDeleteEnabled ? 1 : 0.4,
                                       cursor: isDeleteEnabled ? 'pointer' : 'not-allowed'
                                     }}
-                                    className={`${isDeleteEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} md:w-auto flex-1 md:flex-initial`}
+                                    className={`${isDeleteEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} shrink-0`}
                                     title={!isDeleteEnabled ? "Le bouton Supprimer est désactivé (une ou plusieurs missions ne sont pas en situation Brouillon, Effectué ou Rejet mission)" : undefined}
                                   >
                                     Supprimer
@@ -15518,14 +15559,15 @@ export default function App() {
                                   fontSize: '18px',
                                   fontWeight: '100',
                                   height: '50px',
-                                  display: 'flex',
+                                  display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  width: '100%',
+                                  width: 'auto',
+                                  whiteSpace: 'nowrap',
                                   opacity: (t.missions ? t.missions.length : 0) <= 1 ? 0.5 : 1,
                                   cursor: (t.missions ? t.missions.length : 0) <= 1 ? 'not-allowed' : 'pointer'
                                 }}
-                                className={`${(t.missions ? t.missions.length : 0) <= 1 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} md:w-auto flex-1 md:flex-initial`}
+                                className={`${(t.missions ? t.missions.length : 0) <= 1 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} shrink-0`}
                               >
                                 Calculer
                               </button>
@@ -15548,14 +15590,15 @@ export default function App() {
                                       fontSize: '18px',
                                       fontWeight: '100',
                                       height: '50px',
-                                      display: 'flex',
+                                      display: 'inline-flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
-                                      width: '100%',
+                                      width: 'auto',
+                                      whiteSpace: 'nowrap',
                                       opacity: isAvisageEnabled ? 1 : 0.4,
                                       cursor: isAvisageEnabled ? 'pointer' : 'not-allowed'
                                     }}
-                                    className={`${isAvisageEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} md:w-auto flex-1 md:flex-initial`}
+                                    className={`${isAvisageEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} shrink-0`}
                                   >
                                     Avisage
                                   </button>
@@ -15638,14 +15681,15 @@ export default function App() {
                                   fontSize: '18px',
                                   fontWeight: '100',
                                   height: '50px',
-                                  display: 'flex',
+                                  display: 'inline-flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
-                                  width: '100%',
+                                  width: 'auto',
+                                  whiteSpace: 'nowrap',
                                   opacity: savingTourIds[t.id] ? 0.7 : 1,
                                   pointerEvents: savingTourIds[t.id] ? 'none' : 'auto'
                                 }}
-                                className={`${savingTourIds[t.id] ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} md:w-auto flex-1 md:flex-initial`}
+                                className={`${savingTourIds[t.id] ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} shrink-0`}
                               >
                                 Enregistrer
                               </button>
@@ -15718,7 +15762,7 @@ export default function App() {
                                   <div 
                                     style={{
                                       position: 'absolute',
-                                      left: '11px',
+                                      right: '14px',
                                       top: '50%',
                                       transform: 'translateY(-50%)',
                                       width: '10px',
@@ -15755,8 +15799,8 @@ export default function App() {
                                     style={{
                                       border: '1px solid #dedede',
                                       borderRadius: '13px',
-                                      paddingLeft: '34px',
-                                      paddingRight: '12px',
+                                      paddingLeft: '12px',
+                                      paddingRight: '34px',
                                       paddingTop: '12px',
                                       paddingBottom: '12px',
                                       fontSize: '16px',
@@ -17445,7 +17489,7 @@ export default function App() {
                                         <div 
                                           style={{
                                             position: "absolute",
-                                            left: "14px",
+                                            right: "14px",
                                             top: "50%",
                                             transform: "translateY(-50%)",
                                             width: "10px",
@@ -17479,8 +17523,8 @@ export default function App() {
                                             updateFsmMission(t.id, m.id, { status: nextStatus });
                                           }}
                                           style={{
-                                            paddingLeft: "34px",
-                                            paddingRight: "12px",
+                                            paddingLeft: "12px",
+                                            paddingRight: "34px",
                                             paddingTop: "12px",
                                             paddingBottom: "12px",
                                             width: "100%",

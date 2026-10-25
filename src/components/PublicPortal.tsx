@@ -8039,8 +8039,8 @@ export default function PublicPortal({
               </div>
             )}
 
-            {/* Fixed top bar "Actualiser les données" on Messages, Temps, Réglages */}
-            {["messages", "temps", "localisation"].includes(activeTab) && (
+            {/* Fixed top bar "Actualiser les données" on Messages, Temps */}
+            {["messages", "temps"].includes(activeTab) && (
               <button
                 type="button"
                 disabled={isRefreshingWebappData}
@@ -13953,23 +13953,8 @@ export default function PublicPortal({
                     }
                   `}</style>
 
-                  {/* Header Title */}
+                  {/* Button Cloud */}
                   <div className="space-y-4">
-                    <h2
-                      style={{
-                        fontSize: "28px",
-                        color: "#000000",
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        fontWeight: "bold",
-                        paddingTop: "8px",
-                        paddingBottom: "8px",
-                        margin: 0,
-                      }}
-                    >
-                      {t("Que souhaitez-vous faire ?")}
-                    </h2>
-
-                    {/* Button Cloud */}
                     <div className="flex flex-wrap gap-2.5 sm:gap-3 items-center">
                       {[
                         { key: "pointage", label: "Pointage" },
@@ -13995,14 +13980,10 @@ export default function PublicPortal({
                               fontWeight: 600,
                               borderRadius: "14px",
                               padding: "12px 18px",
-                              backgroundColor: isSelected ? "#0f172a" : "#ffffff",
-                              color: isSelected ? "#ffffff" : "rgb(0, 0, 0)",
-                              border: isSelected
-                                ? "1px solid #000000"
-                                : "1px solid #dadada",
-                              boxShadow: isSelected
-                                ? "rgba(0, 0, 0, 0.16) 0px 4px 12px -2px"
-                                : "rgba(0, 0, 0, 0.06) 0px 2px 8px -2px",
+                              backgroundColor: isSelected ? "#0f172a" : "#f5f7fa",
+                              color: isSelected ? "#ffffff" : "rgb(80, 97, 122)",
+                              border: "none",
+                              boxShadow: "none",
                               cursor: "pointer",
                               transition: "all 0.15s ease-in-out",
                               textAlign: "center",
@@ -15110,6 +15091,31 @@ export default function PublicPortal({
                     </div>
                   )}
 
+                  {/* Actualiser les données button - Right above Quitter la session */}
+                  <button
+                    type="button"
+                    disabled={isRefreshingWebappData}
+                    onClick={handleRefreshWebappData}
+                    style={{
+                      backgroundColor: "#0f172a",
+                      color: "#ffffff",
+                      fontSize: "18px",
+                      fontWeight: "bold",
+                      borderRadius: "12px",
+                      padding: "14px 20px",
+                      border: "none",
+                      cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
+                      width: "100%",
+                    }}
+                    className={`transition-all flex items-center justify-center gap-2 font-bold mt-4 ${
+                      isRefreshingWebappData
+                        ? "animate-webapp-refresh-wave cursor-not-allowed opacity-85"
+                        : "hover:opacity-90 active:scale-[0.99]"
+                    }`}
+                  >
+                    <span>{isRefreshingWebappData ? t("Actualisation...") : t("Actualiser les données")}</span>
+                  </button>
+
                   {/* Quitter la session button - Always at the bottom */}
                   <button
                     type="button"
@@ -15125,7 +15131,7 @@ export default function PublicPortal({
                       cursor: "pointer",
                       width: "100%",
                     }}
-                    className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-4"
+                    className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-3"
                   >
                     <span>Quitter la session</span>
                   </button>

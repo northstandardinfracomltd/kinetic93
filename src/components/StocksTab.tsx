@@ -910,6 +910,54 @@ export default function StocksTab({
     return Array.from(groupsMap.values())
       .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
   }, [variables, stocks, editingStockId]);
+
+  const groupedFilterStockVariables = useMemo(() => {
+    const CATEGORY_MAPPING: Record<string, { label: string; order: number }> = {
+      'Modèle Défibrillateur': { label: 'DÉFIBRILLATEURS', order: 1 },
+      'Modèle Électrode': { label: 'ÉLECTRODES', order: 2 },
+      'Modèle Batterie': { label: 'BATTERIES', order: 3 },
+      'Modèle Coffret': { label: 'COFFRETS', order: 4 },
+      'Modèle Service': { label: 'SERVICES', order: 5 },
+      'Modèle Contrat': { label: 'CONTRATS', order: 6 },
+      'Modèle Filtre Purificateur': { label: 'FILTRES PURIFICATEURS', order: 7 },
+      'Type Filtre Purificateur': { label: 'TYPES FILTRES', order: 8 },
+      'Formation': { label: 'FORMATIONS', order: 9 },
+      'Modèle Signalétique': { label: 'SIGNALÉTIQUE', order: 10 },
+      'Modèle Scellé': { label: 'SCELLÉS', order: 11 },
+      'Modèle Autocollant': { label: 'AUTOCOLLANTS', order: 12 },
+      'Modèle Kit de secours': { label: 'KITS DE SECOURS', order: 13 },
+      'Modèle Pièce Autre': { label: 'PIÈCES AUTRES', order: 14 },
+    };
+
+    const excluded = new Set([
+      'Fournisseur',
+      'Modèle Raison Prestation',
+      'Drapeau GMAO',
+      'Drapeau post-intervention',
+    ]);
+
+    const available = variables.filter(v => !excluded.has(v.category));
+    const groupsMap = new Map<string, { label: string; order: number; items: typeof variables }>();
+
+    available.forEach(v => {
+      const catConfig = CATEGORY_MAPPING[v.category] || {
+        label: (v.category || 'AUTRES').toUpperCase(),
+        order: 99,
+      };
+
+      if (!groupsMap.has(v.category)) {
+        groupsMap.set(v.category, {
+          label: catConfig.label,
+          order: catConfig.order,
+          items: [],
+        });
+      }
+      groupsMap.get(v.category)!.items.push(v);
+    });
+
+    return Array.from(groupsMap.values())
+      .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+  }, [variables]);
   
   const [newLivDate, setNewLivDate] = useState<string>('');
   const [newReapDate, setNewReapDate] = useState<string>('');
@@ -940,6 +988,8 @@ export default function StocksTab({
   const stockSearchQuery = externalStockSearchQuery !== undefined ? externalStockSearchQuery : localStockSearchQuery;
   const setStockSearchQuery = externalSetStockSearchQuery !== undefined ? externalSetStockSearchQuery : setLocalStockSearchQuery;
   const [stockStorageFilter, setStockStorageFilter] = useState<'Tous' | 'ReqPrev2M' | 'ReqPrev2to6M'>('Tous');
+  const [stockPieceFilter, setStockPieceFilter] = useState<string>('');
+  const [stockUgsFilter, setStockUgsFilter] = useState<string>('');
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
@@ -1358,7 +1408,9 @@ export default function StocksTab({
   };
 
   const filteredStocks = stocks.filter((st) => {
-    const vObj = variables.find(v => v.id === st.denominationPieceId);
+    const vObj = variables.find(
+      v => v.id === st.denominationPieceId || (v.nom && st.denominationPieceId && v.nom.trim().toLowerCase() === String(st.denominationPieceId).trim().toLowerCase())
+    );
     const modelNom = vObj ? vObj.nom.toLowerCase() : '';
     const modelMarque = vObj ? vObj.marque.toLowerCase() : '';
     const modelCat = vObj ? vObj.category.toLowerCase() : '';
@@ -1375,6 +1427,10 @@ export default function StocksTab({
       const val = st.besoinProjete2a6Mois !== undefined ? Math.max(st.besoinProjete2a6Mois, prev.bis2to6M) : prev.bis2to6M;
       matchesStorage = val >= 1;
     }
+
+    const matchesPiece = !stockPieceFilter || st.denominationPieceId === stockPieceFilter || (vObj && vObj.id === stockPieceFilter);
+    const ugsFilterTrimmed = stockUgsFilter.trim().toLowerCase();
+    const matchesUgs = !ugsFilterTrimmed || (st.ugs || '0001').toLowerCase().includes(ugsFilterTrimmed);
     
     const query = stockSearchQuery.trim().toLowerCase();
     const matchesSearch = !query || 
@@ -1385,7 +1441,7 @@ export default function StocksTab({
       (st.livraisonDate && st.livraisonDate.toLowerCase().includes(query)) ||
       (st.reapprovisionnementDate && st.reapprovisionnementDate.toLowerCase().includes(query));
       
-    return matchesStorage && matchesSearch;
+    return matchesStorage && matchesPiece && matchesUgs && matchesSearch;
   });
 
   return (
@@ -1480,28 +1536,6 @@ export default function StocksTab({
       
       {!showStockForm ? (
         <>
-          {/* Top Sticky Bar for Logistics Notifications */}
-          <div 
-            className="sticky top-0 z-30 cursor-pointer select-none"
-            style={{ maxWidth: '100%', margin: '0px auto 0px', borderRadius: '0px' }}
-            onClick={() => setIsNotifDrawerOpen(true)}
-          >
-            <div 
-              className="w-full text-white text-center font-medium px-4 py-3 flex items-center justify-center gap-2 transition-opacity hover:opacity-95"
-              style={{
-                backgroundColor: '#0f172a',
-                boxShadow: 'none',
-                borderRadius: '0px',
-                fontSize: '16px',
-                fontFamily: "DefibeoMain, Civilprom, sans-serif"
-              }}
-            >
-              <span>
-                Vous avez {logisticsNotifications.length} notification{logisticsNotifications.length > 1 ? 's' : ''} concernant l’activité logistique. Cliquez pour consulter.
-              </span>
-            </div>
-          </div>
-
           {/* Header Section */}
           <div 
             className="bg-white space-y-4"
@@ -1601,6 +1635,40 @@ export default function StocksTab({
                   </select>
                 </div>
 
+                {/* Activité Pill Button */}
+                <button
+                  type="button"
+                  id="btn-activity-notifications-stocks"
+                  onClick={() => {
+                    setClickedPill('activity-stocks');
+                    setTimeout(() => setClickedPill((prev) => (prev === 'activity-stocks' ? null : prev)), 480);
+                    setIsNotifDrawerOpen(true);
+                  }}
+                  className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill === 'activity-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                  style={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    borderRadius: '1000px',
+                    padding: '8px 16px',
+                    fontSize: '18px',
+                    fontWeight: 100,
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    backgroundColor: 'rgb(255, 217, 239)',
+                    color: 'rgb(142, 25, 92)',
+                    border: 'none',
+                    boxShadow: 'none',
+                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={t("Activité")}
+                >
+                  <span>{t("Activité")}</span>
+                </button>
+
                 {/* Actualiser les données Pill Button */}
                 <button
                   type="button"
@@ -1688,22 +1756,23 @@ export default function StocksTab({
           >
             <div 
               style={{
-                padding: '10px 18px',
-                backgroundColor: '#f8fafc',
-                border: '1px solid rgb(218, 218, 218)',
-                borderRadius: '13px',
+                borderRadius: '1000px',
+                padding: '8px 16px',
+                fontSize: '18px',
+                fontWeight: 100,
+                cursor: 'default',
+                fontFamily: 'DefibeoMain, Civilprom, sans-serif',
+                backgroundColor: 'rgb(247, 252, 192)',
+                color: 'rgb(105, 114, 5)',
+                border: 'none',
                 display: 'inline-flex',
                 alignItems: 'center',
-                fontSize: '15px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                color: '#000000',
-                cursor: 'default',
               }}
             >
-              <span style={{ fontWeight: 400, color: '#475569', marginRight: '6px' }}>
+              <span style={{ marginRight: '6px' }}>
                 {t("Valeur (HT) des stocks disponibles :")}
               </span>
-              <span style={{ fontWeight: 700, color: '#000000' }}>
+              <span>
                 {totalStockValueHT}
               </span>
             </div>
@@ -2003,90 +2072,29 @@ export default function StocksTab({
           {/* Elegant height spacing block to separate header box and form perfectly */}
           <div style={{ height: '16px' }} className="bg-transparent" />
 
-          {/* Info-entête banner with 30% image, 60% text, 10% button layout on desktop */}
-          {showFormInfoBanner && (
-            <div 
-              className="flex flex-col md:flex-row items-center gap-6 p-6 animate-fadeIn"
-              style={{
-                border: '1px solid rgb(218, 218, 218)',
-                borderRadius: '18px',
-                width: '98%',
-                maxWidth: '98%',
-                margin: 'auto',
-                backgroundColor: '#FFF'
-              }}
-              id="stocks-form-info-banner"
-            >
-              {/* Image (30%) */}
-              <div className="w-full md:w-[30%] flex justify-center items-center">
-                <img 
-                  src="https://civilprom.s3.eu-north-1.amazonaws.com/automatismesflow.svg" 
-                  alt="Automatismes Flow Guide" 
-                  className="w-full max-w-[180px] md:max-w-none h-auto object-contain" 
-                  style={{ maxHeight: '150px' }}
-                  referrerPolicy="no-referrer"
-                  id="stocks-form-info-image"
-                />
-              </div>
-
-              {/* Text (60%) */}
-              <div 
-                className="w-full md:w-[60%] leading-relaxed font-sans" 
-                style={{ color: '#000', fontSize: '16px', cursor: 'default' }}
-                id="stocks-form-info-text"
-              >
-                La section « Propriétés » a pour rôle de définir les caractéristiques de votre pièce ou service. Quant à la section « Mouvements », elle concerne les flux tels que le réapprovisionnement fournisseur ou la distribution de stock à un employé. Enfin, l’inventaire de traçabilité, pouvant être activé ou non, permet de renseigner les numéros de lot et les dates de péremption des pièces, qu'elles soient situées dans votre stock central ou embarquées avec le technicien. L’objectif est quadruple : être en capacité d'étiqueter les produits à l'aide de codes-barres, pouvoir sélectionner une pièce lors d’une maintenance, suivre les péremptions, et effectuer un inventaire précis directement depuis la webapp.
-              </div>
-
-              {/* Button (10%) */}
-              <div className="w-full md:w-[10%] flex justify-center md:justify-end" id="stocks-form-info-btn-container">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowFormInfoBanner(false);
-                    localStorage.setItem('defib_hide_stocks_form_info_banner', 'true');
-                  }}
-                  id="stocks-form-info-dismiss-btn"
-                  className="px-4 py-2 text-white font-semibold transition-all whitespace-nowrap cursor-pointer"
-                  style={{
-                    backgroundColor: '#0f172a',
-                    color: '#ffffff',
-                    fontSize: '18px',
-                    boxShadow: 'none',
-                    borderRadius: '12px'
-                  }}
-                >
-                  J'ai compris
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Elegant height spacing block to separate header box/banner and form perfectly */}
-          <div style={{ height: '16px' }} className="bg-transparent" />
-
           <form 
             id="equipement-stock-form"
             onSubmit={handleAddStockSubmit} 
-            className="space-y-6 bg-white p-5 border-none"
+            className="space-y-6 p-5 border-none"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              backgroundColor: 'rgb(245, 247, 250)',
+              border: 'none',
               borderRadius: '18px',
               width: '98%',
               maxWidth: '98%',
               margin: 'auto'
             }}
           >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-5 bg-white font-sans">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5 font-sans">
               
               {/* Section Propriétés Capsule */}
-              <div className="flex bg-white md:col-span-4 select-none mb-1">
+              <div className="flex md:col-span-4 select-none mb-1">
                 <span 
                   className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                   style={{
-                    color: '#fff',
-                    backgroundColor: '#5f1f66',
-                    fontSize: '16px',
+                    color: 'rgb(21 99 55)',
+                    backgroundColor: 'rgb(61 220 132)',
+                    fontSize: '18px',
                     border: 'none',
                     textTransform: 'none',
                     letterSpacing: 'normal'
@@ -2097,7 +2105,7 @@ export default function StocksTab({
               </div>
 
               {/* Lookup Dénomination variable - 3/4 Width on Row */}
-              <div className="flex flex-col gap-1 bg-white md:col-span-3">
+              <div className="flex flex-col gap-1 md:col-span-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Pièce ou service *</label>
                   <div className="flex items-center gap-3">
@@ -2141,7 +2149,7 @@ export default function StocksTab({
               </div>
 
               {/* UGS Reference Code - 1/4 Width on Row */}
-              <div className="flex flex-col gap-1 bg-white md:col-span-1">
+              <div className="flex flex-col gap-1 md:col-span-1">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">UGS *</label>
                 <input
                   type="text"
@@ -2155,8 +2163,8 @@ export default function StocksTab({
               </div>
 
               {/* Quantities Row */}
-              <div className="md:col-span-4 bg-white grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div className="flex flex-col gap-1 bg-white">
+              <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Quantité disponible.</label>
                   <input
                     type="number"
@@ -2169,7 +2177,7 @@ export default function StocksTab({
                   />
                 </div>
 
-                <div className="flex flex-col gap-1 bg-white">
+                <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Quantité réservée.</label>
                   <input
                     type="number"
@@ -2182,7 +2190,7 @@ export default function StocksTab({
                   />
                 </div>
 
-                <div className="flex flex-col gap-1 bg-white">
+                <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Quantité totale.</label>
                   <input
                     type="number"
@@ -2196,9 +2204,9 @@ export default function StocksTab({
               </div>
 
               {/* Pricing section - 3 elegant columns spanning full row width */}
-              <div className="md:col-span-4 bg-white grid grid-cols-1 md:grid-cols-3 gap-5 pt-5">
+              <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-5 pt-5">
                 {/* Valeur Achat */}
-                <div className="flex flex-col gap-1 bg-white">
+                <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Tarif fournisseur. (€)</label>
                   <input
                     type="number"
@@ -2213,7 +2221,7 @@ export default function StocksTab({
                 </div>
 
                 {/* Marge */}
-                <div className="flex flex-col gap-1 bg-white">
+                <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Marge. (€)</label>
                   <input
                     type="number"
@@ -2228,7 +2236,7 @@ export default function StocksTab({
                 </div>
 
                 {/* Prix de vente HT */}
-                <div className="flex flex-col gap-1 bg-white">
+                <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Tarif de vente. (€)</label>
                   <input
                     type="number"
@@ -2244,11 +2252,11 @@ export default function StocksTab({
               </div>
 
               {/* Section Taux de Marge */}
-              <div className="md:col-span-4 mt-2 bg-white flex flex-col gap-1">
+              <div className="md:col-span-4 mt-2 flex flex-col gap-1">
                 <div 
                   style={{
-                    color: 'rgb(143 51 151)',
-                    backgroundColor: 'rgb(253 229 255)',
+                    color: 'rgb(80 97 122)',
+                    backgroundColor: 'rgb(233 237 241)',
                     border: 'none',
                     fontSize: '16px'
                   }}
@@ -2279,15 +2287,14 @@ export default function StocksTab({
               </div>
 
               {/* Section Prévoyance. */}
-              <div className="md:col-span-4 mt-2" style={{ borderTop: '1px solid rgb(218, 218, 218)', margin: '0 -20px' }} />
-              <div className="md:col-span-4 pt-5 mt-2 bg-white flex flex-col gap-1">
-                <div className="flex bg-white mb-2 select-none">
+              <div className="md:col-span-4 pt-5 mt-2 flex flex-col gap-1">
+                <div className="flex mb-2 select-none">
                   <span 
                     className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                     style={{
-                      color: '#fff',
-                      backgroundColor: '#5f1f66',
-                      fontSize: '16px',
+                      color: 'rgb(21 99 55)',
+                      backgroundColor: 'rgb(61 220 132)',
+                      fontSize: '18px',
                       border: 'none',
                       textTransform: 'none',
                       letterSpacing: 'normal'
@@ -2298,7 +2305,7 @@ export default function StocksTab({
                 </div>
 
                 {/* Field Usage recommandé. */}
-                <div className="flex flex-col gap-1 bg-white mb-4">
+                <div className="flex flex-col gap-1 mb-4">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
                       {t("Usage recommandé.")}
@@ -2363,8 +2370,8 @@ export default function StocksTab({
 
                 <div 
                   style={{
-                    color: 'rgb(143 51 151)',
-                    backgroundColor: 'rgb(253 229 255)',
+                    color: 'rgb(80 97 122)',
+                    backgroundColor: 'rgb(233 237 241)',
                     border: 'none',
                     fontSize: '16px'
                   }}
@@ -2372,8 +2379,8 @@ export default function StocksTab({
                 >
                   Nous estimons votre besoin de trésorerie à <strong className="font-extrabold">{((Number(newValAchat) || 0) * (prevoianceData.totalToOrder || 0)).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</strong>€{t(", pour l'achat des stocks requis aux actions de maintenances.")}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-white">
-                  <div className="flex flex-col gap-1 bg-white">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Besoin projeté à 2 mois.</label>
                     <input
                       type="number"
@@ -2385,7 +2392,7 @@ export default function StocksTab({
                     />
                   </div>
 
-                  <div className="flex flex-col gap-1 bg-white">
+                  <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Besoin projeté entre 2 à 6 mois.</label>
                     <input
                       type="number"
@@ -2397,7 +2404,7 @@ export default function StocksTab({
                     />
                   </div>
 
-                  <div className="flex flex-col gap-1 bg-white">
+                  <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Total à commander.</label>
                     <input
                       type="number"
@@ -2412,15 +2419,14 @@ export default function StocksTab({
               </div>
 
               {/* Section Mouvements */}
-              <div className="md:col-span-4 mt-2" style={{ borderTop: '1px solid rgb(218, 218, 218)', margin: '0 -20px' }} />
-              <div className="md:col-span-4 pt-5 mt-2 bg-white flex flex-col gap-1">
-                <div className="flex justify-between items-center bg-white mb-2 select-none">
+              <div className="md:col-span-4 pt-5 mt-2 flex flex-col gap-1">
+                <div className="flex justify-between items-center mb-2 select-none">
                   <span 
                     className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                     style={{
-                      color: '#fff',
-                      backgroundColor: '#5f1f66',
-                      fontSize: '16px',
+                      color: 'rgb(21 99 55)',
+                      backgroundColor: 'rgb(61 220 132)',
+                      fontSize: '18px',
                       border: 'none',
                       textTransform: 'none',
                       letterSpacing: 'normal'
@@ -2463,7 +2469,10 @@ export default function StocksTab({
 
                 {/* Sub-form to add a new movement inline */}
                 {showMvForm && (
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 gap-4 flex flex-col font-sans mb-3 text-xs">
+                  <div
+                    className="rounded-xl p-4 gap-4 flex flex-col font-sans mb-3 text-xs"
+                    style={{ background: '#e9edf1', border: 'none' }}
+                  >
                     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 bg-transparent">
                       <div className="flex flex-col gap-1 bg-transparent">
                         <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Type du mouvement *</label>
@@ -2879,15 +2888,14 @@ export default function StocksTab({
               {/* Section Inventaire de traçabilité */}
               {traceabilityEnabled && (
                 <>
-                  <div className="md:col-span-4 mt-2" style={{ borderTop: '1px solid rgb(218, 218, 218)', margin: '0 -20px' }} />
-                  <div className="md:col-span-4 pt-5 mt-2 bg-white flex flex-col gap-1">
-                    <div className="flex justify-between items-center bg-white mb-2 select-none">
+                  <div className="md:col-span-4 pt-5 mt-2 flex flex-col gap-1">
+                    <div className="flex justify-between items-center mb-2 select-none">
                       <span 
                         className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                         style={{
-                          color: '#fff',
-                          backgroundColor: '#5f1f66',
-                          fontSize: '16px',
+                          color: 'rgb(21 99 55)',
+                          backgroundColor: 'rgb(61 220 132)',
+                          fontSize: '18px',
                           border: 'none',
                           textTransform: 'none',
                           letterSpacing: 'normal'
@@ -2938,7 +2946,10 @@ export default function StocksTab({
 
                     {/* Form Nouveau Inventaire */}
                     {showTraceabilityForm && (
-                      <div className="bg-slate-50 border rounded-xl p-4 gap-4 flex flex-col font-sans mb-3 text-xs" style={{ borderColor: '#dadada' }}>
+                      <div
+                        className="rounded-xl p-4 gap-4 flex flex-col font-sans mb-3 text-xs"
+                        style={{ background: '#e9edf1', border: 'none' }}
+                      >
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-transparent">
                           {/* Sélection du mouvement */}
                           <div className="flex flex-col gap-1 bg-transparent">
@@ -3083,7 +3094,10 @@ export default function StocksTab({
                       return (
                         <>
                           {selectedTraceIds.length > 0 && (
-                            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 gap-4 flex flex-col font-sans mb-3 text-xs">
+                            <div
+                              className="rounded-xl p-4 gap-4 flex flex-col font-sans mb-3 text-xs"
+                              style={{ background: '#e9edf1', border: 'none' }}
+                            >
                               <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 bg-transparent">
                                 {/* Type de mouvement */}
                                 <div className="flex flex-col gap-1 bg-transparent">
@@ -3217,12 +3231,12 @@ export default function StocksTab({
                                           setSelectedTraceIds(prev => Array.from(new Set([...prev, ...visibleIds])));
                                         }
                                       }}
-                                      className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
+                                      className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                                         filteredTraceabilities.length > 0 && filteredTraceabilities.every(t => selectedTraceIds.includes(t.id))
                                           ? 'border-[#2e54ff] bg-transparent'
                                           : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                                       }`}
-                                      style={{ borderWidth: '2.5px' }}
+                                      style={{ borderWidth: '1px' }}
                                       title="Tout sélectionner / désélectionner"
                                     >
                                       {filteredTraceabilities.length > 0 && filteredTraceabilities.every(t => selectedTraceIds.includes(t.id)) && (
@@ -3292,12 +3306,12 @@ export default function StocksTab({
                                                     setSelectedTraceIds([...selectedTraceIds, trace.id]);
                                                   }
                                                 }}
-                                                className={`w-5 h-5 rounded-full border-2 transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
+                                                className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
                                                   selectedTraceIds.includes(trace.id)
                                                     ? 'border-[#2e54ff] bg-transparent'
                                                     : 'border-slate-400 bg-white hover:border-[#2e54ff]'
                                                 }`}
-                                                style={{ borderWidth: '2.5px' }}
+                                                style={{ borderWidth: '1px' }}
                                                 title="Sélectionner cet article"
                                               >
                                                 {selectedTraceIds.includes(trace.id) && (
@@ -3526,7 +3540,7 @@ export default function StocksTab({
               )}
 
               {/* Commentaire. */}
-              <div className="md:col-span-4 bg-white flex flex-col gap-1">
+              <div className="md:col-span-4 flex flex-col gap-1">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Commentaire.</label>
                 <input
                   type="text"
@@ -3538,7 +3552,7 @@ export default function StocksTab({
               </div>
 
               {/* Activer la traçabilité des pièces. */}
-              <div className="md:col-span-4 bg-white flex flex-col gap-2 mt-2">
+              <div className="md:col-span-4 flex flex-col gap-2 mt-2">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
                   {t("Activer la traçabilité des pièces.")}
                 </span>
@@ -3549,7 +3563,10 @@ export default function StocksTab({
                     className="flex items-center gap-2 font-sans font-bold cursor-pointer select-none border-0 bg-transparent text-black"
                     style={{ fontSize: '18px' }}
                   >
-                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${traceabilityEnabled === true ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
+                    <span
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${traceabilityEnabled === true ? 'border-[#2e54ff]' : 'border-slate-300'}`}
+                      style={{ borderWidth: '1px' }}
+                    >
                       {traceabilityEnabled === true && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                     </span>
                     Oui
@@ -3567,7 +3584,10 @@ export default function StocksTab({
                     className={`flex items-center gap-2 font-sans font-bold select-none border-0 bg-transparent text-black ${traceabilities.length > 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                     style={{ fontSize: '18px' }}
                   >
-                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${traceabilityEnabled === false ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
+                    <span
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${traceabilityEnabled === false ? 'border-[#2e54ff]' : 'border-slate-300'}`}
+                      style={{ borderWidth: '1px' }}
+                    >
                       {traceabilityEnabled === false && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                     </span>
                     Non
@@ -3761,7 +3781,7 @@ export default function StocksTab({
               borderLeft: '1px solid #e2e8f0',
             }}
           >
-            <div className="flex-1 overflow-y-auto p-6 pt-8">
+            <div className="flex-1 overflow-y-auto p-6 pt-8 space-y-6">
               <div className="flex flex-wrap gap-2.5 items-center" id="stocks-storage-pills">
                 {[
                   { value: 'Tous', label: 'Tous' },
@@ -3794,6 +3814,10 @@ export default function StocksTab({
                         setClickedPill(`filter-${opt.value}`);
                         setTimeout(() => setClickedPill((prev) => (prev === `filter-${opt.value}` ? null : prev)), 480);
                         setStockStorageFilter(opt.value as any);
+                        if (opt.value === 'Tous') {
+                          setStockPieceFilter('');
+                          setStockUgsFilter('');
+                        }
                       }}
                       style={{
                         borderRadius: '1000px',
@@ -3814,6 +3838,84 @@ export default function StocksTab({
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Filtre Pièce ou service. */}
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="stocks-filter-piece-select"
+                  style={{
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
+                  {t("Pièce ou service.")}
+                </label>
+                <select
+                  id="stocks-filter-piece-select"
+                  value={stockPieceFilter}
+                  onChange={(e) => setStockPieceFilter(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '1px solid #dedede',
+                    borderRadius: '13px',
+                    fontSize: '16px',
+                    fontWeight: 100,
+                    backgroundColor: '#ffffff',
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    outline: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="">{t("Tous")}</option>
+                  {groupedFilterStockVariables.map(group => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.items.map(v => (
+                        <option key={v.id} value={v.id}>
+                          {v.identifiant ? `[${v.identifiant}] ` : ''}{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filtre UGS. */}
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="stocks-filter-ugs-input"
+                  style={{
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
+                  {t("UGS.")}
+                </label>
+                <input
+                  id="stocks-filter-ugs-input"
+                  type="text"
+                  value={stockUgsFilter}
+                  onChange={(e) => setStockUgsFilter(e.target.value)}
+                  placeholder="Ex: 0001"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '1px solid #dedede',
+                    borderRadius: '13px',
+                    fontSize: '16px',
+                    fontWeight: 100,
+                    backgroundColor: '#ffffff',
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    outline: 'none',
+                  }}
+                />
               </div>
             </div>
 

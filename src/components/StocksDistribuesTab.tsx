@@ -1325,25 +1325,26 @@ export default function StocksDistribuesTab({
           <form 
             id="distributed-stock-form"
             onSubmit={handleSubmit} 
-            className="space-y-6 bg-white p-5 border-none"
+            className="space-y-6 p-5 border-none"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              backgroundColor: 'rgb(245, 247, 250)',
+              border: 'none',
               borderRadius: '18px',
               width: '98%',
               maxWidth: '98%',
               margin: 'auto'
             }}
           >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-5 bg-white font-sans text-sm">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5 font-sans text-sm">
               
               {/* Section Propriétés Capsule */}
-              <div className="flex bg-white md:col-span-4 select-none mb-1">
+              <div className="flex md:col-span-4 select-none mb-1">
                 <span 
                   className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                   style={{
-                    color: '#fff',
-                    backgroundColor: '#5f1f66',
-                    fontSize: '16px',
+                    color: 'rgb(21 99 55)',
+                    backgroundColor: 'rgb(61 220 132)',
+                    fontSize: '18px',
                     border: 'none',
                     textTransform: 'none',
                     letterSpacing: 'normal'
@@ -1354,7 +1355,7 @@ export default function StocksDistribuesTab({
               </div>
 
               {/* Piece Selection - looks up Centrale des stocks records */}
-              <div className="flex flex-col gap-1 bg-white md:col-span-4">
+              <div className="flex flex-col gap-1 md:col-span-4">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Équipement de la centrale des stocks *</label>
                   {!editingId && (
@@ -1400,15 +1401,14 @@ export default function StocksDistribuesTab({
               </div>
 
               {/* Section Emplacement */}
-              <div className="md:col-span-4 mt-2" style={{ borderTop: '1px solid rgb(218, 218, 218)', margin: '0 -20px' }} />
-              <div className="md:col-span-4 pt-5 mt-2 bg-white flex flex-col gap-4">
-                <div className="flex bg-white select-none">
+              <div className="md:col-span-4 pt-5 mt-2 flex flex-col gap-4">
+                <div className="flex select-none">
                   <span 
                     className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                     style={{
-                      color: '#fff',
-                      backgroundColor: '#5f1f66',
-                      fontSize: '16px',
+                      color: 'rgb(21 99 55)',
+                      backgroundColor: 'rgb(61 220 132)',
+                      fontSize: '18px',
                       border: 'none',
                       textTransform: 'none',
                       letterSpacing: 'normal'
@@ -1418,7 +1418,7 @@ export default function StocksDistribuesTab({
                   </span>
                 </div>
 
-                <div className="flex flex-col gap-1 bg-white">
+                <div className="flex flex-col gap-1">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Emplacement de stockage *</label>
                   <select
                     value={locationName}
@@ -1439,15 +1439,14 @@ export default function StocksDistribuesTab({
               </div>
 
               {/* Section Volumes */}
-              <div className="md:col-span-4 mt-2" style={{ borderTop: '1px solid rgb(218, 218, 218)', margin: '0 -20px' }} />
-              <div className="md:col-span-4 pt-5 mt-2 bg-white flex flex-col gap-4">
-                <div className="flex bg-white select-none">
+              <div className="md:col-span-4 pt-5 mt-2 flex flex-col gap-4">
+                <div className="flex select-none">
                   <span 
                     className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                     style={{
-                      color: '#fff',
-                      backgroundColor: '#5f1f66',
-                      fontSize: '16px',
+                      color: 'rgb(21 99 55)',
+                      backgroundColor: 'rgb(61 220 132)',
+                      fontSize: '18px',
                       border: 'none',
                       textTransform: 'none',
                       letterSpacing: 'normal'
@@ -1457,9 +1456,9 @@ export default function StocksDistribuesTab({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-5 bg-white">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                   {/* Volume Disponible */}
-                  <div className="flex flex-col gap-1 bg-white md:col-span-1">
+                  <div className="flex flex-col gap-1 md:col-span-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Volume total disponible *</label>
                     <input
                       type="number"
@@ -1472,7 +1471,7 @@ export default function StocksDistribuesTab({
                   </div>
 
                   {/* Volume Réserve */}
-                  <div className="flex flex-col gap-1 bg-white md:col-span-1">
+                  <div className="flex flex-col gap-1 md:col-span-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Volume réservé *</label>
                     <input
                       type="number"
@@ -1484,7 +1483,7 @@ export default function StocksDistribuesTab({
                   </div>
 
                   {/* Volume Entrant */}
-                  <div className="flex flex-col gap-1 bg-white md:col-span-1">
+                  <div className="flex flex-col gap-1 md:col-span-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Volume entrant *</label>
                     <input
                       type="number"
@@ -1496,7 +1495,7 @@ export default function StocksDistribuesTab({
                   </div>
 
                   {/* Total indicator (calculated) */}
-                  <div className="flex flex-col gap-1 bg-white md:col-span-1">
+                  <div className="flex flex-col gap-1 md:col-span-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Volume total</label>
                     <input
                       type="number"
@@ -1509,9 +1508,9 @@ export default function StocksDistribuesTab({
                 </div>
 
                 {/* Section 2: Projections volumes sortants directly under volumes as fields */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-white mt-1">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-1">
                   {/* Sortant cette semaine */}
-                  <div className="flex flex-col gap-1 bg-white">
+                  <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Sortant cette semaine.</label>
                     <input
                       type="number"
@@ -1523,7 +1522,7 @@ export default function StocksDistribuesTab({
                   </div>
 
                   {/* Sortant semaine prochaine */}
-                  <div className="flex flex-col gap-1 bg-white">
+                  <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Sortant semaine prochaine.</label>
                     <input
                       type="number"
@@ -1535,7 +1534,7 @@ export default function StocksDistribuesTab({
                   </div>
 
                   {/* Sortant 7 à 30 jours */}
-                  <div className="flex flex-col gap-1 bg-white">
+                  <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Sortant 7 à 30 jours.</label>
                     <input
                       type="number"
@@ -1550,15 +1549,14 @@ export default function StocksDistribuesTab({
               </div>
 
               {/* Section Mouvements */}
-              <div className="md:col-span-4 mt-2" style={{ borderTop: '1px solid rgb(218, 218, 218)', margin: '0 -20px' }} />
-              <div className="md:col-span-4 pt-5 mt-2 bg-white flex flex-col gap-4">
-                <div className="flex bg-white select-none">
+              <div className="md:col-span-4 pt-5 mt-2 flex flex-col gap-4">
+                <div className="flex select-none">
                   <span 
                     className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                     style={{
-                      color: '#fff',
-                      backgroundColor: '#5f1f66',
-                      fontSize: '16px',
+                      color: 'rgb(21 99 55)',
+                      backgroundColor: 'rgb(61 220 132)',
+                      fontSize: '18px',
                       border: 'none',
                       textTransform: 'none',
                       letterSpacing: 'normal'
@@ -1672,15 +1670,14 @@ export default function StocksDistribuesTab({
               {/* Section Inventaire de traçabilité en lecture seule */}
               {mainStockItem?.traceabilityEnabled && traceabilities.length > 0 && (
                 <>
-                  <div className="md:col-span-4 mt-2" style={{ borderTop: '1px solid rgb(218, 218, 218)', margin: '0 -20px' }} />
-                  <div className="md:col-span-4 pt-5 mt-2 bg-white flex flex-col gap-4">
-                    <div className="flex bg-white select-none">
+                  <div className="md:col-span-4 pt-5 mt-2 flex flex-col gap-4">
+                    <div className="flex select-none">
                       <span 
                         className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                         style={{
-                          color: '#fff',
-                          backgroundColor: '#5f1f66',
-                          fontSize: '16px',
+                          color: 'rgb(21 99 55)',
+                          backgroundColor: 'rgb(61 220 132)',
+                          fontSize: '18px',
                           border: 'none',
                           textTransform: 'none',
                           letterSpacing: 'normal'

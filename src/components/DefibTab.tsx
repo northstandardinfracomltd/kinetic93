@@ -4631,75 +4631,6 @@ export default function DefibTab({
                   />
                 </div>
 
-                {/* 3-item Segmented Toggle for 'Tous' / 'Main. Oui' / 'Main. Non' */}
-                <div 
-                  className="flex items-center p-1 bg-white select-none" 
-                  style={{ 
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    borderRadius: '15px',
-                    border: '1px solid #dadada',
-                    backgroundColor: '#ffffff',
-                  }}
-                >
-                  <button
-                    type="button"
-                    id="toggle-main-all"
-                    onClick={() => setMaintenanceFilter('all')}
-                    style={{
-                      fontSize: '18px',
-                      borderRadius: '13px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      backgroundColor: maintenanceFilter === 'all' ? '#2e54ff' : 'transparent',
-                      color: maintenanceFilter === 'all' ? '#ffffff' : '#000000',
-                      transition: 'none',
-                    }}
-                    className={`px-4 py-1.5 font-bold ${
-                      maintenanceFilter === 'all' ? 'shadow-sm' : ''
-                    }`}
-                  >
-                    {t("Tous")}
-                  </button>
-                  <button
-                    type="button"
-                    id="toggle-main-oui"
-                    onClick={() => setMaintenanceFilter('oui')}
-                    style={{
-                      fontSize: '18px',
-                      borderRadius: '13px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      backgroundColor: maintenanceFilter === 'oui' ? '#2e54ff' : 'transparent',
-                      color: maintenanceFilter === 'oui' ? '#ffffff' : '#000000',
-                      transition: 'none',
-                    }}
-                    className={`px-4 py-1.5 font-bold ${
-                      maintenanceFilter === 'oui' ? 'shadow-sm' : ''
-                    }`}
-                  >
-                    {t("Main. Oui")}
-                  </button>
-                  <button
-                    type="button"
-                    id="toggle-main-non"
-                    onClick={() => setMaintenanceFilter('non')}
-                    style={{
-                      fontSize: '18px',
-                      borderRadius: '13px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      backgroundColor: maintenanceFilter === 'non' ? '#2e54ff' : 'transparent',
-                      color: maintenanceFilter === 'non' ? '#ffffff' : '#000000',
-                      transition: 'none',
-                    }}
-                    className={`px-4 py-1.5 font-bold ${
-                      maintenanceFilter === 'non' ? 'shadow-sm' : ''
-                    }`}
-                  >
-                    {t("Main. Non")}
-                  </button>
-                </div>
-
                 <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -5004,6 +4935,41 @@ export default function DefibTab({
             id="defibrillateurs-sort-pills"
             style={{ maxWidth: '98%', margin: '0 auto', marginTop: '14px', padding: '0px' }}
           >
+            {([
+              { key: 'all' as const, label: t("Tous"), id: 'toggle-main-all' },
+              { key: 'oui' as const, label: t("Main. Oui"), id: 'toggle-main-oui' },
+              { key: 'non' as const, label: t("Main. Non"), id: 'toggle-main-non' },
+            ]).map((opt) => {
+              const isActive = maintenanceFilter === opt.key;
+              return (
+                <button
+                  key={opt.key}
+                  type="button"
+                  id={opt.id}
+                  onClick={() => {
+                    triggerPillWave(`main-${opt.key}`);
+                    setMaintenanceFilter(opt.key);
+                  }}
+                  style={{
+                    borderRadius: '1000px',
+                    padding: '8px 16px',
+                    fontSize: '18px',
+                    fontWeight: 100,
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    backgroundColor: isActive ? 'rgb(46, 84, 255)' : 'rgb(232, 236, 255)',
+                    color: isActive ? '#fff' : 'rgb(46, 84, 255)',
+                    border: 'none',
+                    boxShadow: 'none',
+                    transition: 'all 0.15s ease'
+                  }}
+                  className={`relative overflow-hidden transition-all select-none ${clickedPill?.id === `main-${opt.key}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+
             <button
               type="button"
               onClick={() => {
@@ -6751,7 +6717,7 @@ export default function DefibTab({
 
                     {/* Trousse de secours / Kit container */}
                     <div 
-                      className="p-0 space-y-3 mt-3"
+                      className="p-0 space-y-3 mt-6 pt-3"
                       style={{
                         backgroundColor: '#f5f7fa',
                         border: 'none',

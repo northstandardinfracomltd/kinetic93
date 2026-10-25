@@ -3447,6 +3447,11 @@ export default function SettingsModal({
           border: none !important;
           opacity: 0.7 !important;
         }
+        #settings-section-company button > span.rounded-full,
+        #settings-section-pdf button > span.rounded-full {
+          border-width: 1px !important;
+          border-style: solid !important;
+        }
       `}</style>
 
 
@@ -3721,9 +3726,12 @@ export default function SettingsModal({
                   className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <span 
-                    className="rounded-full flex items-center justify-center transition-all bg-white"
+                    className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
                     style={{
-                      border: enableSatisfactionAvis === "Oui" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
+                      border: enableSatisfactionAvis === "Oui" ? '1px solid #2e54ff' : '1px solid #cbd5e1',
+                      borderWidth: '1px',
+                      borderStyle: 'solid',
+                      borderColor: enableSatisfactionAvis === "Oui" ? '#2e54ff' : '#cbd5e1',
                       width: '20px',
                       height: '20px',
                       minWidth: '20px',
@@ -3748,9 +3756,12 @@ export default function SettingsModal({
                   className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <span 
-                    className="rounded-full flex items-center justify-center transition-all bg-white"
+                    className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
                     style={{
-                      border: enableSatisfactionAvis === "Non" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
+                      border: enableSatisfactionAvis === "Non" ? '1px solid #2e54ff' : '1px solid #cbd5e1',
+                      borderWidth: '1px',
+                      borderStyle: 'solid',
+                      borderColor: enableSatisfactionAvis === "Non" ? '#2e54ff' : '#cbd5e1',
                       width: '20px',
                       height: '20px',
                       minWidth: '20px',
@@ -3783,9 +3794,12 @@ export default function SettingsModal({
                 className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
-                  className="rounded-full flex items-center justify-center transition-all bg-white"
+                  className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
                   style={{
-                    border: enableAutoEmails === "Oui" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
+                    border: enableAutoEmails === "Oui" ? '1px solid #2e54ff' : '1px solid #cbd5e1',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderColor: enableAutoEmails === "Oui" ? '#2e54ff' : '#cbd5e1',
                     width: '20px',
                     height: '20px',
                     minWidth: '20px',
@@ -3810,9 +3824,12 @@ export default function SettingsModal({
                 className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <span 
-                  className="rounded-full flex items-center justify-center transition-all bg-white"
+                  className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
                   style={{
-                    border: enableAutoEmails === "Non" ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
+                    border: enableAutoEmails === "Non" ? '1px solid #2e54ff' : '1px solid #cbd5e1',
+                    borderWidth: '1px',
+                    borderStyle: 'solid',
+                    borderColor: enableAutoEmails === "Non" ? '#2e54ff' : '#cbd5e1',
                     width: '20px',
                     height: '20px',
                     minWidth: '20px',
@@ -4041,9 +4058,12 @@ export default function SettingsModal({
                           className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           <span 
-                            className="rounded-full flex items-center justify-center transition-all bg-white"
+                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
                             style={{
-                              border: currentValue === 'Oui' ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
+                              border: currentValue === 'Oui' ? '1px solid #2e54ff' : '1px solid #cbd5e1',
+                              borderWidth: '1px',
+                              borderStyle: 'solid',
+                              borderColor: currentValue === 'Oui' ? '#2e54ff' : '#cbd5e1',
                               width: '20px',
                               height: '20px',
                               minWidth: '20px',
@@ -4068,9 +4088,12 @@ export default function SettingsModal({
                           className="inline-flex items-center cursor-pointer gap-2 select-none justify-start text-left disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           <span 
-                            className="rounded-full flex items-center justify-center transition-all bg-white"
+                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white"
                             style={{
-                              border: currentValue === 'Non' ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
+                              border: currentValue === 'Non' ? '1px solid #2e54ff' : '1px solid #cbd5e1',
+                              borderWidth: '1px',
+                              borderStyle: 'solid',
+                              borderColor: currentValue === 'Non' ? '#2e54ff' : '#cbd5e1',
                               width: '20px',
                               height: '20px',
                               minWidth: '20px',
@@ -4301,7 +4324,7 @@ export default function SettingsModal({
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   borderRadius: '1000px',
-                                  backgroundColor: '#411046',
+                                  backgroundColor: '#2e54ff',
                                   border: 'none',
                                   color: '#ffffff',
                                   fontSize: '18px',
@@ -4319,7 +4342,7 @@ export default function SettingsModal({
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   borderRadius: '1000px',
-                                  backgroundColor: 'rgb(76 20 81)',
+                                  backgroundColor: '#2e54ff',
                                   border: 'none',
                                   color: 'rgb(255 255 255)',
                                   fontSize: '18px',
@@ -4337,7 +4360,7 @@ export default function SettingsModal({
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   borderRadius: '1000px',
-                                  backgroundColor: '#411046',
+                                  backgroundColor: '#2e54ff',
                                   border: 'none',
                                   color: '#ffffff',
                                   fontSize: '18px',
@@ -4357,7 +4380,7 @@ export default function SettingsModal({
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   borderRadius: '1000px',
-                                  backgroundColor: '#411046',
+                                  backgroundColor: '#2e54ff',
                                   border: 'none',
                                   color: '#ffffff',
                                   fontSize: '18px',
@@ -4680,7 +4703,7 @@ export default function SettingsModal({
                                         <span 
                                           className="rounded-full flex items-center justify-center transition-all bg-white"
                                           style={{
-                                            border: hasComp ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
+                                            border: hasComp ? '1px solid #2e54ff' : '1px solid #cbd5e1',
                                             width: '20px',
                                             height: '20px',
                                             minWidth: '20px',
@@ -4757,7 +4780,7 @@ export default function SettingsModal({
                                           onClick={() => handleUpdateMemberScheduleField(idx, schIdx, 'fermetureMidi', !sch.fermetureMidi)}
                                           className="inline-flex items-center gap-2 cursor-pointer select-none disabled:opacity-50"
                                         >
-                                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${sch.fermetureMidi ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
+                                          <span className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${sch.fermetureMidi ? 'border-[#2e54ff]' : 'border-slate-300'}`}>
                                             {sch.fermetureMidi && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                                           </span>
                                           <span className="font-semibold text-black font-sans" style={{ fontSize: '16px' }}>
@@ -4771,7 +4794,7 @@ export default function SettingsModal({
                                           onClick={() => handleUpdateMemberScheduleField(idx, schIdx, 'openForMissions', sch.openForMissions === undefined ? false : !sch.openForMissions)}
                                           className="inline-flex items-center gap-2 cursor-pointer select-none disabled:opacity-50"
                                         >
-                                          <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all bg-white ${(sch.openForMissions ?? true) ? 'border-[#3b82f6]' : 'border-slate-300'}`}>
+                                          <span className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${(sch.openForMissions ?? true) ? 'border-[#3b82f6]' : 'border-slate-300'}`}>
                                             {(sch.openForMissions ?? true) && <span className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]" />}
                                           </span>
                                           <span className="font-semibold text-black font-sans" style={{ fontSize: '16px' }}>
@@ -5091,7 +5114,7 @@ export default function SettingsModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               
               {/* ENTREPÔT DE DONNÉES CIVILPROM FRANCE */}
-              <div style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between md:col-span-2">
+              <div style={{ border: 'none', borderRadius: '13px', backgroundColor: '#ffffff' }} className="p-4 space-y-3 flex flex-col justify-between md:col-span-2">
                 <div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -5131,7 +5154,7 @@ export default function SettingsModal({
               </div>
 
               {/* ATLASANTÉ GEODAE */}
-              <div id="connector-block-atlasante" style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between">
+              <div id="connector-block-atlasante" style={{ border: 'none', borderRadius: '13px', backgroundColor: '#ffffff' }} className="p-4 space-y-3 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -5141,7 +5164,7 @@ export default function SettingsModal({
                           <span
                             style={{
                               backgroundColor: selectedLang === 'Français, France' 
-                                ? (atlasanteActive ? '#2e54ff' : 'rgb(57, 169, 143)')
+                                ? (atlasanteActive ? '#2e54ff' : '#0f172a')
                                 : 'rgb(185, 28, 28)',
                               boxShadow: 'none',
                               color: '#ffffff',
@@ -5216,7 +5239,7 @@ export default function SettingsModal({
               </div>
 
               {/* GOOGLE DRIVE */}
-              <div id="connector-block-googledrive" style={{ border: '1px solid rgb(229, 229, 229)', borderRadius: '13px', backgroundColor: 'rgb(245, 245, 245)' }} className="p-4 space-y-3 flex flex-col justify-between">
+              <div id="connector-block-googledrive" style={{ border: 'none', borderRadius: '13px', backgroundColor: '#ffffff' }} className="p-4 space-y-3 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -5225,7 +5248,7 @@ export default function SettingsModal({
                         <div className="select-none font-sans flex items-center mt-1">
                           <span
                             style={{
-                              backgroundColor: googleDriveActive ? '#2e54ff' : 'rgb(57, 169, 143)',
+                              backgroundColor: googleDriveActive ? '#2e54ff' : '#0f172a',
                               boxShadow: 'none',
                               color: '#ffffff',
                               fontSize: '16px',
@@ -5338,7 +5361,7 @@ export default function SettingsModal({
                     color: '#ffffff',
                     boxShadow: 'none',
                     borderRadius: '0.75rem',
-                    fontSize: '16px',
+                    fontSize: '18px',
                     padding: '9px 18px',
                     fontWeight: '100',
                     display: 'inline-flex',
@@ -5379,7 +5402,7 @@ export default function SettingsModal({
                     color: '#ffffff',
                     boxShadow: 'none',
                     borderRadius: '0.75rem',
-                    fontSize: '16px',
+                    fontSize: '18px',
                     padding: '9px 18px',
                     fontWeight: '100',
                     display: 'inline-flex',
@@ -5420,7 +5443,7 @@ export default function SettingsModal({
                     color: '#ffffff',
                     boxShadow: 'none',
                     borderRadius: '0.75rem',
-                    fontSize: '16px',
+                    fontSize: '18px',
                     padding: '9px 18px',
                     fontWeight: '100',
                     display: 'inline-flex',
@@ -5463,7 +5486,7 @@ export default function SettingsModal({
                         color: '#ffffff',
                         boxShadow: 'none',
                         borderRadius: '0.75rem',
-                        fontSize: '16px',
+                        fontSize: '18px',
                         padding: '9px 18px',
                         fontWeight: '100',
                         display: 'inline-flex',
