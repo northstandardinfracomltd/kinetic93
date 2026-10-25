@@ -11664,7 +11664,11 @@ export default function App() {
                         onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'logo-defibeo' ? null : prev))}
                       >
                         <img
-                          src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027iconlogo.svg"
+                          src={
+                            hoveredSidebarItem?.id === 'logo-defibeo'
+                              ? 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconcolored2027.svg'
+                              : 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoicongrey2027.svg'
+                          }
                           alt="Logiciel Defibeo"
                           className="sidebar-nav-icon-bounce w-[46px] h-[46px] object-contain block select-none pointer-events-none shrink-0"
                           referrerPolicy="no-referrer"
@@ -11710,7 +11714,7 @@ export default function App() {
                         onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'logo-defibeo' ? null : prev))}
                       >
                         <img
-                          src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027iconlogo.svg"
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconcolored2027.svg"
                           alt="Logiciel Defibeo"
                           className="sidebar-nav-icon-bounce w-[46px] h-[46px] object-contain block select-none pointer-events-none shrink-0"
                           referrerPolicy="no-referrer"
