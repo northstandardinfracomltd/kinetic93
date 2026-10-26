@@ -745,15 +745,23 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
       }
 
       const lower = k.toLowerCase();
+
+      // CRITICAL: Never wipe tenant-scoped spreadsheet URLs or database configurations!
+      // Each tenant's spreadsheet URLs are isolated by `defib_${tenantId}_spreadsheet_*` and `tenantDatabases` keys.
+      if (
+        lower.includes('spreadsheet_') ||
+        lower.includes('tenantdatabases') ||
+        lower.includes('company_info') ||
+        lower.includes('companyinfo')
+      ) {
+        continue;
+      }
+
       if (
         k.startsWith('defib_') ||
         k.startsWith('fs_cache_') ||
         k.startsWith('help_dismissed') ||
         k === 'ctt_global_rules' ||
-        lower.includes('spreadsheet_') ||
-        lower.includes('company_info') ||
-        lower.includes('companyinfo') ||
-        lower.includes('tenantdatabases') ||
         lower.includes('_members') ||
         lower.includes('custom_location_names') ||
         lower.includes('api_connectors') ||
@@ -1274,6 +1282,59 @@ export async function fetchCollectionFromFirestore<T>(
     return null;
   }
 
+  // Helper to extract and merge all non-empty spreadsheet* URL fields from multiple sources
+  const mergeSpreadsheetUrlFields = (...sources: any[]): Record<string, string> => {
+    const mergedSheets: Record<string, string> = {};
+    for (const src of sources) {
+      if (!src || typeof src !== 'object' || Array.isArray(src)) continue;
+      for (const [k, v] of Object.entries(src)) {
+        if (k.startsWith('spreadsheet') && typeof v === 'string' && v.trim()) {
+          const clean = v.trim();
+          if (!clean.includes('1tB1e41') && !clean.includes('2mX5O6r9hD0i3Z9m')) {
+            if (!mergedSheets[k]) {
+              mergedSheets[k] = clean;
+            }
+            if (k.endsWith('Url')) {
+              const baseKey = k.slice(0, -3);
+              if (!mergedSheets[baseKey]) mergedSheets[baseKey] = clean;
+            } else {
+              const urlKey = `${k}Url`;
+              if (!mergedSheets[urlKey]) mergedSheets[urlKey] = clean;
+            }
+          }
+        }
+      }
+    }
+    return mergedSheets;
+  };
+
+  // Helper to persist discovered spreadsheet URLs into localStorage for the active tenant
+  const persistDiscoveredSpreadsheetUrlsToLocal = (obj: any, tid: string) => {
+    if (!obj || typeof obj !== 'object' || typeof window === 'undefined' || !window.localStorage) return;
+    const tVariants = Array.from(new Set([tid, tid.toUpperCase(), tid.toLowerCase()])).filter(Boolean);
+    const camelToSnake = (s: string) => s.replace(/([A-Z])/g, '_$1').toLowerCase();
+    for (const [k, v] of Object.entries(obj)) {
+      if (k.startsWith('spreadsheet') && !k.endsWith('Url') && typeof v === 'string' && v.trim()) {
+        const clean = v.trim();
+        if (clean.includes('1tB1e41') || clean.includes('2mX5O6r9hD0i3Z9m')) continue;
+        const suffix = camelToSnake(k);
+        for (const tv of tVariants) {
+          try {
+            localStorage.setItem(`defib_${tv}_${suffix}`, clean);
+          } catch (_) {}
+        }
+      }
+    }
+  };
+
+  const isCompanyOrDbCol =
+    collectionName === 'companyInfo' ||
+    collectionName === 'company_info' ||
+    collectionName === 'tenantDatabases';
+
+  let directFirestoreObjectCandidate: any = null;
+  let directFirestoreSheetFields: Record<string, string> = {};
+
   // 1. Primary Strategy: Try direct Firestore query with smart key discovery & batched chunking
   if (!isFirestoreQuotaExhausted()) {
     try {
@@ -1281,11 +1342,19 @@ export async function fetchCollectionFromFirestore<T>(
       // 1. Exact canonical key: `${activeTenantId}_${collectionName}`
       // 2. Exact D-variants: `D${num}_${collectionName}`
       // 3. Registered tenant alias keys
+      const extraDbCandidateKeys = isCompanyOrDbCol
+        ? [
+            ...getCollectionKeyCandidates('tenantDatabases', activeTenantId),
+            ...getCollectionKeyCandidates('companyInfo', activeTenantId),
+            ...getCollectionKeyCandidates('company_info', activeTenantId),
+          ]
+        : [];
       const prioritizedKeys = Array.from(new Set([
         `${activeTenantId}_${collectionName}`,
         activeTenantId.toUpperCase().startsWith('D') ? `${activeTenantId.toUpperCase()}_${collectionName}` : `D${activeTenantId}_${collectionName}`,
         activeTenantId.toLowerCase().startsWith('d') ? `${activeTenantId.toLowerCase()}_${collectionName}` : `d${activeTenantId}_${collectionName}`,
-        ...candidateKeys
+        ...candidateKeys,
+        ...extraDbCandidateKeys
       ])).filter(Boolean);
 
       // Helper: fetch all chunks of a chunked document using controlled batch concurrency (8 at a time)
@@ -1358,7 +1427,7 @@ export async function fetchCollectionFromFirestore<T>(
       };
 
       // Fast inspection of top candidate keys (with 6-second timeout)
-      const keysToCheck = prioritizedKeys.slice(0, 6);
+      const keysToCheck = prioritizedKeys.slice(0, isCompanyOrDbCol ? 14 : 6);
       const metaSnaps = await Promise.all(keysToCheck.map(async (key) => {
         try {
           const docRef = doc(db, 'appData', key);
@@ -1375,7 +1444,7 @@ export async function fetchCollectionFromFirestore<T>(
               chunksCount: d.chunksCount || 0,
               totalItems: typeof d.totalItems === 'number' ? d.totalItems : null,
               chunkPrefix: d.chunkPrefix || d.chunkKeyPrefix || key,
-              value: d.value
+              value: d.value !== undefined ? d.value : d
             };
           }
         } catch (err: any) {
@@ -1419,6 +1488,18 @@ export async function fetchCollectionFromFirestore<T>(
         collectionName === 'tenantDatabases' ||
         collectionName === 'crm_settings';
 
+      // If fetching companyInfo or tenantDatabases, harvest all spreadsheet* URLs from all matching Firestore docs
+      if (isCompanyOrDbCol) {
+        const validDocs = metaSnaps
+          .filter(m => m.exists && m.value && typeof m.value === 'object' && !Array.isArray(m.value))
+          .map(m => m.value);
+        if (validDocs.length > 0) {
+          directFirestoreSheetFields = mergeSpreadsheetUrlFields(...validDocs);
+          directFirestoreObjectCandidate = Object.assign({}, ...validDocs.slice().reverse(), directFirestoreSheetFields);
+          persistDiscoveredSpreadsheetUrlsToLocal(directFirestoreSheetFields, activeTenantId);
+        }
+      }
+
       // 2. Check if any candidate has a populated array (excluding singleton object collections)
       const populatedCandidate = !isServerAuthoritativeObjectCol
         ? metaSnaps.find(m => m.exists && Array.isArray(m.value) && m.value.length > 0)
@@ -1452,9 +1533,6 @@ export async function fetchCollectionFromFirestore<T>(
       }
 
       // 3. Check if any candidate has an object or primitive (excluding defib collection which is an array catalog)
-      // Note: For tenant singleton configs (api_connectors, companyInfo, tenantDatabases, crm_settings),
-      // the backend server relay (/api/sync-collection) receives all writes first and is authoritative;
-      // only fall back to direct Firestore object if server relay is unreachable or empty.
       const otherCandidate = metaSnaps.find(m => !isDefibCol && m.exists && m.value !== undefined && m.value !== null);
       if (otherCandidate && !isServerAuthoritativeObjectCol) {
         const sanitizedVal = filterCollectionForTenant(otherCandidate.value as T, collectionName, activeTenantId);
@@ -1698,13 +1776,40 @@ export async function fetchCollectionFromFirestore<T>(
             // If server returned empty array [], do NOT overwrite local cache before checking Strategy 3 below!
           } else if (val && typeof val === 'object' && Object.keys(val as any).length > 0) {
             if ((collectionName === 'companyInfo' || collectionName === 'company_info') && (val as any)._isDefaultFallback) {
+              // If we found direct Firestore object or sheet fields, merge them into the fallback
+              if (directFirestoreObjectCandidate || Object.keys(directFirestoreSheetFields).length > 0) {
+                const enriched = {
+                  ...(val as any),
+                  ...(directFirestoreObjectCandidate || {}),
+                  ...directFirestoreSheetFields,
+                };
+                delete enriched._isDefaultFallback;
+                persistDiscoveredSpreadsheetUrlsToLocal(enriched, activeTenantId);
+                idbSet(primaryKey, enriched).catch(() => {});
+                idbSet(`${activeTenantId}_${collectionName}`, enriched).catch(() => {});
+                idbSet(`defib_${activeTenantId}_${collectionName}`, enriched).catch(() => {});
+                saveToLocalCache(primaryKey, enriched);
+                saveToLocalCache(`${activeTenantId}_${collectionName}`, enriched);
+                saveToLocalCache(`defib_${activeTenantId}_${collectionName}`, enriched);
+                return enriched as T;
+              }
               // Keep as fallback if Strategy 3 has no cached companyInfo for this tenant
               fallbackObjectVal = val;
             } else {
+              let finalObjVal: any = val;
+              if (isCompanyOrDbCol) {
+                const combinedSheets = mergeSpreadsheetUrlFields(val, directFirestoreSheetFields, directFirestoreObjectCandidate);
+                finalObjVal = {
+                  ...(directFirestoreObjectCandidate || {}),
+                  ...(val as any),
+                  ...combinedSheets,
+                };
+                persistDiscoveredSpreadsheetUrlsToLocal(finalObjVal, activeTenantId);
+              }
               // Non-empty object (e.g. companyInfo, api_connectors, tenantDatabases)
               if (collectionName === 'api_connectors' && typeof window !== 'undefined' && window.localStorage) {
                 try {
-                  const connObj = val as any;
+                  const connObj = finalObjVal as any;
                   if (connObj.googleDriveActive !== undefined) {
                     localStorage.setItem(`defib_${activeTenantId}_google_drive_active`, String(Boolean(connObj.googleDriveActive)));
                     localStorage.setItem('defib_google_drive_active', String(Boolean(connObj.googleDriveActive)));
@@ -1719,19 +1824,34 @@ export async function fetchCollectionFromFirestore<T>(
                   }
                 } catch (_) {}
               }
-              idbSet(primaryKey, val).catch(() => {});
-              idbSet(`${activeTenantId}_${collectionName}`, val).catch(() => {});
-              idbSet(`defib_${activeTenantId}_${collectionName}`, val).catch(() => {});
-              saveToLocalCache(primaryKey, val);
-              saveToLocalCache(`${activeTenantId}_${collectionName}`, val);
-              saveToLocalCache(`defib_${activeTenantId}_${collectionName}`, val);
-              return val;
+              idbSet(primaryKey, finalObjVal).catch(() => {});
+              idbSet(`${activeTenantId}_${collectionName}`, finalObjVal).catch(() => {});
+              idbSet(`defib_${activeTenantId}_${collectionName}`, finalObjVal).catch(() => {});
+              saveToLocalCache(primaryKey, finalObjVal);
+              saveToLocalCache(`${activeTenantId}_${collectionName}`, finalObjVal);
+              saveToLocalCache(`defib_${activeTenantId}_${collectionName}`, finalObjVal);
+              return finalObjVal as T;
             }
           }
         }
     } catch (apiErr) {
       console.warn(`[Sync Server Relay] Error fetching ${collectionName} via /api/sync-collection:`, apiErr);
     }
+  }
+
+  // If server relay was unreachable or empty, but direct Firestore found a valid object for companyInfo / tenantDatabases, return it!
+  if (isCompanyOrDbCol && (directFirestoreObjectCandidate || Object.keys(directFirestoreSheetFields).length > 0)) {
+    const mergedDirect = {
+      ...(fallbackObjectVal || {}),
+      ...(directFirestoreObjectCandidate || {}),
+      ...directFirestoreSheetFields,
+    };
+    delete mergedDirect._isDefaultFallback;
+    persistDiscoveredSpreadsheetUrlsToLocal(mergedDirect, activeTenantId);
+    const sanitizedDirect = filterCollectionForTenant(mergedDirect as T, collectionName, activeTenantId);
+    idbSet(`${activeTenantId}_${collectionName}`, sanitizedDirect).catch(() => {});
+    saveToLocalCache(`${activeTenantId}_${collectionName}`, sanitizedDirect);
+    return sanitizedDirect;
   }
 
   // 3. Tertiary Strategy: Local storage and IndexedDB cache
@@ -1838,19 +1958,9 @@ export function sanitizeUndefined(obj: any): any {
 }
 
 let firestoreQuotaExhaustedUntil = 0;
-try {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    const savedQuotaUntil = Number(localStorage.getItem('defib_fs_quota_reset_ts') || '0');
-    if (savedQuotaUntil > Date.now()) {
-      firestoreQuotaExhaustedUntil = savedQuotaUntil;
-    }
-  }
-} catch (_) {}
 
 export function isFirestoreQuotaExhausted(): boolean {
-  // Direct client-side Firestore SDK access is permanently disabled for security (firestore.rules is locked);
-  // all authorized reads/writes go exclusively through the authenticated /api/* backend.
-  return true;
+  return Date.now() < firestoreQuotaExhaustedUntil;
 }
 
 export function recordFirestoreQuotaExhaustion(durationHours = 6) {
@@ -1882,17 +1992,42 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
   const key = getCollectionKey(collectionName, activeTenantId);
   const candidateKeys = getCollectionKeyCandidates(collectionName, activeTenantId);
 
-  // Guard against accidental blank placeholder overwrite of companyInfo
-  if ((collectionName === 'companyInfo' || collectionName === 'company_info') && value && typeof value === 'object' && !Array.isArray(value)) {
+  // Guard against accidental blank placeholder overwrite of companyInfo or tenantDatabases
+  if (
+    (collectionName === 'companyInfo' || collectionName === 'company_info' || collectionName === 'tenantDatabases') &&
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value)
+  ) {
     const incoming = value as any;
-    for (const ck of candidateKeys) {
+    const isExplicitDbSave = Boolean(incoming._explicitDatabaseSave);
+    const allConfigCandidates = [
+      ...candidateKeys,
+      ...getCollectionKeyCandidates('tenantDatabases', activeTenantId),
+      ...getCollectionKeyCandidates('companyInfo', activeTenantId),
+    ];
+    for (const ck of allConfigCandidates) {
       const cached = getFromLocalCache<any>(ck);
       if (cached && typeof cached === 'object' && !Array.isArray(cached)) {
-        // If cached has hiddenTabs or custom info, preserve them if incoming lacks them
-        if (Array.isArray(cached.hiddenTabs) && cached.hiddenTabs.length > 0 && (!incoming.hiddenTabs || incoming.hiddenTabs.length === 0)) {
+        if (
+          (collectionName === 'companyInfo' || collectionName === 'company_info') &&
+          Array.isArray(cached.hiddenTabs) &&
+          cached.hiddenTabs.length > 0 &&
+          (!incoming.hiddenTabs || incoming.hiddenTabs.length === 0)
+        ) {
           if (incoming.name === 'Mon Cabinet' && cached.name && cached.name !== 'Mon Cabinet') {
             console.warn(`[Protection] Refusing to overwrite populated companyInfo ${ck} with default empty placeholder.`);
             return;
+          }
+        }
+        // Preserve any previously saved spreadsheet* URLs unless this is an explicit database save
+        if (!isExplicitDbSave) {
+          for (const [k, v] of Object.entries(cached)) {
+            if (k.startsWith('spreadsheet') && typeof v === 'string' && v.trim()) {
+              if (!incoming[k] || typeof incoming[k] !== 'string' || !incoming[k].trim()) {
+                incoming[k] = v.trim();
+              }
+            }
           }
         }
       }
@@ -2011,15 +2146,23 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
 
   if (isTenantConfigCollection && finalCleanValue !== undefined && finalCleanValue !== null) {
     try {
-      const docRef = doc(db, 'appData', key);
-      await withTimeout(
-        setDoc(docRef, {
-          value: finalCleanValue,
-          _chunked: false,
-          updatedAt: new Date().toISOString(),
-        }),
-        5000,
-        undefined
+      const keysToPersist = new Set<string>([key, `${activeTenantId}_${collectionName}`]);
+      if (collectionName === 'companyInfo' || collectionName === 'company_info' || collectionName === 'tenantDatabases') {
+        keysToPersist.add(`${activeTenantId}_companyInfo`);
+        keysToPersist.add(`${activeTenantId}_tenantDatabases`);
+      }
+      await Promise.all(
+        Array.from(keysToPersist).map(targetDocKey =>
+          withTimeout(
+            setDoc(doc(db, 'appData', targetDocKey), {
+              value: finalCleanValue,
+              _chunked: false,
+              updatedAt: new Date().toISOString(),
+            }),
+            5000,
+            undefined
+          ).catch(() => {})
+        )
       );
     } catch (_) {}
   }

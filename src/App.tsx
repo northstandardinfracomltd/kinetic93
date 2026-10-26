@@ -1730,7 +1730,7 @@ export default function App() {
     };
   }, [faviconRefreshTrigger]);
 
-  // Effect to update document favicon dynamically across all pages (Logiciel Principal & Web App Technicien)
+  // Effect to update document favicon dynamically across all pages (Logiciel Principal, Web App Technicien & Portail Client)
   useEffect(() => {
     if (typeof document !== 'undefined') {
       const targetUrl = DEFAULT_FAVICON_URL;
@@ -1742,6 +1742,11 @@ export default function App() {
       }
       link.type = 'image/png';
       link.href = targetUrl;
+
+      let appleLink: HTMLLinkElement | null = document.querySelector("link[rel='apple-touch-icon']");
+      if (appleLink) {
+        appleLink.href = targetUrl;
+      }
     }
   }, [currentFavicon, isPublicPortalOpen, isClientPortalOpen, isLoggedIn, activeTab]);
 
@@ -7894,9 +7899,24 @@ export default function App() {
         const rawLocalMembers = getLocalTenantValue<Member[]>('members', activeRunTenantId === 'demo' ? INITIAL_MEMBERS : []);
         const baseMembers = ensureTenantMembersClient(rawLocalMembers, activeRunTenantId);
         const resolvedInitLocs = ensureTenantCustomLocationNames(rawLocalCompany?.customLocationNames, activeRunTenantId, baseMembers);
+        const initExtraSheets: Record<string, string> = {};
+        for (const f of EXTRA_SPREADSHEET_FIELDS) {
+          const val = getTenantSpreadsheetUrl(f.key, rawLocalCompany, activeRunTenantId);
+          if (val) {
+            initExtraSheets[f.key] = val;
+            initExtraSheets[f.urlKey as string] = val;
+          }
+        }
+        const initDefibsUrl = getTenantSpreadsheetUrl('spreadsheetDefibrillateurs', rawLocalCompany, activeRunTenantId);
+        const initAutresUrl = getTenantSpreadsheetUrl('spreadsheetAutresMateriels', rawLocalCompany, activeRunTenantId);
+        const initClientsUrl = getTenantSpreadsheetUrl('spreadsheetClients', rawLocalCompany, activeRunTenantId);
         const baseCompanyInfo: CompanyInfo = {
           ...defaultInfo,
           ...rawLocalCompany,
+          ...(initDefibsUrl ? { spreadsheetDefibrillateurs: initDefibsUrl, spreadsheetDefibrillateursUrl: initDefibsUrl } : {}),
+          ...(initAutresUrl ? { spreadsheetAutresMateriels: initAutresUrl, spreadsheetAutresMaterielsUrl: initAutresUrl } : {}),
+          ...(initClientsUrl ? { spreadsheetClients: initClientsUrl, spreadsheetClientsUrl: initClientsUrl } : {}),
+          ...initExtraSheets,
           customLocationNames: resolvedInitLocs
         };
         setCompanyInfo(baseCompanyInfo);
@@ -8173,7 +8193,7 @@ export default function App() {
             cleanSheetUrl(validRemote.spreadsheetDefibrillateursUrl) ||
             cleanSheetUrl(localData.spreadsheetDefibrillateurs) ||
             cleanSheetUrl(localData.spreadsheetDefibrillateursUrl) ||
-            cleanSheetUrl(localStorage.getItem(`defib_${tenantId}_spreadsheet_defibrillateurs`)) ||
+            cleanSheetUrl(getTenantSpreadsheetUrl('spreadsheetDefibrillateurs', localData as CompanyInfo, activeRunTenantId)) ||
             '';
           const effSheetAutres =
             cleanSheetUrl(validDb.spreadsheetAutresMateriels) ||
@@ -8182,7 +8202,7 @@ export default function App() {
             cleanSheetUrl(validRemote.spreadsheetAutresMaterielsUrl) ||
             cleanSheetUrl(localData.spreadsheetAutresMateriels) ||
             cleanSheetUrl(localData.spreadsheetAutresMaterielsUrl) ||
-            cleanSheetUrl(localStorage.getItem(`defib_${tenantId}_spreadsheet_autres_materiels`)) ||
+            cleanSheetUrl(getTenantSpreadsheetUrl('spreadsheetAutresMateriels', localData as CompanyInfo, activeRunTenantId)) ||
             '';
           const effSheetClients =
             cleanSheetUrl(validDb.spreadsheetClients) ||
@@ -8191,9 +8211,10 @@ export default function App() {
             cleanSheetUrl(validRemote.spreadsheetClientsUrl) ||
             cleanSheetUrl(localData.spreadsheetClients) ||
             cleanSheetUrl(localData.spreadsheetClientsUrl) ||
-            cleanSheetUrl(localStorage.getItem(`defib_${tenantId}_spreadsheet_clients`)) ||
+            cleanSheetUrl(getTenantSpreadsheetUrl('spreadsheetClients', localData as CompanyInfo, activeRunTenantId)) ||
             '';
           const effExtraSheets: Record<string, string> = {};
+          const tKeys = Array.from(new Set([activeRunTenantId, activeRunTenantId.toUpperCase(), activeRunTenantId.toLowerCase()])).filter(Boolean);
           for (const f of EXTRA_SPREADSHEET_FIELDS) {
             const val =
               cleanSheetUrl(validDb[f.key]) ||
@@ -8202,12 +8223,14 @@ export default function App() {
               cleanSheetUrl((validRemote as any)[f.urlKey]) ||
               cleanSheetUrl((localData as any)[f.key]) ||
               cleanSheetUrl((localData as any)[f.urlKey]) ||
-              cleanSheetUrl(localStorage.getItem(`defib_${tenantId}_${f.storageSuffix}`)) ||
+              cleanSheetUrl(getTenantSpreadsheetUrl(f.key, localData as CompanyInfo, activeRunTenantId)) ||
               '';
             effExtraSheets[f.key] = val;
             effExtraSheets[f.urlKey as string] = val;
             if (val) {
-              safeSetLocalStorage(`defib_${tenantId}_${f.storageSuffix}`, val);
+              for (const tk of tKeys) {
+                safeSetLocalStorage(`defib_${tk}_${f.storageSuffix}`, val);
+              }
             }
           }
           // Firestore is the supreme source of truth for cross-device consistency
@@ -8264,25 +8287,19 @@ export default function App() {
             safeSetLocalStorage(`defib_${tenantId}_enable_other_equipments`, merged.enableOtherEquipments);
           }
           if (merged.spreadsheetDefibrillateurs) {
-            safeSetLocalStorage(`defib_${tenantId}_spreadsheet_defibrillateurs`, merged.spreadsheetDefibrillateurs);
-          } else {
-            localStorage.removeItem(`defib_${tenantId}_spreadsheet_defibrillateurs`);
-            localStorage.removeItem(`defib_${tenantId.toUpperCase()}_spreadsheet_defibrillateurs`);
-            localStorage.removeItem(`defib_${tenantId.toLowerCase()}_spreadsheet_defibrillateurs`);
+            for (const tk of tKeys) {
+              safeSetLocalStorage(`defib_${tk}_spreadsheet_defibrillateurs`, merged.spreadsheetDefibrillateurs);
+            }
           }
           if (merged.spreadsheetAutresMateriels) {
-            safeSetLocalStorage(`defib_${tenantId}_spreadsheet_autres_materiels`, merged.spreadsheetAutresMateriels);
-          } else {
-            localStorage.removeItem(`defib_${tenantId}_spreadsheet_autres_materiels`);
-            localStorage.removeItem(`defib_${tenantId.toUpperCase()}_spreadsheet_autres_materiels`);
-            localStorage.removeItem(`defib_${tenantId.toLowerCase()}_spreadsheet_autres_materiels`);
+            for (const tk of tKeys) {
+              safeSetLocalStorage(`defib_${tk}_spreadsheet_autres_materiels`, merged.spreadsheetAutresMateriels);
+            }
           }
           if (merged.spreadsheetClients) {
-            safeSetLocalStorage(`defib_${tenantId}_spreadsheet_clients`, merged.spreadsheetClients);
-          } else {
-            localStorage.removeItem(`defib_${tenantId}_spreadsheet_clients`);
-            localStorage.removeItem(`defib_${tenantId.toUpperCase()}_spreadsheet_clients`);
-            localStorage.removeItem(`defib_${tenantId.toLowerCase()}_spreadsheet_clients`);
+            for (const tk of tKeys) {
+              safeSetLocalStorage(`defib_${tk}_spreadsheet_clients`, merged.spreadsheetClients);
+            }
           }
           companyInfoRef.current = merged;
           const allSheetsToRefresh: Array<{ key: string; storageSuffix: string; tabType: string }> = [
@@ -8312,23 +8329,18 @@ export default function App() {
             { key: 'spreadsheetGed', storageSuffix: 'spreadsheet_ged', tabType: 'ged' },
             { key: 'spreadsheetHistoriqueNotifications', storageSuffix: 'spreadsheet_historique_notifications', tabType: 'historiqueNotifications' },
             { key: 'spreadsheetObservateurActionsSuspectes', storageSuffix: 'spreadsheet_observateur_actions_suspectes', tabType: 'observateurActionsSuspectes' },
+            { key: 'spreadsheetExportations', storageSuffix: 'spreadsheet_exportations', tabType: 'exportations' },
           ];
           const refreshedTabTypes = new Set<string>();
           for (const st of allSheetsToRefresh) {
             const sUrl = String((merged as any)[st.key] || '').trim();
             if (sUrl) {
-              safeSetLocalStorage(`defib_${tenantId}_${st.storageSuffix}`, sUrl);
+              for (const tk of tKeys) {
+                safeSetLocalStorage(`defib_${tk}_${st.storageSuffix}`, sUrl);
+              }
               if (!refreshedTabTypes.has(st.tabType)) {
                 refreshedTabTypes.add(st.tabType);
                 refreshGenericSheetCompartment(st.tabType, false, activeRunTenantId, st.tabType === 'tournees' ? undefined : sUrl).catch(() => {});
-              }
-            } else {
-              localStorage.removeItem(`defib_${tenantId}_${st.storageSuffix}`);
-              localStorage.removeItem(`defib_${tenantId.toUpperCase()}_${st.storageSuffix}`);
-              localStorage.removeItem(`defib_${tenantId.toLowerCase()}_${st.storageSuffix}`);
-              if (!refreshedTabTypes.has(st.tabType) && st.key !== 'spreadsheetMissionsTournees') {
-                refreshedTabTypes.add(st.tabType);
-                refreshGenericSheetCompartment(st.tabType, false, activeRunTenantId, '').catch(() => {});
               }
             }
           }
@@ -11666,11 +11678,11 @@ export default function App() {
                         <img
                           src={
                             hoveredSidebarItem?.id === 'logo-defibeo'
-                              ? 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconcolored2027.svg'
-                              : 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoicongrey2027.svg'
+                              ? 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027isblack.svg'
+                              : 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027isgrey.svg'
                           }
                           alt="Logiciel Defibeo"
-                          className="sidebar-nav-icon-bounce w-[46px] h-[46px] object-contain block select-none pointer-events-none shrink-0"
+                          className="sidebar-nav-icon-bounce w-[38px] h-[38px] object-contain block select-none pointer-events-none shrink-0"
                           referrerPolicy="no-referrer"
                         />
                       </div>
@@ -11714,9 +11726,9 @@ export default function App() {
                         onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'logo-defibeo' ? null : prev))}
                       >
                         <img
-                          src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconcolored2027.svg"
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027isblack.svg"
                           alt="Logiciel Defibeo"
-                          className="sidebar-nav-icon-bounce w-[46px] h-[46px] object-contain block select-none pointer-events-none shrink-0"
+                          className="sidebar-nav-icon-bounce w-[38px] h-[38px] object-contain block select-none pointer-events-none shrink-0"
                           referrerPolicy="no-referrer"
                         />
                       </div>

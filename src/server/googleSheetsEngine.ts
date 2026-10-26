@@ -1,6 +1,18 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import https from 'https';
+import dns from 'dns';
+import net from 'net';
+
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (_) {}
+try {
+  if (typeof (net as any).setDefaultAutoSelectFamily === 'function') {
+    (net as any).setDefaultAutoSelectFamily(false);
+  }
+} catch (_) {}
 
 export type SheetTabType =
   | 'defibrillateurs'
@@ -236,66 +248,117 @@ export function extractSpreadsheetIdAndGid(urlOrId: string): { spreadsheetId: st
   return null;
 }
 
+let inFlightTokenPromise: Promise<string | null> | null = null;
+
+function postFormUrlEncodedIpv4(urlStr: string, bodyStr: string, timeoutMs = 12000): Promise<{ ok: boolean; status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const u = new URL(urlStr);
+    const req = https.request(
+      {
+        hostname: u.hostname,
+        port: u.port || 443,
+        path: u.pathname + u.search,
+        method: 'POST',
+        family: 4,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(bodyStr),
+        },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf-8');
+          const status = res.statusCode || 500;
+          resolve({ ok: status >= 200 && status < 300, status, text });
+        });
+      }
+    );
+    req.on('timeout', () => {
+      req.destroy(new Error('Request timeout'));
+    });
+    req.on('error', (err) => reject(err));
+    req.write(bodyStr);
+    req.end();
+  });
+}
+
 async function getServiceAccountAccessToken(): Promise<string | null> {
   if (cachedAccessToken && Date.now() < cachedAccessToken.expiresAt) {
     return cachedAccessToken.token;
   }
-  const cfg = getGlobalGoogleConfig();
-  if (!cfg.serviceAccountJson) return null;
+  if (inFlightTokenPromise) {
+    return inFlightTokenPromise;
+  }
 
-  try {
-    const sa = JSON.parse(cfg.serviceAccountJson);
-    const clientEmail = sa.client_email;
-    const privateKey = sa.private_key;
-    if (!clientEmail || !privateKey) return null;
+  inFlightTokenPromise = (async (): Promise<string | null> => {
+    const cfg = getGlobalGoogleConfig();
+    if (!cfg.serviceAccountJson) return null;
 
-    const nowSec = Math.floor(Date.now() / 1000);
-    const header = { alg: 'RS256', typ: 'JWT' };
-    const claimSet = {
-      iss: clientEmail,
-      scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive',
-      aud: 'https://oauth2.googleapis.com/token',
-      exp: nowSec + 3600,
-      iat: nowSec,
-    };
+    try {
+      const sa = JSON.parse(cfg.serviceAccountJson);
+      const clientEmail = sa.client_email;
+      const privateKey = sa.private_key;
+      if (!clientEmail || !privateKey) return null;
 
-    const base64UrlEncode = (obj: any) =>
-      Buffer.from(JSON.stringify(obj))
-        .toString('base64')
+      const nowSec = Math.floor(Date.now() / 1000);
+      const header = { alg: 'RS256', typ: 'JWT' };
+      const claimSet = {
+        iss: clientEmail,
+        scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive',
+        aud: 'https://oauth2.googleapis.com/token',
+        exp: nowSec + 3600,
+        iat: nowSec,
+      };
+
+      const base64UrlEncode = (obj: any) =>
+        Buffer.from(JSON.stringify(obj))
+          .toString('base64')
+          .replace(/=/g, '')
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_');
+
+      const unsignedToken = `${base64UrlEncode(header)}.${base64UrlEncode(claimSet)}`;
+      const signer = crypto.createSign('RSA-SHA256');
+      signer.update(unsignedToken);
+      signer.end();
+      const signature = signer
+        .sign(privateKey, 'base64')
         .replace(/=/g, '')
         .replace(/\+/g, '-')
         .replace(/\//g, '_');
 
-    const unsignedToken = `${base64UrlEncode(header)}.${base64UrlEncode(claimSet)}`;
-    const signer = crypto.createSign('RSA-SHA256');
-    signer.update(unsignedToken);
-    signer.end();
-    const signature = signer
-      .sign(privateKey, 'base64')
-      .replace(/=/g, '')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_');
+      const jwt = `${unsignedToken}.${signature}`;
+      const bodyStr = `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${encodeURIComponent(jwt)}`;
 
-    const jwt = `${unsignedToken}.${signature}`;
-    const res = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${encodeURIComponent(jwt)}`,
-    });
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const res = await postFormUrlEncodedIpv4('https://oauth2.googleapis.com/token', bodyStr, 12000);
+          if (res.ok && res.text) {
+            const data = JSON.parse(res.text);
+            if (data && data.access_token) {
+              cachedAccessToken = {
+                token: data.access_token,
+                expiresAt: Date.now() + 50 * 60 * 1000,
+              };
+              return data.access_token;
+            }
+          }
+        } catch (_) {
+          if (attempt < 3) {
+            await new Promise((r) => setTimeout(r, 350 * attempt));
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  })().finally(() => {
+    inFlightTokenPromise = null;
+  });
 
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data && data.access_token) {
-      cachedAccessToken = {
-        token: data.access_token,
-        expiresAt: Date.now() + 50 * 60 * 1000,
-      };
-      return data.access_token;
-    }
-  } catch (err) {
-    console.warn('[GoogleSheetsEngine] Service account token generation failed:', err);
-  }
-  return null;
+  return inFlightTokenPromise;
 }
 
 export function parseCsvText(csvText: string): string[][] {
@@ -5553,8 +5616,8 @@ function saveMirrorOverlay(tenantId: string, tabType: SheetTabType, spreadsheetI
   const p = getMirrorFilePath(tenantId, tabType, spreadsheetId);
   try {
     fs.writeFileSync(p, JSON.stringify(overlay), 'utf-8');
-  } catch (err) {
-    console.warn('[GoogleSheetsEngine] Mirror save error:', err);
+  } catch (err: any) {
+    console.warn('[GoogleSheetsEngine] Mirror save error:', err?.message || String(err));
   }
 }
 
@@ -7174,8 +7237,8 @@ async function fetchLightweightSheetContextForColdUpsert(
     }
 
     return { headers: effectiveHeaders, hasRemoteHeaders, matchedByRecordIdx };
-  } catch (err) {
-    console.warn('[GoogleSheetsEngine] Lightweight cold upsert lookup warning:', err);
+  } catch (err: any) {
+    console.warn('[GoogleSheetsEngine] Lightweight cold upsert lookup warning:', err?.message || String(err));
     return { headers: defaultHeaders, hasRemoteHeaders: false, matchedByRecordIdx };
   }
 }
@@ -7532,7 +7595,7 @@ export async function upsertRecordsToTenantSheet(
         }
       } catch (err: any) {
         remoteError = err?.message || String(err);
-        console.warn('[GoogleSheetsEngine] Remote Sheets API write warning:', err);
+        console.warn('[GoogleSheetsEngine] Remote Sheets API write warning:', remoteError);
       }
     }
 
@@ -7561,8 +7624,8 @@ export async function upsertRecordsToTenantSheet(
           syncedToRemoteSheet = true;
           remoteError = '';
         }
-      } catch (err) {
-        console.warn('[GoogleSheetsEngine] Apps Script Bridge write warning:', err);
+      } catch (err: any) {
+        console.warn('[GoogleSheetsEngine] Apps Script Bridge write warning:', err?.message || String(err));
       }
     }
 

@@ -4,12 +4,22 @@ import path from "path";
 import fs from "fs";
 import zlib from "zlib";
 import crypto from "crypto";
+import dns from "dns";
+import net from "net";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc, setLogLevel } from "firebase/firestore";
 import dotenv from "dotenv";
 
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (_) {}
+try {
+  if (typeof (net as any).setDefaultAutoSelectFamily === 'function') {
+    (net as any).setDefaultAutoSelectFamily(false);
+  }
+} catch (_) {}
 try {
   setLogLevel('silent');
 } catch (_) {}
@@ -149,7 +159,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallbackValue: T
   ]);
 }
 
-let serverFirestoreQuotaExhaustedUntil = Date.now() + 24 * 3600 * 1000;
+let serverFirestoreQuotaExhaustedUntil = 0;
 function isServerFirestoreQuotaExhausted(): boolean {
   return Date.now() < serverFirestoreQuotaExhaustedUntil;
 }
@@ -3773,6 +3783,12 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     }
   }
 
+  if (isCompanyCol || isTenantDbCol) {
+    try {
+      await syncTenantConfigFromFirestore(activeTenant);
+    } catch (_) {}
+  }
+
   // 1. FAST PATH: Check in-memory store and disk files for this tenant across all collection name aliases
   const colAliases = getCollectionNameAliases(colName);
   const candidateLookupKeys: string[] = [];
@@ -4205,9 +4221,15 @@ async function warmupDefibrillateursStore() {
       console.log(`[Warmup] fastDefibIndex pre-warmed with ${fastDefibIndex.size} entries.`);
     }
 
-    // 5. Pre-warm configured Google Spreadsheets in background so first read/write is already warm
+    // 5. Pre-warm tenant configs from Firestore and configured Google Spreadsheets in background
     setTimeout(async () => {
       try {
+        const regTenants = getAllServerRegisteredTenantsSync();
+        const tenantIdsToSync = Array.from(
+          new Set(['demo', 'D27', 'D28', 'D26', 'D7', ...regTenants.map((t: any) => String(t?.id || '').trim()).filter(Boolean)])
+        );
+        await Promise.allSettled(tenantIdsToSync.map(tid => syncTenantConfigFromFirestore(tid, true)));
+
         const urlsToWarm = new Set<string>();
         for (const [k, v] of serverMemoryStore.entries()) {
           if (v && typeof v === 'object' && !Array.isArray(v)) {
@@ -4947,77 +4969,230 @@ async function warmupDefibrillateursStore() {
 
   const firestoreDocCheckCacheMs = new Map<string, number>();
   const firestoreDocCheckInFlight = new Map<string, Promise<any>>();
+  const tenantConfigFirestoreSyncMs = new Map<string, number>();
+  const tenantConfigFirestoreSyncInFlight = new Map<string, Promise<void>>();
+
+  async function syncTenantConfigFromFirestore(tenantId: string, forceRefresh = false): Promise<void> {
+    const activeTenant = (tenantId || 'demo').trim();
+    const cleanTid = activeTenant.toLowerCase();
+    const now = Date.now();
+    const lastSync = tenantConfigFirestoreSyncMs.get(cleanTid) || 0;
+    if (!forceRefresh && now - lastSync < 8000) {
+      return;
+    }
+    const existingFlight = tenantConfigFirestoreSyncInFlight.get(cleanTid);
+    if (existingFlight) {
+      return existingFlight;
+    }
+
+    const job = (async () => {
+      try {
+        const isInvalidPlaceholderUrl = (u?: any) =>
+          !u || typeof u !== 'string' || !u.trim() || u.includes('1tB1e41') || u.includes('2mX5O6r9hD0i3Z9m');
+
+        const tAliases = getTenantAliasesSync(activeTenant);
+        const isDNum = /^d\d+$/i.test(activeTenant);
+        const isNum = /^\d+$/.test(activeTenant);
+        const numOnly = isDNum || isNum ? activeTenant.replace(/^d/i, '') : '';
+        const candidateTenants = Array.from(
+          new Set([
+            activeTenant,
+            activeTenant.toUpperCase(),
+            activeTenant.toLowerCase(),
+            ...(numOnly ? [`D${numOnly}`, `d${numOnly}`, numOnly] : []),
+            ...Array.from(tAliases).flatMap(a => [a, a.toUpperCase(), a.toLowerCase()]),
+          ])
+        ).filter(Boolean);
+
+        const docKeysToFetch = new Set<string>();
+        for (const cand of candidateTenants) {
+          for (const suffix of ['tenantDatabases', 'companyInfo', 'company_info']) {
+            if (cand.toLowerCase() === 'demo') {
+              docKeysToFetch.add(suffix);
+              docKeysToFetch.add(`demo_${suffix}`);
+              docKeysToFetch.add(`defib_demo_${suffix}`);
+            } else {
+              docKeysToFetch.add(`${cand}_${suffix}`);
+              docKeysToFetch.add(`defib_${cand}_${suffix}`);
+            }
+          }
+        }
+        docKeysToFetch.add('registered_tenants');
+        docKeysToFetch.add('tenantDatabases');
+        docKeysToFetch.add('defib_tenantDatabases');
+
+        const fetchSingleDoc = async (docKey: string): Promise<{ key: string; val: any }> => {
+          try {
+            const restRes = await fetchFirestoreDocumentRest(docKey, 2500);
+            let raw = restRes.data?.value !== undefined ? restRes.data.value : restRes.data;
+            if (!raw && !restRes.notFound) {
+              const snap = await withTimeout(getDoc(doc(db, 'appData', docKey)), 2000, null);
+              if (snap && snap.exists()) {
+                const sd = snap.data();
+                raw = sd?.value !== undefined ? sd.value : sd;
+              }
+            }
+            return { key: docKey, val: raw || null };
+          } catch (_) {
+            return { key: docKey, val: null };
+          }
+        };
+
+        const fetchedResults = await Promise.all(Array.from(docKeysToFetch).map(fetchSingleDoc));
+        tenantConfigFirestoreSyncMs.set(cleanTid, Date.now());
+
+        const allSheetFieldKeys = Array.from(new Set(Object.values(SHEET_TAB_FIELD_MAP)));
+        const mergedSheetUrls: Record<string, string> = {};
+        let mergedCompanyProps: Record<string, any> = {};
+
+        // 1. Seed from existing local memory / disk first (lowest priority)
+        const localSourceObjects: any[] = [];
+        for (const cand of candidateTenants) {
+          for (const suffix of ['companyInfo', 'tenantDatabases', 'company_info']) {
+            const k = cand.toLowerCase() === 'demo' ? suffix : `${cand}_${suffix}`;
+            if (serverMemoryStore.has(k)) {
+              const mv = serverMemoryStore.get(k);
+              if (mv && typeof mv === 'object' && !Array.isArray(mv)) localSourceObjects.push(mv);
+            }
+            const df = path.join(COLLECTIONS_DIR, `${k}.json`);
+            if (fs.existsSync(df)) {
+              try {
+                const dv = JSON.parse(fs.readFileSync(df, 'utf-8'));
+                const unwrapped = dv?.value !== undefined ? dv.value : dv;
+                if (unwrapped && typeof unwrapped === 'object' && !Array.isArray(unwrapped)) {
+                  localSourceObjects.push(unwrapped);
+                }
+              } catch (_) {}
+            }
+          }
+        }
+
+        // 2. Collect Firestore objects (higher priority, sorted by updatedAt ascending so newest wins)
+        const firestoreObjects: any[] = [];
+        for (const { key, val } of fetchedResults) {
+          if (!val) continue;
+          if (Array.isArray(val)) {
+            for (const item of val) {
+              if (!item || typeof item !== 'object') continue;
+              const tidStr = String(item.tenantId || item.envId || item.shortEnvId || item.id || '').trim().toLowerCase();
+              if (tAliases.has(tidStr) || candidateTenants.some(c => c.toLowerCase() === tidStr)) {
+                firestoreObjects.push(item);
+              }
+            }
+          } else if (typeof val === 'object') {
+            firestoreObjects.push(val);
+            firestoreDocCheckCacheMs.set(key, Date.now());
+          }
+        }
+
+        firestoreObjects.sort((a, b) => {
+          const ta = a?.updatedAt ? Date.parse(String(a.updatedAt)) || 0 : 0;
+          const tb = b?.updatedAt ? Date.parse(String(b.updatedAt)) || 0 : 0;
+          return ta - tb;
+        });
+
+        for (const src of [...localSourceObjects, ...firestoreObjects]) {
+          if (!src || typeof src !== 'object' || Array.isArray(src)) continue;
+          for (const [k, v] of Object.entries(src)) {
+            if (k.startsWith('spreadsheet')) continue;
+            if (v !== undefined && v !== null && v !== '') {
+              if (k === 'name' && v === 'Mon Cabinet' && mergedCompanyProps.name && mergedCompanyProps.name !== 'Mon Cabinet') {
+                continue;
+              }
+              mergedCompanyProps[k] = v;
+            }
+          }
+          for (const fk of allSheetFieldKeys) {
+            const urlKey = `${fk}Url`;
+            const candidateUrl = !isInvalidPlaceholderUrl(src[fk])
+              ? String(src[fk]).trim()
+              : !isInvalidPlaceholderUrl(src[urlKey])
+              ? String(src[urlKey]).trim()
+              : '';
+            if (candidateUrl) {
+              mergedSheetUrls[fk] = candidateUrl;
+              mergedSheetUrls[urlKey] = candidateUrl;
+            }
+          }
+        }
+
+        if (Object.keys(mergedSheetUrls).length === 0 && Object.keys(mergedCompanyProps).length === 0) {
+          return;
+        }
+
+        const primaryCanonicalTenant = cleanTid === 'demo' ? 'demo' : activeTenant.toUpperCase();
+        const targetPrefixes = Array.from(
+          new Set([
+            activeTenant,
+            primaryCanonicalTenant,
+            ...Array.from(tAliases)
+              .filter(a => /^d\d+$/i.test(a))
+              .map(a => a.toUpperCase()),
+          ])
+        );
+
+        for (const pfx of targetPrefixes) {
+          const compKey = pfx.toLowerCase() === 'demo' ? 'companyInfo' : `${pfx}_companyInfo`;
+          const compInfoAliasKey = pfx.toLowerCase() === 'demo' ? 'company_info' : `${pfx}_company_info`;
+          const dbKey = pfx.toLowerCase() === 'demo' ? 'tenantDatabases' : `${pfx}_tenantDatabases`;
+
+          const existingComp = serverMemoryStore.get(compKey);
+          const safeComp = existingComp && typeof existingComp === 'object' && !Array.isArray(existingComp) ? existingComp : {};
+          const nextComp = {
+            ...safeComp,
+            ...mergedCompanyProps,
+            ...mergedSheetUrls,
+          };
+          serverMemoryStore.set(compKey, nextComp);
+          serverMemoryStore.set(compInfoAliasKey, nextComp);
+          firestoreDocCheckCacheMs.set(compKey, Date.now());
+          persistSingleCollectionToDisk(compKey, nextComp);
+
+          const existingDb = serverMemoryStore.get(dbKey);
+          const safeDb = existingDb && typeof existingDb === 'object' && !Array.isArray(existingDb) ? existingDb : {};
+          const nextDb = {
+            ...safeDb,
+            ...mergedSheetUrls,
+            updatedAt: mergedCompanyProps.updatedAt || safeDb.updatedAt || new Date().toISOString(),
+          };
+          serverMemoryStore.set(dbKey, nextDb);
+          firestoreDocCheckCacheMs.set(dbKey, Date.now());
+          persistSingleCollectionToDisk(dbKey, nextDb);
+        }
+      } catch (err) {
+        console.warn(`[syncTenantConfigFromFirestore] Warning syncing config for ${activeTenant}:`, err);
+      } finally {
+        tenantConfigFirestoreSyncInFlight.delete(cleanTid);
+      }
+    })();
+
+    tenantConfigFirestoreSyncInFlight.set(cleanTid, job);
+    return job;
+  }
 
   async function resolveTenantSpreadsheetUrl(tenantId: string, tabType: SheetTabType, explicitUrl?: string): Promise<string> {
     const isInvalidPlaceholderUrl = (u?: string) => !u || u.includes('1tB1e41') || u.includes('2mX5O6r9hD0i3Z9m');
-    // 1. Check server-authoritative tenant spreadsheet URL first
+    // 1. Ensure Firestore config for this tenant is synced before checking memory/disk
+    try {
+      await syncTenantConfigFromFirestore(tenantId, false);
+    } catch (_) {}
+
+    // 2. Check server-authoritative tenant spreadsheet URL
     const syncUrl = getTenantSpreadsheetUrlSync(tenantId, tabType);
     if (syncUrl && !isInvalidPlaceholderUrl(syncUrl) && extractSpreadsheetIdAndGid(syncUrl)) {
       return syncUrl;
     }
-    // 2. Check if companyInfo or tenantDatabases exists in Firestore REST (across all tenant aliases e.g. D27 / D58)
+
+    // 3. Force a fresh Firestore config sync if still not found
     try {
-      const activeTenant = (tenantId || 'demo').trim();
-      const tAliases = getTenantAliasesSync(activeTenant);
-      const fields = getSheetTabFieldCandidates(tabType);
-      const isDNum = /^d\d+$/i.test(activeTenant);
-      const isNum = /^\d+$/.test(activeTenant);
-      const numOnly = (isDNum || isNum) ? activeTenant.replace(/^d/i, '') : '';
-      const candidates = Array.from(new Set([
-        activeTenant,
-        activeTenant.toUpperCase(),
-        activeTenant.toLowerCase(),
-        ...(numOnly ? [`D${numOnly}`, `d${numOnly}`] : []),
-        ...Array.from(tAliases).filter(a => /^d\d+$/i.test(a)).flatMap(a => [a.toUpperCase(), a.toLowerCase()]),
-      ]));
-      const now = Date.now();
-      for (const cand of candidates) {
-        for (const suffix of ['tenantDatabases', 'companyInfo', 'company_info']) {
-          const docKey = cand === 'demo' ? suffix : `${cand}_${suffix}`;
-          const lastCheck = firestoreDocCheckCacheMs.get(docKey) || 0;
-          let obj: any = null;
-          if (now - lastCheck < 30000) {
-            obj = serverMemoryStore.get(docKey) || null;
-          } else {
-            let p = firestoreDocCheckInFlight.get(docKey);
-            if (!p) {
-              p = fetchFirestoreDocumentRest(docKey, 1500)
-                .then(restRes => {
-                  firestoreDocCheckCacheMs.set(docKey, Date.now());
-                  const resolvedObj = restRes.data?.value || restRes.data;
-                  if (resolvedObj && typeof resolvedObj === 'object' && !Array.isArray(resolvedObj)) {
-                    const localExisting = serverMemoryStore.get(docKey);
-                    const mergedObj =
-                      localExisting && typeof localExisting === 'object' && !Array.isArray(localExisting)
-                        ? { ...resolvedObj, ...localExisting }
-                        : resolvedObj;
-                    serverMemoryStore.set(docKey, mergedObj);
-                    persistSingleCollectionToDisk(docKey, mergedObj);
-                    return mergedObj;
-                  }
-                  return serverMemoryStore.get(docKey) || null;
-                })
-                .catch(() => serverMemoryStore.get(docKey) || null)
-                .finally(() => {
-                  firestoreDocCheckInFlight.delete(docKey);
-                });
-              firestoreDocCheckInFlight.set(docKey, p);
-            }
-            obj = await p;
-          }
-          if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-            for (const f of fields) {
-              if (obj[f] && typeof obj[f] === 'string' && extractSpreadsheetIdAndGid(obj[f].trim())) {
-                const foundUrl = obj[f].trim();
-                rememberTenantSpreadsheetUrl(activeTenant, tabType, foundUrl);
-                return foundUrl;
-              }
-            }
-          }
-        }
+      await syncTenantConfigFromFirestore(tenantId, true);
+      const freshSyncUrl = getTenantSpreadsheetUrlSync(tenantId, tabType);
+      if (freshSyncUrl && !isInvalidPlaceholderUrl(freshSyncUrl) && extractSpreadsheetIdAndGid(freshSyncUrl)) {
+        return freshSyncUrl;
       }
     } catch (_) {}
-    // 3. Use explicitUrl fallback and remember it for this tenant if no URL was stored yet
+
+    // 4. Use explicitUrl fallback and remember it for this tenant if no URL was stored yet
     if (explicitUrl && explicitUrl.trim() && !isInvalidPlaceholderUrl(explicitUrl) && extractSpreadsheetIdAndGid(explicitUrl.trim())) {
       const cleanExplicit = explicitUrl.trim();
       rememberTenantSpreadsheetUrl(tenantId, tabType, cleanExplicit);
@@ -6751,6 +6926,7 @@ async function warmupDefibrillateursStore() {
             'spreadsheetApparenceRapportsPdf',
             'spreadsheetCommunicationPortailClient',
             'spreadsheetObservateurActionsSuspectes',
+            'spreadsheetExportations',
           ];
 
           const existingInMem = serverMemoryStore.get(collectionKey);

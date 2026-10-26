@@ -1267,24 +1267,12 @@ export default function SettingsModal({
       const cleanDefault = getCleanTenantDefaultCompany(activeTid);
 
       let comp: CompanyInfo = { ...cleanDefault, ...(companyInfo || {}) };
-      const cachedDefib = localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) || 
-                          localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_defibrillateurs`) || 
-                          localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_defibrillateurs`) || '';
-      const cachedAutres = localStorage.getItem(`defib_${activeTid}_spreadsheet_autres_materiels`) || 
-                           localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_autres_materiels`) || 
-                           localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_autres_materiels`) || '';
-      const cachedClients = localStorage.getItem(`defib_${activeTid}_spreadsheet_clients`) || 
-                            localStorage.getItem(`defib_${activeTid.toLowerCase()}_spreadsheet_clients`) || 
-                            localStorage.getItem(`defib_${activeTid.toUpperCase()}_spreadsheet_clients`) || '';
+      const cachedDefib = getTenantSpreadsheetUrl('spreadsheetDefibrillateurs', comp, activeTid);
+      const cachedAutres = getTenantSpreadsheetUrl('spreadsheetAutresMateriels', comp, activeTid);
+      const cachedClients = getTenantSpreadsheetUrl('spreadsheetClients', comp, activeTid);
       const cachedExtraMap: Record<string, string> = {};
       for (const f of EXTRA_SPREADSHEET_FIELDS) {
-        cachedExtraMap[f.key] =
-          (comp as any)[f.key] ||
-          (comp as any)[f.urlKey] ||
-          localStorage.getItem(`defib_${activeTid}_${f.storageSuffix}`) ||
-          localStorage.getItem(`defib_${activeTid.toLowerCase()}_${f.storageSuffix}`) ||
-          localStorage.getItem(`defib_${activeTid.toUpperCase()}_${f.storageSuffix}`) ||
-          '';
+        cachedExtraMap[f.key] = getTenantSpreadsheetUrl(f.key, comp, activeTid);
       }
 
       const hasReglagesSheet = Boolean(cachedExtraMap.spreadsheetReglages);
@@ -1391,8 +1379,29 @@ export default function SettingsModal({
             '';
 
           const extraEffFields: Record<string, string> = {};
-          const tKeys = [activeTid, activeTid.toLowerCase(), activeTid.toUpperCase()];
+          const tKeys = Array.from(new Set([activeTid, activeTid.toLowerCase(), activeTid.toUpperCase()])).filter(Boolean);
           let needsFirestoreDbHeal = false;
+          if (effDefibs) {
+            try {
+              for (const tid of tKeys) {
+                localStorage.setItem(`defib_${tid}_spreadsheet_defibrillateurs`, effDefibs);
+              }
+            } catch (_) {}
+          }
+          if (effAutres) {
+            try {
+              for (const tid of tKeys) {
+                localStorage.setItem(`defib_${tid}_spreadsheet_autres_materiels`, effAutres);
+              }
+            } catch (_) {}
+          }
+          if (effClients) {
+            try {
+              for (const tid of tKeys) {
+                localStorage.setItem(`defib_${tid}_spreadsheet_clients`, effClients);
+              }
+            } catch (_) {}
+          }
           for (const f of EXTRA_SPREADSHEET_FIELDS) {
             const remoteVal =
               validDb?.[f.key] ||
@@ -1400,7 +1409,7 @@ export default function SettingsModal({
               (validCompany as any)?.[f.key] ||
               (validCompany as any)?.[f.urlKey] ||
               '';
-            const effVal = remoteVal || cachedExtraMap[f.key] || '';
+            const effVal = remoteVal || cachedExtraMap[f.key] || getTenantSpreadsheetUrl(f.key, validCompany as CompanyInfo, activeTid) || '';
             if (!remoteVal && effVal) {
               needsFirestoreDbHeal = true;
             }
@@ -1410,12 +1419,6 @@ export default function SettingsModal({
               try {
                 for (const tid of tKeys) {
                   localStorage.setItem(`defib_${tid}_${f.storageSuffix}`, effVal);
-                }
-              } catch (_) {}
-            } else {
-              try {
-                for (const tid of tKeys) {
-                  localStorage.removeItem(`defib_${tid}_${f.storageSuffix}`);
                 }
               } catch (_) {}
             }
@@ -1496,6 +1499,37 @@ export default function SettingsModal({
       lastPropsCompanyRef.current = companyInfo;
     }
   }, [isOpen, isPage, propTenantId, getCleanTenantDefaultCompany]);
+
+  // Synchronize incoming spreadsheet URLs from companyInfo prop if background sync finishes while SettingsModal is open
+  React.useEffect(() => {
+    if ((!isOpen && !isPage) || !companyInfo) return;
+    setLocalCompany(prev => {
+      let changed = false;
+      const next: any = { ...prev };
+      const coreKeys = [
+        ['spreadsheetDefibrillateurs', 'spreadsheetDefibrillateursUrl'],
+        ['spreadsheetAutresMateriels', 'spreadsheetAutresMaterielsUrl'],
+        ['spreadsheetClients', 'spreadsheetClientsUrl'],
+      ];
+      for (const [k, urlK] of coreKeys) {
+        const incomingVal = String((companyInfo as any)[k] || (companyInfo as any)[urlK] || '').trim();
+        if (incomingVal && !String(prev[k as keyof CompanyInfo] || '').trim()) {
+          next[k] = incomingVal;
+          next[urlK] = incomingVal;
+          changed = true;
+        }
+      }
+      for (const f of EXTRA_SPREADSHEET_FIELDS) {
+        const incomingVal = String((companyInfo as any)[f.key] || (companyInfo as any)[f.urlKey] || '').trim();
+        if (incomingVal && !String((prev as any)[f.key] || '').trim()) {
+          next[f.key] = incomingVal;
+          next[f.urlKey as string] = incomingVal;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [companyInfo, isOpen, isPage]);
 
   // States for the member addition form inside the local state
   const [newMemberName, setNewMemberName] = React.useState('');
