@@ -2020,18 +2020,141 @@ ${question}`;
     }
   });
 
-// Helper function to fetch registered tenants directly from the Master Google Spreadsheet
+// Helper function to fetch registered tenants from Master Google Spreadsheet + Firestore in complement
 let cachedTenantsList: any[] = getCachedMasterTenantsSync();
 let lastTenantsFetchTime = 0;
 
+function mergeTenantRecordsComplementary(baseTenant: any, incomingTenant: any): any {
+  if (!baseTenant) return incomingTenant;
+  if (!incomingTenant) return baseTenant;
+
+  const adminEmailsSet = new Set<string>();
+  const addEmail = (e: any) => {
+    const clean = String(e || '').trim().toLowerCase();
+    if (clean && clean.includes('@')) adminEmailsSet.add(clean);
+  };
+  addEmail(baseTenant.adminEmail);
+  addEmail(baseTenant.companyEmail);
+  if (Array.isArray(baseTenant.adminEmails)) baseTenant.adminEmails.forEach(addEmail);
+  addEmail(incomingTenant.adminEmail);
+  addEmail(incomingTenant.companyEmail);
+  if (Array.isArray(incomingTenant.adminEmails)) incomingTenant.adminEmails.forEach(addEmail);
+
+  // Merge masterUsers by email + role
+  const usersMap = new Map<string, any>();
+  const addUsers = (arr: any[]) => {
+    if (!Array.isArray(arr)) return;
+    for (const u of arr) {
+      if (!u || !u.email) continue;
+      const key = String(u.email).trim().toLowerCase();
+      if (!key) continue;
+      usersMap.set(key, { ...(usersMap.get(key) || {}), ...u });
+    }
+  };
+  addUsers(baseTenant.masterUsers);
+  addUsers(incomingTenant.masterUsers);
+
+  // Merge spreadsheetUrls additively (never overwrite non-empty with empty)
+  const mergedSpreadsheetUrls: Record<string, string> = {};
+  const collectUrls = (obj: any) => {
+    if (!obj || typeof obj !== 'object') return;
+    const sources = [obj, obj.spreadsheetUrls];
+    for (const src of sources) {
+      if (!src || typeof src !== 'object') continue;
+      for (const [k, v] of Object.entries(src)) {
+        if (k.startsWith('spreadsheet') && k !== 'spreadsheetUrls' && typeof v === 'string' && v.trim()) {
+          mergedSpreadsheetUrls[k] = v.trim();
+        }
+      }
+    }
+  };
+  collectUrls(baseTenant);
+  collectUrls(incomingTenant);
+
+  const merged: any = { ...baseTenant };
+  for (const [k, v] of Object.entries(incomingTenant)) {
+    if (k === 'masterUsers' || k === 'spreadsheetUrls' || k === 'adminEmails') continue;
+    if (k.startsWith('spreadsheet')) continue;
+    if (v !== undefined && v !== null && v !== '') {
+      merged[k] = v;
+    }
+  }
+
+  merged.adminEmails = Array.from(adminEmailsSet);
+  merged.masterUsers = Array.from(usersMap.values());
+  merged.spreadsheetUrls = mergedSpreadsheetUrls;
+  Object.assign(merged, mergedSpreadsheetUrls);
+  return merged;
+}
+
 async function getRegisteredTenantsFromDb(forceRefresh = false): Promise<any[]> {
   try {
-    const list = await fetchMasterTenantsFromSpreadsheet(forceRefresh);
-    if (Array.isArray(list) && list.length > 0) {
-      cachedTenantsList = list;
+    const sheetList = await fetchMasterTenantsFromSpreadsheet(forceRefresh);
+
+    // Also gather existing Firestore/disk registered_tenants so Super-Admin emails and URLs work in complement
+    let existingList: any[] = [];
+    const memList = serverMemoryStore.get('registered_tenants');
+    if (Array.isArray(memList)) {
+      existingList = [...memList];
+    } else {
+      const diskReg = path.join(COLLECTIONS_DIR, 'registered_tenants.json');
+      if (fs.existsSync(diskReg)) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(diskReg, 'utf-8'));
+          const unwrapped = parsed?.value !== undefined ? parsed.value : parsed;
+          if (Array.isArray(unwrapped)) existingList = unwrapped;
+        } catch (_) {}
+      }
+    }
+
+    const mergedById = new Map<string, any>();
+    for (const item of SERVER_KNOWN_TENANTS) {
+      const idKey = String(item?.id || '').trim().toLowerCase();
+      if (idKey) mergedById.set(idKey, { ...item });
+    }
+    for (const item of existingList) {
+      const idKey = String(item?.id || '').trim().toLowerCase();
+      if (!idKey) continue;
+      mergedById.set(idKey, mergeTenantRecordsComplementary(mergedById.get(idKey), item));
+    }
+    if (Array.isArray(sheetList)) {
+      for (const item of sheetList) {
+        const idKey = String(item?.id || '').trim().toLowerCase();
+        if (!idKey) continue;
+        mergedById.set(idKey, mergeTenantRecordsComplementary(mergedById.get(idKey), item));
+      }
+    }
+
+    const finalTenants = Array.from(mergedById.values());
+
+    // Additively enrich each tenant's in-memory tenantDatabases / companyInfo with any non-empty spreadsheetUrls from Master Sheet (without overwriting non-empty Firestore URLs)
+    for (const tnt of finalTenants) {
+      const tid = String(tnt?.id || '').trim();
+      const sUrls = tnt?.spreadsheetUrls;
+      if (!tid || !sUrls || typeof sUrls !== 'object' || Object.keys(sUrls).length === 0) continue;
+      const pfx = tid.toLowerCase() === 'demo' ? '' : `${tid.toUpperCase()}_`;
+      for (const suffix of ['tenantDatabases', 'companyInfo']) {
+        const storeKey = pfx ? `${pfx}${suffix}` : suffix;
+        const currentObj = serverMemoryStore.get(storeKey);
+        const safeObj = currentObj && typeof currentObj === 'object' && !Array.isArray(currentObj) ? { ...currentObj } : {};
+        let changed = false;
+        for (const [uk, uv] of Object.entries(sUrls)) {
+          if (typeof uv === 'string' && uv.trim() && (!safeObj[uk] || !String(safeObj[uk]).trim())) {
+            safeObj[uk] = uv.trim();
+            changed = true;
+          }
+        }
+        if (changed) {
+          serverMemoryStore.set(storeKey, safeObj);
+        }
+      }
+    }
+
+    if (finalTenants.length > 0) {
+      cachedTenantsList = finalTenants;
       lastTenantsFetchTime = Date.now();
-      serverMemoryStore.set('registered_tenants', list);
-      return list;
+      serverMemoryStore.set('registered_tenants', finalTenants);
+      return finalTenants;
     }
   } catch (e) {
     console.error("Error fetching master tenants spreadsheet in server:", e);
@@ -2906,14 +3029,14 @@ function getAllServerRegisteredTenantsSync(): any[] {
       if (!item || typeof item !== 'object') continue;
       const tid = String(item.id || '').trim().toLowerCase();
       if (!tid) continue;
-      mergedMap.set(tid, { ...(mergedMap.get(tid) || {}), ...item });
+      mergedMap.set(tid, mergeTenantRecordsComplementary(mergedMap.get(tid), item));
     }
   };
   addList(SERVER_KNOWN_TENANTS);
-  const masterList = getCachedMasterTenantsSync();
-  if (Array.isArray(masterList)) addList(masterList);
   const memList = serverMemoryStore.get('registered_tenants');
   if (Array.isArray(memList)) addList(memList);
+  const masterList = getCachedMasterTenantsSync();
+  if (Array.isArray(masterList)) addList(masterList);
   return Array.from(mergedMap.values());
 }
 
@@ -3418,6 +3541,37 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
         envId: effTenantId,
         tenantId: effTenantId
       });
+    }
+
+    // Include users defined in the MEGA ADMIN Master Spreadsheet (UserEmail1..10 & UserRole1..10) in complement
+    if (Array.isArray(tenantMatch.masterUsers) && tenantMatch.masterUsers.length > 0) {
+      for (const mu of tenantMatch.masterUsers) {
+        const muEmail = String(mu?.email || '').trim();
+        if (!muEmail) continue;
+        const alreadyInList = list.some(
+          (m: any) => m && String(m.email || '').trim().toLowerCase() === muEmail.toLowerCase()
+        );
+        if (!alreadyInList) {
+          const emailPrefix = muEmail.split('@')[0] || `Membre ${mu.slotIndex || ''}`;
+          const formattedName = emailPrefix
+            .split(/[._-]+/)
+            .filter(Boolean)
+            .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ');
+          const mappedRole = mu.role === 'Technicien' ? 'Technicien' : 'Administrateur';
+          list.push({
+            id: `mem-master-${effTenantId}-${mu.slotIndex || emailPrefix}`,
+            name: formattedName || muEmail,
+            email: muEmail,
+            role: mappedRole,
+            status: 'Actif',
+            lastActive: 'En ligne',
+            pin: '1234',
+            envId: effTenantId,
+            tenantId: effTenantId,
+          });
+        }
+      }
     }
 
     // Also include any technicians referenced in this tenant's fsmTours if not already in members
@@ -4855,11 +5009,21 @@ async function warmupDefibrillateursStore() {
     const checkTenantsList = (list: any[]) => {
       for (const t of list) {
         if (!t || typeof t !== 'object') continue;
-        const tidStr = String(t.tenantId || t.envId || t.shortEnvId || t.id || '').trim().toLowerCase();
-        if (tAliases.has(tidStr) || candidateTenants.some(c => c.toLowerCase() === tidStr)) {
+        const tidStr = String(t.tenantId || t.envId || t.id || '').trim().toLowerCase();
+        const tShortStr = String(t.shortEnvId || t.code || '').trim().toLowerCase();
+        if (
+          tAliases.has(tidStr) ||
+          candidateTenants.some(c => c.toLowerCase() === tidStr) ||
+          (tShortStr && tAliases.has(tShortStr))
+        ) {
           for (const f of fields) {
-            if (t[f] && typeof t[f] === 'string' && t[f].trim() && !isInvalidPlaceholder(t[f].trim())) {
-              return t[f].trim();
+            const directVal = t[f];
+            if (directVal && typeof directVal === 'string' && directVal.trim() && !isInvalidPlaceholder(directVal.trim())) {
+              return directVal.trim();
+            }
+            const nestedVal = t.spreadsheetUrls?.[f];
+            if (nestedVal && typeof nestedVal === 'string' && nestedVal.trim() && !isInvalidPlaceholder(nestedVal.trim())) {
+              return nestedVal.trim();
             }
           }
         }
@@ -4906,6 +5070,12 @@ async function warmupDefibrillateursStore() {
     const memTenants = serverMemoryStore.get('registered_tenants');
     if (Array.isArray(memTenants)) {
       const found = checkTenantsList(memTenants);
+      if (found) return found;
+    }
+
+    const masterTenants = getCachedMasterTenantsSync();
+    if (Array.isArray(masterTenants)) {
+      const found = checkTenantsList(masterTenants);
       if (found) return found;
     }
 
@@ -5047,14 +5217,32 @@ async function warmupDefibrillateursStore() {
           }
         };
 
-        const fetchedResults = await Promise.all(Array.from(docKeysToFetch).map(fetchSingleDoc));
+        const [fetchedResults, masterTenantsList] = await Promise.all([
+          Promise.all(Array.from(docKeysToFetch).map(fetchSingleDoc)),
+          fetchMasterTenantsFromSpreadsheet(forceRefresh).catch(() => getCachedMasterTenantsSync()),
+        ]);
         tenantConfigFirestoreSyncMs.set(cleanTid, Date.now());
 
         const allSheetFieldKeys = Array.from(new Set(Object.values(SHEET_TAB_FIELD_MAP)));
         const mergedSheetUrls: Record<string, string> = {};
         let mergedCompanyProps: Record<string, any> = {};
 
-        // 1. Seed from existing local memory / disk first (lowest priority)
+        // 0. Seed from Master Tenants Spreadsheet row for this tenant (complementary, non-destructive)
+        const masterSheetObjects: any[] = [];
+        if (Array.isArray(masterTenantsList)) {
+          for (const mt of masterTenantsList) {
+            if (!mt || typeof mt !== 'object') continue;
+            const mtId = String(mt.id || '').trim().toLowerCase();
+            if (mtId && (tAliases.has(mtId) || candidateTenants.some(c => c.toLowerCase() === mtId))) {
+              if (mt.spreadsheetUrls && typeof mt.spreadsheetUrls === 'object') {
+                masterSheetObjects.push(mt.spreadsheetUrls);
+              }
+              masterSheetObjects.push(mt);
+            }
+          }
+        }
+
+        // 1. Seed from existing local memory / disk first
         const localSourceObjects: any[] = [];
         for (const cand of candidateTenants) {
           for (const suffix of ['companyInfo', 'tenantDatabases', 'company_info']) {
@@ -5076,7 +5264,7 @@ async function warmupDefibrillateursStore() {
           }
         }
 
-        // 2. Collect Firestore objects (higher priority, sorted by updatedAt ascending so newest wins)
+        // 2. Collect Firestore objects (sorted by updatedAt ascending so newest wins, while Master Sheet also complements any non-empty URL)
         const firestoreObjects: any[] = [];
         for (const { key, val } of fetchedResults) {
           if (!val) continue;
@@ -5108,7 +5296,7 @@ async function warmupDefibrillateursStore() {
         for (const src of [...localSourceObjects, ...firestoreObjects]) {
           if (!src || typeof src !== 'object' || Array.isArray(src)) continue;
           for (const [k, v] of Object.entries(src)) {
-            if (k.startsWith('spreadsheet')) continue;
+            if (k.startsWith('spreadsheet') || k === 'masterUsers' || k === 'adminEmails') continue;
             if (v !== undefined && v !== null && v !== '') {
               if (k === 'name' && v === 'Mon Cabinet' && mergedCompanyProps.name && mergedCompanyProps.name !== 'Mon Cabinet') {
                 continue;
@@ -5122,6 +5310,23 @@ async function warmupDefibrillateursStore() {
               ? String(src[fk]).trim()
               : !isInvalidPlaceholderUrl(src[urlKey])
               ? String(src[urlKey]).trim()
+              : '';
+            if (candidateUrl) {
+              mergedSheetUrls[fk] = candidateUrl;
+              mergedSheetUrls[urlKey] = candidateUrl;
+            }
+          }
+        }
+
+        // 3. Apply Master Spreadsheet URLs in complement (fills in any URL configured in MEGA ADMIN without erasing Firestore URLs)
+        for (const mSrc of masterSheetObjects) {
+          if (!mSrc || typeof mSrc !== 'object') continue;
+          for (const fk of allSheetFieldKeys) {
+            const urlKey = `${fk}Url`;
+            const candidateUrl = !isInvalidPlaceholderUrl(mSrc[fk])
+              ? String(mSrc[fk]).trim()
+              : !isInvalidPlaceholderUrl(mSrc[urlKey])
+              ? String(mSrc[urlKey]).trim()
               : '';
             if (candidateUrl) {
               mergedSheetUrls[fk] = candidateUrl;
@@ -5692,17 +5897,35 @@ async function warmupDefibrillateursStore() {
 
       const candidateTenants = Array.from(tenantMap.values());
 
-      // Pass 1 (Admin role only): Prioritize exact primary tenant owner match (Super-Admin Email. from master spreadsheet)
+      // Helper to check if an email matches a tenant's Super-Admin in either Master Spreadsheet OR Firestore
+      const isTenantSuperAdminEmail = (tnt: any, targetEmailLower: string): boolean => {
+        if (!tnt || !targetEmailLower) return false;
+        const tAdminEmail = String(tnt.adminEmail || '').trim().toLowerCase();
+        const tCompanyEmail = String(tnt.companyEmail || '').trim().toLowerCase();
+        if (tAdminEmail === targetEmailLower || tCompanyEmail === targetEmailLower) return true;
+        if (Array.isArray(tnt.adminEmails) && tnt.adminEmails.some((e: any) => String(e || '').trim().toLowerCase() === targetEmailLower)) {
+          return true;
+        }
+        // Also check Firestore/memory companyInfo email for this tenant
+        const tid = String(tnt.id || '').trim();
+        if (tid) {
+          const compKey = tid.toLowerCase() === 'demo' ? 'companyInfo' : `${tid.toUpperCase()}_companyInfo`;
+          const memComp = serverMemoryStore.get(compKey) || serverMemoryStore.get(`${tid}_companyInfo`);
+          if (memComp && typeof memComp === 'object') {
+            const cEmail = String(memComp.email || memComp.adminEmail || memComp.companyEmail || '').trim().toLowerCase();
+            if (cEmail && cEmail === targetEmailLower) return true;
+          }
+        }
+        return false;
+      };
+
+      // Pass 1 (Admin role only): Prioritize exact primary tenant owner match (Super-Admin Email from Master Spreadsheet OR Firestore)
       if (loginRole === 'admin') {
-        const primaryOwnerTenants = candidateTenants.filter(tnt => {
-          const tAdminEmail = String(tnt.adminEmail || '').trim().toLowerCase();
-          const tCompanyEmail = String(tnt.companyEmail || '').trim().toLowerCase();
-          return (tAdminEmail && tAdminEmail === emailLower) || (tCompanyEmail && tCompanyEmail === emailLower);
-        });
+        const primaryOwnerTenants = candidateTenants.filter(tnt => isTenantSuperAdminEmail(tnt, emailLower));
         if (primaryOwnerTenants.length > 0) {
           const chosenTenant = primaryOwnerTenants[0];
           const tid = String(chosenTenant.id || 'demo').trim();
-          const resolvedEmail = String(chosenTenant.adminEmail || chosenTenant.companyEmail || emailLower).trim();
+          const resolvedEmail = emailLower || String(chosenTenant.adminEmail || chosenTenant.companyEmail || '').trim();
           const resolvedName = chosenTenant.adminName || 'Administrateur';
           const primaryProfile = {
             email: resolvedEmail,
@@ -5804,15 +6027,33 @@ async function warmupDefibrillateursStore() {
         }
 
         // Admin or Technicien (passwordless, verified by email 2FA):
-        // 1. Check Firebase tenant primary admin email (if admin role)
-        if (loginRole === 'admin') {
-          const tAdminEmail = String(tnt.adminEmail || '').trim().toLowerCase();
-          const tCompanyEmail = String(tnt.companyEmail || '').trim().toLowerCase();
-          if ((tAdminEmail && tAdminEmail === emailLower) || (tCompanyEmail && tCompanyEmail === emailLower)) {
-            firebaseMatchedMember = {
-              email: tnt.adminEmail || tnt.companyEmail,
-              name: tnt.adminName || 'Administrateur',
-              role: 'Super-Administrateur',
+        // 1. Check Super-Admin email from Firestore OR Master Spreadsheet (if admin role)
+        if (loginRole === 'admin' && isTenantSuperAdminEmail(tnt, emailLower)) {
+          firebaseMatchedMember = {
+            email: emailLower || tnt.adminEmail || tnt.companyEmail,
+            name: tnt.adminName || 'Administrateur',
+            role: 'Super-Administrateur',
+          };
+        }
+
+        // 1b. Check UserEmail1..10 & UserRole1..10 from MEGA ADMIN Master Spreadsheet
+        if (!firebaseMatchedMember && !sheetMatchedMember && Array.isArray(tnt.masterUsers)) {
+          const matchedMasterUser = tnt.masterUsers.find((mu: any) => {
+            if (!mu || !mu.email) return false;
+            const muEmail = String(mu.email).trim().toLowerCase();
+            return muEmail === emailLower && isRoleMatch(mu.role || mu.rawRole, loginRole);
+          });
+          if (matchedMasterUser) {
+            const emailPrefix = String(matchedMasterUser.email).split('@')[0] || 'Utilisateur';
+            const formattedName = emailPrefix
+              .split(/[._-]+/)
+              .filter(Boolean)
+              .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+              .join(' ');
+            sheetMatchedMember = {
+              email: matchedMasterUser.email,
+              name: formattedName || matchedMasterUser.email,
+              role: matchedMasterUser.role === 'Technicien' ? 'Technicien' : 'Administrateur',
             };
           }
         }

@@ -7876,11 +7876,19 @@ export async function deleteRecordsFromTenantSheet(
 export const MASTER_TENANTS_SPREADSHEET_URL =
   'https://docs.google.com/spreadsheets/d/1ujVEcs0PaDVa2M9AQnI9CmQH9SbaBqvVPLNtJ3TX0iw/edit?usp=sharing';
 
+export interface MasterSheetUserEntry {
+  email: string;
+  role: 'Admin' | 'Technicien';
+  rawRole: string;
+  slotIndex: number;
+}
+
 export interface MasterSheetTenantRecord {
   id: string;
   shortEnvId: string;
   code: string;
   adminEmail: string;
+  adminEmails?: string[];
   companyEmail: string;
   companyName: string;
   adminName: string;
@@ -7889,7 +7897,48 @@ export interface MasterSheetTenantRecord {
   nomLogiciel?: string;
   active: boolean;
   disabled: boolean;
+  masterUsers?: MasterSheetUserEntry[];
+  spreadsheetUrls?: Record<string, string>;
+  [key: string]: any;
 }
+
+const MASTER_SHEET_SPREADSHEET_HEADER_TO_FIELD: Record<string, string> = {
+  spreadsheetdefibrillateurs: 'spreadsheetDefibrillateurs',
+  spreadsheetautresmateriels: 'spreadsheetAutresMateriels',
+  spreadsheetclients: 'spreadsheetClients',
+  spreadsheettournees: 'spreadsheetTournees',
+  spreadsheetmissionsdestournees: 'spreadsheetMissionsTournees',
+  spreadsheetmissionstournees: 'spreadsheetMissionsTournees',
+  spreadsheetrapportspdf: 'spreadsheetRapportsPdf',
+  spreadsheetcrm: 'spreadsheetCrm',
+  spreadsheetreglagescrm: 'spreadsheetReglagesCrm',
+  spreadsheetsatisfaction: 'spreadsheetSatisfaction',
+  spreadsheetcommandes: 'spreadsheetCommandes',
+  spreadsheetcentraledesstocks: 'spreadsheetStocks',
+  spreadsheetstocks: 'spreadsheetStocks',
+  spreadsheetstocksdistribues: 'spreadsheetStocksDistribues',
+  spreadsheetachatsfournisseurs: 'spreadsheetAchatsFournisseurs',
+  spreadsheettemps: 'spreadsheetTemps',
+  spreadsheetticketscaisse: 'spreadsheetTicketsCaisse',
+  spreadsheetreleveconcurrentiel: 'spreadsheetReleveConcurrentiel',
+  spreadsheetformations: 'spreadsheetFormations',
+  spreadsheetstagiaires: 'spreadsheetStagiaires',
+  spreadsheetemargements: 'spreadsheetEmargements',
+  spreadsheetmessagesinternes: 'spreadsheetMessagesInternes',
+  spreadsheetvariables: 'spreadsheetVariables',
+  spreadsheetged: 'spreadsheetGed',
+  spreadsheetintituledesemplacements: 'spreadsheetIntituleEmplacements',
+  spreadsheetintituleemplacements: 'spreadsheetIntituleEmplacements',
+  spreadsheetmembresdelenvironnement: 'spreadsheetMembresEnvironnement',
+  spreadsheetmembresenvironnement: 'spreadsheetMembresEnvironnement',
+  spreadsheetreglages: 'spreadsheetReglages',
+  spreadsheetapparencedesrapportspdf: 'spreadsheetApparenceRapportsPdf',
+  spreadsheetapparencerapportspdf: 'spreadsheetApparenceRapportsPdf',
+  spreadsheetcommunicationportailclient: 'spreadsheetCommunicationPortailClient',
+  spreadsheetobservateurdesactionssuspectes: 'spreadsheetObservateurActionsSuspectes',
+  spreadsheetobservateuractionssuspectes: 'spreadsheetObservateurActionsSuspectes',
+  spreadsheetexportations: 'spreadsheetExportations',
+};
 
 const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [
   {
@@ -7901,9 +7950,12 @@ const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [
     companyPhone: '+33 1 47 20 00 01',
     adminName: 'Admin Démo',
     adminEmail: 'account@demo.com',
+    adminEmails: ['account@demo.com', 'contact@defibeo-solutions.com'],
     lang: 'Français',
     active: true,
     disabled: false,
+    masterUsers: [],
+    spreadsheetUrls: {},
   },
   {
     id: 'D27',
@@ -7914,10 +7966,13 @@ const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [
     companyPhone: '0612345678',
     adminName: 'Jean-Luc Degont',
     adminEmail: 'copilotudplv@civilprom.com',
+    adminEmails: ['copilotudplv@civilprom.com'],
     lang: 'Français, France',
     nomLogiciel: 'Copilot',
     active: true,
     disabled: false,
+    masterUsers: [],
+    spreadsheetUrls: {},
   },
   {
     id: 'D28',
@@ -7928,10 +7983,13 @@ const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [
     companyPhone: '0765582200',
     adminName: 'Océane Chabrier',
     adminEmail: 'lecoeurdunsam@civilprom.com',
+    adminEmails: ['lecoeurdunsam@civilprom.com'],
     lang: 'Français, France',
     nomLogiciel: 'lecoeurdunsam',
     active: true,
     disabled: false,
+    masterUsers: [],
+    spreadsheetUrls: {},
   },
   {
     id: 'D26',
@@ -7942,10 +8000,13 @@ const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [
     companyPhone: '061234567890',
     adminName: 'Sommet Jérôme',
     adminEmail: 'dsg.test@civilprom.com',
+    adminEmails: ['dsg.test@civilprom.com'],
     lang: 'Français, France',
     nomLogiciel: 'EssaiDSG',
     active: true,
     disabled: false,
+    masterUsers: [],
+    spreadsheetUrls: {},
   },
   {
     id: 'D7',
@@ -7956,10 +8017,13 @@ const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [
     companyPhone: '0600000000',
     adminName: 'Jean Pedro Maignan',
     adminEmail: 'jpm973@civilprom.com',
+    adminEmails: ['jpm973@civilprom.com'],
     lang: 'Français, France',
     nomLogiciel: 'JPM973',
     active: true,
     disabled: false,
+    masterUsers: [],
+    spreadsheetUrls: {},
   },
 ];
 
@@ -7992,15 +8056,44 @@ export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = 
             .replace(/[^a-z0-9]/g, '')
         );
 
-        const activeColIdx = headersNorm.findIndex(h => h.includes('active') || h.includes('actif') || h.includes('statut'));
-        const emailColIdx = headersNorm.findIndex(h => h.includes('email') || h.includes('mail') || h.includes('superadmin'));
+        const activeColIdx = headersNorm.findIndex(h => h === 'active' || h.includes('active') || h.includes('actif') || h.includes('statut'));
+        const emailColIdx = headersNorm.findIndex(
+          h => h.includes('superadmin') || (!h.startsWith('useremail') && (h.includes('email') || h.includes('mail')))
+        );
         const idColIdx = headersNorm.findIndex(h => h === 'id' || h.includes('tenantid') || h.includes('identifiant'));
-        const codeColIdx = headersNorm.findIndex(h => h.includes('code') || h.includes('short'));
+        const codeColIdx = headersNorm.findIndex(h => h === 'code' || h.includes('code') || h.includes('short'));
 
         const colActive = activeColIdx >= 0 ? activeColIdx : 0;
         const colEmail = emailColIdx >= 0 ? emailColIdx : 1;
         const colId = idColIdx >= 0 ? idColIdx : 2;
         const colCode = codeColIdx >= 0 ? codeColIdx : 3;
+
+        // Discover UserEmailN & UserRoleN column pairs (1..10 or higher)
+        const userSlotCols: Array<{ slotIndex: number; emailIdx: number; roleIdx: number }> = [];
+        headersNorm.forEach((h, idx) => {
+          const m = h.match(/^useremail(\d+)$/);
+          if (m) {
+            const slotNum = parseInt(m[1], 10);
+            const roleColIdx = headersNorm.findIndex(rh => rh === `userrole${slotNum}`);
+            userSlotCols.push({
+              slotIndex: slotNum,
+              emailIdx: idx,
+              roleIdx: roleColIdx,
+            });
+          }
+        });
+
+        // Discover Spreadsheet URL columns
+        const spreadsheetColMappings: Array<{ colIdx: number; fieldKey: string }> = [];
+        headersNorm.forEach((h, idx) => {
+          const mappedField = MASTER_SHEET_SPREADSHEET_HEADER_TO_FIELD[h];
+          if (mappedField) {
+            spreadsheetColMappings.push({ colIdx: idx, fieldKey: mappedField });
+          }
+        });
+
+        const isInvalidPlaceholderUrl = (u?: string) =>
+          !u || !u.trim() || u.includes('1tB1e41') || u.includes('2mX5O6r9hD0i3Z9m');
 
         const parsedTenants: MasterSheetTenantRecord[] = [DEFAULT_MASTER_SHEET_TENANTS[0]]; // Always keep 'demo'
 
@@ -8013,7 +8106,7 @@ export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = 
 
           if (!rawId && !rawEmail) continue;
 
-          const isActive = rawActive === '1';
+          const isActive = rawActive === '1' || rawActive.toLowerCase() === 'true' || rawActive.toLowerCase() === 'oui';
           const effectiveId = rawId || rawCode;
           const effectiveCode = rawCode || rawId;
 
@@ -8025,11 +8118,47 @@ export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = 
             defaultMeta?.companyName ||
             (rawEmail.includes('@') ? rawEmail.split('@')[0].toUpperCase() : effectiveId);
 
+          // Parse UserEmail1..10 and UserRole1..10
+          const masterUsers: MasterSheetUserEntry[] = [];
+          for (const slot of userSlotCols) {
+            const uEmail = String(row[slot.emailIdx] ?? '').trim();
+            if (!uEmail) continue;
+            const rawRoleVal = slot.roleIdx >= 0 ? String(row[slot.roleIdx] ?? '').trim() : '';
+            const normRole = rawRoleVal.toLowerCase();
+            const parsedRole: 'Admin' | 'Technicien' =
+              normRole.includes('tech') || normRole.includes('maintenance') || normRole.includes('intervenant')
+                ? 'Technicien'
+                : 'Admin';
+            masterUsers.push({
+              email: uEmail,
+              role: parsedRole,
+              rawRole: rawRoleVal || parsedRole,
+              slotIndex: slot.slotIndex,
+            });
+          }
+
+          // Parse Spreadsheet URL columns (only non-empty valid URLs)
+          const spreadsheetUrls: Record<string, string> = {};
+          for (const { colIdx, fieldKey } of spreadsheetColMappings) {
+            const cellVal = String(row[colIdx] ?? '').trim();
+            if (cellVal && !isInvalidPlaceholderUrl(cellVal) && (cellVal.startsWith('http://') || cellVal.startsWith('https://') || cellVal.includes('docs.google.com/spreadsheets'))) {
+              spreadsheetUrls[fieldKey] = cellVal;
+              spreadsheetUrls[`${fieldKey}Url`] = cellVal;
+            }
+          }
+
+          const primaryAdminEmail = rawEmail || defaultMeta?.adminEmail || '';
+          const adminEmailsSet = new Set<string>();
+          if (primaryAdminEmail) adminEmailsSet.add(primaryAdminEmail.toLowerCase());
+          if (defaultMeta?.adminEmail) adminEmailsSet.add(defaultMeta.adminEmail.toLowerCase());
+          if (defaultMeta?.companyEmail) adminEmailsSet.add(defaultMeta.companyEmail.toLowerCase());
+
           parsedTenants.push({
             id: effectiveId,
             shortEnvId: effectiveCode,
             code: effectiveCode,
-            adminEmail: rawEmail || defaultMeta?.adminEmail || '',
+            adminEmail: primaryAdminEmail,
+            adminEmails: Array.from(adminEmailsSet),
             companyEmail: rawEmail || defaultMeta?.companyEmail || '',
             companyName: fallbackName,
             adminName: defaultMeta?.adminName || 'Super-Administrateur',
@@ -8038,6 +8167,9 @@ export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = 
             nomLogiciel: defaultMeta?.nomLogiciel || fallbackName,
             active: isActive,
             disabled: !isActive,
+            masterUsers,
+            spreadsheetUrls,
+            ...spreadsheetUrls,
           });
         }
 
