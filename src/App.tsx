@@ -11487,7 +11487,7 @@ export default function App() {
           style={{ backgroundColor: '#f5f7fa' }}
         >
           {(() => {
-            const tenantDisplayName = (companyInfo?.name?.trim() || (tenantId === 'demo' ? 'Défibeo Solutions' : 'Défibeo')).slice(0, 25);
+            const tenantDisplayName = (companyInfo?.name?.trim() || (tenantId === 'demo' ? 'Défibeo Solutions' : 'Défibeo')).slice(0, 20);
             const tenantInitial = (tenantDisplayName.charAt(0) || 'D').toUpperCase();
 
             const mainNavItems: Array<{
@@ -11676,8 +11676,14 @@ export default function App() {
                     className="w-[280px] max-w-none h-auto block select-none pointer-events-none"
                     referrerPolicy="no-referrer"
                   />
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      background: 'linear-gradient(1deg, rgb(245 247 250), transparent)',
+                    }}
+                  />
                   {!isSidebarCollapsed ? (
-                    <div className="absolute bottom-2.5 right-2.5 flex flex-col items-end gap-2.5 max-w-[calc(100%-20px)] z-10">
+                    <div className="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between gap-2.5 z-10">
                       <div
                         className="sidebar-nav-item-bounce inline-flex items-center justify-center shrink-0 cursor-default"
                         onMouseEnter={(e) => {
@@ -11693,8 +11699,8 @@ export default function App() {
                         <img
                           src={
                             hoveredSidebarItem?.id === 'logo-defibeo'
-                              ? 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027isblack.svg'
-                              : 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027isgrey.svg'
+                              ? 'https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg'
+                              : 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg'
                           }
                           alt="Logiciel Defibeo"
                           className="sidebar-nav-icon-bounce w-[38px] h-[38px] object-contain block select-none pointer-events-none shrink-0"
@@ -11702,7 +11708,7 @@ export default function App() {
                         />
                       </div>
                       <div
-                        className="flex items-center justify-center rounded-full truncate max-w-full"
+                        className="flex items-center justify-center rounded-full truncate min-w-0"
                         style={{
                           backgroundColor: '#3ddc84',
                           color: '#136437',
@@ -11721,33 +11727,29 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    <>
-                      <div
-                        className="absolute inset-0 pointer-events-none"
-                        style={{
-                          background: 'linear-gradient(1deg, rgb(245 247 250), transparent)',
-                        }}
+                    <div
+                      className="sidebar-nav-item-bounce absolute bottom-2.5 left-1/2 -translate-x-1/2 inline-flex items-center justify-center z-10 cursor-default"
+                      onMouseEnter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setHoveredSidebarItem({
+                          id: 'logo-defibeo',
+                          label: 'Logiciel Defibeo',
+                          centerY: rect.top + rect.height / 2,
+                        });
+                      }}
+                      onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'logo-defibeo' ? null : prev))}
+                    >
+                      <img
+                        src={
+                          hoveredSidebarItem?.id === 'logo-defibeo'
+                            ? 'https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg'
+                            : 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg'
+                        }
+                        alt="Logiciel Defibeo"
+                        className="sidebar-nav-icon-bounce w-[38px] h-[38px] object-contain block select-none pointer-events-none shrink-0"
+                        referrerPolicy="no-referrer"
                       />
-                      <div
-                        className="sidebar-nav-item-bounce absolute bottom-2.5 left-1/2 -translate-x-1/2 inline-flex items-center justify-center z-10 cursor-default"
-                        onMouseEnter={(e) => {
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          setHoveredSidebarItem({
-                            id: 'logo-defibeo',
-                            label: 'Logiciel Defibeo',
-                            centerY: rect.top + rect.height / 2,
-                          });
-                        }}
-                        onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'logo-defibeo' ? null : prev))}
-                      >
-                        <img
-                          src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027isblack.svg"
-                          alt="Logiciel Defibeo"
-                          className="sidebar-nav-icon-bounce w-[38px] h-[38px] object-contain block select-none pointer-events-none shrink-0"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    </>
+                    </div>
                   )}
                 </div>
 
