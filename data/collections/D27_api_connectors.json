@@ -37,5 +37,11 @@
   "civilpromAssetsFileUrl": "",
   "textelpActive": false,
   "sage4197SecretToken": "",
-  "googleDriveActive": false
+  "googleDriveActive": false,
+  "spreadsheetDefibrillateurs": "https://docs.google.com/spreadsheets/d/1gZO503C5HtbV5KzxOA4WXcBpsF9srKmlga0xD9J0exs/edit?gid=672813022#gid=672813022",
+  "spreadsheetDefibrillateursUrl": "https://docs.google.com/spreadsheets/d/1gZO503C5HtbV5KzxOA4WXcBpsF9srKmlga0xD9J0exs/edit?gid=672813022#gid=672813022",
+  "spreadsheetClients": "https://docs.google.com/spreadsheets/d/1-hgTWh9B07WeD4jYXH3vwNnKPMRSU3qTGltIYmm64gg/edit?gid=864758909#gid=864758909",
+  "spreadsheetClientsUrl": "https://docs.google.com/spreadsheets/d/1-hgTWh9B07WeD4jYXH3vwNnKPMRSU3qTGltIYmm64gg/edit?gid=864758909#gid=864758909",
+  "spreadsheetReglages": "https://docs.google.com/spreadsheets/d/1uUeV2zzX0hpAjhzdUnn26H-7mZzxzUvaZP7HaT5Em1A/edit?usp=sharing",
+  "spreadsheetReglagesUrl": "https://docs.google.com/spreadsheets/d/1uUeV2zzX0hpAjhzdUnn26H-7mZzxzUvaZP7HaT5Em1A/edit?usp=sharing"
 }

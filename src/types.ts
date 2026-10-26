@@ -1009,8 +1009,9 @@ export interface SuspiciousActivityLog {
 }
 
 export function getTenantSpreadsheetUrl(
-  fieldKey: SpreadsheetFieldKey,
-  companyInfo?: Partial<CompanyInfo> | null
+  arg1: SpreadsheetFieldKey | string,
+  arg2?: Partial<CompanyInfo> | string | null,
+  arg3?: Partial<CompanyInfo> | string | null
 ): string {
   const isCleanUrl = (u?: any): string => {
     if (!u || typeof u !== 'string') return '';
@@ -1019,13 +1020,47 @@ export function getTenantSpreadsheetUrl(
     return trimmed;
   };
 
+  const normalizeFieldKey = (rawKey: string): SpreadsheetFieldKey => {
+    const k = String(rawKey || '').trim();
+    if (k.startsWith('spreadsheet')) return k as SpreadsheetFieldKey;
+    const lower = k.toLowerCase();
+    if (lower === 'defibrillateurs' || lower === 'defibs') return 'spreadsheetDefibrillateurs';
+    if (lower === 'clients') return 'spreadsheetClients';
+    if (lower === 'autresmateriels' || lower === 'autres_materiels') return 'spreadsheetAutresMateriels';
+    const foundExtra = EXTRA_SPREADSHEET_FIELDS.find(
+      (f) => f.key.toLowerCase() === lower || f.storageSuffix.toLowerCase() === lower || f.key.toLowerCase() === `spreadsheet${lower}`
+    );
+    if (foundExtra) return foundExtra.key;
+    return k as SpreadsheetFieldKey;
+  };
+
+  let fieldKey: SpreadsheetFieldKey;
+  let companyInfo: Partial<CompanyInfo> | null | undefined;
+  let tenantIdOverride: string | undefined;
+
+  if (typeof arg2 === 'string') {
+    // Called as getTenantSpreadsheetUrl(tenantId, tabOrFieldKey, companyInfo?)
+    tenantIdOverride = typeof arg1 === 'string' ? arg1 : undefined;
+    fieldKey = normalizeFieldKey(arg2);
+    companyInfo = arg3 && typeof arg3 === 'object' ? (arg3 as Partial<CompanyInfo>) : undefined;
+  } else {
+    // Called as getTenantSpreadsheetUrl(fieldKey, companyInfo?, tenantIdOverride?)
+    fieldKey = normalizeFieldKey(typeof arg1 === 'string' ? arg1 : '');
+    companyInfo = arg2 && typeof arg2 === 'object' ? (arg2 as Partial<CompanyInfo>) : undefined;
+    tenantIdOverride = typeof arg3 === 'string' ? arg3 : undefined;
+  }
+
   const urlKey = `${fieldKey}Url` as keyof CompanyInfo;
-  if (companyInfo) {
+  if (companyInfo && typeof companyInfo === 'object') {
     const direct = isCleanUrl(companyInfo[fieldKey]) || isCleanUrl(companyInfo[urlKey]);
     if (direct) return direct;
   }
   if (typeof window === 'undefined') return '';
-  const activeTenantId = localStorage.getItem('defib_tenant_id') || 'demo';
+  const rawTenantId =
+    (typeof tenantIdOverride === 'string' && tenantIdOverride.trim() ? tenantIdOverride : '') ||
+    localStorage.getItem('defib_tenant_id') ||
+    'demo';
+  const activeTenantId = String(rawTenantId).trim() || 'demo';
   const numPart = activeTenantId.replace(/^d/i, '');
   const tenantCandidates = Array.from(
     new Set(
@@ -1061,7 +1096,9 @@ export function getTenantSpreadsheetUrl(
       const candidates = [
         localStorage.getItem(`defib_${t}_company_info`),
         localStorage.getItem(`fs_cache_${t}_tenantDatabases`),
+        localStorage.getItem(`fs_cache_defib_${t}_tenantDatabases`),
         localStorage.getItem(`fs_cache_${t}_companyInfo`),
+        localStorage.getItem(`fs_cache_defib_${t}_companyInfo`),
         localStorage.getItem(`fs_cache_${t}_company_info`),
         localStorage.getItem(`defib_company_info_${t}`),
       ];
@@ -1069,7 +1106,8 @@ export function getTenantSpreadsheetUrl(
         if (!raw) continue;
         try {
           const parsed = JSON.parse(raw);
-          const val = isCleanUrl(parsed?.[fieldKey]) || isCleanUrl(parsed?.[urlKey]);
+          const unwrapped = parsed?.value !== undefined ? parsed.value : parsed;
+          const val = isCleanUrl(unwrapped?.[fieldKey]) || isCleanUrl(unwrapped?.[urlKey]);
           if (val) return val;
         } catch (_) {}
       }

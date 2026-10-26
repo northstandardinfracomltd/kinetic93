@@ -746,13 +746,15 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
 
       const lower = k.toLowerCase();
 
-      // CRITICAL: Never wipe tenant-scoped spreadsheet URLs or database configurations!
-      // Each tenant's spreadsheet URLs are isolated by `defib_${tenantId}_spreadsheet_*` and `tenantDatabases` keys.
+      // CRITICAL: Preserve ONLY tenant-scoped spreadsheet URLs and database configurations (e.g. defib_D27_spreadsheet_*, fs_cache_D27_companyInfo).
+      // Any unprefixed global key (like defib_company_info, fs_cache_companyInfo, fs_cache_tenantDatabases) must be purged so it never leaks across tenants.
+      const isTenantScopedConfigKey = /^(defib|fs_cache)_(d\d+|demo)_/i.test(k) || /^d\d+_(companyinfo|company_info|tenantdatabases)$/i.test(k);
       if (
-        lower.includes('spreadsheet_') ||
-        lower.includes('tenantdatabases') ||
-        lower.includes('company_info') ||
-        lower.includes('companyinfo')
+        isTenantScopedConfigKey &&
+        (lower.includes('spreadsheet_') ||
+          lower.includes('tenantdatabases') ||
+          lower.includes('company_info') ||
+          lower.includes('companyinfo'))
       ) {
         continue;
       }
@@ -1798,10 +1800,11 @@ export async function fetchCollectionFromFirestore<T>(
             } else {
               let finalObjVal: any = val;
               if (isCompanyOrDbCol) {
-                const combinedSheets = mergeSpreadsheetUrlFields(val, directFirestoreSheetFields, directFirestoreObjectCandidate);
+                // Prioritize live direct Firestore per-tenant documents over server memory relay
+                const combinedSheets = mergeSpreadsheetUrlFields(directFirestoreSheetFields, directFirestoreObjectCandidate, val);
                 finalObjVal = {
-                  ...(directFirestoreObjectCandidate || {}),
                   ...(val as any),
+                  ...(directFirestoreObjectCandidate || {}),
                   ...combinedSheets,
                 };
                 persistDiscoveredSpreadsheetUrlsToLocal(finalObjVal, activeTenantId);

@@ -1447,44 +1447,47 @@ export default function SettingsModal({
           const resolvedHasEmplacementsSheet = Boolean(extraEffFields.spreadsheetIntituleEmplacements);
           const resolvedHasComSheet = Boolean(extraEffFields.spreadsheetCommunicationPortailClient);
 
-          setLocalCompany(prev => ({
-            ...prev,
-            ...(validCompany && !resolvedHasReglagesSheet ? {
-              name: validCompany.name || cleanDefault.name,
-              nomCommercial: validCompany.nomCommercial || validCompany.name || cleanDefault.nomCommercial,
-              logo: validCompany.logo !== undefined ? validCompany.logo : cleanDefault.logo,
-              website: validCompany.website !== undefined ? validCompany.website : cleanDefault.website,
-              email: validCompany.email || cleanDefault.email,
-              phone: validCompany.phone !== undefined ? validCompany.phone : cleanDefault.phone,
-              nomLogiciel: validCompany.nomLogiciel !== undefined ? validCompany.nomLogiciel : cleanDefault.nomLogiciel,
-              gmailPartageLocalisation: validCompany.gmailPartageLocalisation !== undefined ? validCompany.gmailPartageLocalisation : cleanDefault.gmailPartageLocalisation,
-              hiddenTabs: validCompany.hiddenTabs !== undefined ? validCompany.hiddenTabs : cleanDefault.hiddenTabs,
-            } : {}),
-            ...(validCompany && !resolvedHasPdfSheet ? {
-              pdfHeaderImg: validCompany.pdfHeaderImg !== undefined ? validCompany.pdfHeaderImg : cleanDefault.pdfHeaderImg,
-              pdfPageHeaderText: validCompany.pdfPageHeaderText !== undefined ? validCompany.pdfPageHeaderText : cleanDefault.pdfPageHeaderText,
-              pdfPageFooterText: validCompany.pdfPageFooterText !== undefined ? validCompany.pdfPageFooterText : cleanDefault.pdfPageFooterText,
-              pdfLastPageInfoText: validCompany.pdfLastPageInfoText !== undefined ? validCompany.pdfLastPageInfoText : cleanDefault.pdfLastPageInfoText,
-              pdfHeaderBgColor: validCompany.pdfHeaderBgColor !== undefined ? validCompany.pdfHeaderBgColor : cleanDefault.pdfHeaderBgColor,
-              pdfCardBorderColor: validCompany.pdfCardBorderColor !== undefined ? validCompany.pdfCardBorderColor : cleanDefault.pdfCardBorderColor,
-              pdfCardBgColor: validCompany.pdfCardBgColor !== undefined ? validCompany.pdfCardBgColor : cleanDefault.pdfCardBgColor,
-              pdfLabelTextColor: validCompany.pdfLabelTextColor !== undefined ? validCompany.pdfLabelTextColor : cleanDefault.pdfLabelTextColor,
-              pdfHideElectrodeSecoursA: validCompany.pdfHideElectrodeSecoursA !== undefined ? validCompany.pdfHideElectrodeSecoursA : cleanDefault.pdfHideElectrodeSecoursA,
-              pdfHideElectrodeSecoursP: validCompany.pdfHideElectrodeSecoursP !== undefined ? validCompany.pdfHideElectrodeSecoursP : cleanDefault.pdfHideElectrodeSecoursP,
-              pdfHideKitSecours: validCompany.pdfHideKitSecours !== undefined ? validCompany.pdfHideKitSecours : cleanDefault.pdfHideKitSecours,
-              pdfSimplifyCoffret: validCompany.pdfSimplifyCoffret !== undefined ? validCompany.pdfSimplifyCoffret : cleanDefault.pdfSimplifyCoffret,
-              pdfHideVerificationsTechniques: validCompany.pdfHideVerificationsTechniques !== undefined ? validCompany.pdfHideVerificationsTechniques : cleanDefault.pdfHideVerificationsTechniques,
-              pdfHideHorodatagesDiagnostic: validCompany.pdfHideHorodatagesDiagnostic !== undefined ? validCompany.pdfHideHorodatagesDiagnostic : cleanDefault.pdfHideHorodatagesDiagnostic,
-              pdfShowDemandeDevisDetails: validCompany.pdfShowDemandeDevisDetails !== undefined ? validCompany.pdfShowDemandeDevisDetails : cleanDefault.pdfShowDemandeDevisDetails,
-            } : {}),
-            spreadsheetDefibrillateurs: effDefibs,
-            spreadsheetAutresMateriels: effAutres,
-            spreadsheetClients: effClients,
-            spreadsheetDefibrillateursUrl: effDefibs,
-            spreadsheetAutresMaterielsUrl: effAutres,
-            spreadsheetClientsUrl: effClients,
-            ...extraEffFields,
-          }));
+          setLocalCompany(prev => {
+            const nextComp: CompanyInfo = {
+              ...prev,
+              ...(validCompany && !resolvedHasReglagesSheet ? {
+                name: validCompany.name || cleanDefault.name,
+                nomCommercial: validCompany.nomCommercial || validCompany.name || cleanDefault.nomCommercial,
+                logo: validCompany.logo !== undefined ? validCompany.logo : cleanDefault.logo,
+                website: validCompany.website !== undefined ? validCompany.website : cleanDefault.website,
+                email: validCompany.email || cleanDefault.email,
+                phone: validCompany.phone !== undefined ? validCompany.phone : cleanDefault.phone,
+                nomLogiciel: validCompany.nomLogiciel !== undefined ? validCompany.nomLogiciel : cleanDefault.nomLogiciel,
+                gmailPartageLocalisation: validCompany.gmailPartageLocalisation !== undefined ? validCompany.gmailPartageLocalisation : cleanDefault.gmailPartageLocalisation,
+                hiddenTabs: validCompany.hiddenTabs !== undefined ? validCompany.hiddenTabs : cleanDefault.hiddenTabs,
+              } : {}),
+              ...(validCompany && !resolvedHasPdfSheet ? {
+                pdfHeaderImg: validCompany.pdfHeaderImg !== undefined ? validCompany.pdfHeaderImg : cleanDefault.pdfHeaderImg,
+                pdfPageHeaderText: validCompany.pdfPageHeaderText !== undefined ? validCompany.pdfPageHeaderText : cleanDefault.pdfPageHeaderText,
+                pdfPageFooterText: validCompany.pdfPageFooterText !== undefined ? validCompany.pdfPageFooterText : cleanDefault.pdfPageFooterText,
+                pdfLastPageInfoText: validCompany.pdfLastPageInfoText !== undefined ? validCompany.pdfLastPageInfoText : cleanDefault.pdfLastPageInfoText,
+                pdfHeaderBgColor: validCompany.pdfHeaderBgColor !== undefined ? validCompany.pdfHeaderBgColor : cleanDefault.pdfHeaderBgColor,
+                pdfCardBorderColor: validCompany.pdfCardBorderColor !== undefined ? validCompany.pdfCardBorderColor : cleanDefault.pdfCardBorderColor,
+                pdfCardBgColor: validCompany.pdfCardBgColor !== undefined ? validCompany.pdfCardBgColor : cleanDefault.pdfCardBgColor,
+                pdfLabelTextColor: validCompany.pdfLabelTextColor !== undefined ? validCompany.pdfLabelTextColor : cleanDefault.pdfLabelTextColor,
+                pdfHideElectrodeSecoursA: validCompany.pdfHideElectrodeSecoursA !== undefined ? validCompany.pdfHideElectrodeSecoursA : cleanDefault.pdfHideElectrodeSecoursA,
+                pdfHideElectrodeSecoursP: validCompany.pdfHideElectrodeSecoursP !== undefined ? validCompany.pdfHideElectrodeSecoursP : cleanDefault.pdfHideElectrodeSecoursP,
+                pdfHideKitSecours: validCompany.pdfHideKitSecours !== undefined ? validCompany.pdfHideKitSecours : cleanDefault.pdfHideKitSecours,
+                pdfSimplifyCoffret: validCompany.pdfSimplifyCoffret !== undefined ? validCompany.pdfSimplifyCoffret : cleanDefault.pdfSimplifyCoffret,
+                pdfHideVerificationsTechniques: validCompany.pdfHideVerificationsTechniques !== undefined ? validCompany.pdfHideVerificationsTechniques : cleanDefault.pdfHideVerificationsTechniques,
+                pdfHideHorodatagesDiagnostic: validCompany.pdfHideHorodatagesDiagnostic !== undefined ? validCompany.pdfHideHorodatagesDiagnostic : cleanDefault.pdfHideHorodatagesDiagnostic,
+                pdfShowDemandeDevisDetails: validCompany.pdfShowDemandeDevisDetails !== undefined ? validCompany.pdfShowDemandeDevisDetails : cleanDefault.pdfShowDemandeDevisDetails,
+              } : {}),
+              spreadsheetDefibrillateurs: effDefibs || prev.spreadsheetDefibrillateurs || '',
+              spreadsheetAutresMateriels: effAutres || prev.spreadsheetAutresMateriels || '',
+              spreadsheetClients: effClients || prev.spreadsheetClients || '',
+              spreadsheetDefibrillateursUrl: effDefibs || prev.spreadsheetDefibrillateurs || '',
+              spreadsheetAutresMaterielsUrl: effAutres || prev.spreadsheetAutresMateriels || '',
+              spreadsheetClientsUrl: effClients || prev.spreadsheetClients || '',
+              ...extraEffFields,
+            };
+            return nextComp;
+          });
 
           if (validCompany && !resolvedHasEmplacementsSheet && validCompany.customLocationNames) {
             setLocalLocationNames(ensureTenantCustomLocationNames(validCompany.customLocationNames, activeTid, ensuredMems));
@@ -2968,12 +2971,27 @@ export default function SettingsModal({
       setIsVerifyingEmail(false);
     }
 
+    const activeSaveTenant = (myTenantId || localStorage.getItem('defib_tenant_id') || 'demo').trim();
+    const isDatabasesTabActive = activeSection === 'bases_de_donnees';
     const extraSaveFields: Record<string, string> = {};
     for (const f of EXTRA_SPREADSHEET_FIELDS) {
-      const val = String((localCompany as any)[f.key] ?? (localCompany as any)[f.urlKey] ?? '');
-      extraSaveFields[f.key] = val;
-      extraSaveFields[f.urlKey as string] = val;
+      const localVal = String((localCompany as any)[f.key] ?? (localCompany as any)[f.urlKey] ?? '').trim();
+      const fallbackVal = isDatabasesTabActive
+        ? localVal
+        : localVal || getTenantSpreadsheetUrl(f.key, companyInfo, activeSaveTenant);
+      extraSaveFields[f.key] = fallbackVal;
+      extraSaveFields[f.urlKey as string] = fallbackVal;
     }
+
+    const saveDefibsUrl = isDatabasesTabActive
+      ? (localCompany.spreadsheetDefibrillateurs || '').trim()
+      : (localCompany.spreadsheetDefibrillateurs || '').trim() || getTenantSpreadsheetUrl('spreadsheetDefibrillateurs', companyInfo, activeSaveTenant);
+    const saveAutresUrl = isDatabasesTabActive
+      ? (localCompany.spreadsheetAutresMateriels || '').trim()
+      : (localCompany.spreadsheetAutresMateriels || '').trim() || getTenantSpreadsheetUrl('spreadsheetAutresMateriels', companyInfo, activeSaveTenant);
+    const saveClientsUrl = isDatabasesTabActive
+      ? (localCompany.spreadsheetClients || '').trim()
+      : (localCompany.spreadsheetClients || '').trim() || getTenantSpreadsheetUrl('spreadsheetClients', companyInfo, activeSaveTenant);
 
     const companyToSave = {
       ...localCompany,
@@ -2986,12 +3004,12 @@ export default function SettingsModal({
       enableDevisFactures: enableDevisFactures,
       communicationPortailClient: communicationPortailClient,
       disableHelpsAndTutorials: disableHelpsAndTutorials,
-      spreadsheetDefibrillateurs: localCompany.spreadsheetDefibrillateurs || '',
-      spreadsheetAutresMateriels: localCompany.spreadsheetAutresMateriels || '',
-      spreadsheetClients: localCompany.spreadsheetClients || '',
-      spreadsheetDefibrillateursUrl: localCompany.spreadsheetDefibrillateurs || '',
-      spreadsheetAutresMaterielsUrl: localCompany.spreadsheetAutresMateriels || '',
-      spreadsheetClientsUrl: localCompany.spreadsheetClients || '',
+      spreadsheetDefibrillateurs: saveDefibsUrl,
+      spreadsheetAutresMateriels: saveAutresUrl,
+      spreadsheetClients: saveClientsUrl,
+      spreadsheetDefibrillateursUrl: saveDefibsUrl,
+      spreadsheetAutresMaterielsUrl: saveAutresUrl,
+      spreadsheetClientsUrl: saveClientsUrl,
       ...extraSaveFields,
     };
 

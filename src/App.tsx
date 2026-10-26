@@ -498,6 +498,7 @@ export default function App() {
     loadedDataRef.current = {};
     setIsFirebaseLoaded(false);
     setLoadedTenantIdState('');
+    loadedTenantIdRef.current = '';
 
     setTenantIdState(tenantToSet);
     setFirebaseTenantId(tenantToSet);
@@ -645,6 +646,7 @@ export default function App() {
     loadedDataRef.current = {};
     setIsFirebaseLoaded(false);
     setLoadedTenantIdState('');
+    loadedTenantIdRef.current = '';
 
     setIsLoggedIn(false);
     setLoggedUser(null);
@@ -7880,10 +7882,16 @@ export default function App() {
         return fallback;
       };
 
-      // 1. Initialize Google Sheets-backed collections (preserve current tenant data or hydrate from IndexedDB cache ONLY if spreadsheet URL is configured)
+      // 1. Initialize Google Sheets-backed collections (strictly scoped to activeRunTenantId; never keep previous tenant state on switch)
       try {
+        const isSwitchingTenant = loadedTenantIdRef.current !== activeRunTenantId;
         let sanitizedOffline: Client[] = [];
-        setClients(prev => (loadedTenantIdState && loadedTenantIdState !== activeRunTenantId ? [] : prev));
+        if (isSwitchingTenant) {
+          setClients([]);
+          setDefibrillateurs([]);
+          setOtherEquipments([]);
+          setDefibSheetStats({ total: 0, synced: true });
+        }
 
         const matchedInitTenant = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], activeRunTenantId) as any;
         const defaultInfo: CompanyInfo = {
@@ -7913,20 +7921,22 @@ export default function App() {
         const baseCompanyInfo: CompanyInfo = {
           ...defaultInfo,
           ...rawLocalCompany,
-          ...(initDefibsUrl ? { spreadsheetDefibrillateurs: initDefibsUrl, spreadsheetDefibrillateursUrl: initDefibsUrl } : {}),
-          ...(initAutresUrl ? { spreadsheetAutresMateriels: initAutresUrl, spreadsheetAutresMaterielsUrl: initAutresUrl } : {}),
-          ...(initClientsUrl ? { spreadsheetClients: initClientsUrl, spreadsheetClientsUrl: initClientsUrl } : {}),
+          ...(initDefibsUrl ? { spreadsheetDefibrillateurs: initDefibsUrl, spreadsheetDefibrillateursUrl: initDefibsUrl } : { spreadsheetDefibrillateurs: '', spreadsheetDefibrillateursUrl: '' }),
+          ...(initAutresUrl ? { spreadsheetAutresMateriels: initAutresUrl, spreadsheetAutresMaterielsUrl: initAutresUrl } : { spreadsheetAutresMateriels: '', spreadsheetAutresMaterielsUrl: '' }),
+          ...(initClientsUrl ? { spreadsheetClients: initClientsUrl, spreadsheetClientsUrl: initClientsUrl } : { spreadsheetClients: '', spreadsheetClientsUrl: '' }),
           ...initExtraSheets,
           customLocationNames: resolvedInitLocs
         };
         setCompanyInfo(baseCompanyInfo);
+        companyInfoRef.current = baseCompanyInfo;
         setLocationNames(resolvedInitLocs);
         setMembers(baseMembers);
 
-        const hasClientsSheetConfigured = Boolean(getTenantSpreadsheetUrl('spreadsheetClients', baseCompanyInfo));
+        const hasClientsSheetConfigured = Boolean(getTenantSpreadsheetUrl('spreadsheetClients', baseCompanyInfo, activeRunTenantId));
         if (hasClientsSheetConfigured) {
           idbGet<Client[]>(`defib_${activeRunTenantId}_clients_v2`)
             .then(cachedClients => {
+              if (tenantIdRef.current !== activeRunTenantId) return;
               if (Array.isArray(cachedClients) && cachedClients.length > 0) {
                 setClients(prev => (prev.length === 0 ? cachedClients : prev));
               }
@@ -7936,40 +7946,45 @@ export default function App() {
           setClients([]);
         }
 
-        const isSwitchingTenant = Boolean(loadedTenantIdState && loadedTenantIdState !== activeRunTenantId);
         const baseVariables = getLocalTenantValue<Variable[]>('variables', []);
         setVariables(prev => (isSwitchingTenant ? baseVariables : (prev.length > 0 ? prev : baseVariables)));
 
         let baseDefibrillateurs: Defibrillateur[] = [];
-        setDefibrillateurs(prev => (loadedTenantIdState && loadedTenantIdState !== activeRunTenantId ? [] : prev));
-        try {
-          const rawStats =
-            localStorage.getItem(`defib_${activeRunTenantId}_defib_sheet_stats`) ||
-            localStorage.getItem(`defib_${activeRunTenantId.toUpperCase()}_defib_sheet_stats`) ||
-            localStorage.getItem(`defib_${activeRunTenantId.toLowerCase()}_defib_sheet_stats`);
-          if (rawStats) {
-            setDefibSheetStats(JSON.parse(rawStats));
-          }
-        } catch (_) {}
-        Promise.all([
-          idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs_v110`),
-          idbGet<Defibrillateur[]>(`defib_${activeRunTenantId.toUpperCase()}_defibrillateurs_v110`),
-          idbGet<Defibrillateur[]>(`defib_${activeRunTenantId.toLowerCase()}_defibrillateurs_v110`),
-        ])
-          .then(candidates => {
-            const best = candidates
-              .filter(Array.isArray)
-              .sort((a, b) => b.length - a.length)[0];
-            if (Array.isArray(best) && best.length > 0) {
-              const delSet = new Set(getDeletedDefibKeys(activeRunTenantId));
-              const validDefibs = dedupeDefibsList(best.filter((df: any) => !isDefibInDeletedList(df, delSet)));
-              if (validDefibs.length > 0) {
-                setDefibrillateurs(prev => (prev.length < validDefibs.length ? validDefibs : prev));
-                setIsDefibLoading(false);
-              }
+        const hasDefibsSheetConfigured = Boolean(getTenantSpreadsheetUrl('spreadsheetDefibrillateurs', baseCompanyInfo, activeRunTenantId));
+        if (hasDefibsSheetConfigured) {
+          try {
+            const rawStats =
+              localStorage.getItem(`defib_${activeRunTenantId}_defib_sheet_stats`) ||
+              localStorage.getItem(`defib_${activeRunTenantId.toUpperCase()}_defib_sheet_stats`) ||
+              localStorage.getItem(`defib_${activeRunTenantId.toLowerCase()}_defib_sheet_stats`);
+            if (rawStats) {
+              setDefibSheetStats(JSON.parse(rawStats));
             }
-          })
-          .catch(() => {});
+          } catch (_) {}
+          Promise.all([
+            idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs_v110`),
+            idbGet<Defibrillateur[]>(`defib_${activeRunTenantId.toUpperCase()}_defibrillateurs_v110`),
+            idbGet<Defibrillateur[]>(`defib_${activeRunTenantId.toLowerCase()}_defibrillateurs_v110`),
+          ])
+            .then(candidates => {
+              if (tenantIdRef.current !== activeRunTenantId) return;
+              const best = candidates
+                .filter(Array.isArray)
+                .sort((a, b) => b.length - a.length)[0];
+              if (Array.isArray(best) && best.length > 0) {
+                const delSet = new Set(getDeletedDefibKeys(activeRunTenantId));
+                const validDefibs = dedupeDefibsList(best.filter((df: any) => !isDefibInDeletedList(df, delSet)));
+                if (validDefibs.length > 0) {
+                  setDefibrillateurs(prev => (prev.length < validDefibs.length ? validDefibs : prev));
+                  setIsDefibLoading(false);
+                }
+              }
+            })
+            .catch(() => {});
+        } else {
+          setDefibrillateurs([]);
+          setDefibSheetStats({ total: 0, synced: true });
+        }
 
         // Maintain cached data on reload/refresh for spreadsheet-backed tabs (like DefibTab) to avoid display flickering
         const cachedTickets = getLocalTenantValue<SupportTicket[]>('support_tickets', []);

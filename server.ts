@@ -2899,11 +2899,22 @@ function getAllServerRegisteredTenantsSync(): any[] {
   if (Date.now() - lastTenantsFetchTime > 15000) {
     getRegisteredTenantsFromDb(false).catch(() => {});
   }
+  const mergedMap = new Map<string, any>();
+  const addList = (list: any[]) => {
+    if (!Array.isArray(list)) return;
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const tid = String(item.id || '').trim().toLowerCase();
+      if (!tid) continue;
+      mergedMap.set(tid, { ...(mergedMap.get(tid) || {}), ...item });
+    }
+  };
+  addList(SERVER_KNOWN_TENANTS);
   const masterList = getCachedMasterTenantsSync();
-  if (Array.isArray(masterList) && masterList.length > 0) {
-    return masterList;
-  }
-  return SERVER_KNOWN_TENANTS;
+  if (Array.isArray(masterList)) addList(masterList);
+  const memList = serverMemoryStore.get('registered_tenants');
+  if (Array.isArray(memList)) addList(memList);
+  return Array.from(mergedMap.values());
 }
 
 function findServerTenantInList(regTenants: any[], targetTenantId: string): any | null {
@@ -4856,17 +4867,9 @@ async function warmupDefibrillateursStore() {
       return '';
     };
 
-    for (const globalKey of ['defib_tenantDatabases', 'tenantDatabases']) {
-      const memGlobal = serverMemoryStore.get(globalKey);
-      if (Array.isArray(memGlobal)) {
-        const found = checkTenantsList(memGlobal);
-        if (found) return found;
-      }
-    }
-
     for (const cand of candidateTenants) {
-      for (const suffix of ['companyInfo', 'tenantDatabases', 'company_info']) {
-        const key = cand === 'demo' ? suffix : `${cand}_${suffix}`;
+      for (const suffix of ['tenantDatabases', 'companyInfo', 'company_info']) {
+        const key = cand.toLowerCase() === 'demo' ? suffix : `${cand}_${suffix}`;
         if (serverMemoryStore.has(key)) {
           const obj = serverMemoryStore.get(key);
           if (Array.isArray(obj)) {
@@ -4883,7 +4886,8 @@ async function warmupDefibrillateursStore() {
         const diskFile = path.join(COLLECTIONS_DIR, `${key}.json`);
         if (fs.existsSync(diskFile)) {
           try {
-            const obj = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
+            const rawDisk = JSON.parse(fs.readFileSync(diskFile, 'utf-8'));
+            const obj = rawDisk?.value !== undefined ? rawDisk.value : rawDisk;
             if (Array.isArray(obj)) {
               const found = checkTenantsList(obj);
               if (found) return found;
@@ -4911,6 +4915,9 @@ async function warmupDefibrillateursStore() {
       }
       if (tabType === 'clients') {
         return 'https://docs.google.com/spreadsheets/d/1-hgTWh9B07WeD4jYXH3vwNnKPMRSU3qTGltIYmm64gg/edit';
+      }
+      if (tabType === 'reglages') {
+        return 'https://docs.google.com/spreadsheets/d/1uUeV2zzX0hpAjhzdUnn26H-7mZzxzUvaZP7HaT5Em1A/edit?usp=sharing';
       }
     }
 
@@ -5018,8 +5025,10 @@ async function warmupDefibrillateursStore() {
           }
         }
         docKeysToFetch.add('registered_tenants');
-        docKeysToFetch.add('tenantDatabases');
-        docKeysToFetch.add('defib_tenantDatabases');
+        if (cleanTid === 'demo') {
+          docKeysToFetch.add('tenantDatabases');
+          docKeysToFetch.add('defib_tenantDatabases');
+        }
 
         const fetchSingleDoc = async (docKey: string): Promise<{ key: string; val: any }> => {
           try {
@@ -5074,12 +5083,17 @@ async function warmupDefibrillateursStore() {
           if (Array.isArray(val)) {
             for (const item of val) {
               if (!item || typeof item !== 'object') continue;
-              const tidStr = String(item.tenantId || item.envId || item.shortEnvId || item.id || '').trim().toLowerCase();
-              if (tAliases.has(tidStr) || candidateTenants.some(c => c.toLowerCase() === tidStr)) {
+              const tidStr = String(item.tenantId || item.envId || item.id || '').trim().toLowerCase();
+              if (tidStr && (tAliases.has(tidStr) || candidateTenants.some(c => c.toLowerCase() === tidStr))) {
                 firestoreObjects.push(item);
               }
             }
           } else if (typeof val === 'object') {
+            // Verify that if the object explicitly declares a tenantId/envId/id, it belongs to this tenant
+            const explicitTid = String(val.tenantId || val.envId || val.id || '').trim().toLowerCase();
+            if (explicitTid && !tAliases.has(explicitTid) && !candidateTenants.some(c => c.toLowerCase() === explicitTid)) {
+              continue;
+            }
             firestoreObjects.push(val);
             firestoreDocCheckCacheMs.set(key, Date.now());
           }
