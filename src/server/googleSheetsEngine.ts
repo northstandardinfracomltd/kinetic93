@@ -1871,12 +1871,12 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Message à afficher', field: 'communicationPortailClient', aliases: ['messageaafficher', 'message', 'communicationportailclient', 'texte', 'annonce', 'communication', 'informationclient', 'messageportailclient', 'texteportailclient', 'bandeaudinformation', 'bandeau', 'messageclient', 'infoclient', 'portailclient', 'communicationclient'] },
   ],
   observateurActionsSuspectes: [
+    { header: 'Nom Prénom Utilisateur', field: 'userName', aliases: ['nomprenomutilisateur', 'nomprenom', 'nometprenom', 'nomprenomdelutilisateur', 'nomdelutilisateur', 'utilisateur', 'username', 'collaborateur', 'membre', 'auteur', 'nom'] },
+    { header: 'IP', field: 'userIp', aliases: ['ip', 'adresseip', 'userip', 'iputilisateur'] },
+    { header: "Texte de l'action", field: 'message', aliases: ['textedelaction', 'texteaction', 'observateurevenement', 'evenement', 'message', 'description', 'trace', 'detail', 'details', 'intitule', 'actioneffectuee', 'titre', 'observation'] },
+    { header: 'Horodatage', field: 'timestamp', aliases: ['horodatage', 'dateheure', 'dateetheure', 'timestamp', 'date', 'createdat'] },
     { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idtrace', 'reference'] },
-    { header: 'Date & Heure', field: 'timestamp', aliases: ['dateheure', 'dateetheure', 'horodatage', 'timestamp', 'date', 'createdat'] },
-    { header: 'Utilisateur', field: 'userName', aliases: ['utilisateur', 'username', 'collaborateur', 'membre', 'auteur', 'nom'] },
-    { header: 'Adresse IP', field: 'userIp', aliases: ['adresseip', 'userip', 'ip', 'iputilisateur'] },
-    { header: 'Type d’action', field: 'actionType', aliases: ['typedaction', 'typeaction', 'actiontype', 'categorie', 'type', 'action'] },
-    { header: 'Observateur - Événement', field: 'message', aliases: ['evenement', 'message', 'description', 'trace', 'detail', 'details', 'intitule', 'actioneffectuee'] },
+    { header: 'Type d’action', field: 'actionType', aliases: ['typedaction', 'typeaction', 'actiontype', 'categorie', 'type'] },
   ],
   exportations: [
     { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idexport', 'reference'] },
@@ -2353,27 +2353,45 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     }).flat(),
   ],
   stocksGlobaux: [
-    // Section 1 - Propriétés
+    // Section 1 - Propriétés & Fournisseurs
     { header: 'Identifiant', field: 'id', aliases: ['identifiant', 'id', 'idstock', 'identifiantstock', 'idcentralestock', 'identifiantcentralestock'] },
-    { header: 'Inventaire (UGS)', field: 'ugs', aliases: ['inventaireugs', 'ugs', 'codeugs', 'referenceugs', 'refugs', 'inventaire', 'sku', 'codebarre', 'reference'] },
-    { header: 'Sélection de la pièce ou service', field: 'denominationPieceId', aliases: ['selectiondelapieceouservice', 'selectiondelapiece', 'selectionpiece', 'pieceouservice', 'piece', 'denominationdelapiece', 'denominationpiece', 'denominationpieceid', 'nomdelapiece', 'nompiece', 'denomination', 'article', 'designation', 'libelle'] },
-    { header: 'Usage recommandé', field: 'usageRecommandeIds', aliases: ['usagerecommande', 'recommandationdusage', 'recommandationusage', 'recommandationdusagemodelescompatibles', 'usagerecommandeids', 'modelescompatibles', 'compatibilite', 'appareilscompatibles'] },
-    { header: 'Tarif fournisseur (€ HT)', field: 'valeurAchat', aliases: ['tariffournisseureuroht', 'tariffournisseurht', 'tariffournisseur', 'coutdachatunitaireht', 'coutdachatunitairehteuro', 'coutachatunitaireht', 'coutachatht', 'achatht', 'valeurachat', 'valeurdachat', 'valeurdachatht', 'prixachatht', 'prixdachatht', 'prixachat', 'paht'], type: 'number' },
-    { header: 'Marge (€ HT)', field: 'marge', aliases: ['margeeuroht', 'margeht', 'marge', 'margecommerciale', 'margepourcent', 'tauxmarge', 'tauxdemarge'], type: 'number' },
-    { header: 'Tarif de vente (€ HT)', field: 'prixVenteHt', aliases: ['tarifdeventeeuroht', 'tarifdeventeht', 'tarifdevente', 'tarifventeht', 'tarifdeventeunitaireht', 'tarifdeventeunitairehteuro', 'venteht', 'prixventeht', 'prixdeventeht', 'prixvente', 'pvht', 'prixunitaireht'], type: 'number' },
+    { header: 'Pièce ou service.', field: 'denominationPieceId', aliases: ['pieceouservice', 'selectiondelapieceouservice', 'selectiondelapiece', 'selectionpiece', 'piece', 'denominationdelapiece', 'denominationpiece', 'denominationpieceid', 'nomdelapiece', 'nompiece', 'denomination', 'article', 'designation', 'libelle'] },
+    { header: 'UGS.', field: 'ugs', aliases: ['ugs', 'inventaireugs', 'codeugs', 'referenceugs', 'refugs', 'inventaire', 'sku', 'codebarre', 'reference'] },
+    { header: 'Quantité disponible.', field: 'quantite', aliases: ['quantitedisponible', 'qtedisponible', 'volumedisponible', 'disponible', 'quantite', 'qte', 'stockdisponible', 'dispo'], type: 'number' },
+    { header: 'Quantitée réservée.', field: 'quantiteReservee', aliases: ['quantiteereservee', 'quantitereservee', 'qtereservee', 'volumereserve', 'reserve', 'stockreserve'], type: 'number' },
+    { header: 'Quantité totale.', field: 'quantiteTotale', aliases: ['quantitetotale', 'qtetotale', 'volumetotal', 'stocktotal'], type: 'number' },
+    { header: 'Tarif fournisseur.', field: 'valeurAchat', aliases: ['tariffournisseur', 'tariffournisseureuroht', 'tariffournisseurht', 'coutdachatunitaireht', 'coutdachatunitairehteuro', 'coutachatunitaireht', 'coutachatht', 'achatht', 'valeurachat', 'valeurdachat', 'valeurdachatht', 'prixachatht', 'prixdachatht', 'prixachat', 'paht'], type: 'number' },
+    { header: 'Marge.', field: 'marge', aliases: ['marge', 'margeeuroht', 'margeht', 'margecommerciale', 'margepourcent', 'tauxmarge', 'tauxdemarge'], type: 'number' },
+    { header: 'Tarif de vente.', field: 'prixVenteHt', aliases: ['tarifdevente', 'tarifdeventeeuroht', 'tarifdeventeht', 'tarifventeht', 'tarifdeventeunitaireht', 'tarifdeventeunitairehteuro', 'venteht', 'prixventeht', 'prixdeventeht', 'prixvente', 'pvht', 'prixunitaireht'], type: 'number' },
+    { header: 'Usage recommandé.', field: 'usageRecommandeIds', aliases: ['usagerecommande', 'recommandationdusage', 'recommandationusage', 'recommandationdusagemodelescompatibles', 'usagerecommandeids', 'modelescompatibles', 'compatibilite', 'appareilscompatibles'] },
+    { header: 'Sélection Miniature.', field: 'selectionMiniature', aliases: ['selectionminiature', 'miniature', 'imageminiature', 'vignette', 'urlminiature'] },
+    { header: 'Poids Net (Kilogramme).', field: 'poidsNet', aliases: ['poidsnetkilogramme', 'poidsnetkg', 'poidsnet', 'poids'] },
+    { header: 'Dimension Longueur.', field: 'dimensionLongueur', aliases: ['dimensionlongueur', 'longueur', 'dimlongueur'] },
+    { header: 'Dimension Largeur.', field: 'dimensionLargeur', aliases: ['dimensionlargeur', 'largeur', 'dimlargeur'] },
+    { header: 'Dimension Hauteur.', field: 'dimensionHauteur', aliases: ['dimensionhauteur', 'hauteur', 'dimhauteur'] },
+    { header: 'Frais Fixe Coût Stockage.', field: 'fraisFixeCoutStockage', aliases: ['fraisfixecoutstockage', 'fraisfixecoutstockageeuro', 'fraisfixestockage', 'coutstockage', 'fraisstockage'] },
+    { header: 'Frais Fixe Coût Transport.', field: 'fraisFixeCoutTransport', aliases: ['fraisfixecouttransport', 'fraisfixecouttransporteuro', 'fraisfixetransport', 'couttransport', 'fraistransport'] },
+    { header: 'Garantie (Mois).', field: 'garantieMois', aliases: ['garantiemois', 'garantie', 'dureegarantie', 'dureedegarantie'] },
+    { header: 'Nombre Colis par Unité.', field: 'nombreColisParUnite', aliases: ['nombrecolisparunite', 'nbcolisparunite', 'colisparunite', 'nombredecolisparunite'] },
+    { header: 'Fournisseur. 1', field: 'fournisseur1', aliases: ['fournisseur1', 'fournisseur_1', 'nomfournisseur1'] },
+    { header: 'Référence Fournisseur. 1', field: 'referenceFournisseur1', aliases: ['referencefournisseur1', 'reffournisseur1', 'reference_fournisseur_1'] },
+    { header: 'Prix Achat fournisseur. 1', field: 'prixAchatFournisseur1', aliases: ['prixachatfournisseur1', 'prixachatfournisseur1euro', 'tarifachatfournisseur1', 'prixfournisseur1'] },
+    { header: 'Fournisseur. 2', field: 'fournisseur2', aliases: ['fournisseur2', 'fournisseur_2', 'nomfournisseur2'] },
+    { header: 'Référence Fournisseur. 2', field: 'referenceFournisseur2', aliases: ['referencefournisseur2', 'reffournisseur2', 'reference_fournisseur_2'] },
+    { header: 'Prix Achat fournisseur. 2', field: 'prixAchatFournisseur2', aliases: ['prixachatfournisseur2', 'prixachatfournisseur2euro', 'tarifachatfournisseur2', 'prixfournisseur2'] },
+    { header: 'Fournisseur. 3', field: 'fournisseur3', aliases: ['fournisseur3', 'fournisseur_3', 'nomfournisseur3'] },
+    { header: 'Référence Fournisseur. 3', field: 'referenceFournisseur3', aliases: ['referencefournisseur3', 'reffournisseur3', 'reference_fournisseur_3'] },
+    { header: 'Prix Achat fournisseur. 3', field: 'prixAchatFournisseur3', aliases: ['prixachatfournisseur3', 'prixachatfournisseur3euro', 'tarifachatfournisseur3', 'prixfournisseur3'] },
     { header: 'Stockage', field: 'stockage', aliases: ['stockage', 'emplacementdestockage', 'emplacementstockage', 'zonestockage', 'rayon', 'casier', 'localisationstock'] },
-    { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentaireinterne', 'commentaires', 'notes', 'note', 'observation', 'observations', 'remarque', 'remarques'] },
-    // Section 2 - Volumes
-    { header: 'Quantité disponible', field: 'quantite', aliases: ['quantitedisponible', 'qtedisponible', 'volumedisponible', 'disponible', 'quantite', 'qte', 'stockdisponible', 'dispo'], type: 'number' },
-    { header: 'Quantité réservée', field: 'quantiteReservee', aliases: ['quantitereservee', 'qtereservee', 'volumereserve', 'reserve', 'stockreserve'], type: 'number' },
     { header: 'Quantité entrante', field: 'volumeEntrant', aliases: ['quantiteentrante', 'qteentrante', 'volumeentrant', 'volumeentrantcommande', 'entrant', 'stockentrant', 'encommande'], type: 'number' },
     { header: 'Date de livraison', field: 'livraisonDate', aliases: ['datedelivraison', 'datelivraison', 'livraisondate', 'prochainelivraisonprevue', 'prochainelivraison', 'livraison'], type: 'date' },
     { header: 'Date de réapprovisionnement', field: 'reapprovisionnementDate', aliases: ['datedereapprovisionnement', 'datereapprovisionnement', 'reapprovisionnementdate', 'dernierreapprovisionnement', 'reapprovisionnement'], type: 'date' },
-    { header: 'Besoin projeté sous 2 mois', field: 'besoinProjete2Mois', aliases: ['besoinprojetesous2mois', 'besoinprojete2mois', 'besoinprojetemoinsde2mois', 'besoin2mois', 'besoinsous2mois', 'sortantcettesem', 'sortantcettesemaine', 'sortantsem'], type: 'number' },
-    { header: 'Besoin projeté de 2 à 6 mois', field: 'besoinProjete2a6Mois', aliases: ['besoinprojetede2a6mois', 'besoinprojete2a6mois', 'besoin2a6mois', 'besoinde2a6mois', 'sortantsempro', 'sortantsemaineprochaine'], type: 'number' },
-    { header: 'Total à commander', field: 'totalACommander', aliases: ['totalacommander', 'acommander', 'quantiteacommander', 'sortant7a30jours', 'sortant7a30j'], type: 'number' },
+    { header: 'Besoin projeté à 2 mois.', field: 'besoinProjete2Mois', aliases: ['besoinprojetea2mois', 'besoinprojetesous2mois', 'besoinprojete2mois', 'besoinprojetemoinsde2mois', 'besoin2mois', 'besoinsous2mois', 'sortantcettesem', 'sortantcettesemaine', 'sortantsem'], type: 'number' },
+    { header: 'Besoin projeté entre 2 à 6 mois.', field: 'besoinProjete2a6Mois', aliases: ['besoinprojeteentre2a6mois', 'besoinprojetede2a6mois', 'besoinprojete2a6mois', 'besoin2a6mois', 'besoinde2a6mois', 'sortantsempro', 'sortantsemaineprochaine'], type: 'number' },
+    { header: 'Total à commander.', field: 'totalACommander', aliases: ['totalacommander', 'acommander', 'quantiteacommander', 'sortant7a30jours', 'sortant7a30j'], type: 'number' },
+    { header: 'Commentaire. (Mouvements)', field: 'commentaire', aliases: ['commentairemouvements', 'commentaire', 'commentaireinterne', 'commentaires', 'notes', 'note', 'observation', 'observations', 'remarque', 'remarques'] },
     // Section 3 & 4 - JSON fallbacks + Toggle
-    { header: "Activer l'inventaire de traçabilité", field: 'traceabilityEnabled', aliases: ['activerlinventairedetracabilite', 'inventairedetracabiliteactif', 'invtracaactif', 'tracabiliteactivee', 'activertracabilite', 'traceabilityenabled', 'tracabilite'], type: 'bool' },
+    { header: 'Activer la traçabilité des pièces.', field: 'traceabilityEnabled', aliases: ['activerlatracabilitedespieces', 'activerlinventairedetracabilite', 'inventairedetracabiliteactif', 'invtracaactif', 'tracabiliteactivee', 'activertracabilite', 'traceabilityenabled', 'tracabilite'], type: 'bool' },
     { header: 'Mouvements', field: 'mouvements', aliases: ['mouvements', 'historiquemouvements', 'listemouvements'], type: 'json' },
     { header: 'Inventaire de traçabilité', field: 'traceabilities', aliases: ['inventairedetracabilite', 'tracabilites', 'traceabilities', 'listetracabilite'], type: 'json' },
     // Section 3 - Mouvements (up to 20 movements)
@@ -2386,41 +2404,58 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
           aliases: [`mouvement${n}id`, `mouvement${n}identifiant`, `idmouvement${n}`, `identifiantmouvement${n}`, `section3mouvement${n}id`, `section3id${n}`, `mvt${n}id`],
         },
         {
-          header: `Mouvement #${n} - Type de mouvement`,
+          header: `Type du mouvement. ${n}`,
           field: `_mv${n}_type`,
-          aliases: [`mouvement${n}typedemouvement`, `mouvement${n}typemouvement`, `mouvement${n}type`, `typedemouvement${n}`, `typemouvement${n}`, `section3mouvement${n}type`, `section3typedemouvement${n}`, `mvt${n}type`],
+          aliases: [`typedumouvement${n}`, `typedemouvement${n}`, `typemouvement${n}`, `mouvement${n}typedemouvement`, `mouvement${n}typemouvement`, `mouvement${n}type`, `section3mouvement${n}type`, `section3typedemouvement${n}`, `mvt${n}type`],
         },
         {
-          header: `Mouvement #${n} - Volume`,
+          header: `Provenance. ${n}`,
+          field: `_mv${n}_emplacement`,
+          aliases: [`provenance${n}`, `provenancedestination${n}`, `emplacementmouvement${n}`, `mouvement${n}provenancedestination`, `mouvement${n}emplacement`, `mouvement${n}destination`, `mouvement${n}provenance`, `section3mouvement${n}emplacement`, `section3provenancedestination${n}`, `mvt${n}emplacement`],
+        },
+        {
+          header: `Volume. ${n}`,
           field: `_mv${n}_volume`,
-          aliases: [`mouvement${n}volume`, `mouvement${n}quantite`, `volumemouvement${n}`, `section3mouvement${n}volume`, `section3volume${n}`, `mvt${n}volume`],
+          aliases: [`volume${n}`, `volumemouvement${n}`, `mouvement${n}volume`, `mouvement${n}quantite`, `section3mouvement${n}volume`, `section3volume${n}`, `mvt${n}volume`],
           type: 'number',
         },
         {
-          header: `Mouvement #${n} - Date`,
+          header: `Date. ${n}`,
           field: `_mv${n}_date`,
-          aliases: [`mouvement${n}date`, `datemouvement${n}`, `datedumouvement${n}`, `section3mouvement${n}date`, `section3date${n}`, `mvt${n}date`],
+          aliases: [`date${n}`, `datemouvement${n}`, `datedumouvement${n}`, `mouvement${n}date`, `section3mouvement${n}date`, `section3date${n}`, `mvt${n}date`],
           type: 'date',
         },
         {
-          header: `Mouvement #${n} - Statut`,
-          field: `_mv${n}_statut`,
-          aliases: [`mouvement${n}statut`, `statutmouvement${n}`, `section3mouvement${n}statut`, `section3statut${n}`, `mvt${n}statut`],
+          header: `Suivi colis. ${n}`,
+          field: `_mv${n}_trackingLink`,
+          aliases: [`suivicolis${n}`, `liendesuivicolis${n}`, `mouvement${n}suivicolis`, `mouvement${n}liendesuivicolis`, `section3mouvement${n}suivicolis`, `section3suivicolis${n}`, `mvt${n}suivicolis`],
         },
         {
-          header: `Mouvement #${n} - Provenance / Destination`,
-          field: `_mv${n}_emplacement`,
-          aliases: [`mouvement${n}provenancedestination`, `mouvement${n}emplacement`, `mouvement${n}destination`, `mouvement${n}provenance`, `provenancedestination${n}`, `emplacementmouvement${n}`, `section3mouvement${n}emplacement`, `section3provenancedestination${n}`, `mvt${n}emplacement`],
+          header: `Statut. ${n}`,
+          field: `_mv${n}_statut`,
+          aliases: [`statut${n}`, `statutmouvement${n}`, `mouvement${n}statut`, `section3mouvement${n}statut`, `section3statut${n}`, `mvt${n}statut`],
         },
         {
           header: `Mouvement #${n} - Bon de commande`,
           field: `_mv${n}_bonCommande`,
           aliases: [`mouvement${n}bondecommande`, `mouvement${n}provenanceachatsfournisseurs`, `bondecommandemouvement${n}`, `section3mouvement${n}bondecommande`, `section3bondecommande${n}`, `mvt${n}bondecommande`],
         },
+      ] as GenericColumnDef[];
+    }).flat(),
+    // Stock distribué summary columns (up to 10 slots in Centrale des Stocks template)
+    ...Array.from({ length: 10 }, (_, idx) => {
+      const n = idx + 1;
+      return [
         {
-          header: `Mouvement #${n} - Suivi colis`,
-          field: `_mv${n}_trackingLink`,
-          aliases: [`mouvement${n}suivicolis`, `mouvement${n}liendesuivicolis`, `suivicolis${n}`, `liendesuivicolis${n}`, `section3mouvement${n}suivicolis`, `section3suivicolis${n}`, `mvt${n}suivicolis`],
+          header: `Stock distribué - Emplacement de stockage. ${n}`,
+          field: `_sd${n}_emplacement`,
+          aliases: [`stockdistribueemplacementdestockage${n}`, `stockdistribueemplacementstockage${n}`, `stockdistribueemplacement${n}`],
+        },
+        {
+          header: `Stock distribué - Volume total disponible. ${n}`,
+          field: `_sd${n}_volume`,
+          aliases: [`stockdistribuevolumetotaldisponible${n}`, `stockdistribuevolumedisponible${n}`, `stockdistribuevolume${n}`],
+          type: 'number',
         },
       ] as GenericColumnDef[];
     }).flat(),
@@ -2952,10 +2987,25 @@ function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType):
       const baseConcept = getStrippedConcept(rawH);
       const nextConcept = i + 1 < headers.length ? getStrippedConcept(headers[i + 1]) : '';
 
+      // Check if this column is a Stock distribué summary column (prevent treating as movement)
+      if (fullNorm.startsWith('stockdistribue')) {
+        const sdMatch = rawH.match(/(\d{1,2})\s*$/);
+        const sdIdx = sdMatch ? parseInt(sdMatch[1], 10) : 0;
+        if (sdIdx >= 1 && sdIdx <= 10) {
+          const isVol = fullNorm.includes('volume');
+          const sdDef = defByField.get(`_sd${sdIdx}_${isVol ? 'volume' : 'emplacement'}`);
+          if (sdDef) {
+            colToDef.set(i, sdDef);
+            usedCols.add(i);
+          }
+        }
+        continue;
+      }
+
       // Check if this column is the traceabilityEnabled toggle
       if (
-        ['activerlinventairedetracabilite', 'inventairedetracabiliteactif', 'invtracaactif', 'tracabiliteactivee', 'activertracabilite', 'traceabilityenabled'].includes(fullNorm) ||
-        ['activerlinventairedetracabilite', 'inventairedetracabiliteactif', 'invtracaactif', 'tracabiliteactivee', 'activertracabilite', 'traceabilityenabled'].includes(baseConcept)
+        ['activerlatracabilitedespieces', 'activerlinventairedetracabilite', 'inventairedetracabiliteactif', 'invtracaactif', 'tracabiliteactivee', 'activertracabilite', 'traceabilityenabled'].includes(fullNorm) ||
+        ['activerlatracabilitedespieces', 'activerlinventairedetracabilite', 'inventairedetracabiliteactif', 'invtracaactif', 'tracabiliteactivee', 'activertracabilite', 'traceabilityenabled'].includes(baseConcept)
       ) {
         const toggleDef = defByField.get('traceabilityEnabled');
         if (toggleDef) {
@@ -2969,8 +3019,8 @@ function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType):
       if (
         /^section3/.test(fullNorm) ||
         /^(?:mouvement|mvt)\d/.test(fullNorm) ||
-        ['typedemouvement', 'typemouvement', 'provenancedestination', 'suivicolis', 'liendesuivicolis', 'provenanceachatsfournisseurs'].includes(baseConcept) ||
-        (['id', 'identifiant'].includes(baseConcept) && ['type', 'typedemouvement', 'typemouvement'].includes(nextConcept))
+        ['typedumouvement', 'typedemouvement', 'typemouvement', 'provenancedestination', 'suivicolis', 'liendesuivicolis', 'provenanceachatsfournisseurs'].includes(baseConcept) ||
+        (['id', 'identifiant'].includes(baseConcept) && ['type', 'typedumouvement', 'typedemouvement', 'typemouvement'].includes(nextConcept))
       ) {
         currentSection = 3;
       } else if (
@@ -2982,7 +3032,7 @@ function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType):
         currentSection = 4;
       } else if (
         /^section2/.test(fullNorm) ||
-        ['quantitedisponible', 'qtedisponible', 'volumedisponible', 'quantitereservee', 'qtereservee', 'quantiteentrante', 'datedelivraison', 'datedereapprovisionnement', 'besoinprojetesous2mois', 'besoinprojetede2a6mois', 'totalacommander'].includes(baseConcept)
+        ['quantitedisponible', 'qtedisponible', 'volumedisponible', 'quantiteereservee', 'quantitereservee', 'qtereservee', 'quantiteentrante', 'datedelivraison', 'datedereapprovisionnement', 'besoinprojetea2mois', 'besoinprojetesous2mois', 'besoinprojeteentre2a6mois', 'besoinprojetede2a6mois', 'totalacommander'].includes(baseConcept)
       ) {
         if (currentSection < 3) currentSection = 2;
       }
@@ -2997,7 +3047,7 @@ function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType):
         let mvSlot: keyof typeof mvCounts | null = null;
         if (['id', 'identifiant', 'idmouvement', 'identifiantmouvement'].includes(baseConcept)) {
           mvSlot = 'id';
-        } else if (['type', 'typedemouvement', 'typemouvement', 'naturemouvement'].includes(baseConcept)) {
+        } else if (['type', 'typedumouvement', 'typedemouvement', 'typemouvement', 'naturemouvement'].includes(baseConcept)) {
           mvSlot = 'type';
         } else if (['volume', 'quantite', 'qte', 'volumemouvement'].includes(baseConcept)) {
           mvSlot = 'volume';
@@ -4474,11 +4524,35 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.commentaire = String(merged.commentaire || '').trim();
     merged.quantite = Math.round(parseNum(merged.quantite, 0));
     merged.quantiteReservee = Math.round(parseNum(merged.quantiteReservee, 0));
+    merged.quantiteTotale =
+      merged.quantiteTotale !== undefined && merged.quantiteTotale !== ''
+        ? Math.round(parseNum(merged.quantiteTotale, merged.quantite + merged.quantiteReservee))
+        : merged.quantite + merged.quantiteReservee;
     merged.livraisonDate = normalizeDateStr(merged.livraisonDate || '');
     merged.reapprovisionnementDate = normalizeDateStr(merged.reapprovisionnementDate || '');
     merged.besoinProjete2Mois = Math.round(parseNum(merged.besoinProjete2Mois, 0));
     merged.besoinProjete2a6Mois = Math.round(parseNum(merged.besoinProjete2a6Mois, 0));
     merged.totalACommander = Math.round(parseNum(merged.totalACommander, 0));
+
+    // Additional Propriétés & Fournisseurs fields
+    merged.selectionMiniature = String(merged.selectionMiniature ?? '').trim();
+    merged.poidsNet = String(merged.poidsNet ?? '').trim();
+    merged.dimensionLongueur = String(merged.dimensionLongueur ?? '').trim();
+    merged.dimensionLargeur = String(merged.dimensionLargeur ?? '').trim();
+    merged.dimensionHauteur = String(merged.dimensionHauteur ?? '').trim();
+    merged.fraisFixeCoutStockage = String(merged.fraisFixeCoutStockage ?? '').trim();
+    merged.fraisFixeCoutTransport = String(merged.fraisFixeCoutTransport ?? '').trim();
+    merged.garantieMois = String(merged.garantieMois ?? '').trim();
+    merged.nombreColisParUnite = String(merged.nombreColisParUnite ?? '').trim();
+    merged.fournisseur1 = String(merged.fournisseur1 ?? '').trim();
+    merged.referenceFournisseur1 = String(merged.referenceFournisseur1 ?? '').trim();
+    merged.prixAchatFournisseur1 = String(merged.prixAchatFournisseur1 ?? '').trim();
+    merged.fournisseur2 = String(merged.fournisseur2 ?? '').trim();
+    merged.referenceFournisseur2 = String(merged.referenceFournisseur2 ?? '').trim();
+    merged.prixAchatFournisseur2 = String(merged.prixAchatFournisseur2 ?? '').trim();
+    merged.fournisseur3 = String(merged.fournisseur3 ?? '').trim();
+    merged.referenceFournisseur3 = String(merged.referenceFournisseur3 ?? '').trim();
+    merged.prixAchatFournisseur3 = String(merged.prixAchatFournisseur3 ?? '').trim();
 
     const mvList: any[] = [];
     for (let idx = 1; idx <= 20; idx++) {
@@ -4714,12 +4788,112 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       merged[verticalLoc] = intituleVal;
     }
   } else if (tabType === 'observateurActionsSuspectes') {
+    const rawKeys = Object.keys(rawByHeader);
+    if (rawKeys.length > 0) {
+      const fallbackColMap = resolveGenericColumnFieldMap(rawKeys, 'observateurActionsSuspectes');
+      for (const [kIdx, def] of fallbackColMap.entries()) {
+        const rk = rawKeys[kIdx];
+        const rv = rk ? rawByHeader[rk] : '';
+        if (rv !== undefined && rv !== '' && (merged[def.field] === undefined || merged[def.field] === '')) {
+          merged[def.field] = rv;
+        }
+      }
+    }
+    const rawUserName = String(
+      merged.userName ||
+        rawByHeader['Nom Prénom Utilisateur'] ||
+        rawByHeader['Nom Prénom Utilisateur.'] ||
+        rawByHeader['Utilisateur'] ||
+        ''
+    ).trim();
+    const rawUserIp = String(
+      merged.userIp ||
+        rawByHeader['IP'] ||
+        rawByHeader['IP.'] ||
+        rawByHeader['Adresse IP'] ||
+        ''
+    ).trim();
+    const rawMessage = String(
+      merged.message ||
+        rawByHeader["Texte de l'action"] ||
+        rawByHeader['Texte de l’action'] ||
+        rawByHeader["Texte de l'action."] ||
+        rawByHeader['Observateur - Événement'] ||
+        ''
+    ).trim();
+    const rawTimestamp = String(
+      merged.timestamp ||
+        rawByHeader['Horodatage'] ||
+        rawByHeader['Horodatage.'] ||
+        rawByHeader['Date & Heure'] ||
+        ''
+    ).trim();
+
     merged.id = merged.id || `sus_${rowIndexZeroBased + 2}`;
-    merged.timestamp = merged.timestamp || new Date().toISOString();
-    merged.userName = merged.userName || 'Utilisateur';
-    merged.userIp = merged.userIp || 'Non renseignée';
+    merged.timestamp = rawTimestamp || new Date().toISOString();
+    merged.userIp = rawUserIp || 'Non renseignée';
     merged.actionType = merged.actionType || 'CONNEXION';
-    merged.message = merged.message || '';
+
+    let resolvedUserName = rawUserName;
+    if (!resolvedUserName || resolvedUserName === 'Utilisateur') {
+      const msgMatch = rawMessage.match(/L['’]utilisateur\s+(.+?)\s*\(IP\s*:/i);
+      if (msgMatch && msgMatch[1] && msgMatch[1].trim() && msgMatch[1].trim() !== 'Utilisateur') {
+        resolvedUserName = msgMatch[1].trim();
+      }
+    }
+    if (!resolvedUserName || resolvedUserName === 'Utilisateur') {
+      // Try finding primary member name for this tenant from cached membresEnvironnement or known tenants
+      for (const [ck, cval] of sheetMemoryCache.entries()) {
+        if (ck.startsWith('membresEnvironnement_') && Array.isArray(cval?.items)) {
+          const foundMem = cval.items.find(
+            (m: any) =>
+              m &&
+              String(m.tenantId || '').toLowerCase() === String(tenantId || '').toLowerCase() &&
+              m.name &&
+              String(m.name).trim() !== '' &&
+              String(m.name).trim() !== 'Utilisateur' &&
+              String(m.name).trim() !== 'Administrateur'
+          );
+          if (foundMem) {
+            resolvedUserName = String(foundMem.name).trim();
+            break;
+          }
+        }
+      }
+    }
+    if (!resolvedUserName || resolvedUserName === 'Utilisateur') {
+      const normTid = String(tenantId || '').trim().toUpperCase();
+      if (normTid === 'D7' || normTid === 'D28') {
+        resolvedUserName = 'Jean-Pedro Maignan';
+      } else if (normTid === 'D26' || normTid === 'D67') {
+        resolvedUserName = 'Administrateur DSG';
+      } else if (normTid === 'D27' || normTid === 'D58') {
+        resolvedUserName = 'Administrateur UDPLV';
+      } else {
+        const known = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], tenantId) as any;
+        if (known?.adminName && String(known.adminName).trim()) {
+          resolvedUserName = String(known.adminName).trim();
+        } else if (known?.companyName && String(known.companyName).trim()) {
+          resolvedUserName = `Administrateur ${String(known.companyName).trim()}`;
+        } else {
+          resolvedUserName = 'Administrateur';
+        }
+      }
+    }
+    merged.userName = resolvedUserName;
+
+    if (!rawMessage) {
+      merged.message = `L’utilisateur ${merged.userName} (IP : ${merged.userIp}), s’est connecté.`;
+      merged._needsSuspiciousSheetBackfill = true;
+    } else if (rawMessage.includes('L’utilisateur Utilisateur ') && merged.userName !== 'Utilisateur') {
+      merged.message = rawMessage.replace('L’utilisateur Utilisateur ', `L’utilisateur ${merged.userName} `);
+      merged._needsSuspiciousSheetBackfill = true;
+    } else {
+      merged.message = rawMessage;
+      if (!rawUserName) {
+        merged._needsSuspiciousSheetBackfill = true;
+      }
+    }
   } else if (tabType === 'variables') {
     // Always recover any fields from rawByHeader or legacy unmapped properties on merged
     const rawKeys = Object.keys(rawByHeader);
@@ -5291,6 +5465,30 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.commentaire = enriched.commentaire || '';
     enriched.quantite = enriched.quantite !== undefined && enriched.quantite !== null ? String(enriched.quantite) : '0';
     enriched.quantiteReservee = enriched.quantiteReservee !== undefined && enriched.quantiteReservee !== null ? String(enriched.quantiteReservee) : '0';
+    enriched.quantiteTotale =
+      enriched.quantiteTotale !== undefined && enriched.quantiteTotale !== null
+        ? String(enriched.quantiteTotale)
+        : String((Number(enriched.quantite) || 0) + (Number(enriched.quantiteReservee) || 0));
+
+    // Additional Propriétés & Fournisseurs fields
+    enriched.selectionMiniature = enriched.selectionMiniature ?? '';
+    enriched.poidsNet = enriched.poidsNet ?? '';
+    enriched.dimensionLongueur = enriched.dimensionLongueur ?? '';
+    enriched.dimensionLargeur = enriched.dimensionLargeur ?? '';
+    enriched.dimensionHauteur = enriched.dimensionHauteur ?? '';
+    enriched.fraisFixeCoutStockage = enriched.fraisFixeCoutStockage ?? '';
+    enriched.fraisFixeCoutTransport = enriched.fraisFixeCoutTransport ?? '';
+    enriched.garantieMois = enriched.garantieMois ?? '';
+    enriched.nombreColisParUnite = enriched.nombreColisParUnite ?? '';
+    enriched.fournisseur1 = enriched.fournisseur1 ?? '';
+    enriched.referenceFournisseur1 = enriched.referenceFournisseur1 ?? '';
+    enriched.prixAchatFournisseur1 = enriched.prixAchatFournisseur1 ?? '';
+    enriched.fournisseur2 = enriched.fournisseur2 ?? '';
+    enriched.referenceFournisseur2 = enriched.referenceFournisseur2 ?? '';
+    enriched.prixAchatFournisseur2 = enriched.prixAchatFournisseur2 ?? '';
+    enriched.fournisseur3 = enriched.fournisseur3 ?? '';
+    enriched.referenceFournisseur3 = enriched.referenceFournisseur3 ?? '';
+    enriched.prixAchatFournisseur3 = enriched.prixAchatFournisseur3 ?? '';
 
     const mvList = Array.isArray(enriched.mouvements) ? enriched.mouvements : [];
     const computedEntrant = mvList
@@ -5686,6 +5884,11 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
   }
   if (tabType === 'membresEnvironnement') {
     return [item.email, item.id, item.name]
+      .filter(Boolean)
+      .map(s => String(s).trim().toLowerCase());
+  }
+  if (tabType === 'observateurActionsSuspectes') {
+    return [item.id, item.timestamp]
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
@@ -6186,13 +6389,22 @@ export async function fetchTenantSheetCollection(
       return false;
     });
   };
+  const isStaleSuspiciousSnap = (snap: CachedSheetResult | null | undefined): boolean => {
+    if (!snap || tabType !== 'observateurActionsSuspectes' || !Array.isArray(snap.items)) return false;
+    return snap.items.some((it: any) => {
+      if (!it || typeof it !== 'object') return false;
+      if (!it.message || !String(it.message).trim()) return true;
+      if (!it.userName || it.userName === 'Utilisateur') return true;
+      return false;
+    });
+  };
   if (!sheetMemoryCache.has(cacheKey)) {
     const diskSnap = loadDiskSnapshot(cacheKey);
     if (diskSnap && Array.isArray(diskSnap.items) && diskSnap.items.length > 0) {
       const isStaleVariablesSnap =
         tabType === 'variables' &&
         diskSnap.items.some(hasUnmappedVariableKeys);
-      if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap) && !isStaleMissionsSnap(diskSnap)) {
+      if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap) && !isStaleMissionsSnap(diskSnap) && !isStaleSuspiciousSnap(diskSnap)) {
         if (tabType === 'defibrillateurs') {
           diskSnap.stats = computeSheetCollectionStats(diskSnap.items, 'defibrillateurs');
           saveDiskSnapshotAsync(cacheKey, diskSnap);
@@ -6207,7 +6419,7 @@ export async function fetchTenantSheetCollection(
     const isStaleVariablesCache =
       tabType === 'variables' &&
       cached.items.some(hasUnmappedVariableKeys);
-    if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached) && !isStaleMissionsSnap(cached)) {
+    if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached) && !isStaleMissionsSnap(cached) && !isStaleSuspiciousSnap(cached)) {
       if (tabType === 'defibrillateurs') {
         cached.stats = computeSheetCollectionStats(cached.items, 'defibrillateurs');
       }
@@ -6472,6 +6684,46 @@ export async function fetchTenantSheetCollection(
               }
             }
           }
+        } else if (tabType === 'observateurActionsSuspectes' && baseItems.length > 0 && rawMatrix !== null) {
+          const itemsNeedingBackfill = baseItems.filter(
+            it => it && it._needsSuspiciousSheetBackfill && typeof it._sheetRowNumber === 'number' && it._sheetRowNumber >= 2
+          );
+          for (const it of baseItems) {
+            if (it && it._needsSuspiciousSheetBackfill) {
+              delete it._needsSuspiciousSheetBackfill;
+            }
+          }
+          if (itemsNeedingBackfill.length > 0) {
+            setImmediate(async () => {
+              try {
+                const accessToken = await getServiceAccountAccessToken();
+                if (!accessToken) return;
+                const sheetTitle = await resolveSheetTabTitle(extracted.spreadsheetId, extracted.gid);
+                const rangePrefix = buildSheetRangePrefix(sheetTitle);
+                const lastColLetter = columnIndexToLetter(Math.max(0, headers.length - 1));
+                const batchData = itemsNeedingBackfill.map(it => ({
+                  range: `${rangePrefix}A${it._sheetRowNumber}:${lastColLetter}${it._sheetRowNumber}`,
+                  values: [mapGenericRecordToRow(headers, it, 'observateurActionsSuspectes')],
+                }));
+                await fetchWithRetry(
+                  `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchUpdate`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      Authorization: `Bearer ${accessToken}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      valueInputOption: 'USER_ENTERED',
+                      data: batchData,
+                    }),
+                    signal: AbortSignal.timeout(8000),
+                  },
+                  2
+                );
+              } catch (_) {}
+            });
+          }
         }
       } else if (!rawMatrix) {
         // If remote fetch failed/timed out (e.g. during forceRefresh), preserve existing cached/disk rows before merging overlay
@@ -6526,7 +6778,7 @@ export async function fetchTenantSheetCollection(
           });
 
           if (existingIdx >= 0) {
-            if (isOverlayFreshOrOffline) {
+            if (isOverlayFreshOrOffline || tabType === 'observateurActionsSuspectes') {
               const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
               if (tabType === 'clients' && isPlaceholderClientValue(cleanUp.id)) {
                 delete cleanUp.id;
@@ -6599,6 +6851,15 @@ export async function fetchTenantSheetCollection(
             baseItems.push(recItem);
           }
         }
+      }
+
+      if (tabType === 'observateurActionsSuspectes' && baseItems.length > 1) {
+        baseItems.sort((a, b) => {
+          const tA = new Date(a?.timestamp || 0).getTime();
+          const tB = new Date(b?.timestamp || 0).getTime();
+          if (!isNaN(tA) && !isNaN(tB) && tA !== tB) return tB - tA;
+          return 0;
+        });
       }
 
       if (tabType === 'clients') {

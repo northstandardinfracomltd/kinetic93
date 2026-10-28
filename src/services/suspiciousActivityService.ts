@@ -97,18 +97,140 @@ export async function fetchCurrentIp(): Promise<string> {
   return inMemoryIp || 'Non renseignée';
 }
 
-export function getCurrentUserName(fallbackUser?: { name?: string; email?: string } | null): string {
-  if (fallbackUser?.name && fallbackUser.name.trim() !== '') return fallbackUser.name.trim();
-  if (fallbackUser?.email && fallbackUser.email.trim() !== '') return fallbackUser.email.trim();
+function isGenericOrEmailName(val?: string | null): boolean {
+  if (!val) return true;
+  const trimmed = val.trim();
+  if (!trimmed) return true;
+  const lower = trimmed.toLowerCase();
+  if (
+    lower === 'utilisateur' ||
+    lower === 'administrateur' ||
+    lower === 'admin' ||
+    lower === 'super-administrateur' ||
+    lower === 'technicien' ||
+    trimmed.includes('@')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function getCurrentUserName(
+  fallbackUser?: { name?: string; email?: string } | string | null,
+  tenantId?: string
+): string {
+  const fbObj =
+    typeof fallbackUser === 'string'
+      ? fallbackUser.includes('@')
+        ? { email: fallbackUser.trim() }
+        : { name: fallbackUser.trim() }
+      : fallbackUser || {};
+
+  let savedUser: { name?: string; email?: string } = {};
   try {
-    const saved = localStorage.getItem('defib_admin_logged_user');
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('defib_admin_logged_user') : null;
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed?.name && parsed.name.trim() !== '') return parsed.name.trim();
-      if (parsed?.email && parsed.email.trim() !== '') return parsed.email.trim();
+      if (parsed && typeof parsed === 'object') savedUser = parsed;
     }
   } catch (_) {}
-  return 'Utilisateur';
+
+  const candidateName = (fbObj.name && fbObj.name.trim()) || (savedUser.name && savedUser.name.trim()) || '';
+  if (candidateName && !isGenericOrEmailName(candidateName)) {
+    return candidateName;
+  }
+
+  const candidateEmail = (
+    (fbObj.email && fbObj.email.trim()) ||
+    (fbObj.name && fbObj.name.includes('@') ? fbObj.name.trim() : '') ||
+    (savedUser.email && savedUser.email.trim()) ||
+    (savedUser.name && savedUser.name.includes('@') ? savedUser.name.trim() : '') ||
+    ''
+  ).toLowerCase();
+
+  // Check tenant members in localStorage (loaded from Spreadsheet Membres de l'environnement or Firestore)
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const effTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      const memberKeys = [
+        `defib_${effTid}_members`,
+        `defib_${effTid.toUpperCase()}_members`,
+        `defib_${effTid.toLowerCase()}_members`,
+      ];
+      for (const mk of memberKeys) {
+        const rawMems = localStorage.getItem(mk);
+        if (!rawMems) continue;
+        const parsedMems = JSON.parse(rawMems);
+        if (!Array.isArray(parsedMems)) continue;
+        if (candidateEmail) {
+          const matchedByEmail = parsedMems.find(
+            (m: any) =>
+              m &&
+              String(m.email || '').trim().toLowerCase() === candidateEmail &&
+              m.name &&
+              !isGenericOrEmailName(String(m.name))
+          );
+          if (matchedByEmail) return String(matchedByEmail.name).trim();
+        }
+        const firstNamedAdmin = parsedMems.find(
+          (m: any) => m && m.name && !isGenericOrEmailName(String(m.name))
+        );
+        if (firstNamedAdmin && (!candidateName || isGenericOrEmailName(candidateName))) {
+          return String(firstNamedAdmin.name).trim();
+        }
+      }
+    }
+  } catch (_) {}
+
+  if (candidateName && !candidateName.includes('@')) {
+    return candidateName;
+  }
+  if (candidateEmail) {
+    const localPart = candidateEmail.split('@')[0] || '';
+    const formatted = localPart
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+    if (formatted) return formatted;
+    return candidateEmail;
+  }
+  return candidateName || 'Administrateur';
+}
+
+export function buildDefaultSuspiciousMessage(
+  actionType: SuspiciousActionType | string,
+  userName: string,
+  userIp: string,
+  details?: Record<string, any>
+): string {
+  const safeName = userName && userName.trim() ? userName.trim() : 'Administrateur';
+  const safeIp = userIp && userIp.trim() ? userIp.trim() : 'Non renseignée';
+  switch (actionType) {
+    case 'MODIFICATION_MASSE_DEFIB':
+      return `L’utilisateur ${safeName} (IP : ${safeIp}), à effectué une modification en masse des Défibrillateurs.`;
+    case 'EXPORT_MASSE':
+      return `L’utilisateur ${safeName} (IP : ${safeIp}), à effectué un export en masse.`;
+    case 'SUPPRESSION_DEFIB':
+      return `L’utilisateur ${safeName} (IP : ${safeIp}), à supprimé le défibrillateur ${details?.identifiant || 'Inconnu'} / ${details?.materialType || 'Défibrillateur'}.`;
+    case 'SUPPRESSION_AUTRE_MATERIEL':
+      return `L’utilisateur ${safeName} (IP : ${safeIp}), à supprimé le autre matériel ${details?.identifiant || 'Inconnu'} / ${details?.serialNumber || 'Sans numéro de série'}.`;
+    case 'SUPPRESSION_CLIENT':
+      return `L’utilisateur ${safeName} (IP : ${safeIp}), à supprime le client ${details?.companyName || 'Client'}.`;
+    case 'SUPPRESSION_TOURNEE':
+      return `L’utilisateur ${safeName} (IP : ${safeIp}), à supprimé la tournée ${details?.tourName || 'Tournée'}.`;
+    case 'SUPPRESSION_STOCK_CENTRALE':
+      return `L’utilisateur ${safeName} (IP : ${safeIp}), à supprimé le stock de la centrale ${details?.itemName || 'Équipement'}.`;
+    case 'SUPPRESSION_STOCK_DISTRIBUE':
+      return `L’utilisateur ${safeName} (IP : ${safeIp}), à supprimé le stock distribué ${details?.itemName || 'Équipement'}.`;
+    case 'SUPPRESSION_MEMBRE':
+      return `L’utilisateur ${safeName} (IP : ${safeIp}), à supprimé le membre de l’environnement ${details?.memberName || 'Membre'}.`;
+    case 'MODIFICATION_PARAMETRE':
+      return `L’utilisateur ${safeName} (IP : ${safeIp}), à modifié le paramètre ${details?.fieldName || 'Réglages'} de l’environnement.`;
+    case 'CONNEXION':
+    default:
+      return `L’utilisateur ${safeName} (IP : ${safeIp}), s’est connecté.`;
+  }
 }
 
 export function deduplicateSuspiciousLogs(logs: SuspiciousActivityLog[]): SuspiciousActivityLog[] {
@@ -117,8 +239,37 @@ export function deduplicateSuspiciousLogs(logs: SuspiciousActivityLog[]): Suspic
   const seenIds = new Set<string>();
 
   for (let i = 0; i < logs.length; i++) {
-    const item = logs[i];
-    if (!item || !item.id || seenIds.has(item.id)) continue;
+    const rawItem = logs[i];
+    if (!rawItem || typeof rawItem !== 'object') continue;
+    const itemId = rawItem.id || `sus_norm_${i}`;
+    if (seenIds.has(itemId)) continue;
+
+    let resolvedName = (rawItem.userName || '').trim();
+    if (!resolvedName || resolvedName === 'Utilisateur') {
+      const msgMatch = (rawItem.message || '').match(/L['’]utilisateur\s+(.+?)\s*\(IP\s*:/i);
+      if (msgMatch && msgMatch[1] && msgMatch[1].trim() && msgMatch[1].trim() !== 'Utilisateur') {
+        resolvedName = msgMatch[1].trim();
+      } else {
+        resolvedName = getCurrentUserName(null, rawItem.tenantId);
+      }
+    }
+    const resolvedIp = (rawItem.userIp || '').trim() || 'Non renseignée';
+    const resolvedAction = (rawItem.actionType || 'CONNEXION') as SuspiciousActionType;
+    let resolvedMsg = (rawItem.message || '').trim();
+    if (!resolvedMsg) {
+      resolvedMsg = buildDefaultSuspiciousMessage(resolvedAction, resolvedName, resolvedIp, rawItem.details);
+    } else if (resolvedMsg.includes('L’utilisateur Utilisateur ') && resolvedName && resolvedName !== 'Utilisateur') {
+      resolvedMsg = resolvedMsg.replace('L’utilisateur Utilisateur ', `L’utilisateur ${resolvedName} `);
+    }
+
+    const item: SuspiciousActivityLog = {
+      ...rawItem,
+      id: itemId,
+      userName: resolvedName,
+      userIp: resolvedIp,
+      actionType: resolvedAction,
+      message: resolvedMsg,
+    };
 
     // Check if this item is a near-duplicate of an already included item (e.g. double connection within 15 seconds)
     const isDup = result.some((prev) => {
@@ -126,7 +277,6 @@ export function deduplicateSuspiciousLogs(logs: SuspiciousActivityLog[]): Suspic
         const tItem = new Date(item.timestamp).getTime();
         const tPrev = new Date(prev.timestamp).getTime();
         if (!isNaN(tItem) && !isNaN(tPrev) && Math.abs(tItem - tPrev) < 15000) {
-          // If previous log had 'local_ip' or 'Non renseignée' and this one has real IP, update previous
           if (
             (prev.userIp === 'local_ip' || prev.userIp === 'Non renseignée') &&
             item.userIp &&
@@ -135,6 +285,10 @@ export function deduplicateSuspiciousLogs(logs: SuspiciousActivityLog[]): Suspic
           ) {
             prev.userIp = item.userIp;
             prev.message = prev.message.replace(/\(IP\s*:\s*(?:local_ip|Non renseignée)\)/i, `(IP : ${item.userIp})`);
+          }
+          if (isGenericOrEmailName(prev.userName) && !isGenericOrEmailName(item.userName)) {
+            prev.userName = item.userName;
+            prev.message = buildDefaultSuspiciousMessage(prev.actionType, prev.userName, prev.userIp, prev.details);
           }
           return true;
         }
@@ -154,6 +308,13 @@ export function deduplicateSuspiciousLogs(logs: SuspiciousActivityLog[]): Suspic
       result.push(item);
     }
   }
+
+  result.sort((a, b) => {
+    const tA = new Date(a.timestamp).getTime();
+    const tB = new Date(b.timestamp).getTime();
+    if (!isNaN(tA) && !isNaN(tB) && tA !== tB) return tB - tA;
+    return 0;
+  });
 
   return result;
 }
@@ -203,7 +364,11 @@ export async function recordSuspiciousActivity(
       ip = cached;
     }
   }
-  const userName = entry.userName || getCurrentUserName();
+  const userName = getCurrentUserName(entry.userName, effectiveTenantId);
+  const message =
+    entry.message && entry.message.trim()
+      ? entry.message.replace(/L['’]utilisateur\s+(.+?)\s*\(IP\s*:/i, `L’utilisateur ${userName} (IP :`)
+      : buildDefaultSuspiciousMessage(entry.actionType, userName, ip, entry.details);
 
   const key = `defib_${effectiveTenantId}_suspicious_activity_logs`;
   let existing: SuspiciousActivityLog[] = [];
@@ -225,7 +390,7 @@ export async function recordSuspiciousActivity(
       return !isNaN(t) && Math.abs(nowMs - t) < 15000;
     });
     if (recentConn) {
-      // If previous entry had placeholder IP and current has a real IP, upgrade it in place
+      let changed = false;
       if (
         (recentConn.userIp === 'local_ip' || recentConn.userIp === 'Non renseignée') &&
         ip &&
@@ -234,10 +399,29 @@ export async function recordSuspiciousActivity(
       ) {
         recentConn.userIp = ip;
         recentConn.message = recentConn.message.replace(/\(IP\s*:\s*(?:local_ip|Non renseignée)\)/i, `(IP : ${ip})`);
+        changed = true;
+      }
+      if (isGenericOrEmailName(recentConn.userName) && !isGenericOrEmailName(userName)) {
+        recentConn.userName = userName;
+        recentConn.message = buildDefaultSuspiciousMessage(recentConn.actionType, userName, recentConn.userIp, recentConn.details);
+        changed = true;
+      }
+      if (changed) {
         try {
           localStorage.setItem(key, JSON.stringify(existing));
           if (effectiveTenantId && effectiveTenantId !== 'demo') {
             saveCollectionToFirestore('suspicious_activity_logs', existing, effectiveTenantId).catch(() => {});
+          }
+          if (typeof window !== 'undefined' && localStorage.getItem('defib_session_token')) {
+            fetch('/api/sheets/upsert', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tenantId: effectiveTenantId,
+                type: 'observateurActionsSuspectes',
+                record: recentConn,
+              }),
+            }).catch(() => {});
           }
         } catch (_) {}
       }
@@ -254,7 +438,7 @@ export async function recordSuspiciousActivity(
   }
 
   // 2. Generic deduplication: Prevent duplicate records for the same action within 3 seconds
-  const dedupeKey = `${effectiveTenantId}_${entry.actionType}_${entry.message}`;
+  const dedupeKey = `${effectiveTenantId}_${entry.actionType}_${message}`;
   if (lastLoggedCall && lastLoggedCall.key === dedupeKey && (nowMs - lastLoggedCall.time) < 3000) {
     if (existing.length > 0) return existing[0];
   }
@@ -262,7 +446,7 @@ export async function recordSuspiciousActivity(
 
   if (existing.length > 0) {
     const latest = existing[0];
-    if (latest.actionType === entry.actionType && latest.message === entry.message) {
+    if (latest.actionType === entry.actionType && latest.message === message) {
       const diffMs = Math.abs(nowMs - new Date(latest.timestamp).getTime());
       if (diffMs < 3000) {
         return latest;
@@ -277,7 +461,7 @@ export async function recordSuspiciousActivity(
     userName,
     userIp: ip,
     actionType: entry.actionType,
-    message: entry.message,
+    message,
     details: entry.details,
   };
 
@@ -358,18 +542,30 @@ export function mergeSuspiciousLogsFromSheet(tenantId: string, sheetItems: any[]
   const key = `defib_${effectiveTenantId}_suspicious_activity_logs`;
   const existing = getTenantSuspiciousLogs(effectiveTenantId);
   const normalizedFromSheet: SuspiciousActivityLog[] = (Array.isArray(sheetItems) ? sheetItems : [])
-    .filter(item => item && typeof item === 'object' && (item.message || item.actionType || item.userName))
-    .map((item, idx) => ({
-      id: item.id || `sus_sheet_${idx + 2}`,
-      tenantId: item.tenantId || effectiveTenantId,
-      timestamp: item.timestamp || new Date().toISOString(),
-      userName: item.userName || 'Utilisateur',
-      userIp: item.userIp || 'Non renseignée',
-      actionType: (item.actionType as SuspiciousActionType) || 'CONNEXION',
-      message: item.message || '',
-      details: item.details,
-    }));
-  const merged = deduplicateSuspiciousLogs([...normalizedFromSheet, ...existing]);
+    .filter(item => item && typeof item === 'object' && (item.message || item.actionType || item.userName || item.timestamp || item.userIp))
+    .map((item, idx) => {
+      const resolvedName =
+        item.userName && String(item.userName).trim() && String(item.userName).trim() !== 'Utilisateur'
+          ? String(item.userName).trim()
+          : getCurrentUserName(null, effectiveTenantId);
+      const resolvedIp = (item.userIp && String(item.userIp).trim()) || 'Non renseignée';
+      const resolvedAction = (item.actionType as SuspiciousActionType) || 'CONNEXION';
+      const resolvedMsg =
+        item.message && String(item.message).trim()
+          ? String(item.message).trim()
+          : buildDefaultSuspiciousMessage(resolvedAction, resolvedName, resolvedIp, item.details);
+      return {
+        id: item.id || `sus_sheet_${idx + 2}`,
+        tenantId: item.tenantId || effectiveTenantId,
+        timestamp: item.timestamp || new Date().toISOString(),
+        userName: resolvedName,
+        userIp: resolvedIp,
+        actionType: resolvedAction,
+        message: resolvedMsg,
+        details: item.details,
+      };
+    });
+  const merged = deduplicateSuspiciousLogs([...existing, ...normalizedFromSheet]);
   try {
     localStorage.setItem(key, JSON.stringify(merged));
   } catch (_) {}
@@ -386,7 +582,7 @@ export async function logUserLogin(
   userName?: string,
   userIp?: string
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = (userName && userName.trim() !== '') ? userName.trim() : getCurrentUserName();
+  const effectiveName = getCurrentUserName(userName, tenantId);
   let effectiveIp = userIp;
   if (!effectiveIp || effectiveIp === 'local_ip' || effectiveIp === 'Non renseignée') {
     const cached = getCurrentCachedIp();
@@ -412,7 +608,7 @@ export async function logBulkEditDefib(
   userIp?: string,
   count?: number
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = userName || getCurrentUserName();
+  const effectiveName = getCurrentUserName(userName, tenantId);
   const effectiveIp = userIp || getCurrentCachedIp();
   const message = `L’utilisateur ${effectiveName} (IP : ${effectiveIp}), à effectué une modification en masse des Défibrillateurs.`;
   return recordSuspiciousActivity(tenantId, {
@@ -431,7 +627,7 @@ export async function logBulkExport(
   userIp?: string,
   category?: string
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = userName || getCurrentUserName();
+  const effectiveName = getCurrentUserName(userName, tenantId);
   const effectiveIp = userIp || getCurrentCachedIp();
   const message = `L’utilisateur ${effectiveName} (IP : ${effectiveIp}), à effectué un export en masse.`;
   return recordSuspiciousActivity(tenantId, {
@@ -451,7 +647,7 @@ export async function logDeleteDefib(
   userName?: string,
   userIp?: string
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = userName || getCurrentUserName();
+  const effectiveName = getCurrentUserName(userName, tenantId);
   const effectiveIp = userIp || getCurrentCachedIp();
   const message = `L’utilisateur ${effectiveName} (IP : ${effectiveIp}), à supprimé le défibrillateur ${identifiant || 'Inconnu'} / ${materialType || 'Défibrillateur'}.`;
   return recordSuspiciousActivity(tenantId, {
@@ -471,7 +667,7 @@ export async function logDeleteOtherEquipment(
   userName?: string,
   userIp?: string
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = userName || getCurrentUserName();
+  const effectiveName = getCurrentUserName(userName, tenantId);
   const effectiveIp = userIp || getCurrentCachedIp();
   const message = `L’utilisateur ${effectiveName} (IP : ${effectiveIp}), à supprimé le autre matériel ${identifiant || 'Inconnu'} / ${serialNumber || 'Sans numéro de série'}.`;
   return recordSuspiciousActivity(tenantId, {
@@ -490,7 +686,7 @@ export async function logDeleteClient(
   userName?: string,
   userIp?: string
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = userName || getCurrentUserName();
+  const effectiveName = getCurrentUserName(userName, tenantId);
   const effectiveIp = userIp || getCurrentCachedIp();
   const message = `L’utilisateur ${effectiveName} (IP : ${effectiveIp}), à supprime le client ${companyName || 'Client'}.`;
   return recordSuspiciousActivity(tenantId, {
@@ -509,7 +705,7 @@ export async function logDeleteTour(
   userName?: string,
   userIp?: string
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = userName || getCurrentUserName();
+  const effectiveName = getCurrentUserName(userName, tenantId);
   const effectiveIp = userIp || getCurrentCachedIp();
   const message = `L’utilisateur ${effectiveName} (IP : ${effectiveIp}), à supprimé la tournée ${tourName || 'Tournée'}.`;
   return recordSuspiciousActivity(tenantId, {
@@ -528,7 +724,7 @@ export async function logDeleteStockCenter(
   userName?: string,
   userIp?: string
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = userName || getCurrentUserName();
+  const effectiveName = getCurrentUserName(userName, tenantId);
   const effectiveIp = userIp || getCurrentCachedIp();
   const message = `L’utilisateur ${effectiveName} (IP : ${effectiveIp}), à supprimé le stock de la centrale ${itemName || 'Équipement'}.`;
   return recordSuspiciousActivity(tenantId, {
@@ -547,7 +743,7 @@ export async function logDeleteDistributedStock(
   userName?: string,
   userIp?: string
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = userName || getCurrentUserName();
+  const effectiveName = getCurrentUserName(userName, tenantId);
   const effectiveIp = userIp || getCurrentCachedIp();
   const message = `L’utilisateur ${effectiveName} (IP : ${effectiveIp}), à supprimé le stock distribué ${itemName || 'Équipement'}.`;
   return recordSuspiciousActivity(tenantId, {
@@ -566,7 +762,7 @@ export async function logDeleteMember(
   userName?: string,
   userIp?: string
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = userName || getCurrentUserName();
+  const effectiveName = getCurrentUserName(userName, tenantId);
   const effectiveIp = userIp || getCurrentCachedIp();
   const message = `L’utilisateur ${effectiveName} (IP : ${effectiveIp}), à supprimé le membre de l’environnement ${memberName || 'Membre'}.`;
   return recordSuspiciousActivity(tenantId, {
@@ -585,7 +781,7 @@ export async function logUpdateSetting(
   userName?: string,
   userIp?: string
 ): Promise<SuspiciousActivityLog> {
-  const effectiveName = userName || getCurrentUserName();
+  const effectiveName = getCurrentUserName(userName, tenantId);
   const effectiveIp = userIp || getCurrentCachedIp();
   const message = `L’utilisateur ${effectiveName} (IP : ${effectiveIp}), à modifié le paramètre ${fieldName} de l’environnement.`;
   return recordSuspiciousActivity(tenantId, {

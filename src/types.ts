@@ -731,6 +731,7 @@ export interface StockRecord {
   denominationPieceId: string; // ID corresponding to a Variable
   quantite: number;
   quantiteReservee?: number;
+  quantiteTotale?: number;
   livraisonDate: string;
   reapprovisionnementDate: string;
   valeurAchat: number;
@@ -746,6 +747,24 @@ export interface StockRecord {
   traceabilityEnabled?: boolean;
   traceabilities?: StockTraceability[];
   usageRecommandeIds?: string[];
+  selectionMiniature?: string;
+  poidsNet?: string;
+  dimensionLongueur?: string;
+  dimensionLargeur?: string;
+  dimensionHauteur?: string;
+  fraisFixeCoutStockage?: string;
+  fraisFixeCoutTransport?: string;
+  garantieMois?: string;
+  nombreColisParUnite?: string;
+  fournisseur1?: string;
+  referenceFournisseur1?: string;
+  prixAchatFournisseur1?: string;
+  fournisseur2?: string;
+  referenceFournisseur2?: string;
+  prixAchatFournisseur2?: string;
+  fournisseur3?: string;
+  referenceFournisseur3?: string;
+  prixAchatFournisseur3?: string;
 }
 
 export interface CommercialDocItem {

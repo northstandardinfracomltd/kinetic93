@@ -972,9 +972,10 @@ export default function FormationsTab({
         >
           {/* Detached Form Header Box */}
           <div
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
+            className="flex items-center bg-white"
             style={{
               borderRadius: '0px',
+              width: '98%',
               maxWidth: '98%',
               margin: 'auto',
               padding: '10px 0px',
@@ -984,14 +985,16 @@ export default function FormationsTab({
             id="formation-form-header-box"
             onClick={(e) => e.stopPropagation()}
           >
-            <div />
-
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full">
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                style={rowActionButton18Style}
-                className="transition-colors cursor-pointer"
+                style={{
+                  ...rowActionButton18Style,
+                  flex: 1,
+                  width: '50%',
+                }}
+                className="flex-1 transition-colors cursor-pointer"
               >
                 <span>Fermer</span>
               </button>
@@ -999,8 +1002,12 @@ export default function FormationsTab({
               <button
                 type="submit"
                 form="formation-core-form"
-                style={blueButtonStyle}
-                className="transition-all"
+                style={{
+                  ...blueButtonStyle,
+                  flex: 1,
+                  width: '50%',
+                }}
+                className="flex-1 transition-all"
               >
                 Enregistrer
               </button>

@@ -508,6 +508,7 @@ export default function AchatsFournisseursTab({
                       }}
                       style={{
                         ...customButtonStyle,
+                        backgroundColor: 'rgb(46, 84, 255)',
                         opacity: !hasAchatsSpreadsheet ? 0.45 : 1,
                         cursor: !hasAchatsSpreadsheet ? 'not-allowed' : 'pointer',
                       }}
@@ -654,7 +655,7 @@ export default function AchatsFournisseursTab({
           
           {/* Header Box styled exactly like other forms */}
           <div
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
+            className="flex items-center bg-white"
             style={{
               borderRadius: '0px',
               width: '98%',
@@ -666,14 +667,16 @@ export default function AchatsFournisseursTab({
             }}
             id="achats-form-header-box"
           >
-            <div />
-
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full">
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
-                style={smallBlackButtonStyle}
-                className="transition-colors cursor-pointer"
+                style={{
+                  ...smallBlackButtonStyle,
+                  flex: 1,
+                  width: '50%',
+                }}
+                className="flex-1 transition-colors cursor-pointer"
               >
                 {t("Annuler")}
               </button>
@@ -681,8 +684,12 @@ export default function AchatsFournisseursTab({
               <button
                 type="submit"
                 form="achats-fournisseurs-form"
-                style={smallBlueButtonStyle}
-                className="transition-all cursor-pointer"
+                style={{
+                  ...smallBlueButtonStyle,
+                  flex: 1,
+                  width: '50%',
+                }}
+                className="flex-1 transition-all cursor-pointer"
               >
                 {t("Enregistrer")}
               </button>

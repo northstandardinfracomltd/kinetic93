@@ -5926,7 +5926,47 @@ async function warmupDefibrillateursStore() {
           const chosenTenant = primaryOwnerTenants[0];
           const tid = String(chosenTenant.id || 'demo').trim();
           const resolvedEmail = emailLower || String(chosenTenant.adminEmail || chosenTenant.companyEmail || '').trim();
-          const resolvedName = chosenTenant.adminName || 'Administrateur';
+          let resolvedName = chosenTenant.adminName || '';
+
+          // Look up real Nom & Prénom from Firestore members or Membres de l'environnement spreadsheet if available
+          if (!resolvedName || resolvedName === 'Administrateur') {
+            const memKey = tid === 'demo' ? 'members' : `${tid}_members`;
+            let fbMembers = serverMemoryStore.get(memKey);
+            if (!Array.isArray(fbMembers)) {
+              const dFile = path.join(COLLECTIONS_DIR, `${memKey}.json`);
+              if (fs.existsSync(dFile)) {
+                try { fbMembers = JSON.parse(fs.readFileSync(dFile, 'utf-8')); } catch (_) {}
+              }
+            }
+            if (Array.isArray(fbMembers)) {
+              const matchedFbMem = fbMembers.find(
+                (m: any) => m && String(m.email || '').trim().toLowerCase() === resolvedEmail.toLowerCase() && m.name && String(m.name).trim() !== ''
+              );
+              if (matchedFbMem) {
+                resolvedName = String(matchedFbMem.name).trim();
+              }
+            }
+          }
+
+          if (!resolvedName || resolvedName === 'Administrateur') {
+            const membresSheetUrl = await resolveTenantSpreadsheetUrl(tid, 'membresEnvironnement').catch(() => '');
+            if (membresSheetUrl && extractSpreadsheetIdAndGid(membresSheetUrl)) {
+              const sData = await fetchTenantSheetCollection(membresSheetUrl, tid, 'membresEnvironnement', false).catch(() => null);
+              if (sData && Array.isArray(sData.items)) {
+                const matchedSheetMem = sData.items.find(
+                  (m: any) => m && String(m.email || '').trim().toLowerCase() === resolvedEmail.toLowerCase() && m.name && String(m.name).trim() !== ''
+                );
+                if (matchedSheetMem) {
+                  resolvedName = String(matchedSheetMem.name).trim();
+                }
+              }
+            }
+          }
+
+          if (!resolvedName) {
+            resolvedName = 'Administrateur';
+          }
+
           const primaryProfile = {
             email: resolvedEmail,
             name: resolvedName,
@@ -6095,11 +6135,16 @@ async function warmupDefibrillateursStore() {
             });
 
           if (sData && Array.isArray(sData.items)) {
-            sheetMatchedMember = findMemberInSheet(sData.items);
-            if (!sheetMatchedMember && !firebaseMatchedMember) {
+            const foundInSheet = findMemberInSheet(sData.items);
+            if (foundInSheet) {
+              sheetMatchedMember = foundInSheet;
+            } else if (!sheetMatchedMember && !firebaseMatchedMember) {
               sData = await fetchTenantSheetCollection(membresSheetUrl, tid, 'membresEnvironnement', true).catch(() => null);
               if (sData && Array.isArray(sData.items)) {
-                sheetMatchedMember = findMemberInSheet(sData.items);
+                const foundAfterRefresh = findMemberInSheet(sData.items);
+                if (foundAfterRefresh) {
+                  sheetMatchedMember = foundAfterRefresh;
+                }
               }
             }
             if (sData && Array.isArray(sData.items)) {

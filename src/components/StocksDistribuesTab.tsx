@@ -1332,21 +1332,23 @@ export default function StocksDistribuesTab({
           
           {/* Header Box styled exactly like DefibTab Form Header */}
           <div 
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
+            className="flex items-center bg-white"
             style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
             id="distributed-form-header-box"
           >
-            <div />
-            
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full">
               <button
                 type="button"
                 onClick={() => {
                   setShowForm(false);
                   setEditingId(null);
                 }}
-                style={rowActionButton18Style}
-                className="transition-colors cursor-pointer"
+                style={{
+                  ...rowActionButton18Style,
+                  flex: 1,
+                  width: '50%',
+                }}
+                className="flex-1 transition-colors cursor-pointer"
               >
                 <span>{t("Annuler")}</span>
               </button>
@@ -1356,11 +1358,13 @@ export default function StocksDistribuesTab({
                 form="distributed-stock-form"
                 style={{
                   ...rowActionButton18Style,
+                  flex: 1,
+                  width: '50%',
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                 }}
-                className="transition-all cursor-pointer"
+                className="flex-1 transition-all cursor-pointer"
               >
                 <span>{t("Enregistrer")}</span>
               </button>

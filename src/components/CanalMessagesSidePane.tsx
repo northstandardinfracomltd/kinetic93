@@ -72,7 +72,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (contextMenu) setContextMenu(null);
-        else onClose();
+        else if (!embedded) onClose();
       }
     };
     if (isOpen) {
@@ -81,7 +81,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, contextMenu, onClose]);
+  }, [isOpen, contextMenu, onClose, embedded]);
 
   // Mark messages as read when opening
   useEffect(() => {

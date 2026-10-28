@@ -167,6 +167,7 @@ export type AppTab =
   | 'emargements'
   | 'notifications'
   | 'parametres'
+  | 'messagerie'
   | 'import-export';
 
 function isNotificationOlderThan3Months(ts?: string): boolean {
@@ -1455,10 +1456,21 @@ export default function App() {
               return vm ? vm.nom : uid;
             })
           : [];
+        const resolveSupplierLabel = (val?: string) => {
+          if (!val) return '';
+          const supMatch = variables.find(
+            v => v.category === 'Fournisseur' && (v.id === val || (v.nom && v.nom.trim().toLowerCase() === val.trim().toLowerCase()))
+          );
+          return supMatch ? supMatch.nom : val;
+        };
         return {
           ...s,
           denominationPieceNom: varMatch ? varMatch.nom : (s as any).denominationPieceNom || s.denominationPieceId || '',
           usageRecommandeNoms: recNames,
+          selectionMiniature: varMatch?.imageUrl || s.selectionMiniature || '',
+          fournisseur1: resolveSupplierLabel(s.fournisseur1),
+          fournisseur2: resolveSupplierLabel(s.fournisseur2),
+          fournisseur3: resolveSupplierLabel(s.fournisseur3),
         };
       };
       const prevEnriched = (Array.isArray(stocks) ? stocks : []).map(enrichStockForSheet);
@@ -2023,9 +2035,21 @@ export default function App() {
   // Canal Messages state & unread tracker
   const [tenantMessages, setTenantMessages] = useState<TenantMessage[]>([]);
   const [isCanalMessagesOpen, setIsCanalMessagesOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [isSidebarMoreOpen, setIsSidebarMoreOpen] = useState(false);
   const [hoveredSidebarItem, setHoveredSidebarItem] = useState<{ id: string; label: string; centerY: number } | null>(null);
+
+  useEffect(() => {
+    const preloadUrls = [
+      'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg',
+      'https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg',
+    ];
+    preloadUrls.forEach((url) => {
+      const img = new Image();
+      img.referrerPolicy = 'no-referrer';
+      img.src = url;
+    });
+  }, []);
   const [lastSeenMessageTime, setLastSeenMessageTime] = useState<number>(() => {
     try {
       const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
@@ -2037,12 +2061,12 @@ export default function App() {
   });
 
   const unreadMessagesCount = useMemo(() => {
-    if (isCanalMessagesOpen) return 0;
+    if (isCanalMessagesOpen || activeTab === 'messagerie') return 0;
     const myEmail = loggedUser?.email?.trim().toLowerCase() || '';
     return (Array.isArray(tenantMessages) ? tenantMessages : []).filter(
       (m) => m && m.createdAt > lastSeenMessageTime && m.authorEmail?.trim().toLowerCase() !== myEmail
     ).length;
-  }, [tenantMessages, lastSeenMessageTime, loggedUser?.email, isCanalMessagesOpen]);
+  }, [tenantMessages, lastSeenMessageTime, loggedUser?.email, isCanalMessagesOpen, activeTab]);
 
   // Count sum of all messages from the last 3 hours (capped from 1 to 8, > 8 => '9+')
   const recentMessagesCount = useMemo(() => {
@@ -3643,6 +3667,23 @@ export default function App() {
               const ensuredCombined = ensureTenantMembersClient(combined, activeTid, loggedUser?.email, loggedUser?.name);
               loadedDataRef.current.members = JSON.stringify(ensuredCombined);
               safeSetLocalStorage(`defib_${activeTid}_members`, JSON.stringify(ensuredCombined));
+              const currentEmailLower = loggedUser?.email?.trim().toLowerCase();
+              if (currentEmailLower && Array.isArray(ensuredCombined)) {
+                const matchedMe = ensuredCombined.find(
+                  (m: any) => m && String(m.email || '').trim().toLowerCase() === currentEmailLower && m.name && String(m.name).trim() !== ''
+                );
+                if (
+                  matchedMe &&
+                  matchedMe.name !== 'Administrateur' &&
+                  matchedMe.name !== 'Utilisateur' &&
+                  !matchedMe.name.includes('@') &&
+                  loggedUser?.name !== matchedMe.name
+                ) {
+                  const updatedUser = { email: loggedUser.email, name: matchedMe.name };
+                  setLoggedUser(updatedUser);
+                  safeSetLocalStorage('defib_admin_logged_user', JSON.stringify(updatedUser));
+                }
+              }
               return ensuredCombined;
             });
             break;
@@ -3753,8 +3794,8 @@ export default function App() {
             break;
           }
           case 'observateurActionsSuspectes': {
-            setSuspiciousActivityLogs(items);
-            safeSetLocalStorage(`defib_${activeTid}_suspicious_activity_logs`, JSON.stringify(items));
+            const mergedLogs = mergeSuspiciousLogsFromSheet(activeTid, items);
+            setSuspiciousActivityLogs(mergedLogs);
             break;
           }
           default:
@@ -11551,8 +11592,8 @@ export default function App() {
               {
                 id: 'crm',
                 label: t('CRM'),
-                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/crmgris.svg',
-                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/crmnoir.svg',
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeocrmgreyv2.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeocrmblackv2.svg',
                 isActive: activeTab === 'crm' && !isCanalMessagesOpen,
                 onClick: () => {
                   setIsCanalMessagesOpen(false);
@@ -11625,10 +11666,11 @@ export default function App() {
                 label: t('Messages'),
                 iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/messageriegris.svg',
                 iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/messagerienoir.svg',
-                isActive: isCanalMessagesOpen,
+                isActive: activeTab === 'messagerie' && !isCanalMessagesOpen,
                 onClick: () => {
+                  setIsCanalMessagesOpen(false);
                   setIsSidebarMoreOpen(false);
-                  setIsCanalMessagesOpen(true);
+                  setActiveTab('messagerie');
                   handleMessagesRead();
                 },
               },
@@ -11642,6 +11684,18 @@ export default function App() {
                   setIsSidebarMoreOpen(false);
                   setHoveredSidebarItem(null);
                   setIsSidebarCollapsed(prev => !prev);
+                },
+              },
+              {
+                id: 'assistance',
+                label: t('Assistance'),
+                iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/crmgris.svg',
+                iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/crmnoir.svg',
+                isActive: activeTab === 'assistance' && !isCanalMessagesOpen,
+                onClick: () => {
+                  setIsCanalMessagesOpen(false);
+                  setIsSidebarMoreOpen(false);
+                  setActiveTab('assistance');
                 },
               },
             ];
@@ -11696,16 +11750,28 @@ export default function App() {
                         }}
                         onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'logo-defibeo' ? null : prev))}
                       >
-                        <img
-                          src={
-                            hoveredSidebarItem?.id === 'logo-defibeo'
-                              ? 'https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg'
-                              : 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg'
-                          }
-                          alt="Logiciel Defibeo"
-                          className="sidebar-nav-icon-bounce w-[38px] h-[38px] object-contain block select-none pointer-events-none shrink-0"
-                          referrerPolicy="no-referrer"
-                        />
+                        <div className="sidebar-nav-icon-bounce relative w-[38px] h-[38px] shrink-0 select-none pointer-events-none">
+                          <img
+                            src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg"
+                            alt="Logiciel Defibeo"
+                            loading="eager"
+                            decoding="sync"
+                            className={` absolute inset-0 w-[38px] h-[38px] object-contain block ${
+                              hoveredSidebarItem?.id === 'logo-defibeo' ? 'opacity-0' : 'opacity-100'
+                            }`}
+                            referrerPolicy="no-referrer"
+                          />
+                          <img
+                            src="https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg"
+                            alt="Logiciel Defibeo"
+                            loading="eager"
+                            decoding="sync"
+                            className={`absolute inset-0 w-[38px] h-[38px] object-contain block ${
+                              hoveredSidebarItem?.id === 'logo-defibeo' ? 'opacity-100' : 'opacity-0'
+                            }`}
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
                       </div>
                       <div
                         className="flex items-center justify-center rounded-full truncate min-w-0"
@@ -11739,16 +11805,28 @@ export default function App() {
                       }}
                       onMouseLeave={() => setHoveredSidebarItem(prev => (prev?.id === 'logo-defibeo' ? null : prev))}
                     >
-                      <img
-                        src={
-                          hoveredSidebarItem?.id === 'logo-defibeo'
-                            ? 'https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg'
-                            : 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg'
-                        }
-                        alt="Logiciel Defibeo"
-                        className="sidebar-nav-icon-bounce w-[38px] h-[38px] object-contain block select-none pointer-events-none shrink-0"
-                        referrerPolicy="no-referrer"
-                      />
+                      <div className="sidebar-nav-icon-bounce relative w-[38px] h-[38px] shrink-0 select-none pointer-events-none">
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg"
+                          alt="Logiciel Defibeo"
+                          loading="eager"
+                          decoding="sync"
+                          className={`absolute inset-0 w-[38px] h-[38px] object-contain block ${
+                            hoveredSidebarItem?.id === 'logo-defibeo' ? 'opacity-0' : 'opacity-100'
+                          }`}
+                          referrerPolicy="no-referrer"
+                        />
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg"
+                          alt="Logiciel Defibeo"
+                          loading="eager"
+                          decoding="sync"
+                          className={`absolute inset-0 w-[38px] h-[38px] object-contain block ${
+                            hoveredSidebarItem?.id === 'logo-defibeo' ? 'opacity-100' : 'opacity-0'
+                          }`}
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -11775,6 +11853,9 @@ export default function App() {
 
                   {mainNavItems.map((item) => {
                     const isClickedWave = clickedSidebarItem?.id === item.id;
+                    const showNoirIcon =
+                      item.isActive ||
+                      ((item.id === 'crm' || item.id === 'assistance') && hoveredSidebarItem?.id === item.id);
                     return (
                       <button
                         key={item.id}
@@ -11800,7 +11881,7 @@ export default function App() {
                       >
                         <div className="flex items-center gap-4 min-w-0">
                           <img
-                            src={item.isActive ? item.iconNoir : item.iconGris}
+                            src={showNoirIcon ? item.iconNoir : item.iconGris}
                             alt={item.label}
                             className="sidebar-nav-icon-bounce w-[26px] h-[26px] object-contain shrink-0"
                             referrerPolicy="no-referrer"
@@ -11943,9 +12024,9 @@ export default function App() {
           </div>
         )}
         {/* Dashboard Workspace Viewports wrapper */}
-        <main className="flex-1 w-full bg-white" id="main-content">
+        <main className={`flex-1 w-full bg-white ${activeTab === 'messagerie' ? 'flex flex-col h-screen overflow-hidden' : ''}`} id="main-content">
           {/* Sub-component Active tab wrapper */}
-          <section className="bg-white pb-16 p-0" id="active-tab-content-wrapper">
+          <section className={`bg-white p-0 ${activeTab === 'messagerie' ? 'flex-1 flex flex-col h-full min-h-0 overflow-hidden pb-0' : 'pb-16'}`} id="active-tab-content-wrapper">
           {activeTab === 'defibrillateurs' && (
             <DefibTab
               currentLang={currentLang}
@@ -20999,6 +21080,7 @@ export default function App() {
                                 disabled={!hasCommandesSpreadsheet}
                                 style={{
                                   ...customButtonStyle,
+                                  backgroundColor: 'rgb(46, 84, 255)',
                                   cursor: hasCommandesSpreadsheet ? 'pointer' : 'not-allowed',
                                   opacity: hasCommandesSpreadsheet ? 1 : 0.45,
                                 }}
@@ -21267,13 +21349,11 @@ export default function App() {
                     
                     {/* Header Box styled exactly like DefibTab Form Header */}
                     <div 
-                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
+                      className="flex items-center bg-white"
                       style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
                       id="devis-form-header-box"
                     >
-                      <div />
-                      
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 w-full">
                         <button
                           type="button"
                           onClick={() => {
@@ -21283,10 +21363,12 @@ export default function App() {
                           id="btn-close-devis-modal"
                           style={{
                             ...rowActionButtonStyle,
+                            flex: 1,
+                            width: '50%',
                             fontSize: '18px',
                             padding: '9px 19px',
                           }}
-                          className="transition-colors cursor-pointer font-sans"
+                          className="flex-1 transition-colors cursor-pointer font-sans"
                         >
                           <span>Annuler</span>
                         </button>
@@ -21297,13 +21379,15 @@ export default function App() {
                           id="btn-submit-devis-form"
                           style={{
                             ...rowActionButtonStyle,
+                            flex: 1,
+                            width: '50%',
                             fontSize: '18px',
                             padding: '9px 19px',
                             backgroundColor: '#2e54ff',
                             color: '#ffffff',
                             boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                           }}
-                          className="transition-all cursor-pointer font-sans"
+                          className="flex-1 transition-all cursor-pointer font-sans"
                         >
                           <span>Enregistrer</span>
                         </button>
@@ -22026,6 +22110,60 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'assistance' && (
+            <SettingsModal
+              key={`assistance-page-${tenantId}`}
+              tenantId={tenantId}
+              isPage={true}
+              isAssistancePage={true}
+              isOpen={true}
+              onClose={() => {}}
+              companyInfo={companyInfo}
+              onUpdateCompanyInfo={handleUpdateCompanyInfo}
+              members={members}
+              onUpdateMembers={handleUpdateMembers}
+              onOpenPublicPortal={() => {
+                setIsPublicPortalOpen(true);
+              }}
+              onOpenClientPortal={() => {
+                setIsClientPortalOpen(true);
+              }}
+              currentUser={loggedUser}
+              enableOtherEquipments={enableOtherEquipments}
+              onUpdateOtherEquipments={handleUpdateOtherEquipments}
+              otherEquipments={otherEquipments}
+              onClearOtherEquipments={() => saveOtherEquipments([])}
+              onConnectorsUpdated={loadApiConnectors}
+              onUpdateLocationNames={setLocationNames}
+              isDeveloper={isDeveloper}
+              isReadOnly={isDeveloper}
+              suspiciousActivityLogs={suspiciousActivityLogs}
+            />
+          )}
+
+          {activeTab === 'messagerie' && (
+            <div className="w-full h-full flex-1 flex flex-col min-h-[calc(100vh-2px)] overflow-hidden bg-white">
+              <CanalMessagesSidePane
+                isOpen={true}
+                embedded={true}
+                onClose={() => {}}
+                tenantId={tenantId}
+                currentUser={{
+                  email: loggedUser?.email || '',
+                  name:
+                    loggedUser?.name?.trim() ||
+                    members.find(m => m.email && loggedUser?.email && m.email.toLowerCase() === loggedUser.email.toLowerCase())?.name ||
+                    companyInfo?.adminName ||
+                    'Membre',
+                }}
+                messages={tenantMessages}
+                setMessages={setTenantMessages}
+                onMessagesRead={handleMessagesRead}
+                companyInfo={companyInfo}
+              />
+            </div>
+          )}
+
         </section>
       </main>
       </div>
@@ -22122,23 +22260,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      <CanalMessagesSidePane
-        isOpen={isCanalMessagesOpen}
-        onClose={() => setIsCanalMessagesOpen(false)}
-        tenantId={tenantId}
-        currentUser={{
-          email: loggedUser?.email || '',
-          name: loggedUser?.name?.trim() || 
-            members.find(m => m.email && loggedUser?.email && m.email.toLowerCase() === loggedUser.email.toLowerCase())?.name ||
-            companyInfo?.adminName || 
-            'Membre'
-        }}
-        messages={tenantMessages}
-        setMessages={setTenantMessages}
-        onMessagesRead={handleMessagesRead}
-        companyInfo={companyInfo}
-      />
     </div>
   );
 }

@@ -495,6 +495,7 @@ export default function GedTab({
                   }}
                   style={{
                     ...customButtonStyle,
+                    backgroundColor: 'rgb(46, 84, 255)',
                     opacity: !hasGedSpreadsheet ? 0.45 : 1,
                     cursor: !hasGedSpreadsheet ? 'not-allowed' : 'pointer',
                   }}
@@ -664,7 +665,7 @@ export default function GedTab({
         <div className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto" id="ged-form-overlay">
           {/* Header Box styled exactly like DefibTab Form Header */}
           <div
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
+            className="flex items-center bg-white"
             style={{
               borderRadius: '0px',
               width: '98%',
@@ -676,17 +677,19 @@ export default function GedTab({
             }}
             id="ged-form-header-box"
           >
-            <div />
-
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full">
               <button
                 type="button"
                 onClick={() => {
                   setIsGedFormOpen(false);
                 }}
                 id="btn-close-ged-modal"
-                style={rowActionButton18Style}
-                className="transition-colors cursor-pointer"
+                style={{
+                  ...rowActionButton18Style,
+                  flex: 1,
+                  width: '50%',
+                }}
+                className="flex-1 transition-colors cursor-pointer"
               >
                 <span>{t('Annuler')}</span>
               </button>
@@ -698,6 +701,8 @@ export default function GedTab({
                 disabled={isUploading}
                 style={{
                   ...rowActionButton18Style,
+                  flex: 1,
+                  width: '50%',
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   boxShadow:
@@ -705,7 +710,7 @@ export default function GedTab({
                   opacity: isUploading ? 0.7 : 1,
                   cursor: isUploading ? 'not-allowed' : 'pointer',
                 }}
-                className="transition-all"
+                className="flex-1 transition-all"
               >
                 {isUploading ? (
                   <span className="inline-flex items-center gap-2">

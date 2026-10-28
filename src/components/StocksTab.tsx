@@ -970,6 +970,75 @@ export default function StocksTab({
   const [newUsageRecommandeIds, setNewUsageRecommandeIds] = useState<string[]>([]);
   const [isSidePanePieceOpen, setIsSidePanePieceOpen] = useState(false);
 
+  // Additional Propriétés fields
+  const [newPoidsNet, setNewPoidsNet] = useState<string>('');
+  const [newDimensionLongueur, setNewDimensionLongueur] = useState<string>('');
+  const [newDimensionLargeur, setNewDimensionLargeur] = useState<string>('');
+  const [newDimensionHauteur, setNewDimensionHauteur] = useState<string>('');
+  const [newFraisFixeCoutStockage, setNewFraisFixeCoutStockage] = useState<string>('');
+  const [newFraisFixeCoutTransport, setNewFraisFixeCoutTransport] = useState<string>('');
+  const [newGarantieMois, setNewGarantieMois] = useState<string>('');
+  const [newNombreColisParUnite, setNewNombreColisParUnite] = useState<string>('');
+
+  // Fournisseurs section fields (1 to 3)
+  const [newFournisseur1, setNewFournisseur1] = useState<string>('');
+  const [isFournisseur1Autre, setIsFournisseur1Autre] = useState<boolean>(false);
+  const [newReferenceFournisseur1, setNewReferenceFournisseur1] = useState<string>('');
+  const [newPrixAchatFournisseur1, setNewPrixAchatFournisseur1] = useState<string>('');
+
+  const [newFournisseur2, setNewFournisseur2] = useState<string>('');
+  const [isFournisseur2Autre, setIsFournisseur2Autre] = useState<boolean>(false);
+  const [newReferenceFournisseur2, setNewReferenceFournisseur2] = useState<string>('');
+  const [newPrixAchatFournisseur2, setNewPrixAchatFournisseur2] = useState<string>('');
+
+  const [newFournisseur3, setNewFournisseur3] = useState<string>('');
+  const [isFournisseur3Autre, setIsFournisseur3Autre] = useState<boolean>(false);
+  const [newReferenceFournisseur3, setNewReferenceFournisseur3] = useState<string>('');
+  const [newPrixAchatFournisseur3, setNewPrixAchatFournisseur3] = useState<string>('');
+
+  const supplierVariables = useMemo(() => {
+    return variables.filter(v => v.category === 'Fournisseur');
+  }, [variables]);
+
+  const populateStockExtraFields = (st?: StockRecord) => {
+    setNewPoidsNet(st?.poidsNet ?? '');
+    setNewDimensionLongueur(st?.dimensionLongueur ?? '');
+    setNewDimensionLargeur(st?.dimensionLargeur ?? '');
+    setNewDimensionHauteur(st?.dimensionHauteur ?? '');
+    setNewFraisFixeCoutStockage(st?.fraisFixeCoutStockage ?? '');
+    setNewFraisFixeCoutTransport(st?.fraisFixeCoutTransport ?? '');
+    setNewGarantieMois(st?.garantieMois ?? '');
+    setNewNombreColisParUnite(st?.nombreColisParUnite ?? '');
+
+    const resolveSup = (raw?: string) => {
+      const val = (raw ?? '').trim();
+      if (!val) return { val: '', isAutre: false };
+      const matched = supplierVariables.find(
+        v => v.id === val || (v.nom && v.nom.trim().toLowerCase() === val.toLowerCase())
+      );
+      if (matched) return { val: matched.nom, isAutre: false };
+      return { val, isAutre: true };
+    };
+
+    const s1 = resolveSup(st?.fournisseur1);
+    setNewFournisseur1(s1.val);
+    setIsFournisseur1Autre(s1.isAutre);
+    setNewReferenceFournisseur1(st?.referenceFournisseur1 ?? '');
+    setNewPrixAchatFournisseur1(st?.prixAchatFournisseur1 ?? '');
+
+    const s2 = resolveSup(st?.fournisseur2);
+    setNewFournisseur2(s2.val);
+    setIsFournisseur2Autre(s2.isAutre);
+    setNewReferenceFournisseur2(st?.referenceFournisseur2 ?? '');
+    setNewPrixAchatFournisseur2(st?.prixAchatFournisseur2 ?? '');
+
+    const s3 = resolveSup(st?.fournisseur3);
+    setNewFournisseur3(s3.val);
+    setIsFournisseur3Autre(s3.isAutre);
+    setNewReferenceFournisseur3(st?.referenceFournisseur3 ?? '');
+    setNewPrixAchatFournisseur3(st?.prixAchatFournisseur3 ?? '');
+  };
+
   const pieceSidePaneItems: SearchSidePaneItem[] = useMemo(() => {
     const items: SearchSidePaneItem[] = [];
     groupedStockVariables.forEach(group => {
@@ -1163,6 +1232,7 @@ export default function StocksTab({
             denominationPieceId: newDenomStr,
             quantite: Number(newQty),
             quantiteReservee: Number(newQtyReservee),
+            quantiteTotale: Number(newQty) + Number(newQtyReservee),
             livraisonDate: finalLivDate,
             reapprovisionnementDate: finalReapDate,
             valeurAchat: Number(newValAchat) || 0,
@@ -1177,7 +1247,24 @@ export default function StocksTab({
             ugs: newUgs || '0001',
             traceabilityEnabled: traceabilityEnabled,
             traceabilities: traceabilities,
-            usageRecommandeIds: newUsageRecommandeIds
+            usageRecommandeIds: newUsageRecommandeIds,
+            poidsNet: newPoidsNet,
+            dimensionLongueur: newDimensionLongueur,
+            dimensionLargeur: newDimensionLargeur,
+            dimensionHauteur: newDimensionHauteur,
+            fraisFixeCoutStockage: newFraisFixeCoutStockage,
+            fraisFixeCoutTransport: newFraisFixeCoutTransport,
+            garantieMois: newGarantieMois,
+            nombreColisParUnite: newNombreColisParUnite,
+            fournisseur1: newFournisseur1,
+            referenceFournisseur1: newReferenceFournisseur1,
+            prixAchatFournisseur1: newPrixAchatFournisseur1,
+            fournisseur2: newFournisseur2,
+            referenceFournisseur2: newReferenceFournisseur2,
+            prixAchatFournisseur2: newPrixAchatFournisseur2,
+            fournisseur3: newFournisseur3,
+            referenceFournisseur3: newReferenceFournisseur3,
+            prixAchatFournisseur3: newPrixAchatFournisseur3,
           };
         }
         return st;
@@ -1190,6 +1277,7 @@ export default function StocksTab({
         denominationPieceId: newDenomStr,
         quantite: Number(newQty),
         quantiteReservee: Number(newQtyReservee),
+        quantiteTotale: Number(newQty) + Number(newQtyReservee),
         livraisonDate: finalLivDate,
         reapprovisionnementDate: finalReapDate,
         valeurAchat: Number(newValAchat) || 0,
@@ -1204,7 +1292,24 @@ export default function StocksTab({
         ugs: newUgs || '0001',
         traceabilityEnabled: traceabilityEnabled,
         traceabilities: traceabilities,
-        usageRecommandeIds: newUsageRecommandeIds
+        usageRecommandeIds: newUsageRecommandeIds,
+        poidsNet: newPoidsNet,
+        dimensionLongueur: newDimensionLongueur,
+        dimensionLargeur: newDimensionLargeur,
+        dimensionHauteur: newDimensionHauteur,
+        fraisFixeCoutStockage: newFraisFixeCoutStockage,
+        fraisFixeCoutTransport: newFraisFixeCoutTransport,
+        garantieMois: newGarantieMois,
+        nombreColisParUnite: newNombreColisParUnite,
+        fournisseur1: newFournisseur1,
+        referenceFournisseur1: newReferenceFournisseur1,
+        prixAchatFournisseur1: newPrixAchatFournisseur1,
+        fournisseur2: newFournisseur2,
+        referenceFournisseur2: newReferenceFournisseur2,
+        prixAchatFournisseur2: newPrixAchatFournisseur2,
+        fournisseur3: newFournisseur3,
+        referenceFournisseur3: newReferenceFournisseur3,
+        prixAchatFournisseur3: newPrixAchatFournisseur3,
       };
       saveStocks([newItem, ...stocks]);
     }
@@ -1255,6 +1360,7 @@ export default function StocksTab({
     setNewStorage('Entrepôt A');
     setNewCommentaire('');
     setNewUsageRecommandeIds([]);
+    populateStockExtraFields(undefined);
     setNewUgs('');
     setMouvements([]);
     setTraceabilityEnabled(false);
@@ -1302,6 +1408,7 @@ export default function StocksTab({
       setNewStorage('Entrepôt A');
       setNewCommentaire('');
       setNewUsageRecommandeIds([]);
+      populateStockExtraFields(undefined);
       setMouvements([]);
       setTraceabilityEnabled(false);
       setTraceabilities([]);
@@ -1890,6 +1997,7 @@ export default function StocksTab({
                             setNewStorage(st.stockage);
                             setNewCommentaire(st.commentaire || '');
                             setNewUsageRecommandeIds(resolvedUsageIds);
+                            populateStockExtraFields(st);
                             setMouvements(st.mouvements || []);
                             setNewUgs(st.ugs || '');
                             setTraceabilityEnabled(st.traceabilityEnabled ?? false);
@@ -1987,6 +2095,7 @@ export default function StocksTab({
                                   setNewStorage(st.stockage);
                                   setNewCommentaire(st.commentaire || '');
                                   setNewUsageRecommandeIds(st.usageRecommandeIds ?? []);
+                                  populateStockExtraFields(st);
                                   setMouvements(st.mouvements || []);
                                   setNewUgs(st.ugs || '');
                                   setTraceabilityEnabled(st.traceabilityEnabled ?? false);
@@ -2079,13 +2188,11 @@ export default function StocksTab({
           
           {/* Header Box styled exactly like DefibTab Form Header */}
           <div 
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
+            className="flex items-center bg-white"
             style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
             id="stocks-form-header-box"
           >
-            <div />
-            
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full">
               <button
                 type="button"
                 onClick={() => {
@@ -2096,8 +2203,10 @@ export default function StocksTab({
                 style={{
                   ...rowActionButton18Style,
                   borderRadius: '13px',
+                  flex: 1,
+                  width: '50%',
                 }}
-                className="transition-colors cursor-pointer"
+                className="flex-1 transition-colors cursor-pointer"
               >
                 <span>Annuler</span>
               </button>
@@ -2108,11 +2217,13 @@ export default function StocksTab({
                 id="btn-submit-stock-form"
                 style={{
                   ...rowActionButton18Style,
+                  flex: 1,
+                  width: '50%',
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                 }}
-                className="transition-all cursor-pointer"
+                className="flex-1 transition-all cursor-pointer"
               >
                 <span>Enregistrer</span>
               </button>
@@ -2332,6 +2443,344 @@ export default function StocksTab({
                       return taux.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
                     })()}%</strong>.
                   </span>
+                </div>
+              </div>
+
+              {/* Additional Propriétés Fields (2 columns grid) */}
+              <div className="md:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                    Poids Net (Kilogramme).
+                  </label>
+                  <input
+                    type="text"
+                    value={newPoidsNet}
+                    onChange={(e) => setNewPoidsNet(e.target.value)}
+                    className="focus:outline-none w-full font-sans"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                    Dimension Longueur.
+                  </label>
+                  <input
+                    type="text"
+                    value={newDimensionLongueur}
+                    onChange={(e) => setNewDimensionLongueur(e.target.value)}
+                    className="focus:outline-none w-full font-sans"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                    Dimension Largeur.
+                  </label>
+                  <input
+                    type="text"
+                    value={newDimensionLargeur}
+                    onChange={(e) => setNewDimensionLargeur(e.target.value)}
+                    className="focus:outline-none w-full font-sans"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                    Dimension Hauteur.
+                  </label>
+                  <input
+                    type="text"
+                    value={newDimensionHauteur}
+                    onChange={(e) => setNewDimensionHauteur(e.target.value)}
+                    className="focus:outline-none w-full font-sans"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                    Frais Fixe Coût Stockage. (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newFraisFixeCoutStockage}
+                    onChange={(e) => setNewFraisFixeCoutStockage(e.target.value)}
+                    className="focus:outline-none w-full font-sans"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                    Frais Fixe Coût Transport. (€)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newFraisFixeCoutTransport}
+                    onChange={(e) => setNewFraisFixeCoutTransport(e.target.value)}
+                    className="focus:outline-none w-full font-sans"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                    Garantie (Mois).
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newGarantieMois}
+                    onChange={(e) => setNewGarantieMois(e.target.value)}
+                    className="focus:outline-none w-full font-sans"
+                    placeholder="0"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                    Nombre Colis par Unité.
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newNombreColisParUnite}
+                    onChange={(e) => setNewNombreColisParUnite(e.target.value)}
+                    className="focus:outline-none w-full font-sans"
+                    placeholder="1"
+                  />
+                </div>
+              </div>
+
+              {/* Section Fournisseurs */}
+              <div className="md:col-span-4 pt-5 mt-2 flex flex-col gap-1">
+                <div className="flex mb-2 select-none">
+                  <span
+                    className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
+                    style={{
+                      color: 'rgb(21 99 55)',
+                      backgroundColor: 'rgb(61 220 132)',
+                      fontSize: '18px',
+                      border: 'none',
+                      textTransform: 'none',
+                      letterSpacing: 'normal'
+                    }}
+                  >
+                    Fournisseurs
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  {/* Fournisseur 1 */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                      Fournisseur. 1
+                    </label>
+                    <select
+                      value={isFournisseur1Autre ? '__AUTRE__' : newFournisseur1}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '__AUTRE__') {
+                          setIsFournisseur1Autre(true);
+                          if (supplierVariables.some(v => v.nom === newFournisseur1)) {
+                            setNewFournisseur1('');
+                          }
+                        } else {
+                          setIsFournisseur1Autre(false);
+                          setNewFournisseur1(val);
+                        }
+                      }}
+                      className="focus:outline-none w-full cursor-pointer font-sans"
+                    >
+                      <option value="">Sélectionnez un fournisseur.</option>
+                      {supplierVariables.map(sup => (
+                        <option key={sup.id} value={sup.nom}>
+                          {sup.nom}
+                        </option>
+                      ))}
+                      <option value="__AUTRE__">Autres</option>
+                    </select>
+                    {isFournisseur1Autre && (
+                      <input
+                        type="text"
+                        value={newFournisseur1}
+                        onChange={(e) => setNewFournisseur1(e.target.value)}
+                        placeholder="Saisissez le fournisseur..."
+                        className="focus:outline-none w-full font-sans mt-1"
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                      Référence Fournisseur. 1
+                    </label>
+                    <input
+                      type="text"
+                      value={newReferenceFournisseur1}
+                      onChange={(e) => setNewReferenceFournisseur1(e.target.value)}
+                      className="focus:outline-none w-full font-sans"
+                      placeholder=""
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                      Prix Achat fournisseur. 1 (€)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newPrixAchatFournisseur1}
+                      onChange={(e) => setNewPrixAchatFournisseur1(e.target.value)}
+                      className="focus:outline-none w-full font-sans"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  {/* Fournisseur 2 */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                      Fournisseur. 2
+                    </label>
+                    <select
+                      value={isFournisseur2Autre ? '__AUTRE__' : newFournisseur2}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '__AUTRE__') {
+                          setIsFournisseur2Autre(true);
+                          if (supplierVariables.some(v => v.nom === newFournisseur2)) {
+                            setNewFournisseur2('');
+                          }
+                        } else {
+                          setIsFournisseur2Autre(false);
+                          setNewFournisseur2(val);
+                        }
+                      }}
+                      className="focus:outline-none w-full cursor-pointer font-sans"
+                    >
+                      <option value="">Sélectionnez un fournisseur.</option>
+                      {supplierVariables.map(sup => (
+                        <option key={sup.id} value={sup.nom}>
+                          {sup.nom}
+                        </option>
+                      ))}
+                      <option value="__AUTRE__">Autres</option>
+                    </select>
+                    {isFournisseur2Autre && (
+                      <input
+                        type="text"
+                        value={newFournisseur2}
+                        onChange={(e) => setNewFournisseur2(e.target.value)}
+                        placeholder="Saisissez le fournisseur..."
+                        className="focus:outline-none w-full font-sans mt-1"
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                      Référence Fournisseur. 2
+                    </label>
+                    <input
+                      type="text"
+                      value={newReferenceFournisseur2}
+                      onChange={(e) => setNewReferenceFournisseur2(e.target.value)}
+                      className="focus:outline-none w-full font-sans"
+                      placeholder=""
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                      Prix Achat fournisseur. 2 (€)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newPrixAchatFournisseur2}
+                      onChange={(e) => setNewPrixAchatFournisseur2(e.target.value)}
+                      className="focus:outline-none w-full font-sans"
+                      placeholder="0.00"
+                    />
+                  </div>
+
+                  {/* Fournisseur 3 */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                      Fournisseur. 3
+                    </label>
+                    <select
+                      value={isFournisseur3Autre ? '__AUTRE__' : newFournisseur3}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '__AUTRE__') {
+                          setIsFournisseur3Autre(true);
+                          if (supplierVariables.some(v => v.nom === newFournisseur3)) {
+                            setNewFournisseur3('');
+                          }
+                        } else {
+                          setIsFournisseur3Autre(false);
+                          setNewFournisseur3(val);
+                        }
+                      }}
+                      className="focus:outline-none w-full cursor-pointer font-sans"
+                    >
+                      <option value="">Sélectionnez un fournisseur.</option>
+                      {supplierVariables.map(sup => (
+                        <option key={sup.id} value={sup.nom}>
+                          {sup.nom}
+                        </option>
+                      ))}
+                      <option value="__AUTRE__">Autres</option>
+                    </select>
+                    {isFournisseur3Autre && (
+                      <input
+                        type="text"
+                        value={newFournisseur3}
+                        onChange={(e) => setNewFournisseur3(e.target.value)}
+                        placeholder="Saisissez le fournisseur..."
+                        className="focus:outline-none w-full font-sans mt-1"
+                      />
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                      Référence Fournisseur. 3
+                    </label>
+                    <input
+                      type="text"
+                      value={newReferenceFournisseur3}
+                      onChange={(e) => setNewReferenceFournisseur3(e.target.value)}
+                      className="focus:outline-none w-full font-sans"
+                      placeholder=""
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                      Prix Achat fournisseur. 3 (€)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newPrixAchatFournisseur3}
+                      onChange={(e) => setNewPrixAchatFournisseur3(e.target.value)}
+                      className="focus:outline-none w-full font-sans"
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
               </div>
 

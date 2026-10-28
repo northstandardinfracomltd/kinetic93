@@ -37,7 +37,9 @@ import HelpBubble from './HelpBubble';
 import { ApiActivityDrawer } from './ApiActivityDrawer';
 import {
   SuspiciousActivityLog,
+  buildDefaultSuspiciousMessage,
   exportSuspiciousActivityToCsv,
+  getCurrentUserName,
   getTenantSuspiciousLogs,
   logDeleteMember,
   logUpdateSetting,
@@ -55,6 +57,7 @@ interface SettingsModalProps {
   onOpenPublicPortal: () => void;
   onOpenClientPortal?: () => void;
   isPage?: boolean;
+  isAssistancePage?: boolean;
   onLogout?: () => void;
   currentUser?: { email: string; name: string } | null;
   enableOtherEquipments?: string;
@@ -79,6 +82,7 @@ export default function SettingsModal({
   onOpenPublicPortal,
   onOpenClientPortal,
   isPage = false,
+  isAssistancePage = false,
   onLogout,
   currentUser,
   enableOtherEquipments: propEnableOtherEquipments = 'Non',
@@ -354,16 +358,12 @@ export default function SettingsModal({
   }, []);
 
   React.useEffect(() => {
-    if (isOpen || isPage) {
+    if (isAssistancePage) {
+      fetchTutorialVideos(true);
+    } else if (isOpen || isPage) {
       fetchTutorialVideos(false);
     }
-  }, [isOpen, isPage, fetchTutorialVideos]);
-
-  React.useEffect(() => {
-    if (activeSection === 'videos_tutoriels') {
-      fetchTutorialVideos(true);
-    }
-  }, [activeSection, fetchTutorialVideos]);
+  }, [isOpen, isPage, isAssistancePage, fetchTutorialVideos]);
 
   const SETTINGS_SECTIONS: { key: SettingsSectionKey; label: string }[] = [
     { key: 'reglages', label: 'Réglages' },
@@ -373,9 +373,7 @@ export default function SettingsModal({
     { key: 'communication', label: 'Communication portail client' },
     { key: 'bases_de_donnees', label: 'Bases de données' },
     { key: 'membres', label: 'Membres de l’environnement' },
-    { key: 'assistance', label: 'Assistance Defibeo' },
     { key: 'actions_suspectes', label: 'Observateur des actions suspectes' },
-    { key: 'videos_tutoriels', label: 'Vidéos Tutoriels' },
   ];
 
   const isCurrentUserSuperAdmin = React.useMemo(() => {
@@ -3670,45 +3668,47 @@ export default function SettingsModal({
           style={isPage ? { maxWidth: '98%', margin: '0 auto', width: '100%' } : {}}
         >
           {/* HUB ACCORDION */}
-          <div className="space-y-4 select-none pt-2 pb-4" id="settings-accordion-hub">
-            <div className="flex flex-wrap gap-3 sm:gap-3.5 items-center">
-              {SETTINGS_SECTIONS.map((sec) => {
-                const isSelected = activeSection === sec.key;
-                return (
-                  <button
-                    key={sec.key}
-                    type="button"
-                    onClick={() => {
-                      setClickedTabPill(sec.key);
-                      setTimeout(() => setClickedTabPill(prev => prev === sec.key ? null : prev), 480);
-                      setActiveSection(prev => prev === sec.key ? null : sec.key);
-                    }}
-                    style={{
-                      position: 'relative',
-                      overflow: 'hidden',
-                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                      fontSize: '18px',
-                      fontWeight: 600,
-                      borderRadius: '100px',
-                      padding: '12px 18px',
-                      backgroundColor: isSelected ? 'rgb(61 220 132)' : 'rgb(245 247 250)',
-                      color: isSelected ? 'rgb(21 99 55)' : 'rgb(80 97 122)',
-                      border: 'none',
-                      boxShadow: 'none',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease-in-out',
-                      textAlign: 'center',
-                      whiteSpace: 'normal',
-                      lineHeight: '1.3'
-                    }}
-                    className={`relative overflow-hidden select-none ${clickedTabPill === sec.key ? 'sidebar-nav-click-shrink-wave' : ''}`}
-                  >
-                    {t(sec.label)}
-                  </button>
-                );
-              })}
+          {!isAssistancePage && (
+            <div className="space-y-4 select-none pt-2 pb-4" id="settings-accordion-hub">
+              <div className="flex flex-wrap gap-3 sm:gap-3.5 items-center">
+                {SETTINGS_SECTIONS.map((sec) => {
+                  const isSelected = activeSection === sec.key;
+                  return (
+                    <button
+                      key={sec.key}
+                      type="button"
+                      onClick={() => {
+                        setClickedTabPill(sec.key);
+                        setTimeout(() => setClickedTabPill(prev => prev === sec.key ? null : prev), 480);
+                        setActiveSection(prev => prev === sec.key ? null : sec.key);
+                      }}
+                      style={{
+                        position: 'relative',
+                        overflow: 'hidden',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        fontSize: '18px',
+                        fontWeight: 600,
+                        borderRadius: '100px',
+                        padding: '12px 18px',
+                        backgroundColor: isSelected ? 'rgb(61 220 132)' : 'rgb(245 247 250)',
+                        color: isSelected ? 'rgb(21 99 55)' : 'rgb(80 97 122)',
+                        border: 'none',
+                        boxShadow: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease-in-out',
+                        textAlign: 'center',
+                        whiteSpace: 'normal',
+                        lineHeight: '1.3'
+                      }}
+                      className={`relative overflow-hidden select-none ${clickedTabPill === sec.key ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                    >
+                      {t(sec.label)}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* SECTION 1: RÉGLAGES */}
           {activeSection === 'reglages' && (
@@ -5350,7 +5350,7 @@ export default function SettingsModal({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div>
-                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Entrepôt de données Civilprom France</h5>
+                        <h5 className="font-bold text-black" style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>Licence et données logiciel Defibeo</h5>
                         <div className="select-none font-sans flex items-center mt-1">
                           <span
                             style={{
@@ -5739,182 +5739,263 @@ export default function SettingsModal({
           </div>
         )}
 
-        {/* SECTION 5: ASSISTANCE DEFIBEO */}
-        {activeSection === 'assistance' && (
-          <div className="rounded-2xl p-5 space-y-4 text-left mt-4 animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-assistance-group">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* SECTION 2: SUBSCRIPTION */}
-              <div 
-                className="rounded-2xl p-5 space-y-3 text-white flex flex-col justify-between animate-fadeIn" 
-                style={{ backgroundColor: '#0f172a' }}
-                id="settings-section-subscription"
-              >
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-bold text-white cursor-default select-none" style={{ fontSize: '18px', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
-                      {t("Facturation Defibeo")}.
-                    </h4>
-                  </div>
-                  <div style={{ backgroundColor: '#ffffff1c', border: 'none', padding: '20px', borderRadius: '13px' }}>
-                    <div className="font-semibold text-white text-[16px] font-sans text-center" style={{ textTransform: 'none' }}>
-                      {t("Votre abonnement Defibeo")}.
-                    </div>
-                    <div className="mt-4">
-                      <a
-                        href="https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-1J0318296F988751YNJI6Z3A"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center font-bold px-5 py-2.5 text-[18px] text-white hover:opacity-90 active:scale-95 transition-all w-full"
-                        style={{
-                          backgroundColor: '#2e54ff',
-                          borderRadius: '0.75rem',
-                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                          fontWeight: '100',
-                          boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, inset 0 6px 12px #ffffff25',
-                          border: 'none',
-                          cursor: 'pointer',
-                          width: '100%'
-                        }}
-                      >
-                        {t("Mettre à jour")}
-                      </a>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 pt-2 flex flex-col">
-                    <span className="block text-[16px] text-white font-sans leading-relaxed" style={{ color: '#ffffff' }}>
-                      {t("Les factures sont automatiquement envoyées par e-mail. Les taxes et frais sont inclus dans le montant de l'abonnement. Vous trouverez ci-dessous l'identifiant de votre environnement logiciel.")}
-                    </span>
-                    <div className="inline-flex items-center justify-center rounded-full bg-transparent text-white border border-white/30 px-3 py-1.5 text-sm font-semibold w-fit select-none" style={{ backgroundColor: 'transparent' }}>
-                      Defibeo {envIdDisplay.toUpperCase()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* SECTION 3: ASSISTANCE SUPPORT */}
-              <div className="flex flex-col justify-between bg-transparent animate-fadeIn" id="settings-section-support">
-                <div className="space-y-2">
-                  <p className="text-[16px] text-black leading-relaxed font-sans">
-                    {t("L'assistance Defibeo est disponible tous les jours, y compris les jours fériés, en Français et en Anglais par email à")}{' '}
-                    <a href="mailto:contact@defibeo.com" className="text-blue-600 hover:underline hover:text-blue-700 font-bold">
-                      contact@defibeo.com
-                    </a>
-                    .
-                  </p>
-                  <div className="space-y-2 pt-1 font-sans flex flex-col">
-                    <a 
-                      href="https://defibeo.com/#pricing" 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
-                    >
-                      {t("Informations sur mon offre")}.
-                    </a>
-                    <a 
-                      href="https://civilprom.s3.eu-north-1.amazonaws.com/DEFIBEO+ACCORD+%EF%BD%9C+FRANCE%2C+FRANC%CC%A7AIS+%EF%BD%9C+2026.pdf" 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
-                    >
-                      {t("Licence et agrément EULA.")}
-                    </a>
-                    <a 
-                      href="https://civilprom.s3.eu-north-1.amazonaws.com/Data_Process_France.pdf.pdf" 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
-                    >
-                      {t("Comment nous protégeons vos données.")}
-                    </a>
-                    <a 
-                      href="https://civilprom.s3.eu-north-1.amazonaws.com/Addendum_Defibeo_5JL26.pdf.pdf" 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
-                    >
-                      {t("Information de conformité HDS.")}
-                    </a>
-                  </div>
-                </div>
-                
-                <div className="flex flex-col space-y-3 mt-4">
-                  <a
-                    href="https://defibeo.com/school/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#2e54ff', color: '#fff' }}
-                    className="text-center cursor-pointer"
-                  >
-                    {t("Centre de connaissances")}
-                  </a>
-
-                  <a
-                    href="mailto:contact@defibeo.com"
-                    style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#0f172a', color: '#fff' }}
-                    className="text-center cursor-pointer"
-                  >
-                    {t("Envoyer un message")}
-                  </a>
-                </div>
-              </div>
-
-            </div>
-
-            {/* BANNIÈRE BOUTIQUE EN LIGNE */}
-            <div 
-              className="p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left mt-4"
+        {/* ASSISTANCE PAGE: VIDÉOS TUTORIELS FOLLOWED BY ASSISTANCE DEFIBEO */}
+        {isAssistancePage && (
+          <>
+            {/* 1. VIDÉOS TUTORIELS */}
+            <div
+              className="p-5 rounded-2xl flex flex-col gap-4 mt-4 text-left animate-fadeIn"
               style={{
                 border: 'none',
                 backgroundColor: 'rgb(245 247 250)',
                 boxShadow: 'none',
-                width: '100%',
-                margin: '0 auto',
+                maxWidth: '100%',
+                margin: '16px 0px 16px 0px',
               }}
+              id="settings-section-videos-tutoriels"
             >
-              <p 
-                className="font-sans leading-relaxed flex-1"
-                style={{ 
-                  fontSize: '16px', 
-                  fontWeight: 400, 
-                  color: '#000000', 
-                  cursor: 'default' 
-                }}
-              >
-                {t("Imprimantes à codes-barres, tablettes, plaquettes d’intervention pour véhicules… Retrouvez tous les équipements optionnels sur la boutique en ligne Defibeo.")}
-              </p>
-              <button
-                type="button"
-                onClick={() => setIsShopDrawerOpen(true)}
-                style={{
-                  backgroundColor: '#2e54ff',
-                  color: '#ffffff',
-                  boxShadow: 'none',
-                  borderRadius: '0.75rem',
-                  fontSize: '18px',
-                  padding: '11px 22px',
-                  fontWeight: '100',
-                  transition: 'all 0s ease-in-out',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                  cursor: 'pointer',
-                  border: 'none',
-                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0
-                }}
-                className="transition-all hover:opacity-95 shrink-0"
-              >
-                {t("Ouvrir la boutique")}
-              </button>
+              {tutorialVideos.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_videodefibeo.svg"
+                    alt=""
+                    className="mx-auto mb-4 select-none pointer-events-none"
+                    style={{ width: '160px', height: 'auto', objectFit: 'contain' }}
+                  />
+                  <p
+                    className="font-bold text-black select-none"
+                    style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                  >
+                    {t("Aucune vidéo disponible.")}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {tutorialVideos.map((video, idx) => {
+                    const rawHref = (video.url || '').trim();
+                    const safeHref =
+                      rawHref && !/^https?:\/\//i.test(rawHref) ? `https://${rawHref}` : rawHref || '#';
+                    return (
+                      <div
+                        key={`${video.title}-${idx}`}
+                        className="p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/60 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs text-left"
+                      >
+                        <p
+                          className="font-medium text-black leading-snug flex-1"
+                          style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                        >
+                          {video.title}
+                        </p>
+                        <a
+                          href={safeHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            backgroundColor: '#2e54ff',
+                            color: '#ffffff',
+                            boxShadow: 'none',
+                            borderRadius: '0.75rem',
+                            fontSize: '18px',
+                            padding: '11px 22px',
+                            fontWeight: '100',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.5rem',
+                            cursor: 'pointer',
+                            border: 'none',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
+                            textDecoration: 'none',
+                          }}
+                          className="transition-all hover:opacity-95 shrink-0"
+                        >
+                          {t("Regarder la vidéo")}
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </div>
+
+            {/* 2. ASSISTANCE DEFIBEO */}
+            <div className="rounded-2xl p-5 space-y-4 text-left mt-4 animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-assistance-group">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* SECTION 2: SUBSCRIPTION */}
+                <div 
+                  className="rounded-2xl p-5 space-y-3 text-white flex flex-col justify-between animate-fadeIn" 
+                  style={{ backgroundColor: '#0f172a' }}
+                  id="settings-section-subscription"
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-white cursor-default select-none" style={{ fontSize: '18px', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
+                        {t("Facturation Defibeo")}.
+                      </h4>
+                    </div>
+                    <div style={{ backgroundColor: '#ffffff1c', border: 'none', padding: '20px', borderRadius: '13px' }}>
+                      <div className="font-semibold text-white text-[16px] font-sans text-center" style={{ textTransform: 'none' }}>
+                        {t("Votre abonnement Defibeo")}.
+                      </div>
+                      <div className="mt-4">
+                        <a
+                          href="https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-1J0318296F988751YNJI6Z3A"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center font-bold px-5 py-2.5 text-[18px] text-white hover:opacity-90 active:scale-95 transition-all w-full"
+                          style={{
+                            backgroundColor: '#2e54ff',
+                            borderRadius: '0.75rem',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            fontWeight: '100',
+                            boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, inset 0 6px 12px #ffffff25',
+                            border: 'none',
+                            cursor: 'pointer',
+                            width: '100%'
+                          }}
+                        >
+                          {t("Mettre à jour")}
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2 flex flex-col">
+                      <span className="block text-[16px] text-white font-sans leading-relaxed" style={{ color: '#ffffff' }}>
+                        {t("Les factures sont automatiquement envoyées par e-mail. Les taxes et frais sont inclus dans le montant de l'abonnement. Vous trouverez ci-dessous l'identifiant de votre environnement logiciel.")}
+                      </span>
+                      <div className="inline-flex items-center justify-center rounded-full bg-transparent text-white border border-white/30 px-3 py-1.5 text-sm font-semibold w-fit select-none" style={{ backgroundColor: 'transparent' }}>
+                        Defibeo {envIdDisplay.toUpperCase()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION 3: ASSISTANCE SUPPORT */}
+                <div className="flex flex-col justify-between bg-transparent animate-fadeIn" id="settings-section-support">
+                  <div className="space-y-2">
+                    <p className="text-[16px] text-black leading-relaxed font-sans">
+                      {t("L'assistance Defibeo est disponible tous les jours, y compris les jours fériés, en Français et en Anglais par email à")}{' '}
+                      <a href="mailto:contact@defibeo.com" className="text-blue-600 hover:underline hover:text-blue-700 font-bold">
+                        contact@defibeo.com
+                      </a>
+                      .
+                    </p>
+                    <div className="space-y-2 pt-1 font-sans flex flex-col">
+                      <a 
+                        href="https://defibeo.com/#pricing" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
+                      >
+                        {t("Informations sur mon offre")}.
+                      </a>
+                      <a 
+                        href="https://civilprom.s3.eu-north-1.amazonaws.com/DEFIBEO+ACCORD+%EF%BD%9C+FRANCE%2C+FRANC%CC%A7AIS+%EF%BD%9C+2026.pdf" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
+                      >
+                        {t("Licence et agrément EULA.")}
+                      </a>
+                      <a 
+                        href="https://civilprom.s3.eu-north-1.amazonaws.com/Data_Process_France.pdf.pdf" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
+                      >
+                        {t("Comment nous protégeons vos données.")}
+                      </a>
+                      <a 
+                        href="https://civilprom.s3.eu-north-1.amazonaws.com/Addendum_Defibeo_5JL26.pdf.pdf" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
+                      >
+                        {t("Information de conformité HDS.")}
+                      </a>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-col space-y-3 mt-4">
+                    <a
+                      href="https://defibeo.com/school/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#2e54ff', color: '#fff' }}
+                      className="text-center cursor-pointer"
+                    >
+                      {t("Centre de connaissances")}
+                    </a>
+
+                    <a
+                      href="mailto:contact@defibeo.com"
+                      style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#0f172a', color: '#fff' }}
+                      className="text-center cursor-pointer"
+                    >
+                      {t("Envoyer un message")}
+                    </a>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* BANNIÈRE BOUTIQUE EN LIGNE */}
+              <div 
+                className="p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left mt-4"
+                style={{
+                  border: 'none',
+                  backgroundColor: 'rgb(245 247 250)',
+                  boxShadow: 'none',
+                  width: '100%',
+                  margin: '0 auto',
+                }}
+              >
+                <p 
+                  className="font-sans leading-relaxed flex-1"
+                  style={{ 
+                    fontSize: '16px', 
+                    fontWeight: 400, 
+                    color: '#000000', 
+                    cursor: 'default' 
+                  }}
+                >
+                  {t("Imprimantes à codes-barres, tablettes, plaquettes d’intervention pour véhicules… Retrouvez tous les équipements optionnels sur la boutique en ligne Defibeo.")}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsShopDrawerOpen(true)}
+                  style={{
+                    backgroundColor: '#2e54ff',
+                    color: '#ffffff',
+                    boxShadow: 'none',
+                    borderRadius: '0.75rem',
+                    fontSize: '18px',
+                    padding: '11px 22px',
+                    fontWeight: '100',
+                    transition: 'all 0s ease-in-out',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    cursor: 'pointer',
+                    border: 'none',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0
+                  }}
+                  className="transition-all hover:opacity-95 shrink-0"
+                >
+                  {t("Ouvrir la boutique")}
+                </button>
+              </div>
+            </div>
+          </>
         )}
 
         {/* SECTION: OBSERVATEUR DES ACTIONS SUSPECTES */}
-        {activeSection === 'actions_suspectes' && (
+        {!isAssistancePage && activeSection === 'actions_suspectes' && (
           <div 
             className="p-5 rounded-2xl flex flex-col gap-5 mt-4 text-left animate-fadeIn"
             style={{
@@ -5942,6 +6023,20 @@ export default function SettingsModal({
                     });
                   } catch (_) {}
 
+                  const displayUserName =
+                    log.userName && log.userName.trim() && log.userName.trim() !== 'Utilisateur'
+                      ? log.userName.trim()
+                      : getCurrentUserName(null, log.tenantId || myTenantId);
+                  const displayMessage =
+                    log.message && log.message.trim()
+                      ? log.message.trim().replace('L’utilisateur Utilisateur ', `L’utilisateur ${displayUserName} `)
+                      : buildDefaultSuspiciousMessage(
+                          log.actionType || 'CONNEXION',
+                          displayUserName,
+                          log.userIp || 'Non renseignée',
+                          log.details
+                        );
+
                   return (
                     <div
                       key={log.id || index}
@@ -5951,9 +6046,26 @@ export default function SettingsModal({
                         className="font-medium text-black leading-snug"
                         style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                       >
-                        {log.message}
+                        {displayMessage}
                       </p>
                       <div className="flex flex-wrap items-center gap-2">
+                        {displayUserName && (
+                          <span
+                            style={{
+                              fontSize: '13px',
+                              borderRadius: '100px',
+                              color: '#ffffff',
+                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                              padding: '3px 8px',
+                              border: 'none',
+                              background: '#0f172a',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                            }}
+                          >
+                            Utilisateur : {displayUserName}
+                          </span>
+                        )}
                         <span
                           style={{
                             fontSize: '13px',
@@ -5987,86 +6099,6 @@ export default function SettingsModal({
                           </span>
                         )}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* SECTION: VIDÉOS TUTORIELS */}
-        {activeSection === 'videos_tutoriels' && (
-          <div
-            className="p-5 rounded-2xl flex flex-col gap-4 mt-4 text-left animate-fadeIn"
-            style={{
-              border: 'none',
-              backgroundColor: 'rgb(245 247 250)',
-              boxShadow: 'none',
-              maxWidth: '100%',
-              margin: '16px 0px 16px 0px',
-            }}
-            id="settings-section-videos-tutoriels"
-          >
-            {tutorialVideos.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <img
-                  src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_videodefibeo.svg"
-                  alt=""
-                  className="mx-auto mb-4 select-none pointer-events-none"
-                  style={{ width: '160px', height: 'auto', objectFit: 'contain' }}
-                />
-                <p
-                  className="font-bold text-black select-none"
-                  style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                >
-                  {t("Aucune vidéo disponible.")}
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {tutorialVideos.map((video, idx) => {
-                  const rawHref = (video.url || '').trim();
-                  const safeHref =
-                    rawHref && !/^https?:\/\//i.test(rawHref) ? `https://${rawHref}` : rawHref || '#';
-                  return (
-                    <div
-                      key={`${video.title}-${idx}`}
-                      className="p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/60 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs text-left"
-                    >
-                      <p
-                        className="font-medium text-black leading-snug flex-1"
-                        style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                      >
-                        {video.title}
-                      </p>
-                      <a
-                        href={safeHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          backgroundColor: '#2e54ff',
-                          color: '#ffffff',
-                          boxShadow: 'none',
-                          borderRadius: '0.75rem',
-                          fontSize: '18px',
-                          padding: '11px 22px',
-                          fontWeight: '100',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.5rem',
-                          cursor: 'pointer',
-                          border: 'none',
-                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                          whiteSpace: 'nowrap',
-                          flexShrink: 0,
-                          textDecoration: 'none',
-                        }}
-                        className="transition-all hover:opacity-95 shrink-0"
-                      >
-                        {t("Regarder la vidéo")}
-                      </a>
                     </div>
                   );
                 })}
@@ -6189,7 +6221,7 @@ export default function SettingsModal({
             );
           })()}
 
-          {onLogout && (
+          {!isAssistancePage && onLogout && (
             <div className="pt-4" style={{ order: 100 }}>
               <button
                 type="button"

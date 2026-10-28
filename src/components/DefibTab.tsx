@@ -2484,6 +2484,28 @@ export default function DefibTab({
     return map;
   }, [variables, modelesDefib, modelesCoffret, modelesElectrode, modelesBatterie]);
 
+  const getModelVariableImageUrl = (val: string | undefined | null, categoryList?: Variable[]): string => {
+    if (!val) return '';
+    const trimmed = String(val).trim();
+    if (!trimmed) return '';
+    const direct = variableMap.get(trimmed);
+    if (direct?.imageUrl) return direct.imageUrl;
+    const lower = trimmed.toLowerCase();
+    const pool = categoryList ? [...categoryList, ...(variables || [])] : (variables || []);
+    const found = pool.find(v =>
+      v &&
+      v.imageUrl &&
+      (
+        v.id === trimmed ||
+        v.id.toLowerCase() === lower ||
+        (v.nom && v.nom.trim().toLowerCase() === lower) ||
+        `${v.marque || ''} - ${v.nom || ''}`.trim().toLowerCase() === lower ||
+        `${v.marque || ''} ${v.nom || ''}`.trim().toLowerCase() === lower
+      )
+    );
+    return found?.imageUrl || '';
+  };
+
   // Cache trace for the 3 most recently added or modified defibrillators (expires after 30 minutes of inactivity)
   const RECENT_DEFIB_TTL_MS = 30 * 60 * 1000;
   const [recentDefibTimestamps, setRecentDefibTimestamps] = useState<Record<string, number>>(() => {
@@ -5952,19 +5974,21 @@ export default function DefibTab({
         >
           {/* Header */}
           <div 
-            className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
+            className="flex items-center bg-white"
             style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
             id="defib-form-header-box"
           >
-            <div />
-            
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full">
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
                 id="btn-close-defib-modal"
-                style={rowActionButton18Style}
-                className="transition-colors cursor-pointer"
+                style={{
+                  ...rowActionButton18Style,
+                  flex: 1,
+                  width: '50%',
+                }}
+                className="flex-1 transition-colors cursor-pointer"
               >
                 <span>Fermer</span>
               </button>
@@ -5976,13 +6000,15 @@ export default function DefibTab({
                 disabled={isSubmitChecking}
                 style={{
                   ...rowActionButton18Style,
+                  flex: 1,
+                  width: '50%',
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   opacity: isSubmitChecking ? 0.5 : 1,
                   cursor: isSubmitChecking ? 'not-allowed' : 'pointer',
                   boxShadow: 'none'
                 }}
-                className="transition-all"
+                className="flex-1 transition-all"
               >
                 {isSubmitChecking ? (
                   <span>Enregistrement en cours...</span>
@@ -6352,23 +6378,41 @@ export default function DefibTab({
                             )}
                           </div>
                         </div>
-                        <select
-                          id="form-modeleid"
-                          value={modeleId}
-                          onChange={(e) => setModeleId(e.target.value)}
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700"
-                          required
-                        >
-                          <option value="">-- Sélectionner Modèle --</option>
-                          {modeleId && !modelesDefib.some(v => v.id === modeleId) && (
-                            <option value={modeleId}>{modeleId}</option>
-                          )}
-                          {modelesDefib.map(v => (
-                            <option key={v.id} value={v.id}>
-                              {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-14 h-14 shrink-0 rounded-md bg-white border overflow-hidden relative flex items-center justify-center p-1.5"
+                            style={{ backgroundColor: '#ffffff', borderColor: 'oklch(0.92 0.01 258.78)', borderWidth: '1px' }}
+                          >
+                            {(() => {
+                              const imgUrl = getModelVariableImageUrl(modeleId, modelesDefib);
+                              return imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt=""
+                                  className="w-full h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : null;
+                            })()}
+                          </div>
+                          <select
+                            id="form-modeleid"
+                            value={modeleId}
+                            onChange={(e) => setModeleId(e.target.value)}
+                            className="flex-1 min-w-0 w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700"
+                            required
+                          >
+                            <option value="">-- Sélectionner Modèle --</option>
+                            {modeleId && !modelesDefib.some(v => v.id === modeleId) && (
+                              <option value={modeleId}>{modeleId}</option>
+                            )}
+                            {modelesDefib.map(v => (
+                              <option key={v.id} value={v.id}>
+                                {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
                       {/* Numéro Atlasanté - single line input */}
@@ -6712,22 +6756,40 @@ export default function DefibTab({
                             )}
                           </div>
                         </div>
-                        <select
-                          id="form-mod-coffret"
-                          value={modeleCoffretId}
-                          onChange={(e) => setModeleCoffretId(e.target.value)}
-                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700"
-                        >
-                          <option value="">-- Sans coffret --</option>
-                          {modeleCoffretId && !modelesCoffret.some(v => v.id === modeleCoffretId) && (
-                            <option value={modeleCoffretId}>{modeleCoffretId}</option>
-                          )}
-                          {modelesCoffret.map(v => (
-                            <option key={v.id} value={v.id}>
-                              {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-14 h-14 shrink-0 rounded-md bg-white border overflow-hidden relative flex items-center justify-center p-1.5"
+                            style={{ backgroundColor: '#ffffff', borderColor: 'oklch(0.92 0.01 258.78)', borderWidth: '1px' }}
+                          >
+                            {(() => {
+                              const imgUrl = getModelVariableImageUrl(modeleCoffretId, modelesCoffret);
+                              return imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt=""
+                                  className="w-full h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : null;
+                            })()}
+                          </div>
+                          <select
+                            id="form-mod-coffret"
+                            value={modeleCoffretId}
+                            onChange={(e) => setModeleCoffretId(e.target.value)}
+                            className="flex-1 min-w-0 w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700"
+                          >
+                            <option value="">-- Sans coffret --</option>
+                            {modeleCoffretId && !modelesCoffret.some(v => v.id === modeleCoffretId) && (
+                              <option value={modeleCoffretId}>{modeleCoffretId}</option>
+                            )}
+                            {modelesCoffret.map(v => (
+                              <option key={v.id} value={v.id}>
+                                {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
                       {/* Numéro Lot Coffret */}
@@ -7752,22 +7814,40 @@ export default function DefibTab({
                             )}
                           </div>
                         </div>
-                        <select
-                          id="form-elec-a-lookup"
-                          value={modeleElectrodeAId}
-                          onChange={(e) => setModeleElectrodeAId(e.target.value)}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
-                        >
-                          <option value="">-- Sélectionner Électrode --</option>
-                          {modeleElectrodeAId && !modelesElectrode.some(v => v.id === modeleElectrodeAId) && (
-                            <option value={modeleElectrodeAId}>{modeleElectrodeAId}</option>
-                          )}
-                          {modelesElectrode.map(v => (
-                            <option key={v.id} value={v.id}>
-                              {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-14 h-14 shrink-0 rounded-md bg-white border overflow-hidden relative flex items-center justify-center p-1.5"
+                            style={{ backgroundColor: '#ffffff', borderColor: 'oklch(0.92 0.01 258.78)', borderWidth: '1px' }}
+                          >
+                            {(() => {
+                              const imgUrl = getModelVariableImageUrl(modeleElectrodeAId, modelesElectrode);
+                              return imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt=""
+                                  className="w-full h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : null;
+                            })()}
+                          </div>
+                          <select
+                            id="form-elec-a-lookup"
+                            value={modeleElectrodeAId}
+                            onChange={(e) => setModeleElectrodeAId(e.target.value)}
+                            className="flex-1 min-w-0 w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
+                          >
+                            <option value="">-- Sélectionner Électrode --</option>
+                            {modeleElectrodeAId && !modelesElectrode.some(v => v.id === modeleElectrodeAId) && (
+                              <option value={modeleElectrodeAId}>{modeleElectrodeAId}</option>
+                            )}
+                            {modelesElectrode.map(v => (
+                              <option key={v.id} value={v.id}>
+                                {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
                       {isVisibleLotPadPakA && (
@@ -8102,22 +8182,40 @@ export default function DefibTab({
                             )}
                           </div>
                         </div>
-                        <select
-                          id="form-elec-p-lookup"
-                          value={modeleElectrodePId}
-                          onChange={(e) => setModeleElectrodePId(e.target.value)}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
-                        >
-                          <option value="">-- Sélectionner Électrode --</option>
-                          {modeleElectrodePId && !modelesElectrode.some(v => v.id === modeleElectrodePId) && (
-                            <option value={modeleElectrodePId}>{modeleElectrodePId}</option>
-                          )}
-                          {modelesElectrode.map(v => (
-                            <option key={v.id} value={v.id}>
-                              {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-14 h-14 shrink-0 rounded-md bg-white border overflow-hidden relative flex items-center justify-center p-1.5"
+                            style={{ backgroundColor: '#ffffff', borderColor: 'oklch(0.92 0.01 258.78)', borderWidth: '1px' }}
+                          >
+                            {(() => {
+                              const imgUrl = getModelVariableImageUrl(modeleElectrodePId, modelesElectrode);
+                              return imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt=""
+                                  className="w-full h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : null;
+                            })()}
+                          </div>
+                          <select
+                            id="form-elec-p-lookup"
+                            value={modeleElectrodePId}
+                            onChange={(e) => setModeleElectrodePId(e.target.value)}
+                            className="flex-1 min-w-0 w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
+                          >
+                            <option value="">-- Sélectionner Électrode --</option>
+                            {modeleElectrodePId && !modelesElectrode.some(v => v.id === modeleElectrodePId) && (
+                              <option value={modeleElectrodePId}>{modeleElectrodePId}</option>
+                            )}
+                            {modelesElectrode.map(v => (
+                              <option key={v.id} value={v.id}>
+                                {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
                       {isVisibleLotP && (
@@ -8452,22 +8550,40 @@ export default function DefibTab({
                             )}
                           </div>
                         </div>
-                        <select
-                          id="form-bat-lookup"
-                          value={modeleBatterieId}
-                          onChange={(e) => setModeleBatterieId(e.target.value)}
-                          className="w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
-                        >
-                          <option value="">-- Sélectionner Batterie --</option>
-                          {modeleBatterieId && !modelesBatterie.some(v => v.id === modeleBatterieId) && (
-                            <option value={modeleBatterieId}>{modeleBatterieId}</option>
-                          )}
-                          {modelesBatterie.map(v => (
-                            <option key={v.id} value={v.id}>
-                              {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-14 h-14 shrink-0 rounded-md bg-white border overflow-hidden relative flex items-center justify-center p-1.5"
+                            style={{ backgroundColor: '#ffffff', borderColor: 'oklch(0.92 0.01 258.78)', borderWidth: '1px' }}
+                          >
+                            {(() => {
+                              const imgUrl = getModelVariableImageUrl(modeleBatterieId, modelesBatterie);
+                              return imgUrl ? (
+                                <img
+                                  src={imgUrl}
+                                  alt=""
+                                  className="w-full h-full object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                              ) : null;
+                            })()}
+                          </div>
+                          <select
+                            id="form-bat-lookup"
+                            value={modeleBatterieId}
+                            onChange={(e) => setModeleBatterieId(e.target.value)}
+                            className="flex-1 min-w-0 w-full px-2 py-1.5 border border-slate-200 rounded text-xs bg-white text-slate-700"
+                          >
+                            <option value="">-- Sélectionner Batterie --</option>
+                            {modeleBatterieId && !modelesBatterie.some(v => v.id === modeleBatterieId) && (
+                              <option value={modeleBatterieId}>{modeleBatterieId}</option>
+                            )}
+                            {modelesBatterie.map(v => (
+                              <option key={v.id} value={v.id}>
+                                {v.marque === 'Standard' ? v.nom : `${v.marque} - ${v.nom}`}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
 
                       <div className="space-y-1">

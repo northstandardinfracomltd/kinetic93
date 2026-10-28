@@ -1313,19 +1313,21 @@ export default function ClientTab({
       <div className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto" id="client-form-overlay">
         {/* Form Header */}
         <div 
-          className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white"
-          style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
+          className="flex items-center bg-white"
+          style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
           id="client-form-header-box"
         >
-          <div />
-          
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 w-full">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
               id="btn-close-client-modal"
-              style={rowActionButton18Style}
-              className="transition-colors cursor-pointer"
+              style={{
+                ...rowActionButton18Style,
+                flex: 1,
+                width: '50%',
+              }}
+              className="flex-1 transition-colors cursor-pointer"
             >
               <span>Fermer</span>
             </button>
@@ -1336,11 +1338,13 @@ export default function ClientTab({
               id="btn-submit-client-form"
               style={{
                 ...rowActionButton18Style,
+                flex: 1,
+                width: '50%',
                 backgroundColor: '#2e54ff',
                 color: '#ffffff',
                 boxShadow: 'none'
               }}
-              className="transition-all cursor-pointer"
+              className="flex-1 transition-all cursor-pointer"
             >
               Enregistrer
             </button>
