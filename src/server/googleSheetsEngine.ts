@@ -6708,7 +6708,14 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
     try {
       const apiRes = await fetchWithRetry(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${targetRange}`,
-        { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(60000) },
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            Pragma: 'no-cache',
+          },
+          signal: AbortSignal.timeout(60000),
+        },
         2
       );
       if (apiRes.ok) {
@@ -6727,7 +6734,13 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
     try {
       const apiRes = await fetchWithRetry(
         `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}/values/${targetRange}?key=${encodeURIComponent(cfg.apiKey)}`,
-        { signal: AbortSignal.timeout(45000) },
+        {
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            Pragma: 'no-cache',
+          },
+          signal: AbortSignal.timeout(45000),
+        },
         2
       );
       if (apiRes.ok) {
@@ -6743,9 +6756,10 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
   }
 
   // Strategy 2: Direct Google Sheets CSV Export (works on any link shared with "Anyone with link")
+  const cb = Date.now();
   const csvUrls = [
-    `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/export?format=csv${gid ? `&gid=${encodeURIComponent(gid)}` : ''}`,
-    `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/gviz/tq?tqx=out:csv${gid ? `&gid=${encodeURIComponent(gid)}` : ''}`,
+    `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/export?format=csv${gid ? `&gid=${encodeURIComponent(gid)}` : ''}&_cb=${cb}`,
+    `https://docs.google.com/spreadsheets/d/${encodeURIComponent(spreadsheetId)}/gviz/tq?tqx=out:csv${gid ? `&gid=${encodeURIComponent(gid)}` : ''}&_cb=${cb}`,
   ];
 
   for (const csvUrl of csvUrls) {
@@ -6754,6 +6768,8 @@ async function fetchRawSheetMatrix(spreadsheetUrl: string): Promise<{ headers: s
         headers: {
           'User-Agent': 'Mozilla/5.0 (compatible; DefibeoSheetsEngine/1.0)',
           Accept: 'text/csv,text/plain,*/*',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
         },
         redirect: 'follow',
         signal: AbortSignal.timeout(35000),
@@ -6911,9 +6927,16 @@ export async function fetchTenantSheetCollection(
     }
   }
 
-  // If a live fetch/refresh is already in-flight for this sheet, always await it so concurrent requests get the fresh data
+  // If a live fetch is already in-flight:
+  // - For normal reads (!forceRefresh), await the in-flight request.
+  // - For manual/forced refreshes (forceRefresh = true), wait for any existing request to settle and THEN run a guaranteed fresh fetch from Google Sheets.
   if (inFlightSheetFetches.has(cacheKey)) {
-    return inFlightSheetFetches.get(cacheKey)!;
+    if (!forceRefresh) {
+      return inFlightSheetFetches.get(cacheKey)!;
+    }
+    try {
+      await inFlightSheetFetches.get(cacheKey);
+    } catch (_) {}
   }
 
   if (!forceRefresh && sheetMemoryCache.has(cacheKey)) {
@@ -7246,11 +7269,23 @@ export async function fetchTenantSheetCollection(
         tabType === 'communicationPortailClient' ||
         tabType === 'membresEnvironnement';
 
-      // Merge upserted records from overlay if rawMatrix failed (offline fallback), or overlay was written recently (< 2 min ago),
-      // or for any record in overlay that has not yet appeared in rawMatrix (e.g. if sheet is read-only / pending write)
+      // Spreadsheet is the authoritative source of truth ("la donnée du spreadsheet est reine"):
+      // When rawMatrix succeeds and forceRefresh is true (or overlay is older than 12s), purge stale overlay upserts
+      // so old cached upserts never overwrite values edited directly in Google Sheets.
+      const recentMap = recentSheetUpserts.get(cacheKey);
+      if (rawMatrix && effectiveRows.length > 0 && (forceRefresh || isSettingsTab || !overlay.lastSyncedAt || overlay.lastSyncedAt <= Date.now() - 12000)) {
+        if (overlay.upsertedById && Object.keys(overlay.upsertedById).length > 0) {
+          overlay.upsertedById = {};
+          saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
+        }
+        if (recentMap && recentMap.size > 0) {
+          recentMap.clear();
+        }
+      }
+
       const upsertedEntries = Object.values(overlay.upsertedById || {});
       const isOverlayFreshOrOffline =
-        !rawMatrix || (!isSettingsTab && !forceRefresh && overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - 120000);
+        !rawMatrix || (!isSettingsTab && !forceRefresh && Boolean(overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - 12000));
       if (upsertedEntries.length > 0) {
         const remainingUpsertedById: Record<string, any> = {};
         for (const [upKey, upItem] of Object.entries(overlay.upsertedById || {})) {
@@ -7292,7 +7327,7 @@ export async function fetchTenantSheetCollection(
               };
               remainingUpsertedById[upKey] = upItem;
             }
-          } else if (!isSettingsTab) {
+          } else if (!isSettingsTab && !forceRefresh) {
             const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
             if (tabType === 'clients' && isPlaceholderClientValue(cleanUp.id)) {
               const slug = String(cleanUp.denomination || '')
@@ -7313,19 +7348,11 @@ export async function fetchTenantSheetCollection(
         }
       }
 
-      // Also merge any in-memory recent upserts that occurred during or shortly before this fetch
-      const recentMap = recentSheetUpserts.get(cacheKey);
+      // Also merge any in-memory recent upserts that occurred within the last 12 seconds (only when not force-refreshing)
       if (recentMap && recentMap.size > 0) {
-        if (rawMatrix && (isSettingsTab || forceRefresh)) {
-          for (const [rk, entry] of recentMap.entries()) {
-            if (entry?.syncedToRemoteSheet) {
-              recentMap.delete(rk);
-            }
-          }
-        }
         for (const [rk, entry] of recentMap.entries()) {
           if (!entry || !entry.item) continue;
-          if (entry.syncedToRemoteSheet && fetchStartedAt > entry.updatedAtMs + 30000) {
+          if (rawMatrix && (forceRefresh || isSettingsTab || fetchStartedAt > entry.updatedAtMs + 12000)) {
             recentMap.delete(rk);
             continue;
           }

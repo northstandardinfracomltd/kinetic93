@@ -2344,52 +2344,72 @@ export default function App() {
 
   const handleManualRefreshDefibs = async (forceRemote = true) => {
     const runId = ++manualDefibRefreshRunIdRef.current;
-    // Cancel any older background batch load so it cannot overwrite manual refresh results
+    const activeTenant = tenantId || 'demo';
+    const rawUrl =
+      companyInfo?.spreadsheetDefibrillateurs ||
+      companyInfo?.spreadsheetDefibrillateursUrl ||
+      localStorage.getItem(`defib_${activeTenant}_spreadsheet_defibrillateurs`) ||
+      localStorage.getItem(`defib_${activeTenant.toUpperCase()}_spreadsheet_defibrillateurs`) ||
+      localStorage.getItem(`defib_${activeTenant.toLowerCase()}_spreadsheet_defibrillateurs`) ||
+      '';
+    const defibSheetUrl = (rawUrl.includes('1tB1e41') || rawUrl.includes('2mX5O6r9hD0i3Z9m')) ? '' : rawUrl.trim();
+
+    // Cancel any older background batch load and lock defibsInFlightUrl so loadSpreadsheetsForTenant cannot race with this refresh
     activeSheetBatchRunRef.current.defibsRunId++;
-    activeSheetBatchRunRef.current.defibsInFlightUrl = '';
+    activeSheetBatchRunRef.current.defibsInFlightUrl = defibSheetUrl || '__auto__';
     setIsRefreshingDefibs(true);
     if (defibrillateurs.length === 0) {
       setIsDefibLoading(true);
     }
     const initialCount = defibSheetStats?.totalCount || defibrillateurs.length || 0;
+    let simulatedPercent = 5;
     setDefibLoadingProgress({
       current: 0,
       total: initialCount,
-      percent: 5,
+      percent: simulatedPercent,
       message: 'Actualisation des données en direct depuis le serveur...'
     });
+
+    let progressInterval: ReturnType<typeof setInterval> | null = setInterval(() => {
+      if (manualDefibRefreshRunIdRef.current !== runId) {
+        if (progressInterval) clearInterval(progressInterval);
+        return;
+      }
+      simulatedPercent = simulatedPercent < 35 ? simulatedPercent + 4 : simulatedPercent < 55 ? simulatedPercent + 2 : Math.min(62, simulatedPercent + 1);
+      setDefibLoadingProgress(prev => ({
+        current: prev.current || 0,
+        total: prev.total || initialCount,
+        percent: Math.max(prev.percent || 0, simulatedPercent),
+        message: prev.message || 'Actualisation des données en direct depuis le serveur...',
+      }));
+    }, 180);
+
     try {
-      const activeTenant = tenantId || 'demo';
-
-      // 1. Fetch persistent deleted keys in parallel without blocking sheet fetch if slow
-      try {
-        const remoteDeletedKeys = await Promise.race([
-          fetchRemoteDeletedDefibKeys(activeTenant),
-          new Promise<string[]>(r => setTimeout(() => r([]), 1200)),
-        ]);
-        if (remoteDeletedKeys.length > 0) {
-          const localKeys = getDeletedDefibKeys(activeTenant);
-          const combined = Array.from(new Set([...localKeys, ...remoteDeletedKeys]));
-          localStorage.setItem(`defib_${activeTenant}_deleted_defib_keys`, JSON.stringify(combined));
-        }
-      } catch (_) {}
-
-      const delSet = new Set(getDeletedDefibKeys(activeTenant));
-
-      // 1b. Fetch from the tenant's Google Spreadsheet for Défibrillateurs in progressive chunks
-      const rawUrl =
-        companyInfo?.spreadsheetDefibrillateurs ||
-        companyInfo?.spreadsheetDefibrillateursUrl ||
-        localStorage.getItem(`defib_${activeTenant}_spreadsheet_defibrillateurs`) ||
-        localStorage.getItem(`defib_${activeTenant.toUpperCase()}_spreadsheet_defibrillateurs`) ||
-        localStorage.getItem(`defib_${activeTenant.toLowerCase()}_spreadsheet_defibrillateurs`) ||
-        '';
-      const defibSheetUrl = (rawUrl.includes('1tB1e41') || rawUrl.includes('2mX5O6r9hD0i3Z9m')) ? '' : rawUrl.trim();
+      // 1. Fetch persistent deleted keys concurrently with the first batch so it never delays the spreadsheet request
+      const deletedKeysPromise = Promise.race([
+        fetchRemoteDeletedDefibKeys(activeTenant),
+        new Promise<string[]>(r => setTimeout(() => r([]), 800)),
+      ])
+        .then(remoteDeletedKeys => {
+          if (remoteDeletedKeys.length > 0) {
+            const localKeys = getDeletedDefibKeys(activeTenant);
+            const combined = Array.from(new Set([...localKeys, ...remoteDeletedKeys]));
+            localStorage.setItem(`defib_${activeTenant}_deleted_defib_keys`, JSON.stringify(combined));
+            return new Set(combined);
+          }
+          return new Set(getDeletedDefibKeys(activeTenant));
+        })
+        .catch(() => new Set(getDeletedDefibKeys(activeTenant)));
 
       if (defibSheetUrl) {
         lastLoadedSheetUrlsRef.current.tenant = activeTenant;
         lastLoadedSheetUrlsRef.current.defibs = defibSheetUrl;
       }
+
+      let finalAccumulatedItems: any[] = [];
+      let finalStats: any = null;
+      let resolvedCleanUrl = defibSheetUrl;
+      let hasNoSpreadsheet = false;
 
       await fetchSheetCollectionInBatches(
         activeTenant,
@@ -2397,9 +2417,15 @@ export default function App() {
         defibSheetUrl,
         forceRemote,
         (json, firstItems) => {
+          if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+          }
           if (json.spreadsheetUrl && typeof json.spreadsheetUrl === 'string') {
             const cleanUrl = json.spreadsheetUrl.trim();
             if (cleanUrl && !cleanUrl.includes('1tB1e41') && !cleanUrl.includes('2mX5O6r9hD0i3Z9m')) {
+              resolvedCleanUrl = cleanUrl;
+              activeSheetBatchRunRef.current.defibsInFlightUrl = cleanUrl;
               lastLoadedSheetUrlsRef.current.tenant = activeTenant;
               lastLoadedSheetUrlsRef.current.defibs = cleanUrl;
               try {
@@ -2407,51 +2433,79 @@ export default function App() {
                   localStorage.setItem(`defib_${k}_spreadsheet_defibrillateurs`, cleanUrl);
                 }
               } catch (_) {}
-              setCompanyInfo(prev =>
-                prev.spreadsheetDefibrillateurs === cleanUrl
-                  ? prev
-                  : { ...prev, spreadsheetDefibrillateurs: cleanUrl, spreadsheetDefibrillateursUrl: cleanUrl }
-              );
             }
           }
           if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+            hasNoSpreadsheet = true;
             setDefibrillateurs([]);
             setDefibSheetStats(null);
             idbSet(`defib_${activeTenant}_defibrillateurs_v112`, []).catch(() => {});
             setIsDefibLoading(false);
             return;
           }
-          const filtered = dedupeDefibsList(firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
-          setDefibrillateurs(filtered);
-          if (!json.hasMore && filtered.length > 0) {
-            persistDefibCache(activeTenant, filtered, json.stats);
-          } else if (json.stats) {
-            setDefibSheetStats(json.stats);
+          finalAccumulatedItems = firstItems;
+          if (json.stats) {
+            finalStats = json.stats;
           }
-          const tot = json.totalCount || filtered.length;
+          const tot = json.totalCount || firstItems.length;
+          const pct = !json.hasMore
+            ? 98
+            : tot > 0
+            ? Math.max(65, Math.min(95, Math.round((firstItems.length / tot) * 95)))
+            : 85;
           setDefibLoadingProgress({
-            current: filtered.length,
+            current: firstItems.length,
             total: tot,
-            percent: tot > 0 ? Math.min(100, Math.round((filtered.length / tot) * 100)) : 100,
-            message: `Chargement ${filtered.length.toLocaleString('en-US')}/${tot.toLocaleString('en-US')}...`,
+            percent: pct,
+            message: `Chargement ${firstItems.length.toLocaleString('en-US')}/${tot.toLocaleString('en-US')}...`,
           });
-          setIsDefibLoading(false);
         },
         (allItems, _loadedCount, totalCount, batchJson) => {
-          const filtered = dedupeDefibsList(allItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
-          if (filtered.length > 0) {
-            setDefibrillateurs(filtered);
-            persistDefibCache(activeTenant, filtered, batchJson?.stats);
+          finalAccumulatedItems = allItems;
+          if (batchJson?.stats) {
+            finalStats = batchJson.stats;
           }
+          const tot = totalCount || allItems.length;
+          const pct = tot > 0 ? Math.max(70, Math.min(98, Math.round((allItems.length / tot) * 98))) : 95;
           setDefibLoadingProgress({
-            current: filtered.length,
-            total: totalCount || filtered.length,
-            percent: totalCount > 0 ? Math.min(100, Math.round((filtered.length / totalCount) * 100)) : 100,
-            message: `Chargement ${filtered.length.toLocaleString('en-US')}/${(totalCount || filtered.length).toLocaleString('en-US')}, Terminé.`,
+            current: allItems.length,
+            total: tot,
+            percent: pct,
+            message: `Chargement ${allItems.length.toLocaleString('en-US')}/${tot.toLocaleString('en-US')}...`,
           });
         },
         () => manualDefibRefreshRunIdRef.current !== runId
       );
+
+      if (manualDefibRefreshRunIdRef.current !== runId) return;
+
+      if (!hasNoSpreadsheet && finalAccumulatedItems.length > 0) {
+        const delSet = await deletedKeysPromise;
+        const filtered = dedupeDefibsList(finalAccumulatedItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
+        setDefibrillateurs(filtered);
+        persistDefibCache(activeTenant, filtered, finalStats);
+        if (resolvedCleanUrl) {
+          setCompanyInfo(prev =>
+            prev.spreadsheetDefibrillateurs === resolvedCleanUrl
+              ? prev
+              : { ...prev, spreadsheetDefibrillateurs: resolvedCleanUrl, spreadsheetDefibrillateursUrl: resolvedCleanUrl }
+          );
+        }
+        const tot = finalStats?.totalCount || filtered.length;
+        setDefibLoadingProgress({
+          current: filtered.length,
+          total: tot,
+          percent: 100,
+          message: `Chargement ${filtered.length.toLocaleString('en-US')}/${tot.toLocaleString('en-US')}, Terminé.`,
+        });
+        setIsDefibLoading(false);
+        await new Promise(r => setTimeout(r, 180));
+      } else {
+        setDefibLoadingProgress(prev => ({
+          ...prev,
+          percent: 100,
+        }));
+      }
 
       // Ensure Clients spreadsheet is also loaded if clients state is currently empty
       if (clients.length === 0) {
@@ -2499,16 +2553,18 @@ export default function App() {
         ).catch(() => {});
       }
 
-      setTimeout(() => setIsDefibLoading(false), 200);
+      setIsDefibLoading(false);
       return;
     } catch (err) {
       console.warn('Manual refresh error:', err);
     } finally {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
       if (manualDefibRefreshRunIdRef.current === runId) {
-        setTimeout(() => {
-          setIsRefreshingDefibs(false);
-          setIsDefibLoading(false);
-        }, 400);
+        activeSheetBatchRunRef.current.defibsInFlightUrl = '';
+        setIsRefreshingDefibs(false);
+        setIsDefibLoading(false);
       }
     }
   };

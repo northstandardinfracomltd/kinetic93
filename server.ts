@@ -4944,20 +4944,23 @@ async function warmupDefibrillateursStore() {
       if (!id) {
         return res.status(400).json({ error: "id paramètre requis." });
       }
-      // Always check the tenant's Google Spreadsheet collection first if configured
+      // Always check the tenant's Google Spreadsheet collection as the sole source of truth if configured
       try {
         const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'defibrillateurs', explicitUrl);
         if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
-          const sheetData = await fetchTenantSheetCollection(sheetUrl, tenantId, 'defibrillateurs', forceRefresh);
-          if (sheetData && Array.isArray(sheetData.items) && sheetData.items.length > 0) {
-            const matcher = matchesDefibWith(id);
-            const sheetMatch = sheetData.items.find(matcher);
-            if (sheetMatch) {
-              const formatted = { ...sheetMatch, ...formatDefibrillateurOutput(sheetMatch) };
-              indexDefibrillateur(formatted, tenantId);
-              return res.json({ status: "success", defib: formatted, fromSpreadsheet: true });
-            }
+          const matcher = matchesDefibWith(id);
+          let sheetData = await fetchTenantSheetCollection(sheetUrl, tenantId, 'defibrillateurs', forceRefresh);
+          let sheetMatch = sheetData && Array.isArray(sheetData.items) ? sheetData.items.find(matcher) : undefined;
+          if (!sheetMatch && !forceRefresh) {
+            sheetData = await fetchTenantSheetCollection(sheetUrl, tenantId, 'defibrillateurs', true);
+            sheetMatch = sheetData && Array.isArray(sheetData.items) ? sheetData.items.find(matcher) : undefined;
           }
+          if (sheetMatch) {
+            const formatted = { ...sheetMatch, ...formatDefibrillateurOutput(sheetMatch) };
+            indexDefibrillateur(formatted, tenantId);
+            return res.json({ status: "success", defib: formatted, fromSpreadsheet: true });
+          }
+          return res.status(404).json({ error: "Défibrillateur non trouvé dans le Spreadsheet." });
         }
       } catch (_) {}
 

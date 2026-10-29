@@ -618,13 +618,16 @@ export default function DefibTab({
 
   // Manual Refresh State
   const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
+  const [localRefreshPercent, setLocalRefreshPercent] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const effectiveRefreshing = isRefreshing || isLocalRefreshing;
+  const prevIsRefreshingRef = useRef(isRefreshing);
 
   useEffect(() => {
-    if (isRefreshing) {
+    if (prevIsRefreshingRef.current && !isRefreshing) {
       setRefreshTrigger(prev => prev + 1);
     }
+    prevIsRefreshingRef.current = isRefreshing;
   }, [isRefreshing]);
 
   const resolvedSpreadsheetUrl = useMemo(() => {
@@ -866,19 +869,24 @@ export default function DefibTab({
   const handleRefreshClick = async () => {
     if (effectiveRefreshing) return;
     setIsLocalRefreshing(true);
-    setFallbackSheetDefibs([]);
-    setRemoteQueriedDefibs([]);
-    setPlanSheetDefibs([]);
-    stableDefibsRef.current = { tenant: activeTenantId, items: [] };
+    setLocalRefreshPercent(5);
     try {
       if (onRefreshData) {
         await onRefreshData();
       }
+      setLocalRefreshPercent(100);
+      setFallbackSheetDefibs([]);
+      setRemoteQueriedDefibs([]);
+      if (!isMapOpen) {
+        setPlanSheetDefibs([]);
+      }
       setRefreshTrigger(prev => prev + 1);
+      await new Promise(r => setTimeout(r, 150));
     } catch (err) {
       console.warn('Manual refresh error in DefibTab:', err);
     } finally {
-      setTimeout(() => setIsLocalRefreshing(false), 500);
+      setIsLocalRefreshing(false);
+      setLocalRefreshPercent(0);
     }
   };
 
@@ -1158,7 +1166,7 @@ export default function DefibTab({
     const byIdent = new Map<string, number>();
     const out: Defibrillateur[] = [];
 
-    for (const sourceList of [effectiveFallback, planSheetDefibs, defibrillateurs, remoteQueriedDefibs]) {
+    for (const sourceList of [effectiveFallback, planSheetDefibs, remoteQueriedDefibs, defibrillateurs]) {
       for (const df of sourceList) {
         if (!df) continue;
         const idKey = String(df.id || '').trim().toLowerCase();
@@ -2232,13 +2240,15 @@ export default function DefibTab({
     return () => window.removeEventListener('defib-external-filter', handleExternalDefibFilter);
   }, [onSearchChange]);
 
-  // Ensure 100% of MAIN OUI defibrillators from the tenant's Spreadsheet are loaded when the Plan map is opened
+  // Ensure 100% of MAIN OUI defibrillators from the tenant's Spreadsheet are loaded when the Plan map is opened and parent defibrillateurs is not yet populated
   useEffect(() => {
-    if (!resolvedSpreadsheetUrl) {
-      setPlanSheetDefibs([]);
+    if (!resolvedSpreadsheetUrl || defibrillateurs.length > 0) {
+      if (planSheetDefibs.length > 0) {
+        setPlanSheetDefibs([]);
+      }
       return;
     }
-    if (!isMapOpen && defibrillateurs.length > 0) {
+    if (!isMapOpen) {
       return;
     }
     let cancelled = false;
@@ -3047,6 +3057,9 @@ export default function DefibTab({
 
   // Direct server-side Google Spreadsheet interrogation on Search & Filters
   useEffect(() => {
+    if (effectiveRefreshing) {
+      return;
+    }
     if (isInitialView && maintenanceFilter === 'all') {
       setRemoteFilteredTotal(null);
       setIsSearchingSpreadsheet(false);
@@ -3142,6 +3155,7 @@ export default function DefibTab({
     maintenanceFilter,
     activeTenantId,
     refreshTrigger,
+    effectiveRefreshing,
   ]);
 
   // Pagination State
@@ -5259,7 +5273,9 @@ export default function DefibTab({
               className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill?.id === 'refresh' ? 'sidebar-nav-click-shrink-wave' : ''}`}
               title={t("Actualiser Données")}
             >
-              {effectiveRefreshing ? t("Actualisation...") : t("Actualiser Données")}
+              {effectiveRefreshing
+                ? `${t("Actualisation...")}${Math.max(1, Math.min(100, Math.round(defibLoadingProgress?.percent || localRefreshPercent || 5)))}%`
+                : t("Actualiser Données")}
             </button>
 
             <button
