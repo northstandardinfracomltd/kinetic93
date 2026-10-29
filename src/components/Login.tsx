@@ -791,7 +791,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const handleAuthCodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const fullCode = authCodeDigits.join('').trim().toUpperCase();
+    const fullCode = authCodeDigits.join('').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
     if (fullCode.length < 6) {
       setError(t.authCodeInvalid || "Veuillez saisir les 6 caractères du code.");
       return;
@@ -800,19 +800,43 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
     setIsLoading(true);
     try {
-      const verifyRes = await fetch('/api/auth/verify-tenant-member', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: pendingUser.loginIdentifier,
-          role: loginRole,
-          authCode: fullCode,
-        }),
-      });
+      let verifyRes: Response | null = null;
+      let verifyData: any = null;
 
-      const verifyData = await verifyRes.json().catch(() => ({}));
-      if (!verifyRes.ok || !verifyData?.matched || !verifyData?.codeVerified) {
-        setError(t.authCodeInvalid || verifyData?.error || "Code d'authentification incorrect. Veuillez vérifier le code reçu.");
+      // Automatically retry up to 3 times if the server is waking up or returns 502/503/504
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          verifyRes = await fetch('/api/auth/verify-tenant-member', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: pendingUser.loginIdentifier,
+              role: loginRole,
+              authCode: fullCode,
+            }),
+          });
+          if (verifyRes.ok) {
+            verifyData = await verifyRes.json().catch(() => ({}));
+            break;
+          }
+          if (verifyRes.status < 500) {
+            verifyData = await verifyRes.json().catch(() => ({}));
+            break;
+          }
+        } catch (_) {}
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 900 * attempt));
+        }
+      }
+
+      if (!verifyRes || !verifyRes.ok) {
+        setError("Le serveur est momentanément occupé (503). Veuillez recliquer sur Valider dans quelques secondes.");
+        setIsLoading(false);
+        return;
+      }
+
+      if (!verifyData?.matched || !verifyData?.codeVerified) {
+        setError(verifyData?.error || t.authCodeInvalid || "Code d'authentification incorrect. Veuillez vérifier le code reçu.");
         setIsLoading(false);
         return;
       }
@@ -959,10 +983,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         return await res.json().catch(() => null);
       };
 
-      let verifyData = await performVerifyRequest();
-      if (!verifyData || !verifyData.matched) {
-        // Retry once in case of a transient cold-start or spreadsheet refresh delay
-        verifyData = await performVerifyRequest();
+      let verifyData: any = null;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          verifyData = await performVerifyRequest();
+          if (verifyData !== null) break;
+        } catch (_) {}
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 800 * attempt));
+        }
       }
 
       if (verifyData?.matched) {

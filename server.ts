@@ -4423,28 +4423,9 @@ async function warmupDefibrillateursStore() {
       console.log(`[Warmup] fastDefibIndex pre-warmed with ${fastDefibIndex.size} entries.`);
     }
 
-    // 5. Pre-warm tenant configs from Firestore and configured Google Spreadsheets in background
-    setTimeout(async () => {
-      try {
-        const regTenants = getAllServerRegisteredTenantsSync();
-        const tenantIdsToSync = Array.from(
-          new Set(['demo', 'D27', 'D28', 'D26', 'D7', ...regTenants.map((t: any) => String(t?.id || '').trim()).filter(Boolean)])
-        );
-        await Promise.allSettled(tenantIdsToSync.map(tid => syncTenantConfigFromFirestore(tid, true)));
-
-        const urlsToWarm = new Set<string>();
-        for (const [k, v] of serverMemoryStore.entries()) {
-          if (v && typeof v === 'object' && !Array.isArray(v)) {
-            const u = (v as any).spreadsheetDefibrillateurs || (v as any).spreadsheetDefibrillateursUrl;
-            if (u && typeof u === 'string' && extractSpreadsheetIdAndGid(u)) {
-              urlsToWarm.add(u.trim());
-            }
-          }
-        }
-        for (const u of urlsToWarm) {
-          await fetchTenantSheetCollection(u, 'D27', 'defibrillateurs', false).catch(() => {});
-        }
-      } catch (_) {}
+    // 5. Lightweight background warmup of master tenants list only (avoid downloading 21MB spreadsheets on boot which can cause 503 spikes)
+    setTimeout(() => {
+      getRegisteredTenantsFromDb(false).catch(() => {});
     }, 500);
   } catch (err) {
     console.warn('[Warmup] Defibrillateurs prewarm warning:', err);
@@ -5729,9 +5710,11 @@ async function warmupDefibrillateursStore() {
     }
   });
 
-  // Strict Server-Side Random 2FA Code Storage (100% required for every login, random per login)
+  // Strict Server-Side Random 2FA Code Storage (persisted to disk so server restarts/503s never lose active codes)
   interface PendingTwoFactorChallenge {
     code: string;
+    codes?: string[];
+    createdAt?: number;
     expiresAt: number;
     attempts: number;
     tenantId: string;
@@ -5746,7 +5729,50 @@ async function warmupDefibrillateursStore() {
     };
     member: any;
   }
+  const PENDING_2FA_FILE = path.join(DATA_DIR, 'pending_2fa_challenges.json');
   const pendingTwoFactorAuthMap = new Map<string, PendingTwoFactorChallenge>();
+
+  const loadPendingTwoFactorFromDisk = () => {
+    try {
+      if (fs.existsSync(PENDING_2FA_FILE)) {
+        const raw = fs.readFileSync(PENDING_2FA_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          const now = Date.now();
+          for (const [k, v] of Object.entries(parsed)) {
+            const item = v as PendingTwoFactorChallenge;
+            if (item && item.expiresAt && item.expiresAt > now) {
+              const existing = pendingTwoFactorAuthMap.get(k);
+              if (existing) {
+                const mergedCodes = Array.from(new Set([...(existing.codes || [existing.code]), ...(item.codes || [item.code])].filter(Boolean)));
+                pendingTwoFactorAuthMap.set(k, { ...item, ...existing, codes: mergedCodes });
+              } else {
+                pendingTwoFactorAuthMap.set(k, item);
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  };
+
+  const savePendingTwoFactorToDisk = () => {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      const now = Date.now();
+      const obj: Record<string, PendingTwoFactorChallenge> = {};
+      for (const [k, v] of pendingTwoFactorAuthMap.entries()) {
+        if (v && v.expiresAt > now) {
+          obj[k] = v;
+        }
+      }
+      fs.writeFileSync(PENDING_2FA_FILE, JSON.stringify(obj, null, 2), 'utf-8');
+    } catch (_) {}
+  };
+
+  loadPendingTwoFactorFromDisk();
 
   const generateRandomServerAuthCode = (): string => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -5834,7 +5860,9 @@ async function warmupDefibrillateursStore() {
         .replace(/[\s\u200B-\u200D\uFEFF\u00A0]+/g, '')
         .toLowerCase();
       const loginRole = String(body.role || 'admin').trim().toLowerCase();
-      const submittedAuthCode = String(body.authCode || '').trim().toUpperCase();
+      const submittedAuthCode = String(body.authCode || '')
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .toUpperCase();
       const isResend = Boolean(body.resend);
       const customScriptUrl = typeof body.scriptUrl === 'string' ? body.scriptUrl.trim() : '';
       const challengeKey = `${emailLower}::${loginRole}`;
@@ -5843,15 +5871,26 @@ async function warmupDefibrillateursStore() {
         return res.json({ matched: false });
       }
 
+      // Ensure disk-persisted 2FA challenges are loaded in case server restarted
+      loadPendingTwoFactorFromDisk();
+
       // Fast path for resending 2FA code if a challenge already exists
       if (isResend && !submittedAuthCode) {
         const existingPending = pendingTwoFactorAuthMap.get(challengeKey);
         if (existingPending && !existingPending.disabled) {
           const freshCode = generateRandomServerAuthCode();
+          const prevCodes = Array.isArray(existingPending.codes)
+            ? existingPending.codes
+            : existingPending.code
+            ? [existingPending.code]
+            : [];
           existingPending.code = freshCode;
-          existingPending.expiresAt = Date.now() + 10 * 60 * 1000;
+          existingPending.codes = Array.from(new Set([freshCode, ...prevCodes])).slice(0, 10);
+          existingPending.createdAt = Date.now();
+          existingPending.expiresAt = Date.now() + 30 * 60 * 1000;
           existingPending.attempts = 0;
           pendingTwoFactorAuthMap.set(challengeKey, existingPending);
+          savePendingTwoFactorToDisk();
           const emailSent = await Promise.race([
             dispatchServerAuthCodeEmail(existingPending.targetEmail, freshCode, customScriptUrl),
             new Promise<boolean>(resolve => setTimeout(() => resolve(true), 2500)),
@@ -5870,9 +5909,24 @@ async function warmupDefibrillateursStore() {
 
       // STEP 2: Verify submitted 6-character random email 2FA code
       if (submittedAuthCode) {
-        const pending = pendingTwoFactorAuthMap.get(challengeKey);
+        let matchedKey = challengeKey;
+        let pending = pendingTwoFactorAuthMap.get(challengeKey);
+        if (!pending) {
+          // Fallback: check any challenge for the same email address
+          for (const [k, v] of pendingTwoFactorAuthMap.entries()) {
+            if (k.startsWith(`${emailLower}::`) || String(v?.targetEmail || '').trim().toLowerCase() === emailLower) {
+              matchedKey = k;
+              pending = v;
+              break;
+            }
+          }
+        }
+
         if (!pending || Date.now() > pending.expiresAt) {
-          pendingTwoFactorAuthMap.delete(challengeKey);
+          if (pending) {
+            pendingTwoFactorAuthMap.delete(matchedKey);
+            savePendingTwoFactorToDisk();
+          }
           return res.json({
             matched: false,
             codeInvalid: true,
@@ -5880,14 +5934,23 @@ async function warmupDefibrillateursStore() {
           });
         }
 
-        const expectedBuf = Buffer.from(pending.code, 'utf-8');
-        const actualBuf = Buffer.from(submittedAuthCode, 'utf-8');
-        const isCodeValid =
-          expectedBuf.length === actualBuf.length &&
-          crypto.timingSafeEqual(expectedBuf, actualBuf);
+        const candidateCodes = Array.from(
+          new Set([pending.code, ...(Array.isArray(pending.codes) ? pending.codes : [])].filter(Boolean))
+        ).map(c => String(c).replace(/[^a-zA-Z0-9]/g, '').toUpperCase());
+
+        // Accept matching code (including O/0 and I/1/L visual confusions just in case)
+        const normalizeConfusable = (s: string) =>
+          s.replace(/0/g, 'O').replace(/[1I]/g, 'L');
+
+        const isCodeValid = candidateCodes.some(
+          expected =>
+            expected === submittedAuthCode ||
+            normalizeConfusable(expected) === normalizeConfusable(submittedAuthCode)
+        );
 
         if (!isCodeValid) {
           pending.attempts += 1;
+          savePendingTwoFactorToDisk();
           return res.json({
             matched: false,
             codeInvalid: true,
@@ -5896,7 +5959,8 @@ async function warmupDefibrillateursStore() {
         }
 
         // Valid random 2FA code! Consume challenge and issue sessionToken
-        pendingTwoFactorAuthMap.delete(challengeKey);
+        pendingTwoFactorAuthMap.delete(matchedKey);
+        savePendingTwoFactorToDisk();
         clearFailedLoginForIp(clientIp);
         const sessionToken = issueServerSessionToken(
           pending.user.email,
@@ -5937,10 +6001,28 @@ async function warmupDefibrillateursStore() {
             disabled: true,
           });
         }
-        const randomCode = generateRandomServerAuthCode();
+        const existing = pendingTwoFactorAuthMap.get(challengeKey);
+        const now = Date.now();
+        // If a challenge was already issued within the last 20 seconds (e.g. duplicate click or retry), reuse the same code so a second email doesn't invalidate the first!
+        const reuseRecentCode =
+          !isResend &&
+          existing &&
+          existing.code &&
+          existing.expiresAt > now &&
+          existing.createdAt &&
+          now - existing.createdAt < 20000;
+
+        const randomCode = reuseRecentCode ? existing.code : generateRandomServerAuthCode();
+        const prevCodes = existing
+          ? Array.from(new Set([existing.code, ...(Array.isArray(existing.codes) ? existing.codes : [])].filter(Boolean)))
+          : [];
+        const allValidCodes = Array.from(new Set([randomCode, ...prevCodes])).slice(0, 10);
+
         pendingTwoFactorAuthMap.set(challengeKey, {
           code: randomCode,
-          expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes validity
+          codes: allValidCodes,
+          createdAt: reuseRecentCode ? existing.createdAt : now,
+          expiresAt: now + 30 * 60 * 1000, // 30 minutes validity
           attempts: 0,
           tenantId: params.tenantId,
           disabled: params.disabled,
@@ -5949,10 +6031,15 @@ async function warmupDefibrillateursStore() {
           user: params.user,
           member: params.member,
         });
-        const emailSent = await Promise.race([
-          dispatchServerAuthCodeEmail(params.targetEmail, randomCode, customScriptUrl),
-          new Promise<boolean>(resolve => setTimeout(() => resolve(true), 2500)),
-        ]);
+        savePendingTwoFactorToDisk();
+
+        let emailSent = true;
+        if (!reuseRecentCode) {
+          emailSent = await Promise.race([
+            dispatchServerAuthCodeEmail(params.targetEmail, randomCode, customScriptUrl),
+            new Promise<boolean>(resolve => setTimeout(() => resolve(true), 2500)),
+          ]);
+        }
         return res.json({
           matched: true,
           requiresTwoFactor: true,
