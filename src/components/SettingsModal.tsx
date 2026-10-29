@@ -99,7 +99,13 @@ export default function SettingsModal({
     const lang = localStorage.getItem('defib_lang') || 'Français, France';
     return lang === 'Français' ? 'Français, France' : lang;
   });
-  const [shortEnvId, setShortEnvId] = React.useState(() => localStorage.getItem('defib_short_env_id') || 'D18');
+  const [shortEnvId, setShortEnvId] = React.useState(() => {
+    const activeId = propTenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+    if (activeId.toLowerCase() === 'demo') return 'D18';
+    const known = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], activeId) as any;
+    if (known?.shortEnvId) return known.shortEnvId;
+    return (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null) || 'D18';
+  });
 
   React.useEffect(() => {
     const activeId = propTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
@@ -107,8 +113,13 @@ export default function SettingsModal({
       setShortEnvId('D18');
       localStorage.setItem('defib_short_env_id', 'D18');
     } else {
+      const immediateKnown = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], activeId) as any;
+      if (immediateKnown?.shortEnvId) {
+        setShortEnvId(immediateKnown.shortEnvId);
+        localStorage.setItem('defib_short_env_id', immediateKnown.shortEnvId);
+      }
       getRegisteredTenants().then(tenants => {
-        const found = findTenantInList(tenants, activeId);
+        const found = (findTenantInList(tenants, activeId) || findTenantInList(KNOWN_TENANTS_REGISTRY as any[], activeId)) as any;
         if (found && found.shortEnvId) {
           setShortEnvId(found.shortEnvId);
           localStorage.setItem('defib_short_env_id', found.shortEnvId);
@@ -119,7 +130,7 @@ export default function SettingsModal({
         console.error('Error fetching registered tenants shortEnvId in SettingsModal:', err);
       });
     }
-  }, [propTenantId, isOpen, isPage]);
+  }, [propTenantId, isOpen, isPage, isAssistancePage]);
 
   const [appsScriptUrl, setAppsScriptUrl] = React.useState<string>('');
   
@@ -169,6 +180,10 @@ export default function SettingsModal({
       conditionsLegalesLink: '',
       mentionsLegalesFactures: '',
       gmailPartageLocalisation: '',
+      expressionAlerte1: '',
+      expressionAlerte2: '',
+      expressionAlerte3: '',
+      expressionAlerte4: '',
       communicationPortailClient: '',
       pdfHeaderImg: '',
       pdfPageHeaderText: '',
@@ -280,8 +295,35 @@ export default function SettingsModal({
 
   const [activeSection, setActiveSection] = React.useState<SettingsSectionKey | null>(null);
 
-  const [tutorialVideos, setTutorialVideos] = React.useState<{ title: string; url: string }[]>([]);
+  const [tutorialVideos, setTutorialVideos] = React.useState<
+    { tenantIdLecture: string; title: string; date: string; url: string }[]
+  >([]);
   const [isLoadingTutorialVideos, setIsLoadingTutorialVideos] = React.useState<boolean>(false);
+
+  const formatVideoDateToDDMMYYYY = React.useCallback((raw: string): string => {
+    const clean = String(raw || '').trim();
+    if (!clean) return '';
+    const ymd = clean.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+    if (ymd) {
+      return `${ymd[3].padStart(2, '0')}/${ymd[2].padStart(2, '0')}/${ymd[1]}`;
+    }
+    const dmy4 = clean.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+    if (dmy4) {
+      return `${dmy4[1].padStart(2, '0')}/${dmy4[2].padStart(2, '0')}/${dmy4[3]}`;
+    }
+    const dmy2 = clean.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/);
+    if (dmy2) {
+      return `${dmy2[1].padStart(2, '0')}/${dmy2[2].padStart(2, '0')}/20${dmy2[3]}`;
+    }
+    const parsed = new Date(clean);
+    if (!isNaN(parsed.getTime())) {
+      const dd = String(parsed.getDate()).padStart(2, '0');
+      const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+      const yyyy = String(parsed.getFullYear());
+      return `${dd}/${mm}/${yyyy}`;
+    }
+    return clean;
+  }, []);
 
   const fetchTutorialVideos = React.useCallback(async (forceRefresh: boolean = false) => {
     setIsLoadingTutorialVideos(true);
@@ -289,18 +331,25 @@ export default function SettingsModal({
       const res = await fetch(`/api/public/tutorial-videos${forceRefresh ? '?refresh=true' : ''}`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data?.videos) && data.videos.length > 0) {
-          setTutorialVideos(data.videos);
+        if (Array.isArray(data?.videos)) {
+          setTutorialVideos(
+            data.videos.map((v: any) => ({
+              tenantIdLecture: String(v?.tenantIdLecture ?? '').trim(),
+              title: String(v?.title ?? '').trim(),
+              date: formatVideoDateToDDMMYYYY(String(v?.date ?? '')),
+              url: String(v?.url ?? '').trim(),
+            }))
+          );
           setIsLoadingTutorialVideos(false);
           return;
         }
       }
     } catch (_) {}
 
-    // Direct CSV export fallback from the fixed public Google Spreadsheet
+    // Direct CSV export fallback from the shared Google Spreadsheet
     try {
       const csvRes = await fetch(
-        'https://docs.google.com/spreadsheets/d/14i40vhQZyn3dVWSF3dluo4Razd14g3UmzIzba4ADb_4/gviz/tq?tqx=out:csv'
+        'https://docs.google.com/spreadsheets/d/1ywR9gmTGNu8EeQgEscgFl5mtlEx4ohtiVvOOigokESA/gviz/tq?tqx=out:csv'
       );
       if (csvRes.ok) {
         const csvText = await csvRes.text();
@@ -309,7 +358,7 @@ export default function SettingsModal({
             .split(/\r?\n/)
             .map(l => l.trim())
             .filter(Boolean);
-          const parsed: { title: string; url: string }[] = [];
+          const parsed: { tenantIdLecture: string; title: string; date: string; url: string }[] = [];
           for (let i = 0; i < lines.length; i++) {
             const cells: string[] = [];
             let cur = '';
@@ -331,20 +380,32 @@ export default function SettingsModal({
               }
             }
             cells.push(cur.trim());
-            const rawTitle = (cells[0] || '').trim();
-            const rawUrl = (cells[1] || '').trim();
-            if (!rawTitle && !rawUrl) continue;
+            const rawTenant = (cells[0] || '').trim();
+            const rawTitle = (cells[1] || '').trim();
+            const rawDate = (cells[2] || '').trim();
+            const rawUrl = (cells[3] || '').trim();
+            if (!rawTenant && !rawTitle && !rawUrl) continue;
+            const normTenant = rawTenant.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
             const normT = rawTitle.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             const normU = rawUrl.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             if (
+              normTenant === 'tenantidlecture' ||
+              normT === 'titre.' ||
+              normT === 'titre' ||
               normT === 'titre de la video.' ||
               normT === 'titre de la video' ||
-              normU === 'url de la video.' ||
-              normU === 'url de la video'
+              normU === 'url.' ||
+              normU === 'url'
             ) {
               continue;
             }
-            parsed.push({ title: rawTitle || rawUrl, url: rawUrl });
+            if (!rawTitle && !rawUrl) continue;
+            parsed.push({
+              tenantIdLecture: rawTenant,
+              title: rawTitle || rawUrl,
+              date: formatVideoDateToDDMMYYYY(rawDate),
+              url: rawUrl,
+            });
           }
           setTutorialVideos(parsed);
           setIsLoadingTutorialVideos(false);
@@ -355,7 +416,41 @@ export default function SettingsModal({
 
     setTutorialVideos([]);
     setIsLoadingTutorialVideos(false);
-  }, []);
+  }, [formatVideoDateToDDMMYYYY]);
+
+  const visibleTutorialVideos = React.useMemo(() => {
+    const activeTid = (propTenantId || myTenantId || 'demo').trim();
+    const allowedTokens = new Set<string>();
+    if (envIdDisplay) allowedTokens.add(envIdDisplay.trim().toUpperCase());
+    if (shortEnvId) allowedTokens.add(shortEnvId.trim().toUpperCase());
+    if (activeTid.toLowerCase() === 'demo') {
+      allowedTokens.add('DEMO');
+      allowedTokens.add('D18');
+      allowedTokens.add('D10');
+    } else {
+      const known = findTenantInList(KNOWN_TENANTS_REGISTRY as any[], activeTid) as any;
+      if (known?.shortEnvId) {
+        allowedTokens.add(String(known.shortEnvId).trim().toUpperCase());
+      }
+      const tidUpper = activeTid.toUpperCase();
+      const collidesWithOtherShortEnvId = (KNOWN_TENANTS_REGISTRY as any[]).some(
+        t => t.id?.toUpperCase() !== tidUpper && t.shortEnvId?.toUpperCase() === tidUpper
+      );
+      if (!collidesWithOtherShortEnvId) {
+        allowedTokens.add(tidUpper);
+      }
+    }
+
+    return tutorialVideos.filter(video => {
+      const rawTarget = String(video.tenantIdLecture || '').trim();
+      if (!rawTarget) return false;
+      const tokens = rawTarget
+        .split(/[,;|/]+/)
+        .map(s => s.replace(/^defibeo\s+/i, '').trim().toUpperCase())
+        .filter(Boolean);
+      return tokens.some(tok => allowedTokens.has(tok));
+    });
+  }, [tutorialVideos, propTenantId, myTenantId, envIdDisplay, shortEnvId]);
 
   React.useEffect(() => {
     if (isAssistancePage) {
@@ -1066,6 +1161,10 @@ export default function SettingsModal({
           conditionsLegalesLink: cleanPatch.conditionsLegalesLink !== undefined ? String(cleanPatch.conditionsLegalesLink) : '',
           mentionsLegalesFactures: cleanPatch.mentionsLegalesFactures !== undefined ? String(cleanPatch.mentionsLegalesFactures) : '',
           gmailPartageLocalisation: cleanPatch.gmailPartageLocalisation !== undefined ? String(cleanPatch.gmailPartageLocalisation) : '',
+          expressionAlerte1: cleanPatch.expressionAlerte1 !== undefined ? String(cleanPatch.expressionAlerte1).slice(0, 30) : '',
+          expressionAlerte2: cleanPatch.expressionAlerte2 !== undefined ? String(cleanPatch.expressionAlerte2).slice(0, 30) : '',
+          expressionAlerte3: cleanPatch.expressionAlerte3 !== undefined ? String(cleanPatch.expressionAlerte3).slice(0, 30) : '',
+          expressionAlerte4: cleanPatch.expressionAlerte4 !== undefined ? String(cleanPatch.expressionAlerte4).slice(0, 30) : '',
           hiddenTabs: Array.isArray(cleanPatch.hiddenTabs) ? cleanPatch.hiddenTabs : (prev.hiddenTabs || []),
         };
         lastPropsCompanyRef.current = nextComp;
@@ -1457,6 +1556,10 @@ export default function SettingsModal({
                 phone: validCompany.phone !== undefined ? validCompany.phone : cleanDefault.phone,
                 nomLogiciel: validCompany.nomLogiciel !== undefined ? validCompany.nomLogiciel : cleanDefault.nomLogiciel,
                 gmailPartageLocalisation: validCompany.gmailPartageLocalisation !== undefined ? validCompany.gmailPartageLocalisation : cleanDefault.gmailPartageLocalisation,
+                expressionAlerte1: validCompany.expressionAlerte1 !== undefined ? String(validCompany.expressionAlerte1).slice(0, 30) : cleanDefault.expressionAlerte1,
+                expressionAlerte2: validCompany.expressionAlerte2 !== undefined ? String(validCompany.expressionAlerte2).slice(0, 30) : cleanDefault.expressionAlerte2,
+                expressionAlerte3: validCompany.expressionAlerte3 !== undefined ? String(validCompany.expressionAlerte3).slice(0, 30) : cleanDefault.expressionAlerte3,
+                expressionAlerte4: validCompany.expressionAlerte4 !== undefined ? String(validCompany.expressionAlerte4).slice(0, 30) : cleanDefault.expressionAlerte4,
                 hiddenTabs: validCompany.hiddenTabs !== undefined ? validCompany.hiddenTabs : cleanDefault.hiddenTabs,
               } : {}),
               ...(validCompany && !resolvedHasPdfSheet ? {
@@ -4008,6 +4111,55 @@ export default function SettingsModal({
               </button>
             </div>
           </div>
+
+          {/* POST-INTERVENTION ALERT EXPRESSIONS */}
+          <div className="space-y-2 mt-4">
+            <label className="block text-[16px] font-bold text-black font-sans leading-tight">
+              {t("Mots ou groupes de mots d'alerte pour le traitement post-intervention. (Optionnel)")}
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input
+                type="text"
+                maxLength={30}
+                disabled={!isCurrentUserSuperAdmin}
+                value={localCompany.expressionAlerte1 ?? ''}
+                onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('expressionAlerte1', e.target.value.slice(0, 30))}
+                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
+                placeholder={t("Expression d’alerte 1")}
+              />
+              <input
+                type="text"
+                maxLength={30}
+                disabled={!isCurrentUserSuperAdmin}
+                value={localCompany.expressionAlerte2 ?? ''}
+                onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('expressionAlerte2', e.target.value.slice(0, 30))}
+                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
+                placeholder={t("Expression d’alerte 2")}
+              />
+              <input
+                type="text"
+                maxLength={30}
+                disabled={!isCurrentUserSuperAdmin}
+                value={localCompany.expressionAlerte3 ?? ''}
+                onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('expressionAlerte3', e.target.value.slice(0, 30))}
+                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
+                placeholder={t("Expression d’alerte 3")}
+              />
+              <input
+                type="text"
+                maxLength={30}
+                disabled={!isCurrentUserSuperAdmin}
+                value={localCompany.expressionAlerte4 ?? ''}
+                onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('expressionAlerte4', e.target.value.slice(0, 30))}
+                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
+                placeholder={t("Expression d’alerte 4")}
+              />
+            </div>
+          </div>
         </div>
       )}
 
@@ -5754,24 +5906,35 @@ export default function SettingsModal({
               }}
               id="settings-section-videos-tutoriels"
             >
-              {tutorialVideos.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <img
-                    src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_videodefibeo.svg"
-                    alt=""
-                    className="mx-auto mb-4 select-none pointer-events-none"
-                    style={{ width: '160px', height: 'auto', objectFit: 'contain' }}
-                  />
-                  <p
-                    className="font-bold text-black select-none"
-                    style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <img
+                  src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_videodefibeo.svg"
+                  alt=""
+                  className="mx-auto mb-4 select-none pointer-events-none"
+                  style={{ width: '160px', height: 'auto', objectFit: 'contain' }}
+                />
+                <p
+                  className="font-bold text-black select-none"
+                  style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                >
+                  {visibleTutorialVideos.length === 0
+                    ? t("Aucune vidéo d’aide disponible.")
+                    : t("Vidéos partagées par le support.")}
+                </p>
+                {visibleTutorialVideos.length === 0 && (
+                  <a
+                    href="mailto:contact@defibeo.com"
+                    style={{ ...rowActionButtonStyle, fontSize: '18px', backgroundColor: '#0f172a', color: '#fff', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", textDecoration: 'none' }}
+                    className="mt-4 text-center cursor-pointer"
                   >
-                    {t("Aucune vidéo disponible.")}
-                  </p>
-                </div>
-              ) : (
+                    {t("Envoyer un message")}
+                  </a>
+                )}
+              </div>
+
+              {visibleTutorialVideos.length > 0 && (
                 <div className="space-y-3">
-                  {tutorialVideos.map((video, idx) => {
+                  {visibleTutorialVideos.map((video, idx) => {
                     const rawHref = (video.url || '').trim();
                     const safeHref =
                       rawHref && !/^https?:\/\//i.test(rawHref) ? `https://${rawHref}` : rawHref || '#';
@@ -5780,12 +5943,22 @@ export default function SettingsModal({
                         key={`${video.title}-${idx}`}
                         className="p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/60 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs text-left"
                       >
-                        <p
-                          className="font-medium text-black leading-snug flex-1"
-                          style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                        >
-                          {video.title}
-                        </p>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6 flex-1">
+                          <span
+                            className="font-bold text-black leading-snug"
+                            style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                          >
+                            {video.title}
+                          </span>
+                          {video.date && (
+                            <span
+                              className="text-black leading-snug"
+                              style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                            >
+                              {video.date}
+                            </span>
+                          )}
+                        </div>
                         <a
                           href={safeHref}
                           target="_blank"
@@ -5801,7 +5974,6 @@ export default function SettingsModal({
                             display: 'inline-flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: '0.5rem',
                             cursor: 'pointer',
                             border: 'none',
                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -5811,7 +5983,7 @@ export default function SettingsModal({
                           }}
                           className="transition-all hover:opacity-95 shrink-0"
                         >
-                          {t("Regarder la vidéo")}
+                          {t("Regarder")}
                         </a>
                       </div>
                     );
@@ -5822,7 +5994,7 @@ export default function SettingsModal({
 
             {/* 2. ASSISTANCE DEFIBEO */}
             <div className="rounded-2xl p-5 space-y-4 text-left mt-4 animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-assistance-group">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {/* SECTION 2: SUBSCRIPTION */}
                 <div 
                   className="rounded-2xl p-5 space-y-3 text-white flex flex-col justify-between animate-fadeIn" 
@@ -5830,115 +6002,23 @@ export default function SettingsModal({
                   id="settings-section-subscription"
                 >
                   <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-white cursor-default select-none" style={{ fontSize: '18px', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}>
-                        {t("Facturation Defibeo")}.
-                      </h4>
-                    </div>
-                    <div style={{ backgroundColor: '#ffffff1c', border: 'none', padding: '20px', borderRadius: '13px' }}>
-                      <div className="font-semibold text-white text-[16px] font-sans text-center" style={{ textTransform: 'none' }}>
-                        {t("Votre abonnement Defibeo")}.
-                      </div>
-                      <div className="mt-4">
-                        <a
-                          href="https://www.paypal.com/webapps/billing/plans/subscribe?plan_id=P-1J0318296F988751YNJI6Z3A"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center font-bold px-5 py-2.5 text-[18px] text-white hover:opacity-90 active:scale-95 transition-all w-full"
-                          style={{
-                            backgroundColor: '#2e54ff',
-                            borderRadius: '0.75rem',
-                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                            fontWeight: '100',
-                            boxShadow: 'inset 0 1px 1px #ffffff00, 0 1px 2px #08080833, inset 0 6px 12px #ffffff25',
-                            border: 'none',
-                            cursor: 'pointer',
-                            width: '100%'
-                          }}
-                        >
-                          {t("Mettre à jour")}
-                        </a>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 pt-2 flex flex-col">
+                    <div className="space-y-3 flex flex-col">
                       <span className="block text-[16px] text-white font-sans leading-relaxed" style={{ color: '#ffffff' }}>
-                        {t("Les factures sont automatiquement envoyées par e-mail. Les taxes et frais sont inclus dans le montant de l'abonnement. Vous trouverez ci-dessous l'identifiant de votre environnement logiciel.")}
+                        {t("Votre licence et votre abonnement est géré par votre représentant et interlocuteur Defibeo, pour plus d’informations veuillez nous contacter. Les factures sont automatiquement envoyées par email. Vous trouverez ci-dessous l'identifiant de votre environnement logiciel.")}
                       </span>
                       <div className="inline-flex items-center justify-center rounded-full bg-transparent text-white border border-white/30 px-3 py-1.5 text-sm font-semibold w-fit select-none" style={{ backgroundColor: 'transparent' }}>
                         Defibeo {envIdDisplay.toUpperCase()}
                       </div>
+                      <a
+                        href="mailto:contact@defibeo.com"
+                        style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#2e54ff', color: '#fff', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", textDecoration: 'none' }}
+                        className="text-center cursor-pointer mt-2"
+                      >
+                        {t("Envoyer un message")}
+                      </a>
                     </div>
                   </div>
                 </div>
-
-                {/* SECTION 3: ASSISTANCE SUPPORT */}
-                <div className="flex flex-col justify-between bg-transparent animate-fadeIn" id="settings-section-support">
-                  <div className="space-y-2">
-                    <p className="text-[16px] text-black leading-relaxed font-sans">
-                      {t("L'assistance Defibeo est disponible tous les jours, y compris les jours fériés, en Français et en Anglais par email à")}{' '}
-                      <a href="mailto:contact@defibeo.com" className="text-blue-600 hover:underline hover:text-blue-700 font-bold">
-                        contact@defibeo.com
-                      </a>
-                      .
-                    </p>
-                    <div className="space-y-2 pt-1 font-sans flex flex-col">
-                      <a 
-                        href="https://defibeo.com/#pricing" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
-                      >
-                        {t("Informations sur mon offre")}.
-                      </a>
-                      <a 
-                        href="https://civilprom.s3.eu-north-1.amazonaws.com/DEFIBEO+ACCORD+%EF%BD%9C+FRANCE%2C+FRANC%CC%A7AIS+%EF%BD%9C+2026.pdf" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
-                      >
-                        {t("Licence et agrément EULA.")}
-                      </a>
-                      <a 
-                        href="https://civilprom.s3.eu-north-1.amazonaws.com/Data_Process_France.pdf.pdf" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
-                      >
-                        {t("Comment nous protégeons vos données.")}
-                      </a>
-                      <a 
-                        href="https://civilprom.s3.eu-north-1.amazonaws.com/Addendum_Defibeo_5JL26.pdf.pdf" 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="block text-[16px] font-semibold text-blue-600 hover:underline hover:text-blue-700 cursor-pointer w-fit"
-                      >
-                        {t("Information de conformité HDS.")}
-                      </a>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col space-y-3 mt-4">
-                    <a
-                      href="https://defibeo.com/school/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#2e54ff', color: '#fff' }}
-                      className="text-center cursor-pointer"
-                    >
-                      {t("Centre de connaissances")}
-                    </a>
-
-                    <a
-                      href="mailto:contact@defibeo.com"
-                      style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#0f172a', color: '#fff' }}
-                      className="text-center cursor-pointer"
-                    >
-                      {t("Envoyer un message")}
-                    </a>
-                  </div>
-                </div>
-
               </div>
 
               {/* BANNIÈRE BOUTIQUE EN LIGNE */}

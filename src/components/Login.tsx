@@ -521,7 +521,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoginLogoHovered, setIsLoginLogoHovered] = useState(false);
 
   // 2FA Auth Code State (Strict random server-side 2FA)
   const [isAuthCodeStep, setIsAuthCodeStep] = useState(false);
@@ -1556,24 +1555,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </div>
             </form>
           )}
-        </div>
-
-        {/* Bottom-left Defibeo icon in Right Column */}
-        <div
-          className="sidebar-nav-item-bounce absolute bottom-6 left-6 md:bottom-8 md:left-8 z-20 inline-flex items-center justify-center cursor-default"
-          onMouseEnter={() => setIsLoginLogoHovered(true)}
-          onMouseLeave={() => setIsLoginLogoHovered(false)}
-        >
-          <img
-            src={
-              isLoginLogoHovered
-                ? 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027iswhite.svg'
-                : 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeo2027isblue.svg'
-            }
-            alt="Defibeo"
-            className="sidebar-nav-icon-bounce w-[46px] h-[46px] object-contain block select-none pointer-events-none shrink-0"
-            referrerPolicy="no-referrer"
-          />
         </div>
       </div>
 

@@ -5,6 +5,7 @@ import { checkIfEmailExistsAnywhere } from '../firebase';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { generateRandomPin, formatDateToFR } from '../utils';
 import { t } from '../utils/translate';
+import { useTenantPresence, ConcurrentAccessBanner } from '../utils/useTenantPresence';
 
 const TEMPLATE_1 = `CONTRAT DE MAINTENANCE DE DÉFIBRILLATEUR (DAE)
 
@@ -1308,9 +1309,30 @@ export default function ClientTab({
     }
   };
 
+  const activeClientNameForPresence = isModalOpen
+    ? String(editingClient?.denomination || denomination || '').trim()
+    : '';
+  const {
+    showTabConflictBanner,
+    showFormConflictBanner,
+    hideTabBannerFor3Hours,
+    hideFormBannerWhileOpen,
+  } = useTenantPresence({
+    tenantId: activeTenantId,
+    tab: 'clients',
+    formKey: activeClientNameForPresence ? `client:${activeClientNameForPresence}` : '',
+    enabled: true,
+  });
+
   if (isModalOpen) {
     return (
       <div className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto" id="client-form-overlay">
+        {showFormConflictBanner && (
+          <ConcurrentAccessBanner
+            message="Un autre membre de votre environnement édite actuellement ces mêmes informations. Attention aux délais de synchronisation et aux risques d'incohérence."
+            onHide={hideFormBannerWhileOpen}
+          />
+        )}
         {/* Form Header */}
         <div 
           className="flex items-center bg-white"
@@ -2514,6 +2536,12 @@ export default function ClientTab({
 
   return (
     <div className="space-y-6" id="client-tab-container">
+      {showTabConflictBanner && (
+        <ConcurrentAccessBanner
+          message="Cet onglet est déjà ouvert et utilisé par un autre membre de votre environnement. Attention aux délais de synchronisation."
+          onHide={hideTabBannerFor3Hours}
+        />
+      )}
       {/* Upper Action Block & Search metrics */}
       <div 
         className="bg-white space-y-4"

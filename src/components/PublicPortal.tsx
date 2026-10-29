@@ -74,6 +74,8 @@ import { getLanguage, t } from "../utils/translate";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
 import GmaoCorrectionForm from "./GmaoCorrectionForm";
 import GmaoOtherEquipmentCorrectionForm from "./GmaoOtherEquipmentCorrectionForm";
+import { mergeReportModerationComment } from "../utils/moderationComment";
+import { getTenantSpreadsheetUrl } from "../types";
 import {
   triggerEmail6RapportIntervention,
   sendScriptEmail,
@@ -1949,6 +1951,8 @@ export default function PublicPortal({
                     status: m.status || "À faire",
                     reason: m.reason || "Visite technique",
                     requiredParts: m.requiredParts || [],
+                    sentToClientParts: Array.isArray(m.sentToClientParts) ? m.sentToClientParts : [],
+                    providedByClientParts: Array.isArray(m.providedByClientParts) ? m.providedByClientParts : [],
                     estimatedDate: rawEstDate,
                     estimatedSlot: m.estimatedSlot || "",
                     rejectionReason: m.rejectionReason || "",
@@ -1960,7 +1964,11 @@ export default function PublicPortal({
                     formationId: m.formationId,
                     bonCommandeId: m.bonCommandeId,
                     customBonCommande: m.customBonCommande,
-                    commentaireInterne: m.commentaireInterne || "",
+                    commentaireInterne:
+                      m.commentaireInterne ||
+                      m["Commentaire visible par le technicien."] ||
+                      m["Commentaire visible par le technicien"] ||
+                      "",
                   };
                 }),
               };
@@ -2057,6 +2065,8 @@ export default function PublicPortal({
     ];
   });
 
+  const [draftRejectionReasons, setDraftRejectionReasons] = useState<Record<string, string>>({});
+
   // Persist tour state changes and sync to general FSM tours
   const saveTours = (updated: typeof tours) => {
     setTours(updated);
@@ -2073,22 +2083,33 @@ export default function PublicPortal({
             (m: any, idx: number) => {
               const matchedPassage = matchedMobileTour.passages.find(
                 (p: any) =>
-                  p.num === idx + 1 || p.identifiant === m.defibIdentifiant,
+                  (p.id && m.id && String(p.id) === String(m.id)) ||
+                  (p.interventionReference &&
+                    m.interventionReference &&
+                    String(p.interventionReference).trim() ===
+                      String(m.interventionReference).trim()) ||
+                  p.num === idx + 1 ||
+                  (p.identifiant && m.defibIdentifiant && p.identifiant === m.defibIdentifiant),
               );
               if (matchedPassage) {
-                const isRejet = matchedPassage.status === "Rejet mission" || (matchedPassage.rejectionReason && matchedPassage.status !== "Effectué");
+                const isRejet = matchedPassage.status === "Rejet mission";
+                const reasonVal = isRejet
+                  ? (matchedPassage.rejectionReason || "")
+                  : (m.rejectionReason || m.raisonRejet || "");
                 return {
                   ...m,
                   status: isRejet ? "Rejet mission" : matchedPassage.status,
-                  rejectionReason: matchedPassage.rejectionReason || "",
-                  rejectedAt: matchedPassage.rejectedAt || "",
+                  rejectionReason: reasonVal,
+                  raisonRejet: reasonVal,
+                  raisonRejeteeMission: reasonVal,
+                  rejectedAt: isRejet ? (matchedPassage.rejectedAt || "") : (m.rejectedAt || ""),
                 };
               }
               return m;
             },
           );
           const hasStarted = updatedMissions.some(
-            (m: any) => m.status === "Effectué" || m.status === "En cours",
+            (m: any) => m.status === "Effectué" || m.status === "En cours" || m.status === "Rejet mission",
           );
           let newStatus = mt.status;
           if (mt.status !== "Effectué" && mt.status !== "Terminé") {
@@ -2123,22 +2144,33 @@ export default function PublicPortal({
                 (m: any, idx: number) => {
                   const matchedPassage = matchedMobileTour.passages.find(
                     (p: any) =>
-                      p.num === idx + 1 || p.identifiant === m.defibIdentifiant,
+                      (p.id && m.id && String(p.id) === String(m.id)) ||
+                      (p.interventionReference &&
+                        m.interventionReference &&
+                        String(p.interventionReference).trim() ===
+                          String(m.interventionReference).trim()) ||
+                      p.num === idx + 1 ||
+                      (p.identifiant && m.defibIdentifiant && p.identifiant === m.defibIdentifiant),
                   );
                   if (matchedPassage) {
-                    const isRejet = matchedPassage.status === "Rejet mission" || (matchedPassage.rejectionReason && matchedPassage.status !== "Effectué");
+                    const isRejet = matchedPassage.status === "Rejet mission";
+                    const reasonVal = isRejet
+                      ? (matchedPassage.rejectionReason || "")
+                      : (m.rejectionReason || m.raisonRejet || "");
                     return {
                       ...m,
                       status: isRejet ? "Rejet mission" : matchedPassage.status,
-                      rejectionReason: matchedPassage.rejectionReason || "",
-                      rejectedAt: matchedPassage.rejectedAt || "",
+                      rejectionReason: reasonVal,
+                      raisonRejet: reasonVal,
+                      raisonRejeteeMission: reasonVal,
+                      rejectedAt: isRejet ? (matchedPassage.rejectedAt || "") : (m.rejectedAt || ""),
                     };
                   }
                   return m;
                 },
               );
               const hasStarted = updatedMissions.some(
-                (m: any) => m.status === "Effectué" || m.status === "En cours",
+                (m: any) => m.status === "Effectué" || m.status === "En cours" || m.status === "Rejet mission",
               );
               let newStatus = mt.status;
               if (mt.status !== "Effectué" && mt.status !== "Terminé") {
@@ -2359,9 +2391,11 @@ export default function PublicPortal({
                 status: m.status || "À faire",
                 reason: m.reason || "Visite technique",
                 requiredParts: m.requiredParts || [],
+                sentToClientParts: Array.isArray(m.sentToClientParts) ? m.sentToClientParts : [],
+                providedByClientParts: Array.isArray(m.providedByClientParts) ? m.providedByClientParts : [],
                 estimatedDate: rawEstDate,
                 estimatedSlot: m.estimatedSlot || "",
-                rejectionReason: m.rejectionReason || "",
+                rejectionReason: m.rejectionReason || m.raisonRejet || m.raisonRejeteeMission || "",
                 rejectedAt: m.rejectedAt || "",
                 interventionReference: m.interventionReference || "",
                 autreReference: m.autreReference || "",
@@ -2370,7 +2404,11 @@ export default function PublicPortal({
                 formationId: m.formationId,
                 bonCommandeId: m.bonCommandeId,
                 customBonCommande: m.customBonCommande,
-                commentaireInterne: m.commentaireInterne || "",
+                commentaireInterne:
+                  m.commentaireInterne ||
+                  m["Commentaire visible par le technicien."] ||
+                  m["Commentaire visible par le technicien"] ||
+                  "",
               };
             }),
           };
@@ -2400,6 +2438,7 @@ export default function PublicPortal({
           ...t,
           passages: t.passages.map((p) => {
             if ((p.id && p.id === passageIdOrNum) || p.num === passageIdOrNum) {
+              if (p.status === "Rejet mission") return p;
               const newStatus = p.status === "À faire" ? "Effectué" : "À faire";
               return { ...p, status: newStatus };
             }
@@ -6225,14 +6264,37 @@ export default function PublicPortal({
                     }}
                     onSave={(updatedReport) => {
                       if (reportToEdit) {
-                        const submission = {
+                        const baseSubmission = {
                           ...reportToEdit,
                           ...updatedReport,
                           validated: false, // Require validation in GMAO tab again
                         };
+                        const submission = {
+                          ...baseSubmission,
+                          commentaire: mergeReportModerationComment(
+                            reportToEdit.commentaire,
+                            baseSubmission,
+                            defibrillateurs,
+                            stocks,
+                            variables,
+                            tours
+                          ),
+                        };
 
                         const updatedReports = generatedReports.map(r => r.id === reportToEdit.id ? submission : r);
                         saveReports(updatedReports);
+                        const activeTid = localStorage.getItem('defib_tenant_id') || 'demo';
+                        const gererSheetUrl = getTenantSpreadsheetUrl('spreadsheetGestionApresIntervention', companyInfo);
+                        fetch('/api/sheets/upsert', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            tenantId: activeTid,
+                            type: 'gestionApresIntervention',
+                            records: [submission],
+                            spreadsheetUrl: gererSheetUrl || undefined,
+                          }),
+                        }).catch(() => {});
 
                         alert(
                           `Le rapport "${submission.title}" a été modifié avec succès (en attente de validation sur le logiciel principal) !`,
@@ -6257,7 +6319,7 @@ export default function PublicPortal({
 
                       if (matchingExistingIndex !== -1) {
                         const existingRep = generatedReports[matchingExistingIndex];
-                        submission = {
+                        const baseSub = {
                           ...existingRep,
                           ...updatedReport,
                           id: existingRep.id,
@@ -6268,10 +6330,21 @@ export default function PublicPortal({
                           date: updatedReport.date || new Date().toLocaleString("fr-FR"),
                           validated: false,
                         };
+                        submission = {
+                          ...baseSub,
+                          commentaire: mergeReportModerationComment(
+                            existingRep.commentaire,
+                            baseSub,
+                            defibrillateurs,
+                            stocks,
+                            variables,
+                            tours
+                          ),
+                        };
                         updatedReportsList[matchingExistingIndex] = submission;
                       } else {
                         const reportId = "REP-" + Date.now();
-                        submission = {
+                        const baseSub = {
                           ...updatedReport,
                           id: reportId,
                           techName: authenticatedUser?.name || "Technicien connecté",
@@ -6279,10 +6352,35 @@ export default function PublicPortal({
                           validated: false,
                           missionStatus: 'Effectué',
                         };
+                        submission = {
+                          ...baseSub,
+                          commentaire: mergeReportModerationComment(
+                            updatedReport.commentaire,
+                            baseSub,
+                            defibrillateurs,
+                            stocks,
+                            variables,
+                            tours
+                          ),
+                        };
                         updatedReportsList = [submission, ...generatedReports];
                       }
 
                       saveReports(updatedReportsList);
+                      if (submission) {
+                        const activeTid = localStorage.getItem('defib_tenant_id') || 'demo';
+                        const gererSheetUrl = getTenantSpreadsheetUrl('spreadsheetGestionApresIntervention', companyInfo);
+                        fetch('/api/sheets/upsert', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            tenantId: activeTid,
+                            type: 'gestionApresIntervention',
+                            records: [submission],
+                            spreadsheetUrl: gererSheetUrl || undefined,
+                          }),
+                        }).catch(() => {});
+                      }
 
                       if (onAddNotification) {
                         const name_technician = authenticatedUser?.name || "Un technicien";
@@ -8593,6 +8691,12 @@ export default function PublicPortal({
                               >
                                 {t.passages.filter((p: any) => p.status !== "Attente").map((p, pIdx) => {
                                   const isCompleted = p.status === "Effectué";
+                                  const isRejected = p.status === "Rejet mission";
+                                  const passageDraftKey = `${t.id}_${p.id || p.num}`;
+                                  const currentRejectionReason =
+                                    draftRejectionReasons[passageDraftKey] !== undefined
+                                      ? draftRejectionReasons[passageDraftKey]
+                                      : (p.rejectionReason || "");
                                   const isFormationMission = p.equipmentType === 'Formation' || p.equipmentType?.toLowerCase().includes('formation') || !!p.formationId;
                                   const matchedFmt = isFormationMission ? formations?.find((f: any) => f.id === p.formationId || f.id === p.identifiant) : null;
                                   const targetFormationId = p.formationId || matchedFmt?.id || p.identifiant;
@@ -8636,11 +8740,18 @@ export default function PublicPortal({
                                       <div className="flex justify-start w-full">
                                         <button
                                           type="button"
-                                          onClick={() =>
-                                            togglePassageStatus(t.id, p.id || p.num)
-                                          }
-                                          className="flex items-center gap-2 cursor-pointer focus:outline-hidden"
-                                          style={{ fontSize: "16px" }}
+                                          disabled={isRejected}
+                                          onClick={() => {
+                                            if (isRejected) return;
+                                            togglePassageStatus(t.id, p.id || p.num);
+                                          }}
+                                          className={`flex items-center gap-2 focus:outline-hidden ${
+                                            isRejected ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                                          }`}
+                                          style={{
+                                            fontSize: "16px",
+                                            cursor: isRejected ? "not-allowed" : "pointer",
+                                          }}
                                         >
                                           <span
                                             className="rounded-full flex items-center justify-center transition-all bg-white"
@@ -8652,7 +8763,7 @@ export default function PublicPortal({
                                               height: "22px",
                                               minWidth: "22px",
                                               minHeight: "22px",
-                                              backgroundColor: "#ffffff",
+                                              backgroundColor: isRejected ? "#e2e8f0" : "#ffffff",
                                             }}
                                           >
                                             {isCompleted && (
@@ -8671,7 +8782,9 @@ export default function PublicPortal({
                                           >
                                             {isCompleted
                                               ? "Effectué"
-                                              : "À faire"}
+                                              : isRejected
+                                                ? "Rejetée"
+                                                : "À faire"}
                                           </span>
                                         </button>
                                       </div>
@@ -8988,27 +9101,30 @@ export default function PublicPortal({
                                                       part.trim() !== "Aucune" &&
                                                       part.trim() !== ""
                                                   );
-                                                  return cleanParts.join(", ");
+                                                  const sentList: string[] = Array.isArray(p.sentToClientParts) ? p.sentToClientParts : [];
+                                                  const providedList: string[] = Array.isArray(p.providedByClientParts) ? p.providedByClientParts : [];
+                                                  const formattedParts = cleanParts.map((part: string) => {
+                                                    const suffixes: string[] = [];
+                                                    if (sentList.includes(part)) suffixes.push("(Envoyée au client)");
+                                                    if (providedList.includes(part)) suffixes.push("(Fourniture par le client)");
+                                                    return suffixes.length > 0 ? `${part} ${suffixes.join(" ")}` : part;
+                                                  });
+                                                  return formattedParts.join(", ");
                                                 })()}
                                               </span>
                                             </p>
                                           )}
 
-                                          {p.commentaireInterne && String(p.commentaireInterne).trim() !== "" && (
-                                            <p
-                                              style={{
-                                                fontSize: "20px",
-                                                color: "rgb(80, 97, 122)",
-                                                fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
-                                                marginTop: "2px",
-                                              }}
+                                          {/* Commentaire interne */}
+                                          <p style={{ color: "rgb(80, 97, 122)" }}>
+                                            <span style={{ color: "#9f9f9f" }}>Commentaire interne :</span>{" "}
+                                            <span
+                                              className="font-semibold"
+                                              style={{ color: "rgb(80, 97, 122)" }}
                                             >
-                                              <span style={{ fontWeight: 400 }}>Commentaire privé:</span>{" "}
-                                              <span style={{ fontWeight: 700, fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif' }}>
-                                                {p.commentaireInterne}.
-                                              </span>
-                                            </p>
-                                          )}
+                                              {p.commentaireInterne ? String(p.commentaireInterne).trim() : ""}
+                                            </span>
+                                          </p>
 
                                                 {/* Fade gradient overlay and blue Dérouler button when folded */}
                                                 {!isUnrolled && (
@@ -9250,39 +9366,28 @@ export default function PublicPortal({
                                           <input
                                             type="text"
                                             maxLength={25}
-                                            value={p.rejectionReason || ""}
+                                            value={currentRejectionReason}
                                             onChange={(e) => {
                                               const val = e.target.value.slice(0, 25);
-                                              const updated = tours.map(
-                                                (item) => {
+                                              setDraftRejectionReasons((prev) => ({
+                                                ...prev,
+                                                [passageDraftKey]: val,
+                                              }));
+                                              setTours((prevTours) =>
+                                                prevTours.map((item) => {
                                                   if (item.id === t.id) {
                                                     return {
                                                       ...item,
-                                                      passages:
-                                                        item.passages.map(
-                                                          (pass) => {
-                                                            if (
-                                                              pass.num === p.num
-                                                            ) {
-                                                              const isReject = val.trim().length > 0;
-                                                              return {
-                                                                ...pass,
-                                                                status: isReject ? "Rejet mission" : (pass.status === "Rejet mission" ? "À faire" : pass.status),
-                                                                rejectionReason:
-                                                                  val,
-                                                                rejectedAt:
-                                                                  isReject ? (pass.rejectedAt || new Date().toLocaleDateString("fr-FR")) : "",
-                                                              };
-                                                            }
-                                                            return pass;
-                                                          },
-                                                        ),
+                                                      passages: item.passages.map((pass) =>
+                                                        (pass.id && p.id ? pass.id === p.id : pass.num === p.num)
+                                                          ? { ...pass, rejectionReason: val }
+                                                          : pass
+                                                      ),
                                                     };
                                                   }
                                                   return item;
-                                                },
+                                                })
                                               );
-                                              saveTours(updated);
                                             }}
                                             placeholder="Raison du rejet (max 25 car.)"
                                             className="placeholder-black placeholder:text-black font-sans focus:outline-none focus:ring-0 border-none outline-none"
@@ -9295,6 +9400,131 @@ export default function PublicPortal({
                                               fontSize: "18px",
                                             }}
                                           />
+                                          {(currentRejectionReason.trim().length >= 1 || isRejected) && (
+                                            <button
+                                              type="button"
+                                              disabled={isRejected}
+                                              onClick={() => {
+                                                const reasonText = currentRejectionReason.trim();
+                                                if (!reasonText || isRejected) return;
+                                                const rejectedAtDate =
+                                                  p.rejectedAt || new Date().toLocaleDateString("fr-FR");
+                                                const updated = tours.map((item) => {
+                                                  if (item.id === t.id) {
+                                                    return {
+                                                      ...item,
+                                                      passages: item.passages.map((pass) => {
+                                                        if (pass.id && p.id ? pass.id === p.id : pass.num === p.num) {
+                                                          return {
+                                                            ...pass,
+                                                            status: "Rejet mission",
+                                                            rejectionReason: reasonText,
+                                                            raisonRejet: reasonText,
+                                                            raisonRejeteeMission: reasonText,
+                                                            rejectedAt: rejectedAtDate,
+                                                          };
+                                                        }
+                                                        return pass;
+                                                      }),
+                                                    };
+                                                  }
+                                                  return item;
+                                                });
+                                                saveTours(updated);
+
+                                                // Synchronize matching report in generatedReports
+                                                if (Array.isArray(generatedReports) && generatedReports.length > 0) {
+                                                  let reportsChanged = false;
+                                                  const changedReportRecords: any[] = [];
+                                                  const nextReports = generatedReports.map((rep: any) => {
+                                                    const passId = String(p.id || p.identifiant || "").trim();
+                                                    const passInterv = String(
+                                                      p.interventionReference || p.identifiant || ""
+                                                    ).trim();
+                                                    const passDefib = String(
+                                                      (p as any).defibIdentifiant || p.identifiant || ""
+                                                    ).trim();
+                                                    const repMissionId = String(rep.missionId || "").trim();
+                                                    const repInterv = String(rep.interventionReference || "").trim();
+                                                    const repDefib = String(
+                                                      rep.defibIdentifiant || rep.defibSnapshot?.identifiant || ""
+                                                    ).trim();
+                                                    const isMatch =
+                                                      (passId && repMissionId && passId === repMissionId) ||
+                                                      (passInterv && repInterv && passInterv === repInterv) ||
+                                                      (passDefib && repDefib && passDefib === repDefib && rep.isUpcoming);
+                                                    if (isMatch) {
+                                                      reportsChanged = true;
+                                                      const cleanReason = reasonText.replace(/\.$/, "");
+                                                      const baseRep = {
+                                                        ...rep,
+                                                        missionStatus: "Rejet mission",
+                                                        rejectionReason: cleanReason,
+                                                      };
+                                                      const nextComment = mergeReportModerationComment(
+                                                        rep.commentaire,
+                                                        baseRep,
+                                                        defibrillateurs,
+                                                        stocks,
+                                                        variables,
+                                                        updated
+                                                      );
+                                                      const updatedRep = {
+                                                        ...baseRep,
+                                                        commentaire: nextComment,
+                                                      };
+                                                      changedReportRecords.push(updatedRep);
+                                                      return updatedRep;
+                                                    }
+                                                    return rep;
+                                                  });
+                                                  if (reportsChanged) {
+                                                    saveReports(nextReports);
+                                                    const activeTid =
+                                                      localStorage.getItem("defib_tenant_id") || "demo";
+                                                    const gererSheetUrl = getTenantSpreadsheetUrl(
+                                                      "spreadsheetGestionApresIntervention",
+                                                      companyInfo
+                                                    );
+                                                    fetch("/api/sheets/upsert", {
+                                                      method: "POST",
+                                                      headers: { "Content-Type": "application/json" },
+                                                      body: JSON.stringify({
+                                                        tenantId: activeTid,
+                                                        type: "gestionApresIntervention",
+                                                        records: changedReportRecords,
+                                                        spreadsheetUrl: gererSheetUrl || undefined,
+                                                      }),
+                                                    }).catch(() => {});
+                                                  }
+                                                }
+                                              }}
+                                              style={{
+                                                backgroundColor: isRejected
+                                                  ? "#e2e8f0"
+                                                  : "rgb(40, 79, 255)",
+                                                color: isRejected ? "#94a3b8" : "#ffffff",
+                                                fontSize: "18px",
+                                                fontWeight: "bold",
+                                                borderRadius: "12px",
+                                                padding: "11px 20px",
+                                                border: "none",
+                                                width: "100%",
+                                                marginTop: "10px",
+                                                boxShadow: isRejected
+                                                  ? "none"
+                                                  : "rgb(255 255 255 / 41%) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 22%) 0px 6px 12px inset",
+                                                cursor: isRejected ? "not-allowed" : "pointer",
+                                              }}
+                                              className={
+                                                isRejected
+                                                  ? "opacity-60 transition-all font-bold"
+                                                  : "hover:opacity-90 active:scale-[0.99] transition-all font-bold"
+                                              }
+                                            >
+                                              Rejeter la mission
+                                            </button>
+                                          )}
                                         </div>
                                       )}
                                     </div>
@@ -9394,6 +9624,68 @@ export default function PublicPortal({
                                       return item;
                                     });
                                     saveTours(updatedTours);
+
+                                    // Also update any matching reports in generatedReports for rejected missions
+                                    if (uncompletedPassages.length > 0) {
+                                      let reportsChanged = false;
+                                      const changedReportRecords: any[] = [];
+                                      const nextReports = generatedReports.map((rep: any) => {
+                                        const matchedPass = uncompletedPassages.find((pass: any) => {
+                                          const passId = String(pass.id || pass.identifiant || '').trim();
+                                          const passInterv = String(pass.interventionReference || pass.identifiant || '').trim();
+                                          const passDefib = String(pass.defibIdentifiant || pass.defibrillateurIdentifiant || '').trim();
+                                          const repMissionId = String(rep.missionId || '').trim();
+                                          const repInterv = String(rep.interventionReference || '').trim();
+                                          const repDefib = String(rep.defibIdentifiant || rep.defibSnapshot?.identifiant || '').trim();
+                                          return (
+                                            (passId && repMissionId && passId === repMissionId) ||
+                                            (passInterv && repInterv && passInterv === repInterv) ||
+                                            (passDefib && repDefib && passDefib === repDefib && rep.isUpcoming)
+                                          );
+                                        });
+                                        if (matchedPass) {
+                                          reportsChanged = true;
+                                          const reasonText = String(matchedPass.rejectionReason || 'Non précisée').trim().replace(/\.$/, '');
+                                          const baseRep = {
+                                            ...rep,
+                                            missionStatus: 'Rejet mission',
+                                            rejectionReason: reasonText,
+                                          };
+                                          const nextComment = mergeReportModerationComment(
+                                            rep.commentaire,
+                                            baseRep,
+                                            defibrillateurs,
+                                            stocks,
+                                            variables,
+                                            updatedTours
+                                          );
+                                          const updatedRep = {
+                                            ...baseRep,
+                                            commentaire: nextComment,
+                                          };
+                                          changedReportRecords.push(updatedRep);
+                                          return updatedRep;
+                                        }
+                                        return rep;
+                                      });
+
+                                      if (reportsChanged) {
+                                        saveReports(nextReports);
+                                        const activeTid = localStorage.getItem('defib_tenant_id') || 'demo';
+                                        const gererSheetUrl = getTenantSpreadsheetUrl('spreadsheetGestionApresIntervention', companyInfo);
+                                        fetch('/api/sheets/upsert', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({
+                                            tenantId: activeTid,
+                                            type: 'gestionApresIntervention',
+                                            records: changedReportRecords,
+                                            spreadsheetUrl: gererSheetUrl || undefined,
+                                          }),
+                                        }).catch(() => {});
+                                      }
+                                    }
+
                                     setSelectedTourId("");
 
                                     alert(

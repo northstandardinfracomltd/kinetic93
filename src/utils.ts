@@ -90,7 +90,8 @@ export const INITIAL_VARIABLES: Variable[] = [
     nom: 'Cardiac Science Powerheart G5',
     marque: 'Cardiac Science',
     description: 'Il s’agit d’un exemple.',
-    imageUrl: 'https://civilprom.s3.eu-north-1.amazonaws.com/Cardiac+Science+Powerheart+G5.png'
+    imageUrl: 'https://civilprom.s3.eu-north-1.amazonaws.com/Cardiac+Science+Powerheart+G5.png',
+    typeDefibrillateur: 'Automatique (DEA)'
   },
   {
     id: 'MRP1',

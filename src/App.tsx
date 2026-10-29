@@ -3,7 +3,7 @@ import { getRegionsForCountry } from './utils/regions';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion, fetchRemoteDeletedDefibKeys, findTenantInList, ensureTenantMembersClient, ensureTenantCustomLocationNames } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { idbSet, idbGet, idbClear } from './idb';
-import { generateReportModerationComment } from './utils/moderationComment';
+import { generateReportModerationComment, hasReportAlerts, mergeReportModerationComment } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
 import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, TeamWorkGroup, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, TenantMessage, EXTRA_SPREADSHEET_FIELDS, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from './types';
@@ -44,6 +44,7 @@ import {
 import { getParisTimestamp } from './utils/dateUtils';
 import { useSingleTabGuard } from './utils/useSingleTabGuard';
 import { useNetworkStatus } from './utils/useNetworkStatus';
+import { useTenantPresence, ConcurrentAccessBanner } from './utils/useTenantPresence';
 
 import DefibTab from './components/DefibTab';
 import HelpBubble from './components/HelpBubble';
@@ -2192,10 +2193,10 @@ export default function App() {
             if (!Array.isArray(prev) || prev.length === 0) return prev;
             const filtered = prev.filter(df => !isDefibInDeletedList(df, delSet));
             if (filtered.length !== prev.length) {
-              idbSet(`defib_${tId}_defibrillateurs_v110`, filtered).catch(() => {});
+              idbSet(`defib_${tId}_defibrillateurs_v112`, filtered).catch(() => {});
               if (/^\d+$/.test(numOnly)) {
-                idbSet(`defib_D${numOnly}_defibrillateurs_v110`, filtered).catch(() => {});
-                idbSet(`defib_d${numOnly}_defibrillateurs_v110`, filtered).catch(() => {});
+                idbSet(`defib_D${numOnly}_defibrillateurs_v112`, filtered).catch(() => {});
+                idbSet(`defib_d${numOnly}_defibrillateurs_v112`, filtered).catch(() => {});
               }
             }
             return filtered;
@@ -2262,9 +2263,7 @@ export default function App() {
         if (identKey) byIdent.set(identKey, idx);
       } else {
         const existing = out[existingIdx];
-        if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
-          out[existingIdx] = { ...existing, ...df, id: existing.id || df.id };
-        }
+        out[existingIdx] = { ...existing, ...df, id: existing.id || df.id };
       }
     }
     return out;
@@ -2281,7 +2280,7 @@ export default function App() {
     }
     if (Array.isArray(items) && items.length > 0) {
       for (const k of [tid, tid.toUpperCase(), tid.toLowerCase()]) {
-        idbSet(`defib_${k}_defibrillateurs_v110`, items).catch(() => {});
+        idbSet(`defib_${k}_defibrillateurs_v112`, items).catch(() => {});
       }
     }
   };
@@ -2345,6 +2344,9 @@ export default function App() {
 
   const handleManualRefreshDefibs = async (forceRemote = true) => {
     const runId = ++manualDefibRefreshRunIdRef.current;
+    // Cancel any older background batch load so it cannot overwrite manual refresh results
+    activeSheetBatchRunRef.current.defibsRunId++;
+    activeSheetBatchRunRef.current.defibsInFlightUrl = '';
     setIsRefreshingDefibs(true);
     if (defibrillateurs.length === 0) {
       setIsDefibLoading(true);
@@ -2415,13 +2417,13 @@ export default function App() {
           if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
             setDefibrillateurs([]);
             setDefibSheetStats(null);
-            idbSet(`defib_${activeTenant}_defibrillateurs_v110`, []).catch(() => {});
+            idbSet(`defib_${activeTenant}_defibrillateurs_v112`, []).catch(() => {});
             setIsDefibLoading(false);
             return;
           }
           const filtered = dedupeDefibsList(firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
           setDefibrillateurs(filtered);
-          if (filtered.length > 0) {
+          if (!json.hasMore && filtered.length > 0) {
             persistDefibCache(activeTenant, filtered, json.stats);
           } else if (json.stats) {
             setDefibSheetStats(json.stats);
@@ -2822,7 +2824,7 @@ export default function App() {
                   batchState.defibsInFlightUrl = '';
                   setDefibrillateurs([]);
                   setDefibSheetStats(null);
-                  idbSet(`defib_${activeTid}_defibrillateurs_v110`, []).catch(() => {});
+                  idbSet(`defib_${activeTid}_defibrillateurs_v112`, []).catch(() => {});
                   setIsDefibLoading(false);
                   return;
                 }
@@ -2833,7 +2835,7 @@ export default function App() {
                 }
                 const filtered = dedupeDefibsList(firstItems.filter((df: any) => !isDefibInDeletedList(df, delSet)));
                 setDefibrillateurs(filtered);
-                if (filtered.length > 0) {
+                if (!json.hasMore && filtered.length > 0) {
                   persistDefibCache(activeTid, filtered, json.stats);
                 } else if (json.stats) {
                   setDefibSheetStats(json.stats);
@@ -3150,6 +3152,82 @@ export default function App() {
     return { tours: updated, changed: true };
   }, [getTenantTourPrefix, tenantId]);
 
+  const gestionApresMapRef = useRef<Map<string, any>>(new Map());
+
+  const applyGestionApresToReport = useCallback((rep: any, gaiRecord?: any) => {
+    if (!rep) return rep;
+    const refKey = String(rep.interventionReference || rep.reportNumber || rep.id || '').trim().toLowerCase();
+    const gai = gaiRecord || (refKey ? gestionApresMapRef.current.get(refKey) : undefined);
+    if (!gai) return rep;
+    const resolvedFlags = Array.isArray(gai.drapeaux)
+      ? gai.drapeaux.map((fl: any, idx: number) => {
+          const nom = String(fl?.nom || fl?.name || fl || '').trim();
+          const matchedVar = variables.find(
+            (v: any) =>
+              (v.category === 'Drapeau GMAO' || v.category === 'Drapeau post-intervention') &&
+              ((fl?.id && v.id === fl.id) || (nom && String(v.nom || '').trim().toLowerCase() === nom.toLowerCase()))
+          );
+          return {
+            id: matchedVar?.id || fl?.id || `flag-${idx}-${nom}`,
+            nom: matchedVar?.nom || nom,
+            couleurHex: fl?.couleurHex || matchedVar?.couleurHex || '',
+          };
+        })
+      : rep.drapeaux || [];
+    const alerts = Array.isArray(gai.postInterventionAlerts)
+      ? gai.postInterventionAlerts
+      : Array.isArray(rep.postInterventionAlerts)
+      ? rep.postInterventionAlerts
+      : [];
+    const nextRep: any = {
+      ...rep,
+      drapeaux: resolvedFlags,
+      commentaire: gai.commentaireInterne !== undefined ? gai.commentaireInterne : (gai.commentaire ?? rep.commentaire ?? ''),
+      disableClientEmail: gai.disableClientEmail !== undefined ? Boolean(gai.disableClientEmail) : Boolean(rep.disableClientEmail),
+      postInterventionAlerts: alerts,
+    };
+    for (let i = 1; i <= 15; i++) {
+      const a = alerts[i - 1];
+      nextRep[`alerteTraite${i}`] = a ? Boolean(a.traite) : Boolean(gai[`alerteTraite${i}`]);
+      nextRep[`alerteInfo${i}`] = a ? String(a.info || '') : String(gai[`alerteInfo${i}`] || '');
+    }
+    return nextRep;
+  }, [variables]);
+
+  const syncSingleGestionApresIntervention = useCallback((rep: any) => {
+    if (!rep) return;
+    const ref = String(rep.interventionReference || rep.reportNumber || rep.id || '').trim();
+    if (!ref) return;
+    const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+    const alerts = Array.isArray(rep.postInterventionAlerts) ? rep.postInterventionAlerts.slice(0, 15) : [];
+    const payloadRecord: any = {
+      id: ref,
+      interventionReference: ref,
+      drapeaux: Array.isArray(rep.drapeaux) ? rep.drapeaux : [],
+      commentaire: rep.commentaire ?? '',
+      commentaireInterne: rep.commentaire ?? '',
+      disableClientEmail: Boolean(rep.disableClientEmail),
+      postInterventionAlerts: alerts,
+    };
+    for (let i = 1; i <= 15; i++) {
+      const a = alerts[i - 1];
+      payloadRecord[`alerteTraite${i}`] = a ? Boolean(a.traite) : false;
+      payloadRecord[`alerteInfo${i}`] = a ? String(a.info || '') : '';
+    }
+    gestionApresMapRef.current.set(ref.toLowerCase(), payloadRecord);
+    const sheetUrl = getTenantSpreadsheetUrl('spreadsheetGestionApresIntervention', companyInfoRef.current);
+    fetch('/api/sheets/upsert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tenantId: activeTid,
+        type: 'gestionApresIntervention',
+        records: [payloadRecord],
+        spreadsheetUrl: sheetUrl || undefined,
+      }),
+    }).catch(() => {});
+  }, [tenantId]);
+
   const refreshGenericSheetCompartment = useCallback(
     async (
       tabType: string,
@@ -3167,6 +3245,7 @@ export default function App() {
       const tabToFieldKeyMap: Record<string, any> = {
         tournees: 'spreadsheetTournees',
         missionsTournees: 'spreadsheetMissionsTournees',
+        gestionApresIntervention: 'spreadsheetGestionApresIntervention',
         rapportsPdf: 'spreadsheetRapportsPdf',
         crm: 'spreadsheetCrm',
         reglagesCrm: 'spreadsheetReglagesCrm',
@@ -3443,6 +3522,7 @@ export default function App() {
                 id: sm.id || cleanRef || `fsm-m-${Date.now()}-${list.length}`,
                 interventionReference: cleanRef,
                 defibIdentifiant: cleanDefibId || sm.defibIdentifiant || '',
+                rejectionReason: sm.rejectionReason ?? sm.raisonRejet ?? '',
               });
               byTourKey.set(targetTourId, list);
             }
@@ -3500,6 +3580,11 @@ export default function App() {
         switch (tabType) {
           case 'rapportsPdf':
             setGeneratedReports(prev => {
+              const prevByRef = new Map<string, any>();
+              (Array.isArray(prev) ? prev : []).forEach((pr: any) => {
+                const k = String(pr?.interventionReference || pr?.reportNumber || pr?.id || '').trim().toLowerCase();
+                if (k) prevByRef.set(k, pr);
+              });
               const sheetIds = new Set(
                 items.flatMap((it: any) =>
                   [it.id, it.reportNumber, it.interventionReference, it.reportId]
@@ -3520,11 +3605,50 @@ export default function App() {
                       !sheetIds.has(String(r.interventionReference || '').trim().toLowerCase())
                   )
                 : [];
-              const combined = [...items, ...preservedUpcoming];
+              const mergedItems = items.map((it: any) => {
+                const k = String(it?.interventionReference || it?.reportNumber || it?.id || '').trim().toLowerCase();
+                const prevRep = k ? prevByRef.get(k) : undefined;
+                const baseRep = prevRep
+                  ? {
+                      ...it,
+                      drapeaux: it.drapeaux || prevRep.drapeaux || [],
+                      commentaire: it.commentaire !== undefined ? it.commentaire : prevRep.commentaire,
+                      disableClientEmail:
+                        it.disableClientEmail !== undefined ? it.disableClientEmail : prevRep.disableClientEmail,
+                      postInterventionAlerts:
+                        it.postInterventionAlerts || prevRep.postInterventionAlerts || [],
+                    }
+                  : it;
+                return applyGestionApresToReport(baseRep);
+              });
+              const mergedUpcoming = preservedUpcoming.map((up: any) => applyGestionApresToReport(up));
+              const combined = [...mergedItems, ...mergedUpcoming];
               safeSetLocalStorage(`defib_${activeTid}_generated_reports`, JSON.stringify(combined));
               return combined;
             });
             break;
+          case 'gestionApresIntervention': {
+            const newMap = new Map<string, any>();
+            for (const gai of items) {
+              const refKey = String(gai?.interventionReference || gai?.id || '').trim().toLowerCase();
+              if (refKey) {
+                newMap.set(refKey, gai);
+              }
+            }
+            gestionApresMapRef.current = newMap;
+            safeSetLocalStorage(`defib_${activeTid}_gestion_apres_intervention`, JSON.stringify(items));
+            setGeneratedReports(prev => {
+              if (!Array.isArray(prev) || prev.length === 0) return prev;
+              const updated = prev.map((r: any) => {
+                const rKey = String(r?.interventionReference || r?.reportNumber || r?.id || '').trim().toLowerCase();
+                const gai = rKey ? newMap.get(rKey) : undefined;
+                return gai ? applyGestionApresToReport(r, gai) : r;
+              });
+              safeSetLocalStorage(`defib_${activeTid}_generated_reports`, JSON.stringify(updated));
+              return updated;
+            });
+            break;
+          }
           case 'crm':
             setTickets(items);
             safeSetLocalStorage(`defib_${activeTid}_support_tickets`, JSON.stringify(items));
@@ -3805,7 +3929,7 @@ export default function App() {
         console.warn(`Error refreshing generic sheet compartment (${tabType}):`, err);
       }
     },
-    [tenantId, loggedUser?.email, loggedUser?.name, ensureFsmTourIdentifiers]
+    [tenantId, loggedUser?.email, loggedUser?.name, ensureFsmTourIdentifiers, applyGestionApresToReport]
   );
 
   // Listen to manual refresh events from TableSubHeaderButtons or SettingsModal
@@ -3813,6 +3937,7 @@ export default function App() {
     const keyToTabMap: Record<string, string> = {
       spreadsheetTournees: 'tournees',
       spreadsheetMissionsTournees: 'missionsTournees',
+      spreadsheetGestionApresIntervention: 'gestionApresIntervention',
       spreadsheetRapportsPdf: 'rapportsPdf',
       spreadsheetCrm: 'crm',
       spreadsheetReglagesCrm: 'reglagesCrm',
@@ -3870,6 +3995,7 @@ export default function App() {
     const secondaryTabTypes = [
       'tournees',
       'rapportsPdf',
+      'gestionApresIntervention',
       'crm',
       'reglagesCrm',
       'satisfaction',
@@ -3964,6 +4090,7 @@ export default function App() {
     try {
       await Promise.all([
         refreshGenericSheetCompartment('rapportsPdf', true),
+        refreshGenericSheetCompartment('gestionApresIntervention', true),
         refreshGenericSheetCompartment('tournees', true),
       ]);
     } catch (err) {
@@ -4177,6 +4304,11 @@ export default function App() {
               cp,
               clientAddress: resolvedAddress,
               techName: m.techName || (t.id !== 'a-trier' ? t.techName : ''),
+              sentToClientParts: Array.isArray(m.sentToClientParts) ? m.sentToClientParts : [],
+              providedByClientParts: Array.isArray(m.providedByClientParts) ? m.providedByClientParts : [],
+              commentaireInterne: m.commentaireInterne ?? '',
+              rejectionReason: m.rejectionReason ?? m.raisonRejet ?? m.raisonRejeteeMission ?? '',
+              raisonRejet: m.rejectionReason ?? m.raisonRejet ?? m.raisonRejeteeMission ?? '',
             });
           }
         }
@@ -4341,19 +4473,22 @@ export default function App() {
             tourDate: tour.startDate || tour.date || '',
             origin: tourOrigin,
             missionStatus: m.status || 'Brouillon',
+            rejectionReason: m.rejectionReason || m.raisonRejet || m.raisonRejeteeMission || '',
             defibSnapshot: { 
               identifiant: m.defibIdentifiant, 
               categorie: m.equipmentType || 'Défibrillateur' 
             },
             siteMission: m.clientName || 'Site'
           };
-          updatedReports.push(upcomingRep);
+          updatedReports.push(applyGestionApresToReport(upcomingRep));
         } else {
           const existing = updatedReports[existingReportIndex];
           if (existing.isUpcoming) {
+            const nextRejectionReason = m.rejectionReason || m.raisonRejet || m.raisonRejeteeMission || existing.rejectionReason || '';
             // Keep pending report details synchronized with tour mission changes
             if (
               existing.missionStatus !== (m.status || 'Brouillon') ||
+              (existing.rejectionReason || '') !== nextRejectionReason ||
               existing.techName !== (tour.techName || 'Non assigné') ||
               existing.origin !== tourOrigin ||
               existing.defibIdentifiant !== m.defibIdentifiant ||
@@ -4365,6 +4500,7 @@ export default function App() {
               updatedReports[existingReportIndex] = {
                 ...existing,
                 missionStatus: m.status || 'Brouillon',
+                rejectionReason: nextRejectionReason,
                 techName: tour.techName || 'Non assigné',
                 tourName: tour.title || tour.name || `Tournée ${tour.id}`,
                 tourDate: tour.startDate || tour.date || '',
@@ -4895,6 +5031,33 @@ export default function App() {
       return prevCounts;
     });
   }, [fsmTours, tenantId]);
+
+  const activeManagingReportForPresence = useMemo(() => {
+    if (!managingReportId) return null;
+    return (generatedReports || []).find(r => r && r.id === managingReportId) || null;
+  }, [managingReportId, generatedReports]);
+
+  const activeManagingReportRefKey = useMemo(() => {
+    if (!activeManagingReportForPresence) return '';
+    const refVal = String(
+      activeManagingReportForPresence.interventionReference ||
+        activeManagingReportForPresence.id ||
+        ''
+    ).trim();
+    return refVal ? `rapport-gerer:${refVal}` : '';
+  }, [activeManagingReportForPresence]);
+
+  const {
+    showTabConflictBanner: showGmaoTabConflictBanner,
+    showFormConflictBanner: showGmaoFormConflictBanner,
+    hideTabBannerFor3Hours: hideGmaoTabBannerFor3Hours,
+    hideFormBannerWhileOpen: hideGmaoFormBannerWhileOpen,
+  } = useTenantPresence({
+    tenantId,
+    tab: activeTab === 'gmao' ? 'rapports-pdf' : '',
+    formKey: activeTab === 'gmao' ? activeManagingReportRefKey : '',
+    enabled: Boolean(isLoggedIn && !isPublicPortalOpen && !isClientPortalOpen && activeTab === 'gmao'),
+  });
 
   // Liste des mois disponibles pour le sélecteur (ex: "Février 2026", "Septembre 2026", etc.)
   const availableFsmMonths = useMemo(() => {
@@ -6048,6 +6211,20 @@ export default function App() {
     }
 
     updateFsmMission(tourId, missionId, { sentToClientParts: newSentParts });
+  };
+
+  const togglePartProvidedByClient = (tourId: string, missionId: string, partName: string) => {
+    const tour = fsmTours.find(t => t.id === tourId);
+    const mission = tour?.missions?.find((m: any) => m.id === missionId);
+    if (!mission) return;
+
+    const providedParts: string[] = Array.isArray(mission.providedByClientParts) ? mission.providedByClientParts : [];
+    const isProvided = providedParts.includes(partName);
+    const newProvidedParts = isProvided
+      ? providedParts.filter((p: string) => p !== partName)
+      : [...providedParts, partName];
+
+    updateFsmMission(tourId, missionId, { providedByClientParts: newProvidedParts });
   };
 
   const updateFsmMission = (tourId: string, missionId: string, fields: any) => {
@@ -8003,9 +8180,9 @@ export default function App() {
             }
           } catch (_) {}
           Promise.all([
-            idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs_v110`),
-            idbGet<Defibrillateur[]>(`defib_${activeRunTenantId.toUpperCase()}_defibrillateurs_v110`),
-            idbGet<Defibrillateur[]>(`defib_${activeRunTenantId.toLowerCase()}_defibrillateurs_v110`),
+            idbGet<Defibrillateur[]>(`defib_${activeRunTenantId}_defibrillateurs_v112`),
+            idbGet<Defibrillateur[]>(`defib_${activeRunTenantId.toUpperCase()}_defibrillateurs_v112`),
+            idbGet<Defibrillateur[]>(`defib_${activeRunTenantId.toLowerCase()}_defibrillateurs_v112`),
           ])
             .then(candidates => {
               if (tenantIdRef.current !== activeRunTenantId) return;
@@ -8016,7 +8193,7 @@ export default function App() {
                 const delSet = new Set(getDeletedDefibKeys(activeRunTenantId));
                 const validDefibs = dedupeDefibsList(best.filter((df: any) => !isDefibInDeletedList(df, delSet)));
                 if (validDefibs.length > 0) {
-                  setDefibrillateurs(prev => (prev.length < validDefibs.length ? validDefibs : prev));
+                  setDefibrillateurs(prev => (prev.length === 0 ? validDefibs : prev));
                   setIsDefibLoading(false);
                 }
               }
@@ -8374,6 +8551,7 @@ export default function App() {
             { key: 'spreadsheetStagiaires', storageSuffix: 'spreadsheet_stagiaires', tabType: 'stagiaires' },
             { key: 'spreadsheetEmargements', storageSuffix: 'spreadsheet_emargements', tabType: 'emargements' },
             { key: 'spreadsheetRapportsPdf', storageSuffix: 'spreadsheet_rapports_pdf', tabType: 'rapportsPdf' },
+            { key: 'spreadsheetGestionApresIntervention', storageSuffix: 'spreadsheet_gestion_apres_intervention', tabType: 'gestionApresIntervention' },
             { key: 'spreadsheetCrm', storageSuffix: 'spreadsheet_crm', tabType: 'crm' },
             { key: 'spreadsheetReglagesCrm', storageSuffix: 'spreadsheet_reglages_crm', tabType: 'reglagesCrm' },
             { key: 'spreadsheetSatisfaction', storageSuffix: 'spreadsheet_satisfaction', tabType: 'satisfaction' },
@@ -10126,12 +10304,12 @@ export default function App() {
         safeSetLocalStorage(`fs_cache_${tenantId}_defibrillateurs`, str);
       }
       try {
-        await idbSet(`defib_${tenantId}_defibrillateurs_v110`, newDefibs);
-        await idbSet(`${tenantId}_defibrillateurs_v110`, newDefibs);
+        await idbSet(`defib_${tenantId}_defibrillateurs_v112`, newDefibs);
+        await idbSet(`${tenantId}_defibrillateurs_v112`, newDefibs);
         const tAliases = getTenantAliases(tenantId);
         if (tAliases.has('d27') || tAliases.has('d58')) {
-          await idbSet('defib_D27_defibrillateurs_v110', newDefibs);
-          await idbSet('defib_D58_defibrillateurs_v110', newDefibs);
+          await idbSet('defib_D27_defibrillateurs_v112', newDefibs);
+          await idbSet('defib_D58_defibrillateurs_v112', newDefibs);
         }
       } catch (_) {}
 
@@ -15056,6 +15234,8 @@ export default function App() {
                                                       const displayLabel = matchedStockItem ? matchedStockItem.label : part;
                                                       const sentParts: string[] = Array.isArray(m.sentToClientParts) ? m.sentToClientParts : [];
                                                       const isSent = sentParts.includes(part);
+                                                      const providedParts: string[] = Array.isArray(m.providedByClientParts) ? m.providedByClientParts : [];
+                                                      const isProvided = providedParts.includes(part);
 
                                                       return (
                                                         <div key={part} className="flex flex-wrap items-center gap-3 bg-transparent py-0.5">
@@ -15095,12 +15275,52 @@ export default function App() {
                                                             </div>
                                                           </button>
 
+                                                          {/* Toggle ON/OFF Fourniture par le client */}
+                                                          <button
+                                                            type="button"
+                                                            onClick={() => togglePartProvidedByClient(t.id, m.id, part)}
+                                                            className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none shrink-0"
+                                                            title="Fourniture par le client"
+                                                          >
+                                                            <span style={{ fontSize: '13px', fontWeight: 600, color: isProvided ? '#2e54ff' : '#64748b' }}>
+                                                              Fourniture par le client
+                                                            </span>
+                                                            <div
+                                                              style={{
+                                                                width: '34px',
+                                                                height: '18px',
+                                                                borderRadius: '9999px',
+                                                                backgroundColor: isProvided ? '#2e54ff' : '#cbd5e1',
+                                                                position: 'relative',
+                                                                transition: 'background-color 0.2s ease',
+                                                                padding: '2px'
+                                                              }}
+                                                            >
+                                                              <div
+                                                                style={{
+                                                                  width: '14px',
+                                                                  height: '14px',
+                                                                  borderRadius: '50%',
+                                                                  backgroundColor: '#ffffff',
+                                                                  position: 'absolute',
+                                                                  top: '2px',
+                                                                  left: isProvided ? '18px' : '2px',
+                                                                  transition: 'left 0.2s ease'
+                                                                }}
+                                                              />
+                                                            </div>
+                                                          </button>
+
                                                           {/* Gélule de la pièce requise */}
                                                           <span
                                                             onClick={() => {
                                                               const updatedParts = (m.requiredParts || []).filter((p: string) => p !== part);
                                                               const updatedSentParts = sentParts.filter((p: string) => p !== part);
-                                                              changeFsmMissionParts(t.id, m.id, m.requiredParts || [], updatedParts, { sentToClientParts: updatedSentParts });
+                                                              const updatedProvidedParts = providedParts.filter((p: string) => p !== part);
+                                                              changeFsmMissionParts(t.id, m.id, m.requiredParts || [], updatedParts, {
+                                                                sentToClientParts: updatedSentParts,
+                                                                providedByClientParts: updatedProvidedParts,
+                                                              });
                                                             }}
                                                             style={{
                                                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -17318,6 +17538,8 @@ export default function App() {
                                               const displayLabel = matchedStockItem ? matchedStockItem.label : part;
                                               const sentParts: string[] = Array.isArray(m.sentToClientParts) ? m.sentToClientParts : [];
                                               const isSent = sentParts.includes(part);
+                                              const providedParts: string[] = Array.isArray(m.providedByClientParts) ? m.providedByClientParts : [];
+                                              const isProvided = providedParts.includes(part);
 
                                               return (
                                                 <div key={part} className="flex flex-wrap items-center gap-3 bg-transparent py-0.5">
@@ -17357,12 +17579,52 @@ export default function App() {
                                                     </div>
                                                   </button>
 
+                                                  {/* Toggle ON/OFF Fourniture par le client */}
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => togglePartProvidedByClient(t.id, m.id, part)}
+                                                    className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none shrink-0"
+                                                    title="Fourniture par le client"
+                                                  >
+                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isProvided ? '#2e54ff' : '#64748b' }}>
+                                                      Fourniture par le client
+                                                    </span>
+                                                    <div
+                                                      style={{
+                                                        width: '34px',
+                                                        height: '18px',
+                                                        borderRadius: '9999px',
+                                                        backgroundColor: isProvided ? '#2e54ff' : '#cbd5e1',
+                                                        position: 'relative',
+                                                        transition: 'background-color 0.2s ease',
+                                                        padding: '2px'
+                                                      }}
+                                                    >
+                                                      <div
+                                                        style={{
+                                                          width: '14px',
+                                                          height: '14px',
+                                                          borderRadius: '50%',
+                                                          backgroundColor: '#ffffff',
+                                                          position: 'absolute',
+                                                          top: '2px',
+                                                          left: isProvided ? '18px' : '2px',
+                                                          transition: 'left 0.2s ease'
+                                                        }}
+                                                      />
+                                                    </div>
+                                                  </button>
+
                                                   {/* Gélule de la pièce requise */}
                                                   <span
                                                     onClick={() => {
                                                       const updatedParts = m.requiredParts.filter((p: string) => p !== part);
                                                       const updatedSentParts = sentParts.filter((p: string) => p !== part);
-                                                      changeFsmMissionParts(t.id, m.id, m.requiredParts, updatedParts, { sentToClientParts: updatedSentParts });
+                                                      const updatedProvidedParts = providedParts.filter((p: string) => p !== part);
+                                                      changeFsmMissionParts(t.id, m.id, m.requiredParts, updatedParts, {
+                                                        sentToClientParts: updatedSentParts,
+                                                        providedByClientParts: updatedProvidedParts,
+                                                      });
                                                     }}
                                                     style={{
                                                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -18655,6 +18917,13 @@ export default function App() {
                   }
                 `}</style>
 
+                {showGmaoTabConflictBanner && (
+                  <ConcurrentAccessBanner
+                    message="Cet onglet est déjà ouvert et utilisé par un autre membre de votre environnement. Attention aux délais de synchronisation."
+                    onHide={hideGmaoTabBannerFor3Hours}
+                  />
+                )}
+
                 {/* Upper Action Block & Search metrics */}
                 <div 
                   className="bg-white space-y-4"
@@ -19010,7 +19279,13 @@ export default function App() {
                                     {Array.isArray(rep.drapeaux) && rep.drapeaux.length > 0 && (
                                       <div className="inline-flex items-center gap-2">
                                         {rep.drapeaux.map((flag: any, fIdx: number) => {
-                                          const borderColor = flag.couleurHex?.trim() || '#000000';
+                                          const matchedVar = variables.find(
+                                            (v: any) =>
+                                              (v.category === 'Drapeau GMAO' || v.category === 'Drapeau post-intervention') &&
+                                              ((flag?.id && v.id === flag.id) ||
+                                                (flag?.nom && String(v.nom || '').trim().toLowerCase() === String(flag.nom || '').trim().toLowerCase()))
+                                          );
+                                          const borderColor = flag.couleurHex?.trim() || matchedVar?.couleurHex?.trim() || '#000000';
                                           return (
                                             <div
                                               key={flag.id || fIdx}
@@ -19046,6 +19321,16 @@ export default function App() {
                                       className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${isConforme ? 'bg-emerald-500' : 'bg-rose-500'}`} 
                                       title={isConforme ? "Conforme" : "Non conforme"}
                                     />
+                                    {hasReportAlerts(rep, defibrillateurs, stocks, variables, fsmTours) && (
+                                      <svg
+                                        viewBox="0 0 10 10"
+                                        className="inline-block w-2.5 h-2.5 shrink-0"
+                                        aria-label="Alerte"
+                                      >
+                                        <title>Alerte soulevée</title>
+                                        <polygon points="5,0 10,10 0,10" fill="#ef4444" />
+                                      </svg>
+                                    )}
                                   </div>
                                 </td>
 
@@ -19663,6 +19948,13 @@ export default function App() {
                       >
                         {/* Drawer Body without inner padding/border div */}
                         <div className="flex-1 overflow-y-auto p-6 pb-28 space-y-6 bg-transparent font-sans" style={{ color: '#50617A', fontSize: '18px' }}>
+                          {showGmaoFormConflictBanner && (
+                            <ConcurrentAccessBanner
+                              message="Un autre membre de votre environnement édite actuellement ces mêmes informations. Attention aux délais de synchronisation et aux risques d'incohérence."
+                              onHide={hideGmaoFormBannerWhileOpen}
+                              style={{ maxWidth: '100%', margin: '0 0 12px 0' }}
+                            />
+                          )}
                           {/* 1. Field: Drapeau ou indicateur */}
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
@@ -19697,10 +19989,12 @@ export default function App() {
                                       nom: foundVar.nom,
                                       couleurHex: foundVar.couleurHex || ''
                                     };
+                                    const updatedRep = { ...managingReport, drapeaux: [...currentFlags, newFlag] };
                                     const updatedReports = generatedReports.map(r => 
-                                      r.id === managingReport.id ? { ...r, drapeaux: [...currentFlags, newFlag] } : r
+                                      r.id === managingReport.id ? updatedRep : r
                                     );
                                     saveReports(updatedReports);
+                                    syncSingleGestionApresIntervention(updatedRep);
                                   }
                                 }
                               }}
@@ -19720,17 +20014,25 @@ export default function App() {
                             {Array.isArray(managingReport.drapeaux) && managingReport.drapeaux.length > 0 ? (
                               <div className="flex flex-wrap gap-2.5 pt-1">
                                 {managingReport.drapeaux.map((flag: any, idx: number) => {
-                                  const hex = flag.couleurHex?.trim();
+                                  const matchedVar = variables.find(
+                                    (v: any) =>
+                                      (v.category === 'Drapeau GMAO' || v.category === 'Drapeau post-intervention') &&
+                                      ((flag?.id && v.id === flag.id) ||
+                                        (flag?.nom && String(v.nom || '').trim().toLowerCase() === String(flag.nom || '').trim().toLowerCase()))
+                                  );
+                                  const hex = flag.couleurHex?.trim() || matchedVar?.couleurHex?.trim();
                                   const txtColor = hex ? getContrastingTextColor(hex) : '#0f172a';
                                   return (
                                     <span
                                       key={flag.id || idx}
                                       onClick={() => {
                                         const updatedFlags = (managingReport.drapeaux || []).filter((_: any, i: number) => i !== idx);
+                                        const updatedRep = { ...managingReport, drapeaux: updatedFlags };
                                         const updatedReports = generatedReports.map(r => 
-                                          r.id === managingReport.id ? { ...r, drapeaux: updatedFlags } : r
+                                          r.id === managingReport.id ? updatedRep : r
                                         );
                                         saveReports(updatedReports);
+                                        syncSingleGestionApresIntervention(updatedRep);
                                       }}
                                       className="flag-pill inline-flex items-center px-4 py-2 rounded-full text-[18px] font-medium cursor-pointer transition-colors select-none hover:!bg-[#851010] hover:!text-white"
                                       style={{
@@ -19761,6 +20063,18 @@ export default function App() {
                                   r.id === managingReport.id ? { ...r, missionStatus: val } : r
                                 );
                                 saveReports(updatedReports);
+                                if (managingReport.missionId || managingReport.interventionReference) {
+                                  const updatedTours = fsmTours.map((t: any) => ({
+                                    ...t,
+                                    missions: (t.missions || []).map((m: any) =>
+                                      (managingReport.missionId && m.id === managingReport.missionId) ||
+                                      (managingReport.interventionReference && m.interventionReference === managingReport.interventionReference)
+                                        ? { ...m, status: val }
+                                        : m
+                                    ),
+                                  }));
+                                  saveFsmTours(updatedTours);
+                                }
                               }}
                               className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 cursor-pointer font-sans"
                             >
@@ -19792,6 +20106,18 @@ export default function App() {
                                     r.id === managingReport.id ? { ...r, rejectionReason: val, reasonImpossible: val, techCommentaireArrivee: val } : r
                                   );
                                   saveReports(updatedReports);
+                                  if (managingReport.missionId || managingReport.interventionReference) {
+                                    const updatedTours = fsmTours.map((t: any) => ({
+                                      ...t,
+                                      missions: (t.missions || []).map((m: any) =>
+                                        (managingReport.missionId && m.id === managingReport.missionId) ||
+                                        (managingReport.interventionReference && m.interventionReference === managingReport.interventionReference)
+                                          ? { ...m, rejectionReason: val }
+                                          : m
+                                      ),
+                                    }));
+                                    saveFsmTours(updatedTours);
+                                  }
                                 }}
                                 placeholder="Entrez la raison du rejet..."
                                 className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
@@ -19799,7 +20125,7 @@ export default function App() {
                             </div>
                           )}
 
-                          {/* 3. Field: Commentaire du technicien. (Disabled textarea showing section 11 Commentaire interne) */}
+                          {/* 3. Field: Commentaire du technicien. (Disabled textarea showing technician comment from Missions des Tournées / section 11) */}
                           <div className="space-y-2 pt-1">
                             <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
                               Commentaire du technicien.
@@ -19807,7 +20133,30 @@ export default function App() {
                             <textarea
                               disabled
                               rows={3}
-                              value={managingReport.defibSnapshot?.commentaireInterne || managingReport.commentaireInterne || ''}
+                              value={(() => {
+                                let missionTechComment = '';
+                                for (const t of fsmTours || []) {
+                                  for (const m of t.missions || []) {
+                                    if (
+                                      (managingReport.missionId && m.id === managingReport.missionId) ||
+                                      (managingReport.interventionReference && m.interventionReference === managingReport.interventionReference)
+                                    ) {
+                                      if (m.commentaireInterne) {
+                                        missionTechComment = m.commentaireInterne;
+                                        break;
+                                      }
+                                    }
+                                  }
+                                  if (missionTechComment) break;
+                                }
+                                return (
+                                  missionTechComment ||
+                                  managingReport.defibSnapshot?.commentaireInterne ||
+                                  managingReport.internalComment ||
+                                  managingReport.commentaireInterne ||
+                                  ''
+                                );
+                              })()}
                               className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-100 resize-y min-h-[90px] focus:outline-none cursor-not-allowed opacity-90"
                             />
                           </div>
@@ -19826,13 +20175,16 @@ export default function App() {
                               }}
                               value={
                                 managingReport.commentaire !== undefined && managingReport.commentaire !== null && managingReport.commentaire !== ''
-                                  ? managingReport.commentaire
-                                  : (!managingReport.isUpcoming ? generateReportModerationComment(managingReport, defibrillateurs) : '')
+                                  ? mergeReportModerationComment(managingReport.commentaire, managingReport, defibrillateurs, stocks, variables, fsmTours)
+                                  : (!managingReport.isUpcoming
+                                      ? generateReportModerationComment(managingReport, defibrillateurs, stocks, variables, fsmTours)
+                                      : mergeReportModerationComment('', managingReport, defibrillateurs, stocks, variables, fsmTours))
                               }
                               onChange={(e) => {
                                 const val = e.target.value;
+                                const updatedRep = { ...managingReport, commentaire: val };
                                 const updatedReports = generatedReports.map(r => 
-                                  r.id === managingReport.id ? { ...r, commentaire: val } : r
+                                  r.id === managingReport.id ? updatedRep : r
                                 );
                                 saveReports(updatedReports);
                                 e.target.style.height = 'auto';
@@ -19844,6 +20196,138 @@ export default function App() {
                             />
                           </div>
 
+                          {/* 4b. Sub-div: Alertes et potentielles erreurs. (up to 15 sub-fields) */}
+                          {(() => {
+                            const rawAlerts: { traite: boolean; info: string }[] = Array.isArray(managingReport.postInterventionAlerts)
+                              ? managingReport.postInterventionAlerts
+                              : (() => {
+                                  const list: { traite: boolean; info: string }[] = [];
+                                  let maxIdx = 0;
+                                  for (let i = 1; i <= 15; i++) {
+                                    if (managingReport[`alerteTraite${i}`] || managingReport[`alerteInfo${i}`]) {
+                                      maxIdx = i;
+                                    }
+                                  }
+                                  for (let i = 1; i <= maxIdx; i++) {
+                                    list.push({
+                                      traite: Boolean(managingReport[`alerteTraite${i}`]),
+                                      info: String(managingReport[`alerteInfo${i}`] || ''),
+                                    });
+                                  }
+                                  return list;
+                                })();
+                            const displayAlerts = rawAlerts.length > 0 ? rawAlerts.slice(0, 15) : [{ traite: false, info: '' }];
+
+                            const updateAlerts = (nextAlerts: { traite: boolean; info: string }[], syncImmediately = false) => {
+                              const capped = nextAlerts.slice(0, 15);
+                              const flatFields: Record<string, any> = {};
+                              for (let i = 1; i <= 15; i++) {
+                                const item = capped[i - 1];
+                                flatFields[`alerteTraite${i}`] = item ? Boolean(item.traite) : false;
+                                flatFields[`alerteInfo${i}`] = item ? String(item.info || '') : '';
+                              }
+                              const updatedRep = {
+                                ...managingReport,
+                                postInterventionAlerts: capped,
+                                ...flatFields,
+                              };
+                              const updatedReports = generatedReports.map(r =>
+                                r.id === managingReport.id ? updatedRep : r
+                              );
+                              saveReports(updatedReports);
+                              if (syncImmediately) {
+                                syncSingleGestionApresIntervention(updatedRep);
+                              }
+                            };
+
+                            return (
+                              <div className="space-y-3 pt-1">
+                                <div className="flex items-center justify-between">
+                                  <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
+                                    Alertes et potentielles erreurs.
+                                  </label>
+                                  {displayAlerts.length < 15 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        updateAlerts([...displayAlerts, { traite: false, info: '' }], false);
+                                      }}
+                                      style={{ fontSize: '18px', textDecoration: 'none' }}
+                                      className="text-[18px] text-blue-600 hover:text-blue-800 cursor-pointer bg-transparent border-0 p-0 font-medium font-sans no-underline hover:no-underline"
+                                    >
+                                      + Ajouter ({displayAlerts.length}/15)
+                                    </button>
+                                  )}
+                                </div>
+
+                                <div className="space-y-2.5">
+                                  {displayAlerts.map((alertItem, aIdx) => (
+                                    <div
+                                      key={aIdx}
+                                      className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 bg-white/80"
+                                    >
+                                      {/* Radio check « Traité. » */}
+                                      <label
+                                        onClick={() => {
+                                          const next = displayAlerts.map((it, idx) =>
+                                            idx === aIdx ? { ...it, traite: !it.traite } : it
+                                          );
+                                          updateAlerts(next, true);
+                                        }}
+                                        className="inline-flex items-center gap-2 cursor-pointer select-none shrink-0"
+                                        style={{ color: '#50617A', fontSize: '16px' }}
+                                      >
+                                        <span
+                                          className="w-5 h-5 rounded-full flex items-center justify-center border transition-colors"
+                                          style={{
+                                            borderColor: alertItem.traite ? '#2e54ff' : '#94a3b8',
+                                            backgroundColor: alertItem.traite ? '#2e54ff' : '#ffffff',
+                                          }}
+                                        >
+                                          {alertItem.traite && (
+                                            <span className="w-2 h-2 rounded-full bg-white" />
+                                          )}
+                                        </span>
+                                        <span className="font-medium text-[#50617A]" style={{ fontSize: '16px' }}>
+                                          Traité.
+                                        </span>
+                                      </label>
+
+                                      {/* One-line field « Informations sur l’alerte. » */}
+                                      <input
+                                        type="text"
+                                        value={alertItem.info || ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          const next = displayAlerts.map((it, idx) =>
+                                            idx === aIdx ? { ...it, info: val } : it
+                                          );
+                                          updateAlerts(next, false);
+                                        }}
+                                        placeholder="Informations sur l’alerte."
+                                        className="flex-1 p-2 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
+                                      />
+
+                                      {displayAlerts.length > 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const next = displayAlerts.filter((_, idx) => idx !== aIdx);
+                                            updateAlerts(next, true);
+                                          }}
+                                          title="Supprimer cette alerte"
+                                          className="text-slate-400 hover:text-rose-600 px-1.5 py-1 text-[18px] font-bold cursor-pointer bg-transparent border-0"
+                                        >
+                                          ×
+                                        </button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
                           {/* 5. Toggle: Désactiver l'email au client. */}
                           <div className="flex items-center justify-between pt-1">
                             <span className="gmao-sidepane-text block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
@@ -19853,10 +20337,12 @@ export default function App() {
                               type="button"
                               onClick={() => {
                                 const updatedValue = !managingReport.disableClientEmail;
+                                const updatedRep = { ...managingReport, disableClientEmail: updatedValue };
                                 const updatedReports = generatedReports.map(r => 
-                                  r.id === managingReport.id ? { ...r, disableClientEmail: updatedValue } : r
+                                  r.id === managingReport.id ? updatedRep : r
                                 );
                                 saveReports(updatedReports);
+                                syncSingleGestionApresIntervention(updatedRep);
                               }}
                               className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none shrink-0"
                               style={{
@@ -19906,17 +20392,20 @@ export default function App() {
                           <button
                             type="button"
                             onClick={() => {
-                              if (managingReport && !managingReport.isUpcoming && managingReport.status !== 'À venir') {
-                                const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
-                                fetch('/api/sheets/upsert', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    tenantId: activeTid,
-                                    type: 'rapportsPdf',
-                                    records: [managingReport],
-                                  }),
-                                }).catch(() => {});
+                              if (managingReport) {
+                                syncSingleGestionApresIntervention(managingReport);
+                                if (!managingReport.isUpcoming && managingReport.status !== 'À venir') {
+                                  const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+                                  fetch('/api/sheets/upsert', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      tenantId: activeTid,
+                                      type: 'rapportsPdf',
+                                      records: [managingReport],
+                                    }),
+                                  }).catch(() => {});
+                                }
                               }
                               saveReports(generatedReports);
                               setManagingReportId(null);
@@ -19991,9 +20480,18 @@ export default function App() {
                             hideReduceAndTimer={true}
                             forceSmartphoneLayout={true}
                             onSave={(updatedReport) => {
+                              const mergedComment = mergeReportModerationComment(
+                                updatedReport.commentaire ?? repToEdit?.commentaire,
+                                { ...repToEdit, ...updatedReport },
+                                defibrillateurs,
+                                stocks,
+                                variables,
+                                fsmTours
+                              );
                               const mergedReport = {
                                 ...repToEdit,
                                 ...updatedReport,
+                                commentaire: mergedComment,
                                 _sheetRowNumber: updatedReport._sheetRowNumber ?? (repToEdit as any)?._sheetRowNumber,
                               };
                               const updatedReports = generatedReports.map(r =>
@@ -20004,6 +20502,7 @@ export default function App() {
                                   : r
                               );
                               saveReports(updatedReports);
+                              syncGestionApresInterventionRow(mergedReport);
 
                               // Explicitly upsert the edited report row to the Rapports PDF spreadsheet
                               const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';

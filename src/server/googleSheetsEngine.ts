@@ -20,6 +20,7 @@ export type SheetTabType =
   | 'clients'
   | 'tournees'
   | 'missionsTournees'
+  | 'gestionApresIntervention'
   | 'rapportsPdf'
   | 'crm'
   | 'reglagesCrm'
@@ -431,6 +432,14 @@ function normalizeHeaderKey(rawHeader: string): string {
     .replace(/[^a-z0-9]/g, '');
 }
 
+function normalizeHeaderKeyKeepSection(rawHeader: string): string {
+  return String(rawHeader || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
 function normalizeYesNo(val: any, defaultVal: 'Oui' | 'Non' = 'Non'): 'Oui' | 'Non' {
   if (val === undefined || val === null || val === '') return defaultVal;
   const s = String(val).trim().toLowerCase();
@@ -470,6 +479,7 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
   { header: 'Section 1 - Modèle.', field: 'modeleId', aliases: ['modele', 'modeledae', 'modeledefibrillateur', 'modeleid', 'model', 'identificationmodele', 'identificationmodeleidentifiantunique', 'modeleidentifiantunique'] },
   { header: 'Section 1 - Numéro Atlasanté.', field: 'numeroAtlasante', aliases: ['numeroatlasante', 'atlasante', 'idatlasante', 'geodae', 'identificationnumeroatlasante'] },
   { header: 'Section 1 - Version du logiciel.', field: 'versionLogiciel', aliases: ['versiondulogiciel', 'versionlogiciel', 'firmware', 'version', 'identificationversionlogiciel', 'identificationversiondulogiciel'] },
+  { header: 'Section 1 - Type de défibrillateur.', field: 'typeDefibrillateur', aliases: ['typededefibrillateur', 'typedefibrillateur', 'section1typededefibrillateur', 'section1typedefibrillateur', 'identificationtypededefibrillateur', 'identificationtypedefibrillateur'] },
   { header: 'Section 1 - Commentaire Général.', field: 'commentaire', aliases: ['commentairegeneral', 'commentaire', 'commentairedae', 'notes', 'note', 'observation', 'identificationcommentaire', 'identificationcommentairegeneral'] },
 
   // Section 2
@@ -949,6 +959,17 @@ export function mapRowToDefib(
     } else if (def.field === 'situationElectrodeA' || def.field === 'situationElectrodeP' || def.field === 'situationBatterie') {
       if (rawVal !== '') {
         obj[def.field] = normalizeSituationFromSheet(rawVal);
+      }
+    } else if (def.field === 'typeDefibrillateur') {
+      if (rawVal !== '') {
+        const lower = rawVal.toLowerCase();
+        if (lower.includes('semi') || rawVal.toUpperCase() === 'DSA') {
+          obj[def.field] = 'Semi-Automatique (DSA)';
+        } else if (lower.includes('automatique') || rawVal.toUpperCase() === 'DEA') {
+          obj[def.field] = 'Automatique (DEA)';
+        } else {
+          obj[def.field] = rawVal;
+        }
       }
     } else if (rawVal !== '') {
       obj[def.field] = rawVal;
@@ -1575,6 +1596,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Autre référence', field: 'autreReference', aliases: ['autrereference', 'referenceexterne', 'refexterne', 'referenceclient'] },
     { header: 'Bon de commande', field: 'bonCommandeId', aliases: ['bondecommande', 'numerobondecommande', 'refbondecommande', 'boncommandeid', 'customboncommande', 'bdc', 'commande'] },
     { header: 'Statut de la mission', field: 'status', aliases: ['statutdelamission', 'statutmission', 'statut', 'status', 'situation', 'situationmission', 'situationdelamission', 'etat', 'avancement'] },
+    { header: 'Raison rejet.', field: 'rejectionReason', aliases: ['raisonrejet', 'raisonderejet', 'raisonduerejet', 'raisonrejeteemission', 'raisonrejetmission', 'raisonderejetdemission', 'motifrejet', 'motifderejet', 'rejectionreason', 'refusalreason', 'raisonrefus'] },
     { header: 'Type d’équipement', field: 'equipmentType', aliases: ['typedequipement', 'typeequipement', 'categorieequipement', 'categorie', 'equipmenttype', 'equipement', 'materiel', 'typemateriel'] },
     { header: 'Identifiant.', field: 'defibIdentifiant', aliases: ['identifiant', 'identifiantequipement', 'identifiantdefibrillateur', 'identifiantdae', 'identifiantmateriel', 'defibidentifiant', 'defibid', 'equipementlie', 'daelie', 'idmateriel', 'iddefib', 'idequipement'] },
     { header: 'Numéro de série', field: 'defibNumeroSerie', aliases: ['numerodeserie', 'numeroserie', 'numserie', 'serie', 'sn', 'serialnumber', 'defibnumeroserie', 'defibserialnumber'] },
@@ -1584,9 +1606,10 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Client ID', field: 'clientId', aliases: ['clientid', 'idclient', 'identifiantclient', 'codeclient'] },
     { header: 'Motif de la mission', field: 'reason', aliases: ['motifdelamission', 'motifmission', 'motif', 'raison', 'raisondelaprestation', 'raisonprestation', 'reason', 'reasons', 'prestation', 'typeintervention', 'objet', 'motifs'] },
     { header: 'Pièces requises', field: 'requiredParts', aliases: ['piecesrequises', 'pieces', 'consommables', 'equipementsrequis', 'requiredparts', 'materielrequis', 'stocksrequis'] },
+    { header: 'Fournitures par le client', field: 'providedByClientParts', aliases: ['fournituresparleclient', 'fournitureparleclient', 'piecesfourniesparleclient', 'providedbyclientparts', 'fournitureclient', 'fournituresclient'] },
     { header: 'Pièces envoyées au client', field: 'sentToClientParts', aliases: ['piecesenvoyeesauclient', 'piecesenvoyees', 'senttoclientparts', 'envoipieces', 'envoyeeauclient'] },
+    { header: 'Commentaire visible par le technicien.', field: 'commentaireInterne', aliases: ['commentairevisibleparletechnicien', 'commentaireinterne', 'commentaireprive', 'internalcomment', 'noteinterne', 'commentairetechnicien'] },
     { header: 'Priorité', field: 'priority', aliases: ['priorite', 'priority', 'urgence', 'criticite'] },
-    { header: 'Commentaire interne.', field: 'commentaireInterne', aliases: ['commentaireinterne', 'commentairevisibleparletechnicien', 'commentaireprive', 'internalcomment', 'noteinterne'] },
     { header: 'Date prévue', field: 'estimatedDate', aliases: ['dateprevue', 'dateestimee', 'dateintervention', 'datemission', 'estimateddate', 'scheduleddate', 'date', 'echeance'], type: 'date' },
     { header: 'Créneau horaire', field: 'estimatedSlot', aliases: ['creneauhoraire', 'creneau', 'creneauestime', 'heure', 'horaire', 'estimatedslot', 'time', 'plagehoraire'] },
     { header: 'Durée prévue (min)', field: 'dureePrestation', aliases: ['dureeprevuemin', 'dureeprevue', 'dureeprestation', 'duree', 'tempsprevu', 'dureemin'] },
@@ -1602,6 +1625,42 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Technicien', field: 'techName', aliases: ['technicien', 'techname', 'technicienassigne', 'collaborateur', 'intervenant'] },
     { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'notes', 'observation', 'remarques', 'refusalcomment', 'motifrefus', 'clientrefusalcomment'] },
     { header: 'Identifiant formation', field: 'formationId', aliases: ['identifiantformation', 'formationid', 'idformation'] },
+  ],
+  gestionApresIntervention: [
+    { header: 'Référence Intervention.', field: 'interventionReference', aliases: ['referenceintervention', 'referencedelintervention', 'refintervention', 'reference', 'id'] },
+    { header: 'Drapeau ou indicateur.', field: 'drapeaux', aliases: ['drapeauouindicateur', 'drapeauxouindicateurs', 'drapeaux', 'drapeau', 'indicateur'] },
+    { header: 'Commentaire interne.', field: 'commentaireInterne', aliases: ['commentaireinterne', 'commentaire', 'internalcomment'] },
+    { header: "Désactiver l'email au client.", field: 'disableClientEmail', aliases: ['desactiverlemailauclient', 'desactiveremailauclient', 'disableclientemail'] },
+    { header: 'Traité. Alerte 1', field: 'alerteTraite1', aliases: ['traitealerte1', 'alerte1traite', 'traite1'] },
+    { header: "Informations sur l'alerte. 1", field: 'alerteInfo1', aliases: ['informationssurlalerte1', 'informationsurlalerte1', 'alerteinfo1', 'alerte1'] },
+    { header: 'Traité. Alerte 2', field: 'alerteTraite2', aliases: ['traitealerte2', 'alerte2traite', 'traite2'] },
+    { header: "Informations sur l'alerte. 2", field: 'alerteInfo2', aliases: ['informationssurlalerte2', 'informationsurlalerte2', 'alerteinfo2', 'alerte2'] },
+    { header: 'Traité. Alerte 3', field: 'alerteTraite3', aliases: ['traitealerte3', 'alerte3traite', 'traite3'] },
+    { header: "Informations sur l'alerte. 3", field: 'alerteInfo3', aliases: ['informationssurlalerte3', 'informationsurlalerte3', 'alerteinfo3', 'alerte3'] },
+    { header: 'Traité. Alerte 4', field: 'alerteTraite4', aliases: ['traitealerte4', 'alerte4traite', 'traite4'] },
+    { header: "Informations sur l'alerte. 4", field: 'alerteInfo4', aliases: ['informationssurlalerte4', 'informationsurlalerte4', 'alerteinfo4', 'alerte4'] },
+    { header: 'Traité. Alerte 5', field: 'alerteTraite5', aliases: ['traitealerte5', 'alerte5traite', 'traite5'] },
+    { header: "Informations sur l'alerte. 5", field: 'alerteInfo5', aliases: ['informationssurlalerte5', 'informationsurlalerte5', 'alerteinfo5', 'alerte5'] },
+    { header: 'Traité. Alerte 6', field: 'alerteTraite6', aliases: ['traitealerte6', 'alerte6traite', 'traite6'] },
+    { header: "Informations sur l'alerte. 6", field: 'alerteInfo6', aliases: ['informationssurlalerte6', 'informationsurlalerte6', 'alerteinfo6', 'alerte6'] },
+    { header: 'Traité. Alerte 7', field: 'alerteTraite7', aliases: ['traitealerte7', 'alerte7traite', 'traite7'] },
+    { header: "Informations sur l'alerte. 7", field: 'alerteInfo7', aliases: ['informationssurlalerte7', 'informationsurlalerte7', 'alerteinfo7', 'alerte7'] },
+    { header: 'Traité. Alerte 8', field: 'alerteTraite8', aliases: ['traitealerte8', 'alerte8traite', 'traite8'] },
+    { header: "Informations sur l'alerte. 8", field: 'alerteInfo8', aliases: ['informationssurlalerte8', 'informationsurlalerte8', 'alerteinfo8', 'alerte8'] },
+    { header: 'Traité. Alerte 9', field: 'alerteTraite9', aliases: ['traitealerte9', 'alerte9traite', 'traite9'] },
+    { header: "Informations sur l'alerte. 9", field: 'alerteInfo9', aliases: ['informationssurlalerte9', 'informationsurlalerte9', 'alerteinfo9', 'alerte9'] },
+    { header: 'Traité. Alerte 10', field: 'alerteTraite10', aliases: ['traitealerte10', 'alerte10traite', 'traite10'] },
+    { header: "Informations sur l'alerte. 10", field: 'alerteInfo10', aliases: ['informationssurlalerte10', 'informationsurlalerte10', 'alerteinfo10', 'alerte10'] },
+    { header: 'Traité. Alerte 11', field: 'alerteTraite11', aliases: ['traitealerte11', 'alerte11traite', 'traite11'] },
+    { header: "Informations sur l'alerte. 11", field: 'alerteInfo11', aliases: ['informationssurlalerte11', 'informationsurlalerte11', 'alerteinfo11', 'alerte11'] },
+    { header: 'Traité. Alerte 12', field: 'alerteTraite12', aliases: ['traitealerte12', 'alerte12traite', 'traite12'] },
+    { header: "Informations sur l'alerte. 12", field: 'alerteInfo12', aliases: ['informationssurlalerte12', 'informationsurlalerte12', 'alerteinfo12', 'alerte12'] },
+    { header: 'Traité. Alerte 13', field: 'alerteTraite13', aliases: ['traitealerte13', 'alerte13traite', 'traite13'] },
+    { header: "Informations sur l'alerte. 13", field: 'alerteInfo13', aliases: ['informationssurlalerte13', 'informationsurlalerte13', 'alerteinfo13', 'alerte13'] },
+    { header: 'Traité. Alerte 14', field: 'alerteTraite14', aliases: ['traitealerte14', 'alerte14traite', 'traite14'] },
+    { header: "Informations sur l'alerte. 14", field: 'alerteInfo14', aliases: ['informationssurlalerte14', 'informationsurlalerte14', 'alerteinfo14', 'alerte14'] },
+    { header: 'Traité. Alerte 15', field: 'alerteTraite15', aliases: ['traitealerte15', 'alerte15traite', 'traite15'] },
+    { header: "Informations sur l'alerte. 15", field: 'alerteInfo15', aliases: ['informationssurlalerte15', 'informationsurlalerte15', 'alerteinfo15', 'alerte15'] },
   ],
   crm: [
     { header: 'Type.', field: 'type', aliases: ['type', 'typeligne', 'recordtype'] },
@@ -1835,6 +1894,10 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Activer le texte invitant le client à laisser un avis (mesure de satisfaction)', field: 'enableSatisfactionAvis', aliases: ['activerletexteinvitantleclientalaisserunavismesuredesatisfaction', 'activeravisclient', 'enablesatisfactionavis', 'mesuredesatisfaction', 'avissatisfaction'], type: 'yesno' },
     { header: "Activer l'infogérance et la maintenance de d'autres types d'équipements", field: 'enableOtherEquipments', aliases: ['activerlinfogeranceetlamaintenancededautrestypesdequipements', 'activerautrestypesequipements', 'activerautresmateriels', 'enableotherequipments', 'autresmateriels'], type: 'yesno' },
     { header: 'Activer les emails automatiques destinés aux clients', field: 'enableAutoEmails', aliases: ['activerlesemailsautomatiquesdestinesauxclients', 'activeremailsautomatiques', 'emailsautomatiques', 'enableautoemails'], type: 'yesno' },
+    { header: 'Expression d’alerte 1', field: 'expressionAlerte1', aliases: ['expressiondalerte1', 'expressionalerte1'] },
+    { header: 'Expression d’alerte 2', field: 'expressionAlerte2', aliases: ['expressiondalerte2', 'expressionalerte2'] },
+    { header: 'Expression d’alerte 3', field: 'expressionAlerte3', aliases: ['expressiondalerte3', 'expressionalerte3'] },
+    { header: 'Expression d’alerte 4', field: 'expressionAlerte4', aliases: ['expressiondalerte4', 'expressionalerte4'] },
     { header: 'Utiliser Commandes sur Defibeo', field: 'enableDevisFactures', aliases: ['utilisercommandessurdefibeo', 'utilisercommandes', 'enabledevisfactures', 'commandesdefibeo', 'devisetfactures'], type: 'yesno' },
     { header: 'Désactiver les aides et tutoriels', field: 'disableHelpsAndTutorials', aliases: ['desactiverlesaidesettutoriels', 'desactiveraidestutoriels', 'disablehelpsandtutorials', 'aidestutoriels'], type: 'yesno' },
     { header: 'Personnaliser la visibilité des onglets', field: 'hiddenTabs', aliases: ['personnaliserlavisibilitedesonglets', 'visibilitedesonglets', 'visibiliteonglets', 'ongletsmasques', 'hiddentabs', 'onglets'], type: 'array' },
@@ -1893,97 +1956,131 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     // Section 0 - Configuration
     { header: 'Section 0 - Référence intervention', field: 'interventionReference', aliases: ['section0referenceintervention', 'referenceintervention', 'interventionreference', 'reportnumber', 'numerorapport', 'idrapport', 'reference', 'id'] },
     { header: 'Section 0 - Autre référence', field: 'autreReference', aliases: ['section0autrereference', 'autrereference'] },
-    { header: 'Section 0 - Équipement sélectionné', field: 'selectedEquipmentLabel', aliases: ['section0equipementselectionne', 'equipementselectionne', 'selectedequipmentlabel'] },
+    { header: 'Section 0 - Équipement sélectionné', field: 'selectedEquipmentLabel', aliases: ['section0equipementselectionne', 'equipementselectionne', 'selectedequipmentlabel', 'section0recherchedequipementsclientidserie', 'recherchedequipementsclientidserie'] },
     { header: 'Section 0 - Nouveau matériel créé (Type)', field: 'createdEquipmentType', aliases: ['section0nouveaumaterielcreetype', 'nouveaumaterielcreetype', 'nouveaumateriel', 'createdequipmenttype'] },
-    { header: 'Section 0 - Titre du document', field: 'reportTitle', aliases: ['section0titredudocument', 'titredudocument', 'reporttitle', 'titrerapport'] },
+    { header: 'Section 0 - Titre du document', field: 'reportTitle', aliases: ['section0titredudocument', 'titredudocument', 'reporttitle', 'titrerapport', 'section0titre', 'titre'] },
     { header: 'Section 0 - Raison(s) de la prestation', field: 'reasons', aliases: ['section0raisonsdelaprestation', 'raisonsdelaprestation', 'raisondelaprestation', 'reasons', 'reason', 'typeintervention', 'motif'] },
     { header: 'Section 0 - Technicien', field: 'techName', aliases: ['section0technicien', 'technicien', 'techname', 'intervenant', 'redacteur'] },
-    { header: 'Section 0 - Horodatage entrant', field: 'date', aliases: ['section0horodatageentrant', 'horodatageentrant', 'dateintervention', 'datemaintenance', 'dernieremaintenance', 'date', 'datestr'] },
+    { header: 'Section 0 - Horodatage entrant', field: 'date', aliases: ['section0horodatageentrant', 'horodatageentrant', 'section0horodatageentrat', 'horodatageentrat', 'dateintervention', 'datemaintenance', 'dernieremaintenance', 'date', 'datestr'] },
     { header: 'Section 0 - Site de la mission', field: 'missionSite', aliases: ['section0sitedelamission', 'sitedelamission', 'missionsite'] },
     { header: 'Section 0 - Bon de commande', field: 'bonDeCommande', aliases: ['section0bondecommande', 'bondecommande', 'boncommandeid', 'customboncommande'] },
     // Section 1 - Identification et photos
-    { header: "Section 1 - Identifiant de l'appareil", field: 'identifiant', aliases: ['section1identifiantdelappareil', 'identifiantdelappareil', 'identifiantappareil', 'identifiant', 'defibidentifiant', 'equipement'] },
-    { header: 'Section 1 - Numéro de série', field: 'numeroSerie', aliases: ['section1numerodeserie', 'numerodeserie', 'numeroserie', 'numserie', 'sn'] },
+    { header: "Section 1 - Identifiant de l'appareil", field: 'identifiant', aliases: ['section1identifiantdelappareil', 'identifiantdelappareil', 'identifiantappareil', 'section1identifiant', 'identifiant', 'defibidentifiant', 'equipement'] },
+    { header: 'Section 1 - Numéro de série', field: 'numeroSerie', aliases: ['section1numerodeserie', 'numerodeserie', 'numeroserie', 'numserie', 'sn', 'section1serie', 'serie'] },
     { header: "Section 1 - Catégorie d'équipement", field: 'categorie', aliases: ['section1categoriedequipement', 'categoriedequipement', 'categorieequipement', 'categorie'] },
-    { header: "Section 1 - Modèle de l'appareil", field: 'modele', aliases: ['section1modeledelappareil', 'modeledelappareil', 'modeleappareil', 'modele', 'modeleid'] },
+    { header: "Section 1 - Modèle de l'appareil", field: 'modele', aliases: ['section1modeledelappareil', 'modeledelappareil', 'modeleappareil', 'section1modelededefibrillateur', 'modelededefibrillateur', 'modele', 'modeleid'] },
+    { header: 'Section 1 - Type de défibrillateur.', field: 'typeDefibrillateur', aliases: ['section1typedefibrillateur', 'typedefibrillateur', 'typededefibrillateur', 'section1typededefibrillateur'] },
+    { header: 'Section 1 - Numéro Atlasanté.', field: 'numeroAtlasante', aliases: ['section1numeroatlasante', 'numeroatlasante'] },
+    { header: 'Section 1 - Version du logiciel.', field: 'versionLogiciel', aliases: ['section1versiondulogiciel', 'versiondulogiciel', 'versionlogiciel'] },
+    { header: 'Section 1 - Matériel inter-changé par le client ?', field: 'materielInterchangeClient', aliases: ['section1materielinterchangeparleclient', 'materielinterchangeparleclient', 'materielinterchangeclient'], type: 'yesno' },
+    { header: 'Section 1 - Commentaire changement.', field: 'commentaireChangement', aliases: ['section1commentairechangement', 'commentairechangement'] },
     { header: 'Section 1 - Défibrillateur entièrement automatique (DEA)', field: 'dea', aliases: ['section1defibrillateurentierementautomatiquedea', 'defibrillateurentierementautomatiquedea', 'dea'], type: 'yesno' },
     { header: 'Section 1 - Écran intégré', field: 'ecran', aliases: ['section1ecranintegre', 'ecranintegre', 'ecran'], type: 'yesno' },
     { header: 'Section 1 - Compteur de chocs délivrés', field: 'chocs', aliases: ['section1compteurdechocsdelivres', 'compteurdechocsdelivres', 'chocsdelivres', 'chocs'] },
     { header: 'Section 1 - Dispositif RCP intégré', field: 'rcp', aliases: ['section1dispositifrcpintegre', 'dispositifrcpintegre', 'rcp'], type: 'yesno' },
     { header: 'Section 1 - Hors service', field: 'horsService', aliases: ['section1horsservice', 'horsservice'], type: 'yesno' },
-    { header: "Section 1 - Prêt d'appareil en cours", field: 'pretEnCours', aliases: ['section1pretdappareilencours', 'pretdappareilencours', 'pretencours'], type: 'yesno' },
-    { header: 'Section 1 - Appareil de prêt sélectionné', field: 'pretId', aliases: ['section1appareildepretselectionne', 'appareildepretselectionne', 'pretid'] },
+    { header: "Section 1 - Prêt d'appareil en cours", field: 'pretEnCours', aliases: ['section1pretdappareilencours', 'pretdappareilencours', 'pretencours', 'section1fournituredunmaterieldepret', 'fournituredunmaterieldepret', 'fourniturematerielpret'], type: 'yesno' },
+    { header: 'Section 1 - Appareil de prêt sélectionné', field: 'pretId', aliases: ['section1appareildepretselectionne', 'appareildepretselectionne', 'pretid', 'section1selectiondumaterielprete', 'selectiondumaterielprete', 'selectionmaterielprete'] },
     { header: 'Section 1 - Dénomination du site', field: 'denomination', aliases: ['section1denominationdusite', 'denominationdusite', 'denominationsite', 'denomination', 'site'] },
     { header: 'Section 1 - Emplacement précis', field: 'emplacement', aliases: ['section1emplacementprecis', 'emplacementprecis', 'emplacement'] },
-    { header: 'Section 1 - Photographie 1 (Appareil / Coffret)', field: 'photoUrl', aliases: ['section1photographie1appareilcoffret', 'photographie1appareilcoffret', 'photographie1', 'photourl', 'preuvephotoglobaleurl', 'preuvephotoglobale', 'photoglobale', 'photo1', 'photographieglobaledudefibrillateur', 'photographieglobale'] },
-    { header: 'Section 1 - Photographie 2 (Environnement / Électrodes)', field: 'photo2Url', aliases: ['section1photographie2environnementelectrodes', 'photographie2environnementelectrodes', 'photographie2', 'photo2url', 'preuvephotoarriereetiquetteurl', 'preuvephotoarriere', 'photoarriere', 'photo2', 'photographiearriereetiquette', 'photographiearriere', 'photoarriereurl'] },
+    { header: 'Section 1 - Photographie 1 (Appareil / Coffret)', field: 'photoUrl', aliases: ['section1photographie1appareilcoffret', 'photographie1appareilcoffret', 'photographie1', 'photourl', 'preuvephotoglobaleurl', 'preuvephotoglobale', 'photoglobale', 'photo1', 'section1photographieglobaledudefibrillateur', 'photographieglobaledudefibrillateur', 'section1photographieglobaledudefibrilalteur', 'photographieglobaledudefibrilalteur', 'section1photographieglobaledudefibrilalteururlpartagegoogledriveupload', 'photographieglobaledudefibrilalteururlpartagegoogledriveupload', 'section1photographieglobaledudefibrillateururlpartagegoogledriveupload', 'photographieglobaledudefibrillateururlpartagegoogledriveupload', 'photographieglobale'] },
+    { header: 'Section 1 - Photographie 2 (Environnement / Électrodes)', field: 'photo2Url', aliases: ['section1photographie2environnementelectrodes', 'photographie2environnementelectrodes', 'photographie2', 'photo2url', 'preuvephotoarriereetiquetteurl', 'preuvephotoarriere', 'photoarriere', 'photo2', 'section1photographiearriereetiquette', 'photographiearriereetiquette', 'section1photographiearriereetiquetteurlpartagegoogledriveupload', 'photographiearriereetiquetteurlpartagegoogledriveupload', 'photographiearriere', 'photoarriereurl'] },
     // Section 2 - Client
     { header: 'Section 2 - Client', field: 'clientName', aliases: ['section2client', 'client', 'clientname', 'entreprise', 'clientid'] },
-    { header: 'Section 2 - Contact sur site', field: 'nomPrenomSite', aliases: ['section2contactsursite', 'contactsursite', 'nomprenomsite'] },
+    { header: 'Section 2 - Contact sur site', field: 'nomPrenomSite', aliases: ['section2contactsursite', 'contactsursite', 'section2contact', 'contact', 'nomprenomsite'] },
     { header: 'Section 2 - Téléphone du contact', field: 'telephoneSite', aliases: ['section2telephoneducontact', 'telephoneducontact', 'telephonesite'] },
     { header: 'Section 2 - Email du contact', field: 'emailSite', aliases: ['section2emailducontact', 'emailducontact', 'emailsite'] },
-    { header: 'Section 2 - Contrat actif', field: 'contrat', aliases: ['section2contratactif', 'contratactif', 'contrat'], type: 'yesno' },
+    { header: 'Section 2 - Contrat actif', field: 'contrat', aliases: ['section2contratactif', 'contratactif', 'section2contrat', 'contrat'], type: 'yesno' },
     { header: 'Section 2 - Référence du contrat', field: 'referenceContrat', aliases: ['section2referenceducontrat', 'referenceducontrat', 'referencecontrat'] },
     { header: 'Section 2 - Catégorie de contrat', field: 'nomContrat', aliases: ['section2categoriedecontrat', 'categoriedecontrat', 'nomcontrat'] },
     { header: 'Section 2 - Émettre une facture brouillon', field: 'emettreFactureBrouillon', aliases: ['section2emettreunefacturebrouillon', 'emettreunefacturebrouillon', 'emettrefacturebrouillon'], type: 'yesno' },
-    { header: 'Section 2 - Service sélectionné (Facturation)', field: 'serviceEmettreId', aliases: ['section2serviceselectionnefacturation', 'serviceselectionnefacturation', 'selectiondunservice', 'serviceemettreid'] },
+    { header: 'Section 2 - Service sélectionné (Facturation)', field: 'serviceEmettreId', aliases: ['section2serviceselectionnefacturation', 'serviceselectionnefacturation', 'section2selectiondunservice', 'selectiondunservice', 'serviceemettreid'] },
     // Section 3 - Coffret
-    { header: 'Section 3 - Modèle de boîtier / coffret', field: 'modeleCoffret', aliases: ['section3modeledeboitiercoffret', 'modeledeboitiercoffret', 'modeledeboitier', 'modelecoffret', 'modelecoffretid'] },
+    { header: 'Section 3 - Modèle de boîtier / coffret', field: 'modeleCoffret', aliases: ['section3modeledeboitiercoffret', 'modeledeboitiercoffret', 'section3modeledeboitier', 'modeledeboitier', 'section3modeleduboitier', 'modeleduboitier', 'modelecoffret', 'modelecoffretid'] },
     { header: 'Section 3 - Lot de boîtier', field: 'numeroLotCoffret', aliases: ['section3lotdeboitier', 'lotdeboitier', 'numerolotcoffret'] },
+    { header: 'Section 3 - Coffret remplacé.', field: 'coffretRemplace', aliases: ['section3coffretremplace', 'coffretremplace'], type: 'yesno' },
+    { header: 'Section 3 - Sélection coffret remplacé.', field: 'selectionCoffretRemplace', aliases: ['section3selectioncoffretremplace', 'selectioncoffretremplace'] },
+    { header: 'Section 3 - Origine coffret installé.', field: 'origineCoffretInstalle', aliases: ['section3originecoffretinstalle', 'originecoffretinstalle'] },
     { header: "Section 3 - Équipé d'une alarme", field: 'equipeAlarme', aliases: ['section3equipedunealarme', 'equipedunealarme', 'equipealarme'], type: 'yesno' },
-    { header: 'Section 3 - Alarme fonctionnelle', field: 'alarme', aliases: ['section3alarmefonctionnelle', 'alarmefonctionnelle', 'alarme', 'alarmecoffret'], type: 'yesno' },
+    { header: 'Section 3 - Alarme fonctionnelle', field: 'alarme', aliases: ['section3alarmefonctionnelle', 'alarmefonctionnelle', 'section3alarmefonctionelle', 'alarmefonctionelle', 'alarme', 'alarmecoffret'], type: 'yesno' },
     { header: "Section 3 - Dispositif d'armoire connectée", field: 'armoireConnectee', aliases: ['section3dispositifdarmoireconnectee', 'dispositifdarmoireconnectee', 'armoireconnectee'], type: 'yesno' },
     { header: 'Section 3 - Dispositif handicap', field: 'dispositifHandicap', aliases: ['section3dispositifhandicap', 'dispositifhandicap'], type: 'yesno' },
     { header: 'Section 3 - Signalétique conforme', field: 'signaletiqueConforme', aliases: ['section3signaletiqueconforme', 'signaletiqueconforme', 'signaletiqueboitier'], type: 'yesno' },
     { header: 'Section 3 - Installé en extérieur', field: 'installeExterieur', aliases: ['section3installeenexterieur', 'installeenexterieur', 'installeexterieur'], type: 'yesno' },
     { header: 'Section 3 - Commentaire concernant le boîtier', field: 'commentaireCoffret', aliases: ['section3commentaireconcernantleboitier', 'commentaireconcernantleboitier', 'commentairecoffret'] },
     // Section 4 - Accès
-    { header: 'Section 4 - Voie (Numéro et rue)', field: 'numVoie', aliases: ['section4voienumeroetrue', 'voienumeroetrue', 'voie', 'numvoie', 'numeroetvoie'] },
+    { header: 'Section 4 - Voie (Numéro et rue)', field: 'numVoie', aliases: ['section4voienumeroetrue', 'voienumeroetrue', 'section4voie', 'voie', 'numvoie', 'numeroetvoie'] },
     { header: 'Section 4 - Ville', field: 'ville', aliases: ['section4ville', 'ville'] },
     { header: 'Section 4 - Code postal', field: 'cp', aliases: ['section4codepostal', 'codepostal', 'cp'] },
     { header: 'Section 4 - Région', field: 'region', aliases: ['section4region', 'region'] },
     { header: 'Section 4 - Pays', field: 'pays', aliases: ['section4pays', 'pays'] },
     { header: 'Section 4 - Latitude GPS', field: 'latitude', aliases: ['section4latitudegps', 'latitudegps', 'latitude'] },
     { header: 'Section 4 - Longitude GPS', field: 'longitude', aliases: ['section4longitudegps', 'longitudegps', 'longitude'] },
+    { header: 'Section 4 - Accès 24h/24 et 7j/7.', field: 'acces247', aliases: ['section4acces24h24et7j7', 'acces24h24et7j7', 'acces247'], type: 'yesno' },
+    { header: 'Section 4 - Plage horaire en semaine.', field: 'accesSemaine', aliases: ['section4plagehoraireensemiane', 'section4plagehoraireensemaine', 'plagehoraireensemaine', 'accessemaine'] },
+    { header: 'Section 4 - Plage horaire le weekend.', field: 'accesWeekend', aliases: ['section4plagehoraireleweekend', 'plagehoraireleweekend', 'accesweekend'] },
+    { header: 'Section 4 - Commentaire concernant l’adresse.', field: 'commentaireAdresse', aliases: ['section4commentaireconcernantladresse', 'commentaireconcernantladresse', 'commentaireadresse'] },
     // Section 5 - Dates
+    { header: 'Section 5 - Dernière maintenance.', field: 'derniereMaintenance', aliases: ['section5dernieremaintenance', 'dernieremaintenance'] },
     { header: 'Section 5 - Date de fabrication', field: '_s5_fabrication', aliases: ['section5datedefabrication', 'section5fabrication', 'fabrication'] },
     { header: 'Section 5 - Date de mise en service', field: '_s5_miseEnService', aliases: ['section5datedemiseenservice', 'section5miseenservice', 'miseenservice'] },
     { header: 'Section 5 - Date de fin de garantie', field: 'finGarantie', aliases: ['section5datedefindegarantie', 'section5findegarantie', 'findegarantie', 'fingarantie'] },
+    { header: 'Section 5 - Sortie fabricant.', field: 'sortieFabricant', aliases: ['section5sortiefabricant', 'sortiefabricant'] },
+    { header: 'Section 5 - Préconisation de remplacement.', field: 'preconisationRemplacement', aliases: ['section5preconisationderemplacement', 'preconisationderemplacement', 'section5preconisationderemplacementdudae', 'preconisationderemplacementdudae', 'preconisationremplacement'], type: 'bool' },
+    { header: 'Section 5 - Recommandation ou observation pour la préconisation de remplacement.', field: 'recommandationPreconisationRemplacement', aliases: ['section5recommandationouobservationpourlapreconisationderemplacement', 'recommandationouobservationpourlapreconisationderemplacement', 'section5recommandationpreconisationderemplacement', 'recommandationpreconisationderemplacement', 'recommandationpreconisationremplacement'] },
     // Section 6 - Électrode Adulte (A)
-    { header: 'Section 6 - Modèle sélectionné', field: '_s6_modeleElectrodeA', aliases: ['section6modeleselectionne', 'modeleelectrodea', 'modeleelectrodeaid'] },
-    { header: 'Section 6 - Numéro de lot', field: '_s6_lotElectrodeA', aliases: ['section6numerodelot', 'lotelectrodea'] },
-    { header: 'Section 6 - Date de fabrication', field: '_s6_fabricationElectrodeA', aliases: ['section6datedefabrication', 'fabricationelectrodea'] },
-    { header: 'Section 6 - Date de péremption', field: '_s6_peremptionElectrodeA', aliases: ['section6datedeperemption', 'peremptionelectrodea'] },
-    { header: "Section 6 - Remplacée lors de l'intervention", field: '_s6_remplaceElectrodeA', aliases: ['section6remplaceelorsdelintervention', 'remplaceelectrodea'], type: 'yesno' },
-    { header: "Section 6 - Déstocké depuis l'emplacement", field: '_s6_destockElectrodeA', aliases: ['section6destockedepuislemplacement', 'destockelectrodea'] },
+    { header: 'Section 6 - Modèle sélectionné', field: '_s6_modeleElectrodeA', aliases: ['section6modeleselectionne', 'section6modeledelectrodea', 'modeledelectrodea', 'modeleelectrodea', 'modeleelectrodeaid'] },
+    { header: 'Section 6 - Numéro de lot', field: '_s6_lotElectrodeA', aliases: ['section6numerodelot', 'section6lota', 'lota', 'lotelectrodea'] },
+    { header: 'Section 6 - Date de fabrication', field: '_s6_fabricationElectrodeA', aliases: ['section6datedefabrication', 'section6insertion', 'insertionelectrodea', 'fabricationelectrodea'] },
+    { header: 'Section 6 - Date de péremption', field: '_s6_peremptionElectrodeA', aliases: ['section6datedeperemption', 'section6peremption', 'peremptionelectrodea'] },
+    { header: "Section 6 - Remplacée lors de l'intervention", field: '_s6_remplaceElectrodeA', aliases: ['section6remplaceelorsdelintervention', 'section6electrodearemplacee', 'electrodearemplacee', 'remplaceelectrodea'], type: 'yesno' },
+    { header: 'Section 6 - Électrode A conforme et fonctionnelle.', field: 'electrodeAConformeSante', aliases: ['section6electrodeaconformeetfonctionnelle', 'electrodeaconformeetfonctionnelle', 'electrodeaconformesante'], type: 'yesno' },
+    { header: "Section 6 - Déstocké depuis l'emplacement", field: '_s6_destockElectrodeA', aliases: ['section6destockedepuislemplacement', 'section6selectiondelelectroderemplacee', 'selectionelectrodearemplacee', 'destockelectrodea'] },
+    { header: 'Section 6 - Origine de l’électrode A installée.', field: 'origineElectrodeAInstallee', aliases: ['section6originedelelectrodeainstallee', 'originedelelectrodeainstallee', 'origineelectrodeainstallee'] },
     // Section 6 (Secours) - Électrode Adulte de secours
-    { header: 'Section 6 (Secours) - Modèle sélectionné', field: '_s6s_modeleElectrodeSecoursA', aliases: ['section6secoursmodeleselectionne', 'modeleelectrodesecoursa', 'modeleelectrodesecoursaid'] },
-    { header: 'Section 6 (Secours) - Numéro de lot', field: '_s6s_lotElectrodeSecoursA', aliases: ['section6secoursnumerodelot', 'lotelectrodesecoursa'] },
-    { header: 'Section 6 (Secours) - Date de péremption', field: '_s6s_peremptionElectrodeSecoursA', aliases: ['section6secoursdatedeperemption', 'peremptionelectrodesecoursa'] },
-    { header: "Section 6 (Secours) - Remplacée lors de l'intervention", field: '_s6s_remplaceElectrodeSecoursA', aliases: ['section6secoursremplaceelorsdelintervention', 'remplaceelectrodesecoursa'], type: 'yesno' },
-    { header: "Section 6 (Secours) - Déstocké depuis l'emplacement", field: '_s6s_destockElectrodeSecoursA', aliases: ['section6secoursdestockedepuislemplacement', 'destockelectrodesecoursa'] },
+    { header: 'Section 6 (Secours) - Modèle sélectionné', field: '_s6s_modeleElectrodeSecoursA', aliases: ['section6secoursmodeleselectionne', 'section6modeledelectrodedesecours', 'modeleelectrodesecoursa', 'modeleelectrodesecoursaid', 'modeleelectrodeasecoursid'] },
+    { header: 'Section 6 (Secours) - Numéro de lot', field: '_s6s_lotElectrodeSecoursA', aliases: ['section6secoursnumerodelot', 'section6lotdelelectrodedesecours', 'lotelectrodesecoursa', 'lotelectrodeasecours'] },
+    { header: 'Section 6 (Secours) - Date de péremption', field: '_s6s_peremptionElectrodeSecoursA', aliases: ['section6secoursdatedeperemption', 'section6peremptiondelelectrodedesecours', 'peremptionelectrodesecoursa', 'peremptionsecourselectrodea'] },
+    { header: "Section 6 (Secours) - Remplacée lors de l'intervention", field: '_s6s_remplaceElectrodeSecoursA', aliases: ['section6secoursremplaceelorsdelintervention', 'section6electrodeasecoursremplacee', 'electrodeasecoursremplacee', 'remplaceelectrodesecoursa'], type: 'yesno' },
+    { header: "Section 6 (Secours) - Déstocké depuis l'emplacement", field: '_s6s_destockElectrodeSecoursA', aliases: ['section6secoursdestockedepuislemplacement', 'section6selectiondelelectrodesecoursaremplacee', 'selectiondelelectrodesecoursaremplacee', 'selectionelectrodeasecoursremplacee', 'destockelectrodesecoursa'] },
+    { header: 'Section 6 - Origine de l’électrode secours A installée.', field: 'origineElectrodeSecoursAInstallee', aliases: ['section6originedelelectrodesecoursainstallee', 'originedelelectrodesecoursainstallee', 'origineelectrodesecoursainstallee'] },
+    { header: 'Section 6 - PadPak.', field: 'hasPadpakA', aliases: ['section6padpak', 'haspadpaka'], type: 'yesno' },
+    { header: 'Section 6 - Lot PadPak A.', field: 'lotPadpakA', aliases: ['section6lotpadpaka', 'lotpadpaka'] },
+    { header: 'Section 6 - Péremption PadPak A.', field: 'peremptionPadpakA', aliases: ['section6peremptionpadpaka', 'peremptionpadpaka'] },
+    { header: 'Section 6 - Commentaire concernant l’électrode A.', field: 'commentaireElectrodeA', aliases: ['section6commentaireconcernantlelectrodea', 'commentaireconcernantlelectrodea', 'commentaireelectrodea'] },
     // Section 7 - Électrode Pédiatrique (P)
-    { header: 'Section 7 - Modèle sélectionné', field: '_s7_modeleElectrodeP', aliases: ['section7modeleselectionne', 'modeleelectrodep', 'modeleelectrodepid'] },
-    { header: 'Section 7 - Numéro de lot', field: '_s7_lotElectrodeP', aliases: ['section7numerodelot', 'lotelectrodep'] },
-    { header: 'Section 7 - Date de fabrication', field: '_s7_fabricationElectrodeP', aliases: ['section7datedefabrication', 'fabricationelectrodep'] },
-    { header: 'Section 7 - Date de péremption', field: '_s7_peremptionElectrodeP', aliases: ['section7datedeperemption', 'peremptionelectrodep'] },
-    { header: "Section 7 - Remplacée lors de l'intervention", field: '_s7_remplaceElectrodeP', aliases: ['section7remplaceelorsdelintervention', 'remplaceelectrodep'], type: 'yesno' },
-    { header: "Section 7 - Déstocké depuis l'emplacement", field: '_s7_destockElectrodeP', aliases: ['section7destockedepuislemplacement', 'destockelectrodep'] },
+    { header: 'Section 7 - Modèle sélectionné', field: '_s7_modeleElectrodeP', aliases: ['section7modeleselectionne', 'section7modeledelectrodep', 'modeledelectrodep', 'modeleelectrodep', 'modeleelectrodepid'] },
+    { header: 'Section 7 - Numéro de lot', field: '_s7_lotElectrodeP', aliases: ['section7numerodelot', 'section7lotp', 'lotp', 'lotelectrodep'] },
+    { header: 'Section 7 - Date de fabrication', field: '_s7_fabricationElectrodeP', aliases: ['section7datedefabrication', 'section7insertion', 'insertionelectrodep', 'fabricationelectrodep'] },
+    { header: 'Section 7 - Date de péremption', field: '_s7_peremptionElectrodeP', aliases: ['section7datedeperemption', 'section7peremption', 'peremptionelectrodep'] },
+    { header: "Section 7 - Remplacée lors de l'intervention", field: '_s7_remplaceElectrodeP', aliases: ['section7remplaceelorsdelintervention', 'section7electrodepemplacee', 'section7electroderemplacee', 'section7electrodepremplacee', 'electrodepremplacee', 'remplaceelectrodep'], type: 'yesno' },
+    { header: 'Section 7 - Électrode P conforme et fonctionnelle.', field: 'electrodePConformeSante', aliases: ['section7electrodepconformeetfonctionnelle', 'electrodepconformeetfonctionnelle', 'electrodepconformesante'], type: 'yesno' },
+    { header: "Section 7 - Déstocké depuis l'emplacement", field: '_s7_destockElectrodeP', aliases: ['section7destockedepuislemplacement', 'section7selectiondelelectroderemplacee', 'selectionelectrodepremplacee', 'destockelectrodep'] },
+    { header: 'Section 7 - Origine de l’électrode P installée.', field: 'origineElectrodePInstallee', aliases: ['section7originedelelectrodepinstallee', 'originedelelectrodepinstallee', 'origineelectrodepinstallee'] },
     // Section 7 (Secours) - Électrode Pédiatrique de secours
-    { header: 'Section 7 (Secours) - Modèle sélectionné', field: '_s7s_modeleElectrodeSecoursP', aliases: ['section7secoursmodeleselectionne', 'modeleelectrodesecoursp', 'modeleelectrodesecourspid'] },
-    { header: 'Section 7 (Secours) - Numéro de lot', field: '_s7s_lotElectrodeSecoursP', aliases: ['section7secoursnumerodelot', 'lotelectrodesecoursp'] },
-    { header: 'Section 7 (Secours) - Date de péremption', field: '_s7s_peremptionElectrodeSecoursP', aliases: ['section7secoursdatedeperemption', 'peremptionelectrodesecoursp'] },
-    { header: "Section 7 (Secours) - Remplacée lors de l'intervention", field: '_s7s_remplaceElectrodeSecoursP', aliases: ['section7secoursremplaceelorsdelintervention', 'remplaceelectrodesecoursp'], type: 'yesno' },
-    { header: "Section 7 (Secours) - Déstocké depuis l'emplacement", field: '_s7s_destockElectrodeSecoursP', aliases: ['section7secoursdestockedepuislemplacement', 'destockelectrodesecoursp'] },
+    { header: 'Section 7 (Secours) - Modèle sélectionné', field: '_s7s_modeleElectrodeSecoursP', aliases: ['section7secoursmodeleselectionne', 'section7modeledelectrodedesecours', 'modeleelectrodesecoursp', 'modeleelectrodesecourspid', 'modeleelectrodepsecoursid'] },
+    { header: 'Section 7 (Secours) - Numéro de lot', field: '_s7s_lotElectrodeSecoursP', aliases: ['section7secoursnumerodelot', 'section7lotdelelectrodedesecours', 'lotelectrodesecoursp', 'lotelectrodepsecours'] },
+    { header: 'Section 7 (Secours) - Date de péremption', field: '_s7s_peremptionElectrodeSecoursP', aliases: ['section7secoursdatedeperemption', 'section7peremptiondelelectrodedesecours', 'peremptionelectrodesecoursp', 'peremptionsecourselectrodep'] },
+    { header: "Section 7 (Secours) - Remplacée lors de l'intervention", field: '_s7s_remplaceElectrodeSecoursP', aliases: ['section7secoursremplaceelorsdelintervention', 'section7electrodepsecoursremplacee', 'electrodepsecoursremplacee', 'remplaceelectrodesecoursp'], type: 'yesno' },
+    { header: "Section 7 (Secours) - Déstocké depuis l'emplacement", field: '_s7s_destockElectrodeSecoursP', aliases: ['section7secoursdestockedepuislemplacement', 'section7selectiondelelectrodesecourspremplacee', 'selectiondelelectrodesecourspremplacee', 'selectionelectrodepsecoursremplacee', 'destockelectrodesecoursp'] },
+    { header: 'Section 7 - Origine de l’électrode secours P installée.', field: 'origineElectrodeSecoursPInstallee', aliases: ['section7originedelelectrodesecourspinstallee', 'originedelelectrodesecourspinstallee', 'origineelectrodesecourspinstallee'] },
+    { header: 'Section 7 - PadPak.', field: 'hasPadpakP', aliases: ['section7padpak', 'haspadpakp'], type: 'yesno' },
+    { header: 'Section 7 - Lot PadPak P.', field: 'lotPadpakP', aliases: ['section7lotpadpakp', 'lotpadpakp'] },
+    { header: 'Section 7 - Péremption PadPak P.', field: 'peremptionPadpakP', aliases: ['section7peremptionpadpakp', 'peremptionpadpakp'] },
+    { header: 'Section 7 - Commentaire concernant l’électrode P.', field: 'commentaireElectrodeP', aliases: ['section7commentaireconcernantlelectrodep', 'commentaireconcernantlelectrodep', 'commentaireelectrodep'] },
     // Section 8 - Batterie (B)
-    { header: 'Section 8 - Modèle sélectionné', field: '_s8_modeleBatterie', aliases: ['section8modeleselectionne', 'modelebatterie', 'modelebatterieid'] },
-    { header: 'Section 8 - Numéro de lot', field: '_s8_lotBatterie', aliases: ['section8numerodelot', 'lotbatterie'] },
-    { header: 'Section 8 - Date de fabrication', field: '_s8_fabricationBatterie', aliases: ['section8datedefabrication', 'fabricationbatterie'] },
-    { header: 'Section 8 - Date de mise en service', field: '_s8_miseEnServiceBatterie', aliases: ['section8datedemiseenservice', 'miseenservicebatterie'] },
-    { header: 'Section 8 - Date de péremption', field: '_s8_peremptionBatterie', aliases: ['section8datedeperemption', 'peremptionbatterie'] },
-    { header: 'Section 8 - Pourcentage constaté (%)', field: 'pourcentageBatterie', aliases: ['section8pourcentageconstate', 'pourcentageconstate', 'pourcentagebatterie'] },
-    { header: "Section 8 - Remplacée lors de l'intervention", field: '_s8_remplaceBatterie', aliases: ['section8remplaceelorsdelintervention', 'remplacebatterie'], type: 'yesno' },
-    { header: "Section 8 - Déstocké depuis l'emplacement", field: '_s8_destockBatterie', aliases: ['section8destockedepuislemplacement', 'destockbatterie'] },
+    { header: 'Section 8 - Modèle sélectionné', field: '_s8_modeleBatterie', aliases: ['section8modeleselectionne', 'section8modeledebatterie', 'section8modeledelabatterie', 'modeledelabatterie', 'modeledebatterie', 'modelebatterie', 'modelebatterieid'] },
+    { header: 'Section 8 - Numéro de lot', field: '_s8_lotBatterie', aliases: ['section8numerodelot', 'section8lotb', 'lotb', 'lotbatterie'] },
+    { header: 'Section 8 - Date de fabrication', field: '_s8_fabricationBatterie', aliases: ['section8datedefabrication', 'section8fabrication', 'fabricationbatterie'] },
+    { header: 'Section 8 - Date de mise en service', field: '_s8_miseEnServiceBatterie', aliases: ['section8datedemiseenservice', 'section8insertion', 'insertionbatterie', 'miseenservicebatterie'] },
+    { header: 'Section 8 - Date de péremption', field: '_s8_peremptionBatterie', aliases: ['section8datedeperemption', 'section8peremption', 'peremptionbatterie'] },
+    { header: 'Section 8 - Pourcentage constaté (%)', field: 'pourcentageBatterie', aliases: ['section8pourcentageconstate', 'section8pourcentagedecharge', 'pourcentagedecharge', 'pourcentageconstate', 'pourcentagebatterie'] },
+    { header: "Section 8 - Remplacée lors de l'intervention", field: '_s8_remplaceBatterie', aliases: ['section8remplaceelorsdelintervention', 'section8batterieremplacee', 'batterieremplacee', 'remplacebatterie'], type: 'yesno' },
+    { header: 'Section 8 - Batterie conforme et fonctionnelle.', field: 'batterieConformeSante', aliases: ['section8batterieconformeetfonctionnelle', 'batterieconformeetfonctionnelle', 'section8batterieconformeetfonctionelle', 'batterieconformeetfonctionelle', 'batterieconformesante'], type: 'yesno' },
+    { header: "Section 8 - Déstocké depuis l'emplacement", field: '_s8_destockBatterie', aliases: ['section8destockedepuislemplacement', 'section8selectiondelabatterieremplacee', 'section8selectiondelabatterie', 'selectiondelabatterieremplacee', 'selectiondelabatterie', 'selectionbatterieremplacee', 'destockbatterie'] },
+    { header: 'Section 8 - Origine de la batterie installée.', field: 'origineBatterieInstallee', aliases: ['section8originedelabatterieinstallee', 'originedelabatterieinstallee', 'originebatterieinstallee'] },
+    { header: 'Section 8 - Pourcentage de charge nouvelle batterie.', field: 'pourcentageChargeNouvelleBatterie', aliases: ['section8pourcentagedechargenouvellebatterie', 'pourcentagedechargenouvellebatterie', 'pourcentagechargenouvellebatterie'] },
+    { header: 'Section 8 - Commentaire concernant la batterie.', field: 'commentaireBatterie', aliases: ['section8commentaireconcernantlabatterie', 'commentaireconcernantlabatterie', 'commentairebatterie'] },
     // Section 9 - Pile (B2)
     { header: 'Section 9 - Modèle sélectionné', field: '_s9_modelePile', aliases: ['section9modeleselectionne', 'modelepile', 'modelepileid'] },
     { header: 'Section 9 - Numéro de lot', field: '_s9_lotPile', aliases: ['section9numerodelot', 'lotpile'] },
@@ -1992,34 +2089,53 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Section 9 - Date de péremption', field: '_s9_peremptionPile', aliases: ['section9datedeperemption', 'peremptionpile'] },
     { header: "Section 9 - Remplacée lors de l'intervention", field: '_s9_remplacePile', aliases: ['section9remplaceelorsdelintervention', 'remplacepile'], type: 'yesno' },
     { header: "Section 9 - Déstocké depuis l'emplacement", field: '_s9_destockPile', aliases: ['section9destockedepuislemplacement', 'destockpile'] },
-    // Section 10 - Kit / Trousse de secours
+    // Section 9 / 10 - Kit / Trousse de secours
+    { header: 'Section 9 - Trousse de secours présente.', field: 'kitTrousseSecoursPresent', aliases: ['section9troussedesecourspresente', 'section10troussedesecourspresente', 'troussedesecourspresente', 'kittroussesecourspresent'], type: 'yesno' },
     { header: 'Section 10 - Modèle sélectionné', field: '_s10_modeleKit', aliases: ['section10modeleselectionne', 'modelekit', 'modelekitid'] },
     { header: 'Section 10 - Numéro de lot', field: '_s10_lotKit', aliases: ['section10numerodelot', 'lotkit'] },
-    { header: 'Section 10 - Date de péremption', field: '_s10_peremptionKit', aliases: ['section10datedeperemption', 'peremptionkit'] },
-    { header: "Section 10 - Remplacé lors de l'intervention", field: '_s10_remplaceKit', aliases: ['section10remplacelorsdelintervention', 'remplacekit'], type: 'yesno' },
-    { header: "Section 10 - Déstocké depuis l'emplacement", field: '_s10_destockKit', aliases: ['section10destockedepuislemplacement', 'destockkit'] },
-    { header: 'Section 10 - Paire de ciseaux', field: 'kitCiseaux', aliases: ['section10pairedeciseaux', 'pairedeciseaux', 'kitciseaux'], type: 'yesno' },
-    { header: 'Section 10 - Compresses stériles', field: 'kitCompresses', aliases: ['section10compressessteriles', 'compressessteriles', 'kitcompresses'], type: 'yesno' },
-    { header: 'Section 10 - Rasoir', field: 'kitRasoir', aliases: ['section10rasoir', 'rasoir', 'kitrasoir'], type: 'yesno' },
-    { header: 'Section 10 - Gants', field: 'kitGants', aliases: ['section10gants', 'gants', 'kitgants'], type: 'yesno' },
-    { header: 'Section 10 - Masque bouche-à-bouche', field: 'kitMasque', aliases: ['section10masqueboucheabouche', 'masqueboucheabouche', 'kitmasque'], type: 'yesno' },
+    { header: 'Section 10 - Date de péremption', field: '_s10_peremptionKit', aliases: ['section10datedeperemption', 'section9peremptiondelatrousse', 'section10peremptiondelatrousse', 'peremptiondelatrousse', 'peremptiontrousse', 'peremptionkit'] },
+    { header: "Section 10 - Remplacé lors de l'intervention", field: '_s10_remplaceKit', aliases: ['section10remplacelorsdelintervention', 'section9kitdesecoursremplaceouajoute', 'section10kitdesecoursremplaceouajoute', 'kitdesecoursremplaceouajoute', 'kitsecoursremplaceouajoute', 'remplacekit'], type: 'yesno' },
+    { header: "Section 10 - Déstocké depuis l'emplacement", field: '_s10_destockKit', aliases: ['section10destockedepuislemplacement', 'section9selectiondunkitdesecours', 'section10selectiondunkitdesecours', 'selectiondunkitdesecours', 'selectionkitsecoursremplace', 'destockkit'] },
+    { header: 'Section 9 - Origine du kit de secours installé.', field: 'origineKitSecoursInstalle', aliases: ['section9originedukitdesecoursinstalle', 'section10originedukitdesecoursinstalle', 'originedukitdesecoursinstalle', 'originekitsecoursinstalle'] },
+    { header: 'Section 10 - Paire de ciseaux', field: 'kitCiseaux', aliases: ['section10pairedeciseaux', 'section9ciseauxpresents', 'section10ciseauxpresents', 'ciseauxpresents', 'pairedeciseaux', 'kitciseaux', 'kitciseauxpresents'], type: 'yesno' },
+    { header: 'Section 10 - Compresses stériles', field: 'kitCompresses', aliases: ['section10compressessteriles', 'section9serviettespresentes', 'section10serviettespresentes', 'serviettespresentes', 'compressessteriles', 'kitcompresses', 'kitserviettespresentes'], type: 'yesno' },
+    { header: 'Section 9 - Péremption des serviettes.', field: 'kitPeremptionServiettes', aliases: ['section9peremptiondesserviettes', 'section10peremptiondesserviettes', 'peremptiondesserviettes', 'kitperemptionserviettes'] },
+    { header: 'Section 10 - Rasoir', field: 'kitRasoir', aliases: ['section10rasoir', 'section9rasoirpresent', 'section10rasoirpresent', 'rasoirpresent', 'rasoir', 'kitrasoir', 'kitrasoirpresent'], type: 'yesno' },
+    { header: 'Section 10 - Gants', field: 'kitGants', aliases: ['section10gants', 'section9gantspresents', 'section10gantspresents', 'section10pairedegantspresents', 'section9pairedegantspresents', 'pairedegantspresents', 'gantspresents', 'gants', 'kitgants', 'kitgantspresents'], type: 'yesno' },
+    { header: 'Section 10 - Masque bouche-à-bouche', field: 'kitMasque', aliases: ['section10masqueboucheabouche', 'section9masquepresent', 'section10masquepresent', 'masquepresent', 'masqueboucheabouche', 'kitmasque', 'kitmasquepresent'], type: 'yesno' },
+    { header: 'Section 9 - Péremption du masque.', field: 'kitPeremptionMasque', aliases: ['section9peremptiondumasque', 'section10peremptiondumasque', 'peremptiondumasque', 'kitperemptionmasque'] },
+    // Section 10 / 9 - Vérifications techniques
+    { header: 'Section 10 - Conforme à mon arrivée.', field: 'techConformeArrivee', aliases: ['section10conformeamonarrivee', 'section9conformeamonarrivee', 'conformeamonarrivee', 'conformearrivee', 'techconformearrivee'], type: 'yesno' },
+    { header: 'Section 10 - Commentaire sur l’état à mon arrivée.', field: 'techCommentaireArrivee', aliases: ['section10commentairesurletatamonarrivee', 'section9commentairesurletatamonarrivee', 'commentairesurletatamonarrivee', 'commentairearrivee', 'techcommentairearrivee'] },
+    { header: 'Section 10 - Nettoyage.', field: 'techNettoyage', aliases: ['section10nettoyage', 'section9nettoyage', 'nettoyage', 'technettoyage'], type: 'yesno' },
+    { header: 'Section 10 - Voyant conforme.', field: 'techVoyantConforme', aliases: ['section10voyantconforme', 'section9voyantconforme', 'voyantconforme', 'techvoyantconforme'], type: 'yesno' },
+    { header: 'Section 10 - Équipé d’un message numérique.', field: 'techEquipeMessageNumerique', aliases: ['section10equipedunmessagenumerique', 'section9equipedunmessagenumerique', 'equipedunmessagenumerique', 'techequipemessagenumerique'], type: 'yesno' },
+    { header: 'Section 10 - Message numérique conforme.', field: 'techMessageNumeroConforme', aliases: ['section10messagenumeriqueconforme', 'section9messagenumeriqueconforme', 'messagenumeriqueconforme', 'techmessagenumeroconforme'], type: 'yesno' },
+    { header: 'Section 10 - Guides vocaux conformes.', field: 'techGuidesVocauxConformes', aliases: ['section10guidesvocauxconformes', 'section9guidesvocauxconformes', 'guidesvocauxconformes', 'techguidesvocauxconformes'], type: 'yesno' },
+    { header: 'Section 10 - Branchement conforme des électrodes.', field: 'techBranchementElectrodesConforme', aliases: ['section10branchementconformedeselectrodes', 'section9branchementconformedeselectrodes', 'branchementconformedeselectrodes', 'techbranchementelectrodesconforme'], type: 'yesno' },
     // Section 11 - Vérifications, Diagnostic et Clôture
     { header: 'Section 11 - Tests et contrôles fonctionnels conformes', field: 'verificationsConformes', aliases: ['section11testsetcontrolesfonctionnelsconformes', 'testsetcontrolesfonctionnelsconformes', 'verificationsconformes'], type: 'yesno' },
+    { header: 'Section 11 - Fichier de données récupéré.', field: 'fichierDonneesRecupere', aliases: ['section11fichierdedonneesrecupere', 'fichierdedonneesrecupere', 'fichierdonneesrecupere'], type: 'yesno' },
+    { header: 'Section 11 - Je confirme que mes photos prises sont valides.', field: 'mesPhotosValides', aliases: ['section11jeconfirmequemesphotosprisessontvalides', 'jeconfirmequemesphotosprisessontvalides', 'mesphotosvalides'], type: 'bool' },
     { header: 'Section 11 - Demande de devis', field: 'demandeDevis', aliases: ['section11demandededevis', 'demandededevis', 'demandedevis'], type: 'yesno' },
-    { header: 'Section 11 - Motif de la demande de devis', field: 'motifDemandeDevis', aliases: ['section11motifdelademandededevis', 'motifdelademandededevis', 'motifdemandedevis'] },
-    { header: "Section 11 - Description pour l'élaboration du devis", field: 'descriptionDemandeDevis', aliases: ['section11descriptionpourlelaborationdudevis', 'descriptionpourlelaborationdudevis', 'descriptiondemandedevis'] },
-    { header: 'Section 11 - Pièce jointe (Devis)', field: 'pieceJointeDevisName', aliases: ['section11piecejointedevis', 'piecejointedevis', 'piecejointedevisname', 'piecejointedevisfichier', 'fichierjoint', 'piecesjointes1a3fichiers', 'piecesjointes', 'attachments', 'urlpiecesjointes'] },
+    { header: 'Section 11 - Demande de devis (Priorité)', field: 'devisPriorite', aliases: ['section11demandededevispriorite', 'demandededevispriorite', 'devispriorite'] },
+    { header: 'Section 11 - Motif de la demande de devis', field: 'motifDemandeDevis', aliases: ['section11motifdelademandededevis', 'motifdelademandededevis', 'motifdemandedevis', 'section11demandededevisarticlesselectionnes', 'demandededevisarticlesselectionnes', 'section11demandededevisselectiondudesproduitsservices', 'demandededevisselectiondudesproduitsservices', 'selectiondudesproduitsservices', 'devisarticlesselectionnes'] },
+    { header: "Section 11 - Description pour l'élaboration du devis", field: 'descriptionDemandeDevis', aliases: ['section11descriptionpourlelaborationdudevis', 'descriptionpourlelaborationdudevis', 'descriptiondemandedevis', 'section11demandededevisautresinformations', 'demandededevisautresinformations', 'devisautreinfo'] },
+    { header: 'Section 11 - Pièce jointe (Devis)', field: 'pieceJointeDevisName', aliases: ['section11piecejointedevis', 'piecejointedevis', 'piecejointedevisname', 'piecejointedevisfichier', 'fichierjoint', 'section11piecesjointes1a3fichiers', 'piecesjointes1a3fichiers', 'piecesjointes', 'attachments', 'urlpiecesjointes'] },
+    { header: 'Section 11 - Pièce jointe 1 (URL Partagé Google Drive Upload)', field: 'pieceJointe1Url', aliases: ['section11piecejointe1urlpartagegoogledriveupload', 'piecejointe1urlpartagegoogledriveupload', 'section11piecejointe1', 'piecejointe1', 'piecejointe1url'] },
+    { header: 'Section 11 - Pièce jointe 2 (URL Partagé Google Drive Upload)', field: 'pieceJointe2Url', aliases: ['section11piecejointe2urlpartagegoogledriveupload', 'piecejointe2urlpartagegoogledriveupload', 'section11piecejointe2', 'piecejointe2', 'piecejointe2url'] },
+    { header: 'Section 11 - Pièce jointe 3 (URL Partagé Google Drive Upload)', field: 'pieceJointe3Url', aliases: ['section11piecejointe3urlpartagegoogledriveupload', 'piecejointe3urlpartagegoogledriveupload', 'section11piecejointe3', 'piecejointe3', 'piecejointe3url'] },
     { header: "Section 11 - Défibrillateur conforme et prêt à l'usage", field: 'conforme', aliases: ['section11defibrillateurconformeetpretalusage', 'defibrillateurconformeetpretalusage', 'conforme', 'isconforme'], type: 'yesno' },
-    { header: 'Section 11 - Commentaire de diagnostic et de clôture', field: 'diagnosticCommentaire', aliases: ['section11commentairedediagnosticetdecloture', 'commentairedediagnosticetdecloture', 'diagnosticcommentaire', 'remarques'] },
+    { header: 'Section 11 - Commentaire de diagnostic et de clôture', field: 'diagnosticCommentaire', aliases: ['section11commentairedediagnosticetdecloture', 'commentairedediagnosticetdecloture', 'section11commentaire', 'diagnosticcommentaire', 'remarques'] },
     { header: 'Section 11 - Signature du technicien', field: 'techSignature', aliases: ['section11signaturedutechnicien', 'signaturedutechnicien', 'techsignature'] },
-    { header: 'Section 11 - Horodatage de clôture', field: 'endTimeStamp', aliases: ['section11horodatagedecloture', 'horodatagedecloture', 'endtimestamp'] },
-    { header: 'Section 11 - Code PIN client (Validation sur site)', field: 'clientPinCode', aliases: ['section11codepinclientvalidationsursite', 'codepinclientvalidationsursite', 'codepinclient', 'clientpincode'] },
+    { header: 'Section 11 - Horodatage de clôture', field: 'endTimeStamp', aliases: ['section11horodatagedecloture', 'horodatagedecloture', 'section11horodatagedefin', 'horodatagedefin', 'endtimestamp'] },
+    { header: 'Section 11 - Code PIN client (Validation sur site)', field: 'clientPinCode', aliases: ['section11codepinclientvalidationsursite', 'codepinclientvalidationsursite', 'section11codepinsignatureclient', 'codepinsignatureclient', 'section11signatureclientavecpin', 'signatureclientavecpin', 'codepinclient', 'clientpincode'] },
     // Section 12 - Pièces jointes, Étiquettes & Modération
-    { header: 'Section 12 - Photographie 3 / Pièce jointe interne', field: 'photo3Url', aliases: ['section12photographie3piecejointeinterne', 'photographie3piecejointeinterne', 'photographie3', 'photo3url', 'preuvephotoresultattesturl', 'preuvephotoresultattest', 'photoresultattest', 'photo3', 'resultatdutest', 'photoresultattesturl', 'phototest'] },
-    { header: 'Section 12 - Étiquette de maintenance conforme et complétée', field: 'etiquetteConforme', aliases: ['section12etiquettedemaintenanceconformeetcompletee', 'etiquettedemaintenanceconformeetcompletee', 'etiquetteconforme'], type: 'yesno' },
-    { header: 'Section 12 - Scellé de sécurité posé', field: 'scellePose', aliases: ['section12scelledesecuritepose', 'scelledesecuritepose', 'scellepose'], type: 'yesno' },
-    { header: 'Section 12 - Autocollant posé ou existant conforme', field: 'autocollantConforme', aliases: ['section12autocollantposeouexistantconforme', 'autocollantposeouexistantconforme', 'autocollantconforme'], type: 'yesno' },
-    { header: 'Section 12 - Commentaire interne', field: 'internalComment', aliases: ['section12commentaireinterne', 'commentaireinterne', 'internalcomment'] },
+    { header: 'Section 12 - Photographie 3 / Pièce jointe interne', field: 'photo3Url', aliases: ['section12photographie3piecejointeinterne', 'photographie3piecejointeinterne', 'photographie3', 'photo3url', 'preuvephotoresultattesturl', 'preuvephotoresultattest', 'photoresultattest', 'photo3', 'section1resultatdutest', 'resultatdutest', 'section1resultatdutesturlpartagegoogledriveupload', 'resultatdutesturlpartagegoogledriveupload', 'photoresultattesturl', 'phototest'] },
+    { header: 'Section 12 - Étiquette de maintenance conforme et complétée', field: 'etiquetteConforme', aliases: ['section12etiquettedemaintenanceconformeetcompletee', 'etiquettedemaintenanceconformeetcompletee', 'section11etiquetteobligatoireconformehorsserviceoumaintenance', 'etiquetteobligatoireconformehorsserviceoumaintenance', 'etiquetteobligatoireconforme', 'etiquetteconforme'], type: 'yesno' },
+    { header: 'Section 12 - Scellé de sécurité posé', field: 'scellePose', aliases: ['section12scelledesecuritepose', 'scelledesecuritepose', 'section11scelleconforme', 'scelleconforme', 'scellepose'], type: 'yesno' },
+    { header: 'Section 12 - Autocollant posé ou existant conforme', field: 'autocollantConforme', aliases: ['section12autocollantposeouexistantconforme', 'autocollantposeouexistantconforme', 'section11stickerdelentrepriseapplique', 'stickerdelentrepriseapplique', 'stickerentrepriseapplique', 'autocollantconforme'], type: 'yesno' },
+    { header: 'Section 12 - Commentaire interne', field: 'internalComment', aliases: ['section12commentaireinterne', 'section11commentaireinterne', 'commentaireinterne', 'internalcomment'] },
     { header: 'Statut du rapport', field: 'status', aliases: ['statutdurapport', 'statutrapport', 'status', 'statut'] },
     { header: 'Drapeau ou indicateur', field: 'drapeaux', aliases: ['drapeauouindicateur', 'drapeaux', 'drapeau'] },
     { header: 'Situation', field: 'missionStatus', aliases: ['situation', 'missionstatus'] },
@@ -2701,6 +2817,30 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
         'instructions',
       ],
     },
+    {
+      header: 'Type d’usage de l’électrode.',
+      field: 'typeUsageElectrode',
+      aliases: [
+        'typedusagedelelectrode',
+        'typeusagedelelectrode',
+        'typeusageelectrode',
+        'usageelectrode',
+        'typedusageelectrode',
+        'typedusage',
+      ],
+    },
+    {
+      header: 'Type de défibrillateur.',
+      field: 'typeDefibrillateur',
+      aliases: [
+        'typedefibrillateur',
+        'typededefibrillateur',
+        'typedefib',
+        'typedae',
+        'dsaoudea',
+        'deaoudsa',
+      ],
+    },
   ],
 };
 GENERIC_CANONICAL_HEADERS.devisFactures = GENERIC_CANONICAL_HEADERS.commandes;
@@ -2719,7 +2859,8 @@ function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = 
       tabType === 'stocksGlobaux' ||
       tabType === 'stocks' ||
       tabType === 'stocksDistribues' ||
-      tabType === 'variables'
+      tabType === 'variables' ||
+      tabType === 'reglages'
     ) {
       if (tabType === 'stocksGlobaux' || tabType === 'stocks') {
         return canonical
@@ -2781,7 +2922,7 @@ function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType):
     defByField.set(d.field, d);
   }
 
-  const normFullHeaders = headers.map(normalizeHeaderKey);
+  const normFullHeaders = headers.map(normalizeHeaderKeyKeepSection);
   const normStrippedHeaders = headers.map(normalizeHeaderKeyStripSubSection);
   const usedCols = new Set<number>();
 
@@ -3121,9 +3262,10 @@ function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType):
   for (const def of defs) {
     if (Array.from(colToDef.values()).some(d => d.field === def.field)) continue;
     const allAliases = new Set([
+      normalizeHeaderKeyKeepSection(def.header),
       normalizeHeaderKey(def.header),
-      normalizeHeaderKey(def.field),
-      ...def.aliases.map(a => normalizeHeaderKey(a)),
+      normalizeHeaderKeyKeepSection(def.field),
+      ...def.aliases.map(a => normalizeHeaderKeyKeepSection(a)),
       ...def.aliases,
     ]);
     for (let i = 0; i < normFullHeaders.length; i++) {
@@ -3330,14 +3472,60 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     } else if (Array.isArray(merged.reasons) && !merged.reason) {
       merged.reason = merged.reasons.join(', ');
     }
-    if (typeof merged.requiredParts === 'string') {
-      merged.requiredParts = merged.requiredParts
-        .split(',')
-        .map((s: string) => s.trim())
-        .filter(Boolean);
-    } else if (!Array.isArray(merged.requiredParts)) {
-      merged.requiredParts = [];
-    }
+    const parseMissionPartsArray = (raw: any): string[] => {
+      if (Array.isArray(raw)) return raw.map((x: any) => String(x || '').trim()).filter(Boolean);
+      if (typeof raw !== 'string') return [];
+      const s = raw.trim();
+      if (!s) return [];
+      if (s.startsWith('[') && s.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(s);
+          if (Array.isArray(parsed)) return parsed.map((x: any) => String(x || '').trim()).filter(Boolean);
+        } catch (_) {}
+      }
+      if (s.includes(' | ')) {
+        return s.split(' | ').map(x => x.trim()).filter(Boolean);
+      }
+      const tokens = s.split(',').map(x => x.trim()).filter(Boolean);
+      const out: string[] = [];
+      let idx = 0;
+      while (idx < tokens.length) {
+        if (
+          idx + 3 < tokens.length &&
+          /^(\d{2,4}[-/]\d{1,2}[-/]\d{1,4}|-)$/.test(tokens[idx + 2]) &&
+          /^\d+$/.test(tokens[idx + 3])
+        ) {
+          out.push(`${tokens[idx]}, ${tokens[idx + 1]}, ${tokens[idx + 2]}, ${tokens[idx + 3]}`);
+          idx += 4;
+        } else {
+          out.push(tokens[idx]);
+          idx += 1;
+        }
+      }
+      return out;
+    };
+    merged.requiredParts = parseMissionPartsArray(merged.requiredParts);
+    merged.sentToClientParts = parseMissionPartsArray(merged.sentToClientParts);
+    merged.providedByClientParts = parseMissionPartsArray(merged.providedByClientParts);
+    merged.commentaireInterne = String(
+      merged.commentaireInterne ??
+        merged['Commentaire visible par le technicien.'] ??
+        merged['Commentaire visible par le technicien'] ??
+        merged['Commentaire interne.'] ??
+        merged['Commentaire interne'] ??
+        ''
+    ).trim();
+    const resolvedRejectionReason = String(
+      merged.rejectionReason ??
+        merged.raisonRejet ??
+        merged['Raison rejet.'] ??
+        merged['Raison rejet'] ??
+        merged['Raison de rejet.'] ??
+        merged['Raison de rejet'] ??
+        ''
+    ).trim();
+    merged.rejectionReason = resolvedRejectionReason;
+    merged.raisonRejet = resolvedRejectionReason;
     if (!merged.clientAddress && (merged.cp || merged.ville)) {
       merged.clientAddress = [merged.cp, merged.ville].filter(Boolean).join(' ');
     }
@@ -3479,19 +3667,31 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.siteMission = merged.missionSite || merged.siteMission || 'DÉPLACEMENT';
     merged.photoArriereUrl = merged.photo2Url || merged.photoArriereUrl || '';
     merged.photoResultatTestUrl = merged.photo3Url || merged.photoResultatTestUrl || '';
+    merged.typeDefibrillateur = merged.typeDefibrillateur || (merged.dea === 'Oui' ? 'Automatique (DEA)' : merged.dea === 'Non' ? 'Semi-Automatique (DSA)' : '');
+    merged.fournitureMaterielPret = merged.pretEnCours || merged.fournitureMaterielPret || 'Non';
+    merged.selectionMaterielPrete = merged.pretId || merged.selectionMaterielPrete || '';
+    merged.coffretRemplace = merged.coffretRemplace || 'Non';
+    merged.selectionCoffretRemplace = merged.selectionCoffretRemplace || '';
+    merged.origineCoffretInstalle = merged.origineCoffretInstalle || '';
     merged.electrodeARemplacee = merged.remplaceElectrodeA || merged.electrodeARemplacee || 'Non';
     merged.selectionElectrodeARemplacee = merged.destockElectrodeA || merged.selectionElectrodeARemplacee || '';
+    merged.origineElectrodeAInstallee = merged.origineElectrodeAInstallee || '';
     merged.electrodeASecoursRemplacee = merged.remplaceElectrodeSecoursA || merged.electrodeASecoursRemplacee || 'Non';
     merged.selectionElectrodeASecoursRemplacee = merged.destockElectrodeSecoursA || merged.selectionElectrodeASecoursRemplacee || '';
+    merged.origineElectrodeSecoursAInstallee = merged.origineElectrodeSecoursAInstallee || '';
     merged.electrodePRemplacee = merged.remplaceElectrodeP || merged.electrodePRemplacee || 'Non';
     merged.selectionElectrodePRemplacee = merged.destockElectrodeP || merged.selectionElectrodePRemplacee || '';
+    merged.origineElectrodePInstallee = merged.origineElectrodePInstallee || '';
     merged.electrodePSecoursRemplacee = merged.remplaceElectrodeSecoursP || merged.electrodePSecoursRemplacee || 'Non';
     merged.selectionElectrodePSecoursRemplacee = merged.destockElectrodeSecoursP || merged.selectionElectrodePSecoursRemplacee || '';
+    merged.origineElectrodeSecoursPInstallee = merged.origineElectrodeSecoursPInstallee || '';
     merged.batterieRemplacee = merged.remplaceBatterie || merged.batterieRemplacee || 'Non';
     merged.selectionBatterieRemplacee = merged.destockBatterie || merged.selectionBatterieRemplacee || '';
+    merged.origineBatterieInstallee = merged.origineBatterieInstallee || '';
     merged.kitPeremption = merged.peremptionKit || merged.kitPeremption || '';
     merged.kitSecoursRemplaceOuAjoute = merged.remplaceKit || merged.kitSecoursRemplaceOuAjoute || 'Non';
     merged.selectionKitSecoursRemplace = merged.destockKit || merged.selectionKitSecoursRemplace || '';
+    merged.origineKitSecoursInstalle = merged.origineKitSecoursInstalle || '';
     merged.kitCiseauxPresents = merged.kitCiseaux || merged.kitCiseauxPresents || 'Oui';
     merged.kitServiettesPresentes = merged.kitCompresses || merged.kitServiettesPresentes || 'Oui';
     merged.kitRasoirPresent = merged.kitRasoir || merged.kitRasoirPresent || 'Oui';
@@ -3558,7 +3758,33 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         .filter(Boolean);
     }
     merged.devisAutreInfo = merged.descriptionDemandeDevis || merged.devisAutreInfo || '';
-    if (merged.pieceJointeDevisName && (!Array.isArray(merged.attachments) || merged.attachments.length === 0)) {
+
+    const rawPreco =
+      merged.preconisationRemplacement ??
+      merged['Section 5 - Préconisation de remplacement.'] ??
+      merged['Section 5 - Préconisation de remplacement'] ??
+      existingSnap.preconisationRemplacement;
+    merged.preconisationRemplacement = normalizeBool(rawPreco, false);
+    merged.recommandationPreconisationRemplacement = String(
+      merged.recommandationPreconisationRemplacement ??
+        merged['Section 5 - Recommandation ou observation pour la préconisation de remplacement.'] ??
+        merged['Section 5 - Recommandation ou observation pour la préconisation de remplacement'] ??
+        existingSnap.recommandationPreconisationRemplacement ??
+        ''
+    ).trim();
+
+    const numberedAttachmentUrls = [merged.pieceJointe1Url, merged.pieceJointe2Url, merged.pieceJointe3Url]
+      .map(u => String(u || '').trim())
+      .filter(Boolean);
+    if (numberedAttachmentUrls.length > 0 && (!Array.isArray(merged.attachments) || merged.attachments.length === 0)) {
+      merged.attachments = numberedAttachmentUrls.map((part: string, idx: number) => ({
+        name: part.startsWith('http') ? `Pièce jointe ${idx + 1}` : part,
+        url: part,
+        type: 'application/octet-stream',
+      }));
+      if (!merged.piecesJointes) merged.piecesJointes = merged.attachments;
+      if (!merged.pieceJointeDevisName) merged.pieceJointeDevisName = numberedAttachmentUrls.join(', ');
+    } else if (merged.pieceJointeDevisName && (!Array.isArray(merged.attachments) || merged.attachments.length === 0)) {
       const rawParts = String(merged.pieceJointeDevisName).split(/\s*,\s*/).filter(Boolean);
       merged.attachments = rawParts.map((part: string, idx: number) => ({
         name: part.startsWith('http') ? `Pièce jointe ${idx + 1}` : part,
@@ -3629,6 +3855,8 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       fabrication: merged.fabrication || existingSnap.fabrication || '',
       miseEnService: merged.miseEnService || existingSnap.miseEnService || '',
       finGarantie: merged.finGarantie || existingSnap.finGarantie || '',
+      preconisationRemplacement: merged.preconisationRemplacement,
+      recommandationPreconisationRemplacement: merged.recommandationPreconisationRemplacement,
       modeleElectrodeA: merged.modeleElectrodeA || existingSnap.modeleElectrodeA || '',
       modeleElectrodeAId: merged.modeleElectrodeA || existingSnap.modeleElectrodeAId || '',
       lotElectrodeA: merged.lotElectrodeA || existingSnap.lotElectrodeA || '',
@@ -3717,6 +3945,80 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       customBonCommande: merged.bonDeCommande || existingSnap.customBonCommande || '',
       autreReference: merged.autreReference || existingSnap.autreReference || '',
     };
+  } else if (tabType === 'gestionApresIntervention') {
+    const ref = String(merged.interventionReference || merged.id || '').trim();
+    merged.interventionReference = ref;
+    merged.id = ref || `GAI-${rowIndexZeroBased + 2}`;
+
+    const rawDrapeaux = merged.drapeaux;
+    if (Array.isArray(rawDrapeaux)) {
+      merged.drapeaux = rawDrapeaux.map((d: any, idx: number) =>
+        typeof d === 'object' && d !== null
+          ? { id: d.id || `flag-${idx}`, nom: String(d.nom || d.name || '').trim(), couleurHex: String(d.couleurHex || '').trim() }
+          : { id: `flag-${idx}`, nom: String(d).trim(), couleurHex: '' }
+      ).filter((d: any) => d.nom);
+    } else if (typeof rawDrapeaux === 'string' && rawDrapeaux.trim()) {
+      const str = rawDrapeaux.trim();
+      let parsed: any = null;
+      if (str.startsWith('[')) {
+        try { parsed = JSON.parse(str); } catch (_) {}
+      }
+      if (Array.isArray(parsed)) {
+        merged.drapeaux = parsed.map((d: any, idx: number) =>
+          typeof d === 'object' && d !== null
+            ? { id: d.id || `flag-${idx}`, nom: String(d.nom || d.name || '').trim(), couleurHex: String(d.couleurHex || '').trim() }
+            : { id: `flag-${idx}`, nom: String(d).trim(), couleurHex: '' }
+        ).filter((d: any) => d.nom);
+      } else {
+        merged.drapeaux = str
+          .split(/\s*[,;|]\s*/)
+          .map((s: string) => s.trim())
+          .filter(Boolean)
+          .map((nom: string, idx: number) => ({ id: `flag-${idx}-${nom}`, nom, couleurHex: '' }));
+      }
+    } else {
+      merged.drapeaux = [];
+    }
+
+    const comm = String(merged.commentaireInterne ?? merged.commentaire ?? '').trim();
+    merged.commentaireInterne = comm;
+    merged.commentaire = comm;
+
+    const rawDis = String(merged.disableClientEmail ?? '').trim().toLowerCase();
+    merged.disableClientEmail =
+      merged.disableClientEmail === true ||
+      rawDis === 'oui' ||
+      rawDis === 'true' ||
+      rawDis === '1' ||
+      rawDis === 'yes';
+
+    const alertsList: { traite: boolean; info: string }[] = [];
+    let maxAlertIndex = 0;
+    for (let i = 1; i <= 15; i++) {
+      const rawTraite = merged[`alerteTraite${i}`];
+      const rawInfo = String(merged[`alerteInfo${i}`] ?? '').trim();
+      const tStr = String(rawTraite ?? '').trim().toLowerCase();
+      const isTraite =
+        rawTraite === true ||
+        tStr === 'oui' ||
+        tStr === 'true' ||
+        tStr === '1' ||
+        tStr === 'yes' ||
+        tStr === 'traite' ||
+        tStr === 'traité';
+      merged[`alerteTraite${i}`] = isTraite;
+      merged[`alerteInfo${i}`] = rawInfo;
+      if (isTraite || rawInfo) {
+        maxAlertIndex = i;
+      }
+    }
+    for (let i = 1; i <= maxAlertIndex; i++) {
+      alertsList.push({
+        traite: Boolean(merged[`alerteTraite${i}`]),
+        info: String(merged[`alerteInfo${i}`] ?? '').trim(),
+      });
+    }
+    merged.postInterventionAlerts = alertsList;
   } else if (tabType === 'crm') {
     const resolvedRef = String(merged.reference || merged.id || `#${100000 + rowIndexZeroBased}`).trim();
     merged.id = String(merged.id || resolvedRef).trim();
@@ -4692,6 +4994,12 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     }
   } else if (tabType === 'reglages') {
     merged.id = merged.id || 'tenant_reglages';
+    for (const [colIdx, def] of colToDef.entries()) {
+      const rawCell = String(row[colIdx] ?? '').trim();
+      if (rawCell === '') {
+        merged[def.field] = '';
+      }
+    }
     const resolvedLang = String(merged.langue || merged.language || 'Français, France').trim();
     merged.langue = resolvedLang;
     merged.language = resolvedLang;
@@ -4706,6 +5014,10 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.conditionsLegalesLink = String(merged.conditionsLegalesLink ?? '').trim();
     merged.mentionsLegalesFactures = String(merged.mentionsLegalesFactures ?? '').trim();
     merged.gmailPartageLocalisation = String(merged.gmailPartageLocalisation ?? '').trim();
+    merged.expressionAlerte1 = String(merged.expressionAlerte1 ?? '').trim().slice(0, 30);
+    merged.expressionAlerte2 = String(merged.expressionAlerte2 ?? '').trim().slice(0, 30);
+    merged.expressionAlerte3 = String(merged.expressionAlerte3 ?? '').trim().slice(0, 30);
+    merged.expressionAlerte4 = String(merged.expressionAlerte4 ?? '').trim().slice(0, 30);
     if (typeof merged.hiddenTabs === 'string') {
       merged.hiddenTabs = merged.hiddenTabs
         .split(/[,;|]/)
@@ -4996,6 +5308,48 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         ''
     ).trim();
 
+    const rawTypeUsage = String(
+      merged.typeUsageElectrode ||
+        merged['Type d’usage de l’électrode.'] ||
+        merged["Type d'usage de l'électrode."] ||
+        merged['Type d’usage de l’électrode'] ||
+        merged["Type d'usage de l'électrode"] ||
+        ''
+    ).trim();
+    const normTypeUsage = rawTypeUsage
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    if (normTypeUsage.startsWith('ped')) {
+      merged.typeUsageElectrode = 'Pédiatrique';
+    } else if (normTypeUsage.startsWith('adu')) {
+      merged.typeUsageElectrode = 'Adulte';
+    } else {
+      merged.typeUsageElectrode = rawTypeUsage;
+    }
+
+    const rawTypeDefib = String(
+      merged.typeDefibrillateur ||
+        merged['Type de défibrillateur.'] ||
+        merged['Type de défibrillateur'] ||
+        merged['Type Défibrillateur.'] ||
+        merged['Type Défibrillateur'] ||
+        ''
+    ).trim();
+    const normTypeDefib = rawTypeDefib
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    if (!normTypeDefib || normTypeDefib.includes('non renseign') || normTypeDefib === 'non' || normTypeDefib === '-') {
+      merged.typeDefibrillateur = '';
+    } else if (normTypeDefib.includes('semi') || normTypeDefib.includes('dsa')) {
+      merged.typeDefibrillateur = 'Semi-Automatique (DSA)';
+    } else if (normTypeDefib.includes('auto') || normTypeDefib.includes('dea')) {
+      merged.typeDefibrillateur = 'Automatique (DEA)';
+    } else {
+      merged.typeDefibrillateur = rawTypeDefib;
+    }
+
     if (!merged.id || String(merged.id).startsWith('sheet_gen_')) {
       merged.id =
         merged.identifiant ||
@@ -5064,6 +5418,25 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     if (Array.isArray(enriched.requiredParts)) {
       enriched.requiredParts = enriched.requiredParts.join(', ');
     }
+    if (Array.isArray(enriched.sentToClientParts)) {
+      enriched.sentToClientParts = enriched.sentToClientParts.join(', ');
+    }
+    if (Array.isArray(enriched.providedByClientParts)) {
+      enriched.providedByClientParts = enriched.providedByClientParts.join(', ');
+    }
+    enriched.commentaireInterne =
+      enriched.commentaireInterne ??
+      enriched['Commentaire visible par le technicien.'] ??
+      enriched['Commentaire visible par le technicien'] ??
+      enriched.internalComment ??
+      '';
+    enriched.rejectionReason =
+      enriched.rejectionReason ??
+      enriched.raisonRejet ??
+      enriched.motifRejet ??
+      enriched['Raison rejet.'] ??
+      enriched['Raison rejet'] ??
+      '';
   } else if (tabType === 'rapportsPdf') {
     const snap = enriched.defibSnapshot && typeof enriched.defibSnapshot === 'object' ? enriched.defibSnapshot : {};
     for (const [sk, sv] of Object.entries(snap)) {
@@ -5094,6 +5467,12 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.bonDeCommande = enriched.bonDeCommande || snap.customBonCommande || snap.bonCommandeId || '';
     enriched.categorie = snap.categorie || enriched.categorie || 'Défibrillateur';
     enriched.modele = snap.modele || snap.modeleId || enriched.modele || '';
+    enriched.typeDefibrillateur =
+      enriched.typeDefibrillateur ||
+      snap.typeDefibrillateur ||
+      (enriched.dea === 'Oui' ? 'Automatique (DEA)' : enriched.dea === 'Non' ? 'Semi-Automatique (DSA)' : '');
+    enriched.pretEnCours = enriched.fournitureMaterielPret || enriched.pretEnCours || snap.pretEnCours || 'Non';
+    enriched.pretId = enriched.selectionMaterielPrete || enriched.pretId || snap.pretId || '';
     enriched.denomination = snap.nomSite || snap.denomination || enriched.denomination || enriched.site || '';
     enriched.emplacement = snap.emplacement || snap.commentaireAdresse || enriched.emplacement || '';
     enriched.photoUrl = enriched.photoUrl || snap.photoUrl || '';
@@ -5101,6 +5480,18 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.photo3Url = enriched.photoResultatTestUrl || enriched.photo3Url || snap.photo3Url || '';
     enriched.clientName = enriched.clientName || enriched.entreprise || snap.clientNom || snap.clientId || enriched.clientId || '';
     enriched.modeleCoffret = snap.modeleCoffret || snap.modeleCoffretId || enriched.modeleCoffret || '';
+    enriched.coffretRemplace = enriched.coffretRemplace || snap.coffretRemplace || 'Non';
+    enriched.selectionCoffretRemplace =
+      (enriched.selectionCoffretRemplace === 'Autre' ? enriched.customCoffretRemplace : enriched.selectionCoffretRemplace) ||
+      snap.selectionCoffretRemplace ||
+      '';
+    enriched.origineCoffretInstalle = enriched.origineCoffretInstalle || snap.origineCoffretInstalle || '';
+    enriched.origineElectrodeAInstallee = enriched.origineElectrodeAInstallee || snap.origineElectrodeAInstallee || '';
+    enriched.origineElectrodeSecoursAInstallee = enriched.origineElectrodeSecoursAInstallee || snap.origineElectrodeSecoursAInstallee || '';
+    enriched.origineElectrodePInstallee = enriched.origineElectrodePInstallee || snap.origineElectrodePInstallee || '';
+    enriched.origineElectrodeSecoursPInstallee = enriched.origineElectrodeSecoursPInstallee || snap.origineElectrodeSecoursPInstallee || '';
+    enriched.origineBatterieInstallee = enriched.origineBatterieInstallee || snap.origineBatterieInstallee || '';
+    enriched.origineKitSecoursInstalle = enriched.origineKitSecoursInstalle || snap.origineKitSecoursInstalle || '';
     enriched.alarme = enriched.alarme || snap.alarme || snap.alarmeCoffret || '';
     enriched.signaletiqueConforme = enriched.signaletiqueConforme || snap.signaletiqueConforme || snap.signaletiqueBoitier || '';
     enriched.installeExterieur =
@@ -5150,11 +5541,35 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.motifDemandeDevis = enriched.motifDemandeDevis || snap.motifDemandeDevis || '';
     }
     enriched.descriptionDemandeDevis = enriched.devisAutreInfo || enriched.descriptionDemandeDevis || snap.descriptionDemandeDevis || '';
-    if (Array.isArray(enriched.attachments) && enriched.attachments.length > 0) {
-      enriched.pieceJointeDevisName = enriched.attachments.map((a: any) => a?.url || a?.name || '').filter(Boolean).join(', ');
-    } else if (Array.isArray(enriched.piecesJointes) && enriched.piecesJointes.length > 0) {
-      enriched.pieceJointeDevisName = enriched.piecesJointes.map((a: any) => a?.url || a?.name || '').filter(Boolean).join(', ');
+    const attList =
+      Array.isArray(enriched.attachments) && enriched.attachments.length > 0
+        ? enriched.attachments
+        : Array.isArray(enriched.piecesJointes) && enriched.piecesJointes.length > 0
+        ? enriched.piecesJointes
+        : [];
+    if (attList.length > 0) {
+      enriched.pieceJointeDevisName = attList.map((a: any) => a?.url || a?.name || '').filter(Boolean).join(', ');
     }
+    enriched.pieceJointe1Url = enriched.pieceJointe1Url || attList[0]?.url || attList[0]?.name || '';
+    enriched.pieceJointe2Url = enriched.pieceJointe2Url || attList[1]?.url || attList[1]?.name || '';
+    enriched.pieceJointe3Url = enriched.pieceJointe3Url || attList[2]?.url || attList[2]?.name || '';
+
+    const isPrecoActive = normalizeBool(
+      enriched.preconisationRemplacement ??
+        snap.preconisationRemplacement ??
+        enriched['Section 5 - Préconisation de remplacement.'] ??
+        enriched['Section 5 - Préconisation de remplacement'],
+      false
+    );
+    enriched.preconisationRemplacement = isPrecoActive ? 'Oui' : 'Non';
+    enriched.recommandationPreconisationRemplacement = String(
+      enriched.recommandationPreconisationRemplacement ??
+        snap.recommandationPreconisationRemplacement ??
+        enriched['Section 5 - Recommandation ou observation pour la préconisation de remplacement.'] ??
+        enriched['Section 5 - Recommandation ou observation pour la préconisation de remplacement'] ??
+        ''
+    ).trim();
+
     if (enriched.etiquetteObligatoireConforme !== undefined) {
       enriched.etiquetteConforme = enriched.etiquetteObligatoireConforme ? 'Oui' : 'Non';
     }
@@ -5266,6 +5681,39 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.destockKit ||
       snap.destockKit ||
       '';
+  } else if (tabType === 'gestionApresIntervention') {
+    enriched.interventionReference = String(enriched.interventionReference || enriched.reportNumber || enriched.id || '').trim();
+    if (Array.isArray(enriched.drapeaux)) {
+      enriched.drapeaux = enriched.drapeaux
+        .map((f: any) => (typeof f === 'object' && f !== null ? String(f.nom || f.name || '').trim() : String(f || '').trim()))
+        .filter(Boolean)
+        .join(', ');
+    } else if (typeof enriched.drapeaux === 'string') {
+      enriched.drapeaux = enriched.drapeaux.trim();
+    } else {
+      enriched.drapeaux = '';
+    }
+    enriched.commentaireInterne = String(enriched.commentaire ?? enriched.commentaireInterne ?? '');
+    const isDis =
+      enriched.disableClientEmail === true ||
+      String(enriched.disableClientEmail ?? '').trim().toLowerCase() === 'oui' ||
+      String(enriched.disableClientEmail ?? '').trim().toLowerCase() === 'true';
+    enriched.disableClientEmail = isDis ? 'Oui' : 'Non';
+
+    const alertsArr = Array.isArray(enriched.postInterventionAlerts) ? enriched.postInterventionAlerts : null;
+    for (let i = 1; i <= 15; i++) {
+      const alertObj = alertsArr && alertsArr[i - 1] ? alertsArr[i - 1] : null;
+      const rawT = alertObj !== null ? alertObj.traite : enriched[`alerteTraite${i}`];
+      const rawI = alertObj !== null ? alertObj.info : enriched[`alerteInfo${i}`];
+      const cleanInfo = String(rawI ?? '').trim();
+      const isT =
+        rawT === true ||
+        String(rawT ?? '').trim().toLowerCase() === 'oui' ||
+        String(rawT ?? '').trim().toLowerCase() === 'true' ||
+        String(rawT ?? '').trim().toLowerCase() === '1';
+      enriched[`alerteInfo${i}`] = cleanInfo;
+      enriched[`alerteTraite${i}`] = isT ? 'Oui' : (cleanInfo ? 'Non' : '');
+    }
   } else if (tabType === 'achatsFournisseurs') {
     enriched.orderRef = enriched.orderRef || enriched.orderReference || '';
     enriched.date = enriched.date || enriched.dateStr || '';
@@ -5685,6 +6133,12 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched[`${p}commentaire`] = ab.commentaire || '';
     });
   } else if (tabType === 'reglages') {
+    enriched.langue = enriched.langue || enriched.language || 'Français, France';
+    enriched.name = enriched.name ?? enriched.nomCommercial ?? '';
+    enriched.expressionAlerte1 = String(enriched.expressionAlerte1 ?? '').trim().slice(0, 30);
+    enriched.expressionAlerte2 = String(enriched.expressionAlerte2 ?? '').trim().slice(0, 30);
+    enriched.expressionAlerte3 = String(enriched.expressionAlerte3 ?? '').trim().slice(0, 30);
+    enriched.expressionAlerte4 = String(enriched.expressionAlerte4 ?? '').trim().slice(0, 30);
     if (Array.isArray(enriched.hiddenTabs)) {
       enriched.hiddenTabs = enriched.hiddenTabs.join(', ');
     }
@@ -5692,10 +6146,30 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.category = enriched.category || enriched.categorie || 'Modèle Défibrillateur';
     enriched.nom = enriched.nom || enriched.titre || '';
     enriched.marque = enriched.marque || enriched.fabricant || 'Standard';
+    const rawEnrichedTypeDefib = String(
+      enriched.typeDefibrillateur ??
+        enriched['Type de défibrillateur.'] ??
+        enriched['Type de défibrillateur'] ??
+        ''
+    ).trim();
+    const normEnrichedTypeDefib = rawEnrichedTypeDefib
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    let cleanTypeDefib = '';
+    if (normEnrichedTypeDefib && !normEnrichedTypeDefib.includes('non renseign')) {
+      if (normEnrichedTypeDefib.includes('semi') || normEnrichedTypeDefib.includes('dsa')) {
+        cleanTypeDefib = 'Semi-Automatique (DSA)';
+      } else if (normEnrichedTypeDefib.includes('auto') || normEnrichedTypeDefib.includes('dea')) {
+        cleanTypeDefib = 'Automatique (DEA)';
+      } else {
+        cleanTypeDefib = rawEnrichedTypeDefib;
+      }
+    }
     enriched.typeDefibrillateur =
       enriched.category === 'Modèle Défibrillateur'
-        ? (enriched.typeDefibrillateur || 'Non renseigné')
-        : (enriched.typeDefibrillateur || '');
+        ? cleanTypeDefib
+        : '';
     enriched.couleurHex = enriched.couleurHex ?? '';
     enriched.dureePrestation =
       enriched.dureePrestation !== undefined && enriched.dureePrestation !== null && String(enriched.dureePrestation).trim() !== ''
@@ -5708,6 +6182,13 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.rappelDateDebut = enriched.rappelDateDebut ?? '';
     enriched.rappelDateFin = enriched.rappelDateFin ?? '';
     enriched.rappelObservation = enriched.rappelObservation ?? '';
+    enriched.typeUsageElectrode =
+      enriched.category === 'Modèle Électrode'
+        ? (enriched.typeUsageElectrode ??
+           enriched['Type d’usage de l’électrode.'] ??
+           enriched["Type d'usage de l'électrode."] ??
+           '')
+        : '';
     const visFields = [
       'visibiliteNumeroAtlasante',
       'visibiliteVersionLogiciel',
@@ -5847,7 +6328,7 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
-  if (tabType === 'rapportsPdf') {
+  if (tabType === 'rapportsPdf' || tabType === 'gestionApresIntervention') {
     return [item.interventionReference, item.reportNumber, item.id, item.reportId]
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
@@ -6367,7 +6848,9 @@ export async function fetchTenantSheetCollection(
       (it['Commentaire sur la variable.'] && !it.description) ||
       (it["Type d'alerte / rappel."] && !it.rappelAlerteOption) ||
       (it['Observation sur le rappel ou l’alerte.'] && !it.rappelObservation) ||
-      (it["Observation sur le rappel ou l'alerte."] && !it.rappelObservation)
+      (it["Observation sur le rappel ou l'alerte."] && !it.rappelObservation) ||
+      (it['Type d’usage de l’électrode.'] && !it.typeUsageElectrode) ||
+      (it["Type d'usage de l'électrode."] && !it.typeUsageElectrode)
     ) {
       return true;
     }
@@ -6375,13 +6858,20 @@ export async function fetchTenantSheetCollection(
   };
   const isStaleDefibSnap = (snap: CachedSheetResult | null | undefined): boolean => {
     if (!snap || tabType !== 'defibrillateurs') return false;
-    if (!Array.isArray(snap.headers) || snap.headers.length === 121 || snap.headers[0] === 'Section 1 - Identifiant') {
+    if (
+      !Array.isArray(snap.headers) ||
+      snap.headers.length === 121 ||
+      snap.headers[0] === 'Section 1 - Identifiant'
+    ) {
       return true;
     }
     return false;
   };
   const isStaleMissionsSnap = (snap: CachedSheetResult | null | undefined): boolean => {
     if (!snap || tabType !== 'missionsTournees' || !Array.isArray(snap.items)) return false;
+    if (!Array.isArray(snap.headers) || snap.headers.length === 0) {
+      return true;
+    }
     return snap.items.some((it: any) => {
       if (!it || typeof it !== 'object') return false;
       if (String(it.interventionReference || '').startsWith('fsm-m-')) return true;
@@ -6398,13 +6888,20 @@ export async function fetchTenantSheetCollection(
       return false;
     });
   };
+  const isStaleReglagesSnap = (snap: CachedSheetResult | null | undefined): boolean => {
+    if (!snap || tabType !== 'reglages' || !Array.isArray(snap.items)) return false;
+    if (!Array.isArray(snap.headers) || snap.headers.length === 0) {
+      return true;
+    }
+    return false;
+  };
   if (!sheetMemoryCache.has(cacheKey)) {
     const diskSnap = loadDiskSnapshot(cacheKey);
     if (diskSnap && Array.isArray(diskSnap.items) && diskSnap.items.length > 0) {
       const isStaleVariablesSnap =
         tabType === 'variables' &&
-        diskSnap.items.some(hasUnmappedVariableKeys);
-      if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap) && !isStaleMissionsSnap(diskSnap) && !isStaleSuspiciousSnap(diskSnap)) {
+        (diskSnap.items.some(hasUnmappedVariableKeys) || !Array.isArray(diskSnap.headers) || diskSnap.headers.length === 0);
+      if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap) && !isStaleMissionsSnap(diskSnap) && !isStaleSuspiciousSnap(diskSnap) && !isStaleReglagesSnap(diskSnap)) {
         if (tabType === 'defibrillateurs') {
           diskSnap.stats = computeSheetCollectionStats(diskSnap.items, 'defibrillateurs');
           saveDiskSnapshotAsync(cacheKey, diskSnap);
@@ -6414,16 +6911,21 @@ export async function fetchTenantSheetCollection(
     }
   }
 
+  // If a live fetch/refresh is already in-flight for this sheet, always await it so concurrent requests get the fresh data
+  if (inFlightSheetFetches.has(cacheKey)) {
+    return inFlightSheetFetches.get(cacheKey)!;
+  }
+
   if (!forceRefresh && sheetMemoryCache.has(cacheKey)) {
     const cached = sheetMemoryCache.get(cacheKey)!;
     const isStaleVariablesCache =
       tabType === 'variables' &&
-      cached.items.some(hasUnmappedVariableKeys);
-    if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached) && !isStaleMissionsSnap(cached) && !isStaleSuspiciousSnap(cached)) {
+      (cached.items.some(hasUnmappedVariableKeys) || !Array.isArray(cached.headers) || cached.headers.length === 0);
+    if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached) && !isStaleMissionsSnap(cached) && !isStaleSuspiciousSnap(cached) && !isStaleReglagesSnap(cached)) {
       if (tabType === 'defibrillateurs') {
         cached.stats = computeSheetCollectionStats(cached.items, 'defibrillateurs');
       }
-      if (Date.now() - cached.fetchedAt > 300000 && !inFlightSheetFetches.has(cacheKey)) {
+      if (Date.now() - cached.fetchedAt > 20000 && !inFlightSheetFetches.has(cacheKey)) {
         setImmediate(() => {
           fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true).catch(() => {});
         });
@@ -6437,10 +6939,6 @@ export async function fetchTenantSheetCollection(
         hasRemoteHeaders: cached.headers.length > 0,
       };
     }
-  }
-
-  if (inFlightSheetFetches.has(cacheKey)) {
-    return inFlightSheetFetches.get(cacheKey)!;
   }
 
   const fetchStartedAt = Date.now();
@@ -7549,7 +8047,21 @@ export async function upsertRecordsToTenantSheet(
       hasRemoteHeaders = warmCached.hasRemoteHeaders === true;
       const clientMissingAutreContratHeaders =
         tabType === 'clients' && !headers.some(h => normalizeHeaderKey(h).includes('autrecontrat1'));
-      if ((!hasRemoteHeaders || clientMissingAutreContratHeaders) && accessToken) {
+      const missionsMissingNewHeaders =
+        tabType === 'missionsTournees' &&
+        (!headers.some(h => normalizeHeaderKey(h).includes('fournituresparleclient') || normalizeHeaderKey(h).includes('fournitureparleclient')) ||
+          !headers.some(h => normalizeHeaderKey(h).includes('commentairevisibleparletechnicien')) ||
+          !headers.some(h => normalizeHeaderKey(h).includes('raisonrejet')));
+      const variablesMissingNewHeaders =
+        tabType === 'variables' &&
+        !headers.some(h => normalizeHeaderKey(h).includes('typedusagedelelectrode'));
+      const defibMissingNewHeaders =
+        tabType === 'defibrillateurs' &&
+        !headers.some(h => normalizeHeaderKey(h).includes('typededefibrillateur') || normalizeHeaderKey(h).includes('typedefibrillateur'));
+      const reglagesMissingNewHeaders =
+        tabType === 'reglages' &&
+        !headers.some(h => normalizeHeaderKey(h).includes('expressiondalerte1') || normalizeHeaderKey(h).includes('expressionalerte1'));
+      if ((!hasRemoteHeaders || clientMissingAutreContratHeaders || missionsMissingNewHeaders || variablesMissingNewHeaders || defibMissingNewHeaders || reglagesMissingNewHeaders) && accessToken) {
         const lightCtx = await fetchLightweightSheetContextForColdUpsert(
           extracted.spreadsheetId,
           extracted.gid,
@@ -8170,6 +8682,7 @@ const MASTER_SHEET_SPREADSHEET_HEADER_TO_FIELD: Record<string, string> = {
   spreadsheettournees: 'spreadsheetTournees',
   spreadsheetmissionsdestournees: 'spreadsheetMissionsTournees',
   spreadsheetmissionstournees: 'spreadsheetMissionsTournees',
+  spreadsheetgestionapresintervention: 'spreadsheetGestionApresIntervention',
   spreadsheetrapportspdf: 'spreadsheetRapportsPdf',
   spreadsheetcrm: 'spreadsheetCrm',
   spreadsheetreglagescrm: 'spreadsheetReglagesCrm',
@@ -8452,11 +8965,38 @@ export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = 
 }
 
 export const TUTORIAL_VIDEOS_SPREADSHEET_URL =
-  'https://docs.google.com/spreadsheets/d/14i40vhQZyn3dVWSF3dluo4Razd14g3UmzIzba4ADb_4/edit?usp=sharing';
+  'https://docs.google.com/spreadsheets/d/1ywR9gmTGNu8EeQgEscgFl5mtlEx4ohtiVvOOigokESA/edit?usp=sharing';
 
 export interface TutorialVideoRecord {
+  tenantIdLecture: string;
   title: string;
+  date: string;
   url: string;
+}
+
+function formatTutorialVideoDate(raw: string): string {
+  const clean = String(raw || '').trim();
+  if (!clean) return '';
+  const ymd = clean.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (ymd) {
+    return `${ymd[3].padStart(2, '0')}/${ymd[2].padStart(2, '0')}/${ymd[1]}`;
+  }
+  const dmy4 = clean.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if (dmy4) {
+    return `${dmy4[1].padStart(2, '0')}/${dmy4[2].padStart(2, '0')}/${dmy4[3]}`;
+  }
+  const dmy2 = clean.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2})$/);
+  if (dmy2) {
+    return `${dmy2[1].padStart(2, '0')}/${dmy2[2].padStart(2, '0')}/20${dmy2[3]}`;
+  }
+  const parsed = new Date(clean);
+  if (!isNaN(parsed.getTime())) {
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const yyyy = String(parsed.getFullYear());
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return clean;
 }
 
 let cachedTutorialVideos: TutorialVideoRecord[] = [];
@@ -8480,36 +9020,67 @@ export async function fetchTutorialVideosFromSpreadsheet(forceRefresh: boolean =
           .replace(/[^a-z0-9]/g, '')
       );
 
+      const tenantIdx = headersNorm.findIndex(
+        h => h.includes('tenant') || h.includes('idlecture') || h.includes('environnement') || h.includes('envid')
+      );
       const titleIdx = headersNorm.findIndex(h => h.includes('titre') || h.includes('title') || h.includes('nom'));
-      const urlIdx = headersNorm.findIndex(h => h.includes('url') || h.includes('lien') || h.includes('link') || h.includes('video') && h !== headersNorm[titleIdx]);
+      const dateIdx = headersNorm.findIndex(h => h.includes('date') || h.includes('publication'));
+      const urlIdx = headersNorm.findIndex(
+        h => h.includes('url') || h.includes('lien') || h.includes('link') || (h.includes('video') && h !== headersNorm[titleIdx])
+      );
 
-      const colTitle = titleIdx >= 0 ? titleIdx : 0;
-      const colUrl = urlIdx >= 0 && urlIdx !== colTitle ? urlIdx : (colTitle === 0 ? 1 : 0);
+      const colTenant = tenantIdx >= 0 ? tenantIdx : 0;
+      const colTitle = titleIdx >= 0 ? titleIdx : 1;
+      const colDate = dateIdx >= 0 ? dateIdx : 2;
+      const colUrl = urlIdx >= 0 ? urlIdx : 3;
 
       const videos: TutorialVideoRecord[] = [];
 
       // If row 1 (headers) was actually data rather than column headers
-      if (headers.length >= 2 && titleIdx < 0 && urlIdx < 0) {
-        const hTitle = String(headers[0] ?? '').trim();
-        const hUrl = String(headers[1] ?? '').trim();
+      if (headers.length >= 4 && tenantIdx < 0 && titleIdx < 0 && dateIdx < 0 && urlIdx < 0) {
+        const hTenant = String(headers[0] ?? '').trim();
+        const hTitle = String(headers[1] ?? '').trim();
+        const hDate = String(headers[2] ?? '').trim();
+        const hUrl = String(headers[3] ?? '').trim();
         const hTitleNorm = hTitle.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        if (hTitle && hUrl && !hTitleNorm.includes('titre de la video') && !hUrl.toLowerCase().includes('url de la video')) {
-          videos.push({ title: hTitle, url: hUrl });
+        if (hTenant && (hTitle || hUrl) && !hTitleNorm.includes('titre')) {
+          videos.push({
+            tenantIdLecture: hTenant,
+            title: hTitle || hUrl,
+            date: formatTutorialVideoDate(hDate),
+            url: hUrl,
+          });
         }
       }
 
       for (const row of rows) {
         if (!Array.isArray(row)) continue;
+        const rawTenant = String(row[colTenant] ?? '').trim();
         const rawTitle = String(row[colTitle] ?? '').trim();
+        const rawDate = String(row[colDate] ?? '').trim();
         const rawUrl = String(row[colUrl] ?? '').trim();
-        if (!rawTitle && !rawUrl) continue;
+        if (!rawTenant && !rawTitle && !rawUrl) continue;
+        const normTenant = rawTenant.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
         const normT = rawTitle.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         const normU = rawUrl.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        if (normT === 'titre de la video.' || normT === 'titre de la video' || normU === 'url de la video.' || normU === 'url de la video') {
+        if (
+          normTenant === 'tenantidlecture' ||
+          normT === 'titre.' ||
+          normT === 'titre' ||
+          normT === 'titre de la video.' ||
+          normT === 'titre de la video' ||
+          normU === 'url.' ||
+          normU === 'url' ||
+          normU === 'url de la video.' ||
+          normU === 'url de la video'
+        ) {
           continue;
         }
+        if (!rawTitle && !rawUrl) continue;
         videos.push({
+          tenantIdLecture: rawTenant,
           title: rawTitle || rawUrl,
+          date: formatTutorialVideoDate(rawDate),
           url: rawUrl,
         });
       }
@@ -8523,4 +9094,5 @@ export async function fetchTutorialVideosFromSpreadsheet(forceRefresh: boolean =
   }
   return cachedTutorialVideos;
 }
+
 

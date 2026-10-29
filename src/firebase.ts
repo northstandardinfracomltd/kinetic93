@@ -1150,6 +1150,8 @@ export async function fetchCollectionFromFirestore<T>(
     fsm_tours: { type: 'tournees', localKey: 'spreadsheet_tournees', infoKey: 'spreadsheetTournees' },
     tournees: { type: 'tournees', localKey: 'spreadsheet_tournees', infoKey: 'spreadsheetTournees' },
     missionsTournees: { type: 'missionsTournees', localKey: 'spreadsheet_missions_tournees', infoKey: 'spreadsheetMissionsTournees' },
+    gestionApresIntervention: { type: 'gestionApresIntervention', localKey: 'spreadsheet_gestion_apres_intervention', infoKey: 'spreadsheetGestionApresIntervention' },
+    gestion_apres_intervention: { type: 'gestionApresIntervention', localKey: 'spreadsheet_gestion_apres_intervention', infoKey: 'spreadsheetGestionApresIntervention' },
     generatedReports: { type: 'rapportsPdf', localKey: 'spreadsheet_rapports_pdf', infoKey: 'spreadsheetRapportsPdf' },
     generated_reports: { type: 'rapportsPdf', localKey: 'spreadsheet_rapports_pdf', infoKey: 'spreadsheetRapportsPdf' },
     reports: { type: 'rapportsPdf', localKey: 'spreadsheet_rapports_pdf', infoKey: 'spreadsheetRapportsPdf' },

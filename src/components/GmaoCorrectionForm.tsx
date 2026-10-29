@@ -436,6 +436,12 @@ export default function GmaoCorrectionForm({
         const trace = st.traceabilities.find(t => t.id === selectionId);
         if (trace) return { trace, stock: st };
       }
+      if (st.id === selectionId) {
+        return {
+          trace: { id: st.id, lotOrSerial: (st as any).ugs || '', situation: 'Disponible' as const },
+          stock: st
+        };
+      }
     }
     return null;
   }, [stocks]);
@@ -646,25 +652,41 @@ export default function GmaoCorrectionForm({
     }[] = [];
     
     (stocks || []).forEach(st => {
-      const varObj = variables.find(v => v.id === st.denominationPieceId);
+      const varObj = variables.find(
+        v =>
+          v.id === st.denominationPieceId ||
+          (v.nom && st.denominationPieceId && v.nom.trim().toLowerCase() === st.denominationPieceId.trim().toLowerCase()) ||
+          (v.identifiant && st.denominationPieceId && v.identifiant.trim().toLowerCase() === st.denominationPieceId.trim().toLowerCase())
+      );
       if (category && varObj?.category !== category) return;
       
       const denom = varObj
         ? (varObj.marque && varObj.marque !== 'Standard' ? `${varObj.nom} (${varObj.marque})` : varObj.nom)
-        : `Pièce (${st.id})`;
+        : `Pièce (${st.denominationPieceId || st.id})`;
       
-      if (st.traceabilityEnabled && st.traceabilities) {
+      let addedTrace = false;
+      if (st.traceabilityEnabled && st.traceabilities && st.traceabilities.length > 0) {
         st.traceabilities.forEach(trace => {
           if (trace.situation === 'Disponible') {
+            addedTrace = true;
             list.push({
               stockId: st.id,
               traceId: trace.id,
               lotOrSerial: trace.lotOrSerial,
               expirationDate: trace.expirationDate,
-              denominationPieceId: st.denominationPieceId,
+              denominationPieceId: varObj?.id || st.denominationPieceId,
               label: `${denom} - Lot/Série: ${trace.lotOrSerial}${trace.expirationDate ? ` (Pér: ${trace.expirationDate})` : ''}`
             });
           }
+        });
+      }
+      if (!addedTrace) {
+        list.push({
+          stockId: st.id,
+          traceId: st.id,
+          lotOrSerial: (st as any).ugs || '',
+          denominationPieceId: varObj?.id || st.denominationPieceId,
+          label: `${denom}${(st as any).ugs ? ` - UGS: ${(st as any).ugs}` : ''}`
         });
       }
     });
@@ -682,7 +704,12 @@ export default function GmaoCorrectionForm({
     }[] = [];
     
     (stocks || []).forEach(st => {
-      const varObj = variables.find(v => v.id === st.denominationPieceId);
+      const varObj = variables.find(
+        v =>
+          v.id === st.denominationPieceId ||
+          (v.nom && st.denominationPieceId && v.nom.trim().toLowerCase() === st.denominationPieceId.trim().toLowerCase()) ||
+          (v.identifiant && st.denominationPieceId && v.identifiant.trim().toLowerCase() === st.denominationPieceId.trim().toLowerCase())
+      );
       const isElectrodeOrBatteryOrDefibOrCoffretOrService = varObj && [
         'Modèle Défibrillateur',
         'Modèle Coffret',
@@ -695,20 +722,31 @@ export default function GmaoCorrectionForm({
       
       const denom = varObj
         ? (varObj.marque && varObj.marque !== 'Standard' ? `${varObj.nom} (${varObj.marque})` : varObj.nom)
-        : `Pièce (${st.id})`;
+        : `Pièce (${st.denominationPieceId || st.id})`;
       
-      if (st.traceabilityEnabled && st.traceabilities) {
+      let addedTrace = false;
+      if (st.traceabilityEnabled && st.traceabilities && st.traceabilities.length > 0) {
         st.traceabilities.forEach(trace => {
           if (trace.situation === 'Disponible') {
+            addedTrace = true;
             list.push({
               stockId: st.id,
               traceId: trace.id,
               lotOrSerial: trace.lotOrSerial,
               expirationDate: trace.expirationDate,
-              denominationPieceId: st.denominationPieceId,
+              denominationPieceId: varObj?.id || st.denominationPieceId,
               label: `${denom} - Lot/Série: ${trace.lotOrSerial}${trace.expirationDate ? ` (Pér: ${trace.expirationDate})` : ''}`
             });
           }
+        });
+      }
+      if (!addedTrace) {
+        list.push({
+          stockId: st.id,
+          traceId: st.id,
+          lotOrSerial: (st as any).ugs || '',
+          denominationPieceId: varObj?.id || st.denominationPieceId,
+          label: `${denom}${(st as any).ugs ? ` - UGS: ${(st as any).ugs}` : ''}`
         });
       }
     });
@@ -896,9 +934,19 @@ export default function GmaoCorrectionForm({
   const pillsContainerRef = useRef<HTMLDivElement>(null);
 
   const selectedModelVar = useMemo(() => {
-    if (!snapshot.modeleId) return null;
-    return (variables || []).find(v => v.id === snapshot.modeleId && v.category === 'Modèle Défibrillateur') || null;
-  }, [snapshot.modeleId, variables]);
+    const modelRef = String(snapshot.modeleId || (snapshot as any).modele || report?.modeleId || report?.modele || origDefib?.modeleId || '').trim();
+    if (!modelRef) return null;
+    const lowerRef = modelRef.toLowerCase();
+    return (variables || []).find(v =>
+      v.category === 'Modèle Défibrillateur' &&
+      (
+        v.id === modelRef ||
+        (v.nom && v.nom.trim().toLowerCase() === lowerRef) ||
+        (v.identifiant && v.identifiant.trim().toLowerCase() === lowerRef) ||
+        (v.marque && v.nom && `${v.nom} (${v.marque})`.trim().toLowerCase() === lowerRef)
+      )
+    ) || null;
+  }, [snapshot.modeleId, snapshot, report, origDefib, variables]);
 
   const isVisibleNumeroAtlasante = selectedModelVar ? (selectedModelVar.visibiliteNumeroAtlasante !== 'Non') : true;
   const isVisibleVersionLogiciel = selectedModelVar ? (selectedModelVar.visibiliteVersionLogiciel !== 'Non') : true;
@@ -1043,7 +1091,29 @@ export default function GmaoCorrectionForm({
   const [googleDriveEmail, setGoogleDriveEmail] = useState('');
   const [googleDriveAccessToken, setGoogleDriveAccessToken] = useState('');
 
-  // S3 Alarme & Armoire
+  // S1 Type de défibrillateur
+  const normalizeTypeDefib = (rawVal?: string, deaFlag?: string): string => {
+    const v = String(rawVal || '').trim();
+    if (v === 'Automatique (DEA)' || v.toUpperCase() === 'DEA') return 'Automatique (DEA)';
+    if (v === 'Semi-Automatique (DSA)' || v.toUpperCase() === 'DSA') return 'Semi-Automatique (DSA)';
+    if ( v ) return v;
+    if (deaFlag === 'Oui') return 'Automatique (DEA)';
+    if (deaFlag === 'Non') return 'Semi-Automatique (DSA)';
+    return '';
+  };
+  const [typeDefibrillateur, setTypeDefibrillateur] = useState<string>(() =>
+    normalizeTypeDefib(
+      report?.typeDefibrillateur || (report?.defibSnapshot as any)?.typeDefibrillateur || (origDefib as any)?.typeDefibrillateur,
+      report?.dea || (report?.defibSnapshot as any)?.dea
+    )
+  );
+
+  // S3 Alarme, Armoire & Remplacement Coffret
+  const [coffretRemplace, setCoffretRemplace] = useState<'Oui' | 'Non'>(report?.coffretRemplace || 'Non');
+  const [selectionCoffretRemplace, setSelectionCoffretRemplace] = useState<string>(report?.selectionCoffretRemplace || '');
+  const [customCoffretRemplace, setCustomCoffretRemplace] = useState<string>(report?.customCoffretRemplace || '');
+  const [origineCoffretInstalle, setOrigineCoffretInstalle] = useState<string>(report?.origineCoffretInstalle || '');
+  const [isScanCoffretOpen, setIsScanCoffretOpen] = useState(false);
   const [equipeAlarme, setEquipeAlarme] = useState<'Oui' | 'Non' | ''>(report?.equipeAlarme || 'Oui');
   const [alarme, setAlarme] = useState<'Oui' | 'Non' | ''>(report?.alarme || 'Non');
   const [armoireConnectee, setArmoireConnectee] = useState<'Oui' | 'Non'>(report?.armoireConnectee || 'Non');
@@ -1061,20 +1131,25 @@ export default function GmaoCorrectionForm({
   // S6 Electrode A
   const [electrodeARemplacee, setElectrodeARemplacee] = useState<'Oui' | 'Non'>(report?.electrodeARemplacee || 'Non');
   const [selectionElectrodeARemplacee, setSelectionElectrodeARemplacee] = useState<string>(report?.selectionElectrodeARemplacee || '');
+  const [origineElectrodeAInstallee, setOrigineElectrodeAInstallee] = useState<string>(report?.origineElectrodeAInstallee || '');
   const [electrodeAConformeSante, setElectrodeAConformeSante] = useState<'Oui' | 'Non'>(report?.electrodeAConformeSante || 'Oui');
   const [electrodeASecoursRemplacee, setElectrodeASecoursRemplacee] = useState<'Oui' | 'Non'>(report?.electrodeASecoursRemplacee || 'Non');
   const [selectionElectrodeASecoursRemplacee, setSelectionElectrodeASecoursRemplacee] = useState<string>(report?.selectionElectrodeASecoursRemplacee || '');
+  const [origineElectrodeSecoursAInstallee, setOrigineElectrodeSecoursAInstallee] = useState<string>(report?.origineElectrodeSecoursAInstallee || '');
 
   // S7 Electrode P
   const [electrodePRemplacee, setElectrodePRemplacee] = useState<'Oui' | 'Non'>(report?.electrodePRemplacee || 'Non');
   const [selectionElectrodePRemplacee, setSelectionElectrodePRemplacee] = useState<string>(report?.selectionElectrodePRemplacee || '');
+  const [origineElectrodePInstallee, setOrigineElectrodePInstallee] = useState<string>(report?.origineElectrodePInstallee || '');
   const [electrodePConformeSante, setElectrodePConformeSante] = useState<'Oui' | 'Non'>(report?.electrodePConformeSante || 'Oui');
   const [electrodePSecoursRemplacee, setElectrodePSecoursRemplacee] = useState<'Oui' | 'Non'>(report?.electrodePSecoursRemplacee || 'Non');
   const [selectionElectrodePSecoursRemplacee, setSelectionElectrodePSecoursRemplacee] = useState<string>(report?.selectionElectrodePSecoursRemplacee || '');
+  const [origineElectrodeSecoursPInstallee, setOrigineElectrodeSecoursPInstallee] = useState<string>(report?.origineElectrodeSecoursPInstallee || '');
 
   // S8 Batterie
   const [batterieRemplacee, setBatterieRemplacee] = useState<'Oui' | 'Non'>(report?.batterieRemplacee || 'Non');
   const [selectionBatterieRemplacee, setSelectionBatterieRemplacee] = useState<string>(report?.selectionBatterieRemplacee || '');
+  const [origineBatterieInstallee, setOrigineBatterieInstallee] = useState<string>(report?.origineBatterieInstallee || '');
   const [pourcentageChargeNouvelleBatterie, setPourcentageChargeNouvelleBatterie] = useState<string>(
     report?.pourcentageChargeNouvelleBatterie ? String(report.pourcentageChargeNouvelleBatterie) : '100'
   );
@@ -1106,6 +1181,7 @@ export default function GmaoCorrectionForm({
   const [kitRasoirPresent, setKitRasoirPresent] = useState<'Oui' | 'Non'>(report?.kitRasoirPresent || report?.defibSnapshot?.kitRasoirPresent || origDefib?.kitRasoirPresent || 'Oui');
   const [kitSecoursRemplaceOuAjoute, setKitSecoursRemplaceOuAjoute] = useState<'Oui' | 'Non'>(report?.kitSecoursRemplaceOuAjoute || 'Non');
   const [selectionKitSecoursRemplace, setSelectionKitSecoursRemplace] = useState<string>(report?.selectionKitSecoursRemplace || '');
+  const [origineKitSecoursInstalle, setOrigineKitSecoursInstalle] = useState<string>(report?.origineKitSecoursInstalle || '');
   
   // S11 add-on
   const [fichierDonneesRecupere, setFichierDonneesRecupere] = useState<'Oui' | 'Non'>(report?.fichierDonneesRecupere || 'Non');
@@ -1160,8 +1236,14 @@ export default function GmaoCorrectionForm({
   const devisDropdownRef = useRef<HTMLDivElement>(null);
 
   // Section 5 Dates - Préconisation de remplacement
+  const parsePrecoBool = (v: any): boolean => {
+    if (typeof v === 'boolean') return v;
+    if (v === undefined || v === null || v === '') return false;
+    const s = String(v).trim().toLowerCase();
+    return s === 'oui' || s === 'true' || s === '1' || s === 'vrai';
+  };
   const [preconisationRemplacement, setPreconisationRemplacement] = useState<boolean>(
-    () => Boolean(report?.preconisationRemplacement ?? report?.defibSnapshot?.preconisationRemplacement ?? false)
+    () => parsePrecoBool(report?.preconisationRemplacement ?? report?.defibSnapshot?.preconisationRemplacement)
   );
   const [recommandationPreconisationRemplacement, setRecommandationPreconisationRemplacement] = useState<string>(
     () => report?.recommandationPreconisationRemplacement || report?.defibSnapshot?.recommandationPreconisationRemplacement || ''
@@ -1241,6 +1323,16 @@ export default function GmaoCorrectionForm({
       setSelectionMaterielPrete(report.selectionMaterielPrete || '');
       setAttachments(report.attachments || []);
       setKitPeremption(report.kitPeremption || report.defibSnapshot?.peremptionTrousse || origDefib?.peremptionTrousse || '');
+      setTypeDefibrillateur(
+        normalizeTypeDefib(
+          report.typeDefibrillateur || (report.defibSnapshot as any)?.typeDefibrillateur || (origDefib as any)?.typeDefibrillateur,
+          report.dea || (report.defibSnapshot as any)?.dea
+        )
+      );
+      setCoffretRemplace(report.coffretRemplace || 'Non');
+      setSelectionCoffretRemplace(report.selectionCoffretRemplace || '');
+      setCustomCoffretRemplace(report.customCoffretRemplace || '');
+      setOrigineCoffretInstalle(report.origineCoffretInstalle || '');
       setEquipeAlarme(report.equipeAlarme !== undefined ? report.equipeAlarme : 'Oui');
       setAlarme(report.alarme !== undefined ? report.alarme : 'Non');
       setArmoireConnectee(report.armoireConnectee || 'Non');
@@ -1260,20 +1352,25 @@ export default function GmaoCorrectionForm({
       setElectrodeARemplacee(report.electrodeARemplacee || 'Non');
       setSelectionElectrodeARemplacee(report.selectionElectrodeARemplacee || '');
       setCustomElectrodeARemplacee(report.customElectrodeARemplacee || '');
+      setOrigineElectrodeAInstallee(report.origineElectrodeAInstallee || '');
       setElectrodeAConformeSante(report.electrodeAConformeSante || 'Oui');
       setElectrodeASecoursRemplacee(report.electrodeASecoursRemplacee || 'Non');
       setSelectionElectrodeASecoursRemplacee(report.selectionElectrodeASecoursRemplacee || '');
       setCustomElectrodeASecoursRemplacee(report.customElectrodeASecoursRemplacee || '');
+      setOrigineElectrodeSecoursAInstallee(report.origineElectrodeSecoursAInstallee || '');
       setElectrodePRemplacee(report.electrodePRemplacee || 'Non');
       setSelectionElectrodePRemplacee(report.selectionElectrodePRemplacee || '');
       setCustomElectrodePRemplacee(report.customElectrodePRemplacee || '');
+      setOrigineElectrodePInstallee(report.origineElectrodePInstallee || '');
       setElectrodePConformeSante(report.electrodePConformeSante || 'Oui');
       setElectrodePSecoursRemplacee(report.electrodePSecoursRemplacee || 'Non');
       setSelectionElectrodePSecoursRemplacee(report.selectionElectrodePSecoursRemplacee || '');
       setCustomElectrodePSecoursRemplacee(report.customElectrodePSecoursRemplacee || '');
+      setOrigineElectrodeSecoursPInstallee(report.origineElectrodeSecoursPInstallee || '');
       setBatterieRemplacee(report.batterieRemplacee || 'Non');
       setSelectionBatterieRemplacee(report.selectionBatterieRemplacee || '');
       setCustomBatterieRemplacee(report.customBatterieRemplacee || '');
+      setOrigineBatterieInstallee(report.origineBatterieInstallee || '');
       setPourcentageChargeNouvelleBatterie(report.pourcentageChargeNouvelleBatterie ? String(report.pourcentageChargeNouvelleBatterie) : '100');
       setBatterieConformeSante(report.batterieConformeSante || (report.defibSnapshot?.situationBatterie === 'Vert' ? 'Oui' : 'Non') || 'Oui');
       setTechConformeArrivee(report.techConformeArrivee || '');
@@ -1298,6 +1395,7 @@ export default function GmaoCorrectionForm({
       setKitSecoursRemplaceOuAjoute(report.kitSecoursRemplaceOuAjoute || 'Non');
       setSelectionKitSecoursRemplace(report.selectionKitSecoursRemplace || '');
       setCustomKitSecoursRemplace(report.customKitSecoursRemplace || '');
+      setOrigineKitSecoursInstalle(report.origineKitSecoursInstalle || '');
       setFichierDonneesRecupere(report.fichierDonneesRecupere || 'Non');
       setEmettreFactureBrouillon(report.emettreFactureBrouillon || 'Oui');
       setServiceEmettreId(report.serviceEmettreId || '');
@@ -1311,7 +1409,7 @@ export default function GmaoCorrectionForm({
       setDevisArticlesSelectionnes(report.devisArticlesSelectionnes || []);
       setDevisAutreInfo(report.devisAutreInfo || '');
       setDevisPriorite(report.devisPriorite || 'Moyenne');
-      setPreconisationRemplacement(Boolean(report.preconisationRemplacement ?? report.defibSnapshot?.preconisationRemplacement ?? false));
+      setPreconisationRemplacement(parsePrecoBool(report.preconisationRemplacement ?? report.defibSnapshot?.preconisationRemplacement));
       setRecommandationPreconisationRemplacement(report.recommandationPreconisationRemplacement || report.defibSnapshot?.recommandationPreconisationRemplacement || '');
     }
   }, [report]);
@@ -1919,6 +2017,16 @@ export default function GmaoCorrectionForm({
     if (!snapshot.clientId) {
       errors.push("Veuillez associer un client à l'appareil.");
     }
+    if (isDefibrillator && (!typeDefibrillateur || !typeDefibrillateur.trim())) {
+      errors.push("Le type de défibrillateur doit-être renseigné.");
+    }
+    if (isDefibrillator && typeDefibrillateur && typeDefibrillateur.trim() && selectedModelVar) {
+      const normEntered = normalizeTypeDefib(typeDefibrillateur).trim().toLowerCase();
+      const normModel = normalizeTypeDefib(selectedModelVar.typeDefibrillateur).trim().toLowerCase();
+      if (!normModel || normEntered !== normModel) {
+        errors.push("Le type de défibrillateur semble invalide.");
+      }
+    }
 
     // 1. PIN Code validation
     const enteredPinTrimmed = clientPinCode.trim().toUpperCase();
@@ -1962,6 +2070,66 @@ export default function GmaoCorrectionForm({
     }
 
     // 2. Dates validation
+    const isDateValueMalformed = (rawVal: string | undefined, inputId?: string): boolean => {
+      if (inputId && typeof document !== 'undefined') {
+        const el = document.getElementById(inputId) as HTMLInputElement | null;
+        if (el && el.validity?.badInput) {
+          return true;
+        }
+      }
+      if (!rawVal || !rawVal.trim()) return false;
+      const clean = rawVal.trim();
+
+      const isoMatch = clean.match(/^(\d+)-(\d{1,2})-(\d{1,2})$/);
+      if (isoMatch) {
+        const yearStr = isoMatch[1];
+        const month = parseInt(isoMatch[2], 10);
+        const day = parseInt(isoMatch[3], 10);
+        if (yearStr.length !== 4 || !/^(19\d\d|20\d\d)$/.test(yearStr)) return true;
+        const year = parseInt(yearStr, 10);
+        if (month < 1 || month > 12 || day < 1 || day > 31) return true;
+        const d = new Date(year, month - 1, day);
+        if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return true;
+        return false;
+      }
+
+      const frMatch = clean.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d+)$/);
+      if (frMatch) {
+        const day = parseInt(frMatch[1], 10);
+        const month = parseInt(frMatch[2], 10);
+        const yearStr = frMatch[3];
+        if (yearStr.length !== 4 || !/^(19\d\d|20\d\d)$/.test(yearStr)) return true;
+        const year = parseInt(yearStr, 10);
+        if (month < 1 || month > 12 || day < 1 || day > 31) return true;
+        const d = new Date(year, month - 1, day);
+        if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return true;
+        return false;
+      }
+
+      return true;
+    };
+
+    const dateFieldsToVerify: { val: string | undefined; inputId: string; fieldName: string }[] = [
+      { val: snapshot.fabrication, inputId: 'snap-fabrication', fieldName: 'Fabrication.' },
+      { val: snapshot.miseEnService, inputId: 'snap-miseEnService', fieldName: 'Mise en service.' },
+      { val: snapshot.finGarantie, inputId: 'snap-finGarantie', fieldName: 'Fin de garantie.' },
+      { val: snapshot.peremptionElectrodeA, inputId: 'snap-peremptionElectrodeA', fieldName: 'Péremption. (A)' },
+      { val: snapshot.peremptionSecoursElectrodeA, inputId: 'snap-peremptionSecoursElectrodeA', fieldName: 'Péremption de l’électrode de secours. (A)' },
+      { val: snapshot.peremptionElectrodeP, inputId: 'snap-peremptionElectrodeP', fieldName: 'Péremption. (P)' },
+      { val: snapshot.peremptionSecoursElectrodeP, inputId: 'snap-peremptionSecoursElectrodeP', fieldName: 'Péremption de l’électrode de secours. (P)' },
+      { val: snapshot.peremptionBatterie, inputId: 'snap-peremptionBatterie', fieldName: 'Péremption. (B)' },
+      { val: snapshot.fabricationBatterie, inputId: 'snap-fabricationBatterie', fieldName: 'Fabrication. (B)' },
+      { val: snapshot.insertionBatterie, inputId: 'snap-insertionBatterie', fieldName: 'Insertion. (B)' },
+      { val: kitPeremption, inputId: 'kitPeremption', fieldName: 'Péremption de la trousse.' },
+      { val: kitPeremptionServiettes, inputId: 'kitPeremptionServiettes', fieldName: 'Péremption des serviettes.' },
+    ];
+
+    dateFieldsToVerify.forEach(({ val, inputId, fieldName }) => {
+      if (isDateValueMalformed(val, inputId)) {
+        errors.push(`Il semble que la date soit incorrecte pour ${fieldName} : veuillez vérifier.`);
+      }
+    });
+
     const today = new Date();
     const todayPure = new Date(today);
     todayPure.setHours(0, 0, 0, 0);
@@ -1976,6 +2144,7 @@ export default function GmaoCorrectionForm({
 
     const checkDateRules = (val: string, label: string) => {
       if (!val || !val.trim()) return;
+      if (isDateValueMalformed(val)) return;
       const d = parseDateSafely(val);
       if (!d) return;
 
@@ -2138,23 +2307,79 @@ export default function GmaoCorrectionForm({
       }
     }
 
+    // 9. Duplicate UGS/Catégorie across installed pieces check
+    const resolveStockUgsForSelection = (selectionId: string): string => {
+      if (!selectionId || selectionId === 'Autre') return '';
+      const res = getTraceAndStock(selectionId);
+      if (res && res.stock) {
+        const ugs = (res.stock.ugs || '').trim();
+        if (ugs) return ugs.toLowerCase();
+        return (res.stock.denominationPieceId || res.stock.id || '').trim().toLowerCase();
+      }
+      const directStock = (stocks || []).find(
+        st =>
+          st.id === selectionId ||
+          (st.ugs && st.ugs.trim().toLowerCase() === selectionId.trim().toLowerCase()) ||
+          (st.denominationPieceId && st.denominationPieceId.trim().toLowerCase() === selectionId.trim().toLowerCase())
+      );
+      if (directStock) {
+        return (directStock.ugs || directStock.denominationPieceId || directStock.id || '').trim().toLowerCase();
+      }
+      return '';
+    };
+
+    const activePieceSelections: string[] = [];
+    if (coffretRemplace === 'Oui' && selectionCoffretRemplace && selectionCoffretRemplace !== 'Autre') {
+      activePieceSelections.push(selectionCoffretRemplace);
+    }
+    if (electrodeARemplacee === 'Oui' && selectionElectrodeARemplacee && selectionElectrodeARemplacee !== 'Autre') {
+      activePieceSelections.push(selectionElectrodeARemplacee);
+    }
+    if (electrodePRemplacee === 'Oui' && selectionElectrodePRemplacee && selectionElectrodePRemplacee !== 'Autre') {
+      activePieceSelections.push(selectionElectrodePRemplacee);
+    }
+    if (batterieRemplacee === 'Oui' && selectionBatterieRemplacee && selectionBatterieRemplacee !== 'Autre') {
+      activePieceSelections.push(selectionBatterieRemplacee);
+    }
+    if (kitSecoursRemplaceOuAjoute === 'Oui' && selectionKitSecoursRemplace && selectionKitSecoursRemplace !== 'Autre') {
+      activePieceSelections.push(selectionKitSecoursRemplace);
+    }
+
+    const seenUgs = new Set<string>();
+    let hasDuplicateUgs = false;
+    for (const selId of activePieceSelections) {
+      const ugsKey = resolveStockUgsForSelection(selId);
+      if (ugsKey) {
+        if (seenUgs.has(ugsKey)) {
+          hasDuplicateUgs = true;
+          break;
+        }
+        seenUgs.add(ugsKey);
+      }
+    }
+    if (hasDuplicateUgs) {
+      errors.push("Il semble que vous avez installé deux pièces avec la même UGS/Catégorie, veuillez vérifier.");
+    }
+
     if (errors.length > 0) {
       const firstErr = (errors[0] || '').toLowerCase();
       if (firstErr.includes("section 11") || firstErr.includes("prêt à l’usage")) {
         setActiveSection(11);
       } else if (firstErr.includes("section 9") || firstErr.includes("arrivée")) {
         setActiveSection(9);
-      } else if (firstErr.includes("section 10") || firstErr.includes("kit")) {
+      } else if (firstErr.includes("section 10") || firstErr.includes("kit") || firstErr.includes("trousse") || firstErr.includes("serviettes")) {
         setActiveSection(10);
-      } else if (firstErr.includes("section 8") || firstErr.includes("batterie")) {
+      } else if (firstErr.includes("section 8") || firstErr.includes("batterie") || firstErr.includes("(b)")) {
         setActiveSection(8);
-      } else if (firstErr.includes("section 7") || firstErr.includes("pédiatrique")) {
+      } else if (firstErr.includes("section 7") || firstErr.includes("pédiatrique") || firstErr.includes("(p)")) {
         setActiveSection(7);
-      } else if (firstErr.includes("section 6") || firstErr.includes("adulte") || firstErr.includes("électrode a")) {
+      } else if (firstErr.includes("section 6") || firstErr.includes("adulte") || firstErr.includes("électrode a") || firstErr.includes("(a)")) {
         setActiveSection(6);
+      } else if (firstErr.includes("fabrication.") || firstErr.includes("mise en service.") || firstErr.includes("fin de garantie.")) {
+        setActiveSection(5);
       } else if (firstErr.includes("client")) {
         setActiveSection(2);
-      } else if (firstErr.includes("identifiant") || firstErr.includes("série") || firstErr.includes("modèle")) {
+      } else if (firstErr.includes("identifiant") || firstErr.includes("série") || firstErr.includes("modèle") || firstErr.includes("type de défibrillateur")) {
         setActiveSection(1);
       }
 
@@ -2169,12 +2394,19 @@ export default function GmaoCorrectionForm({
         }
         return;
       } else {
-        const hasBlocking = errors.some(err => 
-          err.includes("bloquant") || 
-          err.includes("obligatoire") || 
-          err.includes("associer un client") || 
-          err.includes("invalide")
-        );
+        const hasBlocking = errors.some(err => {
+          const lower = err.toLowerCase();
+          if (lower.includes("semble invalide")) return false;
+          return (
+            lower.includes("bloquant") || 
+            lower.includes("obligatoire") || 
+            lower.includes("associer un client") || 
+            lower.includes("doit-être renseigné") ||
+            lower.includes("doit être renseigné") ||
+            lower.includes("invalide") ||
+            lower.includes("requis")
+          );
+        });
         if (hasBlocking) {
           setAlertInfoErrors(errors);
           setErrorText("Veuillez corriger les erreurs bloquantes avant d'enregistrer.");
@@ -2208,7 +2440,7 @@ export default function GmaoCorrectionForm({
     const processPieceSelection = (
       selectionId: string, 
       customVal: string, 
-      pieceType: 'electrodeA' | 'electrodeASecours' | 'electrodeP' | 'electrodePSecours' | 'batterie' | 'kit'
+      pieceType: 'coffret' | 'electrodeA' | 'electrodeASecours' | 'electrodeP' | 'electrodePSecours' | 'batterie' | 'kit'
     ) => {
       if (!selectionId) return;
 
@@ -2247,6 +2479,21 @@ export default function GmaoCorrectionForm({
     };
 
     // Update finalSnapshot & final report payload based on selections
+    if (coffretRemplace === 'Oui') {
+      processPieceSelection(selectionCoffretRemplace, customCoffretRemplace, 'coffret');
+      if (selectionCoffretRemplace === 'Autre') {
+        finalSnapshot.numeroLotCoffret = customCoffretRemplace;
+      } else {
+        const res = getTraceAndStock(selectionCoffretRemplace);
+        if (res) {
+          finalSnapshot.modeleCoffretId = res.stock.denominationPieceId;
+          if (res.trace.lotOrSerial) {
+            finalSnapshot.numeroLotCoffret = res.trace.lotOrSerial;
+          }
+        }
+      }
+    }
+
     if (electrodeARemplacee === 'Oui') {
       processPieceSelection(selectionElectrodeARemplacee, customElectrodeARemplacee, 'electrodeA');
       if (selectionElectrodeARemplacee === 'Autre') {
@@ -2383,6 +2630,7 @@ export default function GmaoCorrectionForm({
       numeroSerie: finalSnapshot.numeroSerie || '',
       categorie: finalSnapshot.categorie || 'Défibrillateur',
       modele: finalSnapshot.modele || finalSnapshot.modeleId || '',
+      typeDefibrillateur,
       denomination: finalSnapshot.nomSite || finalSnapshot.denomination || '',
       emplacement: finalSnapshot.commentaireAdresse || finalSnapshot.emplacement || '',
       clientId: finalSnapshot.clientId || '',
@@ -2428,7 +2676,19 @@ export default function GmaoCorrectionForm({
       pieceJointeDevisName: Array.isArray(attachments) && attachments.length > 0
         ? attachments.map(a => a.url || a.name).filter(Boolean).join(', ')
         : undefined,
-      defibSnapshot: finalSnapshot,
+      defibSnapshot: {
+        ...finalSnapshot,
+        typeDefibrillateur,
+        coffretRemplace,
+        selectionCoffretRemplace,
+        origineCoffretInstalle: coffretRemplace === 'Oui' ? origineCoffretInstalle : '',
+        origineElectrodeAInstallee: electrodeARemplacee === 'Oui' ? origineElectrodeAInstallee : '',
+        origineElectrodeSecoursAInstallee: electrodeASecoursRemplacee === 'Oui' ? origineElectrodeSecoursAInstallee : '',
+        origineElectrodePInstallee: electrodePRemplacee === 'Oui' ? origineElectrodePInstallee : '',
+        origineElectrodeSecoursPInstallee: electrodePSecoursRemplacee === 'Oui' ? origineElectrodeSecoursPInstallee : '',
+        origineBatterieInstallee: batterieRemplacee === 'Oui' ? origineBatterieInstallee : '',
+        origineKitSecoursInstalle: kitSecoursRemplaceOuAjoute === 'Oui' ? origineKitSecoursInstalle : '',
+      },
       commentaireInterne: snapshot.commentaireInterne || '',
       techSignature: techSignature,
       endTimeStamp: endTimeStamp,
@@ -2448,6 +2708,10 @@ export default function GmaoCorrectionForm({
       photoResultatTestUrl,
 
       // Section 3 additions
+      coffretRemplace,
+      selectionCoffretRemplace,
+      customCoffretRemplace,
+      origineCoffretInstalle: coffretRemplace === 'Oui' ? origineCoffretInstalle : '',
       equipeAlarme,
       alarme,
       armoireConnectee,
@@ -2458,20 +2722,25 @@ export default function GmaoCorrectionForm({
       // Section 6 additions
       electrodeARemplacee,
       selectionElectrodeARemplacee,
+      origineElectrodeAInstallee: electrodeARemplacee === 'Oui' ? origineElectrodeAInstallee : '',
       electrodeAConformeSante,
       electrodeASecoursRemplacee,
       selectionElectrodeASecoursRemplacee,
+      origineElectrodeSecoursAInstallee: electrodeASecoursRemplacee === 'Oui' ? origineElectrodeSecoursAInstallee : '',
 
       // Section 7 additions
       electrodePRemplacee,
       selectionElectrodePRemplacee,
+      origineElectrodePInstallee: electrodePRemplacee === 'Oui' ? origineElectrodePInstallee : '',
       electrodePConformeSante,
       electrodePSecoursRemplacee,
       selectionElectrodePSecoursRemplacee,
+      origineElectrodeSecoursPInstallee: electrodePSecoursRemplacee === 'Oui' ? origineElectrodeSecoursPInstallee : '',
 
       // Section 8 additions
       batterieRemplacee,
       selectionBatterieRemplacee,
+      origineBatterieInstallee: batterieRemplacee === 'Oui' ? origineBatterieInstallee : '',
       pourcentageChargeNouvelleBatterie: batterieRemplacee === 'Oui' ? pourcentageChargeNouvelleBatterie : undefined,
       batterieConformeSante,
 
@@ -2511,6 +2780,7 @@ export default function GmaoCorrectionForm({
       kitRasoirPresent,
       kitSecoursRemplaceOuAjoute,
       selectionKitSecoursRemplace,
+      origineKitSecoursInstalle: kitSecoursRemplaceOuAjoute === 'Oui' ? origineKitSecoursInstalle : '',
 
       // Section 11 additions
       fichierDonneesRecupere,
@@ -2534,7 +2804,12 @@ export default function GmaoCorrectionForm({
 
     // Auto-generate moderation comment for the "Gérer" side pane ONLY when report is no longer upcoming (Modération or Validés)
     if (!savedReportPayload.isUpcoming) {
-      savedReportPayload.commentaire = generateReportModerationComment(savedReportPayload, defibrillateurs);
+      savedReportPayload.commentaire = generateReportModerationComment(
+        { ...savedReportPayload, commentaire: report?.commentaire },
+        defibrillateurs,
+        stocks,
+        variables
+      );
     }
 
     setIsSaving(true);
@@ -2632,11 +2907,15 @@ export default function GmaoCorrectionForm({
 
       {alertInfoErrors && alertInfoErrors.length > 0 && (() => {
         const isErrorBlocking = (err: string) => {
-          return err.toLowerCase().includes("bloquant") || 
-                 err.toLowerCase().includes("obligatoire") || 
-                 err.toLowerCase().includes("associer un client") || 
-                 err.toLowerCase().includes("invalide") ||
-                 err.toLowerCase().includes("requis");
+          const lower = err.toLowerCase();
+          if (lower.includes("semble invalide")) return false;
+          return lower.includes("bloquant") || 
+                 lower.includes("obligatoire") || 
+                 lower.includes("associer un client") || 
+                 lower.includes("doit-être renseigné") ||
+                 lower.includes("doit être renseigné") ||
+                 lower.includes("invalide") ||
+                 lower.includes("requis");
         };
         const blockingErrors = alertInfoErrors.filter(isErrorBlocking);
         const potentialErrors = alertInfoErrors.filter(err => !isErrorBlocking(err));
@@ -3292,6 +3571,22 @@ export default function GmaoCorrectionForm({
               )}
             </div>
 
+            <div className="space-y-1">
+              <label htmlFor="snap-typeDefibrillateur" className="block text-[11px] font-bold text-black uppercase">
+                Type de défibrillateur.
+              </label>
+              <select
+                id="snap-typeDefibrillateur"
+                value={typeDefibrillateur}
+                onChange={(e) => setTypeDefibrillateur(e.target.value)}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+              >
+                <option value="">Sélectionnez un type de défibrillateur.</option>
+                <option value="Automatique (DEA)">Automatique (DEA)</option>
+                <option value="Semi-Automatique (DSA)">Semi-Automatique (DSA)</option>
+              </select>
+            </div>
+
             {isVisibleNumeroAtlasante && typeof window !== 'undefined' && ((localStorage.getItem('defib_lang') || 'Français, France') === 'Français, France' || localStorage.getItem('defib_lang') === 'Français') && (
               <div className="space-y-1">
                 <label htmlFor="snap-numeroAtlasante" className="block text-[11px] font-bold text-black uppercase">
@@ -3934,6 +4229,115 @@ export default function GmaoCorrectionForm({
               </div>
             </div>
 
+            {/* Remplacement Coffret */}
+            <div className="pt-3 space-y-3 bg-white">
+              <div className="space-y-1 bg-white">
+                <label className="block text-[11px] font-bold text-black uppercase">
+                  Coffret remplacé.
+                </label>
+                <div className="flex gap-6 items-center pt-1 bg-white">
+                  <FormRadio
+                    label="Oui"
+                    checked={coffretRemplace === 'Oui'}
+                    onChange={() => setCoffretRemplace('Oui')}
+                  />
+                  <FormRadio
+                    label="Non"
+                    checked={coffretRemplace === 'Non'}
+                    onChange={() => setCoffretRemplace('Non')}
+                  />
+                </div>
+              </div>
+
+              {coffretRemplace === 'Oui' && (
+                <div className="space-y-3 bg-white animate-fadeIn">
+                  <div className="space-y-1 bg-white">
+                    <label htmlFor="select-coffret-rempc" className="block text-[11px] font-bold text-black uppercase">
+                      Sélection coffret remplacé.
+                    </label>
+                    <div className="flex gap-2">
+                      <select
+                        id="select-coffret-rempc"
+                        value={selectionCoffretRemplace}
+                        onChange={(e) => {
+                          setSelectionCoffretRemplace(e.target.value);
+                          if (e.target.value !== 'Autre') {
+                            setCustomCoffretRemplace('');
+                          }
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                      >
+                        <option value="">Sélectionner le coffret stocké...</option>
+                        {getAvailableTraceabilities('Modèle Coffret').map(item => (
+                          <option key={item.traceId} value={item.traceId}>
+                            {item.label}
+                          </option>
+                        ))}
+                        <option value="Autre">Autre</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setIsScanCoffretOpen(true)}
+                        style={rowActionButton18Style}
+                        className="shrink-0 transition-colors cursor-pointer font-sans"
+                      >
+                        Scan
+                      </button>
+                    </div>
+                    {isScanCoffretOpen && (
+                      <BarcodeScannerModal
+                        isOpen={isScanCoffretOpen}
+                        onClose={() => setIsScanCoffretOpen(false)}
+                        onScanSuccess={(scannedText) => {
+                          setIsScanCoffretOpen(false);
+                          const cleanText = scannedText.trim();
+                          const traceList = getAvailableTraceabilities('Modèle Coffret');
+                          const matched = traceList.find(t => t.lotOrSerial.toLowerCase() === cleanText.toLowerCase());
+                          if (matched) {
+                            setSelectionCoffretRemplace(matched.traceId);
+                            setCustomCoffretRemplace('');
+                            handleSnapshotChange('numeroLotCoffret', matched.lotOrSerial);
+                          } else {
+                            setSelectionCoffretRemplace('Autre');
+                            setCustomCoffretRemplace(cleanText);
+                            handleSnapshotChange('numeroLotCoffret', cleanText);
+                          }
+                        }}
+                      />
+                    )}
+                    {selectionCoffretRemplace === 'Autre' && (
+                      <div className="pt-2">
+                        <input
+                          type="text"
+                          placeholder="Référence libre (Référence ou Lot/Série)"
+                          value={customCoffretRemplace}
+                          onChange={(e) => setCustomCoffretRemplace(e.target.value)}
+                          className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-1 bg-white">
+                    <label htmlFor="select-origine-coffret-installe" className="block text-[11px] font-bold text-black uppercase">
+                      Origine coffret installé.
+                    </label>
+                    <select
+                      id="select-origine-coffret-installe"
+                      value={origineCoffretInstalle}
+                      onChange={(e) => setOrigineCoffretInstalle(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                    >
+                      <option value="">Sélectionnez l'origine...</option>
+                      <option value="Envoyé au client au préalable.">Envoyé au client au préalable.</option>
+                      <option value="Fourniture par le client.">Fourniture par le client.</option>
+                      <option value="Stock embarqué technicien.">Stock embarqué technicien.</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* New additions Section 3 (Alarme, Armoire connected, Dispositif handicap, Signalétique, Commentaire) */}
             <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
               {!simplifyCoffret && (
@@ -4530,6 +4934,23 @@ export default function GmaoCorrectionForm({
                     />
                   </div>
                 )}
+
+                <div className="pt-2 space-y-1 bg-white">
+                  <label htmlFor="select-origine-electrode-a-installee" className="block text-[11px] font-bold text-black uppercase">
+                    Origine de l’électrode A installée.
+                  </label>
+                  <select
+                    id="select-origine-electrode-a-installee"
+                    value={origineElectrodeAInstallee}
+                    onChange={(e) => setOrigineElectrodeAInstallee(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                  >
+                    <option value="">Sélectionnez l'origine...</option>
+                    <option value="Envoyé au client au préalable.">Envoyé au client au préalable.</option>
+                    <option value="Fourniture par le client.">Fourniture par le client.</option>
+                    <option value="Stock embarqué technicien.">Stock embarqué technicien.</option>
+                  </select>
+                </div>
               </div>
             )}
 
@@ -4617,6 +5038,23 @@ export default function GmaoCorrectionForm({
                         />
                       </div>
                     )}
+
+                    <div className="pt-2 space-y-1 bg-white">
+                      <label htmlFor="select-origine-electrode-secours-a-installee" className="block text-[11px] font-bold text-black uppercase">
+                        Origine de l’électrode secours A installée.
+                      </label>
+                      <select
+                        id="select-origine-electrode-secours-a-installee"
+                        value={origineElectrodeSecoursAInstallee}
+                        onChange={(e) => setOrigineElectrodeSecoursAInstallee(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                      >
+                        <option value="">Sélectionnez l'origine...</option>
+                        <option value="Envoyé au client au préalable.">Envoyé au client au préalable.</option>
+                        <option value="Fourniture par le client.">Fourniture par le client.</option>
+                        <option value="Stock embarqué technicien.">Stock embarqué technicien.</option>
+                      </select>
+                    </div>
                   </div>
                 )}
               </>
@@ -4900,6 +5338,23 @@ export default function GmaoCorrectionForm({
                     />
                   </div>
                 )}
+
+                <div className="pt-2 space-y-1 bg-white">
+                  <label htmlFor="select-origine-electrode-p-installee" className="block text-[11px] font-bold text-black uppercase">
+                    Origine de l’électrode P installée.
+                  </label>
+                  <select
+                    id="select-origine-electrode-p-installee"
+                    value={origineElectrodePInstallee}
+                    onChange={(e) => setOrigineElectrodePInstallee(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                  >
+                    <option value="">Sélectionnez l'origine...</option>
+                    <option value="Envoyé au client au préalable.">Envoyé au client au préalable.</option>
+                    <option value="Fourniture par le client.">Fourniture par le client.</option>
+                    <option value="Stock embarqué technicien.">Stock embarqué technicien.</option>
+                  </select>
+                </div>
               </div>
             )}
 
@@ -4987,6 +5442,23 @@ export default function GmaoCorrectionForm({
                         />
                       </div>
                     )}
+
+                    <div className="pt-2 space-y-1 bg-white">
+                      <label htmlFor="select-origine-electrode-secours-p-installee" className="block text-[11px] font-bold text-black uppercase">
+                        Origine de l’électrode secours P installée.
+                      </label>
+                      <select
+                        id="select-origine-electrode-secours-p-installee"
+                        value={origineElectrodeSecoursPInstallee}
+                        onChange={(e) => setOrigineElectrodeSecoursPInstallee(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                      >
+                        <option value="">Sélectionnez l'origine...</option>
+                        <option value="Envoyé au client au préalable.">Envoyé au client au préalable.</option>
+                        <option value="Fourniture par le client.">Fourniture par le client.</option>
+                        <option value="Stock embarqué technicien.">Stock embarqué technicien.</option>
+                      </select>
+                    </div>
                   </div>
                 )}
               </>
@@ -5203,7 +5675,7 @@ export default function GmaoCorrectionForm({
             {batterieRemplacee === 'Oui' && (
               <div className="pt-3 space-y-1 bg-white animate-fadeIn">
                 <label htmlFor="select-batterie-rempc" className="block text-[11px] font-bold text-black uppercase">
-                  Sélection de la batterie.
+                  Sélection de la batterie remplacée.
                 </label>
                 <div className="flex gap-2">
                   <select
@@ -5269,6 +5741,23 @@ export default function GmaoCorrectionForm({
                     />
                   </div>
                 )}
+
+                <div className="pt-2 space-y-1 bg-white">
+                  <label htmlFor="select-origine-batterie-installee" className="block text-[11px] font-bold text-black uppercase">
+                    Origine de la batterie installée.
+                  </label>
+                  <select
+                    id="select-origine-batterie-installee"
+                    value={origineBatterieInstallee}
+                    onChange={(e) => setOrigineBatterieInstallee(e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                  >
+                    <option value="">Sélectionnez l'origine...</option>
+                    <option value="Envoyé au client au préalable.">Envoyé au client au préalable.</option>
+                    <option value="Fourniture par le client.">Fourniture par le client.</option>
+                    <option value="Stock embarqué technicien.">Stock embarqué technicien.</option>
+                  </select>
+                </div>
 
                 <div className="pt-2 space-y-1 bg-white">
                   <label htmlFor="input-pourcentage-charge-nouvelle-batterie" className="block text-[11px] font-bold text-black uppercase">
@@ -5560,6 +6049,23 @@ export default function GmaoCorrectionForm({
                         />
                       </div>
                     )}
+
+                    <div className="pt-2 space-y-1 bg-white">
+                      <label htmlFor="select-origine-kit-secours-installe" className="block text-[11px] font-bold text-black uppercase">
+                        Origine du kit de secours installé.
+                      </label>
+                      <select
+                        id="select-origine-kit-secours-installe"
+                        value={origineKitSecoursInstalle}
+                        onChange={(e) => setOrigineKitSecoursInstalle(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                      >
+                        <option value="">Sélectionnez l'origine...</option>
+                        <option value="Envoyé au client au préalable.">Envoyé au client au préalable.</option>
+                        <option value="Fourniture par le client.">Fourniture par le client.</option>
+                        <option value="Stock embarqué technicien.">Stock embarqué technicien.</option>
+                      </select>
+                    </div>
                   </div>
                 )}
               </div>

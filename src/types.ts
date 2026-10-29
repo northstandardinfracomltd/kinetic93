@@ -101,7 +101,8 @@ export interface Variable {
   marque: string;
   description: string;
   category: VariableCategory;
-  typeDefibrillateur?: 'DSA' | 'DEA' | 'Non renseigné'; // Appliqué si category === 'Modèle Défibrillateur'
+  typeDefibrillateur?: 'Automatique (DEA)' | 'Semi-Automatique (DSA)' | 'DSA' | 'DEA' | 'Non renseigné' | '' | string; // Appliqué si category === 'Modèle Défibrillateur'
+  typeUsageElectrode?: 'Pédiatrique' | 'Adulte' | ''; // Appliqué si category === 'Modèle Électrode'
   imageUrl?: string; // Appliqué si category === 'Modèle Défibrillateur'
   couleurHex?: string; // Appliqué si category === 'Drapeau GMAO' ou 'Drapeau post-intervention'
   dureePrestation?: number; // Durée de la prestation en minutes (Appliqué si category === 'Modèle Raison Prestation')
@@ -155,6 +156,7 @@ export interface Defibrillateur {
   modeleId: string; // Lookup Variable category 'Modèle Défibrillateur'
   numeroAtlasante?: string;
   versionLogiciel?: string;
+  typeDefibrillateur?: 'Automatique (DEA)' | 'Semi-Automatique (DSA)' | string;
   
   // Section 2 - Client
   clientId: string; // Lookup Client
@@ -480,6 +482,10 @@ export interface CompanyInfo {
   enableSatisfactionAvis?: 'Oui' | 'Non';
   enableDevisFactures?: 'Oui' | 'Non';
   gmailPartageLocalisation?: string;
+  expressionAlerte1?: string;
+  expressionAlerte2?: string;
+  expressionAlerte3?: string;
+  expressionAlerte4?: string;
   disableHelpsAndTutorials?: 'Oui' | 'Non';
   enableOtherEquipments?: 'Oui' | 'Non';
   hiddenTabs?: string[];
@@ -519,6 +525,8 @@ export interface CompanyInfo {
   spreadsheetTourneesUrl?: string;
   spreadsheetMissionsTournees?: string;
   spreadsheetMissionsTourneesUrl?: string;
+  spreadsheetGestionApresIntervention?: string;
+  spreadsheetGestionApresInterventionUrl?: string;
   spreadsheetRapportsPdf?: string;
   spreadsheetRapportsPdfUrl?: string;
   spreadsheetCrm?: string;
@@ -575,6 +583,7 @@ export type SpreadsheetFieldKey =
   | 'spreadsheetClients'
   | 'spreadsheetTournees'
   | 'spreadsheetMissionsTournees'
+  | 'spreadsheetGestionApresIntervention'
   | 'spreadsheetRapportsPdf'
   | 'spreadsheetCrm'
   | 'spreadsheetReglagesCrm'
@@ -609,6 +618,7 @@ export const EXTRA_SPREADSHEET_FIELDS: {
 }[] = [
   { key: 'spreadsheetTournees', urlKey: 'spreadsheetTourneesUrl', storageSuffix: 'spreadsheet_tournees', label: 'Spreadsheet Tournées.', id: 'settings-db-spreadsheet-tournees' },
   { key: 'spreadsheetMissionsTournees', urlKey: 'spreadsheetMissionsTourneesUrl', storageSuffix: 'spreadsheet_missions_tournees', label: 'Spreadsheet Missions des Tournées.', id: 'settings-db-spreadsheet-missions-tournees' },
+  { key: 'spreadsheetGestionApresIntervention', urlKey: 'spreadsheetGestionApresInterventionUrl', storageSuffix: 'spreadsheet_gestion_apres_intervention', label: 'Spreadsheet Gestion Après Intervention.', id: 'settings-db-spreadsheet-gestion-apres-intervention' },
   { key: 'spreadsheetRapportsPdf', urlKey: 'spreadsheetRapportsPdfUrl', storageSuffix: 'spreadsheet_rapports_pdf', label: 'Spreadsheet Rapports PDF.', id: 'settings-db-spreadsheet-rapports-pdf' },
   { key: 'spreadsheetCrm', urlKey: 'spreadsheetCrmUrl', storageSuffix: 'spreadsheet_crm', label: 'Spreadsheet CRM.', id: 'settings-db-spreadsheet-crm' },
   { key: 'spreadsheetReglagesCrm', urlKey: 'spreadsheetReglagesCrmUrl', storageSuffix: 'spreadsheet_reglages_crm', label: 'Spreadsheet Réglages CRM.', id: 'settings-db-spreadsheet-reglages-crm' },

@@ -714,7 +714,12 @@ try {
           continue;
         }
         try {
-          const content = fs.readFileSync(path.join(COLLECTIONS_DIR, file), 'utf-8');
+          const fullFilePath = path.join(COLLECTIONS_DIR, file);
+          const content = fs.readFileSync(fullFilePath, 'utf-8').trim();
+          if (!content) {
+            try { fs.unlinkSync(fullFilePath); } catch (_) {}
+            continue;
+          }
           const parsed = JSON.parse(content);
           if (parsed !== undefined && parsed !== null) {
             serverMemoryStore.set(key, parsed);
@@ -735,8 +740,11 @@ try {
               }
             }
           }
-        } catch (colErr) {
-          console.warn(`Failed to read collection file ${file}:`, colErr);
+        } catch (_colErr) {
+          // Auto-heal truncated/corrupted collection file so it never blocks or warns again
+          try {
+            fs.unlinkSync(path.join(COLLECTIONS_DIR, file));
+          } catch (_) {}
         }
       }
     }
@@ -746,6 +754,7 @@ try {
 }
 
 let persistTimeout: NodeJS.Timeout | null = null;
+const activeCollectionWrites = new Map<string, Promise<void>>();
 
 function persistSingleCollectionToDisk(key: string, value: any) {
   try {
@@ -753,12 +762,20 @@ function persistSingleCollectionToDisk(key: string, value: any) {
       fs.mkdirSync(COLLECTIONS_DIR, { recursive: true });
     }
     const filePath = path.join(COLLECTIONS_DIR, `${key}.json`);
-    fs.promises.writeFile(filePath, JSON.stringify(value), 'utf-8').catch(e => {
-      console.warn(`Failed to persist collection ${key} to disk:`, e);
-    });
-  } catch (e) {
-    console.warn(`Failed to persist collection ${key} to disk:`, e);
-  }
+    const tmpPath = path.join(COLLECTIONS_DIR, `.${key}.${process.pid}.${Date.now()}.tmp`);
+    const payload = JSON.stringify(value);
+    const prev = activeCollectionWrites.get(key) || Promise.resolve();
+    const next = prev
+      .catch(() => {})
+      .then(async () => {
+        await fs.promises.writeFile(tmpPath, payload, 'utf-8');
+        await fs.promises.rename(tmpPath, filePath);
+      })
+      .catch(async () => {
+        try { await fs.promises.unlink(tmpPath); } catch (_) {}
+      });
+    activeCollectionWrites.set(key, next);
+  } catch (_) {}
 }
 
 function persistServerStoreToDiskNow() {
@@ -780,7 +797,9 @@ function persistServerStoreToDiskNow() {
       }
       obj[k] = v;
     }
-    fs.writeFileSync(STORE_FILE, JSON.stringify(obj), 'utf-8');
+    const tmpStoreFile = `${STORE_FILE}.${process.pid}.tmp`;
+    fs.writeFileSync(tmpStoreFile, JSON.stringify(obj), 'utf-8');
+    fs.renameSync(tmpStoreFile, STORE_FILE);
   } catch (e) {
     console.warn("Failed to persist server disk store immediately:", e);
   }
@@ -804,9 +823,12 @@ function persistServerStoreToDisk() {
         }
         obj[k] = v;
       }
-      fs.writeFile(STORE_FILE, JSON.stringify(obj), 'utf-8', (err) => {
-        if (err) console.warn("Failed to persist server disk store:", err);
-      });
+      const tmpStoreFile = `${STORE_FILE}.${process.pid}.${Date.now()}.tmp`;
+      fs.promises.writeFile(tmpStoreFile, JSON.stringify(obj), 'utf-8')
+        .then(() => fs.promises.rename(tmpStoreFile, STORE_FILE))
+        .catch(async () => {
+          try { await fs.promises.unlink(tmpStoreFile); } catch (_) {}
+        });
     } catch (e) {
       console.warn("Failed to persist server disk store:", e);
     }
@@ -3781,6 +3803,8 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     missions: 'missionsTournees',
     missionsTournees: 'missionsTournees',
     missions_tournees: 'missionsTournees',
+    gestionApresIntervention: 'gestionApresIntervention',
+    gestion_apres_intervention: 'gestionApresIntervention',
     generated_reports: 'rapportsPdf',
     generatedReports: 'rapportsPdf',
     reports: 'rapportsPdf',
@@ -4916,14 +4940,15 @@ async function warmupDefibrillateursStore() {
       const id = String(req.query.id || req.query.identifiant || req.query.numeroSerie || '').trim();
       const tenantId = String(req.query.tenantId || 'demo').trim();
       const explicitUrl = String(req.query.spreadsheetUrl || '').trim();
+      const forceRefresh = req.query.forceRefresh === 'true';
       if (!id) {
         return res.status(400).json({ error: "id paramètre requis." });
       }
-      // First check if tenant has a live Google Spreadsheet collection already warm in memory
+      // Always check the tenant's Google Spreadsheet collection first if configured
       try {
         const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'defibrillateurs', explicitUrl);
-        if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl) && isSheetCollectionCached(sheetUrl, 'defibrillateurs')) {
-          const sheetData = await fetchTenantSheetCollection(sheetUrl, tenantId, 'defibrillateurs', false);
+        if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
+          const sheetData = await fetchTenantSheetCollection(sheetUrl, tenantId, 'defibrillateurs', forceRefresh);
           if (sheetData && Array.isArray(sheetData.items) && sheetData.items.length > 0) {
             const matcher = matchesDefibWith(id);
             const sheetMatch = sheetData.items.find(matcher);
@@ -4953,6 +4978,7 @@ async function warmupDefibrillateursStore() {
     clients: 'spreadsheetClients',
     tournees: 'spreadsheetTournees',
     missionsTournees: 'spreadsheetMissionsTournees',
+    gestionApresIntervention: 'spreadsheetGestionApresIntervention',
     rapportsPdf: 'spreadsheetRapportsPdf',
     crm: 'spreadsheetCrm',
     reglagesCrm: 'spreadsheetReglagesCrm',
@@ -5594,6 +5620,96 @@ async function warmupDefibrillateursStore() {
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Real-time Tenant Tab & Form Presence Detection (across sessions/users of the same tenant)
+  interface TenantPresenceEntry {
+    sessionId: string;
+    tenantId: string;
+    tab: string;
+    formKey: string;
+    updatedAt: number;
+  }
+  const activeTenantPresenceMap = new Map<string, TenantPresenceEntry>();
+  const PRESENCE_TTL_MS = 12000;
+
+  const pruneStalePresence = (now: number) => {
+    for (const [k, entry] of activeTenantPresenceMap.entries()) {
+      if (now - entry.updatedAt > PRESENCE_TTL_MS) {
+        activeTenantPresenceMap.delete(k);
+      }
+    }
+  };
+
+  app.post("/api/presence/heartbeat", (req, res) => {
+    try {
+      const now = Date.now();
+      pruneStalePresence(now);
+
+      const body = req.body || {};
+      const sessionId = String(body.sessionId || '').trim();
+      const tenantId = String(body.tenantId || 'DEMO').trim().toUpperCase();
+      const tab = String(body.tab || '').trim();
+      const formKey = String(body.formKey || '').trim().toLowerCase();
+
+      if (!sessionId || !tenantId) {
+        return res.json({ tabConflict: false, formConflict: false });
+      }
+
+      const mapKey = `${tenantId}::${sessionId}`;
+      if (!tab && !formKey) {
+        activeTenantPresenceMap.delete(mapKey);
+        return res.json({ tabConflict: false, formConflict: false });
+      }
+
+      activeTenantPresenceMap.set(mapKey, {
+        sessionId,
+        tenantId,
+        tab,
+        formKey,
+        updatedAt: now,
+      });
+
+      let tabConflict = false;
+      let formConflict = false;
+
+      for (const entry of activeTenantPresenceMap.values()) {
+        if (entry.tenantId !== tenantId) continue;
+        if (entry.sessionId === sessionId) continue;
+        if (tab && entry.tab === tab) {
+          tabConflict = true;
+        }
+        if (formKey && entry.formKey && entry.formKey === formKey) {
+          formConflict = true;
+        }
+      }
+
+      return res.json({ tabConflict, formConflict });
+    } catch (err: any) {
+      return res.json({ tabConflict: false, formConflict: false });
+    }
+  });
+
+  app.post("/api/presence/leave", (req, res) => {
+    try {
+      const body = req.body || {};
+      const sessionId = String(body.sessionId || '').trim();
+      const tenantId = String(body.tenantId || '').trim().toUpperCase();
+      if (sessionId) {
+        if (tenantId) {
+          activeTenantPresenceMap.delete(`${tenantId}::${sessionId}`);
+        } else {
+          for (const [k, entry] of activeTenantPresenceMap.entries()) {
+            if (entry.sessionId === sessionId) {
+              activeTenantPresenceMap.delete(k);
+            }
+          }
+        }
+      }
+      return res.json({ ok: true });
+    } catch {
+      return res.json({ ok: true });
     }
   });
 
@@ -7203,6 +7319,7 @@ async function warmupDefibrillateursStore() {
           const EXTRA_SERVER_SHEET_KEYS = [
             'spreadsheetTournees',
             'spreadsheetMissionsTournees',
+            'spreadsheetGestionApresIntervention',
             'spreadsheetRapportsPdf',
             'spreadsheetCrm',
             'spreadsheetReglagesCrm',

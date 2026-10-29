@@ -12,6 +12,7 @@ import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { DefibTablePreloader } from './DefibTablePreloader';
 import { SafeDateInput } from './SafeDateInput';
 import { DefibeoIntelligenceSidePane } from './DefibeoIntelligenceSidePane';
+import { useTenantPresence, ConcurrentAccessBanner } from '../utils/useTenantPresence';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -682,79 +683,83 @@ export default function DefibTab({
     activeTenantId,
   ]);
 
-  // Instant IndexedDB hydration & full multi-chunk fallback for Défibrillateurs on browser reload (up to 40,000+ rows)
+  // Instant IndexedDB hydration & full multi-chunk fallback for Défibrillateurs ONLY when parent defibrillateurs is empty and not currently refreshing
   useEffect(() => {
-    const expectedTotal = sheetStats?.totalCount || 0;
-    if (Array.isArray(defibrillateurs) && defibrillateurs.length > 0 && (expectedTotal === 0 || defibrillateurs.length >= expectedTotal - 50)) {
+    if (isRefreshing || isLocalRefreshing) {
+      return;
+    }
+    if (Array.isArray(defibrillateurs) && defibrillateurs.length > 0) {
       return;
     }
     let cancelled = false;
 
     Promise.all([
-      idbGet<Defibrillateur[]>(`defib_${activeTenantId}_defibrillateurs_v110`),
-      idbGet<Defibrillateur[]>(`defib_${activeTenantId.toUpperCase()}_defibrillateurs_v110`),
-      idbGet<Defibrillateur[]>(`defib_${activeTenantId.toLowerCase()}_defibrillateurs_v110`),
+      idbGet<Defibrillateur[]>(`defib_${activeTenantId}_defibrillateurs_v112`),
+      idbGet<Defibrillateur[]>(`defib_${activeTenantId.toUpperCase()}_defibrillateurs_v112`),
+      idbGet<Defibrillateur[]>(`defib_${activeTenantId.toLowerCase()}_defibrillateurs_v112`),
     ])
       .then(candidates => {
         const best = candidates.filter(Array.isArray).sort((a, b) => b.length - a.length)[0];
         if (!cancelled && Array.isArray(best) && best.length > 0) {
-          setFallbackSheetDefibs(prev => (prev.length >= best.length ? prev : best));
+          setFallbackSheetDefibs(prev => (prev.length === 0 ? best : prev));
         }
       })
       .catch(() => {});
 
-    (async () => {
-      try {
-        const sheetUrl = resolvedSpreadsheetUrl;
-        let offset = 0;
-        let hasMore = true;
-        const acc: Defibrillateur[] = [];
+    if (!onRefreshData) {
+      (async () => {
+        try {
+          const sheetUrl = resolvedSpreadsheetUrl;
+          let offset = 0;
+          let hasMore = true;
+          const acc: Defibrillateur[] = [];
 
-        while (hasMore && !cancelled) {
-          const isFirst = offset === 0;
-          const chunkSize = isFirst ? 5000 : 20000;
-          const res = await fetch(
-            `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=defibrillateurs&forceRefresh=false&offset=${offset}&limit=${chunkSize}&spreadsheetUrl=${encodeURIComponent(sheetUrl)}`
-          );
-          if (!res.ok || cancelled) break;
-          const json = await res.json();
-          if (cancelled) break;
-          if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
-            break;
+          while (hasMore && !cancelled) {
+            const isFirst = offset === 0;
+            const chunkSize = isFirst ? 5000 : 20000;
+            const res = await fetch(
+              `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=defibrillateurs&forceRefresh=false&offset=${offset}&limit=${chunkSize}&spreadsheetUrl=${encodeURIComponent(sheetUrl)}`
+            );
+            if (!res.ok || cancelled) break;
+            const json = await res.json();
+            if (cancelled) break;
+            if (!json.fromSpreadsheet || json.status === 'no_spreadsheet') {
+              break;
+            }
+            if (json.stats && typeof json.stats.totalCount === 'number') {
+              setLocalSheetStats(json.stats);
+              try {
+                for (const k of [activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase()]) {
+                  localStorage.setItem(`defib_${k}_defib_sheet_stats`, JSON.stringify(json.stats));
+                }
+              } catch (_) {}
+            }
+            const items = Array.isArray(json.items) ? json.items : [];
+            acc.push(...items);
+            if (acc.length > 0) {
+              const snapshot = [...acc];
+              setFallbackSheetDefibs(snapshot);
+            }
+            if (json.hasMore && items.length > 0 && typeof json.nextOffset === 'number' && json.nextOffset > offset) {
+              offset = json.nextOffset;
+            } else {
+              hasMore = false;
+            }
           }
-          if (json.stats && typeof json.stats.totalCount === 'number') {
-            setLocalSheetStats(json.stats);
-            try {
-              for (const k of [activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase()]) {
-                localStorage.setItem(`defib_${k}_defib_sheet_stats`, JSON.stringify(json.stats));
-              }
-            } catch (_) {}
-          }
-          const items = Array.isArray(json.items) ? json.items : [];
-          acc.push(...items);
-          if (acc.length > 0) {
-            const snapshot = [...acc];
-            setFallbackSheetDefibs(prev => (prev.length > snapshot.length ? prev : snapshot));
-          }
-          if (json.hasMore && items.length > 0 && typeof json.nextOffset === 'number' && json.nextOffset > offset) {
-            offset = json.nextOffset;
-          } else {
-            hasMore = false;
-          }
-        }
 
-        if (!cancelled && acc.length > 0) {
-          for (const k of [activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase()]) {
-            idbSet(`defib_${k}_defibrillateurs_v110`, acc).catch(() => {});
+          if (!cancelled && acc.length > 0) {
+            for (const k of [activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase()]) {
+              idbSet(`defib_${k}_defibrillateurs_v112`, acc).catch(() => {});
+            }
           }
-        }
-      } catch (_) {}
-    })();
+        } catch (_) {}
+      })();
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [activeTenantId, defibrillateurs?.length, sheetStats?.totalCount, resolvedSpreadsheetUrl, refreshTrigger]);
+  }, [activeTenantId, defibrillateurs?.length, resolvedSpreadsheetUrl, isRefreshing, isLocalRefreshing, Boolean(onRefreshData)]);
 
   // Direct lookup & cache fallback for Clients Spreadsheet (Col 1: "Section 1 - Entreprise.")
   useEffect(() => {
@@ -861,11 +866,15 @@ export default function DefibTab({
   const handleRefreshClick = async () => {
     if (effectiveRefreshing) return;
     setIsLocalRefreshing(true);
-    setRefreshTrigger(prev => prev + 1);
+    setFallbackSheetDefibs([]);
+    setRemoteQueriedDefibs([]);
+    setPlanSheetDefibs([]);
+    stableDefibsRef.current = { tenant: activeTenantId, items: [] };
     try {
       if (onRefreshData) {
         await onRefreshData();
       }
+      setRefreshTrigger(prev => prev + 1);
     } catch (err) {
       console.warn('Manual refresh error in DefibTab:', err);
     } finally {
@@ -1131,24 +1140,25 @@ export default function DefibTab({
   const stableDefibsRef = useRef<{ tenant: string; items: Defibrillateur[] }>({ tenant: '', items: [] });
 
   // Merge local loaded defibrillateurs with fallbackSheetDefibs, planSheetDefibs, and on-demand rows returned from /api/sheets/query
+  // Order is strictly from oldest/fallback to freshest/authoritative so fresh spreadsheet data always overwrites stale cached records
   const mergedDefibrillateurs = useMemo(() => {
-    let baseList = defibrillateurs.length >= fallbackSheetDefibs.length ? defibrillateurs : fallbackSheetDefibs;
-    if (baseList.length === 0 && !resolvedSpreadsheetUrl && remoteQueriedDefibs.length === 0 && planSheetDefibs.length === 0) {
+    const primarySource = defibrillateurs.length > 0 ? defibrillateurs : fallbackSheetDefibs;
+    if (primarySource.length === 0 && !resolvedSpreadsheetUrl && remoteQueriedDefibs.length === 0 && planSheetDefibs.length === 0) {
       stableDefibsRef.current = { tenant: activeTenantId, items: [] };
       return [];
     }
-    if (baseList.length > 0) {
-      stableDefibsRef.current = { tenant: activeTenantId, items: baseList };
+    let effectiveFallback = fallbackSheetDefibs;
+    if (primarySource.length > 0) {
+      stableDefibsRef.current = { tenant: activeTenantId, items: primarySource };
     } else if (stableDefibsRef.current.tenant === activeTenantId && stableDefibsRef.current.items.length > 0) {
-      baseList = stableDefibsRef.current.items;
+      effectiveFallback = stableDefibsRef.current.items;
     }
 
-    const secondaryBase = defibrillateurs.length >= fallbackSheetDefibs.length ? fallbackSheetDefibs : defibrillateurs;
     const byId = new Map<string, number>();
     const byIdent = new Map<string, number>();
     const out: Defibrillateur[] = [];
 
-    for (const sourceList of [baseList, secondaryBase, planSheetDefibs, remoteQueriedDefibs]) {
+    for (const sourceList of [effectiveFallback, planSheetDefibs, defibrillateurs, remoteQueriedDefibs]) {
       for (const df of sourceList) {
         if (!df) continue;
         const idKey = String(df.id || '').trim().toLowerCase();
@@ -1166,14 +1176,12 @@ export default function DefibTab({
           if (identKey) byIdent.set(identKey, idx);
         } else {
           const existing = out[existingIdx];
-          if (df.updatedAt && (!existing.updatedAt || df.updatedAt > existing.updatedAt)) {
-            const merged = { ...existing, ...df, id: existing.id || df.id };
-            out[existingIdx] = merged;
-            const mId = String(merged.id || '').trim().toLowerCase();
-            const mIdent = String(merged.identifiant || '').trim().toLowerCase();
-            if (mId) byId.set(mId, existingIdx);
-            if (mIdent) byIdent.set(mIdent, existingIdx);
-          }
+          const merged = { ...existing, ...df, id: existing.id || df.id };
+          out[existingIdx] = merged;
+          const mId = String(merged.id || '').trim().toLowerCase();
+          const mIdent = String(merged.identifiant || '').trim().toLowerCase();
+          if (mId) byId.set(mId, existingIdx);
+          if (mIdent) byIdent.set(mIdent, existingIdx);
         }
       }
     }
@@ -1776,6 +1784,22 @@ export default function DefibTab({
   const [modeleId, setModeleId] = useState('');
   const [numeroAtlasante, setNumeroAtlasante] = useState('');
   const [versionLogiciel, setVersionLogiciel] = useState('');
+  const [typeDefibrillateur, setTypeDefibrillateur] = useState('');
+
+  const activeDefibIdentifiantForPresence = isFormOpen
+    ? String(identifiant || editingDefib?.identifiant || '').trim()
+    : '';
+  const {
+    showTabConflictBanner,
+    showFormConflictBanner,
+    hideTabBannerFor3Hours,
+    hideFormBannerWhileOpen,
+  } = useTenantPresence({
+    tenantId: activeTenantId,
+    tab: 'defibrillateurs',
+    formKey: activeDefibIdentifiantForPresence ? `defib:${activeDefibIdentifiantForPresence}` : '',
+    enabled: true,
+  });
 
   // Copy Identifiant state
   const [copiedTableId, setCopiedTableId] = useState<string | null>(null);
@@ -3069,7 +3093,7 @@ export default function DefibTab({
             action3To6: activeFilters.action3To6,
             sortFilter,
             limit: 50000,
-            forceRefresh: refreshTrigger > 0,
+            forceRefresh: false,
           }),
         });
         if (!res.ok || cancelled) return;
@@ -3701,6 +3725,7 @@ export default function DefibTab({
     setCommentaire('');
     setNumeroAtlasante('');
     setVersionLogiciel('');
+    setTypeDefibrillateur('');
     // Auto-select to the most recently created model variable, or CSPG5, or the first model
     const defaultModel = modelesDefib.length > 0 ? modelesDefib[modelesDefib.length - 1] : null;
     setModeleId(defaultModel ? defaultModel.id : '');
@@ -3871,6 +3896,14 @@ export default function DefibTab({
     setModeleId(resolveModelSelectValue(df.modeleId || anyDf.modele || anyDf.modele_dae || anyDf.model, modelesDefib));
     setNumeroAtlasante(df.numeroAtlasante || anyDf.numero_atlasante || '');
     setVersionLogiciel(df.versionLogiciel || anyDf.version_logiciel || '');
+    const rawTypeDefib = String(df.typeDefibrillateur || anyDf.type_defibrillateur || anyDf['Section 1 - Type de défibrillateur.'] || '').trim();
+    const normTypeDefib =
+      rawTypeDefib.toLowerCase().includes('semi') || rawTypeDefib.toUpperCase() === 'DSA'
+        ? 'Semi-Automatique (DSA)'
+        : rawTypeDefib.toLowerCase().includes('automatique') || rawTypeDefib.toUpperCase() === 'DEA'
+          ? 'Automatique (DEA)'
+          : rawTypeDefib;
+    setTypeDefibrillateur(normTypeDefib);
 
     const resolvedLinkedClient = getLinkedClientForDefib(df);
     const effClientId = resolvedLinkedClient?.id || (!isPlaceholderClientVal(df.clientId) && clientMap.has(df.clientId) ? df.clientId : '');
@@ -4023,12 +4056,11 @@ export default function DefibTab({
 
     try {
       const targetKey = df.identifiant || df.numeroSerie || df.id;
-      const alreadyHasSheetRow = Boolean((df as any)._rawSheetRow && (df as any)._sheetRowNumber);
-      if (targetKey && !alreadyHasSheetRow) {
+      if (targetKey && resolvedSpreadsheetUrl) {
         const activeTenant = activeTenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : '') || 'demo';
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 1200);
+          const timeoutId = setTimeout(() => controller.abort(), 2500);
           const res = await fetch(
             `/api/sync-single-defib?id=${encodeURIComponent(targetKey)}&tenantId=${encodeURIComponent(activeTenant)}&spreadsheetUrl=${encodeURIComponent(resolvedSpreadsheetUrl)}`,
             { signal: controller.signal }
@@ -4038,29 +4070,35 @@ export default function DefibTab({
             const json = await res.json();
             if (json && json.defib && json.fromSpreadsheet) {
               const fresh = json.defib;
-              if (fresh._sheetRowNumber) {
-                setEditingDefib(prev => prev ? ({ ...prev, _sheetRowNumber: fresh._sheetRowNumber, _rawSheetRow: fresh._rawSheetRow || (prev as any)._rawSheetRow } as any) : prev);
+              setEditingDefib(prev => prev ? ({ ...prev, ...fresh, id: prev.id || fresh.id, _sheetRowNumber: fresh._sheetRowNumber || (prev as any)._sheetRowNumber, _rawSheetRow: fresh._rawSheetRow || (prev as any)._rawSheetRow } as any) : prev);
+              if (fresh.commentaire !== undefined) setCommentaire(fresh.commentaire || '');
+              if (fresh.typeDefibrillateur?.trim()) setTypeDefibrillateur(fresh.typeDefibrillateur);
+              if (fresh.commentaireInterne !== undefined) setCommentaireInterne(fresh.commentaireInterne || '');
+              if (fresh.commentaireAdresse !== undefined || fresh.aideAcces !== undefined || fresh.aide_acces !== undefined) {
+                const freshAide = (fresh.commentaireAdresse || fresh.aideAcces || fresh.aide_acces || '').trim();
+                setCommentaireAdresse(freshAide);
               }
-              if (!(df as any)._rawSheetRow) {
-                if (fresh.commentaire?.trim()) setCommentaire(prev => prev || fresh.commentaire);
-                if (fresh.commentaireInterne?.trim()) setCommentaireInterne(prev => prev || fresh.commentaireInterne);
-                if (fresh.commentaireAdresse?.trim() || fresh.aideAcces?.trim() || fresh.aide_acces?.trim()) {
-                  const freshAide = (fresh.commentaireAdresse || fresh.aideAcces || fresh.aide_acces || '').trim();
-                  if (freshAide) setCommentaireAdresse(prev => prev || freshAide);
-                }
-                if (fresh.commentaireCoffret?.trim()) setCommentaireCoffret(prev => prev || fresh.commentaireCoffret);
-                if (fresh.numeroLotCoffret?.trim()) setNumeroLotCoffret(prev => prev || fresh.numeroLotCoffret);
-                if (fresh.lotBatterie?.trim()) setLotBatterie(prev => prev || fresh.lotBatterie);
-                if (fresh.commentaireBatterie?.trim()) setCommentaireBatterie(prev => prev || fresh.commentaireBatterie);
-                if (fresh.peremptionBatterie?.trim()) setPeremptionBatterie(prev => prev || toISODateOnly(fresh.peremptionBatterie));
-                if (fresh.lotElectrodeA?.trim()) setLotElectrodeA(prev => prev || fresh.lotElectrodeA);
-                if (fresh.commentaireElectrodeA?.trim()) setCommentaireElectrodeA(prev => prev || fresh.commentaireElectrodeA);
-                if (fresh.peremptionElectrodeA?.trim()) setPeremptionElectrodeA(prev => prev || toISODateOnly(fresh.peremptionElectrodeA));
-                if (fresh.lotElectrodeP?.trim()) setLotElectrodeP(prev => prev || fresh.lotElectrodeP);
-                if (fresh.commentaireElectrodeP?.trim()) setCommentaireElectrodeP(prev => prev || fresh.commentaireElectrodeP);
-                if (fresh.peremptionElectrodeP?.trim()) setPeremptionElectrodeP(prev => prev || toISODateOnly(fresh.peremptionElectrodeP));
-                if (fresh.derniereMaintenance?.trim()) setDerniereMaintenance(prev => prev || toISODateOnly(fresh.derniereMaintenance));
-              }
+              if (fresh.commentaireCoffret !== undefined) setCommentaireCoffret(fresh.commentaireCoffret || '');
+              if (fresh.numeroLotCoffret !== undefined) setNumeroLotCoffret(fresh.numeroLotCoffret || '');
+              if (fresh.lotBatterie !== undefined) setLotBatterie(fresh.lotBatterie || '');
+              if (fresh.commentaireBatterie !== undefined) setCommentaireBatterie(fresh.commentaireBatterie || '');
+              if (fresh.peremptionBatterie !== undefined) setPeremptionBatterie(toISODateOnly(fresh.peremptionBatterie));
+              if (fresh.insertionBatterie !== undefined) setInsertionBatterie(toISODateOnly(fresh.insertionBatterie));
+              if (fresh.fabricationBatterie !== undefined) setFabricationBatterie(toISODateOnly(fresh.fabricationBatterie));
+              if (fresh.livraisonBatterie !== undefined) setLivraisonBatterie(toISODateOnly(fresh.livraisonBatterie));
+              if (fresh.lotElectrodeA !== undefined) setLotElectrodeA(fresh.lotElectrodeA || '');
+              if (fresh.commentaireElectrodeA !== undefined) setCommentaireElectrodeA(fresh.commentaireElectrodeA || '');
+              if (fresh.peremptionElectrodeA !== undefined) setPeremptionElectrodeA(toISODateOnly(fresh.peremptionElectrodeA));
+              if (fresh.insertionElectrodeA !== undefined) setInsertionElectrodeA(toISODateOnly(fresh.insertionElectrodeA));
+              if (fresh.fabricationElectrodeA !== undefined) setFabricationElectrodeA(toISODateOnly(fresh.fabricationElectrodeA));
+              if (fresh.livraisonElectrodeA !== undefined) setLivraisonElectrodeA(toISODateOnly(fresh.livraisonElectrodeA));
+              if (fresh.lotElectrodeP !== undefined) setLotElectrodeP(fresh.lotElectrodeP || '');
+              if (fresh.commentaireElectrodeP !== undefined) setCommentaireElectrodeP(fresh.commentaireElectrodeP || '');
+              if (fresh.peremptionElectrodeP !== undefined) setPeremptionElectrodeP(toISODateOnly(fresh.peremptionElectrodeP));
+              if (fresh.insertionElectrodeP !== undefined) setInsertionElectrodeP(toISODateOnly(fresh.insertionElectrodeP));
+              if (fresh.fabricationElectrodeP !== undefined) setFabricationElectrodeP(toISODateOnly(fresh.fabricationElectrodeP));
+              if (fresh.livraisonElectrodeP !== undefined) setLivraisonElectrodeP(toISODateOnly(fresh.livraisonElectrodeP));
+              if (fresh.derniereMaintenance !== undefined) setDerniereMaintenance(toISODateOnly(fresh.derniereMaintenance));
             }
           }
         } catch (_) {}
@@ -4156,6 +4194,7 @@ export default function DefibTab({
       identifiant: identifiant.trim().toUpperCase(),
       numeroAtlasante: numeroAtlasante.trim(),
       versionLogiciel: versionLogiciel.trim(),
+      typeDefibrillateur: typeDefibrillateur.trim(),
       numeroSerie: numeroSerie.trim(),
       commentaire: commentaire.trim(),
       modeleId,
@@ -4628,6 +4667,12 @@ export default function DefibTab({
     <div className="space-y-6" id="defib-tab-container">
       {!isFormOpen && (
         <>
+          {showTabConflictBanner && (
+            <ConcurrentAccessBanner
+              message="Cet onglet est déjà ouvert et utilisé par un autre membre de votre environnement. Attention aux délais de synchronisation."
+              onHide={hideTabBannerFor3Hours}
+            />
+          )}
           {/* Top action block & Search metrics */}
           <div 
             className="bg-white space-y-4"
@@ -5972,6 +6017,12 @@ export default function DefibTab({
           className="w-full max-w-[1000px] space-y-6 font-sans animate-fadeIn mx-auto"
           id="defib-form-overlay"
         >
+          {showFormConflictBanner && (
+            <ConcurrentAccessBanner
+              message="Un autre membre de votre environnement édite actuellement ces mêmes informations. Attention aux délais de synchronisation et aux risques d'incohérence."
+              onHide={hideFormBannerWhileOpen}
+            />
+          )}
           {/* Header */}
           <div 
             className="flex items-center bg-white"
@@ -6448,6 +6499,23 @@ export default function DefibTab({
                           />
                         </div>
                       )}
+
+                      {/* Type de défibrillateur */}
+                      <div className="space-y-1">
+                        <label htmlFor="form-typedefibrillateur" className="block text-[11px] font-bold text-slate-500 uppercase">
+                          Type de défibrillateur.
+                        </label>
+                        <select
+                          id="form-typedefibrillateur"
+                          value={typeDefibrillateur}
+                          onChange={(e) => setTypeDefibrillateur(e.target.value)}
+                          className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700"
+                        >
+                          <option value="">-- Sélectionner --</option>
+                          <option value="Automatique (DEA)">Automatique (DEA)</option>
+                          <option value="Semi-Automatique (DSA)">Semi-Automatique (DSA)</option>
+                        </select>
+                      </div>
                     </div>
 
                     {/* Commentaire simple */}
