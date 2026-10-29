@@ -184,7 +184,7 @@ export default function StocksDistribuesTab({
   }, []);
 
   const resolvedSpreadsheetUrl = useMemo(() => {
-    return getTenantSpreadsheetUrl('spreadsheetStocksDistribues', companyInfo);
+    return getTenantSpreadsheetUrl('spreadsheetStocks', companyInfo);
   }, [companyInfo, spreadsheetVersion]);
 
   const handleRefreshDistributedStocks = () => {
@@ -193,7 +193,7 @@ export default function StocksDistribuesTab({
     try {
       window.dispatchEvent(
         new CustomEvent('defib-manual-refresh-spreadsheet', {
-          detail: { spreadsheetKey: 'spreadsheetStocksDistribues', idSuffix: 'stocks-distribues' },
+          detail: { spreadsheetKey: 'spreadsheetStocks', idSuffix: 'stocks' },
         })
       );
     } finally {

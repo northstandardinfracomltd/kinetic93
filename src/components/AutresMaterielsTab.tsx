@@ -201,6 +201,7 @@ interface AutresMaterielsTabProps {
   onSearchChange?: (search: string) => void;
   initialSortFilter?: 'recent' | 'closest_maintenance' | null;
   sortFilterTrigger?: number;
+  onShowGmaoReports?: (identifiant: string) => void;
 }
 
 const FRENCH_DEPARTMENTS = [
@@ -301,6 +302,7 @@ export default function AutresMaterielsTab({
   onSearchChange,
   initialSortFilter,
   sortFilterTrigger,
+  onShowGmaoReports,
 }: AutresMaterielsTabProps) {
   const activeTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
   const [isLocalRefreshing, setIsLocalRefreshing] = useState(false);
@@ -2187,19 +2189,43 @@ export default function AutresMaterielsTab({
             style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
             id="materiel-form-header-box"
           >
-            <div className="flex items-center gap-3 w-full">
+            <div className="grid grid-cols-3 items-center gap-3 w-full">
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
                 id="btn-close-materiel-modal"
                 style={{
                   ...rowActionButton18Style,
-                  flex: 1,
-                  width: '50%',
+                  width: '100%',
                 }}
-                className="flex-1 transition-colors cursor-pointer"
+                className="w-full transition-colors cursor-pointer"
               >
                 <span>Fermer</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={!editingItem}
+                onClick={() => {
+                  if (!editingItem) return;
+                  const targetIdentifiant = identifiant || editingItem?.identifiant || '';
+                  setIsFormOpen(false);
+                  if (onShowGmaoReports) {
+                    onShowGmaoReports(targetIdentifiant);
+                  } else {
+                    setActiveTab('gmao');
+                  }
+                }}
+                id="btn-history-materiel-modal"
+                style={{
+                  ...rowActionButton18Style,
+                  width: '100%',
+                  opacity: !editingItem ? 0.5 : 1,
+                  cursor: !editingItem ? 'not-allowed' : 'pointer',
+                }}
+                className="w-full transition-colors"
+              >
+                <span>Historique</span>
               </button>
 
               <button
@@ -2208,13 +2234,12 @@ export default function AutresMaterielsTab({
                 id="btn-submit-materiel-form"
                 style={{
                   ...rowActionButton18Style,
-                  flex: 1,
-                  width: '50%',
+                  width: '100%',
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
                 }}
-                className="flex-1 transition-all cursor-pointer border-0"
+                className="w-full transition-all cursor-pointer border-0"
               >
                 Enregistrer
               </button>

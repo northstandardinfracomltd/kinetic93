@@ -2097,6 +2097,7 @@ function mergeTenantRecordsComplementary(baseTenant: any, incomingTenant: any): 
     for (const src of sources) {
       if (!src || typeof src !== 'object') continue;
       for (const [k, v] of Object.entries(src)) {
+        if (k === 'spreadsheetStocksDistribues' || k === 'spreadsheetStocksDistribuesUrl') continue;
         if (k.startsWith('spreadsheet') && k !== 'spreadsheetUrls' && typeof v === 'string' && v.trim()) {
           mergedSpreadsheetUrls[k] = v.trim();
         }
@@ -4984,7 +4985,7 @@ async function warmupDefibrillateursStore() {
     devisFactures: 'spreadsheetCommandes',
     stocks: 'spreadsheetStocks',
     stocksGlobaux: 'spreadsheetStocks',
-    stocksDistribues: 'spreadsheetStocksDistribues',
+    stocksDistribues: 'spreadsheetStocks',
     historiqueNotifications: 'spreadsheetStocks',
     achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
     temps: 'spreadsheetTemps',
@@ -7488,7 +7489,6 @@ async function warmupDefibrillateursStore() {
             'spreadsheetSatisfaction',
             'spreadsheetCommandes',
             'spreadsheetStocks',
-            'spreadsheetStocksDistribues',
             'spreadsheetAchatsFournisseurs',
             'spreadsheetTemps',
             'spreadsheetTicketsCaisse',

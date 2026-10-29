@@ -1224,6 +1224,22 @@ export default function StocksTab({
     const finalReapDate = newReapDate;
     const finalStorage = newStorage || 'Entrepôt A';
 
+    const sanitizePipe = (val: any) => String(val ?? '').replace(/[|;]/g, ' ').trim();
+    const serializedInventaire = traceabilities
+      .map((tr) =>
+        [
+          sanitizePipe(tr.emplacement || 'Centrale des stocks'),
+          sanitizePipe(tr.lotOrSerial || ''),
+          sanitizePipe(tr.expirationDate || ''),
+          sanitizePipe(tr.situation || 'Disponible'),
+          sanitizePipe(tr.reservationInfo || ''),
+          tr.volume !== undefined && tr.volume !== null && String(tr.volume).trim() !== '' ? String(tr.volume).trim() : '1',
+          sanitizePipe(tr.comment || ''),
+        ].join('|')
+      )
+      .join(';')
+      .slice(0, 50000);
+
     if (editingStockId) {
       const updated = stocks.map(st => {
         if (st.id === editingStockId) {
@@ -1247,6 +1263,7 @@ export default function StocksTab({
             ugs: newUgs || '0001',
             traceabilityEnabled: traceabilityEnabled,
             traceabilities: traceabilities,
+            inventaire: serializedInventaire,
             usageRecommandeIds: newUsageRecommandeIds,
             poidsNet: newPoidsNet,
             dimensionLongueur: newDimensionLongueur,
@@ -1292,6 +1309,7 @@ export default function StocksTab({
         ugs: newUgs || '0001',
         traceabilityEnabled: traceabilityEnabled,
         traceabilities: traceabilities,
+        inventaire: serializedInventaire,
         usageRecommandeIds: newUsageRecommandeIds,
         poidsNet: newPoidsNet,
         dimensionLongueur: newDimensionLongueur,
@@ -1673,80 +1691,7 @@ export default function StocksTab({
             className="bg-white space-y-4"
             style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
           >
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-              <div>
-                <div 
-                  className="relative inline-grid grid-cols-2 items-center p-1 bg-white select-none overflow-hidden" 
-                  id="stocks-nav-toggle"
-                  style={{ 
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    borderRadius: '15px',
-                    border: '1px solid #dadada',
-                    backgroundColor: '#ffffff',
-                  }}
-                >
-                  {/* Animated sliding pill indicator */}
-                  <div
-                    aria-hidden="true"
-                    style={{
-                      position: 'absolute',
-                      top: '4px',
-                      bottom: '4px',
-                      left: '4px',
-                      width: 'calc((100% - 8px) / 2)',
-                      backgroundColor: '#2e54ff',
-                      borderRadius: '13px',
-                      transform: slidingNavTab === 'stocks' ? 'translateX(0%)' : 'translateX(100%)',
-                      transition: 'transform 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
-                      pointerEvents: 'none',
-                      zIndex: 0,
-                    }}
-                  />
-                  <button
-                    type="button"
-                    id="toggle-nav-centrale-stocks"
-                    onClick={() => {
-                      setSlidingNavTab('stocks');
-                      if (setActiveTab) setActiveTab('stocks');
-                    }}
-                    style={{
-                      fontSize: '18px',
-                      borderRadius: '13px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      backgroundColor: 'transparent',
-                      color: slidingNavTab === 'stocks' ? '#ffffff' : '#000000',
-                      transition: 'color 0.15s ease',
-                    }}
-                    className="relative z-10 px-4 py-1.5 font-bold text-center whitespace-nowrap"
-                  >
-                    {t("Centrale des Stocks")}
-                  </button>
-                  <button
-                    type="button"
-                    id="toggle-nav-stocks-distribues"
-                    onClick={() => {
-                      setSlidingNavTab('stocks-distribues');
-                      setTimeout(() => {
-                        if (setActiveTab) setActiveTab('stocks-distribues');
-                      }, 150);
-                    }}
-                    style={{
-                      fontSize: '18px',
-                      borderRadius: '13px',
-                      border: 'none',
-                      cursor: 'pointer',
-                      backgroundColor: 'transparent',
-                      color: slidingNavTab === 'stocks-distribues' ? '#ffffff' : '#000000',
-                      transition: 'color 0.15s ease',
-                    }}
-                    className="relative z-10 px-4 py-1.5 font-bold text-center whitespace-nowrap"
-                  >
-                    {t("Stocks Distribués")}
-                  </button>
-                </div>
-              </div>
-
+            <div className="flex flex-col md:flex-row md:items-center md:justify-end gap-4 flex-wrap bg-white">
               <div className="flex flex-wrap items-center gap-2.5 bg-white">
                 {/* 3 Dots More Options Dropdown */}
                 <div
@@ -1896,7 +1841,7 @@ export default function StocksTab({
                         cursor: !hasStocksSpreadsheet ? 'not-allowed' : 'pointer',
                       }}
                       className="font-sans"
-                      title={!hasStocksSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Centrale des Stocks dans les paramètres du tenant." : undefined}
+                      title={!hasStocksSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Stocks dans les paramètres du tenant." : undefined}
                     >
                       Nouveau
                     </button>
@@ -2916,9 +2861,9 @@ export default function StocksTab({
                 </div>
               </div>
 
-              {/* Section Mouvements */}
-              <div className="md:col-span-4 pt-5 mt-2 flex flex-col gap-1">
-                <div className="flex justify-between items-center mb-2 select-none">
+              {/* Section Inventaire de traçabilité */}
+              <div className="md:col-span-4 pt-5 mt-2 flex flex-col gap-4">
+                <div className="flex justify-between items-center mb-1 select-none">
                   <span 
                     className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                     style={{
@@ -2930,23 +2875,9 @@ export default function StocksTab({
                       letterSpacing: 'normal'
                     }}
                   >
-                    Mouvements
+                    {t("Inventaire de traçabilité")}
                   </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowMvForm(!showMvForm)}
-                      style={{
-                        backgroundColor: '#0f172a',
-                        color: '#ffffff',
-                        padding: '10px 20px',
-                        fontSize: '18px',
-                        borderRadius: '13px',
-                      }}
-                      className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0 text-white"
-                    >
-                      Nouveau mouvement
-                    </button>
+                  <div className="flex gap-2 items-center">
                     <button
                       type="submit"
                       form="equipement-stock-form"
@@ -2965,1134 +2896,354 @@ export default function StocksTab({
                   </div>
                 </div>
 
-                {/* Sub-form to add a new movement inline */}
-                {showMvForm && (
-                  <div
-                    className="rounded-xl p-4 gap-4 flex flex-col font-sans mb-3 text-xs"
-                    style={{ background: '#e9edf1', border: 'none' }}
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 bg-transparent">
-                      <div className="flex flex-col gap-1 bg-transparent">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Type du mouvement *</label>
-                        <select
-                          value={newMvType}
-                          onChange={(e) => {
-                            const val = e.target.value as any;
-                            setNewMvType(val);
-                            if (val === 'Expédition directe au client') {
-                              setNewMvVolume(1);
-                              setNewMvEmplacement('');
-                              setNewMvBonCommande('');
-                              setNewMvCustomBonCommande('');
-                            } else if (val === 'Réapprovisionnement fournisseur') {
-                              if (achatsFournisseurs.length > 0) {
-                                setNewMvProvenanceSelect(achatsFournisseurs[0].reference);
-                                setNewMvEmplacement(achatsFournisseurs[0].reference);
-                              } else {
-                                setNewMvProvenanceSelect('custom');
-                                setNewMvEmplacement('');
-                              }
-                              setNewMvCustomProvenance('');
-                            }
-                          }}
-                          className="w-full bg-white text-black p-2 rounded border border-slate-200"
-                          style={{ minHeight: '36px' }}
-                        >
-                          <option value="Réapprovisionnement fournisseur">Réapprovisionnement fournisseur</option>
-                          <option value="Distribution">Distribution</option>
-                          <option value="Rapatriement">Rapatriement</option>
-                          <option value="Expédition directe au client">Expédition directe au client</option>
-                        </select>
-                      </div>
+                {/* Commentaire. */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Commentaire.</label>
+                  <input
+                    type="text"
+                    value={newCommentaire}
+                    onChange={(e) => setNewCommentaire(e.target.value)}
+                    placeholder="Entrez votre commentaire..."
+                    className="focus:outline-none w-full font-sans p-2 border border-slate-200 rounded text-xs bg-white text-slate-700"
+                  />
+                </div>
 
-                      {/* Lookup / conditional input depending on type */}
-                      <div className="flex flex-col gap-1 bg-transparent">
-                        {newMvType === 'Expédition directe au client' ? (
-                          <>
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Commande. *</label>
-                            <select
-                              value={newMvBonCommande}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setNewMvBonCommande(val);
-                                if (val !== 'custom') {
-                                  setNewMvCustomBonCommande('');
-                                  const foundDoc = commercialDocs.find(d => (d.bonCommandeReference && d.bonCommandeReference === val) || d.ref === val || d.id === val);
-                                  if (foundDoc) {
-                                    setNewMvEmplacement(`${foundDoc.bonCommandeEntete || foundDoc.bonCommandeReference || foundDoc.ref}${foundDoc.clientDenomination ? ` (${foundDoc.clientDenomination})` : ''}`);
-                                  } else {
-                                    setNewMvEmplacement(val);
-                                  }
-                                } else {
-                                  setNewMvEmplacement(newMvCustomBonCommande);
-                                }
-                              }}
-                              className="w-full bg-white text-black p-2 rounded border border-slate-200"
-                              style={{ minHeight: '36px' }}
-                              required
-                            >
-                              <option value="">-- Choisir une commande --</option>
-                              <option value="custom">Autre (texte libre)</option>
-                              {commercialDocs.map(doc => {
-                                const displayLabel = `${doc.bonCommandeEntete || doc.bonCommandeReference || doc.ref}${doc.clientDenomination ? ` — ${doc.clientDenomination}` : ''}`;
-                                const val = doc.bonCommandeReference || doc.ref || doc.id;
-                                return (
-                                  <option key={doc.id} value={val}>
-                                    {displayLabel}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                            {newMvBonCommande === 'custom' && (
-                              <input
-                                type="text"
-                                value={newMvCustomBonCommande}
-                                onChange={(e) => {
-                                  setNewMvCustomBonCommande(e.target.value);
-                                  setNewMvEmplacement(e.target.value);
-                                }}
-                                placeholder="Saisir le bon de commande..."
-                                className="w-full bg-white text-black p-2 rounded border border-slate-200 mt-1 font-sans text-xs"
-                                style={{ minHeight: '36px' }}
-                                required
-                              />
-                            )}
-                          </>
-                        ) : newMvType === 'Distribution' ? (
-                          <>
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Envoyer à *</label>
-                            <select
-                              value={newMvEmplacement}
-                              onChange={(e) => setNewMvEmplacement(e.target.value)}
-                              className="w-full bg-white text-black p-2 rounded border border-slate-200"
-                              style={{ minHeight: '36px' }}
-                              required
-                            >
-                              <option value="" disabled hidden>Sélectionnez un emplacement</option>
-                              {availableLocationOptions.map(opt => (
-                                <option key={opt.locName} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                          </>
-                        ) : newMvType === 'Rapatriement' ? (
-                          <>
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Retour de *</label>
-                            <select
-                              value={newMvEmplacement}
-                              onChange={(e) => setNewMvEmplacement(e.target.value)}
-                              className="w-full bg-white text-black p-2 rounded border border-slate-200"
-                              style={{ minHeight: '36px' }}
-                              required
-                            >
-                              <option value="" disabled hidden>Sélectionnez un emplacement</option>
-                              {availableLocationOptions.map(opt => (
-                                <option key={opt.locName} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                          </>
-                        ) : newMvType === 'Réapprovisionnement fournisseur' ? (
-                          <>
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Provenance *</label>
-                            <select
-                              value={newMvProvenanceSelect}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setNewMvProvenanceSelect(val);
-                                if (val !== 'custom') {
-                                  setNewMvCustomProvenance('');
-                                  setNewMvEmplacement(val);
-                                } else {
-                                  setNewMvEmplacement(newMvCustomProvenance);
-                                }
-                              }}
-                              className="w-full bg-white text-black p-2 rounded border border-slate-200"
-                              style={{ minHeight: '36px' }}
-                              required
-                            >
-                              <option value="" disabled hidden>Sélectionnez une provenance</option>
-                              {achatsFournisseurs.map(achat => {
-                                const labelVal = `${achat.reference} - ${achat.supplierName || 'Fournisseur'}`;
-                                return (
-                                  <option key={achat.id} value={achat.reference}>
-                                    {labelVal}
-                                  </option>
-                                );
-                              })}
-                              <option value="custom">Autre</option>
-                            </select>
-                            {newMvProvenanceSelect === 'custom' && (
-                              <input
-                                type="text"
-                                value={newMvCustomProvenance}
-                                onChange={(e) => {
-                                  setNewMvCustomProvenance(e.target.value);
-                                  setNewMvEmplacement(e.target.value);
-                                }}
-                                placeholder="Saisir la provenance personnalisée..."
-                                className="w-full bg-white text-black p-2 rounded border border-slate-200 mt-1 font-sans text-xs"
-                                style={{ minHeight: '36px' }}
-                                required
-                              />
-                            )}
-                          </>
-                        ) : (
-                          <>
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Provenance *</label>
-                            <input
-                              type="text"
-                              value={newMvEmplacement}
-                              onChange={(e) => setNewMvEmplacement(e.target.value)}
-                              placeholder="Fournisseur"
-                              className="w-full bg-white p-2 border border-slate-200 rounded text-black font-semibold text-xs font-mono"
-                              style={{ minHeight: '36px' }}
-                              required
-                            />
-                          </>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col gap-1 bg-transparent">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Volume *</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max={newMvType === 'Distribution' ? Number(newQty) : undefined}
-                          value={newMvType === 'Expédition directe au client' ? 1 : newMvVolume}
-                          disabled={newMvType === 'Expédition directe au client'}
-                          readOnly={newMvType === 'Expédition directe au client'}
-                          onChange={(e) => setNewMvVolume(Number(e.target.value))}
-                          className={`w-full p-2 border border-slate-200 rounded text-black font-semibold text-xs ${
-                            newMvType === 'Expédition directe au client' ? 'bg-slate-100 cursor-not-allowed opacity-80' : 'bg-white'
-                          }`}
-                          style={{ minHeight: '36px' }}
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-1 bg-transparent">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date *</label>
-                        <input
-                          type="date"
-                          value={newMvDate}
-                          onChange={(e) => setNewMvDate(e.target.value)}
-                          className="w-full bg-white p-2 border border-slate-200 rounded text-black font-semibold text-xs"
-                          style={{ minHeight: '36px' }}
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-1 bg-transparent">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Suivi colis</label>
-                        <input
-                          type="text"
-                          placeholder="Lien de suivi"
-                          value={newMvTrackingLink}
-                          onChange={(e) => setNewMvTrackingLink(e.target.value)}
-                          className="w-full bg-white p-2 border border-slate-200 rounded text-black font-semibold text-xs"
-                          style={{ minHeight: '36px' }}
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-1 bg-transparent">
-                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Statut *</label>
-                        <select
-                          value={newMvStatut}
-                          onChange={(e) => setNewMvStatut(e.target.value as any)}
-                          className="w-full bg-white text-black p-2 rounded border border-slate-200"
-                          style={{ minHeight: '36px' }}
-                        >
-                          <option value="Préparation">Préparation</option>
-                          <option value="Expédié">Expédié</option>
-                          <option value="Terminé">Terminé</option>
-                          <option value="Annulé">Annulé</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3 bg-transparent mt-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowMvForm(false)}
-                        style={{
-                          backgroundColor: '#0f172a',
-                          color: '#ffffff',
-                          padding: '10px 20px',
-                          fontSize: '18px',
-                          borderRadius: '13px',
-                        }}
-                        className="font-sans font-bold active:scale-95 transition-all text-white cursor-pointer border-0"
+                {/* Activer la traçabilité des pièces. */}
+                <div className="flex flex-col gap-2 mt-1">
+                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                    {t("Activer la traçabilité des pièces.")}
+                  </span>
+                  <div className="flex gap-4 mt-1 bg-transparent">
+                    <button
+                      type="button"
+                      onClick={() => setTraceabilityEnabled(true)}
+                      className="flex items-center gap-2 font-sans font-bold cursor-pointer select-none border-0 bg-transparent text-black"
+                      style={{ fontSize: '18px' }}
+                    >
+                      <span
+                        className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${traceabilityEnabled === true ? 'border-[#2e54ff]' : 'border-slate-300'}`}
+                        style={{ borderWidth: '1px' }}
                       >
-                        Annuler
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleAddMovementInline}
-                        style={{
-                          backgroundColor: '#0f172a',
-                          color: '#ffffff',
-                          padding: '10px 20px',
-                          fontSize: '18px',
-                          borderRadius: '13px',
-                        }}
-                        className="font-sans font-bold active:scale-95 transition-all text-white cursor-pointer border-0 shadow-xs"
-                      >
-                        Ajouter
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Table of movements report */}
-                {mouvements.length > 0 && (
-                  <div 
-                    className="overflow-x-auto border rounded-xl mt-2 bg-white" 
-                    style={{ borderColor: 'oklch(0.88 0 0)', borderWidth: '1px' }}
-                  >
-                    <table className="w-full text-left font-sans border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-white" style={{ borderBottom: '1px solid oklch(0.88 0 0)' }}>
-                          <th className="px-3 py-3 text-center font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Indicateur.</th>
-                          <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Circulation.</th>
-                          <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Raccordement.</th>
-                          <th className="px-3 py-3 text-center font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Volume.</th>
-                          <th className="px-3 py-3 text-center font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Suivi du colis.</th>
-                          <th className="px-3 py-3 text-center font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Date.</th>
-                          <th className="px-3 py-3 text-center font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Situation.</th>
-                          <th className="px-3 py-3 text-right font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Action.</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white">
-                        {mouvements.map((mv, index) => {
-                          return (
-                            <tr 
-                              key={mv.id} 
-                              className="hover:bg-slate-50 transition-all font-sans bg-white text-black" 
-                              style={{ borderBottom: index === mouvements.length - 1 ? 'none' : '1px solid oklch(0.88 0 0)' }}
-                            >
-                              {/* Indicator (Pink text with 18px arrow) */}
-                              <td className="px-3 py-2 whitespace-nowrap bg-white text-center" style={{ cursor: 'default' }}>
-                                <span 
-                                  className="inline-flex items-center justify-center font-bold font-sans"
-                                  style={{ 
-                                    color: '#2e54ff',
-                                    fontSize: '18px',
-                                    lineHeight: '1',
-                                    cursor: 'default'
-                                  }}
-                                >
-                                  {mv.type === 'Réapprovisionnement fournisseur' ? '↓' : 
-                                   mv.type === 'Distribution' ? '→' : 
-                                   mv.type === 'Expédition directe au client' ? '↗' : 
-                                   mv.type === 'Annulation' ? '↑' : '←'}
-                                </span>
-                              </td>
-                              {/* Type / Circulation */}
-                              <td 
-                                className="px-3 py-2 bg-white font-medium text-black"
-                                style={{ fontSize: '16px', whiteSpace: 'nowrap', color: '#000000', cursor: 'default' }}
-                              >
-                                {mv.type}
-                              </td>
-                              {/* Provenance / Destination / Raccordement */}
-                              <td 
-                                className="px-3 py-2 bg-white font-medium text-black"
-                                style={{ fontSize: '16px', whiteSpace: 'nowrap', color: '#000000', cursor: 'default' }}
-                              >
-                                {mv.emplacement || '-'}
-                              </td>
-                              {/* Volume */}
-                              <td 
-                                className="px-3 py-2 text-center bg-white font-semibold text-black"
-                                style={{ fontSize: '16px', whiteSpace: 'nowrap', color: '#000000', cursor: 'default' }}
-                              >
-                                {mv.volume}
-                              </td>
-                              {/* Suivi Colis (trackingLink) */}
-                              <td className="px-3 py-2 text-center bg-white text-black min-w-[140px]">
-                                <input
-                                  type="text"
-                                  value={mv.trackingLink || ''}
-                                  disabled={mv.isCanceled || mv.type === 'Annulation'}
-                                  onChange={(e) => handleUpdateMovementTrackingLink(mv.id, e.target.value)}
-                                  placeholder="Lien de suivi"
-                                  className="w-full bg-white text-black border px-3 disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed font-sans"
-                                  style={{ 
-                                    height: '44px', 
-                                    borderRadius: '6px', 
-                                    fontSize: '12px', 
-                                    outline: 'none',
-                                    border: '1px solid #cbd5e1'
-                                  }}
-                                />
-                              </td>
-                              {/* Date */}
-                              <td 
-                                className="px-3 py-2 text-center bg-white font-medium text-black"
-                                style={{ fontSize: '16px', whiteSpace: 'nowrap', color: '#000000', cursor: 'default' }}
-                              >
-                                {mv.date ? new Date(mv.date).toLocaleDateString('fr-FR') : '-'}
-                              </td>
-                              {/* Statut - dropdown enabled inline */}
-                              <td className="px-3 py-2 text-center whitespace-nowrap bg-white">
-                                <select
-                                  value={mv.statut}
-                                  disabled={mv.isCanceled || mv.type === 'Annulation'}
-                                  onChange={(e) => handleUpdateMovementStatus(mv.id, e.target.value as any)}
-                                  className="mx-auto bg-white text-black px-3 border min-w-[110px] disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed font-sans"
-                                  style={{ 
-                                    height: '44px', 
-                                    fontSize: '12px', 
-                                    borderRadius: '6px', 
-                                    outline: 'none',
-                                    border: '1px solid #cbd5e1'
-                                  }}
-                                >
-                                  <option value="Préparation">Préparation</option>
-                                  <option value="Expédié">Expédié</option>
-                                  <option value="Terminé">Terminé</option>
-                                  <option value="Annulé">Annulé</option>
-                                </select>
-                              </td>
-                              {/* Delete/Cancel option */}
-                              <td className="px-3 py-2 text-right bg-white">
-                                <button
-                                  type="button"
-                                  disabled={mv.isCanceled || mv.type === 'Annulation'}
-                                  onClick={() => handleCancelMovement(mv.id)}
-                                  style={{
-                                    backgroundColor: (mv.isCanceled || mv.type === 'Annulation') ? '#e2e8f0' : '#0f172a',
-                                    color: (mv.isCanceled || mv.type === 'Annulation') ? '#94a3b8' : '#ffffff',
-                                    padding: '8px 16px',
-                                    fontSize: '16px',
-                                    borderRadius: '13px',
-                                    cursor: (mv.isCanceled || mv.type === 'Annulation') ? 'not-allowed' : 'pointer',
-                                  }}
-                                  className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0"
-                                >
-                                  Annuler
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {/* Section Inventaire de traçabilité */}
-              {traceabilityEnabled && (
-                <>
-                  <div className="md:col-span-4 pt-5 mt-2 flex flex-col gap-1">
-                    <div className="flex justify-between items-center mb-2 select-none">
-                      <span 
-                        className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
-                        style={{
-                          color: 'rgb(21 99 55)',
-                          backgroundColor: 'rgb(61 220 132)',
-                          fontSize: '18px',
-                          border: 'none',
-                          textTransform: 'none',
-                          letterSpacing: 'normal'
-                        }}
-                      >
-                        {t("Inventaire de traçabilité")}
+                        {traceabilityEnabled === true && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
                       </span>
-                      <div className="flex gap-2 items-center">
-                        <select
-                          value={selectedSituationFilter}
-                          onChange={(e) => setSelectedSituationFilter(e.target.value)}
-                          style={{
-                            backgroundColor: '#0f172a',
-                            color: '#ffffff',
-                            padding: '10px 20px',
-                            fontSize: '18px',
-                            borderRadius: '13px',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontWeight: 'bold'
-                          }}
-                          className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0 text-white"
-                          title="Filtrer par situation"
-                        >
-                          <option value="Toutes situations" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Toutes situations</option>
-                          <option value="Disponible" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Disponible</option>
-                          <option value="Utilisé" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Utilisé</option>
-                          <option value="Indisponible" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Indisponible</option>
-                          <option value="Signalé manquant" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Signalé manquant</option>
-                          <option value="Prêté" style={{ backgroundColor: '#0f172a', color: '#ffffff' }}>Prêté</option>
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => setShowTraceabilityForm(!showTraceabilityForm)}
-                          style={{
-                            backgroundColor: '#0f172a',
-                            color: '#ffffff',
-                            padding: '10px 20px',
-                            fontSize: '18px',
-                            borderRadius: '13px',
-                          }}
-                          className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0 text-white"
-                        >
-                          Nouveau inventaire
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Form Nouveau Inventaire */}
-                    {showTraceabilityForm && (
-                      <div
-                        className="rounded-xl p-4 gap-4 flex flex-col font-sans mb-3 text-xs"
-                        style={{ background: '#e9edf1', border: 'none' }}
-                      >
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-transparent">
-                          {/* Sélection du mouvement */}
-                          <div className="flex flex-col gap-1 bg-transparent">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t("Sélection du mouvement *")}</label>
-                            <select
-                              value={selectedMovementId}
-                              onChange={(e) => setSelectedMovementId(e.target.value)}
-                              className="w-full bg-white text-black p-2 rounded border"
-                              style={{ minHeight: '36px', borderColor: '#dadada' }}
-                              required
-                            >
-                              <option value="" disabled hidden>Sélectionnez un mouvement</option>
-                              <option value="Autre">Autre (Aucun mouvement)</option>
-                              {mouvements.filter(mv => mv.type !== 'Annulation').map(mv => (
-                                <option key={mv.id} value={mv.id}>
-                                  {mv.date} - {mv.type} (Vol: {mv.volume})
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Numéro de lot ou série */}
-                          <div className="flex flex-col gap-1 bg-transparent">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t("Numéro de lot ou série *")}</label>
-                            <input
-                              type="text"
-                              value={lotOrSerial}
-                              onChange={(e) => setLotOrSerial(e.target.value)}
-                              placeholder="Lot / Série"
-                              className="w-full bg-white p-2 border rounded text-black font-semibold text-xs"
-                              style={{ minHeight: '36px', borderColor: '#dadada' }}
-                              required
-                            />
-                          </div>
-
-                          {/* Date de péremption */}
-                          <div className="flex flex-col gap-1 bg-transparent min-w-0 overflow-hidden">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{t("Date de péremption (si applicable).")}</label>
-                            <input
-                              type="date"
-                              value={expirationDate}
-                              onChange={(e) => setExpirationDate(e.target.value)}
-                              className="w-full bg-white p-2 border rounded text-black font-semibold text-xs min-w-0 max-w-full block box-border"
-                              style={{ minHeight: '36px', borderColor: '#dadada', WebkitAppearance: 'none', appearance: 'none' }}
-                            />
-                          </div>
-
-                          {/* Volume */}
-                          <div className="flex flex-col gap-1 bg-transparent">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Volume *</label>
-                            <input
-                              type="number"
-                              value={1}
-                              disabled
-                              readOnly
-                              className="w-full bg-slate-100 p-2 border rounded text-slate-500 font-semibold text-xs cursor-not-allowed"
-                              style={{ minHeight: '36px', borderColor: '#dadada' }}
-                            />
-                          </div>
-
-                          {/* Situation */}
-                          <div className="flex flex-col gap-1 bg-transparent">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Situation *</label>
-                            <select
-                              value={situation}
-                              onChange={(e) => setSituation(e.target.value as any)}
-                              className="w-full bg-white text-black p-2 rounded border"
-                              style={{ minHeight: '36px', borderColor: '#dadada' }}
-                              required
-                            >
-                              <option value="Disponible">Disponible</option>
-                              <option value="Utilisé">Utilisé</option>
-                              <option value="Indisponible">Indisponible</option>
-                              <option value="Signalé manquant">Signalé manquant</option>
-                              <option value="Prêté">Prêté</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex justify-end gap-3 bg-transparent mt-2">
-                          <button
-                            type="button"
-                            onClick={() => setShowTraceabilityForm(false)}
-                            style={{
-                              backgroundColor: '#0f172a',
-                              color: '#ffffff',
-                              padding: '10px 20px',
-                              fontSize: '18px',
-                              borderRadius: '13px',
-                            }}
-                            className="font-sans font-bold active:scale-95 transition-all text-white cursor-pointer border-0"
-                          >
-                            Annuler
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleAddTraceabilityInline}
-                            style={{
-                              backgroundColor: '#0f172a',
-                              color: '#ffffff',
-                              padding: '10px 20px',
-                              fontSize: '18px',
-                              borderRadius: '13px',
-                            }}
-                            className="font-sans font-bold active:scale-95 transition-all text-white cursor-pointer border-0 shadow-xs"
-                          >
-                            Ajouter
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Table des Traçabilités */}
-                    {traceabilities.length > 0 && (() => {
-                      const ALL_LOCATIONS = [
-                        'Centrale des stocks',
-                        'Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E',
-                        'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J',
-                        'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E',
-                        'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'
-                      ];
-
-                      // Filter traceabilities by situation filter
-                      const filteredTraceabilities = selectedSituationFilter === 'Toutes situations'
-                        ? traceabilities
-                        : traceabilities.filter(t => t.situation === selectedSituationFilter);
-
-                      // Group traceabilities
-                      const groups: Record<string, { idx: number; trace: StockTraceability }[]> = {};
-                      traceabilities.forEach((trace, idx) => {
-                        if (selectedSituationFilter !== 'Toutes situations' && trace.situation !== selectedSituationFilter) {
+                      Oui
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (traceabilities.length > 0) {
+                          alert("Impossible de désactiver la traçabilité car des pièces de traçabilité existent déjà dans le tableau.");
                           return;
                         }
-                        const loc = getTraceLocation(trace);
-                        if (!groups[loc]) {
-                          groups[loc] = [];
-                        }
-                        groups[loc].push({ idx, trace });
-                      });
+                        setTraceabilityEnabled(false);
+                      }}
+                      disabled={traceabilities.length > 0}
+                      className={`flex items-center gap-2 font-sans font-bold select-none border-0 bg-transparent text-black ${traceabilities.length > 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                      style={{ fontSize: '18px' }}
+                    >
+                      <span
+                        className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${traceabilityEnabled === false ? 'border-[#2e54ff]' : 'border-slate-300'}`}
+                        style={{ borderWidth: '1px' }}
+                      >
+                        {traceabilityEnabled === false && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
+                      </span>
+                      Non
+                    </button>
+                  </div>
+                </div>
 
-                      return (
-                        <>
-                          {selectedTraceIds.length > 0 && (
+                {/* 7-column sub-field rows when Activer la traçabilité des pièces. = Oui */}
+                {traceabilityEnabled && (() => {
+                  const ALL_LOCATIONS = [
+                    'Centrale des stocks',
+                    'Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E',
+                    'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J',
+                    'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E',
+                    'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'
+                  ];
+
+                  const sanitizePipe = (val: any) => String(val ?? '').replace(/[|;]/g, ' ').trim();
+                  const serializedPlaintext = traceabilities
+                    .map((tr) =>
+                      [
+                        sanitizePipe(tr.emplacement || 'Centrale des stocks'),
+                        sanitizePipe(tr.lotOrSerial || ''),
+                        sanitizePipe(tr.expirationDate || ''),
+                        sanitizePipe(tr.situation || 'Disponible'),
+                        sanitizePipe(tr.reservationInfo || ''),
+                        tr.volume !== undefined && tr.volume !== null && String(tr.volume).trim() !== '' ? String(tr.volume).trim() : '1',
+                        sanitizePipe(tr.comment || ''),
+                      ].join('|')
+                    )
+                    .join(';');
+                  const totalTraceabilityChars = serializedPlaintext.length;
+                  const isMaxCharsReached = totalTraceabilityChars >= 50000;
+
+                  const handleAddNewTraceabilityRow = () => {
+                    if (isMaxCharsReached) return;
+                    const newItem: StockTraceability = {
+                      id: `TR-${newUgs || '0001'}-${Date.now()}-${traceabilities.length + 1}`,
+                      movementId: 'Autre',
+                      emplacement: 'Centrale des stocks',
+                      lotOrSerial: '',
+                      expirationDate: '',
+                      situation: 'Disponible',
+                      reservationInfo: '',
+                      volume: 1,
+                      comment: '',
+                    };
+                    setTraceabilities([...traceabilities, newItem]);
+                  };
+
+                  return (
+                    <div className="flex flex-col gap-4 mt-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <button
+                          type="button"
+                          id="btn-nouvelle-piece-tracabilite"
+                          disabled={isMaxCharsReached}
+                          onClick={handleAddNewTraceabilityRow}
+                          style={{
+                            backgroundColor: isMaxCharsReached ? '#94a3b8' : '#0f172a',
+                            color: '#ffffff',
+                            padding: '10px 20px',
+                            fontSize: '18px',
+                            borderRadius: '13px',
+                            cursor: isMaxCharsReached ? 'not-allowed' : 'pointer',
+                            opacity: isMaxCharsReached ? 0.6 : 1,
+                          }}
+                          className="font-sans font-bold active:scale-95 transition-all border-0 text-white"
+                          title={isMaxCharsReached ? "Limite de 50 000 caractères atteinte pour la cellule Google Spreadsheets." : undefined}
+                        >
+                          Nouvelle pièce
+                        </button>
+                      </div>
+
+                      {traceabilities.length > 0 && (
+                        <div className="flex flex-col gap-3">
+                          {traceabilities.map((trace, idx) => (
                             <div
-                              className="rounded-xl p-4 gap-4 flex flex-col font-sans mb-3 text-xs"
-                              style={{ background: '#e9edf1', border: 'none' }}
+                              key={trace.id || idx}
+                              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3 p-4 rounded-xl bg-white border"
+                              style={{ borderColor: '#dce1ea' }}
                             >
-                              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 bg-transparent">
-                                {/* Type de mouvement */}
-                                <div className="flex flex-col gap-1 bg-transparent">
-                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Type du mouvement *</label>
-                                  <select
-                                    value={distribMvType}
-                                    onChange={(e) => setDistribMvType(e.target.value as any)}
-                                    className="w-full bg-white text-black p-2 rounded border border-slate-200 font-semibold text-xs"
-                                    style={{ minHeight: '36px' }}
-                                  >
-                                    <option value="Distribution">Distribution</option>
-                                    <option value="Rapatriement">Rapatriement</option>
-                                  </select>
-                                </div>
-
-                                {/* Envoyer à */}
-                                <div className="flex flex-col gap-1 bg-transparent">
-                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Envoyer à *</label>
-                                  <select
-                                    value={distribEmplacement}
-                                    onChange={(e) => setDistribEmplacement(e.target.value)}
-                                    className="w-full bg-white text-black p-2 rounded border border-slate-200 font-semibold text-xs"
-                                    style={{ minHeight: '36px' }}
-                                    required
-                                  >
-                                    <option value="" disabled hidden>Sélectionnez un emplacement</option>
-                                    {ALL_LOCATIONS.map(loc => {
-                                      const assignedTech = members.find(m => m.role === 'Technicien' && m.locationLink === loc);
-                                      const customName = getLocationCustomName(loc);
-                                      const label = assignedTech ? `${assignedTech.name} — ${customName}` : customName;
+                              {/* 1. Emplacement. */}
+                              <div className="flex flex-col gap-1 min-w-0">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                  Emplacement.
+                                </label>
+                                <select
+                                  value={trace.emplacement || 'Centrale des stocks'}
+                                  onChange={(e) => {
+                                    const updated = [...traceabilities];
+                                    updated[idx] = { ...updated[idx], emplacement: e.target.value };
+                                    setTraceabilities(updated);
+                                  }}
+                                  className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                >
+                                  {ALL_LOCATIONS.map((loc) => {
+                                    if (loc === 'Centrale des stocks') {
                                       return (
                                         <option key={loc} value={loc}>
-                                          {label}
+                                          Centrale des stocks
                                         </option>
                                       );
-                                    })}
-                                  </select>
-                                </div>
+                                    }
+                                    const assignedTech = members.find(
+                                      (m) => m.role === 'Technicien' && m.locationLink === loc
+                                    );
+                                    const customName = getLocationCustomName(loc);
+                                    const label = assignedTech
+                                      ? `${assignedTech.name} — ${customName}`
+                                      : customName;
+                                    return (
+                                      <option key={loc} value={loc}>
+                                        {label}
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              </div>
 
-                                {/* Volume */}
-                                <div className="flex flex-col gap-1 bg-transparent">
-                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Volume *</label>
-                                  <input
-                                    type="number"
-                                    value={selectedTraceIds.length}
-                                    disabled
-                                    className="w-full bg-slate-100 p-2 border border-slate-200 rounded text-slate-500 font-semibold text-xs cursor-not-allowed"
-                                    style={{ minHeight: '36px' }}
-                                  />
-                                </div>
-
-                                {/* Date */}
-                                <div className="flex flex-col gap-1 bg-transparent">
-                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date *</label>
-                                  <input
-                                    type="date"
-                                    value={distribDate}
-                                    onChange={(e) => setDistribDate(e.target.value)}
-                                    className="w-full bg-white p-2 border border-slate-200 rounded text-black font-semibold text-xs"
-                                    style={{ minHeight: '36px' }}
-                                    required
-                                  />
-                                </div>
-
-                                {/* Suivi-colis */}
-                                <div className="flex flex-col gap-1 bg-transparent">
-                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Suivi colis</label>
+                              {/* 2. Numéro de lot ou série. (+ Code-barres & bouton Imprimer à côté) */}
+                              <div className="flex flex-col gap-1 min-w-0">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                  Numéro de lot ou série.
+                                </label>
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <input
                                     type="text"
-                                    placeholder="Lien de suivi"
-                                    value={distribSuiviColis}
-                                    onChange={(e) => setDistribSuiviColis(e.target.value)}
-                                    className="w-full bg-white p-2 border border-slate-200 rounded text-black font-semibold text-xs"
-                                    style={{ minHeight: '36px' }}
+                                    value={trace.lotOrSerial || ''}
+                                    onChange={(e) => {
+                                      const updated = [...traceabilities];
+                                      updated[idx] = { ...updated[idx], lotOrSerial: e.target.value };
+                                      setTraceabilities(updated);
+                                    }}
+                                    placeholder="Lot / Série"
+                                    className="flex-1 min-w-[120px] bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
                                   />
-                                </div>
-
-                                {/* Statut */}
-                                <div className="flex flex-col gap-1 bg-transparent">
-                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Statut *</label>
-                                  <select
-                                    value={distribStatut}
-                                    onChange={(e) => setDistribStatut(e.target.value as any)}
-                                    className="w-full bg-white text-black p-2 rounded border border-slate-200 font-semibold text-xs"
-                                    style={{ minHeight: '36px' }}
+                                  <div
+                                    className="inline-block bg-transparent shrink-0"
+                                    dangerouslySetInnerHTML={{
+                                      __html: generateBarcodeSVGString(trace.lotOrSerial || ''),
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadBarcodeSVG(trace.lotOrSerial || '')}
+                                    style={{
+                                      backgroundColor: '#0f172a',
+                                      color: '#ffffff',
+                                      padding: '8px 14px',
+                                      fontSize: '16px',
+                                      borderRadius: '10px',
+                                    }}
+                                    className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0 shrink-0"
+                                    title="Imprimer / Télécharger"
                                   >
-                                    <option value="Préparation">Préparation</option>
-                                    <option value="Expédié">Expédié</option>
-                                    <option value="Terminé">Terminé</option>
-                                    <option value="Annulé">Annulé</option>
-                                  </select>
+                                    Imprimer
+                                  </button>
                                 </div>
                               </div>
 
-                              {/* Actions */}
-                              <div className="flex justify-end gap-3 bg-transparent mt-2">
-                                <button
-                                  type="button"
-                                  onClick={handleSelectedDistributionSubmit}
-                                  style={{
-                                    backgroundColor: '#2e54ff',
-                                    color: '#ffffff',
-                                    padding: '10px 20px',
-                                    fontSize: '18px',
-                                    borderRadius: '13px',
+                              {/* 3. Date de péremption. */}
+                              <div className="flex flex-col gap-1 min-w-0">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                  Date de péremption.
+                                </label>
+                                <input
+                                  type="date"
+                                  value={trace.expirationDate || ''}
+                                  onChange={(e) => {
+                                    const updated = [...traceabilities];
+                                    updated[idx] = {
+                                      ...updated[idx],
+                                      expirationDate: e.target.value || '',
+                                    };
+                                    setTraceabilities(updated);
                                   }}
-                                  className="font-sans font-bold active:scale-95 transition-all text-white cursor-pointer border-0 shadow-xs"
+                                  className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                />
+                              </div>
+
+                              {/* 4. Situation. */}
+                              <div className="flex flex-col gap-1 min-w-0">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                  Situation.
+                                </label>
+                                <select
+                                  value={
+                                    trace.situation === 'Signalé manquant'
+                                      ? 'Signalé Manquant'
+                                      : trace.situation || 'Disponible'
+                                  }
+                                  onChange={(e) => {
+                                    const updated = [...traceabilities];
+                                    updated[idx] = {
+                                      ...updated[idx],
+                                      situation: e.target.value as any,
+                                    };
+                                    setTraceabilities(updated);
+                                  }}
+                                  className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
                                 >
-                                  Valider la distribution
-                                </button>
+                                  <option value="Disponible">Disponible</option>
+                                  <option value="Utilisé">Utilisé</option>
+                                  <option value="Indisponible">Indisponible</option>
+                                  <option value="Signalé Manquant">Signalé Manquant</option>
+                                  <option value="Prêté">Prêté</option>
+                                </select>
+                              </div>
+
+                              {/* 5. Infos réservation. */}
+                              <div className="flex flex-col gap-1 min-w-0">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                  Infos réservation.
+                                </label>
+                                <input
+                                  type="text"
+                                  value={trace.reservationInfo ?? ''}
+                                  onChange={(e) => {
+                                    const updated = [...traceabilities];
+                                    updated[idx] = {
+                                      ...updated[idx],
+                                      reservationInfo: e.target.value,
+                                    };
+                                    setTraceabilities(updated);
+                                  }}
+                                  placeholder="Infos réservation..."
+                                  className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                />
+                              </div>
+
+                              {/* 6. Volume. */}
+                              <div className="flex flex-col gap-1 min-w-0">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                  Volume.
+                                </label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={trace.volume ?? 1}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? 1 : Number(e.target.value);
+                                    const updated = [...traceabilities];
+                                    updated[idx] = {
+                                      ...updated[idx],
+                                      volume: isNaN(val) ? 1 : val,
+                                    };
+                                    setTraceabilities(updated);
+                                  }}
+                                  className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                />
+                              </div>
+
+                              {/* 7. Commentaire. + Supprimer */}
+                              <div className="flex flex-col gap-1 min-w-0">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                  Commentaire.
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={trace.comment || ''}
+                                    onChange={(e) => {
+                                      const updated = [...traceabilities];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        comment: e.target.value,
+                                      };
+                                      setTraceabilities(updated);
+                                    }}
+                                    placeholder="Commentaire..."
+                                    className="flex-1 min-w-0 bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setTraceabilities(traceabilities.filter((_, i) => i !== idx));
+                                    }}
+                                    style={{
+                                      backgroundColor: '#0f172a',
+                                      color: '#ffffff',
+                                      padding: '8px 14px',
+                                      fontSize: '16px',
+                                      borderRadius: '10px',
+                                    }}
+                                    className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0 shrink-0"
+                                  >
+                                    Supprimer
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          )}
-
-                          <div 
-                            className="overflow-x-auto border rounded-xl mt-2 bg-white" 
-                            style={{ borderColor: 'oklch(0.88 0 0)', borderWidth: '1px' }}
-                          >
-                            <table className="w-full text-left font-sans border-collapse text-xs">
-                              <thead>
-                                <tr className="bg-white" style={{ borderBottom: '1px solid oklch(0.88 0 0)' }}>
-                                  <th className="px-3 py-3 text-center font-semibold" style={{ width: '45px' }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const visibleIds = filteredTraceabilities.map(t => t.id);
-                                        const isAllSelected = visibleIds.length > 0 && visibleIds.every(id => selectedTraceIds.includes(id));
-                                        if (isAllSelected) {
-                                          setSelectedTraceIds(prev => prev.filter(id => !visibleIds.includes(id)));
-                                        } else {
-                                          setSelectedTraceIds(prev => Array.from(new Set([...prev, ...visibleIds])));
-                                        }
-                                      }}
-                                      className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
-                                        filteredTraceabilities.length > 0 && filteredTraceabilities.every(t => selectedTraceIds.includes(t.id))
-                                          ? 'border-[#2e54ff] bg-transparent'
-                                          : 'border-slate-400 bg-white hover:border-[#2e54ff]'
-                                      }`}
-                                      style={{ borderWidth: '1px' }}
-                                      title="Tout sélectionner / désélectionner"
-                                    >
-                                      {filteredTraceabilities.length > 0 && filteredTraceabilities.every(t => selectedTraceIds.includes(t.id)) && (
-                                        <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
-                                      )}
-                                    </button>
-                                  </th>
-                                  {isDefibrillator && (
-                                    <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>
-                                      Extraire / Déployer.
-                                    </th>
-                                  )}
-                                  <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Code barre / Imprimer.</th>
-                                  <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Numéro de lot ou série.</th>
-                                  <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Date de péremption.</th>
-                                  <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Situation.</th>
-                                  <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Infos réservation.</th>
-                                  <th className="px-3 py-3 text-center font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Volume.</th>
-                                  <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Commentaire.</th>
-                                  <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Mouvement.</th>
-                                  <th className="px-3 py-3 font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Transférer vers:</th>
-                                  <th className="px-3 py-3 text-right font-semibold text-black font-sans" style={{ fontSize: '16px', color: '#000000', whiteSpace: 'nowrap' }}>Supprimer.</th>
-                                </tr>
-                              </thead>
-                              <tbody className="bg-white">
-                                {Object.entries(groups).map(([locName, items]) => {
-                                  // Find technician associated with this location
-                                  const assignedTech = members.find(m => m.role === 'Technicien' && m.locationLink === locName);
-
-                                  return (
-                                    <React.Fragment key={locName}>
-                                      {/* Intercalaire (Divider Row) */}
-                                      <tr className="bg-[#0f172a] select-none" style={{ borderBottom: '1px solid #000000', borderTop: '1px solid #000000' }}>
-                                        <td colSpan={isDefibrillator ? 12 : 11} className="px-4 py-3 bg-[#0f172a]">
-                                          <div className="flex items-center gap-6 font-sans text-[15px] font-bold text-white bg-transparent">
-                                            <span className="bg-transparent">
-                                              Emplacement : {getLocationCustomName(locName)}
-                                            </span>
-                                            {assignedTech && (
-                                              <span className="bg-transparent text-white font-bold">
-                                                Technicien : {assignedTech.name}
-                                              </span>
-                                            )}
-                                            <span className="text-white font-bold text-[15px] ml-auto bg-transparent pr-2">
-                                              {items.length} {items.length > 1 ? 'pièces' : 'pièce'}
-                                            </span>
-                                          </div>
-                                        </td>
-                                      </tr>
-
-                                      {/* Rows for this group */}
-                                      {items.map(({ idx, trace }, itemGroupIdx) => {
-                                        return (
-                                          <tr 
-                                            key={trace.id} 
-                                            className="hover:bg-slate-50 transition-all font-sans bg-white text-black" 
-                                            style={{ borderBottom: itemGroupIdx === items.length - 1 ? 'none' : '1px solid oklch(0.88 0 0)' }}
-                                          >
-                                            {/* Selection Radio-Check */}
-                                            <td className="px-3 py-3 bg-white text-center" style={{ width: '45px' }}>
-                                              <button
-                                                type="button"
-                                                onClick={() => {
-                                                  if (selectedTraceIds.includes(trace.id)) {
-                                                    setSelectedTraceIds(selectedTraceIds.filter(id => id !== trace.id));
-                                                  } else {
-                                                    setSelectedTraceIds([...selectedTraceIds, trace.id]);
-                                                  }
-                                                }}
-                                                className={`w-5 h-5 rounded-full border transition-all flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-[#2e54ff]/20 cursor-pointer mx-auto ${
-                                                  selectedTraceIds.includes(trace.id)
-                                                    ? 'border-[#2e54ff] bg-transparent'
-                                                    : 'border-slate-400 bg-white hover:border-[#2e54ff]'
-                                                }`}
-                                                style={{ borderWidth: '1px' }}
-                                                title="Sélectionner cet article"
-                                              >
-                                                {selectedTraceIds.includes(trace.id) && (
-                                                  <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
-                                                )}
-                                              </button>
-                                            </td>
-
-                                            {/* Extraire / Déployer button if type is defibrillator */}
-                                            {isDefibrillator && (
-                                              <td className="px-3 py-3 bg-white whitespace-nowrap">
-                                                <button
-                                                  type="button"
-                                                  disabled={trace.volume === 0}
-                                                  onClick={() => handleExtractDeployDefib(trace, idx)}
-                                                  style={{
-                                                    backgroundColor: trace.volume === 0 ? '#94a3b8' : '#0f172a',
-                                                    color: '#ffffff',
-                                                    padding: '8px 16px',
-                                                    fontSize: '18px',
-                                                    borderRadius: '10px',
-                                                    cursor: trace.volume === 0 ? 'not-allowed' : 'pointer',
-                                                    opacity: trace.volume === 0 ? 0.6 : 1,
-                                                  }}
-                                                  className={`font-sans font-bold transition-all border-0 ${trace.volume === 0 ? '' : 'active:scale-95 cursor-pointer hover:opacity-90'}`}
-                                                  title={trace.volume === 0 ? "Volume à 0 (Déjà extrait/déployé)" : "Extraire / Déployer dans les défibrillateurs"}
-                                                >
-                                                  Extraire/Déployer
-                                                </button>
-                                              </td>
-                                            )}
-
-                                            {/* Code-barres / Imprimer */}
-                                          <td className="px-3 py-3 bg-white">
-                                            <div className="flex items-center gap-4 bg-transparent whitespace-nowrap">
-                                              <div 
-                                                className="inline-block bg-transparent"
-                                                dangerouslySetInnerHTML={{ __html: generateBarcodeSVGString(trace.lotOrSerial) }} 
-                                              />
-                                              <button
-                                                type="button"
-                                                onClick={() => downloadBarcodeSVG(trace.lotOrSerial)}
-                                                style={{
-                                                  backgroundColor: '#0f172a',
-                                                  color: '#ffffff',
-                                                  padding: '8px 16px',
-                                                  fontSize: '18px',
-                                                  borderRadius: '10px',
-                                                }}
-                                                className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0"
-                                                title="Imprimer / Télécharger"
-                                              >
-                                                Imprimer
-                                              </button>
-                                            </div>
-                                          </td>
-
-                                          {/* Numéro de lot ou série */}
-                                          <td className="px-3 py-3 bg-white">
-                                            <input
-                                              type="text"
-                                              value={trace.lotOrSerial}
-                                              onChange={(e) => {
-                                                const updated = [...traceabilities];
-                                                updated[idx].lotOrSerial = e.target.value;
-                                                setTraceabilities(updated);
-                                              }}
-                                              className="w-full bg-white text-black p-1 border border-slate-300 rounded font-semibold text-xs font-mono"
-                                              style={{ minHeight: '30px', minWidth: '130px' }}
-                                            />
-                                          </td>
-
-                                          {/* Date de péremption */}
-                                          <td className="px-3 py-3 bg-white">
-                                            <input
-                                              type="date"
-                                              value={trace.expirationDate || ''}
-                                              onChange={(e) => {
-                                                const updated = [...traceabilities];
-                                                updated[idx].expirationDate = e.target.value || undefined;
-                                                setTraceabilities(updated);
-                                              }}
-                                              className="w-full bg-white text-black p-1 border border-slate-300 rounded font-sans text-xs"
-                                              style={{ minHeight: '30px', minWidth: '130px' }}
-                                            />
-                                          </td>
-
-                                          {/* Situation */}
-                                          <td className="px-3 py-3 bg-white">
-                                            <select
-                                              value={trace.situation}
-                                              onChange={(e) => {
-                                                const updated = [...traceabilities];
-                                                updated[idx].situation = e.target.value as any;
-                                                setTraceabilities(updated);
-                                              }}
-                                              className="w-full bg-white text-black p-1 border border-slate-300 rounded font-sans text-xs font-semibold"
-                                              style={{ minHeight: '30px', minWidth: '180px' }}
-                                            >
-                                              <option value="Disponible">Disponible</option>
-                                              <option value="Utilisé">Utilisé</option>
-                                              <option value="Indisponible">Indisponible</option>
-                                              <option value="Signalé manquant">Signalé manquant</option>
-                                              <option value="Prêté">Prêté</option>
-                                            </select>
-                                          </td>
-
-                                          {/* Infos réservation */}
-                                          <td className="px-3 py-3 bg-white">
-                                            <input
-                                              type="text"
-                                              value={getReservationInfoText(trace)}
-                                              disabled
-                                              className="w-full bg-slate-100 text-slate-500 p-1 border border-slate-300 rounded font-sans text-xs cursor-not-allowed"
-                                              style={{ minHeight: '30px', minWidth: '400px' }}
-                                            />
-                                          </td>
-
-                                          {/* Volume */}
-                                          <td className="px-3 py-3 bg-white text-center">
-                                            <input
-                                              type="number"
-                                              value={trace.volume}
-                                              disabled
-                                              className="w-16 bg-slate-100 text-slate-500 p-1 border border-slate-300 rounded font-sans text-xs text-center cursor-not-allowed"
-                                              style={{ minHeight: '30px' }}
-                                            />
-                                          </td>
-
-                                          {/* Commentaire */}
-                                          <td className="px-3 py-3 bg-white">
-                                            <input
-                                              type="text"
-                                              value={trace.comment || ''}
-                                              onChange={(e) => {
-                                                const updated = [...traceabilities];
-                                                updated[idx].comment = e.target.value;
-                                                setTraceabilities(updated);
-                                              }}
-                                              placeholder="Commentaire..."
-                                              className="w-full bg-white text-black p-1 border border-slate-300 rounded font-sans text-xs"
-                                              style={{ minHeight: '30px', minWidth: '150px' }}
-                                            />
-                                          </td>
-
-                                          {/* Mouvement */}
-                                          <td className="px-3 py-3 bg-white">
-                                            <select
-                                              value={trace.movementId}
-                                              onChange={(e) => {
-                                                const updated = [...traceabilities];
-                                                updated[idx].movementId = e.target.value;
-                                                setTraceabilities(updated);
-                                              }}
-                                              className="w-full bg-white text-black p-1 border border-slate-300 rounded font-sans text-xs"
-                                              style={{ minHeight: '30px', minWidth: '280px' }}
-                                            >
-                                              <option value="" disabled hidden>Sélectionnez un mouvement</option>
-                                              <option value="Autre">Autre (Aucun mouvement)</option>
-                                              {mouvements.filter(mv => mv.type !== 'Annulation').map(mv => (
-                                                <option key={mv.id} value={mv.id}>
-                                                  {mv.date} - {mv.type} (Vol: {mv.volume})
-                                                </option>
-                                              ))}
-                                            </select>
-                                          </td>
-
-                                          {/* Transférer vers */}
-                                          <td className="px-3 py-3 bg-white">
-                                            <select
-                                              value={trace.emplacement || locName}
-                                              onChange={(e) => {
-                                                const updated = [...traceabilities];
-                                                updated[idx].emplacement = e.target.value;
-                                                setTraceabilities(updated);
-                                              }}
-                                              className="bg-white text-black p-1 border border-slate-300 rounded font-sans text-xs font-semibold"
-                                              style={{ border: '1px solid #cbd5e1', minHeight: '30px', minWidth: '160px' }}
-                                            >
-                                              {ALL_LOCATIONS.map(loc => {
-                                                const assignedTech = members.find(m => m.role === 'Technicien' && m.locationLink === loc);
-                                                const customName = getLocationCustomName(loc);
-                                                const label = assignedTech ? `${assignedTech.name} — ${customName}` : customName;
-                                                return (
-                                                  <option key={loc} value={loc}>
-                                                    {label}
-                                                  </option>
-                                                );
-                                              })}
-                                            </select>
-                                          </td>
-
-                                          {/* Actions */}
-                                          <td className="px-3 py-3 text-right bg-white">
-                                            <button
-                                              type="button"
-                                              onClick={() => {
-                                                setTraceabilities(traceabilities.filter((_, i) => i !== idx));
-                                              }}
-                                              style={{
-                                                backgroundColor: '#0f172a',
-                                                color: '#ffffff',
-                                                padding: '8px 16px',
-                                                fontSize: '18px',
-                                                borderRadius: '10px',
-                                              }}
-                                              className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0"
-                                            >
-                                              Supprimer
-                                            </button>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </React.Fragment>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                          ))}
                         </div>
-                      </>
-                    );
-                  })()}
-                  </div>
-                </>
-              )}
-
-              {/* Commentaire. */}
-              <div className="md:col-span-4 flex flex-col gap-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Commentaire.</label>
-                <input
-                  type="text"
-                  value={newCommentaire}
-                  onChange={(e) => setNewCommentaire(e.target.value)}
-                  placeholder="Entrez votre commentaire..."
-                  className="focus:outline-none w-full font-sans p-2 border border-slate-200 rounded text-xs bg-white text-slate-700"
-                />
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
-
-              {/* Activer la traçabilité des pièces. */}
-              <div className="md:col-span-4 flex flex-col gap-2 mt-2">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
-                  {t("Activer la traçabilité des pièces.")}
-                </span>
-                <div className="flex gap-4 mt-1 bg-transparent">
-                  <button
-                    type="button"
-                    onClick={() => setTraceabilityEnabled(true)}
-                    className="flex items-center gap-2 font-sans font-bold cursor-pointer select-none border-0 bg-transparent text-black"
-                    style={{ fontSize: '18px' }}
-                  >
-                    <span
-                      className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${traceabilityEnabled === true ? 'border-[#2e54ff]' : 'border-slate-300'}`}
-                      style={{ borderWidth: '1px' }}
-                    >
-                      {traceabilityEnabled === true && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
-                    </span>
-                    Oui
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (traceabilities.length > 0) {
-                        alert("Impossible de désactiver la traçabilité car des pièces de traçabilité existent déjà dans le tableau.");
-                        return;
-                      }
-                      setTraceabilityEnabled(false);
-                    }}
-                    disabled={traceabilities.length > 0}
-                    className={`flex items-center gap-2 font-sans font-bold select-none border-0 bg-transparent text-black ${traceabilities.length > 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                    style={{ fontSize: '18px' }}
-                  >
-                    <span
-                      className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${traceabilityEnabled === false ? 'border-[#2e54ff]' : 'border-slate-300'}`}
-                      style={{ borderWidth: '1px' }}
-                    >
-                      {traceabilityEnabled === false && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
-                    </span>
-                    Non
-                  </button>
-                </div>
-              </div>
-
             </div>
           </form>
         </div>

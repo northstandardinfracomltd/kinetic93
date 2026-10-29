@@ -1339,19 +1339,50 @@ export default function ClientTab({
           style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
           id="client-form-header-box"
         >
-          <div className="flex items-center gap-3 w-full">
+          <div className="grid grid-cols-3 items-center gap-3 w-full">
             <button
               type="button"
               onClick={() => setIsModalOpen(false)}
               id="btn-close-client-modal"
               style={{
                 ...rowActionButton18Style,
-                flex: 1,
-                width: '50%',
+                width: '100%',
               }}
-              className="flex-1 transition-colors cursor-pointer"
+              className="w-full transition-colors cursor-pointer"
             >
               <span>Fermer</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={!editingClient}
+              onClick={() => {
+                if (!editingClient) return;
+                const targetClientName = (
+                  denomination ||
+                  editingClient?.denomination ||
+                  (editingClient as any)?.nomSite ||
+                  (editingClient as any)?.nom ||
+                  (editingClient as any)?.entreprise ||
+                  ''
+                ).trim();
+                setIsModalOpen(false);
+                if (onShowClientDefibs) {
+                  onShowClientDefibs(targetClientName);
+                } else if (setActiveTab) {
+                  setActiveTab('defibrillateurs');
+                }
+              }}
+              id="btn-materiels-client-modal"
+              style={{
+                ...rowActionButton18Style,
+                width: '100%',
+                opacity: !editingClient ? 0.5 : 1,
+                cursor: !editingClient ? 'not-allowed' : 'pointer',
+              }}
+              className="w-full transition-colors"
+            >
+              <span>Matériel(s)</span>
             </button>
 
             <button
@@ -1360,13 +1391,12 @@ export default function ClientTab({
               id="btn-submit-client-form"
               style={{
                 ...rowActionButton18Style,
-                flex: 1,
-                width: '50%',
+                width: '100%',
                 backgroundColor: '#2e54ff',
                 color: '#ffffff',
                 boxShadow: 'none'
               }}
-              className="flex-1 transition-all cursor-pointer"
+              className="w-full transition-all cursor-pointer"
             >
               Enregistrer
             </button>
@@ -2793,26 +2823,8 @@ export default function ClientTab({
                       {(() => {
                         const defibCount = getClientDefibVolume(client);
                         const isDeleteDisabled = defibCount > 0;
-                        const clientName = (client.denomination || (client as any).nomSite || (client as any).nom || (client as any).entreprise || '').trim();
                         return (
                           <div className="inline-flex gap-2">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (onShowClientDefibs) {
-                                  onShowClientDefibs(clientName);
-                                } else if (setActiveTab) {
-                                  setActiveTab('defibrillateurs');
-                                }
-                              }}
-                              id={`btn-view-defibs-client-${client.id}`}
-                              style={rowActionButton18Style}
-                              className="cursor-pointer"
-                              title={`Voir les défibrillateurs de ${clientName || 'ce client'}`}
-                            >
-                              {t('Défibrillateurs')}
-                            </button>
                             <button
                               type="button"
                               onClick={() => openEditModal(client)}

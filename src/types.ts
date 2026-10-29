@@ -624,8 +624,7 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetReglagesCrm', urlKey: 'spreadsheetReglagesCrmUrl', storageSuffix: 'spreadsheet_reglages_crm', label: 'Spreadsheet Réglages CRM.', id: 'settings-db-spreadsheet-reglages-crm' },
   { key: 'spreadsheetSatisfaction', urlKey: 'spreadsheetSatisfactionUrl', storageSuffix: 'spreadsheet_satisfaction', label: 'Spreadsheet Satisfaction.', id: 'settings-db-spreadsheet-satisfaction' },
   { key: 'spreadsheetCommandes', urlKey: 'spreadsheetCommandesUrl', storageSuffix: 'spreadsheet_commandes', label: 'Spreadsheet Commandes.', id: 'settings-db-spreadsheet-commandes' },
-  { key: 'spreadsheetStocks', urlKey: 'spreadsheetStocksUrl', storageSuffix: 'spreadsheet_stocks', label: 'Spreadsheet Centrale des Stocks.', id: 'settings-db-spreadsheet-stocks' },
-  { key: 'spreadsheetStocksDistribues', urlKey: 'spreadsheetStocksDistribuesUrl', storageSuffix: 'spreadsheet_stocks_distribues', label: 'Spreadsheet Stocks Distribués.', id: 'settings-db-spreadsheet-stocks-distribues' },
+  { key: 'spreadsheetStocks', urlKey: 'spreadsheetStocksUrl', storageSuffix: 'spreadsheet_stocks', label: 'Spreadsheet Stocks.', id: 'settings-db-spreadsheet-stocks' },
   { key: 'spreadsheetAchatsFournisseurs', urlKey: 'spreadsheetAchatsFournisseursUrl', storageSuffix: 'spreadsheet_achats_fournisseurs', label: 'Spreadsheet Achats fournisseurs.', id: 'settings-db-spreadsheet-achats-fournisseurs' },
   { key: 'spreadsheetTemps', urlKey: 'spreadsheetTempsUrl', storageSuffix: 'spreadsheet_temps', label: 'Spreadsheet Temps.', id: 'settings-db-spreadsheet-temps' },
   { key: 'spreadsheetTicketsCaisse', urlKey: 'spreadsheetTicketsCaisseUrl', storageSuffix: 'spreadsheet_tickets_caisse', label: 'Spreadsheet Tickets Caisse.', id: 'settings-db-spreadsheet-tickets-caisse' },
@@ -727,7 +726,7 @@ export interface StockTraceability {
   lotOrSerial: string;
   expirationDate?: string;
   volume: number; // always 1
-  situation: 'Disponible' | 'Utilisé' | 'Indisponible' | 'Signalé manquant' | 'Prêté';
+  situation: 'Disponible' | 'Utilisé' | 'Indisponible' | 'Signalé Manquant' | 'Signalé manquant' | 'Prêté';
   emplacement?: string;
   comment?: string;
   bonCommande?: string;
@@ -756,6 +755,7 @@ export interface StockRecord {
   ugs?: string;
   traceabilityEnabled?: boolean;
   traceabilities?: StockTraceability[];
+  inventaire?: string;
   usageRecommandeIds?: string[];
   selectionMiniature?: string;
   poidsNet?: string;

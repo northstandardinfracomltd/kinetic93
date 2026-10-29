@@ -1166,8 +1166,6 @@ export async function fetchCollectionFromFirestore<T>(
     commercialDocs: { type: 'commandes', localKey: 'spreadsheet_commandes', infoKey: 'spreadsheetCommandes' },
     commercial_docs: { type: 'commandes', localKey: 'spreadsheet_commandes', infoKey: 'spreadsheetCommandes' },
     stocks: { type: 'stocksGlobaux', localKey: 'spreadsheet_stocks', infoKey: 'spreadsheetStocks' },
-    distributed_stocks: { type: 'stocksDistribues', localKey: 'spreadsheet_stocks', infoKey: 'spreadsheetStocks' },
-    distributedStocks: { type: 'stocksDistribues', localKey: 'spreadsheet_stocks', infoKey: 'spreadsheetStocks' },
     logistics_notifications: { type: 'historiqueNotifications', localKey: 'spreadsheet_stocks', infoKey: 'spreadsheetStocks' },
     achats_fournisseurs: { type: 'achatsFournisseurs', localKey: 'spreadsheet_achats_fournisseurs', infoKey: 'spreadsheetAchatsFournisseurs' },
     pointages: { type: 'temps', localKey: 'spreadsheet_temps', infoKey: 'spreadsheetTemps' },

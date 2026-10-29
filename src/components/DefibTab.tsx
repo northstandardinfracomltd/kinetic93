@@ -5856,7 +5856,7 @@ export default function DefibTab({
                             }}
                             style={rowActionButton18Style}
                           >
-                            {t("Rapport(s)")}
+                            {t("Historique")}
                           </button>
                           <button
                             onClick={(e) => {
@@ -6045,19 +6045,41 @@ export default function DefibTab({
             style={{ borderRadius: '0px', width: '98%', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
             id="defib-form-header-box"
           >
-            <div className="flex items-center gap-3 w-full">
+            <div className="grid grid-cols-3 items-center gap-3 w-full">
               <button
                 type="button"
                 onClick={() => setIsFormOpen(false)}
                 id="btn-close-defib-modal"
                 style={{
                   ...rowActionButton18Style,
-                  flex: 1,
-                  width: '50%',
+                  width: '100%',
                 }}
-                className="flex-1 transition-colors cursor-pointer"
+                className="w-full transition-colors cursor-pointer"
               >
                 <span>Fermer</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={!editingDefib}
+                onClick={() => {
+                  if (!editingDefib) return;
+                  const targetIdentifiant = identifiant || editingDefib?.identifiant || '';
+                  setIsFormOpen(false);
+                  if (onShowGmaoReports) {
+                    onShowGmaoReports(targetIdentifiant);
+                  }
+                }}
+                id="btn-history-defib-modal"
+                style={{
+                  ...rowActionButton18Style,
+                  width: '100%',
+                  opacity: !editingDefib ? 0.5 : 1,
+                  cursor: !editingDefib ? 'not-allowed' : 'pointer',
+                }}
+                className="w-full transition-colors"
+              >
+                <span>Historique</span>
               </button>
 
               <button
@@ -6067,15 +6089,14 @@ export default function DefibTab({
                 disabled={isSubmitChecking}
                 style={{
                   ...rowActionButton18Style,
-                  flex: 1,
-                  width: '50%',
+                  width: '100%',
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
                   opacity: isSubmitChecking ? 0.5 : 1,
                   cursor: isSubmitChecking ? 'not-allowed' : 'pointer',
                   boxShadow: 'none'
                 }}
-                className="flex-1 transition-all"
+                className="w-full transition-all"
               >
                 {isSubmitChecking ? (
                   <span>Enregistrement en cours...</span>

@@ -1170,7 +1170,7 @@ export default function App() {
         ticketsCaisse: 'spreadsheetTicketsCaisse',
         stocksCentrale: 'spreadsheetStocks',
         stocksGlobaux: 'spreadsheetStocks',
-        stocksDistribues: 'spreadsheetStocksDistribues',
+        stocksDistribues: 'spreadsheetStocks',
         historiqueNotifications: 'spreadsheetStocks',
         crm: 'spreadsheetCrm',
         reglagesCrm: 'spreadsheetReglagesCrm',
@@ -1583,9 +1583,6 @@ export default function App() {
           collaborateur: customCollab,
         };
       };
-      const prevEnrichedDS = (Array.isArray(distributedStocks) ? distributedStocks : []).map(enrichDistStockForSheet);
-      const nextEnrichedDS = (Array.isArray(updated) ? updated : []).map(enrichDistStockForSheet);
-      syncCompartmentToGoogleSheets('stocksDistribues', prevEnrichedDS, nextEnrichedDS, ['id'], effectiveTenantId);
       fetch('/api/sync-collection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3309,7 +3306,7 @@ export default function App() {
         commandes: 'spreadsheetCommandes',
         devisFactures: 'spreadsheetCommandes',
         stocksGlobaux: 'spreadsheetStocks',
-        stocksDistribues: 'spreadsheetStocksDistribues',
+        stocksDistribues: 'spreadsheetStocks',
         historiqueNotifications: 'spreadsheetStocks',
         achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
         temps: 'spreadsheetTemps',
@@ -4002,7 +3999,7 @@ export default function App() {
       spreadsheetDevisFactures: 'devisFactures',
       spreadsheetStocks: 'stocksGlobaux',
       spreadsheetStocksGlobaux: 'stocksGlobaux',
-      spreadsheetStocksDistribues: 'stocksDistribues',
+      spreadsheetStocksDistribues: 'stocksGlobaux',
       spreadsheetHistoriqueNotifications: 'historiqueNotifications',
       spreadsheetAchatsFournisseurs: 'achatsFournisseurs',
       spreadsheetTemps: 'temps',
@@ -4057,7 +4054,6 @@ export default function App() {
       'satisfaction',
       'commandes',
       'stocksGlobaux',
-      'stocksDistribues',
       'historiqueNotifications',
       'achatsFournisseurs',
       'temps',
@@ -4125,7 +4121,6 @@ export default function App() {
       await Promise.all([
         refreshGenericSheetCompartment('tournees', true),
         refreshGenericSheetCompartment('stocksGlobaux', true),
-        refreshGenericSheetCompartment('stocksDistribues', true),
         refreshGenericSheetCompartment('variables', true),
         refreshGenericSheetCompartment('membresEnvironnement', true),
         refreshGenericSheetCompartment('commandes', true),
@@ -8601,7 +8596,6 @@ export default function App() {
             { key: 'spreadsheetTournees', storageSuffix: 'spreadsheet_tournees', tabType: 'tournees' },
             { key: 'spreadsheetMissionsTournees', storageSuffix: 'spreadsheet_missions_tournees', tabType: 'tournees' },
             { key: 'spreadsheetStocks', storageSuffix: 'spreadsheet_stocks', tabType: 'stocksGlobaux' },
-            { key: 'spreadsheetStocksDistribues', storageSuffix: 'spreadsheet_stocks_distribues', tabType: 'stocksDistribues' },
             { key: 'spreadsheetCommandes', storageSuffix: 'spreadsheet_commandes', tabType: 'commandes' },
             { key: 'spreadsheetFormations', storageSuffix: 'spreadsheet_formations', tabType: 'formations' },
             { key: 'spreadsheetStagiaires', storageSuffix: 'spreadsheet_stagiaires', tabType: 'stagiaires' },
@@ -8861,7 +8855,6 @@ export default function App() {
       refreshGenericSheetCompartment('tournees', true);
       refreshGenericSheetCompartment('rapportsPdf', true);
       refreshGenericSheetCompartment('stocksGlobaux', true);
-      refreshGenericSheetCompartment('stocksDistribues', true);
       refreshGenericSheetCompartment('temps', true);
       refreshGenericSheetCompartment('formations', true);
       refreshGenericSheetCompartment('stagiaires', true);
@@ -12295,6 +12288,7 @@ export default function App() {
               }}
               onShowGmaoReports={(identifiant) => {
                 setActiveTab('gmao');
+                setGmaoFilter('validated');
                 setGmaoSearchQuery(identifiant);
               }}
               companyInfo={companyInfo}
@@ -12317,6 +12311,12 @@ export default function App() {
               fsmTours={fsmTours}
               onUpdateFsmTours={saveFsmTours}
               setActiveTab={setActiveTab}
+              onShowGmaoReports={(identifiant) => {
+                setActiveTab('gmao');
+                setGmaoFilter('validated');
+                setGmaoIncludeAutresMateriels(true);
+                setGmaoSearchQuery(identifiant);
+              }}
               members={members}
               defibrillateurs={defibrillateurs}
               variables={variables}

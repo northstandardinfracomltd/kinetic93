@@ -2472,7 +2472,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     // Section 1 - Propriétés & Fournisseurs
     { header: 'Identifiant', field: 'id', aliases: ['identifiant', 'id', 'idstock', 'identifiantstock', 'idcentralestock', 'identifiantcentralestock'] },
     { header: 'Pièce ou service.', field: 'denominationPieceId', aliases: ['pieceouservice', 'selectiondelapieceouservice', 'selectiondelapiece', 'selectionpiece', 'piece', 'denominationdelapiece', 'denominationpiece', 'denominationpieceid', 'nomdelapiece', 'nompiece', 'denomination', 'article', 'designation', 'libelle'] },
-    { header: 'UGS.', field: 'ugs', aliases: ['ugs', 'inventaireugs', 'codeugs', 'referenceugs', 'refugs', 'inventaire', 'sku', 'codebarre', 'reference'] },
+    { header: 'UGS.', field: 'ugs', aliases: ['ugs', 'inventaireugs', 'codeugs', 'referenceugs', 'refugs', 'sku', 'codebarre', 'reference'] },
     { header: 'Quantité disponible.', field: 'quantite', aliases: ['quantitedisponible', 'qtedisponible', 'volumedisponible', 'disponible', 'quantite', 'qte', 'stockdisponible', 'dispo'], type: 'number' },
     { header: 'Quantitée réservée.', field: 'quantiteReservee', aliases: ['quantiteereservee', 'quantitereservee', 'qtereservee', 'volumereserve', 'reserve', 'stockreserve'], type: 'number' },
     { header: 'Quantité totale.', field: 'quantiteTotale', aliases: ['quantitetotale', 'qtetotale', 'volumetotal', 'stocktotal'], type: 'number' },
@@ -2505,11 +2505,11 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Besoin projeté à 2 mois.', field: 'besoinProjete2Mois', aliases: ['besoinprojetea2mois', 'besoinprojetesous2mois', 'besoinprojete2mois', 'besoinprojetemoinsde2mois', 'besoin2mois', 'besoinsous2mois', 'sortantcettesem', 'sortantcettesemaine', 'sortantsem'], type: 'number' },
     { header: 'Besoin projeté entre 2 à 6 mois.', field: 'besoinProjete2a6Mois', aliases: ['besoinprojeteentre2a6mois', 'besoinprojetede2a6mois', 'besoinprojete2a6mois', 'besoin2a6mois', 'besoinde2a6mois', 'sortantsempro', 'sortantsemaineprochaine'], type: 'number' },
     { header: 'Total à commander.', field: 'totalACommander', aliases: ['totalacommander', 'acommander', 'quantiteacommander', 'sortant7a30jours', 'sortant7a30j'], type: 'number' },
-    { header: 'Commentaire. (Mouvements)', field: 'commentaire', aliases: ['commentairemouvements', 'commentaire', 'commentaireinterne', 'commentaires', 'notes', 'note', 'observation', 'observations', 'remarque', 'remarques'] },
-    // Section 3 & 4 - JSON fallbacks + Toggle
+    { header: 'Commentaire. (Inventaire de traçabilité)', field: 'commentaire', aliases: ['commentaireinventairedetracabilite', 'commentairemouvements', 'commentaire', 'commentaireinterne', 'commentaires', 'notes', 'note', 'observation', 'observations', 'remarque', 'remarques'] },
+    // Section 3 & 4 - Plaintext Inventaire + Toggle
     { header: 'Activer la traçabilité des pièces.', field: 'traceabilityEnabled', aliases: ['activerlatracabilitedespieces', 'activerlinventairedetracabilite', 'inventairedetracabiliteactif', 'invtracaactif', 'tracabiliteactivee', 'activertracabilite', 'traceabilityenabled', 'tracabilite'], type: 'bool' },
+    { header: 'Inventaire', field: 'inventaire', aliases: ['inventaire', 'inventairedetracabilite', 'tracabilites', 'traceabilities', 'listetracabilite'] },
     { header: 'Mouvements', field: 'mouvements', aliases: ['mouvements', 'historiquemouvements', 'listemouvements'], type: 'json' },
-    { header: 'Inventaire de traçabilité', field: 'traceabilities', aliases: ['inventairedetracabilite', 'tracabilites', 'traceabilities', 'listetracabilite'], type: 'json' },
     // Section 3 - Mouvements (up to 20 movements)
     ...Array.from({ length: 20 }, (_, idx) => {
       const n = idx + 1;
@@ -3151,6 +3151,24 @@ function resolveGenericColumnFieldMap(headers: string[], tabType: SheetTabType):
         const toggleDef = defByField.get('traceabilityEnabled');
         if (toggleDef) {
           colToDef.set(i, toggleDef);
+          usedCols.add(i);
+        }
+        continue;
+      }
+
+      // Check if this column is the plaintext Inventaire column or global Commentaire column
+      if (['inventaire', 'inventairedetracabilite', 'tracabilites', 'traceabilities', 'listetracabilite'].includes(fullNorm)) {
+        const invDef = defByField.get('inventaire');
+        if (invDef) {
+          colToDef.set(i, invDef);
+          usedCols.add(i);
+        }
+        continue;
+      }
+      if (['commentaireinventairedetracabilite', 'commentairemouvements'].includes(fullNorm)) {
+        const comDef = defByField.get('commentaire');
+        if (comDef) {
+          colToDef.set(i, comDef);
           usedCols.add(i);
         }
         continue;
@@ -4889,41 +4907,103 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     }
 
     const trList: any[] = [];
-    for (let idx = 1; idx <= 50; idx++) {
-      const p = `_tr${idx}_`;
-      const trId = String(merged[`${p}id`] || '').trim();
-      const trMvId = String(merged[`${p}movementId`] || '').trim();
-      const trLot = String(merged[`${p}lotOrSerial`] || '').trim();
-      const trExp = normalizeDateStr(merged[`${p}expirationDate`] || '');
-      const trVolRaw = merged[`${p}volume`];
-      const trSit = String(merged[`${p}situation`] || '').trim();
-      const trEmp = String(merged[`${p}emplacement`] || '').trim();
-      const trRes = String(merged[`${p}reservationInfo`] || '').trim();
-      const trBc = String(merged[`${p}bonCommande`] || '').trim();
-      const trCli = String(merged[`${p}client`] || '').trim();
-      const trDateEst = normalizeDateStr(merged[`${p}dateEstimee`] || '');
-      const trCom = String(merged[`${p}comment`] || '').trim();
+    const rawInventaireStr = String(
+      merged.inventaire ??
+        rawByHeader['Inventaire'] ??
+        rawByHeader['Inventaire.'] ??
+        rawByHeader['Inventaire de traçabilité'] ??
+        ''
+    ).trim();
 
-      if (trId || trLot || trMvId || trExp || trSit || trEmp || trRes || trBc || trCli || trCom) {
+    if (rawInventaireStr) {
+      const lines = rawInventaireStr
+        .split(';')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      lines.forEach((lineStr, idx) => {
+        const parts = lineStr.split('|');
+        const trEmp = String(parts[0] ?? '').trim();
+        const trLot = String(parts[1] ?? '').trim();
+        const trExp = normalizeDateStr(String(parts[2] ?? '').trim());
+        const trSitRaw = String(parts[3] ?? '').trim();
+        const trRes = String(parts[4] ?? '').trim();
+        const trVolRaw = String(parts[5] ?? '').trim();
+        const trCom = parts.slice(6).join('|').trim();
+
+        const trSit =
+          trSitRaw.toLowerCase() === 'signalé manquant' || trSitRaw.toLowerCase() === 'signale manquant'
+            ? 'Signalé Manquant'
+            : trSitRaw || 'Disponible';
+
         trList.push({
-          id: trId || `TR-${merged.ugs || rowIndexZeroBased + 2}-${idx}`,
-          movementId: trMvId || (merged.mouvements?.[0]?.id || ''),
+          id: `TR-${merged.ugs || rowIndexZeroBased + 2}-${idx + 1}`,
+          movementId: 'Autre',
+          emplacement: trEmp || 'Centrale des stocks',
           lotOrSerial: trLot,
           expirationDate: trExp,
-          volume: trVolRaw !== undefined && trVolRaw !== '' ? Math.round(parseNum(trVolRaw, 1)) || 1 : 1,
-          situation: trSit || 'Disponible',
-          emplacement: trEmp || 'Centrale des stocks',
+          situation: trSit,
           reservationInfo: trRes,
-          bonCommande: trBc,
-          client: trCli,
-          dateEstimee: trDateEst,
+          volume: trVolRaw !== '' ? Math.round(parseNum(trVolRaw, 1)) || 1 : 1,
           comment: trCom,
         });
+      });
+    } else {
+      for (let idx = 1; idx <= 50; idx++) {
+        const p = `_tr${idx}_`;
+        const trId = String(merged[`${p}id`] || '').trim();
+        const trMvId = String(merged[`${p}movementId`] || '').trim();
+        const trLot = String(merged[`${p}lotOrSerial`] || '').trim();
+        const trExp = normalizeDateStr(merged[`${p}expirationDate`] || '');
+        const trVolRaw = merged[`${p}volume`];
+        const trSit = String(merged[`${p}situation`] || '').trim();
+        const trEmp = String(merged[`${p}emplacement`] || '').trim();
+        const trRes = String(merged[`${p}reservationInfo`] || '').trim();
+        const trBc = String(merged[`${p}bonCommande`] || '').trim();
+        const trCli = String(merged[`${p}client`] || '').trim();
+        const trDateEst = normalizeDateStr(merged[`${p}dateEstimee`] || '');
+        const trCom = String(merged[`${p}comment`] || '').trim();
+
+        if (trId || trLot || trMvId || trExp || trSit || trEmp || trRes || trBc || trCli || trCom) {
+          trList.push({
+            id: trId || `TR-${merged.ugs || rowIndexZeroBased + 2}-${idx}`,
+            movementId: trMvId || (merged.mouvements?.[0]?.id || 'Autre'),
+            lotOrSerial: trLot,
+            expirationDate: trExp,
+            volume: trVolRaw !== undefined && trVolRaw !== '' ? Math.round(parseNum(trVolRaw, 1)) || 1 : 1,
+            situation: trSit || 'Disponible',
+            emplacement: trEmp || 'Centrale des stocks',
+            reservationInfo: trRes,
+            bonCommande: trBc,
+            client: trCli,
+            dateEstimee: trDateEst,
+            comment: trCom,
+          });
+        }
       }
     }
+
     if (trList.length > 0 || !Array.isArray(merged.traceabilities)) {
       merged.traceabilities = trList;
     }
+
+    const sanitizePipe = (val: any) => String(val ?? '').replace(/[|;]/g, ' ').trim();
+    merged.inventaire =
+      rawInventaireStr ||
+      (Array.isArray(merged.traceabilities) && merged.traceabilities.length > 0
+        ? merged.traceabilities
+            .map((tr: any) =>
+              [
+                sanitizePipe(tr.emplacement || 'Centrale des stocks'),
+                sanitizePipe(tr.lotOrSerial || ''),
+                sanitizePipe(tr.expirationDate || ''),
+                sanitizePipe(tr.situation || 'Disponible'),
+                sanitizePipe(tr.reservationInfo || ''),
+                tr.volume !== undefined && tr.volume !== null && String(tr.volume).trim() !== '' ? String(tr.volume).trim() : '1',
+                sanitizePipe(tr.comment || ''),
+              ].join('|')
+            )
+            .join(';')
+        : '');
 
     merged.traceabilityEnabled =
       merged.traceabilityEnabled !== undefined
@@ -5979,6 +6059,25 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     }
 
     const trList = Array.isArray(enriched.traceabilities) ? enriched.traceabilities : [];
+    const sanitizePipeOut = (val: any) => String(val ?? '').replace(/[|;]/g, ' ').trim();
+    const serializedInventaire =
+      trList.length > 0
+        ? trList
+            .map((tr: any) =>
+              [
+                sanitizePipeOut(tr.emplacement || 'Centrale des stocks'),
+                sanitizePipeOut(tr.lotOrSerial || ''),
+                sanitizePipeOut(tr.expirationDate || ''),
+                sanitizePipeOut(tr.situation || 'Disponible'),
+                sanitizePipeOut(tr.reservationInfo || ''),
+                tr.volume !== undefined && tr.volume !== null && String(tr.volume).trim() !== '' ? String(tr.volume).trim() : '1',
+                sanitizePipeOut(tr.comment || ''),
+              ].join('|')
+            )
+            .join(';')
+        : String(enriched.inventaire || '').trim();
+    enriched.inventaire = serializedInventaire.slice(0, 50000);
+
     for (let idx = 1; idx <= 50; idx++) {
       const p = `_tr${idx}_`;
       const tr = trList[idx - 1];
@@ -8715,9 +8814,8 @@ const MASTER_SHEET_SPREADSHEET_HEADER_TO_FIELD: Record<string, string> = {
   spreadsheetreglagescrm: 'spreadsheetReglagesCrm',
   spreadsheetsatisfaction: 'spreadsheetSatisfaction',
   spreadsheetcommandes: 'spreadsheetCommandes',
-  spreadsheetcentraledesstocks: 'spreadsheetStocks',
   spreadsheetstocks: 'spreadsheetStocks',
-  spreadsheetstocksdistribues: 'spreadsheetStocksDistribues',
+  spreadsheetcentraledesstocks: 'spreadsheetStocks',
   spreadsheetachatsfournisseurs: 'spreadsheetAchatsFournisseurs',
   spreadsheettemps: 'spreadsheetTemps',
   spreadsheetticketscaisse: 'spreadsheetTicketsCaisse',
@@ -8855,7 +8953,17 @@ function loadMasterTenantsFromDiskCache(): MasterSheetTenantRecord[] {
       const raw = fs.readFileSync(file, 'utf-8');
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 1) {
-        return parsed;
+        return parsed.map((t: any) => {
+          if (t && typeof t === 'object') {
+            delete t.spreadsheetStocksDistribues;
+            delete t.spreadsheetStocksDistribuesUrl;
+            if (t.spreadsheetUrls && typeof t.spreadsheetUrls === 'object') {
+              delete t.spreadsheetUrls.spreadsheetStocksDistribues;
+              delete t.spreadsheetUrls.spreadsheetStocksDistribuesUrl;
+            }
+          }
+          return t;
+        });
       }
     }
   } catch (_) {}
