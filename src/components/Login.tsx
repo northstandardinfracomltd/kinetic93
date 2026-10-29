@@ -665,6 +665,16 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     // Purge cached collection snapshots on arriving at the login screen to ensure fresh synchronization
     purgeAllLocalEnvironmentCaches();
 
+    // Remove any legacy login attempt lockout keys from localStorage
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('login_attempts_')) {
+          localStorage.removeItem(k);
+        }
+      }
+    } catch (_) {}
+
     fetch('/api/public/client-ip')
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
@@ -678,61 +688,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       });
   }, []);
 
-  const getBlockInfo = (): { count: number; blockedUntil: number; hoursText: string } | null => {
-    try {
-      const stored = localStorage.getItem(`login_attempts_${clientIp}`);
-      if (!stored) return null;
-      const parsed = JSON.parse(stored);
-      if (parsed.blockedUntil && Date.now() < parsed.blockedUntil) {
-        let h = '10 minutes';
-        if (parsed.count >= 10) h = '24h';
-        else if (parsed.count >= 5) h = '10h';
-        return { ...parsed, hoursText: h };
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return null;
-  };
-
-  const handleFailedAttempt = () => {
-    try {
-      const stored = localStorage.getItem(`login_attempts_${clientIp}`);
-      let parsed = { count: 0, blockedUntil: 0 };
-      if (stored) {
-        parsed = JSON.parse(stored);
-      }
-      
-      parsed.count = (parsed.count || 0) + 1;
-      
-      let blockDurationMs = 0;
-      let hoursText = '';
-      if (parsed.count >= 10) {
-        blockDurationMs = 24 * 60 * 60 * 1000;
-        hoursText = '24h';
-      } else if (parsed.count >= 5) {
-        blockDurationMs = 10 * 60 * 60 * 1000;
-        hoursText = '10h';
-      } else if (parsed.count >= 3) {
-        blockDurationMs = 10 * 60 * 1000;
-        hoursText = '10 minutes';
-      }
-      
-      if (blockDurationMs > 0) {
-        parsed.blockedUntil = Date.now() + blockDurationMs;
-        localStorage.setItem(`login_attempts_${clientIp}`, JSON.stringify(parsed));
-        setError(`Vous avez effectué plusieurs tentatives de connexions. Par sécurité, veuillez patienter ${hoursText} avant d'essayer à nouveau.`);
-      } else {
-        localStorage.setItem(`login_attempts_${clientIp}`, JSON.stringify(parsed));
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   const handleSuccessLogin = (emailVal: string, nameVal: string, tenantIdVal: string, roleVal?: string) => {
     try {
-      localStorage.removeItem(`login_attempts_${clientIp}`);
       purgeAllLocalEnvironmentCaches(tenantIdVal);
       localStorage.setItem('defib_keep_logged_in', keepLoggedIn ? 'true' : 'false');
       localStorage.setItem('defib_last_activity_ts', String(Date.now()));
@@ -853,17 +810,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         }),
       });
 
-      if (verifyRes.status === 429) {
-        const rateData = await verifyRes.json().catch(() => ({}));
-        setError(rateData.error || t.tooManyAttempts || "Trop de tentatives de connexion. Veuillez patienter avant de réessayer.");
-        setIsLoading(false);
-        return;
-      }
-
       const verifyData = await verifyRes.json().catch(() => ({}));
       if (!verifyRes.ok || !verifyData?.matched || !verifyData?.codeVerified) {
         setError(t.authCodeInvalid || verifyData?.error || "Code d'authentification incorrect. Veuillez vérifier le code reçu.");
-        handleFailedAttempt();
         setIsLoading(false);
         return;
       }
@@ -986,66 +935,62 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    // Preemptive block check
-    const block = getBlockInfo();
-    if (block) {
-      setError(t.tooManyAttempts || `Vous avez effectué plusieurs tentatives de connexions. Par sécurité, veuillez patienter ${block.hoursText} avant d'essayer à nouveau.`);
-      return;
-    }
-
     setIsLoading(true);
 
-    const emailLower = email.trim().toLowerCase();
+    const emailLower = email.replace(/[\s\u200B-\u200D\uFEFF\u00A0]+/g, '').toLowerCase();
 
     try {
-      const scriptUrl = await getAppsScriptUrl().catch(() => '');
-      const verifyRes = await fetch('/api/auth/verify-tenant-member', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: emailLower,
-          role: loginRole,
-          scriptUrl,
-        }),
-      });
+      const scriptUrl = await Promise.race([
+        getAppsScriptUrl().catch(() => ''),
+        new Promise<string>(resolve => setTimeout(() => resolve(''), 600)),
+      ]);
 
-      if (verifyRes.status === 429) {
-        const rateData = await verifyRes.json().catch(() => ({}));
-        setError(t.tooManyAttempts || rateData.error || "Trop de tentatives de connexion. Veuillez patienter avant de réessayer.");
-        setIsLoading(false);
-        return;
+      const performVerifyRequest = async () => {
+        const res = await fetch('/api/auth/verify-tenant-member', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: emailLower,
+            role: loginRole,
+            scriptUrl,
+          }),
+        });
+        if (!res.ok) return null;
+        return await res.json().catch(() => null);
+      };
+
+      let verifyData = await performVerifyRequest();
+      if (!verifyData || !verifyData.matched) {
+        // Retry once in case of a transient cold-start or spreadsheet refresh delay
+        verifyData = await performVerifyRequest();
       }
 
-      if (verifyRes.ok) {
-        const verifyData = await verifyRes.json();
-        if (verifyData?.matched) {
-          if (verifyData.disabled) {
-            setError(t.accountSuspended || "Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
-            setIsLoading(false);
-            return;
-          }
-
-          const matchedRole = verifyData.user?.role || verifyData.member?.role || loginRole;
-          const matchedTenantId = verifyData.tenantId || 'demo';
-          const matchedEmail = verifyData.user?.email || verifyData.member?.email || emailLower;
-          const matchedName =
-            verifyData.user?.name ||
-            verifyData.member?.denomination ||
-            verifyData.member?.name ||
-            emailLower;
-          const targetEmail = verifyData.sentToEmail || matchedEmail;
-
-          promptForServerAuthCode({
-            loginIdentifier: emailLower,
-            email: matchedEmail,
-            name: matchedName,
-            tenantId: matchedTenantId,
-            role: matchedRole,
-            targetEmail,
-          });
+      if (verifyData?.matched) {
+        if (verifyData.disabled) {
+          setError(t.accountSuspended || "Votre compte est suspendu, contactez Défibeo pour réactiver votre environnement.");
+          setIsLoading(false);
           return;
         }
+
+        const matchedRole = verifyData.user?.role || verifyData.member?.role || loginRole;
+        const matchedTenantId = verifyData.tenantId || 'demo';
+        const matchedEmail = verifyData.user?.email || verifyData.member?.email || emailLower;
+        const matchedName =
+          verifyData.user?.name ||
+          verifyData.member?.denomination ||
+          verifyData.member?.name ||
+          emailLower;
+        const targetEmail = verifyData.sentToEmail || matchedEmail;
+
+        promptForServerAuthCode({
+          loginIdentifier: emailLower,
+          email: matchedEmail,
+          name: matchedName,
+          tenantId: matchedTenantId,
+          role: matchedRole,
+          targetEmail,
+        });
+        return;
       }
 
       if (loginRole === 'admin') {
@@ -1056,12 +1001,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         setError(t.errorTech);
       }
       setIsLoading(false);
-      handleFailedAttempt();
     } catch (err: any) {
       console.error('Error logging in:', err);
       setError('Erreur lors de la connexion: ' + (err.message || String(err)));
       setIsLoading(false);
-      handleFailedAttempt();
     }
   };
 

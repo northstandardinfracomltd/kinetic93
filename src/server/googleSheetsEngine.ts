@@ -8772,7 +8772,12 @@ const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [
     nomLogiciel: 'Copilot',
     active: true,
     disabled: false,
-    masterUsers: [],
+    masterUsers: [
+      { email: 'sav@undefipourlavie.com', role: 'Admin', rawRole: 'Admin', slotIndex: 1 },
+      { email: 'mlambert@undefipourlavie.com', role: 'Admin', rawRole: 'Admin', slotIndex: 2 },
+      { email: 'mpaugam@undefipourlavie.com', role: 'Admin', rawRole: 'Admin', slotIndex: 3 },
+      { email: 'nicolas.bobelet@lemon-group.fr', role: 'Admin', rawRole: 'Admin', slotIndex: 4 },
+    ],
     spreadsheetUrls: {},
   },
   {
@@ -8806,7 +8811,16 @@ const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [
     nomLogiciel: 'EssaiDSG',
     active: true,
     disabled: false,
-    masterUsers: [],
+    masterUsers: [
+      { email: 'adv@d-securite.com', role: 'Admin', rawRole: 'Admin', slotIndex: 1 },
+      { email: 'corinne.favier@d-securite.com', role: 'Admin', rawRole: 'Admin', slotIndex: 2 },
+      { email: 'andrea.rufini@d-securite.com', role: 'Admin', rawRole: 'Admin', slotIndex: 3 },
+      { email: 'tab.tan@civilprom.com', role: 'Admin', rawRole: 'Admin', slotIndex: 4 },
+      { email: 'asstechdsg01@d-securite.com', role: 'Admin', rawRole: 'Admin', slotIndex: 5 },
+      { email: 'yann.besson@d-securite.com', role: 'Admin', rawRole: 'Admin', slotIndex: 6 },
+      { email: 'test2@civilprom.com', role: 'Technicien', rawRole: 'Technicien', slotIndex: 7 },
+      { email: 'test3@civilprom.com', role: 'Technicien', rawRole: 'Technicien', slotIndex: 8 },
+    ],
     spreadsheetUrls: {},
   },
   {
@@ -8823,12 +8837,39 @@ const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [
     nomLogiciel: 'JPM973',
     active: true,
     disabled: false,
-    masterUsers: [],
+    masterUsers: [
+      { email: 'secretariat.jpmformation@gmaill.com', role: 'Admin', rawRole: 'Admin', slotIndex: 1 },
+    ],
     spreadsheetUrls: {},
   },
 ];
 
-let cachedMasterTenants: MasterSheetTenantRecord[] = [...DEFAULT_MASTER_SHEET_TENANTS];
+function getMasterTenantsDiskCacheFile(): string {
+  return path.join(getMirrorDir(), 'master_tenants_cache.json');
+}
+
+function loadMasterTenantsFromDiskCache(): MasterSheetTenantRecord[] {
+  try {
+    const file = getMasterTenantsDiskCacheFile();
+    if (fs.existsSync(file)) {
+      const raw = fs.readFileSync(file, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 1) {
+        return parsed;
+      }
+    }
+  } catch (_) {}
+  return [...DEFAULT_MASTER_SHEET_TENANTS];
+}
+
+function saveMasterTenantsToDiskCache(tenants: MasterSheetTenantRecord[]): void {
+  try {
+    const file = getMasterTenantsDiskCacheFile();
+    fs.writeFileSync(file, JSON.stringify(tenants, null, 2), 'utf-8');
+  } catch (_) {}
+}
+
+let cachedMasterTenants: MasterSheetTenantRecord[] = loadMasterTenantsFromDiskCache();
 let lastMasterTenantsFetchAt = 0;
 let masterTenantsInFlight: Promise<MasterSheetTenantRecord[]> | null = null;
 
@@ -8842,12 +8883,21 @@ export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = 
     return cachedMasterTenants;
   }
   if (masterTenantsInFlight) {
-    return masterTenantsInFlight;
+    if (!forceRefresh) {
+      return masterTenantsInFlight;
+    }
+    try {
+      await masterTenantsInFlight;
+    } catch (_) {}
   }
 
   masterTenantsInFlight = (async () => {
     try {
-      const matrix = await fetchRawSheetMatrix(MASTER_TENANTS_SPREADSHEET_URL);
+      let matrix = await fetchRawSheetMatrix(MASTER_TENANTS_SPREADSHEET_URL);
+      if (!matrix || !Array.isArray(matrix.rows) || matrix.rows.length === 0) {
+        await new Promise(r => setTimeout(r, 300));
+        matrix = await fetchRawSheetMatrix(MASTER_TENANTS_SPREADSHEET_URL);
+      }
       if (matrix && Array.isArray(matrix.rows) && matrix.rows.length > 0) {
         const headersNorm = (matrix.headers || []).map(h =>
           String(h || '')
@@ -8896,12 +8946,17 @@ export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = 
         const isInvalidPlaceholderUrl = (u?: string) =>
           !u || !u.trim() || u.includes('1tB1e41') || u.includes('2mX5O6r9hD0i3Z9m');
 
+        const cleanSheetEmail = (raw: any): string =>
+          String(raw ?? '')
+            .replace(/[\s\u200B-\u200D\uFEFF\u00A0]+/g, '')
+            .trim();
+
         const parsedTenants: MasterSheetTenantRecord[] = [DEFAULT_MASTER_SHEET_TENANTS[0]]; // Always keep 'demo'
 
         for (const row of matrix.rows) {
           if (!Array.isArray(row) || row.every(cell => !String(cell ?? '').trim())) continue;
           const rawActive = String(row[colActive] ?? '').trim();
-          const rawEmail = String(row[colEmail] ?? '').trim();
+          const rawEmail = cleanSheetEmail(row[colEmail]);
           const rawId = String(row[colId] ?? '').trim();
           const rawCode = String(row[colCode] ?? '').trim();
 
@@ -8922,20 +8977,31 @@ export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = 
           // Parse UserEmail1..10 and UserRole1..10
           const masterUsers: MasterSheetUserEntry[] = [];
           for (const slot of userSlotCols) {
-            const uEmail = String(row[slot.emailIdx] ?? '').trim();
-            if (!uEmail) continue;
+            const rawSlotCell = String(row[slot.emailIdx] ?? '').trim();
+            if (!rawSlotCell) continue;
+            // Support single email or multiple emails separated by comma/semicolon/newline in a single cell
+            const cellEmails = rawSlotCell
+              .split(/[;,\r\n]+/)
+              .map(e => cleanSheetEmail(e))
+              .filter(e => e.length > 0);
             const rawRoleVal = slot.roleIdx >= 0 ? String(row[slot.roleIdx] ?? '').trim() : '';
-            const normRole = rawRoleVal.toLowerCase();
+            const normRole = rawRoleVal
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .trim();
             const parsedRole: 'Admin' | 'Technicien' =
               normRole.includes('tech') || normRole.includes('maintenance') || normRole.includes('intervenant')
                 ? 'Technicien'
                 : 'Admin';
-            masterUsers.push({
-              email: uEmail,
-              role: parsedRole,
-              rawRole: rawRoleVal || parsedRole,
-              slotIndex: slot.slotIndex,
-            });
+            for (const uEmail of cellEmails) {
+              masterUsers.push({
+                email: uEmail,
+                role: parsedRole,
+                rawRole: rawRoleVal || parsedRole,
+                slotIndex: slot.slotIndex,
+              });
+            }
           }
 
           // Parse Spreadsheet URL columns (only non-empty valid URLs)
@@ -8977,6 +9043,7 @@ export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = 
         if (parsedTenants.length > 1) {
           cachedMasterTenants = parsedTenants;
           lastMasterTenantsFetchAt = Date.now();
+          saveMasterTenantsToDiskCache(parsedTenants);
           return cachedMasterTenants;
         }
       }

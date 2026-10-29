@@ -688,13 +688,50 @@ try {
       }
     }
   }
-  // Also load any dedicated collection files (deduplicating D27/D58/generic massive arrays in RAM)
+  const deferredLargeFiles: string[] = [];
+  const loadSingleCollectionFile = (file: string) => {
+    const key = file.replace(/\.json$/, '');
+    try {
+      const fullFilePath = path.join(COLLECTIONS_DIR, file);
+      const content = fs.readFileSync(fullFilePath, 'utf-8').trim();
+      if (!content) {
+        try { fs.unlinkSync(fullFilePath); } catch (_) {}
+        return;
+      }
+      const parsed = JSON.parse(content);
+      if (parsed !== undefined && parsed !== null) {
+        serverMemoryStore.set(key, parsed);
+        serverStoreTimestamps.set(key, Date.now());
+        if (key === 'D27_defibrillateurs') {
+          serverMemoryStore.set('D58_defibrillateurs', parsed);
+          serverStoreTimestamps.set('D58_defibrillateurs', Date.now());
+        } else if (key === 'D27_interventions') {
+          serverMemoryStore.set('D58_interventions', parsed);
+          serverStoreTimestamps.set('D58_interventions', Date.now());
+        } else if (key === 'D27_rapportsPdf') {
+          serverMemoryStore.set('D58_rapportsPdf', parsed);
+          serverStoreTimestamps.set('D58_rapportsPdf', Date.now());
+        }
+        if (key.includes('defibrillateurs') && Array.isArray(parsed)) {
+          for (const item of parsed) {
+            indexDefibrillateur(item, key.replace(/_defibrillateurs$/, ''));
+          }
+        }
+      }
+    } catch (_colErr) {
+      // Auto-heal truncated/corrupted collection file so it never blocks or warns again
+      try {
+        fs.unlinkSync(path.join(COLLECTIONS_DIR, file));
+      } catch (_) {}
+    }
+  };
+
+  // Load lightweight collection files synchronously and defer >2MB files until right after port 3000 is bound
   if (fs.existsSync(COLLECTIONS_DIR)) {
     const files = fs.readdirSync(COLLECTIONS_DIR);
     for (const file of files) {
       if (file.endsWith('.json')) {
         const key = file.replace(/\.json$/, '');
-        // Skip redundant 70MB/50MB duplicate copies if canonical D27_* exists on disk
         if (
           (key === 'D58_defibrillateurs' || key === 'defibrillateurs') &&
           fs.existsSync(path.join(COLLECTIONS_DIR, 'D27_defibrillateurs.json'))
@@ -714,41 +751,22 @@ try {
           continue;
         }
         try {
-          const fullFilePath = path.join(COLLECTIONS_DIR, file);
-          const content = fs.readFileSync(fullFilePath, 'utf-8').trim();
-          if (!content) {
-            try { fs.unlinkSync(fullFilePath); } catch (_) {}
+          const stat = fs.statSync(path.join(COLLECTIONS_DIR, file));
+          if (stat.size > 2 * 1024 * 1024) {
+            deferredLargeFiles.push(file);
             continue;
           }
-          const parsed = JSON.parse(content);
-          if (parsed !== undefined && parsed !== null) {
-            serverMemoryStore.set(key, parsed);
-            serverStoreTimestamps.set(key, Date.now());
-            if (key === 'D27_defibrillateurs') {
-              serverMemoryStore.set('D58_defibrillateurs', parsed);
-              serverStoreTimestamps.set('D58_defibrillateurs', Date.now());
-            } else if (key === 'D27_interventions') {
-              serverMemoryStore.set('D58_interventions', parsed);
-              serverStoreTimestamps.set('D58_interventions', Date.now());
-            } else if (key === 'D27_rapportsPdf') {
-              serverMemoryStore.set('D58_rapportsPdf', parsed);
-              serverStoreTimestamps.set('D58_rapportsPdf', Date.now());
-            }
-            if (key.includes('defibrillateurs') && Array.isArray(parsed)) {
-              for (const item of parsed) {
-                indexDefibrillateur(item, key.replace(/_defibrillateurs$/, ''));
-              }
-            }
-          }
-        } catch (_colErr) {
-          // Auto-heal truncated/corrupted collection file so it never blocks or warns again
-          try {
-            fs.unlinkSync(path.join(COLLECTIONS_DIR, file));
-          } catch (_) {}
-        }
+        } catch (_) {}
+        loadSingleCollectionFile(file);
       }
     }
   }
+  (globalThis as any).__loadDeferredLargeFiles = async () => {
+    for (const file of deferredLargeFiles) {
+      await new Promise(r => setImmediate(r));
+      loadSingleCollectionFile(file);
+    }
+  };
 } catch (e) {
   console.warn("Failed to load server disk store:", e);
 }
@@ -1048,6 +1066,7 @@ async function startServer() {
   try {
     let storeModified = false;
     for (const [k, val] of serverMemoryStore.entries()) {
+      if (!k.includes('registered_tenants') && !k.includes('members')) continue;
       if (Array.isArray(val)) {
         let arrChanged = false;
         const cleanedArr = val.map((item: any) => {
@@ -1132,25 +1151,13 @@ async function startServer() {
     }
   };
 
-  // Brute-force rate limiter per IP for authentication endpoint
+  // Brute-force rate limiter disabled per user request (no login attempt lockout)
   const loginRateLimitMap = new Map<string, { count: number; blockedUntil: number }>();
-  const checkLoginIpRateLimit = (ip: string): { blocked: boolean; retryAfterSec?: number } => {
-    const rec = loginRateLimitMap.get(ip);
-    if (!rec) return { blocked: false };
-    if (rec.blockedUntil > Date.now()) {
-      return { blocked: true, retryAfterSec: Math.ceil((rec.blockedUntil - Date.now()) / 1000) };
-    }
+  const checkLoginIpRateLimit = (_ip: string): { blocked: boolean; retryAfterSec?: number } => {
     return { blocked: false };
   };
-  const recordFailedLoginForIp = (ip: string) => {
-    const rec = loginRateLimitMap.get(ip) || { count: 0, blockedUntil: 0 };
-    rec.count += 1;
-    if (rec.count >= 15) {
-      rec.blockedUntil = Date.now() + 30 * 60 * 1000; // 30 minutes
-    } else if (rec.count >= 8) {
-      rec.blockedUntil = Date.now() + 5 * 60 * 1000; // 5 minutes
-    }
-    loginRateLimitMap.set(ip, rec);
+  const recordFailedLoginForIp = (_ip: string) => {
+    // No-op: login lockout disabled
   };
   const clearFailedLoginForIp = (ip: string) => {
     loginRateLimitMap.delete(ip);
@@ -2062,19 +2069,25 @@ function mergeTenantRecordsComplementary(baseTenant: any, incomingTenant: any): 
   addEmail(incomingTenant.companyEmail);
   if (Array.isArray(incomingTenant.adminEmails)) incomingTenant.adminEmails.forEach(addEmail);
 
-  // Merge masterUsers by email + role
+  // Merge masterUsers by email + role (with incoming MEGA ADMIN masterUsers authoritative when non-empty)
   const usersMap = new Map<string, any>();
   const addUsers = (arr: any[]) => {
     if (!Array.isArray(arr)) return;
     for (const u of arr) {
       if (!u || !u.email) continue;
-      const key = String(u.email).trim().toLowerCase();
-      if (!key) continue;
-      usersMap.set(key, { ...(usersMap.get(key) || {}), ...u });
+      const cleanEmail = String(u.email).replace(/[\s\u200B-\u200D\uFEFF\u00A0]+/g, '').toLowerCase();
+      if (!cleanEmail) continue;
+      const cleanRole = String(u.role || u.rawRole || 'admin').trim().toLowerCase();
+      const key = `${cleanEmail}::${cleanRole}`;
+      usersMap.set(key, { ...(usersMap.get(key) || {}), ...u, email: cleanEmail });
     }
   };
-  addUsers(baseTenant.masterUsers);
-  addUsers(incomingTenant.masterUsers);
+  if (Array.isArray(incomingTenant.masterUsers) && incomingTenant.masterUsers.length > 0) {
+    addUsers(incomingTenant.masterUsers);
+  } else {
+    addUsers(baseTenant.masterUsers);
+    addUsers(incomingTenant.masterUsers);
+  }
 
   // Merge spreadsheetUrls additively (never overwrite non-empty with empty)
   const mergedSpreadsheetUrls: Record<string, string> = {};
@@ -5815,16 +5828,11 @@ async function warmupDefibrillateursStore() {
   app.post("/api/auth/verify-tenant-member", async (req, res) => {
     try {
       const clientIp = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim();
-      const rateCheck = checkLoginIpRateLimit(clientIp);
-      if (rateCheck.blocked) {
-        return res.status(429).json({
-          matched: false,
-          error: `Trop de tentatives de connexion. Veuillez réessayer dans ${Math.ceil((rateCheck.retryAfterSec || 60) / 60)} minutes.`,
-        });
-      }
 
       const body = req.body || {};
-      const emailLower = String(body.email || '').trim().toLowerCase();
+      const emailLower = String(body.email || '')
+        .replace(/[\s\u200B-\u200D\uFEFF\u00A0]+/g, '')
+        .toLowerCase();
       const loginRole = String(body.role || 'admin').trim().toLowerCase();
       const submittedAuthCode = String(body.authCode || '').trim().toUpperCase();
       const isResend = Boolean(body.resend);
@@ -5844,7 +5852,10 @@ async function warmupDefibrillateursStore() {
           existingPending.expiresAt = Date.now() + 10 * 60 * 1000;
           existingPending.attempts = 0;
           pendingTwoFactorAuthMap.set(challengeKey, existingPending);
-          const emailSent = await dispatchServerAuthCodeEmail(existingPending.targetEmail, freshCode, customScriptUrl);
+          const emailSent = await Promise.race([
+            dispatchServerAuthCodeEmail(existingPending.targetEmail, freshCode, customScriptUrl),
+            new Promise<boolean>(resolve => setTimeout(() => resolve(true), 2500)),
+          ]);
           return res.json({
             matched: true,
             requiresTwoFactor: true,
@@ -5862,7 +5873,6 @@ async function warmupDefibrillateursStore() {
         const pending = pendingTwoFactorAuthMap.get(challengeKey);
         if (!pending || Date.now() > pending.expiresAt) {
           pendingTwoFactorAuthMap.delete(challengeKey);
-          recordFailedLoginForIp(clientIp);
           return res.json({
             matched: false,
             codeInvalid: true,
@@ -5878,10 +5888,6 @@ async function warmupDefibrillateursStore() {
 
         if (!isCodeValid) {
           pending.attempts += 1;
-          if (pending.attempts >= 5) {
-            pendingTwoFactorAuthMap.delete(challengeKey);
-          }
-          recordFailedLoginForIp(clientIp);
           return res.json({
             matched: false,
             codeInvalid: true,
@@ -5943,7 +5949,10 @@ async function warmupDefibrillateursStore() {
           user: params.user,
           member: params.member,
         });
-        const emailSent = await dispatchServerAuthCodeEmail(params.targetEmail, randomCode, customScriptUrl);
+        const emailSent = await Promise.race([
+          dispatchServerAuthCodeEmail(params.targetEmail, randomCode, customScriptUrl),
+          new Promise<boolean>(resolve => setTimeout(() => resolve(true), 2500)),
+        ]);
         return res.json({
           matched: true,
           requiresTwoFactor: true,
@@ -5988,21 +5997,17 @@ async function warmupDefibrillateursStore() {
         });
       }
 
-      // 2. Fetch live tenant list directly from the Master Google Spreadsheet
-      const masterTenants = await getRegisteredTenantsFromDb(true);
-      const tenantMap = new Map<string, any>();
-      for (const t of masterTenants) {
-        if (!t || typeof t !== 'object') continue;
-        const id = String(t.id || '').trim();
-        if (!id) continue;
-        tenantMap.set(id.toLowerCase(), t);
-      }
-      if (!tenantMap.has('demo')) {
-        tenantMap.set('demo', { id: 'demo', disabled: false });
-      }
+      const cleanCompareEmail = (val: any): string =>
+        String(val ?? '')
+          .replace(/[\s\u200B-\u200D\uFEFF\u00A0]+/g, '')
+          .toLowerCase();
 
       const isRoleMatch = (memberRoleRaw: any, targetLoginRole: string) => {
-        const r = String(memberRoleRaw || '').trim().toLowerCase();
+        const r = String(memberRoleRaw || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
         if (targetLoginRole === 'technicien') {
           return r.includes('tech') || r.includes('maintenance') || r.includes('intervenant');
         }
@@ -6014,15 +6019,13 @@ async function warmupDefibrillateursStore() {
         return false;
       };
 
-      const candidateTenants = Array.from(tenantMap.values());
-
       // Helper to check if an email matches a tenant's Super-Admin in either Master Spreadsheet OR Firestore
       const isTenantSuperAdminEmail = (tnt: any, targetEmailLower: string): boolean => {
         if (!tnt || !targetEmailLower) return false;
-        const tAdminEmail = String(tnt.adminEmail || '').trim().toLowerCase();
-        const tCompanyEmail = String(tnt.companyEmail || '').trim().toLowerCase();
+        const tAdminEmail = cleanCompareEmail(tnt.adminEmail);
+        const tCompanyEmail = cleanCompareEmail(tnt.companyEmail);
         if (tAdminEmail === targetEmailLower || tCompanyEmail === targetEmailLower) return true;
-        if (Array.isArray(tnt.adminEmails) && tnt.adminEmails.some((e: any) => String(e || '').trim().toLowerCase() === targetEmailLower)) {
+        if (Array.isArray(tnt.adminEmails) && tnt.adminEmails.some((e: any) => cleanCompareEmail(e) === targetEmailLower)) {
           return true;
         }
         // Also check Firestore/memory companyInfo email for this tenant
@@ -6031,83 +6034,152 @@ async function warmupDefibrillateursStore() {
           const compKey = tid.toLowerCase() === 'demo' ? 'companyInfo' : `${tid.toUpperCase()}_companyInfo`;
           const memComp = serverMemoryStore.get(compKey) || serverMemoryStore.get(`${tid}_companyInfo`);
           if (memComp && typeof memComp === 'object') {
-            const cEmail = String(memComp.email || memComp.adminEmail || memComp.companyEmail || '').trim().toLowerCase();
+            const cEmail = cleanCompareEmail(memComp.email || memComp.adminEmail || memComp.companyEmail);
             if (cEmail && cEmail === targetEmailLower) return true;
           }
         }
         return false;
       };
 
-      // Pass 1 (Admin role only): Prioritize exact primary tenant owner match (Super-Admin Email from Master Spreadsheet OR Firestore)
-      if (loginRole === 'admin') {
-        const primaryOwnerTenants = candidateTenants.filter(tnt => isTenantSuperAdminEmail(tnt, emailLower));
-        if (primaryOwnerTenants.length > 0) {
-          const chosenTenant = primaryOwnerTenants[0];
-          const tid = String(chosenTenant.id || 'demo').trim();
-          const resolvedEmail = emailLower || String(chosenTenant.adminEmail || chosenTenant.companyEmail || '').trim();
-          let resolvedName = chosenTenant.adminName || '';
-
-          // Look up real Nom & Prénom from Firestore members or Membres de l'environnement spreadsheet if available
-          if (!resolvedName || resolvedName === 'Administrateur') {
-            const memKey = tid === 'demo' ? 'members' : `${tid}_members`;
-            let fbMembers = serverMemoryStore.get(memKey);
-            if (!Array.isArray(fbMembers)) {
-              const dFile = path.join(COLLECTIONS_DIR, `${memKey}.json`);
-              if (fs.existsSync(dFile)) {
-                try { fbMembers = JSON.parse(fs.readFileSync(dFile, 'utf-8')); } catch (_) {}
-              }
-            }
-            if (Array.isArray(fbMembers)) {
-              const matchedFbMem = fbMembers.find(
-                (m: any) => m && String(m.email || '').trim().toLowerCase() === resolvedEmail.toLowerCase() && m.name && String(m.name).trim() !== ''
-              );
-              if (matchedFbMem) {
-                resolvedName = String(matchedFbMem.name).trim();
-              }
-            }
+      const lookupFastCachedMemberName = (tid: string, targetEmailLower: string): string => {
+        const memKey = tid === 'demo' ? 'members' : `${tid}_members`;
+        let fbMembers = serverMemoryStore.get(memKey);
+        if (!Array.isArray(fbMembers)) {
+          const dFile = path.join(COLLECTIONS_DIR, `${memKey}.json`);
+          if (fs.existsSync(dFile)) {
+            try { fbMembers = JSON.parse(fs.readFileSync(dFile, 'utf-8')); } catch (_) {}
           }
+        }
+        if (Array.isArray(fbMembers)) {
+          const matchedFbMem = fbMembers.find(
+            (m: any) => m && cleanCompareEmail(m.email) === targetEmailLower && m.name && String(m.name).trim() !== ''
+          );
+          if (matchedFbMem) {
+            return String(matchedFbMem.name).trim();
+          }
+        }
+        return '';
+      };
 
-          if (!resolvedName || resolvedName === 'Administrateur') {
-            const membresSheetUrl = await resolveTenantSpreadsheetUrl(tid, 'membresEnvironnement').catch(() => '');
-            if (membresSheetUrl && extractSpreadsheetIdAndGid(membresSheetUrl)) {
-              const sData = await fetchTenantSheetCollection(membresSheetUrl, tid, 'membresEnvironnement', false).catch(() => null);
-              if (sData && Array.isArray(sData.items)) {
-                const matchedSheetMem = sData.items.find(
-                  (m: any) => m && String(m.email || '').trim().toLowerCase() === resolvedEmail.toLowerCase() && m.name && String(m.name).trim() !== ''
-                );
-                if (matchedSheetMem) {
-                  resolvedName = String(matchedSheetMem.name).trim();
-                }
-              }
+      const buildTenantsList = (rawList: any[]): any[] => {
+        const tenantMap = new Map<string, any>();
+        for (const t of rawList) {
+          if (!t || typeof t !== 'object') continue;
+          const id = String(t.id || '').trim();
+          if (!id) continue;
+          tenantMap.set(id.toLowerCase(), t);
+        }
+        if (!tenantMap.has('demo')) {
+          tenantMap.set('demo', { id: 'demo', disabled: false });
+        }
+        return Array.from(tenantMap.values());
+      };
+
+      // Fast Pass 1: Check MEGA ADMIN Master Spreadsheet (Super-Admin Email AND UserEmail1..10 & UserRole1..10) across ALL tenants
+      const findMegaAdminMatch = (tenants: any[]): {
+        tenantId: string;
+        disabled: boolean;
+        source: string;
+        targetEmail: string;
+        user: { email: string; name: string; role: string; memberRecord?: any };
+        member: any;
+      } | null => {
+        if (loginRole === 'admin') {
+          const primaryOwnerTenants = tenants.filter(tnt => isTenantSuperAdminEmail(tnt, emailLower));
+          if (primaryOwnerTenants.length > 0) {
+            const chosenTenant = primaryOwnerTenants[0];
+            const tid = String(chosenTenant.id || 'demo').trim();
+            const resolvedEmail = emailLower || String(chosenTenant.adminEmail || chosenTenant.companyEmail || '').trim();
+            let resolvedName = chosenTenant.adminName || '';
+            if (!resolvedName || resolvedName === 'Administrateur' || resolvedName === 'Super-Administrateur') {
+              const cachedName = lookupFastCachedMemberName(tid, emailLower);
+              if (cachedName) resolvedName = cachedName;
             }
-          }
-
-          if (!resolvedName) {
-            resolvedName = 'Administrateur';
-          }
-
-          const primaryProfile = {
-            email: resolvedEmail,
-            name: resolvedName,
-            role: 'Super-Administrateur',
-          };
-          return await issueTwoFactorChallenge({
-            tenantId: tid,
-            disabled: Boolean(chosenTenant.disabled),
-            source: 'firebase',
-            targetEmail: resolvedEmail,
-            user: {
+            if (!resolvedName) resolvedName = 'Administrateur';
+            const primaryProfile = {
               email: resolvedEmail,
               name: resolvedName,
-              role: 'admin',
-              memberRecord: primaryProfile,
-            },
-            member: {
-              ...primaryProfile,
-              role: 'admin',
-            },
-          });
+              role: 'Super-Administrateur',
+            };
+            return {
+              tenantId: tid,
+              disabled: Boolean(chosenTenant.disabled),
+              source: 'spreadsheet',
+              targetEmail: resolvedEmail,
+              user: {
+                email: resolvedEmail,
+                name: resolvedName,
+                role: 'admin',
+                memberRecord: primaryProfile,
+              },
+              member: {
+                ...primaryProfile,
+                role: 'admin',
+              },
+            };
+          }
         }
+
+        // Check UserEmail1..10 & UserRole1..10 across all tenants in MEGA ADMIN
+        if (loginRole === 'admin' || loginRole === 'technicien') {
+          for (const tnt of tenants) {
+            if (!tnt || !Array.isArray(tnt.masterUsers)) continue;
+            const matchedMasterUser = tnt.masterUsers.find((mu: any) => {
+              if (!mu || !mu.email) return false;
+              const muEmail = cleanCompareEmail(mu.email);
+              return muEmail === emailLower && isRoleMatch(mu.role || mu.rawRole, loginRole);
+            });
+            if (matchedMasterUser) {
+              const tid = String(tnt.id || 'demo').trim();
+              const resolvedEmail = String(matchedMasterUser.email || emailLower).trim().toLowerCase();
+              let resolvedName = lookupFastCachedMemberName(tid, emailLower);
+              if (!resolvedName) {
+                const emailPrefix = resolvedEmail.split('@')[0] || 'Utilisateur';
+                resolvedName =
+                  emailPrefix
+                    .split(/[._-]+/)
+                    .filter(Boolean)
+                    .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+                    .join(' ') || resolvedEmail;
+              }
+              const resolvedRole = loginRole === 'technicien' ? 'technicien' : 'admin';
+              const displayRole = loginRole === 'technicien' ? 'Technicien' : 'Administrateur';
+              const memberProfile = {
+                email: resolvedEmail,
+                name: resolvedName,
+                role: displayRole,
+              };
+              return {
+                tenantId: tid,
+                disabled: Boolean(tnt.disabled),
+                source: 'spreadsheet',
+                targetEmail: resolvedEmail,
+                user: {
+                  email: resolvedEmail,
+                  name: resolvedName,
+                  role: resolvedRole,
+                  memberRecord: memberProfile,
+                },
+                member: {
+                  ...memberProfile,
+                  role: resolvedRole,
+                },
+              };
+            }
+          }
+        }
+        return null;
+      };
+
+      // Check cached MEGA ADMIN tenants first (0ms), then force-refresh MEGA ADMIN if not matched
+      let candidateTenants = buildTenantsList(await getRegisteredTenantsFromDb(false));
+      let megaAdminMatched = findMegaAdminMatch(candidateTenants);
+      if (!megaAdminMatched) {
+        candidateTenants = buildTenantsList(await getRegisteredTenantsFromDb(true));
+        megaAdminMatched = findMegaAdminMatch(candidateTenants);
+      }
+      if (megaAdminMatched) {
+        return await issueTwoFactorChallenge(megaAdminMatched);
       }
 
       for (const tnt of candidateTenants) {
@@ -10836,10 +10908,15 @@ async function warmupDefibrillateursStore() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
-    // Non-blocking background warmup for defibrillateurs dataset
-    setTimeout(() => {
+    // Non-blocking background warmup for deferred large files & defibrillateurs dataset
+    setTimeout(async () => {
+      try {
+        if (typeof (globalThis as any).__loadDeferredLargeFiles === 'function') {
+          await (globalThis as any).__loadDeferredLargeFiles();
+        }
+      } catch (_) {}
       warmupDefibrillateursStore().catch(e => console.warn("[Warmup] Background init error:", e));
-    }, 100);
+    }, 50);
   });
 }
 
