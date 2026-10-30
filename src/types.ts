@@ -1,3 +1,5 @@
+import { t } from './utils/translate';
+
 export type AppTab = string;
 
 export interface SignaturePin {
@@ -1146,14 +1148,87 @@ export function getTenantSpreadsheetUrl(
   return '';
 }
 
-export function openTenantSpreadsheetUrl(url: string): void {
+export function openTenantSpreadsheetUrl(url: string, options?: { direct?: boolean }): void {
   const trimmed = String(url || '').trim();
   if (!trimmed || typeof document === 'undefined') return;
-  const link = document.createElement('a');
-  link.href = trimmed;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+
+  const openDirectNewTab = () => {
+    const link = document.createElement('a');
+    link.href = trimmed;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  if (options?.direct || trimmed.includes('consoledefibeo.deroesch.com')) {
+    openDirectNewTab();
+    return;
+  }
+
+  const existingBackdrop = document.getElementById('spreadsheet-editor-popup-backdrop');
+  if (existingBackdrop) {
+    existingBackdrop.remove();
+  }
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'spreadsheet-editor-popup-backdrop';
+  backdrop.className = 'fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn';
+  backdrop.onclick = () => {
+    backdrop.remove();
+  };
+
+  const card = document.createElement('div');
+  card.id = 'spreadsheet-editor-popup-card';
+  card.className = 'p-6 w-full flex flex-col gap-5 text-left';
+  card.style.background = '#f5f7fa';
+  card.style.backgroundColor = '#f5f7fa';
+  card.style.borderRadius = '13px';
+  card.style.boxShadow = 'none';
+  card.style.textAlign = 'left';
+  card.style.maxWidth = '380px';
+  card.onclick = (e) => {
+    e.stopPropagation();
+  };
+
+  const paragraph = document.createElement('p');
+  paragraph.className = 'leading-relaxed m-0';
+  paragraph.style.color = '#000000';
+  paragraph.style.fontSize = '18px';
+  paragraph.style.fontWeight = '100';
+  paragraph.style.fontFamily = '"DefibeoMain", "Civilprom", sans-serif';
+  paragraph.style.cursor = 'default';
+  paragraph.textContent = t(
+    "Si vous n’avez pas accès à la feuille de calcul, cliquez sur Demander l’accès afin d’obtenir l’autorisation."
+  );
+
+  const btnContainer = document.createElement('div');
+  btnContainer.className = 'flex items-center justify-end pt-1';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.id = 'btn-confirm-open-spreadsheet-new-tab';
+  btn.className = 'w-full text-center cursor-pointer outline-none hover:opacity-90 active:scale-[0.99] transition-all';
+  btn.style.padding = '11px 22px';
+  btn.style.color = '#ffffff';
+  btn.style.fontSize = '18px';
+  btn.style.fontWeight = '100';
+  btn.style.fontFamily = '"DefibeoMain", "Civilprom", sans-serif';
+  btn.style.boxShadow = 'none';
+  btn.style.background = '#2e54ff';
+  btn.style.backgroundColor = '#2e54ff';
+  btn.style.border = 'none';
+  btn.style.borderRadius = '13px';
+  btn.textContent = t('Ouvrir (nouvel onglet)');
+  btn.onclick = () => {
+    openDirectNewTab();
+    backdrop.remove();
+  };
+
+  btnContainer.appendChild(btn);
+  card.appendChild(paragraph);
+  card.appendChild(btnContainer);
+  backdrop.appendChild(card);
+  document.body.appendChild(backdrop);
 }

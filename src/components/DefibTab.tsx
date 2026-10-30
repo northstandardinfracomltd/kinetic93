@@ -855,7 +855,14 @@ export default function DefibTab({
     return normalized;
   }, [clientsProp, fallbackSheetClients, resolvedClientsSpreadsheetUrl]);
 
+  const [isSpreadsheetEditorPopupOpen, setIsSpreadsheetEditorPopupOpen] = useState(false);
+
   const handleOpenSpreadsheetEditor = () => {
+    if (!resolvedSpreadsheetUrl) return;
+    setIsSpreadsheetEditorPopupOpen(true);
+  };
+
+  const handleConfirmOpenSpreadsheetNewTab = () => {
     if (!resolvedSpreadsheetUrl) return;
     const link = document.createElement('a');
     link.href = resolvedSpreadsheetUrl;
@@ -864,6 +871,7 @@ export default function DefibTab({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    setIsSpreadsheetEditorPopupOpen(false);
   };
 
   const handleRefreshClick = async () => {
@@ -892,12 +900,58 @@ export default function DefibTab({
 
   // Navigation, Search & Filters State
   const [search, setSearch] = useState(initialSearch || '');
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const recentSearchesStorageKey = `defib_${activeTenantId}_recent_defib_searches`;
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw =
+        localStorage.getItem(`defib_${activeTenantId}_recent_defib_searches`) ||
+        localStorage.getItem('defib_recent_defib_searches');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map(item => String(item || '').trim())
+            .filter(item => item.length >= 5)
+            .slice(0, 5);
+        }
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  const saveRecentSearch = (rawValue: string) => {
+    const trimmed = String(rawValue || '').trim();
+    if (trimmed.length < 5) return;
+    setRecentSearches(prev => {
+      const next = [
+        trimmed,
+        ...prev.filter(item => item.length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()),
+      ].slice(0, 5);
+      try {
+        localStorage.setItem(recentSearchesStorageKey, JSON.stringify(next));
+        localStorage.setItem('defib_recent_defib_searches', JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (initialSearch !== undefined) {
       setSearch(initialSearch);
     }
   }, [initialSearch]);
+
+  // Save to recent searches only after at least 3 seconds without any new character entered
+  useEffect(() => {
+    const trimmed = String(search || '').trim();
+    if (trimmed.length < 5) return;
+    const timer = setTimeout(() => {
+      saveRecentSearch(trimmed);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [search]);
   const [isFilterPaneOpen, setIsFilterPaneOpen] = useState(false);
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
@@ -4752,13 +4806,34 @@ export default function DefibTab({
                     }
                   `}</style>
                   <input
+                    ref={searchInputRef}
                     type="text"
                     id="search-defibs-input"
+                    name="defib-quick-search-nofill"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-form-type="other"
                     value={search}
                     onChange={(e) => {
                       setSearch(e.target.value);
                       if (onSearchChange) {
                         onSearchChange(e.target.value);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (search.trim()) {
+                          saveRecentSearch(search);
+                        }
+                        setIsSearchFocused(false);
+                        searchInputRef.current?.blur();
+                      } else if (e.key === 'Escape') {
+                        setIsSearchFocused(false);
+                        searchInputRef.current?.blur();
                       }
                     }}
                     placeholder={t('Recherche rapide')}
@@ -4767,8 +4842,78 @@ export default function DefibTab({
                     onMouseEnter={() => setIsSearchHovered(true)}
                     onMouseLeave={() => setIsSearchHovered(false)}
                     onFocus={() => setIsSearchFocused(true)}
-                    onBlur={() => setIsSearchFocused(false)}
+                    onBlur={() => {
+                      setIsSearchFocused(false);
+                    }}
                   />
+                  {isSearchFocused && (
+                    <div
+                      id="search-defibs-recent-dropdown"
+                      className="absolute left-0 top-full mt-1.5 bg-white z-50 py-2.5 font-sans animate-fadeIn"
+                      style={{
+                        width: '100%',
+                        minWidth: '100%',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        borderRadius: '13px',
+                        border: '1px solid #dedede',
+                        backgroundColor: '#ffffff',
+                        boxShadow: 'none',
+                      }}
+                    >
+                      <div
+                        className="px-4 pb-1.5 text-left select-none"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          color: '#000000',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        }}
+                      >
+                        {t('Recherche(s) récente(s):')}
+                      </div>
+                      {recentSearches.length === 0 ? (
+                        <div
+                          className="px-4 py-1 text-left select-none"
+                          style={{
+                            fontSize: '18px',
+                            fontWeight: 100,
+                            color: 'rgb(190, 202, 219)',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          }}
+                        >
+                          {t('Aucune recherche récente')}
+                        </div>
+                      ) : (
+                        recentSearches.slice(0, 5).map((item, idx) => (
+                          <button
+                            key={`${item}-${idx}`}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setSearch(item);
+                              if (onSearchChange) {
+                                onSearchChange(item);
+                              }
+                              saveRecentSearch(item);
+                              setIsSearchFocused(false);
+                              searchInputRef.current?.blur();
+                            }}
+                            className="w-full text-left px-4 py-1.5 truncate cursor-pointer border-0 bg-transparent hover:text-[#2e54ff] transition-colors"
+                            style={{
+                              fontSize: '18px',
+                              fontWeight: 100,
+                              color: '#000000',
+                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            }}
+                            title={item}
+                          >
+                            {item}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
@@ -11729,6 +11874,65 @@ export default function DefibTab({
           }}
         >
           {t("Recherche en cours…")}
+        </div>,
+        document.body
+      )}
+
+      {/* 📊 Popup Ouvrir l'éditeur SpreadSheets 📊 */}
+      {isSpreadsheetEditorPopupOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          id="spreadsheet-editor-popup-backdrop"
+          onClick={() => setIsSpreadsheetEditorPopupOpen(false)}
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn"
+        >
+          <div
+            id="spreadsheet-editor-popup-card"
+            onClick={(e) => e.stopPropagation()}
+            className="p-6 w-full flex flex-col gap-5 text-left"
+            style={{
+              background: '#f5f7fa',
+              backgroundColor: '#f5f7fa',
+              borderRadius: '13px',
+              boxShadow: 'none',
+              textAlign: 'left',
+              maxWidth: '380px',
+            }}
+          >
+            <p
+              className="leading-relaxed m-0"
+              style={{
+                color: '#000000',
+                fontSize: '18px',
+                fontWeight: 100,
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                cursor: 'default',
+              }}
+            >
+              {t("Si vous n’avez pas accès à la feuille de calcul, cliquez sur Demander l’accès afin d’obtenir l’autorisation.")}
+            </p>
+            <div className="flex items-center justify-end pt-1">
+              <button
+                type="button"
+                id="btn-confirm-open-spreadsheet-new-tab"
+                onClick={handleConfirmOpenSpreadsheetNewTab}
+                className="w-full text-center cursor-pointer outline-none hover:opacity-90 active:scale-[0.99] transition-all"
+                style={{
+                  padding: '11px 22px',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                  background: '#2e54ff',
+                  backgroundColor: '#2e54ff',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
+              >
+                {t("Ouvrir (nouvel onglet)")}
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

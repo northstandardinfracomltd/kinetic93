@@ -851,8 +851,15 @@ export default function PublicPortal({
     | "stocks"
     | "temps"
     | "frais"
+    | "veille"
     | "localisation";
   const [activeTab, setActiveTab] = useState<WebappTab>("interventions");
+  const [isWebappLogoHovered, setIsWebappLogoHovered] = useState(false);
+  const [clickedWebappNavTab, setClickedWebappNavTab] = useState<{ id: string; key: number } | null>(null);
+  const tenantPillVisualRef = useRef<HTMLDivElement | null>(null);
+  const webappNavContainerRef = useRef<HTMLDivElement | null>(null);
+  const webappNavIconRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [webappGreenBarMetrics, setWebappGreenBarMetrics] = useState<{ left: number; width: number } | null>(null);
 
   // Messages state & real-time sync for Technician Webapp
   const [tenantMessages, setTenantMessages] = useState<TenantMessage[]>(() => {
@@ -1017,6 +1024,35 @@ export default function PublicPortal({
     effectiveHiddenTabs.includes("Tickets de Caisse") ||
     effectiveHiddenTabs.includes("Frais (Webapp)") ||
     effectiveHiddenTabs.includes("Frais");
+
+  useEffect(() => {
+    const updateGreenBarPosition = () => {
+      const containerEl = webappNavContainerRef.current;
+      const isMoreTab = ["planning", "veille", "frais", "messages"].includes(activeTab);
+      const targetKey = isMoreTab ? "more" : activeTab;
+      const iconEl = webappNavIconRefs.current[targetKey];
+      if (!containerEl || !iconEl) {
+        setWebappGreenBarMetrics(null);
+        return;
+      }
+      const containerRect = containerEl.getBoundingClientRect();
+      const iconRect = iconEl.getBoundingClientRect();
+      const barWidth = isMoreTab ? 28 : 38;
+      const iconCenter = iconRect.left - containerRect.left + iconRect.width / 2;
+      setWebappGreenBarMetrics({
+        left: Math.max(4, iconCenter - barWidth / 2),
+        width: barWidth,
+      });
+    };
+
+    updateGreenBarPosition();
+    const rafId = window.requestAnimationFrame(updateGreenBarPosition);
+    window.addEventListener("resize", updateGreenBarPosition);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener("resize", updateGreenBarPosition);
+    };
+  }, [activeTab, hidePointage, isStocksHidden]);
 
   // Selected tour ID for mobile view
   const [selectedTourId, setSelectedTourId] = useState<string>(() => {
@@ -8267,7 +8303,7 @@ export default function PublicPortal({
               </div>
             )}
 
-            {/* Top Header with SVG illustration, Tenant Commercial Name Pill, and 3-dots Tab Selector + Active Tab Pill */}
+            {/* Top Header with SVG illustration, Gradient Overlay, Defibeo Logo, Tenant Pill, and One-Line Icon Nav Bar */}
             {(() => {
               const commercialTenantName = (
                 companyInfo?.nomLogiciel?.trim() ||
@@ -8275,39 +8311,72 @@ export default function PublicPortal({
                 "Défibeo"
               ).slice(0, 25);
 
-              const tabOptions: Array<{ value: typeof activeTab; label: string }> = [
-                { value: "interventions", label: t("Interventions") },
-                { value: "rapports", label: t("Rapports") },
-                { value: "messages", label: t("Messages") },
-                { value: "planning", label: t("Planning") },
+              const mainNavTabs: Array<{
+                value: WebappTab;
+                label: string;
+                iconGris: string;
+                iconNoir: string;
+              }> = [
+                {
+                  value: "interventions",
+                  label: t("Interventions"),
+                  iconGris: "https://civilprom.s3.eu-north-1.amazonaws.com/tourneesgris.svg",
+                  iconNoir: "https://civilprom.s3.eu-north-1.amazonaws.com/tourneesnoir.svg",
+                },
+                {
+                  value: "rapports",
+                  label: t("Rapports PDF"),
+                  iconGris: "https://civilprom.s3.eu-north-1.amazonaws.com/rapportsgris.svg",
+                  iconNoir: "https://civilprom.s3.eu-north-1.amazonaws.com/rapportsnoir.svg",
+                },
                 ...(!hidePointage && !companyInfo?.hiddenTabs?.includes("Temps (Webapp)")
-                  ? [{ value: "temps" as const, label: t("Temps") }]
+                  ? [
+                      {
+                        value: "temps" as WebappTab,
+                        label: t("Temps"),
+                        iconGris: "https://civilprom.s3.eu-north-1.amazonaws.com/tempsgris.svg",
+                        iconNoir: "https://civilprom.s3.eu-north-1.amazonaws.com/tempsnoir.svg",
+                      },
+                    ]
                   : []),
                 ...(!isStocksHidden
-                  ? [{ value: "stocks" as const, label: t("Stocks") }]
+                  ? [
+                      {
+                        value: "stocks" as WebappTab,
+                        label: t("Stocks"),
+                        iconGris: "https://civilprom.s3.eu-north-1.amazonaws.com/stocksgris.svg",
+                        iconNoir: "https://civilprom.s3.eu-north-1.amazonaws.com/stocksnoir.svg",
+                      },
+                    ]
                   : []),
-                ...(!isFraisHidden
-                  ? [{ value: "frais" as const, label: t("Frais") }]
-                  : []),
-                ...(!companyInfo?.hiddenTabs?.includes("Relevé Concurrentiel (Webapp)")
-                  ? [{ value: "veille" as const, label: t("Relevé Concurrentiel") }]
-                  : []),
-                { value: "localisation", label: t("Réglages") },
+                {
+                  value: "localisation",
+                  label: t("Réglages"),
+                  iconGris: "https://civilprom.s3.eu-north-1.amazonaws.com/parametresgris.svg",
+                  iconNoir: "https://civilprom.s3.eu-north-1.amazonaws.com/parametresnoir.svg",
+                },
               ];
 
-              const activeTabLabel =
-                tabOptions.find((opt) => opt.value === activeTab)?.label ||
-                (activeTab === "temps"
-                  ? t("Temps")
-                  : activeTab === "stocks"
-                  ? t("Stocks")
-                  : activeTab === "frais"
-                  ? t("Frais")
-                  : activeTab === "veille"
-                  ? t("Relevé Concurrentiel")
-                  : activeTab === "localisation"
-                  ? t("Réglages")
-                  : t("Interventions"));
+              const moreDropdownOptions: Array<{ value: WebappTab; label: string }> = [
+                { value: "planning", label: t("Planning") },
+                ...(!companyInfo?.hiddenTabs?.includes("Relevé Concurrentiel (Webapp)")
+                  ? [{ value: "veille" as WebappTab, label: t("Relevé Concurrentiel") }]
+                  : []),
+                ...(!isFraisHidden
+                  ? [{ value: "frais" as WebappTab, label: t("Frais") }]
+                  : []),
+                { value: "messages", label: t("Messages") },
+              ];
+
+              const isMoreTabActive = moreDropdownOptions.some((opt) => opt.value === activeTab);
+
+              const triggerTenantPillWave = () => {
+                const el = tenantPillVisualRef.current;
+                if (!el) return;
+                el.classList.remove("sidebar-nav-click-shrink-wave");
+                void el.offsetWidth;
+                el.classList.add("sidebar-nav-click-shrink-wave");
+              };
 
               const greenPillStyle: React.CSSProperties = {
                 backgroundColor: "#3ddc84",
@@ -8323,70 +8392,218 @@ export default function PublicPortal({
 
               return (
                 <div
-                  className="relative w-full overflow-hidden shrink-0 select-none"
-                  style={{ backgroundColor: "#e9edf1" }}
+                  className="relative w-full shrink-0 select-none"
+                  style={{ backgroundColor: "rgb(245, 247, 250)" }}
                   id="nav-tabs"
                 >
-                  <img
-                    src="https://civilprom.s3.eu-north-1.amazonaws.com/svgentete.svg"
-                    alt=""
-                    className="w-[280px] max-w-none h-auto block select-none pointer-events-none"
-                    referrerPolicy="no-referrer"
-                  />
-
-                  <div className="absolute bottom-2.5 right-3 flex flex-col items-end gap-2 max-w-[calc(100%-24px)]">
-                    {/* Top Pill: Commercial Tenant Name (clickable system dropdown for logout) */}
+                  {/* Top Illustration Header with Gradient Overlay, Defibeo Icon Left, Tenant Pill Right */}
+                  <div
+                    className="relative w-full overflow-hidden"
+                    style={{ backgroundColor: "#e9edf1" }}
+                  >
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/svgentete.svg"
+                      alt=""
+                      className="w-[280px] max-w-none h-auto block select-none pointer-events-none"
+                      referrerPolicy="no-referrer"
+                    />
                     <div
-                      className="relative flex items-center justify-center rounded-full truncate max-w-full hover:opacity-90 transition-opacity"
-                      style={greenPillStyle}
-                      title={commercialTenantName}
-                    >
-                      <span className="truncate pointer-events-none">{commercialTenantName}</span>
-                      <select
-                        id="webapp-tenant-session-dropdown"
-                        aria-label={commercialTenantName}
-                        value=""
-                        onChange={(e) => {
-                          if (e.target.value === "logout") {
-                            handleLogout();
-                          }
-                        }}
-                        style={{
-                          position: "absolute",
-                          inset: 0,
-                          width: "100%",
-                          height: "100%",
-                          opacity: 0,
-                          cursor: "pointer",
-                          border: "none",
-                          outline: "none",
-                          padding: 0,
-                          margin: 0,
-                          background: "transparent",
-                          zIndex: 20,
-                        }}
+                      className="absolute inset-0 pointer-events-none"
+                      style={{
+                        background: "linear-gradient(1deg, rgb(245, 247, 250), transparent)",
+                      }}
+                    />
+
+                    {/* Bottom-Left: Defibeo Logo with Hover/Click Eclat Icon & 'Logiciel Defibeo' Floating Pill */}
+                    <div className="absolute bottom-3 left-5 z-20 flex items-center">
+                      <div
+                        className="relative flex items-center cursor-pointer sidebar-nav-item-bounce"
+                        onMouseEnter={() => setIsWebappLogoHovered(true)}
+                        onMouseLeave={() => setIsWebappLogoHovered(false)}
+                        onClick={() => setIsWebappLogoHovered((prev) => !prev)}
                       >
-                        <option value="" disabled>
-                          {commercialTenantName}
-                        </option>
-                        <option value="logout">Quitter la session</option>
-                      </select>
+                        <img
+                          src={
+                            isWebappLogoHovered
+                              ? "https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg"
+                              : "https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg"
+                          }
+                          alt="Defibeo"
+                          className="w-11 h-11 object-contain select-none sidebar-nav-icon-bounce"
+                          referrerPolicy="no-referrer"
+                        />
+                        {isWebappLogoHovered && (
+                          <div
+                            className="absolute left-14 z-50 pointer-events-none whitespace-nowrap"
+                            style={{
+                              backgroundColor: "#040116",
+                              color: "#ffffff",
+                              fontSize: "15px",
+                              fontWeight: 400,
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              padding: "6px 14px",
+                              borderRadius: "9999px",
+                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.18)",
+                            }}
+                          >
+                            Logiciel Defibeo
+                          </div>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Bottom Row: Active Tab Name Pill (clickable system dropdown to switch tab) */}
-                    <div className="flex items-center justify-end max-w-full">
+                    {/* Bottom-Right: Commercial Tenant Name Green Pill (clickable system dropdown for logout) */}
+                    <div className="absolute bottom-3 right-5 z-20 flex items-center justify-end max-w-[calc(100%-100px)]">
                       <div
-                        className="relative flex items-center justify-center rounded-full truncate hover:opacity-90 transition-opacity"
-                        style={greenPillStyle}
-                        title={activeTabLabel}
+                        className="relative inline-flex items-center justify-center rounded-full max-w-full hover:opacity-90 transition-opacity"
+                        title={commercialTenantName}
                       >
-                        <span className="truncate pointer-events-none">{activeTabLabel}</span>
+                        <div
+                          ref={tenantPillVisualRef}
+                          className="flex items-center justify-center rounded-full truncate pointer-events-none"
+                          style={greenPillStyle}
+                        >
+                          <span className="truncate">{commercialTenantName}</span>
+                        </div>
                         <select
-                          id="webapp-nav-tabs-dropdown"
-                          aria-label={t("Navigation")}
-                          value={activeTab}
+                          id="webapp-tenant-session-dropdown"
+                          aria-label={commercialTenantName}
+                          value=""
+                          onMouseDown={triggerTenantPillWave}
+                          onTouchStart={triggerTenantPillWave}
                           onChange={(e) => {
-                            const nextTab = e.target.value as typeof activeTab;
+                            if (e.target.value === "logout") {
+                              handleLogout();
+                            }
+                          }}
+                          style={{
+                            position: "absolute",
+                            inset: 0,
+                            width: "100%",
+                            height: "100%",
+                            opacity: 0,
+                            cursor: "pointer",
+                            border: "none",
+                            outline: "none",
+                            padding: 0,
+                            margin: 0,
+                            background: "transparent",
+                            zIndex: 20,
+                          }}
+                        >
+                          <option value="" disabled>
+                            {commercialTenantName}
+                          </option>
+                          <option value="logout">Quitter la session</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom One-Line Horizontal Navigation Bar (Horizontally Scrollable when needed) */}
+                  <div
+                    className="w-full overflow-x-auto no-scrollbar"
+                    style={{
+                      backgroundColor: "rgb(245, 247, 250)",
+                      WebkitOverflowScrolling: "touch",
+                    }}
+                  >
+                    <div
+                      ref={webappNavContainerRef}
+                      className="relative min-w-full w-max flex items-center justify-between gap-6 px-5 pt-2.5 pb-3.5"
+                      style={{ backgroundColor: "rgb(245, 247, 250)" }}
+                    >
+                      {/* Left-Aligned Main Tabs (Interventions to Réglages) */}
+                      <div className="flex items-center gap-5 sm:gap-7 shrink-0">
+                        {mainNavTabs.map((tab) => {
+                          const isActive = activeTab === tab.value;
+                          const isWaveActive = clickedWebappNavTab?.id === tab.value;
+                          return (
+                            <button
+                              key={tab.value}
+                              type="button"
+                              onClick={(e) => {
+                                const btnEl = e.currentTarget;
+                                setClickedWebappNavTab({ id: tab.value, key: Date.now() });
+                                setActiveTab(tab.value);
+                                if (["interventions", "rapports", "planning", "stocks"].includes(tab.value)) {
+                                  handleRefreshWebappData();
+                                }
+                                const contentArea = document.getElementById("tab-content-area");
+                                if (contentArea) {
+                                  contentArea.scrollTop = 0;
+                                }
+                                window.requestAnimationFrame(() => {
+                                  btnEl?.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "nearest",
+                                    inline: "nearest",
+                                  });
+                                });
+                              }}
+                              className="group relative flex items-center gap-3 py-1 min-w-[28px] focus:outline-none cursor-pointer sidebar-nav-item-bounce shrink-0"
+                              title={tab.label}
+                            >
+                              <div
+                                ref={(el) => {
+                                  webappNavIconRefs.current[tab.value] = el;
+                                }}
+                                className="w-7 h-7 min-w-[28px] flex items-center justify-center shrink-0"
+                              >
+                                <img
+                                  src={isActive ? tab.iconNoir : tab.iconGris}
+                                  alt={tab.label}
+                                  className="w-6 h-6 object-contain select-none pointer-events-none sidebar-nav-icon-bounce"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                              {isActive && (
+                                <span
+                                  key={isWaveActive ? clickedWebappNavTab?.key : tab.value}
+                                  className={`whitespace-nowrap select-none shrink-0 ${
+                                    isWaveActive ? "sidebar-nav-click-shrink-wave" : ""
+                                  }`}
+                                  style={{
+                                    fontSize: "18px",
+                                    fontWeight: 400,
+                                    color: "#040116",
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    lineHeight: 1.2,
+                                  }}
+                                >
+                                  {tab.label}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Right-Aligned 3-Dots System Dropdown (Planning, Relevé Concurrentiel, Frais, Messages) */}
+                      <div
+                        ref={(el) => {
+                          webappNavIconRefs.current["more"] = el;
+                        }}
+                        className="relative w-7 h-7 min-w-[28px] flex items-center justify-center shrink-0 sidebar-nav-item-bounce"
+                        title={t("Plus d'options")}
+                      >
+                        <img
+                          src={
+                            isMoreTabActive
+                              ? "https://civilprom.s3.eu-north-1.amazonaws.com/3dotsnoir.svg"
+                              : "https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
+                          }
+                          alt=""
+                          className="w-5 h-5 object-contain select-none pointer-events-none sidebar-nav-icon-bounce"
+                          referrerPolicy="no-referrer"
+                        />
+                        <select
+                          id="webapp-nav-more-dropdown"
+                          aria-label={t("Plus d'onglets")}
+                          value={isMoreTabActive ? activeTab : ""}
+                          onChange={(e) => {
+                            const nextTab = e.target.value as WebappTab;
+                            if (!nextTab) return;
                             setActiveTab(nextTab);
                             if (["interventions", "rapports", "planning", "stocks"].includes(nextTab)) {
                               handleRefreshWebappData();
@@ -8411,13 +8628,35 @@ export default function PublicPortal({
                             zIndex: 20,
                           }}
                         >
-                          {tabOptions.map((opt) => (
+                          <option value="" disabled>
+                            {t("Plus...")}
+                          </option>
+                          {moreDropdownOptions.map((opt) => (
                             <option key={opt.value} value={opt.value}>
                               {opt.label}
                             </option>
                           ))}
                         </select>
                       </div>
+
+                      {/* Sliding Rounded Green Bar Indicator Under Active Tab Icon */}
+                      {webappGreenBarMetrics && !isMoreTabActive && (
+                        <div
+                          className="pointer-events-none"
+                          style={{
+                            position: "absolute",
+                            bottom: 0,
+                            left: 0,
+                            height: "6px",
+                            width: `${webappGreenBarMetrics.width}px`,
+                            backgroundColor: "#3ddc84",
+                            borderRadius: "8px 8px 0px 0px",
+                            transform: `translateX(${webappGreenBarMetrics.left}px)`,
+                            transition:
+                              "transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), width 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
+                          }}
+                        />
+                      )}
                     </div>
                   </div>
                 </div>

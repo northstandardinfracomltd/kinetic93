@@ -390,6 +390,73 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
   // Settings: Texte de l'email de relance (Modèles 1, 2, 3)
   const activeTenant = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const recentSearchesStorageKey = `defib_${activeTenant}_recent_crm_searches`;
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_recent_crm_searches`) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((s) => typeof s === 'string' && s.trim().length >= 5)
+            .map((s) => s.trim())
+            .slice(0, 5);
+        }
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(recentSearchesStorageKey) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setRecentSearches(
+            parsed
+              .filter((s) => typeof s === 'string' && s.trim().length >= 5)
+              .map((s) => s.trim())
+              .slice(0, 5)
+          );
+          return;
+        }
+      }
+    } catch (_) {}
+    setRecentSearches([]);
+  }, [recentSearchesStorageKey]);
+
+  const saveRecentSearch = React.useCallback(
+    (term: string) => {
+      const trimmed = (term || '').trim();
+      if (trimmed.length < 5) return;
+      setRecentSearches((prev) => {
+        const filtered = prev.filter(
+          (item) => item.trim().length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()
+        );
+        const updated = [trimmed, ...filtered].slice(0, 5);
+        try {
+          localStorage.setItem(recentSearchesStorageKey, JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
+    },
+    [recentSearchesStorageKey]
+  );
+
+  // Save recent search only after 3 seconds without typing (if >= 5 characters)
+  useEffect(() => {
+    const trimmed = (ticketSearch || '').trim();
+    if (trimmed.length < 5) return;
+    const timer = setTimeout(() => {
+      saveRecentSearch(trimmed);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [ticketSearch, saveRecentSearch]);
+
   const defaultRelanceTemplate = `Bonjour {Client.},\n\nNous nous permettons de vous relancer concernant notre proposition commerciale {Référence Devis.}.\nVous pouvez consulter les pièces du dossier ici : {Lien Stockage Partagé Devis.}.\n\nRestant à votre entière disposition pour tout renseignement complémentaire.\n\nBien cordialement,`;
 
   const [relanceEmailBody, setRelanceEmailBody] = useState<string>(() => {
@@ -2590,25 +2657,116 @@ export const CrmTab: React.FC<CrmTabProps> = ({
             </button>
 
             {/* Search Input */}
-            <input
-              type="text"
-              id="search-crm-input"
-              value={ticketSearch}
-              onChange={(e) => setTicketSearch(e.target.value)}
-              placeholder="Recherche rapide"
-              style={{
-                border: '1px solid #dedede',
-                borderRadius: '13px',
-                padding: '9px 19px',
-                fontSize: '18px',
-                fontWeight: '100',
-                color: '#000000',
-                backgroundColor: '#ffffff',
-                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                outline: 'none',
-                width: '200px',
-              }}
-            />
+            <div className="relative" style={{ width: '200px', minWidth: '200px', maxWidth: '200px' }}>
+              <input
+                ref={searchInputRef}
+                type="text"
+                id="search-crm-input"
+                name="defib_quick_search_crm_no_autofill"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-lpignore="true"
+                data-form-type="other"
+                value={ticketSearch}
+                onChange={(e) => setTicketSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (ticketSearch.trim()) {
+                      saveRecentSearch(ticketSearch);
+                    }
+                    setIsSearchFocused(false);
+                    searchInputRef.current?.blur();
+                  } else if (e.key === 'Escape') {
+                    setIsSearchFocused(false);
+                    searchInputRef.current?.blur();
+                  }
+                }}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+                placeholder={t("Recherche rapide")}
+                style={{
+                  border: '1px solid #dedede',
+                  borderRadius: '13px',
+                  padding: '9px 19px',
+                  fontSize: '18px',
+                  fontWeight: '100',
+                  color: '#000000',
+                  backgroundColor: '#ffffff',
+                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                  outline: 'none',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                }}
+              />
+              {isSearchFocused && (
+                <div
+                  id="search-crm-recent-dropdown"
+                  className="absolute left-0 top-full mt-1.5 bg-white z-50 py-2.5 font-sans animate-fadeIn"
+                  style={{
+                    width: '100%',
+                    minWidth: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    borderRadius: '13px',
+                    border: '1px solid #dedede',
+                    backgroundColor: '#ffffff',
+                    boxShadow: 'none',
+                  }}
+                >
+                  <div
+                    className="px-4 pb-1.5 text-left select-none"
+                    style={{
+                      fontSize: '18px',
+                      fontWeight: 100,
+                      color: '#000000',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    }}
+                  >
+                    {t('Recherche(s) récente(s):')}
+                  </div>
+                  {recentSearches.length === 0 ? (
+                    <div
+                      className="px-4 py-1 text-left select-none"
+                      style={{
+                        fontSize: '18px',
+                        fontWeight: 100,
+                        color: 'rgb(190, 202, 219)',
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      }}
+                    >
+                      {t('Aucune recherche récente')}
+                    </div>
+                  ) : (
+                    recentSearches.slice(0, 5).map((item, idx) => (
+                      <button
+                        key={`${item}-${idx}`}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setTicketSearch(item);
+                          saveRecentSearch(item);
+                          setIsSearchFocused(false);
+                          searchInputRef.current?.blur();
+                        }}
+                        className="w-full text-left px-4 py-1.5 truncate cursor-pointer border-0 bg-transparent hover:text-[#2e54ff] transition-colors"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          color: '#000000',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        }}
+                        title={item}
+                      >
+                        {item}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
 
             {/* Nouveau Button */}
             <button

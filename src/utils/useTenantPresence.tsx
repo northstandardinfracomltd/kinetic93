@@ -337,12 +337,12 @@ export const ConcurrentAccessBanner: React.FC<{
     <div
       className={`w-full flex items-center justify-between gap-4 px-4 py-3 font-sans ${className}`}
       style={{
-        backgroundColor: '#f97316',
-        color: '#ffffff',
+        background: 'linear-gradient(45deg, #fc8a19, #ffb12a)',
+        color: 'rgb(255, 255, 255)',
         fontSize: '18px',
         borderRadius: '13px',
         maxWidth: '98%',
-        margin: '0 auto 12px auto',
+        margin: '12px auto 12px',
         ...style,
       }}
     >
@@ -350,7 +350,7 @@ export const ConcurrentAccessBanner: React.FC<{
         className="text-left leading-snug flex-1"
         style={{
           fontSize: '18px',
-          color: '#ffffff',
+          color: 'rgb(255, 255, 255)',
           textAlign: 'left',
           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
           fontWeight: 400,
@@ -364,9 +364,10 @@ export const ConcurrentAccessBanner: React.FC<{
         className="shrink-0 cursor-pointer transition-opacity hover:opacity-90 select-none"
         style={{
           fontSize: '18px',
-          color: '#ffffff',
-          backgroundColor: 'rgba(0, 0, 0, 0.22)',
-          border: '1px solid rgba(255, 255, 255, 0.45)',
+          color: 'rgb(255, 255, 255)',
+          background: 'rgb(15, 23, 42)',
+          backgroundColor: 'rgb(15, 23, 42)',
+          border: 'none',
           borderRadius: '10px',
           padding: '6px 16px',
           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',

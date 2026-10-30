@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { OtherEquipment, Client, Variable, CompanyInfo } from '../types';
+import { OtherEquipment, Client, Variable, CompanyInfo, openTenantSpreadsheetUrl } from '../types';
 import { Plus, Search, Trash2, Edit } from 'lucide-react';
 import { generateRandomShortCode } from '../utils';
 import { t } from '../utils/translate';
@@ -370,13 +370,7 @@ export default function AutresMaterielsTab({
 
   const handleOpenSpreadsheetEditor = () => {
     if (!resolvedSpreadsheetUrl) return;
-    const link = document.createElement('a');
-    link.href = resolvedSpreadsheetUrl;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    openTenantSpreadsheetUrl(resolvedSpreadsheetUrl);
   };
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -451,6 +445,72 @@ export default function AutresMaterielsTab({
 
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const recentSearchesStorageKey = `defib_${activeTenantId}_recent_materiels_searches`;
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenantId}_recent_materiels_searches`) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((s) => typeof s === 'string' && s.trim().length >= 5)
+            .map((s) => s.trim())
+            .slice(0, 5);
+        }
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(recentSearchesStorageKey) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setRecentSearches(
+            parsed
+              .filter((s) => typeof s === 'string' && s.trim().length >= 5)
+              .map((s) => s.trim())
+              .slice(0, 5)
+          );
+          return;
+        }
+      }
+    } catch (_) {}
+    setRecentSearches([]);
+  }, [recentSearchesStorageKey]);
+
+  const saveRecentSearch = React.useCallback(
+    (term: string) => {
+      const trimmed = (term || '').trim();
+      if (trimmed.length < 5) return;
+      setRecentSearches((prev) => {
+        const filtered = prev.filter(
+          (item) => item.trim().length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()
+        );
+        const updated = [trimmed, ...filtered].slice(0, 5);
+        try {
+          localStorage.setItem(recentSearchesStorageKey, JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
+    },
+    [recentSearchesStorageKey]
+  );
+
+  // Save recent search only after 3 seconds without typing (if >= 5 characters)
+  useEffect(() => {
+    const trimmed = (searchQuery || '').trim();
+    if (trimmed.length < 5) return;
+    const timer = setTimeout(() => {
+      saveRecentSearch(trimmed);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [searchQuery, saveRecentSearch]);
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OtherEquipment | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('Tous');
@@ -1469,12 +1529,33 @@ export default function AutresMaterielsTab({
                     }
                   `}</style>
                   <input
+                    ref={searchInputRef}
                     type="text"
                     id="search-materiels-input"
+                    name="defib_quick_search_materiels_no_autofill"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-form-type="other"
                     value={searchQuery}
                     onChange={(e) => {
                       setSearchQuery(e.target.value);
                       if (onSearchChange) onSearchChange(e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (searchQuery.trim()) {
+                          saveRecentSearch(searchQuery);
+                        }
+                        setIsSearchFocused(false);
+                        searchInputRef.current?.blur();
+                      } else if (e.key === 'Escape') {
+                        setIsSearchFocused(false);
+                        searchInputRef.current?.blur();
+                      }
                     }}
                     placeholder={t('Recherche rapide')}
                     className="w-full text-black placeholder:text-[rgb(222,222,222)] placeholder:font-light outline-none"
@@ -1484,6 +1565,74 @@ export default function AutresMaterielsTab({
                     onFocus={() => setIsSearchFocused(true)}
                     onBlur={() => setIsSearchFocused(false)}
                   />
+                  {isSearchFocused && (
+                    <div
+                      id="search-materiels-recent-dropdown"
+                      className="absolute left-0 top-full mt-1.5 bg-white z-50 py-2.5 font-sans animate-fadeIn"
+                      style={{
+                        width: '100%',
+                        minWidth: '100%',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        borderRadius: '13px',
+                        border: '1px solid #dedede',
+                        backgroundColor: '#ffffff',
+                        boxShadow: 'none',
+                      }}
+                    >
+                      <div
+                        className="px-4 pb-1.5 text-left select-none"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          color: '#000000',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        }}
+                      >
+                        {t('Recherche(s) récente(s):')}
+                      </div>
+                      {recentSearches.length === 0 ? (
+                        <div
+                          className="px-4 py-1 text-left select-none"
+                          style={{
+                            fontSize: '18px',
+                            fontWeight: 100,
+                            color: 'rgb(190, 202, 219)',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          }}
+                        >
+                          {t('Aucune recherche récente')}
+                        </div>
+                      ) : (
+                        recentSearches.slice(0, 5).map((item, idx) => (
+                          <button
+                            key={`${item}-${idx}`}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setSearchQuery(item);
+                              if (onSearchChange) {
+                                onSearchChange(item);
+                              }
+                              saveRecentSearch(item);
+                              setIsSearchFocused(false);
+                              searchInputRef.current?.blur();
+                            }}
+                            className="w-full text-left px-4 py-1.5 truncate cursor-pointer border-0 bg-transparent hover:text-[#2e54ff] transition-colors"
+                            style={{
+                              fontSize: '18px',
+                              fontWeight: 100,
+                              color: '#000000',
+                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            }}
+                            title={item}
+                          >
+                            {item}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">

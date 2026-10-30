@@ -962,8 +962,140 @@ export default function App() {
   const [fsmOpenPieceDropdownId, setFsmOpenPieceDropdownId] = useState<string | null>(null);
   const [fsmPieceSearch, setFsmPieceSearch] = useState('');
   const [fsmSearchQuery, setFsmSearchQuery] = useState('');
+  const [isFsmSearchFocused, setIsFsmSearchFocused] = useState(false);
+  const fsmSearchInputRef = useRef<HTMLInputElement>(null);
   const [defibSearchQuery, setDefibSearchQuery] = useState('');
   const [gmaoSearchQuery, setGmaoSearchQuery] = useState('');
+  const [isGmaoSearchFocused, setIsGmaoSearchFocused] = useState(false);
+  const gmaoSearchInputRef = useRef<HTMLInputElement>(null);
+
+  const activeSearchTenantId = tenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+  const fsmRecentStorageKey = `defib_${activeSearchTenantId}_recent_fsm_searches`;
+  const gmaoRecentStorageKey = `defib_${activeSearchTenantId}_recent_gmao_searches`;
+
+  const [fsmRecentSearches, setFsmRecentSearches] = useState<string[]>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeSearchTenantId}_recent_fsm_searches`) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((s) => typeof s === 'string' && s.trim().length >= 5)
+            .map((s) => s.trim())
+            .slice(0, 5);
+        }
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  const [gmaoRecentSearches, setGmaoRecentSearches] = useState<string[]>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeSearchTenantId}_recent_gmao_searches`) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((s) => typeof s === 'string' && s.trim().length >= 5)
+            .map((s) => s.trim())
+            .slice(0, 5);
+        }
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(fsmRecentStorageKey) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setFsmRecentSearches(
+            parsed
+              .filter((s) => typeof s === 'string' && s.trim().length >= 5)
+              .map((s) => s.trim())
+              .slice(0, 5)
+          );
+          return;
+        }
+      }
+    } catch (_) {}
+    setFsmRecentSearches([]);
+  }, [fsmRecentStorageKey]);
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(gmaoRecentStorageKey) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setGmaoRecentSearches(
+            parsed
+              .filter((s) => typeof s === 'string' && s.trim().length >= 5)
+              .map((s) => s.trim())
+              .slice(0, 5)
+          );
+          return;
+        }
+      }
+    } catch (_) {}
+    setGmaoRecentSearches([]);
+  }, [gmaoRecentStorageKey]);
+
+  const saveFsmRecentSearch = useCallback(
+    (term: string) => {
+      const trimmed = (term || '').trim();
+      if (trimmed.length < 5) return;
+      setFsmRecentSearches((prev) => {
+        const filtered = prev.filter(
+          (item) => item.trim().length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()
+        );
+        const updated = [trimmed, ...filtered].slice(0, 5);
+        try {
+          localStorage.setItem(fsmRecentStorageKey, JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
+    },
+    [fsmRecentStorageKey]
+  );
+
+  const saveGmaoRecentSearch = useCallback(
+    (term: string) => {
+      const trimmed = (term || '').trim();
+      if (trimmed.length < 5) return;
+      setGmaoRecentSearches((prev) => {
+        const filtered = prev.filter(
+          (item) => item.trim().length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()
+        );
+        const updated = [trimmed, ...filtered].slice(0, 5);
+        try {
+          localStorage.setItem(gmaoRecentStorageKey, JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
+    },
+    [gmaoRecentStorageKey]
+  );
+
+  useEffect(() => {
+    const trimmed = (fsmSearchQuery || '').trim();
+    if (trimmed.length < 5) return;
+    const timer = setTimeout(() => {
+      saveFsmRecentSearch(trimmed);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [fsmSearchQuery, saveFsmRecentSearch]);
+
+  useEffect(() => {
+    const trimmed = (gmaoSearchQuery || '').trim();
+    if (trimmed.length < 5) return;
+    const timer = setTimeout(() => {
+      saveGmaoRecentSearch(trimmed);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [gmaoSearchQuery, saveGmaoRecentSearch]);
   const [gmaoFilter, setGmaoFilter] = useState<'upcoming' | 'moderation' | 'validated'>('moderation');
   const [gmaoIncludeAutresMateriels, setGmaoIncludeAutresMateriels] = useState<boolean>(true);
   const [isGmaoFilterPaneOpen, setIsGmaoFilterPaneOpen] = useState<boolean>(false);
@@ -12277,7 +12409,7 @@ export default function App() {
                 setAutresMaterielsSearchQuery(q);
                 setAutresMaterielsInitialSortFilter(urgentOnly ? 'closest_maintenance' : null);
                 setAutresMaterielsSortFilterTrigger(prev => prev + 1);
-                setActiveTab('autres-materiels');
+                setActiveTab('autres-materiels', true);
                 setTimeout(() => {
                   window.dispatchEvent(
                     new CustomEvent('autres-materiels-external-filter', {
@@ -12287,7 +12419,7 @@ export default function App() {
                 }, 30);
               }}
               onShowGmaoReports={(identifiant) => {
-                setActiveTab('gmao');
+                setActiveTab('gmao', true);
                 setGmaoFilter('validated');
                 setGmaoSearchQuery(identifiant);
               }}
@@ -12312,7 +12444,7 @@ export default function App() {
               onUpdateFsmTours={saveFsmTours}
               setActiveTab={setActiveTab}
               onShowGmaoReports={(identifiant) => {
-                setActiveTab('gmao');
+                setActiveTab('gmao', true);
                 setGmaoFilter('validated');
                 setGmaoIncludeAutresMateriels(true);
                 setGmaoSearchQuery(identifiant);
@@ -12346,7 +12478,7 @@ export default function App() {
               setActiveTab={setActiveTab}
               onShowClientDefibs={(clientName) => {
                 setDefibSearchQuery(clientName);
-                setActiveTab('defibrillateurs');
+                setActiveTab('defibrillateurs', true);
               }}
               isDeveloper={isDeveloper}
               isReadOnly={isDeveloper}
@@ -13014,10 +13146,33 @@ export default function App() {
                       {/* Field recherche (Search input) */}
                       <div className="relative w-full sm:w-48">
                         <input
+                          ref={fsmSearchInputRef}
                           type="text"
                           id="search-fsm-input"
+                          name="defib_quick_search_fsm_no_autofill"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-form-type="other"
                           value={fsmSearchQuery}
                           onChange={(e) => setFsmSearchQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (fsmSearchQuery.trim()) {
+                                saveFsmRecentSearch(fsmSearchQuery);
+                              }
+                              setIsFsmSearchFocused(false);
+                              fsmSearchInputRef.current?.blur();
+                            } else if (e.key === 'Escape') {
+                              setIsFsmSearchFocused(false);
+                              fsmSearchInputRef.current?.blur();
+                            }
+                          }}
+                          onFocus={() => setIsFsmSearchFocused(true)}
+                          onBlur={() => setIsFsmSearchFocused(false)}
                           placeholder={translate("Recherche rapide")}
                           className="w-full text-black placeholder-[rgb(222,222,222)] placeholder:font-light outline-none placeholder:text-[18px]"
                           style={{
@@ -13033,6 +13188,71 @@ export default function App() {
                             transition: 'all 0s',
                           }}
                         />
+                        {isFsmSearchFocused && (
+                          <div
+                            id="search-fsm-recent-dropdown"
+                            className="absolute left-0 top-full mt-1.5 bg-white z-50 py-2.5 font-sans animate-fadeIn"
+                            style={{
+                              width: '100%',
+                              minWidth: '100%',
+                              maxWidth: '100%',
+                              boxSizing: 'border-box',
+                              borderRadius: '13px',
+                              border: '1px solid #dedede',
+                              backgroundColor: '#ffffff',
+                              boxShadow: 'none',
+                            }}
+                          >
+                            <div
+                              className="px-4 pb-1.5 text-left select-none"
+                              style={{
+                                fontSize: '18px',
+                                fontWeight: 100,
+                                color: '#000000',
+                                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                              }}
+                            >
+                              {translate('Recherche(s) récente(s):')}
+                            </div>
+                            {fsmRecentSearches.length === 0 ? (
+                              <div
+                                className="px-4 py-1 text-left select-none"
+                                style={{
+                                  fontSize: '18px',
+                                  fontWeight: 100,
+                                  color: 'rgb(190, 202, 219)',
+                                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                }}
+                              >
+                                {translate('Aucune recherche récente')}
+                              </div>
+                            ) : (
+                              fsmRecentSearches.slice(0, 5).map((item, idx) => (
+                                <button
+                                  key={`${item}-${idx}`}
+                                  type="button"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    setFsmSearchQuery(item);
+                                    saveFsmRecentSearch(item);
+                                    setIsFsmSearchFocused(false);
+                                    fsmSearchInputRef.current?.blur();
+                                  }}
+                                  className="w-full text-left px-4 py-1.5 truncate cursor-pointer border-0 bg-transparent hover:text-[#2e54ff] transition-colors"
+                                  style={{
+                                    fontSize: '18px',
+                                    fontWeight: 100,
+                                    color: '#000000',
+                                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                  }}
+                                  title={item}
+                                >
+                                  {item}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
@@ -19174,10 +19394,33 @@ export default function App() {
                       {/* Field recherche (Search input) */}
                       <div className="relative w-full sm:w-48">
                         <input
+                          ref={gmaoSearchInputRef}
                           type="text"
                           id="search-gmao-input"
+                          name="defib_quick_search_gmao_no_autofill"
+                          autoComplete="off"
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          spellCheck={false}
+                          data-lpignore="true"
+                          data-form-type="other"
                           value={gmaoSearchQuery}
                           onChange={(e) => setGmaoSearchQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (gmaoSearchQuery.trim()) {
+                                saveGmaoRecentSearch(gmaoSearchQuery);
+                              }
+                              setIsGmaoSearchFocused(false);
+                              gmaoSearchInputRef.current?.blur();
+                            } else if (e.key === 'Escape') {
+                              setIsGmaoSearchFocused(false);
+                              gmaoSearchInputRef.current?.blur();
+                            }
+                          }}
+                          onFocus={() => setIsGmaoSearchFocused(true)}
+                          onBlur={() => setIsGmaoSearchFocused(false)}
                           placeholder={t("Recherche rapide")}
                           className="w-full text-black placeholder-[rgb(222,222,222)] placeholder:font-light outline-none placeholder:text-[18px]"
                           style={{
@@ -19193,6 +19436,71 @@ export default function App() {
                             transition: 'all 0s',
                           }}
                         />
+                        {isGmaoSearchFocused && (
+                          <div
+                            id="search-gmao-recent-dropdown"
+                            className="absolute left-0 top-full mt-1.5 bg-white z-50 py-2.5 font-sans animate-fadeIn"
+                            style={{
+                              width: '100%',
+                              minWidth: '100%',
+                              maxWidth: '100%',
+                              boxSizing: 'border-box',
+                              borderRadius: '13px',
+                              border: '1px solid #dedede',
+                              backgroundColor: '#ffffff',
+                              boxShadow: 'none',
+                            }}
+                          >
+                            <div
+                              className="px-4 pb-1.5 text-left select-none"
+                              style={{
+                                fontSize: '18px',
+                                fontWeight: 100,
+                                color: '#000000',
+                                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                              }}
+                            >
+                              {t('Recherche(s) récente(s):')}
+                            </div>
+                            {gmaoRecentSearches.length === 0 ? (
+                              <div
+                                className="px-4 py-1 text-left select-none"
+                                style={{
+                                  fontSize: '18px',
+                                  fontWeight: 100,
+                                  color: 'rgb(190, 202, 219)',
+                                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                }}
+                              >
+                                {t('Aucune recherche récente')}
+                              </div>
+                            ) : (
+                              gmaoRecentSearches.slice(0, 5).map((item, idx) => (
+                                <button
+                                  key={`${item}-${idx}`}
+                                  type="button"
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    setGmaoSearchQuery(item);
+                                    saveGmaoRecentSearch(item);
+                                    setIsGmaoSearchFocused(false);
+                                    gmaoSearchInputRef.current?.blur();
+                                  }}
+                                  className="w-full text-left px-4 py-1.5 truncate cursor-pointer border-0 bg-transparent hover:text-[#2e54ff] transition-colors"
+                                  style={{
+                                    fontSize: '18px',
+                                    fontWeight: 100,
+                                    color: '#000000',
+                                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                  }}
+                                  title={item}
+                                >
+                                  {item}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

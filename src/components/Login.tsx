@@ -642,6 +642,16 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   // Toggle & Subscriber Creation Form states
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [loginRole, setLoginRole] = useState<'admin' | 'client' | 'technicien'>('admin');
+  const [isLogoHovered, setIsLogoHovered] = useState(false);
+  const rolePillVisualRef = React.useRef<HTMLDivElement | null>(null);
+  const langPillVisualRef = React.useRef<HTMLDivElement | null>(null);
+
+  const playPillWaveOnElement = (el: HTMLDivElement | null) => {
+    if (!el) return;
+    el.classList.remove('sidebar-nav-click-shrink-wave');
+    void el.offsetWidth;
+    el.classList.add('sidebar-nav-click-shrink-wave');
+  };
   
   // Issue report popup state variables
   const [isReportOpen, setIsReportOpen] = useState(false);
@@ -1085,7 +1095,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   return (
     <div
-      className="min-h-screen w-full flex flex-col md:flex-row font-sans relative overflow-x-hidden"
+      className="min-h-screen w-full flex flex-col lg:flex-row font-sans relative overflow-x-hidden"
       id="login-viewport-wrapper"
       style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
     >
@@ -1098,6 +1108,25 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
         #tab-topbar-loading-indicator {
           display: none !important;
+        }
+
+        @media (max-width: 1023px), (max-width: 1180px) and (orientation: portrait) {
+          #login-viewport-wrapper {
+            flex-direction: column !important;
+          }
+          #login-left-column {
+            width: 100% !important;
+            height: 250px !important;
+            min-height: 220px !important;
+          }
+          #login-left-column > img {
+            max-width: 45% !important;
+          }
+          #login-right-column {
+            width: 100% !important;
+            min-height: 460px !important;
+            flex: 1 1 auto !important;
+          }
         }
 
         #login-email-input {
@@ -1152,22 +1181,87 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         }
       `}</style>
 
-      {/* Left Column (Top on Mobile, Left on Desktop) */}
+      {/* Left Column (Top on Mobile & Vertical Tablet, Left on Desktop) */}
       <div
-        className="w-full md:w-1/2 h-[220px] sm:h-[250px] md:min-h-screen md:h-screen relative overflow-hidden flex items-stretch shrink-0"
+        className="w-full lg:w-1/2 h-[220px] sm:h-[250px] lg:min-h-screen lg:h-screen relative overflow-hidden flex items-stretch shrink-0"
         style={{ backgroundColor: '#e9edf1' }}
         id="login-left-column"
       >
         <img
           src="https://civilprom.s3.eu-north-1.amazonaws.com/loginpcillustration.svg"
           alt="Illustration Connexion"
-          className="h-full w-auto max-w-[45%] md:max-w-none object-contain object-left select-none pointer-events-none"
+          className="h-full w-auto max-w-[45%] lg:max-w-none object-contain object-left select-none pointer-events-none"
           style={{ height: '100%', alignSelf: 'flex-start' }}
         />
 
+        {/* Gradient color overlay above the illustration */}
+        <div
+          className="absolute inset-0 pointer-events-none z-10"
+          style={{
+            background: 'linear-gradient(1deg, rgb(245, 247, 250), transparent)',
+          }}
+        />
+
+        {/* Bottom-left Defibeo logo-icon with hover icon & 'Logiciel Defibeo' pill */}
+        <div
+          className="absolute bottom-6 left-6 lg:bottom-8 lg:left-8 z-20 flex items-center"
+          id="login-left-logo-container"
+        >
+          <div
+            className="sidebar-nav-item-bounce relative inline-flex items-center justify-center shrink-0 cursor-default"
+            onMouseEnter={() => setIsLogoHovered(true)}
+            onMouseLeave={() => setIsLogoHovered(false)}
+            onClick={() => setIsLogoHovered((prev) => !prev)}
+          >
+            <div className="sidebar-nav-icon-bounce relative w-[42px] h-[42px] lg:w-[56px] lg:h-[56px] shrink-0 select-none pointer-events-none">
+              <img
+                src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg"
+                alt="Logiciel Defibeo"
+                loading="eager"
+                decoding="sync"
+                className={`absolute inset-0 w-full h-full object-contain block ${
+                  isLogoHovered ? 'opacity-0' : 'opacity-100'
+                }`}
+                referrerPolicy="no-referrer"
+              />
+              <img
+                src="https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg"
+                alt="Logiciel Defibeo"
+                loading="eager"
+                decoding="sync"
+                className={`absolute inset-0 w-full h-full object-contain block ${
+                  isLogoHovered ? 'opacity-100' : 'opacity-0'
+                }`}
+                referrerPolicy="no-referrer"
+              />
+            </div>
+
+            {isLogoHovered && (
+              <div
+                className="absolute z-[9999] pointer-events-none select-none shadow-md"
+                style={{
+                  left: 'calc(100% + 12px)',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  backgroundColor: '#0f172a',
+                  color: '#ffffff',
+                  borderRadius: '9999px',
+                  padding: '6px 16px',
+                  fontSize: '16px',
+                  fontWeight: 400,
+                  fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Logiciel Defibeo
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Bottom-right stacked controls */}
         <div
-          className="absolute bottom-6 right-6 md:bottom-8 md:right-8 z-20 flex flex-col items-end gap-2.5"
+          className="absolute bottom-6 right-6 lg:bottom-8 lg:right-8 z-20 flex flex-col items-end gap-2.5"
           id="login-left-controls"
         >
           {/* 1. 3-dots icon with system dropdown ("Quitter", "Assistance") */}
@@ -1203,23 +1297,30 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </div>
 
           {/* 2. Green pill button for User Role ("En tant que Admin" by default) */}
-          <div
-            className="relative inline-flex items-center justify-center rounded-full px-5 py-2 cursor-pointer select-none"
-            style={{
-              backgroundColor: '#3ddc84',
-              color: '#156337',
-              fontSize: '18px',
-              borderRadius: '9999px',
-              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-            }}
-          >
-            <span className="pointer-events-none whitespace-nowrap">
-              {t.asRolePrefix} {roleLabel}
-            </span>
+          <div className="relative inline-flex items-center justify-center cursor-pointer select-none">
+            <div
+              ref={rolePillVisualRef}
+              onAnimationEnd={(e) => e.currentTarget.classList.remove('sidebar-nav-click-shrink-wave')}
+              className="pointer-events-none relative overflow-hidden inline-flex items-center justify-center rounded-full px-5 py-2"
+              style={{
+                backgroundColor: '#3ddc84',
+                color: '#156337',
+                fontSize: '18px',
+                borderRadius: '9999px',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                transformOrigin: 'center center',
+              }}
+            >
+              <span className="pointer-events-none whitespace-nowrap">
+                {t.asRolePrefix} {roleLabel}
+              </span>
+            </div>
             <select
               aria-label={t.chooseRoleAria}
               value={loginRole}
+              onPointerDown={() => playPillWaveOnElement(rolePillVisualRef.current)}
               onChange={(e) => {
+                playPillWaveOnElement(rolePillVisualRef.current);
                 setLoginRole(e.target.value as 'admin' | 'technicien' | 'client');
                 setError('');
               }}
@@ -1232,23 +1333,30 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </div>
 
           {/* 3. Green pill button for Language selection */}
-          <div
-            className="relative inline-flex items-center justify-center rounded-full px-5 py-2 cursor-pointer select-none"
-            style={{
-              backgroundColor: '#3ddc84',
-              color: '#156337',
-              fontSize: '18px',
-              borderRadius: '9999px',
-              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-            }}
-          >
-            <span className="pointer-events-none whitespace-nowrap">
-              {selectedLang}
-            </span>
+          <div className="relative inline-flex items-center justify-center cursor-pointer select-none">
+            <div
+              ref={langPillVisualRef}
+              onAnimationEnd={(e) => e.currentTarget.classList.remove('sidebar-nav-click-shrink-wave')}
+              className="pointer-events-none relative overflow-hidden inline-flex items-center justify-center rounded-full px-5 py-2"
+              style={{
+                backgroundColor: '#3ddc84',
+                color: '#156337',
+                fontSize: '18px',
+                borderRadius: '9999px',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                transformOrigin: 'center center',
+              }}
+            >
+              <span className="pointer-events-none whitespace-nowrap">
+                {selectedLang}
+              </span>
+            </div>
             <select
               aria-label={t.chooseLangAria}
               value={selectedLang}
+              onPointerDown={() => playPillWaveOnElement(langPillVisualRef.current)}
               onChange={(e) => {
+                playPillWaveOnElement(langPillVisualRef.current);
                 const val = normalizeLoginLang(e.target.value);
                 setSelectedLang(val);
                 setReqLang(val);
@@ -1267,9 +1375,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         </div>
       </div>
 
-      {/* Right Column (Bottom on Mobile, Right on Desktop) */}
+      {/* Right Column (Bottom on Mobile & Vertical Tablet, Right on Desktop) */}
       <div
-        className="w-full md:w-1/2 min-h-[460px] md:min-h-screen flex-1 flex flex-col justify-center items-center px-6 py-12 md:px-12 relative"
+        className="w-full lg:w-1/2 min-h-[460px] lg:min-h-screen flex-1 flex flex-col justify-center items-center px-6 py-12 lg:px-12 relative"
         style={{ backgroundColor: '#375bff' }}
         id="login-right-column"
       >

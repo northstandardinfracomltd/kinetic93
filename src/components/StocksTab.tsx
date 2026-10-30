@@ -1062,6 +1062,72 @@ export default function StocksTab({
   const [stockUgsFilter, setStockUgsFilter] = useState<string>('');
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const activeStocksTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
+  const recentSearchesStorageKey = `defib_${activeStocksTenantId}_recent_stocks_searches`;
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeStocksTenantId}_recent_stocks_searches`) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .filter((s) => typeof s === 'string' && s.trim().length >= 5)
+            .map((s) => s.trim())
+            .slice(0, 5);
+        }
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(recentSearchesStorageKey) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setRecentSearches(
+            parsed
+              .filter((s) => typeof s === 'string' && s.trim().length >= 5)
+              .map((s) => s.trim())
+              .slice(0, 5)
+          );
+          return;
+        }
+      }
+    } catch (_) {}
+    setRecentSearches([]);
+  }, [recentSearchesStorageKey]);
+
+  const saveRecentSearch = React.useCallback(
+    (term: string) => {
+      const trimmed = (term || '').trim();
+      if (trimmed.length < 5) return;
+      setRecentSearches((prev) => {
+        const filtered = prev.filter(
+          (item) => item.trim().length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()
+        );
+        const updated = [trimmed, ...filtered].slice(0, 5);
+        try {
+          localStorage.setItem(recentSearchesStorageKey, JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
+    },
+    [recentSearchesStorageKey]
+  );
+
+  // Save recent search only after 3 seconds without typing (if >= 5 characters)
+  useEffect(() => {
+    const trimmed = (stockSearchQuery || '').trim();
+    if (trimmed.length < 5) return;
+    const timer = setTimeout(() => {
+      saveRecentSearch(trimmed);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [stockSearchQuery, saveRecentSearch]);
 
   // Valeur (HT) des stocks disponibles
   const totalStockValueHT = useMemo(() => {
@@ -1809,11 +1875,32 @@ export default function StocksTab({
                 {/* Field recherche (Search input) */}
                 <div className="relative w-full sm:w-56 bg-white">
                   <input
+                    ref={searchInputRef}
                     type="text"
                     id="search-stock-input"
+                    name="defib_quick_search_stocks_no_autofill"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-form-type="other"
                     value={stockSearchQuery}
                     onChange={(e) => setStockSearchQuery(e.target.value)}
-                    placeholder="Recherche."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (stockSearchQuery.trim()) {
+                          saveRecentSearch(stockSearchQuery);
+                        }
+                        setIsSearchFocused(false);
+                        searchInputRef.current?.blur();
+                      } else if (e.key === 'Escape') {
+                        setIsSearchFocused(false);
+                        searchInputRef.current?.blur();
+                      }
+                    }}
+                    placeholder={t("Recherche rapide")}
                     className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
                     style={searchInputStyle}
                     onMouseEnter={() => setIsSearchHovered(true)}
@@ -1821,6 +1908,71 @@ export default function StocksTab({
                     onFocus={() => setIsSearchFocused(true)}
                     onBlur={() => setIsSearchFocused(false)}
                   />
+                  {isSearchFocused && (
+                    <div
+                      id="search-stock-recent-dropdown"
+                      className="absolute left-0 top-full mt-1.5 bg-white z-50 py-2.5 font-sans animate-fadeIn"
+                      style={{
+                        width: '100%',
+                        minWidth: '100%',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        borderRadius: '13px',
+                        border: '1px solid #dedede',
+                        backgroundColor: '#ffffff',
+                        boxShadow: 'none',
+                      }}
+                    >
+                      <div
+                        className="px-4 pb-1.5 text-left select-none"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          color: '#000000',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        }}
+                      >
+                        {t('Recherche(s) récente(s):')}
+                      </div>
+                      {recentSearches.length === 0 ? (
+                        <div
+                          className="px-4 py-1 text-left select-none"
+                          style={{
+                            fontSize: '18px',
+                            fontWeight: 100,
+                            color: 'rgb(190, 202, 219)',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          }}
+                        >
+                          {t('Aucune recherche récente')}
+                        </div>
+                      ) : (
+                        recentSearches.slice(0, 5).map((item, idx) => (
+                          <button
+                            key={`${item}-${idx}`}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setStockSearchQuery(item);
+                              saveRecentSearch(item);
+                              setIsSearchFocused(false);
+                              searchInputRef.current?.blur();
+                            }}
+                            className="w-full text-left px-4 py-1.5 truncate cursor-pointer border-0 bg-transparent hover:text-[#2e54ff] transition-colors"
+                            style={{
+                              fontSize: '18px',
+                              fontWeight: 100,
+                              color: '#000000',
+                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            }}
+                            title={item}
+                          >
+                            {item}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {(() => {
