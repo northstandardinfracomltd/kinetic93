@@ -6140,29 +6140,26 @@ export default function PublicPortal({
             {/* FLOATING CAPSULE « Rapport d’intervention en cours. » WHEN REPORT IS REDUCED */}
             {isReportOverlayOpen && isReportOverlayMinimized && (
               <div 
-                className="fixed inset-x-0 bottom-[124px] z-[60] flex items-center justify-center pointer-events-none px-4"
+                className="fixed inset-x-0 bottom-[68px] z-[110] flex items-center justify-center pointer-events-none px-4"
               >
                 <div
                   onClick={() => setIsReportOverlayMinimized(false)}
                   title="Cliquer pour agrandir le rapport d’intervention"
                   style={{
-                    backgroundColor: "#fff",
-                    border: "1px solid #dadada",
-                    color: "#000",
-                    fontSize: "16px",
+                    backgroundColor: "#d22d0b",
+                    padding: "10px 20px",
+                    border: "none",
+                    color: "#fff",
+                    fontSize: "18px",
                     textAlign: "center",
                     borderRadius: "1000px",
                   }}
-                  className="pointer-events-auto select-none px-5 py-2 flex items-center justify-center gap-2.5 cursor-pointer shadow-md transition-all active:scale-95 hover:bg-slate-50"
+                  className="pointer-events-auto select-none flex items-center justify-center cursor-pointer transition-all active:scale-95"
                 >
-                  <span className="relative flex h-2.5 w-2.5 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
                   <span
                     style={{
-                      color: "#000",
-                      fontSize: "16px",
+                      color: "#fff",
+                      fontSize: "18px",
                       textAlign: "center",
                       fontFamily: "var(--font-sans), sans-serif",
                     }}
@@ -6179,12 +6176,12 @@ export default function PublicPortal({
               <div
                 className={
                   isReportOverlayMinimized
-                    ? "fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-slate-300 shadow-2xl flex flex-col overflow-hidden text-black animate-report-dock-down"
-                    : "fixed inset-0 bg-white z-50 flex flex-col overflow-y-auto overflow-x-hidden p-0 text-black animate-report-expand-up max-w-[100vw] w-full"
+                    ? "fixed bottom-0 left-0 right-0 z-[100] bg-white border-none shadow-2xl flex flex-col overflow-hidden text-black animate-report-dock-down"
+                    : "fixed inset-0 bg-white z-[100] flex flex-col overflow-y-auto overflow-x-hidden p-0 text-black animate-report-expand-up max-w-[100vw] w-full"
                 }
                 style={
                   isReportOverlayMinimized
-                    ? { maxHeight: "116px", height: "auto" }
+                    ? { maxHeight: "116px", height: "auto", borderTop: "none" }
                     : { overflowX: "hidden", maxWidth: "100vw", width: "100%", overscrollBehaviorX: "none", touchAction: "pan-y" }
                 }
                 id="report-form-overlay"
@@ -8260,8 +8257,8 @@ export default function PublicPortal({
               </div>
             )}
 
-            {/* Fixed top bar "Actualiser les données" on Messages, Temps */}
-            {["messages", "temps"].includes(activeTab) && (
+            {/* Fixed top bar "Actualiser les données" on Messages */}
+            {activeTab === "messages" && (
               <button
                 type="button"
                 disabled={isRefreshingWebappData}
@@ -8289,7 +8286,8 @@ export default function PublicPortal({
                 onClick={() => setActiveTab("temps")}
                 className="text-white text-center font-semibold select-none shadow-xs font-sans shrink-0 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
                 style={{
-                  background: "#0f172a",
+                  background: "rgb(210 45 12)",
+                  color: "#ffffff",
                   fontSize: "14px",
                   padding: "12px 0px",
                   cursor: "pointer",
@@ -8415,7 +8413,7 @@ export default function PublicPortal({
                     />
 
                     {/* Bottom-Left: Defibeo Logo with Hover/Click Eclat Icon & 'Logiciel Defibeo' Floating Pill */}
-                    <div className="absolute bottom-3 left-5 z-20 flex items-center">
+                    <div className="absolute bottom-3 left-5 z-30 flex items-center" style={{ zIndex: 30 }}>
                       <div
                         className="relative flex items-center cursor-pointer sidebar-nav-item-bounce"
                         onMouseEnter={() => setIsWebappLogoHovered(true)}
@@ -8444,6 +8442,7 @@ export default function PublicPortal({
                               padding: "6px 14px",
                               borderRadius: "9999px",
                               boxShadow: "0 4px 12px rgba(0, 0, 0, 0.18)",
+                              zIndex: 9999,
                             }}
                           >
                             Logiciel Defibeo
@@ -8781,19 +8780,16 @@ export default function PublicPortal({
                           }}
                         >
                           {pauseRepasError && (
-                            <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-red-700 text-sm font-semibold flex items-start justify-between gap-2 animate-fadeIn">
-                              <div className="flex items-start gap-2">
-                                <span className="text-base shrink-0">⚠️</span>
-                                <div className="flex-1">{pauseRepasError}</div>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => setPauseRepasError(null)}
-                                className="text-red-500 hover:text-red-700 font-bold ml-2 cursor-pointer text-sm"
-                                title="Fermer"
-                              >
-                                ✕
-                              </button>
+                            <div
+                              className="p-3 rounded-xl font-semibold animate-fadeIn"
+                              style={{
+                                background: "#d22d0b",
+                                border: "none",
+                                color: "#fff",
+                                fontSize: "16px",
+                              }}
+                            >
+                              {pauseRepasError}
                             </div>
                           )}
                           <div className="flex items-center justify-between">
@@ -8843,7 +8839,7 @@ export default function PublicPortal({
                               )}
                               <div
                                 className="font-bold font-sans"
-                                style={{ fontSize: "16px", color: "rgb(80, 97, 122)" }}
+                                style={{ fontSize: "16px", color: "#000000" }}
                                 id="pause-start-timestamp"
                               >
                                 {t("Début Pause :")} {formatPauseTimestamp(pauseStartTime || Date.now())}
@@ -8852,13 +8848,19 @@ export default function PublicPortal({
                                 <select
                                   value={pauseReason}
                                   onChange={(e) => updateTourPauseState(true, e.target.value)}
-                                  className="w-full bg-white font-semibold transition-all duration-150 focus:outline-none cursor-pointer"
+                                  className="w-full bg-white font-semibold transition-all duration-150 focus:outline-none cursor-pointer appearance-none text-center"
                                   style={{
-                                    color: "rgb(80, 97, 122)",
+                                    color: "#000000",
                                     border: "none",
                                     borderRadius: "14px",
                                     padding: "10px 14px",
-                                    fontSize: "16px",
+                                    fontSize: "18px",
+                                    textAlign: "center",
+                                    textAlignLast: "center",
+                                    appearance: "none",
+                                    WebkitAppearance: "none",
+                                    MozAppearance: "none",
+                                    backgroundImage: "none",
                                   }}
                                 >
                                   <option value="Repas">Repas</option>
@@ -8871,49 +8873,6 @@ export default function PublicPortal({
                               </div>
                             </div>
                           )}
-                        </div>
-                      </div>
-
-                      {/* Div-Info with Actualiser les données button */}
-                      <div className="px-1">
-                        <div
-                          className="p-4 flex flex-col gap-3 select-none font-sans"
-                          style={{
-                            backgroundColor: "#f5f7fa",
-                            border: "none",
-                            borderRadius: "14px",
-                          }}
-                        >
-                          <div
-                            className="font-medium leading-snug"
-                            style={{ fontSize: "16px", color: "rgb(80, 97, 122)" }}
-                          >
-                            {t("Seules les tournées marquées « À faire » et attribuées au technicien peuvent être sélectionnées.")}
-                          </div>
-                          <div className="w-full">
-                            <button
-                              type="button"
-                              disabled={isRefreshingWebappData}
-                              onClick={handleRefreshWebappData}
-                              className={`w-full font-sans font-bold transition-opacity focus:outline-none ${
-                                isRefreshingWebappData
-                                  ? "cursor-not-allowed opacity-50"
-                                  : "hover:opacity-90 cursor-pointer"
-                              }`}
-                              style={{
-                                backgroundColor: "#0f172a",
-                                color: "#ffffff",
-                                fontSize: "18px",
-                                borderRadius: "13px",
-                                padding: "10px 20px",
-                                border: "none",
-                                width: "100%",
-                                cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
-                              }}
-                            >
-                              {t("Actualiser les données")}
-                            </button>
-                          </div>
                         </div>
                       </div>
 
@@ -8984,40 +8943,33 @@ export default function PublicPortal({
                                             if (isRejected) return;
                                             togglePassageStatus(t.id, p.id || p.num);
                                           }}
-                                          className={`flex items-center gap-2 focus:outline-hidden ${
+                                          className={`inline-flex items-center gap-2 select-none focus:outline-hidden ${
                                             isRejected ? "cursor-not-allowed opacity-60" : "cursor-pointer"
                                           }`}
                                           style={{
-                                            fontSize: "16px",
+                                            fontSize: "18px",
+                                            color: "#000000",
+                                            fontWeight: 500,
                                             cursor: isRejected ? "not-allowed" : "pointer",
                                           }}
                                         >
                                           <span
-                                            className="rounded-full flex items-center justify-center transition-all bg-white"
+                                            className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
                                             style={{
-                                              border: isCompleted
-                                                ? "2.5px solid #fe4eba"
-                                                : "2.5px solid #cbd5e1",
-                                              width: "22px",
-                                              height: "22px",
-                                              minWidth: "22px",
-                                              minHeight: "22px",
-                                              backgroundColor: isRejected ? "#e2e8f0" : "#ffffff",
+                                              borderWidth: "1px",
+                                              borderColor: isCompleted
+                                                ? "#2e54ff"
+                                                : "oklch(0.92 0.01 258.78)",
+                                              backgroundColor: "transparent",
                                             }}
                                           >
                                             {isCompleted && (
-                                              <span
-                                                className="rounded-full bg-[#fe4eba]"
-                                                style={{
-                                                  width: "10px",
-                                                  height: "10px",
-                                                }}
-                                              />
+                                              <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
                                             )}
                                           </span>
                                           <span
                                             className="font-semibold"
-                                            style={{ color: "rgb(80, 97, 122)" }}
+                                            style={{ color: "#000000", fontSize: "18px" }}
                                           >
                                             {isCompleted
                                               ? "Effectué"
@@ -9030,14 +8982,14 @@ export default function PublicPortal({
 
                                       <div className="space-y-3">
                                         <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap">
-                                          {/* Rond rose avec le numéro du passage */}
+                                          {/* Rond avec le numéro du passage */}
                                           <div
                                             className="flex items-center justify-center font-bold text-white rounded-full shrink-0"
                                             style={{
-                                              backgroundColor: "#fe4eba",
-                                              width: "28px",
-                                              height: "28px",
-                                              fontSize: "14px",
+                                              backgroundColor: "rgb(210 45 11)",
+                                              width: "39px",
+                                              height: "39px",
+                                              fontSize: "18px",
                                             }}
                                           >
                                             {(() => {
@@ -9058,12 +9010,11 @@ export default function PublicPortal({
                                           {/* Identifiant du défibrillateur dans une gelule alignée à gauche et pas en full width */}
                                           <span
                                             style={{
-                                              backgroundColor:
-                                                "rgb(77, 21, 83)",
-                                              color: "rgb(255, 255, 255)",
+                                              backgroundColor: "rgb(61 220 132)",
+                                              color: "rgb(21 99 55)",
                                               borderRadius: "1000px",
-                                              padding: "4px 12px",
-                                              fontSize: "15px",
+                                              padding: "6px 16px",
+                                              fontSize: "18px",
                                               fontWeight: 700,
                                               border: "none",
                                               display: "inline-block",
@@ -9088,8 +9039,13 @@ export default function PublicPortal({
                                             if (!thumbUrl) return null;
                                             return (
                                               <div
-                                                className="w-16 h-16 sm:w-18 sm:h-18 rounded-[12px] bg-white border flex items-center justify-center p-1.5 shrink-0 shadow-xs"
-                                                style={{ borderColor: "rgb(201, 190, 205)" }}
+                                                className="w-16 h-16 sm:w-18 sm:h-18 rounded-[12px] flex items-center justify-center shrink-0"
+                                                style={{
+                                                  border: "1px solid #dce1ea",
+                                                  padding: "5px",
+                                                  boxShadow: "none",
+                                                  background: "transparent",
+                                                }}
                                                 title="Modèle défibrillateur"
                                               >
                                                 <img
@@ -9115,7 +9071,7 @@ export default function PublicPortal({
                                           {/* Site */}
                                           {!isFormationMission && (
                                             <p style={{ color: "rgb(80, 97, 122)" }}>
-                                              <span style={{ color: "#9f9f9f" }}>Site :</span>{" "}
+                                              <span style={{ color: "#000000" }}>Site :</span>{" "}
                                               <span
                                                 className="font-semibold"
                                                 style={{ color: "rgb(80, 97, 122)" }}
@@ -9130,7 +9086,7 @@ export default function PublicPortal({
 
                                           {/* Client */}
                                           <p style={{ color: "rgb(80, 97, 122)" }}>
-                                            <span style={{ color: "#9f9f9f" }}>Client :</span>{" "}
+                                            <span style={{ color: "#000000" }}>Client :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "rgb(80, 97, 122)" }}
@@ -9151,7 +9107,7 @@ export default function PublicPortal({
                                           {/* Matériel */}
                                           {!isFormationMission && (
                                             <p style={{ color: "rgb(80, 97, 122)" }}>
-                                              <span style={{ color: "#9f9f9f" }}>Matériel :</span>{" "}
+                                              <span style={{ color: "#000000" }}>Matériel :</span>{" "}
                                               <span
                                                 className="font-semibold"
                                                 style={{ color: "rgb(80, 97, 122)" }}
@@ -9165,7 +9121,7 @@ export default function PublicPortal({
                                           {/* Modèle */}
                                           {!isFormationMission && (
                                             <p style={{ color: "rgb(80, 97, 122)" }}>
-                                              <span style={{ color: "#9f9f9f" }}>Modèle :</span>{" "}
+                                              <span style={{ color: "#000000" }}>Modèle :</span>{" "}
                                               <span
                                                 className="font-semibold"
                                                 style={{ color: "rgb(80, 97, 122)" }}
@@ -9177,7 +9133,7 @@ export default function PublicPortal({
 
                                           {/* Localisation */}
                                           <p style={{ color: "rgb(80, 97, 122)" }}>
-                                            <span style={{ color: "#9f9f9f" }}>Localisation :</span>{" "}
+                                            <span style={{ color: "#000000" }}>Localisation :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "rgb(80, 97, 122)" }}
@@ -9209,13 +9165,13 @@ export default function PublicPortal({
                                                 style={{ maxHeight: isUnrolled ? "none" : "68px" }}
                                               >
                                                 <p style={{ color: "rgb(80, 97, 122)" }}>
-                                                  <span style={{ color: "#9f9f9f" }}>Téléphone :</span>{" "}
+                                                  <span style={{ color: "#000000" }}>Téléphone :</span>{" "}
                                             {equipmentPhone && equipmentPhone !== "Non renseigné" ? (
                                               <a
                                                 href={`tel:${equipmentPhone.replace(/\s+/g, "")}`}
                                                 className="font-semibold underline hover:opacity-75 transition-opacity"
                                                 style={{
-                                                  color: "#fe4eba",
+                                                  color: "#2e54ff",
                                                   cursor: "pointer",
                                                 }}
                                                 id={`tel-link-${p.num}`}
@@ -9228,7 +9184,7 @@ export default function PublicPortal({
                                           </p>
 
                                           <p style={{ color: "rgb(80, 97, 122)" }}>
-                                            <span style={{ color: "#9f9f9f" }}>Référence intervention :</span>{" "}
+                                            <span style={{ color: "#000000" }}>Référence intervention :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "rgb(80, 97, 122)" }}
@@ -9238,7 +9194,7 @@ export default function PublicPortal({
                                           </p>
 
                                           <p style={{ color: "rgb(80, 97, 122)" }}>
-                                            <span style={{ color: "#9f9f9f" }}>Autre référence :</span>{" "}
+                                            <span style={{ color: "#000000" }}>Autre référence :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "rgb(80, 97, 122)" }}
@@ -9249,7 +9205,7 @@ export default function PublicPortal({
 
                                           {/* Bon de commande */}
                                           <p style={{ color: "rgb(80, 97, 122)" }}>
-                                            <span style={{ color: "#9f9f9f" }}>Bon de commande :</span>{" "}
+                                            <span style={{ color: "#000000" }}>Bon de commande :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "rgb(80, 97, 122)" }}
@@ -9264,7 +9220,7 @@ export default function PublicPortal({
                                           {/* Coordonnées GPS */}
                                           {!isFormationMission && (
                                             <p style={{ color: "rgb(80, 97, 122)" }}>
-                                              <span style={{ color: "#9f9f9f" }}>Coordonnées GPS :</span>{" "}
+                                              <span style={{ color: "#000000" }}>Coordonnées GPS :</span>{" "}
                                               {(() => {
                                                 const lat = matchedDefib?.latitude || matchedOther?.latitude || "";
                                                 const lng = matchedDefib?.longitude || matchedOther?.longitude || "";
@@ -9275,7 +9231,7 @@ export default function PublicPortal({
                                                     <span
                                                       onClick={() => handleCopyGps(gpsStr)}
                                                       className="font-semibold underline cursor-pointer hover:opacity-80 transition-all"
-                                                      style={{ color: "#fe4eba" }}
+                                                      style={{ color: "#2e54ff" }}
                                                       title="Cliquez pour copier"
                                                     >
                                                       {gpsStr}
@@ -9288,7 +9244,7 @@ export default function PublicPortal({
                                           )}
 
                                           <p style={{ color: "rgb(80, 97, 122)" }}>
-                                            <span style={{ color: "#9f9f9f" }}>Date estimée :</span>{" "}
+                                            <span style={{ color: "#000000" }}>Date estimée :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "rgb(80, 97, 122)" }}
@@ -9313,7 +9269,7 @@ export default function PublicPortal({
                                             </span>
                                           </p>
                                           <p style={{ color: "rgb(80, 97, 122)" }}>
-                                            <span style={{ color: "#9f9f9f" }}>Créneau estimé :</span>{" "}
+                                            <span style={{ color: "#000000" }}>Créneau estimé :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "rgb(80, 97, 122)" }}
@@ -9325,7 +9281,7 @@ export default function PublicPortal({
                                           {/* Pièce(s) requise(s) */}
                                           {!isFormationMission && (
                                             <p style={{ color: "rgb(80, 97, 122)" }}>
-                                              <span style={{ color: "#9f9f9f" }}>Pièce(s) requise(s) :</span>{" "}
+                                              <span style={{ color: "#000000" }}>Pièce(s) requise(s) :</span>{" "}
                                               <span
                                                 className="font-semibold"
                                                 style={{ color: "rgb(80, 97, 122)" }}
@@ -9356,7 +9312,7 @@ export default function PublicPortal({
 
                                           {/* Commentaire interne */}
                                           <p style={{ color: "rgb(80, 97, 122)" }}>
-                                            <span style={{ color: "#9f9f9f" }}>Commentaire interne :</span>{" "}
+                                            <span style={{ color: "#000000" }}>Commentaire interne :</span>{" "}
                                             <span
                                               className="font-semibold"
                                               style={{ color: "rgb(80, 97, 122)" }}
@@ -9384,9 +9340,10 @@ export default function PublicPortal({
                                                             ),
                                                         )
                                                       }
-                                                      className="font-bold text-[16px] hover:underline cursor-pointer transition-transform active:scale-95"
+                                                      className="font-bold text-[18px] hover:underline cursor-pointer transition-transform active:scale-95"
                                                       style={{
-                                                        color: "rgb(53, 86, 236)",
+                                                        color: "#2e54ff",
+                                                        fontSize: "18px",
                                                         background: "transparent",
                                                         backgroundColor: "transparent",
                                                         border: "none",
@@ -9411,8 +9368,10 @@ export default function PublicPortal({
                                                           return next;
                                                         })
                                                       }
-                                                      className="font-bold text-[14px] hover:underline cursor-pointer text-slate-500 py-1"
+                                                      className="font-bold text-[18px] hover:underline cursor-pointer py-1"
                                                       style={{
+                                                        color: "#2e54ff",
+                                                        fontSize: "18px",
                                                         fontFamily:
                                                           "var(--font-sans), sans-serif",
                                                       }}
@@ -9438,7 +9397,7 @@ export default function PublicPortal({
                                           style={{
                                             backgroundColor: isCompleted
                                               ? "#e2e8f0"
-                                              : "#000000",
+                                              : "rgb(15, 23, 42)",
                                             color: isCompleted
                                               ? "#94a3b8"
                                               : "#fff",
@@ -9447,7 +9406,7 @@ export default function PublicPortal({
                                             borderRadius: "12px",
                                             padding: "11px 20px",
                                             border: "none",
-                                            boxShadow: isCompleted ? "none" : "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset",
+                                            boxShadow: "none",
                                             cursor: isCompleted
                                               ? "not-allowed"
                                               : "pointer",
@@ -9539,10 +9498,10 @@ export default function PublicPortal({
                                             backgroundColor: isFormationMission
                                               ? (isCompleted || !matchedEmargement
                                                 ? "#e2e8f0"
-                                                : "#000000")
+                                                : "rgb(46, 84, 255)")
                                               : (isCompleted
                                                 ? "#e2e8f0"
-                                                : "rgb(40 79 255)"),
+                                                : "rgb(46, 84, 255)"),
                                             color: isFormationMission
                                               ? (isCompleted || !matchedEmargement
                                                 ? "#94a3b8"
@@ -9555,13 +9514,7 @@ export default function PublicPortal({
                                             borderRadius: "12px",
                                             padding: "11px 20px",
                                             border: "none",
-                                            boxShadow: isFormationMission
-                                              ? (isCompleted || !matchedEmargement
-                                                ? "none"
-                                                : "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset")
-                                              : (isCompleted
-                                                ? "none"
-                                                : "rgb(255 255 255 / 41%) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 22%) 0px 6px 12px inset"),
+                                            boxShadow: "none",
                                             cursor: isFormationMission
                                               ? (isCompleted || !matchedEmargement
                                                 ? "not-allowed"
@@ -9589,14 +9542,15 @@ export default function PublicPortal({
                                             className="mt-2.5 p-3"
                                             style={{
                                               borderRadius: "13px",
-                                              backgroundColor: "rgb(238, 241, 255)",
-                                              color: "rgb(49, 85, 255)",
+                                              backgroundColor: "rgb(236 239 244)",
+                                              color: "#000000",
                                             }}
                                           >
                                             <label
-                                              className="block text-[18px] font-bold mb-1 font-sans"
+                                              className="block text-[18px] font-bold mb-1 font-sans text-center"
                                               style={{
-                                                color: "rgb(49, 85, 255)",
+                                                color: "#000000",
+                                                textAlign: "center",
                                                 textTransform: "none",
                                               }}
                                             >
@@ -9741,7 +9695,7 @@ export default function PublicPortal({
                                               style={{
                                                 backgroundColor: isRejected
                                                   ? "#e2e8f0"
-                                                  : "rgb(40, 79, 255)",
+                                                  : "rgb(46, 84, 255)",
                                                 color: isRejected ? "#94a3b8" : "#ffffff",
                                                 fontSize: "18px",
                                                 fontWeight: "bold",
@@ -9750,9 +9704,7 @@ export default function PublicPortal({
                                                 border: "none",
                                                 width: "100%",
                                                 marginTop: "10px",
-                                                boxShadow: isRejected
-                                                  ? "none"
-                                                  : "rgb(255 255 255 / 41%) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgb(255 255 255 / 22%) 0px 6px 12px inset",
+                                                boxShadow: "none",
                                                 cursor: isRejected ? "not-allowed" : "pointer",
                                               }}
                                               className={
@@ -9932,17 +9884,14 @@ export default function PublicPortal({
                                     );
                                   }}
                                   style={{
-                                    backgroundColor: "#dc2626",
+                                    backgroundColor: "rgb(210 45 12)",
                                     color: "#ffffff",
                                     fontSize: "18px",
                                     fontWeight: "bold",
                                     borderRadius: "12px",
                                     padding: "14px 20px",
                                     border: "none",
-                                    boxShadow:
-                                      t.status === "Terminé"
-                                        ? "none"
-                                        : "inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, inset 0 6px 12px #ffffff1f",
+                                    boxShadow: "none",
                                     cursor:
                                       t.status === "Terminé"
                                         ? "not-allowed"
@@ -9950,7 +9899,7 @@ export default function PublicPortal({
                                     width: "100%",
                                     opacity: t.status === "Terminé" ? 0.55 : 1,
                                   }}
-                                  className={`${t.status === "Terminé" ? "" : "hover:bg-red-700 active:scale-[0.99]"} transition-all flex items-center justify-center gap-2`}
+                                  className={`${t.status === "Terminé" ? "" : "hover:opacity-90 active:scale-[0.99]"} transition-all flex items-center justify-center gap-2`}
                                 >
                                   Terminer la tournée
                                 </button>
@@ -9972,6 +9921,54 @@ export default function PublicPortal({
                               </div>
                             </div>
                           ))}
+
+                      {/* Div-Info with Actualiser les données button (déplacée en dessous du bouton Terminer la tournée) */}
+                      <div className="px-1">
+                        <div
+                          className="p-0 flex flex-col gap-3 select-none font-sans"
+                          style={{
+                            backgroundColor: "transparent",
+                            border: "none",
+                          }}
+                        >
+                          <div
+                            className="font-medium leading-relaxed"
+                            style={{
+                              fontSize: "18px",
+                              color: "#000000",
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            {t("Seules les tournées marquées « À faire » et attribuées au technicien peuvent être sélectionnées.")}
+                          </div>
+                          <div className="w-full">
+                            <button
+                              type="button"
+                              disabled={isRefreshingWebappData}
+                              onClick={handleRefreshWebappData}
+                              className={`w-full font-sans font-bold transition-all focus:outline-none flex items-center justify-center gap-2 ${
+                                isRefreshingWebappData
+                                  ? "cursor-not-allowed opacity-50"
+                                  : "hover:opacity-90 active:scale-[0.99] cursor-pointer"
+                              }`}
+                              style={{
+                                backgroundColor: "#0f172a",
+                                color: "#ffffff",
+                                fontSize: "18px",
+                                fontWeight: "bold",
+                                borderRadius: "12px",
+                                padding: "14px 20px",
+                                border: "none",
+                                boxShadow: "none",
+                                width: "100%",
+                                cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
+                              }}
+                            >
+                              {t("Actualiser les données")}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   );
                 })()}
@@ -10032,15 +10029,14 @@ export default function PublicPortal({
                       setIsReportOverlayOpen(true);
                     }}
                     style={{
-                      backgroundColor: "rgb(53, 86, 236)",
+                      backgroundColor: "rgb(46, 84, 255)",
                       color: "#ffffff",
                       fontSize: "18px",
                       fontWeight: "bold",
                       borderRadius: "12px",
                       padding: "14px 20px",
                       border: "none",
-                      boxShadow:
-                        "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                      boxShadow: "none",
                       cursor: "pointer",
                       width: "100%",
                     }}
@@ -10059,7 +10055,7 @@ export default function PublicPortal({
                       />
                       <p
                         className="font-bold font-sans"
-                        style={{ fontSize: "18px", color: "rgb(80, 97, 122)" }}
+                        style={{ fontSize: "18px", color: "#000000" }}
                       >
                         {t("Aucun rapport disponible.")}
                       </p>
@@ -10078,6 +10074,7 @@ export default function PublicPortal({
                       borderRadius: "12px",
                       padding: "14px 20px",
                       border: "none",
+                      boxShadow: "none",
                       cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
                       width: "100%",
                     }}
@@ -10481,6 +10478,17 @@ export default function PublicPortal({
                     #tab-stocks-screen select {
                       box-sizing: border-box !important;
                       max-width: 100% !important;
+                      text-align: center !important;
+                    }
+                    #tab-stocks-screen select {
+                      -webkit-appearance: none !important;
+                      -moz-appearance: none !important;
+                      appearance: none !important;
+                      background-image: none !important;
+                      text-align-last: center !important;
+                    }
+                    #tab-stocks-screen select::-ms-expand {
+                      display: none !important;
                     }
                     #tab-stocks-screen input[type="date"] {
                       -webkit-appearance: none !important;
@@ -10490,6 +10498,14 @@ export default function PublicPortal({
                       max-width: 100% !important;
                       min-width: 0 !important;
                       display: block !important;
+                    }
+                    #tab-stocks-screen input[type="date"]::-webkit-calendar-picker-indicator {
+                      display: none !important;
+                      -webkit-appearance: none !important;
+                      background: none !important;
+                      width: 0 !important;
+                      height: 0 !important;
+                      margin: 0 !important;
                     }
                     #tab-stocks-screen input[type="date"]::-webkit-date-and-time-value {
                       text-align: center !important;
@@ -10602,15 +10618,14 @@ export default function PublicPortal({
                         setShowRapatriementForm(false);
                       }}
                       style={{
-                        backgroundColor: "rgb(53, 86, 236)",
+                        backgroundColor: "rgb(46, 84, 255)",
                         color: "#ffffff",
                         fontSize: "18px",
                         fontWeight: "bold",
                         borderRadius: "12px",
                         padding: "14px 20px",
                         border: "none",
-                        boxShadow:
-                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                        boxShadow: "none",
                         cursor: "pointer",
                         width: "100%",
                       }}
@@ -10633,16 +10648,14 @@ export default function PublicPortal({
                       borderRadius: "12px",
                       padding: "14px 20px",
                       border: "none",
+                      boxShadow: "none",
                       cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
                       width: "100%",
+                      opacity: isRefreshingWebappData ? 0.5 : 1,
                     }}
-                    className={`transition-all flex items-center justify-center gap-2 font-bold mb-4 ${
-                      isRefreshingWebappData
-                        ? "animate-webapp-refresh-wave cursor-not-allowed opacity-85"
-                        : "hover:opacity-90 active:scale-[0.99]"
-                    }`}
+                    className="flex items-center justify-center gap-2 font-bold mb-4"
                   >
-                    {isRefreshingWebappData ? t("Actualisation...") : t("Actualiser les données")}
+                    {t("Actualiser les données")}
                   </button>
 
                   {/* Form for Nouveau stock distribué */}
@@ -10652,6 +10665,7 @@ export default function PublicPortal({
                       style={{
                         backgroundColor: "#f5f7fa",
                         border: "none",
+                        boxShadow: "none",
                         borderRadius: "18px",
                         width: "100%",
                         boxSizing: "border-box",
@@ -10680,9 +10694,7 @@ export default function PublicPortal({
                           style={{
                             color: "#000000",
                             fontSize: "18px",
-                            borderColor: "#D5D5D5",
-                            borderWidth: "1px",
-                            borderStyle: "solid",
+                            border: "none",
                             borderRadius: "13px",
                             padding: "10px 12px",
                             backgroundColor: "#ffffff",
@@ -10734,18 +10746,16 @@ export default function PublicPortal({
                           value={techLocationLink || "Aucun emplacement spécifié"}
                           disabled
                           style={{
-                            color: "rgb(80, 97, 122)",
+                            color: "#000000",
                             fontSize: "18px",
-                            borderColor: "#D5D5D5",
-                            borderWidth: "1px",
-                            borderStyle: "solid",
+                            border: "none",
                             borderRadius: "13px",
                             padding: "10px 12px",
-                            backgroundColor: "#f1f5f9",
+                            backgroundColor: "#ffffff",
                             width: "100%",
                             boxSizing: "border-box",
                             opacity: 1,
-                            WebkitTextFillColor: "rgb(80, 97, 122)",
+                            WebkitTextFillColor: "#000000",
                             textAlign: "center",
                           }}
                           className="font-sans cursor-not-allowed"
@@ -10763,11 +10773,9 @@ export default function PublicPortal({
                           value={newDistribVolumeDisponible}
                           onChange={(e) => setNewDistribVolumeDisponible(Math.max(0, Number(e.target.value)))}
                           style={{
-                            color: "rgb(80, 97, 122)",
+                            color: "#000000",
                             fontSize: "18px",
-                            borderColor: "#D5D5D5",
-                            borderWidth: "1px",
-                            borderStyle: "solid",
+                            border: "none",
                             borderRadius: "13px",
                             padding: "10px 12px",
                             backgroundColor: "#ffffff",
@@ -10815,7 +10823,7 @@ export default function PublicPortal({
 
                       {/* Sub-section Inventaire de traçabilité pour nouveau stock */}
                       {newDistribTraceabilityEnabled && (
-                        <div className="p-4 rounded-xl space-y-3 bg-slate-50/50" style={{ border: "1px solid #dadada", borderRadius: "14px" }}>
+                        <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: "#f5f7fa", border: "none", boxShadow: "none", borderRadius: "14px" }}>
                           <div className="flex flex-col gap-2.5 select-none w-full">
                             <div>
                               <span
@@ -10833,13 +10841,14 @@ export default function PublicPortal({
                               type="button"
                               onClick={() => setShowNewDistribTraceForm(!showNewDistribTraceForm)}
                               style={{
-                                backgroundColor: "rgb(53, 86, 236)",
+                                backgroundColor: "rgb(46, 84, 255)",
                                 color: "#ffffff",
                                 borderRadius: "11px",
                                 fontSize: "16px",
                                 fontWeight: "bold",
                                 padding: "12px 16px",
                                 border: "none",
+                                boxShadow: "none",
                                 width: "100%",
                               }}
                               className="font-sans active:scale-[0.98] transition-all w-full text-center cursor-pointer block"
@@ -10850,7 +10859,7 @@ export default function PublicPortal({
 
                           {/* Traceability Sub-form for mobile vertical layout */}
                           {showNewDistribTraceForm && (
-                            <div className="bg-white p-4 rounded-xl space-y-3 text-left font-sans animate-fadeIn" style={{ border: "1px solid #dadada" }}>
+                            <div className="p-4 rounded-xl space-y-3 text-left font-sans animate-fadeIn" style={{ backgroundColor: "#f5f7fa", border: "none", boxShadow: "none" }}>
                               {/* 1. Mouvement */}
                               <div className="flex flex-col gap-1 w-full min-w-0">
                                 <label className="font-bold font-sans text-black text-[15px]">
@@ -10862,9 +10871,7 @@ export default function PublicPortal({
                                   style={{
                                     color: "#000000",
                                     fontSize: "16px",
-                                    borderColor: "#dadada",
-                                    borderWidth: "1px",
-                                    borderStyle: "solid",
+                                    border: "none",
                                     borderRadius: "10px",
                                     padding: "8px 10px",
                                     backgroundColor: "#ffffff",
@@ -10901,11 +10908,10 @@ export default function PublicPortal({
                                   style={{
                                     color: "#000000",
                                     fontSize: "16px",
-                                    borderColor: "#dadada",
-                                    borderWidth: "1px",
-                                    borderStyle: "solid",
+                                    border: "none",
                                     borderRadius: "10px",
                                     padding: "8px 10px",
+                                    backgroundColor: "#ffffff",
                                     width: "100%",
                                     maxWidth: "100%",
                                     boxSizing: "border-box",
@@ -10927,11 +10933,10 @@ export default function PublicPortal({
                                   style={{
                                     color: "#000000",
                                     fontSize: "16px",
-                                    borderColor: "#dadada",
-                                    borderWidth: "1px",
-                                    borderStyle: "solid",
+                                    border: "none",
                                     borderRadius: "10px",
                                     padding: "8px 10px",
+                                    backgroundColor: "#ffffff",
                                     width: "100%",
                                     maxWidth: "100%",
                                     minWidth: "0px",
@@ -10958,16 +10963,16 @@ export default function PublicPortal({
                                   style={{
                                     color: "#000000",
                                     fontSize: "16px",
-                                    borderColor: "#dadada",
-                                    borderWidth: "1px",
-                                    borderStyle: "solid",
+                                    border: "none",
                                     borderRadius: "10px",
                                     padding: "8px 10px",
-                                    backgroundColor: "#f1f5f9",
+                                    backgroundColor: "#ffffff",
                                     width: "100%",
                                     maxWidth: "100%",
                                     boxSizing: "border-box",
                                     textAlign: "center",
+                                    opacity: 1,
+                                    WebkitTextFillColor: "#000000",
                                   }}
                                   className="font-sans font-semibold cursor-not-allowed"
                                 />
@@ -10984,9 +10989,7 @@ export default function PublicPortal({
                                   style={{
                                     color: "#000000",
                                     fontSize: "16px",
-                                    borderColor: "#dadada",
-                                    borderWidth: "1px",
-                                    borderStyle: "solid",
+                                    border: "none",
                                     borderRadius: "10px",
                                     padding: "8px 10px",
                                     backgroundColor: "#ffffff",
@@ -11045,7 +11048,7 @@ export default function PublicPortal({
                                     setNewDistribSituation("Disponible");
                                     setShowNewDistribTraceForm(false);
                                   }}
-                                  className="flex-1 bg-[#3556ec] text-white font-bold py-2 rounded-lg text-[15px]"
+                                  className="flex-1 bg-[#2e54ff] text-white font-bold py-2 rounded-lg text-[15px]"
                                 >
                                   Ajouter
                                 </button>
@@ -11060,7 +11063,7 @@ export default function PublicPortal({
                                 Pièces à ajouter ({pendingNewDistribTraceabilities.length}) :
                               </span>
                               {pendingNewDistribTraceabilities.map((t, i) => (
-                                <div key={t.id} className="flex items-center justify-between p-2.5 bg-white border rounded-lg text-xs font-sans" style={{ borderColor: "#cbd5e1" }}>
+                                <div key={t.id} className="flex items-center justify-between p-2.5 bg-white rounded-lg text-xs font-sans" style={{ border: "none", boxShadow: "none" }}>
                                   <div>
                                     <span className="font-bold text-black">{t.lotOrSerial}</span>
                                     {t.expirationDate && <span className="text-slate-500 ml-2">(Périm. {t.expirationDate})</span>}
@@ -11290,14 +11293,13 @@ export default function PublicPortal({
                             }
                           }}
                           style={{
-                            backgroundColor: isSavingDistribStock ? "rgb(120, 140, 240)" : "rgb(53, 86, 236)",
+                            backgroundColor: isSavingDistribStock ? "rgb(120, 140, 240)" : "rgb(46, 84, 255)",
                             color: "#ffffff",
                             fontSize: "18px",
                             borderRadius: "13px",
                             padding: "12px 16px",
                             border: "none",
-                            boxShadow:
-                              "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                            boxShadow: "none",
                             cursor: isSavingDistribStock ? "not-allowed" : "pointer",
                           }}
                           className="flex-1 font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
@@ -11509,8 +11511,15 @@ export default function PublicPortal({
                       </div>
 
                       {/* Section 2: Mouvements (Table layout with scroll horizontally) */}
-                      <div className="bg-white space-y-3">
-                        <div className="flex bg-white select-none">
+                      <div
+                        className="p-4 rounded-[14px] space-y-3"
+                        style={{
+                          backgroundColor: "#f5f7fa",
+                          border: "none",
+                          boxShadow: "none",
+                        }}
+                      >
+                        <div className="flex select-none">
                           <span
                             className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                             style={{
@@ -11527,10 +11536,10 @@ export default function PublicPortal({
                         </div>
 
                         <div
-                          className="overflow-x-auto border rounded-xl mt-2 bg-white"
+                          className="overflow-x-auto rounded-xl mt-2 bg-white"
                           style={{
-                            borderColor: "oklch(0.88 0 0)",
-                            borderWidth: "1px",
+                            border: "none",
+                            boxShadow: "none",
                           }}
                         >
                           <table className="w-full text-left font-sans border-collapse text-xs">
@@ -11826,8 +11835,15 @@ export default function PublicPortal({
 
                       {/* Section Inventaire de traçabilité */}
                       {matchedStockRecord?.traceabilityEnabled && (
-                        <div className="bg-white space-y-4 mt-4">
-                          <div className="flex bg-white select-none">
+                        <div
+                          className="p-4 rounded-[14px] space-y-4 mt-4"
+                          style={{
+                            backgroundColor: "#f5f7fa",
+                            border: "none",
+                            boxShadow: "none",
+                          }}
+                        >
+                          <div className="flex select-none">
                             <span
                               className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                               style={{
@@ -11913,6 +11929,7 @@ export default function PublicPortal({
                                 fontWeight: "bold",
                                 padding: "12px 16px",
                                 border: "none",
+                                boxShadow: "none",
                                 cursor: "pointer",
                               }}
                               className="flex-1 font-sans active:scale-[0.98] transition-all text-center"
@@ -11927,15 +11944,14 @@ export default function PublicPortal({
                                 setShowNewWebappTraceForm(!showNewWebappTraceForm);
                               }}
                               style={{
-                                backgroundColor: "rgb(53, 86, 236)",
+                                backgroundColor: "rgb(46, 84, 255)",
                                 color: "#ffffff",
                                 borderRadius: "13px",
                                 fontSize: "18px",
                                 fontWeight: "bold",
                                 padding: "12px 16px",
                                 border: "none",
-                                boxShadow:
-                                  "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                boxShadow: "none",
                                 cursor: "pointer",
                               }}
                               className="flex-1 font-sans active:scale-[0.98] transition-all hover:opacity-90 text-center"
@@ -11947,9 +11963,11 @@ export default function PublicPortal({
                           {/* Form Nouveau inventaire de traçabilité */}
                           {showNewWebappTraceForm && (
                             <div
-                              className="bg-white p-4 my-3 flex flex-col gap-4 font-sans text-xs border rounded-xl animate-fadeIn"
+                              className="p-4 my-3 flex flex-col gap-4 font-sans text-xs rounded-xl animate-fadeIn"
                               style={{
-                                borderColor: "#dadada",
+                                backgroundColor: "#f5f7fa",
+                                border: "none",
+                                boxShadow: "none",
                                 borderRadius: "16px",
                                 width: "100%",
                                 boxSizing: "border-box",
@@ -11968,9 +11986,7 @@ export default function PublicPortal({
                                     style={{
                                       color: "#000000",
                                       fontSize: "18px",
-                                      borderColor: "#dadada",
-                                      borderWidth: "1px",
-                                      borderStyle: "solid",
+                                      border: "none",
                                       borderRadius: "13px",
                                       padding: "10px 12px",
                                       backgroundColor: "#ffffff",
@@ -12010,9 +12026,7 @@ export default function PublicPortal({
                                     style={{
                                       color: "#000000",
                                       fontSize: "18px",
-                                      borderColor: "#dadada",
-                                      borderWidth: "1px",
-                                      borderStyle: "solid",
+                                      border: "none",
                                       borderRadius: "13px",
                                       padding: "10px 12px",
                                       backgroundColor: "#ffffff",
@@ -12038,9 +12052,7 @@ export default function PublicPortal({
                                     style={{
                                       color: "#000000",
                                       fontSize: "18px",
-                                      borderColor: "#dadada",
-                                      borderWidth: "1px",
-                                      borderStyle: "solid",
+                                      border: "none",
                                       borderRadius: "13px",
                                       padding: "10px 12px",
                                       backgroundColor: "#ffffff",
@@ -12071,12 +12083,10 @@ export default function PublicPortal({
                                     style={{
                                       color: "#000000",
                                       fontSize: "18px",
-                                      borderColor: "#dadada",
-                                      borderWidth: "1px",
-                                      borderStyle: "solid",
+                                      border: "none",
                                       borderRadius: "13px",
                                       padding: "10px 12px",
-                                      backgroundColor: "#f1f5f9",
+                                      backgroundColor: "#ffffff",
                                       width: "100%",
                                       boxSizing: "border-box",
                                       opacity: 1,
@@ -12107,9 +12117,7 @@ export default function PublicPortal({
                                     style={{
                                       color: "#000000",
                                       fontSize: "18px",
-                                      borderColor: "#dadada",
-                                      borderWidth: "1px",
-                                      borderStyle: "solid",
+                                      border: "none",
                                       borderRadius: "13px",
                                       padding: "10px 12px",
                                       backgroundColor: "#ffffff",
@@ -12281,12 +12289,14 @@ export default function PublicPortal({
                                     }
                                   }}
                                   style={{
-                                    backgroundColor: isSavingWebappTrace ? "rgb(120, 140, 240)" : "rgb(53, 86, 236)",
+                                    backgroundColor: "rgb(46, 84, 255)",
                                     color: "#ffffff",
                                     fontSize: "18px",
                                     borderRadius: "13px",
                                     padding: "12px 16px",
                                     border: "none",
+                                    boxShadow: "none",
+                                    opacity: isSavingWebappTrace ? 0.5 : 1,
                                     cursor: isSavingWebappTrace ? "not-allowed" : "pointer",
                                   }}
                                   className="flex-1 font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
@@ -12311,10 +12321,10 @@ export default function PublicPortal({
                           )}
 
                           <div
-                            className="overflow-x-auto border rounded-xl mt-2 bg-white"
+                            className="overflow-x-auto rounded-xl mt-2 bg-white"
                             style={{
-                              borderColor: "oklch(0.88 0 0)",
-                              borderWidth: "1px",
+                              border: "none",
+                              boxShadow: "none",
                             }}
                           >
                             <table className="w-full text-left font-sans border-collapse text-xs">
@@ -12478,17 +12488,18 @@ export default function PublicPortal({
                                                 );
                                               }
                                             }}
-                                            className={`w-full font-semibold font-sans ${!isInventoryMode ? "cursor-not-allowed text-slate-700" : "bg-white text-black"}`}
+                                            className={`w-full font-semibold font-sans text-center ${!isInventoryMode ? "cursor-not-allowed text-black" : "bg-white text-black"}`}
                                             style={{
                                               backgroundColor: "#ffffff",
                                               color: "#000000",
                                               fontSize: "18px",
                                               borderRadius: "13px",
-                                              border: "1px solid #cbd5e1",
+                                              border: "none",
                                               padding: "6px 12px",
                                               minHeight: "42px",
                                               opacity: 1,
                                               WebkitTextFillColor: "#000000",
+                                              textAlign: "center",
                                             }}
                                           />
                                         </td>
@@ -12501,17 +12512,18 @@ export default function PublicPortal({
                                             onChange={(e) => {
                                               handleUpdateTraceability(trace.id, { expirationDate: e.target.value });
                                             }}
-                                            className={`w-full font-sans ${!isInventoryMode ? "cursor-not-allowed text-slate-700" : "bg-white text-black"}`}
+                                            className={`w-full font-sans text-center ${!isInventoryMode ? "cursor-not-allowed text-black" : "bg-white text-black"}`}
                                             style={{
                                               backgroundColor: "#ffffff",
                                               color: "#000000",
                                               fontSize: "18px",
                                               borderRadius: "13px",
-                                              border: "1px solid #cbd5e1",
+                                              border: "none",
                                               padding: "6px 12px",
                                               minHeight: "42px",
                                               opacity: 1,
                                               WebkitTextFillColor: "#000000",
+                                              textAlign: "center",
                                             }}
                                           />
                                         </td>
@@ -12529,11 +12541,12 @@ export default function PublicPortal({
                                               color: "#000000",
                                               fontSize: "18px",
                                               borderRadius: "13px",
-                                              border: "1px solid #cbd5e1",
+                                              border: "none",
                                               padding: "6px 12px",
                                               minHeight: "42px",
                                               opacity: 1,
                                               WebkitTextFillColor: "#000000",
+                                              textAlign: "center",
                                             }}
                                           />
                                         </td>
@@ -12550,12 +12563,13 @@ export default function PublicPortal({
                                               color: "#000000",
                                               fontSize: "18px",
                                               borderRadius: "13px",
-                                              border: "1px solid #cbd5e1",
+                                              border: "none",
                                               padding: "6px 12px",
                                               minHeight: "42px",
                                               minWidth: "220px",
                                               opacity: 1,
                                               WebkitTextFillColor: "#000000",
+                                              textAlign: "center",
                                             }}
                                           />
                                         </td>
@@ -12569,18 +12583,19 @@ export default function PublicPortal({
                                               handleUpdateTraceability(trace.id, { comment: e.target.value });
                                             }}
                                             placeholder={isInventoryMode ? "Saisir un commentaire" : ""}
-                                            className={`w-full font-sans ${!isInventoryMode ? "cursor-not-allowed text-slate-700" : "bg-white text-black"}`}
+                                            className={`w-full font-sans text-center ${!isInventoryMode ? "cursor-not-allowed text-black" : "bg-white text-black"}`}
                                             style={{
                                               backgroundColor: "#ffffff",
                                               color: "#000000",
                                               fontSize: "18px",
                                               borderRadius: "13px",
-                                              border: "1px solid #cbd5e1",
+                                              border: "none",
                                               padding: "6px 12px",
                                               minHeight: "42px",
                                               minWidth: "220px",
                                               opacity: 1,
                                               WebkitTextFillColor: "#000000",
+                                              textAlign: "center",
                                             }}
                                           />
                                         </td>
@@ -12589,13 +12604,13 @@ export default function PublicPortal({
                                           <select
                                             value={trace.movementId}
                                             disabled
-                                            className="w-full font-sans cursor-not-allowed appearance-none"
+                                            className="w-full font-sans cursor-not-allowed appearance-none text-center"
                                             style={{
                                               backgroundColor: "#ffffff",
                                               color: "#000000",
                                               fontSize: "18px",
                                               borderRadius: "13px",
-                                              border: "1px solid #cbd5e1",
+                                              border: "none",
                                               padding: "6px 12px",
                                               minHeight: "42px",
                                               minWidth: "280px",
@@ -12605,6 +12620,8 @@ export default function PublicPortal({
                                               WebkitAppearance: "none",
                                               MozAppearance: "none",
                                               backgroundImage: "none",
+                                              textAlign: "center",
+                                              textAlignLast: "center",
                                             }}
                                           >
                                             <option value="" disabled hidden>
@@ -12698,7 +12715,14 @@ export default function PublicPortal({
 
                         {/* Rapatriement sub-form */}
                         {showRapatriementForm && (
-                          <div className="p-0 space-y-4 font-sans text-black bg-transparent border-none shadow-none">
+                          <div
+                            className="p-4 rounded-[14px] space-y-4 font-sans text-black"
+                            style={{
+                              backgroundColor: "#f5f7fa",
+                              border: "none",
+                              boxShadow: "none",
+                            }}
+                          >
                             <div className="grid grid-cols-1 gap-4 bg-transparent">
                               <div className="flex flex-col gap-1.5 bg-transparent">
                                 <label className="text-black font-semibold bg-transparent" style={{ fontSize: "16px" }}>
@@ -12708,12 +12732,18 @@ export default function PublicPortal({
                                   type="text"
                                   value="Rapatriement"
                                   disabled
-                                  className="w-full bg-slate-100 border border-slate-200 text-slate-500 font-bold bg-transparent"
+                                  className="w-full bg-white text-black font-bold text-center"
                                   style={{
+                                    backgroundColor: "#ffffff",
+                                    color: "#000000",
+                                    WebkitTextFillColor: "#000000",
+                                    opacity: 1,
+                                    border: "none",
                                     borderRadius: "13px",
                                     padding: "10px 14px",
                                     fontSize: "16px",
                                     height: "44px",
+                                    textAlign: "center",
                                   }}
                                 />
                               </div>
@@ -12729,13 +12759,21 @@ export default function PublicPortal({
                                       Number(e.target.value) || 0,
                                     )
                                   }
-                                  className="w-full bg-white text-black font-medium transition-all"
+                                  className="w-full bg-white text-black font-medium transition-all text-center"
                                   style={{
-                                    border: "1px solid #cbd5e1",
+                                    backgroundColor: "#ffffff",
+                                    color: "#000000",
+                                    border: "none",
                                     borderRadius: "13px",
                                     padding: "10px 14px",
                                     fontSize: "16px",
                                     height: "44px",
+                                    textAlign: "center",
+                                    textAlignLast: "center",
+                                    appearance: "none",
+                                    WebkitAppearance: "none",
+                                    MozAppearance: "none",
+                                    backgroundImage: "none",
                                   }}
                                 >
                                   {(() => {
@@ -12780,13 +12818,16 @@ export default function PublicPortal({
                                     setRapatrimentTrackingLink(e.target.value)
                                   }
                                   placeholder="Coller lien de suivi"
-                                  className="w-full bg-white text-black font-semibold"
+                                  className="w-full bg-white text-black font-semibold text-center"
                                   style={{
-                                    border: "1px solid #cbd5e1",
+                                    backgroundColor: "#ffffff",
+                                    color: "#000000",
+                                    border: "none",
                                     borderRadius: "13px",
                                     padding: "10px 14px",
                                     fontSize: "16px",
                                     height: "44px",
+                                    textAlign: "center",
                                   }}
                                 />
                               </div>
@@ -12801,13 +12842,16 @@ export default function PublicPortal({
                                   onChange={(e) =>
                                     setRapatrimentDate(e.target.value)
                                   }
-                                  className="w-full bg-white text-black font-semibold"
+                                  className="w-full bg-white text-black font-semibold text-center"
                                   style={{
-                                    border: "1px solid #cbd5e1",
+                                    backgroundColor: "#ffffff",
+                                    color: "#000000",
+                                    border: "none",
                                     borderRadius: "13px",
                                     padding: "10px 14px",
                                     fontSize: "16px",
                                     height: "44px",
+                                    textAlign: "center",
                                   }}
                                 />
                               </div>
@@ -12821,13 +12865,17 @@ export default function PublicPortal({
                                   onChange={(e) =>
                                     setRapatrimentStatut(e.target.value as any)
                                   }
-                                  className="w-full bg-white text-black font-medium cursor-pointer"
+                                  className="w-full bg-white text-black font-medium cursor-pointer text-center"
                                   style={{
-                                    border: "1px solid #cbd5e1",
+                                    backgroundColor: "#ffffff",
+                                    color: "#000000",
+                                    border: "none",
                                     borderRadius: "13px",
                                     padding: "10px 14px",
                                     fontSize: "16px",
                                     height: "44px",
+                                    textAlign: "center",
+                                    textAlignLast: "center",
                                     appearance: "none",
                                     WebkitAppearance: "none",
                                     MozAppearance: "none",
@@ -12891,6 +12939,15 @@ export default function PublicPortal({
                       box-sizing: border-box !important;
                       max-width: 100% !important;
                     }
+                    #tab-temps-screen select {
+                      -webkit-appearance: none !important;
+                      -moz-appearance: none !important;
+                      appearance: none !important;
+                      background-image: none !important;
+                    }
+                    #tab-temps-screen select::-ms-expand {
+                      display: none !important;
+                    }
                     #tab-temps-screen input[type="date"],
                     #tab-temps-screen input[type="time"],
                     #tab-temps-screen input[type="text"] {
@@ -12913,7 +12970,7 @@ export default function PublicPortal({
                     }
                     #tab-temps-screen input[type="date"]::-webkit-date-and-time-value,
                     #tab-temps-screen input[type="time"]::-webkit-date-and-time-value {
-                      text-align: left !important;
+                      text-align: center !important;
                       margin: 0 !important;
                       padding: 0 !important;
                       min-height: 1.2em !important;
@@ -12944,16 +13001,14 @@ export default function PublicPortal({
                             handleTogglePointage();
                           }}
                           style={{
-                            backgroundColor: isTracking ? "#dc2626" : "rgb(39, 78, 255)",
+                            backgroundColor: isTracking ? "rgb(210, 45, 12)" : "rgb(46, 84, 255)",
                             color: "#fff",
                             fontSize: "18px",
                             fontWeight: "bold",
                             borderRadius: "13px",
                             padding: "14px 20px",
                             border: "none",
-                            boxShadow: isTracking
-                              ? "none"
-                              : "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                            boxShadow: "none",
                             cursor: "pointer",
                             width: "100%",
                           }}
@@ -12964,6 +13019,31 @@ export default function PublicPortal({
                           ) : (
                             <span>{t("Démarrer le pointage")}</span>
                           )}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={isRefreshingWebappData}
+                          onClick={handleRefreshWebappData}
+                          style={{
+                            backgroundColor: "#0f172a",
+                            color: "#ffffff",
+                            fontSize: "18px",
+                            fontWeight: "bold",
+                            borderRadius: "12px",
+                            padding: "14px 20px",
+                            border: "none",
+                            boxShadow: "none",
+                            cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
+                            width: "100%",
+                          }}
+                          className={`w-full transition-opacity flex items-center justify-center gap-2 font-bold ${
+                            isRefreshingWebappData
+                              ? "cursor-not-allowed opacity-50"
+                              : "hover:opacity-90 cursor-pointer"
+                          }`}
+                        >
+                          {t("Actualiser les données")}
                         </button>
                       </div>
                     );
@@ -13109,13 +13189,13 @@ export default function PublicPortal({
                       return (
                         <div
                           style={{
-                            backgroundColor: "#ffffff",
-                            border: "1px solid #dadada",
-                            borderBottom: "0px solid transparent",
+                            backgroundColor: "#f5f7fa",
+                            border: "none",
+                            boxShadow: "none",
                             borderRadius: "16px 16px 0px 0px",
                             padding: "20px",
                           }}
-                          className="space-y-4 shadow-xs"
+                          className="space-y-4"
                           id="tech-volume-horaire-semaine"
                         >
                           <div
@@ -13142,17 +13222,24 @@ export default function PublicPortal({
                               value={activeWeekKey}
                               onChange={(e) => setSelectedVolumeWeek(e.target.value)}
                               style={{
-                                border: "1px solid #c9bfcd",
+                                border: "none",
+                                boxShadow: "none",
                                 borderRadius: "13px",
-                                padding: "12px 16px",
-                                fontSize: "16px",
+                                padding: "15px 20px",
+                                fontSize: "18px",
                                 width: "100%",
                                 backgroundColor: "#ffffff",
                                 color: "#000000",
                                 fontFamily: "var(--font-sans), sans-serif",
                                 cursor: "pointer",
+                                textAlign: "center",
+                                textAlignLast: "center",
+                                appearance: "none",
+                                WebkitAppearance: "none",
+                                MozAppearance: "none",
+                                backgroundImage: "none",
                               }}
-                              className="focus:outline-none"
+                              className="focus:outline-none appearance-none text-center"
                             >
                               {availableWeeks.length === 0 ? (
                                 <option value="">{t("Aucun pointage disponible.")}</option>
@@ -13288,17 +13375,24 @@ export default function PublicPortal({
                                     value={selectedCttMonthYear}
                                     onChange={(e) => setSelectedCttMonthYear(e.target.value)}
                                     style={{
-                                      border: "1px solid #c9bfcd",
+                                      border: "none",
+                                      boxShadow: "none",
                                       borderRadius: "13px",
-                                      padding: "12px 16px",
-                                      fontSize: "16px",
+                                      padding: "15px 20px",
+                                      fontSize: "18px",
                                       width: "100%",
                                       backgroundColor: "#ffffff",
                                       color: "#000000",
                                       fontFamily: "var(--font-sans), sans-serif",
                                       cursor: "pointer",
+                                      textAlign: "center",
+                                      textAlignLast: "center",
+                                      appearance: "none",
+                                      WebkitAppearance: "none",
+                                      MozAppearance: "none",
+                                      backgroundImage: "none",
                                     }}
-                                    className="focus:outline-none"
+                                    className="focus:outline-none appearance-none text-center"
                                   >
                                     <option value="">{t("Sélection Mois & Année")}</option>
                                     {availableCttMonths.map((m) => (
@@ -13481,9 +13575,11 @@ export default function PublicPortal({
                         return (
                           <div
                             key={p.id}
-                            className="p-4 sm:p-5 rounded-[16px] space-y-4 bg-white shadow-xs overflow-hidden max-w-full box-border"
+                            className="p-4 sm:p-5 rounded-[16px] space-y-4 overflow-hidden max-w-full box-border"
                             style={{
-                              border: "1px solid rgb(201, 190, 205)",
+                              backgroundColor: "#f5f7fa",
+                              border: "none",
+                              boxShadow: "none",
                               boxSizing: "border-box",
                             }}
                             id={`pointage-card-${p.id}`}
@@ -13526,10 +13622,14 @@ export default function PublicPortal({
                                     fontSize: "18px",
                                     padding: "14px",
                                     borderRadius: "13px",
-                                    border: "1px solid rgb(201, 191, 205)",
+                                    border: "none",
+                                    boxShadow: "none",
                                     outline: "none",
-                                    color: "rgb(0, 0, 0)",
-                                    backgroundColor: "#e2d9e6",
+                                    color: "#000000",
+                                    WebkitTextFillColor: "#000000",
+                                    opacity: 1,
+                                    backgroundColor: "#ffffff",
+                                    textAlign: "center",
                                     boxSizing: "border-box",
                                     width: "100%",
                                     maxWidth: "100%",
@@ -13537,7 +13637,7 @@ export default function PublicPortal({
                                     WebkitAppearance: "none",
                                     appearance: "none",
                                   }}
-                                  className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
+                                  className="w-full min-w-0 max-w-full box-border block cursor-not-allowed text-center"
                                 />
                               </div>
 
@@ -13560,10 +13660,14 @@ export default function PublicPortal({
                                         fontSize: "18px",
                                         padding: "14px",
                                         borderRadius: "13px",
-                                        border: "1px solid rgb(201, 191, 205)",
+                                        border: "none",
+                                        boxShadow: "none",
                                         outline: "none",
-                                        color: "rgb(0, 0, 0)",
-                                        backgroundColor: "#e2d9e6",
+                                        color: "#000000",
+                                        WebkitTextFillColor: "#000000",
+                                        opacity: 1,
+                                        backgroundColor: "#ffffff",
+                                        textAlign: "center",
                                         boxSizing: "border-box",
                                         width: "100%",
                                         maxWidth: "100%",
@@ -13571,7 +13675,7 @@ export default function PublicPortal({
                                         WebkitAppearance: "none",
                                         appearance: "none",
                                       }}
-                                      className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
+                                      className="w-full min-w-0 max-w-full box-border block cursor-not-allowed text-center"
                                     />
                                   </div>
 
@@ -13592,10 +13696,14 @@ export default function PublicPortal({
                                         fontSize: "18px",
                                         padding: "14px",
                                         borderRadius: "13px",
-                                        border: "1px solid rgb(201, 191, 205)",
+                                        border: "none",
+                                        boxShadow: "none",
                                         outline: "none",
-                                        color: "rgb(0, 0, 0)",
-                                        backgroundColor: "#e2d9e6",
+                                        color: "#000000",
+                                        WebkitTextFillColor: "#000000",
+                                        opacity: 1,
+                                        backgroundColor: "#ffffff",
+                                        textAlign: "center",
                                         boxSizing: "border-box",
                                         width: "100%",
                                         maxWidth: "100%",
@@ -13603,7 +13711,7 @@ export default function PublicPortal({
                                         WebkitAppearance: "none",
                                         appearance: "none",
                                       }}
-                                      className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
+                                      className="w-full min-w-0 max-w-full box-border block cursor-not-allowed text-center"
                                     />
                                   </div>
 
@@ -13624,10 +13732,14 @@ export default function PublicPortal({
                                         fontSize: "18px",
                                         padding: "14px",
                                         borderRadius: "13px",
-                                        border: "1px solid rgb(201, 191, 205)",
+                                        border: "none",
+                                        boxShadow: "none",
                                         outline: "none",
-                                        color: "rgb(0, 0, 0)",
-                                        backgroundColor: "#e2d9e6",
+                                        color: "#000000",
+                                        WebkitTextFillColor: "#000000",
+                                        opacity: 1,
+                                        backgroundColor: "#ffffff",
+                                        textAlign: "center",
                                         boxSizing: "border-box",
                                         width: "100%",
                                         maxWidth: "100%",
@@ -13635,7 +13747,7 @@ export default function PublicPortal({
                                         WebkitAppearance: "none",
                                         appearance: "none",
                                       }}
-                                      className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
+                                      className="w-full min-w-0 max-w-full box-border block cursor-not-allowed text-center"
                                     />
                                   </div>
 
@@ -13656,10 +13768,12 @@ export default function PublicPortal({
                                         fontSize: "18px",
                                         padding: "14px",
                                         borderRadius: "13px",
-                                        border: "1px solid rgb(201, 191, 205)",
+                                        border: "none",
+                                        boxShadow: "none",
                                         outline: "none",
-                                        color: "rgb(0, 0, 0)",
+                                        color: "#000000",
                                         backgroundColor: "#ffffff",
+                                        textAlign: "center",
                                         boxSizing: "border-box",
                                         width: "100%",
                                         maxWidth: "100%",
@@ -13667,7 +13781,7 @@ export default function PublicPortal({
                                         WebkitAppearance: "none",
                                         appearance: "none",
                                       }}
-                                      className="w-full min-w-0 max-w-full box-border block"
+                                      className="w-full min-w-0 max-w-full box-border block text-center"
                                       onChange={(e) =>
                                         handleEditPointageField(p.id, {
                                           comment: e.target.value,
@@ -13686,9 +13800,8 @@ export default function PublicPortal({
                                 onClick={() => togglePointageExpanded(p.id)}
                                 style={{
                                   color: "#fff",
-                                  boxShadow:
-                                    "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                                  backgroundColor: "rgb(39, 78, 255)",
+                                  boxShadow: "none",
+                                  backgroundColor: "rgb(46, 84, 255)",
                                   borderRadius: "13px",
                                   padding: "10px 18px",
                                   fontSize: "18px",
@@ -13716,10 +13829,10 @@ export default function PublicPortal({
                                     style={{
                                       fontSize: "22px",
                                       color: "#000000",
-                                      fontFamily: "'Gochi', cursive, sans-serif",
+                                      fontFamily: "var(--font-sans), sans-serif",
                                       cursor: "default",
                                     }}
-                                    className="font-bold font-gochi"
+                                    className="font-bold font-sans"
                                   >
                                     {t("Trajet")}
                                   </h4>
@@ -13742,10 +13855,14 @@ export default function PublicPortal({
                                           fontSize: "18px",
                                           padding: "14px",
                                           borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
+                                          border: "none",
+                                          boxShadow: "none",
                                           outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#e2d9e6",
+                                          color: "#000000",
+                                          WebkitTextFillColor: "#000000",
+                                          opacity: 1,
+                                          backgroundColor: "#ffffff",
+                                          textAlign: "center",
                                           boxSizing: "border-box",
                                           width: "100%",
                                           maxWidth: "100%",
@@ -13753,7 +13870,7 @@ export default function PublicPortal({
                                           WebkitAppearance: "none",
                                           appearance: "none",
                                         }}
-                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed text-center"
                                       />
                                     </div>
 
@@ -13775,10 +13892,14 @@ export default function PublicPortal({
                                           fontSize: "18px",
                                           padding: "14px",
                                           borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
+                                          border: "none",
+                                          boxShadow: "none",
                                           outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#e2d9e6",
+                                          color: "#000000",
+                                          WebkitTextFillColor: "#000000",
+                                          opacity: 1,
+                                          backgroundColor: "#ffffff",
+                                          textAlign: "center",
                                           boxSizing: "border-box",
                                           width: "100%",
                                           maxWidth: "100%",
@@ -13786,7 +13907,7 @@ export default function PublicPortal({
                                           WebkitAppearance: "none",
                                           appearance: "none",
                                         }}
-                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed text-center"
                                       />
                                     </div>
 
@@ -13807,10 +13928,14 @@ export default function PublicPortal({
                                           fontSize: "18px",
                                           padding: "14px",
                                           borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
+                                          border: "none",
+                                          boxShadow: "none",
                                           outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#e2d9e6",
+                                          color: "#000000",
+                                          WebkitTextFillColor: "#000000",
+                                          opacity: 1,
+                                          backgroundColor: "#ffffff",
+                                          textAlign: "center",
                                           boxSizing: "border-box",
                                           width: "100%",
                                           maxWidth: "100%",
@@ -13818,7 +13943,7 @@ export default function PublicPortal({
                                           WebkitAppearance: "none",
                                           appearance: "none",
                                         }}
-                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed text-center"
                                       />
                                     </div>
                                   </div>
@@ -13830,10 +13955,10 @@ export default function PublicPortal({
                                     style={{
                                       fontSize: "22px",
                                       color: "#000000",
-                                      fontFamily: "'Gochi', cursive, sans-serif",
+                                      fontFamily: "var(--font-sans), sans-serif",
                                       cursor: "default",
                                     }}
-                                    className="font-bold font-gochi"
+                                    className="font-bold font-sans"
                                   >
                                     {t("Repas")}
                                   </h4>
@@ -13856,10 +13981,14 @@ export default function PublicPortal({
                                           fontSize: "18px",
                                           padding: "14px",
                                           borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
+                                          border: "none",
+                                          boxShadow: "none",
                                           outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#e2d9e6",
+                                          color: "#000000",
+                                          WebkitTextFillColor: "#000000",
+                                          opacity: 1,
+                                          backgroundColor: "#ffffff",
+                                          textAlign: "center",
                                           boxSizing: "border-box",
                                           width: "100%",
                                           maxWidth: "100%",
@@ -13867,7 +13996,7 @@ export default function PublicPortal({
                                           WebkitAppearance: "none",
                                           appearance: "none",
                                         }}
-                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed text-center"
                                       />
                                     </div>
                                   </div>
@@ -13879,10 +14008,10 @@ export default function PublicPortal({
                                     style={{
                                       fontSize: "22px",
                                       color: "#000000",
-                                      fontFamily: "'Gochi', cursive, sans-serif",
+                                      fontFamily: "var(--font-sans), sans-serif",
                                       cursor: "default",
                                     }}
-                                    className="font-bold font-gochi"
+                                    className="font-bold font-sans"
                                   >
                                     {t("CTT")}
                                   </h4>
@@ -13904,10 +14033,14 @@ export default function PublicPortal({
                                           fontSize: "18px",
                                           padding: "14px",
                                           borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
+                                          border: "none",
+                                          boxShadow: "none",
                                           outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#e2d9e6",
+                                          color: "#000000",
+                                          WebkitTextFillColor: "#000000",
+                                          opacity: 1,
+                                          backgroundColor: "#ffffff",
+                                          textAlign: "center",
                                           boxSizing: "border-box",
                                           width: "100%",
                                           maxWidth: "100%",
@@ -13915,7 +14048,7 @@ export default function PublicPortal({
                                           WebkitAppearance: "none",
                                           appearance: "none",
                                         }}
-                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed text-center"
                                       />
                                     </div>
 
@@ -13937,10 +14070,14 @@ export default function PublicPortal({
                                           fontSize: "18px",
                                           padding: "14px",
                                           borderRadius: "13px",
-                                          border: "1px solid rgb(201, 191, 205)",
+                                          border: "none",
+                                          boxShadow: "none",
                                           outline: "none",
-                                          color: "rgb(0, 0, 0)",
-                                          backgroundColor: "#e2d9e6",
+                                          color: "#000000",
+                                          WebkitTextFillColor: "#000000",
+                                          opacity: 1,
+                                          backgroundColor: "#ffffff",
+                                          textAlign: "center",
                                           boxSizing: "border-box",
                                           width: "100%",
                                           maxWidth: "100%",
@@ -13948,7 +14085,7 @@ export default function PublicPortal({
                                           WebkitAppearance: "none",
                                           appearance: "none",
                                         }}
-                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed"
+                                        className="w-full min-w-0 max-w-full box-border block cursor-not-allowed text-center"
                                       />
                                     </div>
                                   </div>
@@ -13960,9 +14097,8 @@ export default function PublicPortal({
                                   onClick={() => togglePointageExpanded(p.id)}
                                   style={{
                                     color: "#fff",
-                                    boxShadow:
-                                      "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                                    backgroundColor: "rgb(39, 78, 255)",
+                                    boxShadow: "none",
+                                    backgroundColor: "rgb(46, 84, 255)",
                                     borderRadius: "13px",
                                     padding: "10px 18px",
                                     fontSize: "18px",
@@ -14275,15 +14411,14 @@ export default function PublicPortal({
                       type="submit"
                       onClick={() => playTechSound2()}
                       style={{
-                        backgroundColor: "rgb(53, 86, 236)",
+                        backgroundColor: "rgb(46, 84, 255)",
                         color: "#fff",
                         fontSize: "18px",
                         fontWeight: "bold",
                         borderRadius: "12px",
                         padding: "14px 20px",
                         border: "none",
-                        boxShadow:
-                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                        boxShadow: "none",
                         cursor: "pointer",
                         width: "100%",
                       }}
@@ -14551,15 +14686,14 @@ export default function PublicPortal({
                       type="submit"
                       onClick={() => playTechSound2()}
                       style={{
-                        backgroundColor: "rgb(53, 86, 236)",
+                        backgroundColor: "rgb(46, 84, 255)",
                         color: "#fff",
                         fontSize: "18px",
                         fontWeight: "bold",
                         borderRadius: "12px",
                         padding: "14px 20px",
                         border: "none",
-                        boxShadow:
-                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                        boxShadow: "none",
                         cursor: "pointer",
                         width: "100%",
                       }}
@@ -14765,15 +14899,14 @@ export default function PublicPortal({
                           setActiveSettingsSection(null);
                         }}
                         style={{
-                          backgroundColor: "rgb(53, 86, 236)",
+                          backgroundColor: "rgb(46, 84, 255)",
                           color: "#fff",
                           fontSize: "18px",
                           fontWeight: "bold",
                           borderRadius: "12px",
                           padding: "14px 20px",
                           border: "none",
-                          boxShadow:
-                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          boxShadow: "none",
                           cursor: "pointer",
                           width: "100%",
                         }}
@@ -14855,15 +14988,14 @@ export default function PublicPortal({
                           setActiveSettingsSection(null);
                         }}
                         style={{
-                          backgroundColor: "rgb(53, 86, 236)",
+                          backgroundColor: "rgb(46, 84, 255)",
                           color: "#fff",
                           fontSize: "18px",
                           fontWeight: "bold",
                           borderRadius: "12px",
                           padding: "14px 20px",
                           border: "none",
-                          boxShadow:
-                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          boxShadow: "none",
                           cursor: "pointer",
                           width: "100%",
                         }}
@@ -15187,15 +15319,14 @@ export default function PublicPortal({
                       <button
                         type="submit"
                         style={{
-                          backgroundColor: "rgb(53, 86, 236)",
+                          backgroundColor: "rgb(46, 84, 255)",
                           color: "#fff",
                           fontSize: "18px",
                           fontWeight: "bold",
                           borderRadius: "12px",
                           padding: "14px 20px",
                           border: "none",
-                          boxShadow:
-                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          boxShadow: "none",
                           cursor: "pointer",
                           width: "100%",
                         }}
@@ -15267,15 +15398,14 @@ export default function PublicPortal({
                         type="button"
                         onClick={handleSaveSignature}
                         style={{
-                          backgroundColor: "rgb(53, 86, 236)",
+                          backgroundColor: "rgb(46, 84, 255)",
                           color: "#fff",
                           fontSize: "18px",
                           fontWeight: "bold",
                           borderRadius: "12px",
                           padding: "14px 20px",
                           border: "none",
-                          boxShadow:
-                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                          boxShadow: "none",
                           cursor: "pointer",
                           width: "100%",
                         }}
@@ -15323,29 +15453,6 @@ export default function PublicPortal({
                           />
                         </div>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveSettingsSection(null);
-                        }}
-                        style={{
-                          backgroundColor: "rgb(53, 86, 236)",
-                          color: "#fff",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderRadius: "12px",
-                          padding: "14px 20px",
-                          border: "none",
-                          boxShadow:
-                            "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
-                          cursor: "pointer",
-                          width: "100%",
-                        }}
-                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
-                      >
-                        <span>Appliquer</span>
-                      </button>
                     </div>
                   )}
 
@@ -15671,14 +15778,14 @@ export default function PublicPortal({
                           onClick={handleGoogleCalendarSync}
                           disabled={isSyncingGoogleCal}
                           style={{
-                            backgroundColor: "#0f172a",
+                            backgroundColor: "rgb(46, 84, 255)",
                             color: "#ffffff",
                             fontSize: "18px",
                             fontWeight: "bold",
                             borderRadius: "12px",
                             padding: "14px 20px",
                             border: "none",
-                            boxShadow: 'none',
+                            boxShadow: "none",
                             cursor: "pointer",
                             width: "100%",
                           }}
@@ -15707,13 +15814,14 @@ export default function PublicPortal({
                             onClick={handleGoogleCalendarSync}
                             disabled={isSyncingGoogleCal}
                             style={{
-                              backgroundColor: "#0f172a",
+                              backgroundColor: "rgb(46, 84, 255)",
                               color: "#ffffff",
                               fontSize: "18px",
                               fontWeight: "bold",
                               borderRadius: "12px",
                               padding: "14px 20px",
                               border: "none",
+                              boxShadow: "none",
                               cursor: "pointer",
                               width: "100%",
                             }}

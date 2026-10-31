@@ -720,9 +720,9 @@ export default function GmaoOtherEquipmentCorrectionForm({
   };
 
   return (
-    <div className={isWebapp ? `w-full ${isReduced ? 'space-y-0 pb-0' : 'space-y-6 pb-12'} font-sans animate-fadeIn max-w-full text-black px-2 sm:px-4 bg-white relative` : "w-full space-y-6 font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black pb-12 px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl"} id="gmao-other-eq-correction-layout">
+    <div className={isWebapp ? `w-full ${isReduced ? 'space-y-0 pb-0 px-0' : 'space-y-6 pb-12 px-2 sm:px-4'} font-sans animate-fadeIn max-w-full text-black bg-white relative` : "w-full space-y-6 font-sans animate-fadeIn max-w-full md:max-w-3xl lg:max-w-5xl mx-auto text-black pb-12 px-0 md:px-4 bg-white md:border md:border-slate-200 md:shadow-lg md:rounded-3xl"} id="gmao-other-eq-correction-layout" style={isReduced ? { borderTop: 'none' } : undefined}>
       {isWebapp && (
-        <div className="w-full flex flex-row items-stretch !m-0 !p-0 shrink-0 relative" style={{ position: 'relative' }}>
+        <div className="w-full flex flex-row items-stretch !m-0 !p-0 shrink-0 relative border-t-0" style={{ position: 'relative', borderTop: 'none' }}>
           <button
             type="button"
             onClick={onCancel}
@@ -823,9 +823,10 @@ export default function GmaoOtherEquipmentCorrectionForm({
             onClick={() => playTechSound3()}
             style={{
               ...rowActionButton18Style,
-              backgroundColor: '#2e54ff',
+              backgroundColor: 'rgb(46, 84, 255)',
               color: '#ffffff',
-              border: '1px solid #2e54ff',
+              border: 'none',
+              boxShadow: 'none',
               opacity: saving ? 0.5 : 1,
             }}
             className="transition-all cursor-pointer font-semibold"
@@ -1481,8 +1482,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
                           <button
                             type="button"
                             onClick={() => setPhotoGlobaleUrl('')}
-                            style={{ ...rowActionButton18Style, backgroundColor: '#ef4444', color: '#ffffff' }}
-                            className="transition-colors cursor-pointer font-sans hover:bg-red-600"
+                            style={{ ...rowActionButton18Style, backgroundColor: '#d22d0b', color: '#ffffff' }}
+                            className="transition-colors cursor-pointer font-sans hover:opacity-90"
                           >
                             Supprimer
                           </button>
@@ -1521,8 +1522,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
                           <button
                             type="button"
                             onClick={() => setPhotoArriereUrl('')}
-                            style={{ ...rowActionButton18Style, backgroundColor: '#ef4444', color: '#ffffff' }}
-                            className="transition-colors cursor-pointer font-sans hover:bg-red-600"
+                            style={{ ...rowActionButton18Style, backgroundColor: '#d22d0b', color: '#ffffff' }}
+                            className="transition-colors cursor-pointer font-sans hover:opacity-90"
                           >
                             Supprimer
                           </button>
@@ -1561,8 +1562,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
                           <button
                             type="button"
                             onClick={() => setPhotoLedsUrl('')}
-                            style={{ ...rowActionButton18Style, backgroundColor: '#ef4444', color: '#ffffff' }}
-                            className="transition-colors cursor-pointer font-sans hover:bg-red-600"
+                            style={{ ...rowActionButton18Style, backgroundColor: '#d22d0b', color: '#ffffff' }}
+                            className="transition-colors cursor-pointer font-sans hover:opacity-90"
                           >
                             Supprimer
                           </button>
@@ -1874,9 +1875,9 @@ export default function GmaoOtherEquipmentCorrectionForm({
                       onClick={() => setPhotoUrl('')}
                       style={{
                         ...rowActionButton18Style,
-                        backgroundColor: '#ef4444',
+                        backgroundColor: '#d22d0b',
                       }}
-                      className="transition-colors cursor-pointer font-sans hover:bg-red-600"
+                      className="transition-colors cursor-pointer font-sans hover:opacity-90"
                     >
                       Supprimer
                     </button>

@@ -442,9 +442,8 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               id="btn-send-canal-message"
               className="inline-flex items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center text-[15px] sm:text-[18px]"
               style={{
-                backgroundColor: '#2e54ff',
-                boxShadow:
-                  'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #2e54ff, inset 0 6px 12px #ffffff1f',
+                backgroundColor: 'rgb(46, 84, 255)',
+                boxShadow: 'none',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 opacity: (!messageInput.trim() || !hasMessagesSpreadsheet) ? 0.45 : 1,
                 cursor: (!messageInput.trim() || !hasMessagesSpreadsheet) ? 'not-allowed' : 'pointer',

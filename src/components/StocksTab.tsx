@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { t } from '../utils/translate';
 import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, StockTraceability, Member, LogisticsNotification, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
@@ -221,6 +221,7 @@ export default function StocksTab({
   // Traçabilité States
   const [traceabilityEnabled, setTraceabilityEnabled] = useState<boolean>(false);
   const [traceabilities, setTraceabilities] = useState<StockTraceability[]>([]);
+  const [savedTraceLots, setSavedTraceLots] = useState<Record<string, string>>({});
   const [selectedSituationFilter, setSelectedSituationFilter] = useState<string>('Toutes situations');
 
   const isDefibrillator = useMemo(() => {
@@ -1449,6 +1450,7 @@ export default function StocksTab({
     setMouvements([]);
     setTraceabilityEnabled(false);
     setTraceabilities([]);
+    setSavedTraceLots({});
     setSelectedMovementId('');
     setLotOrSerial('');
     setExpirationDate('');
@@ -1496,6 +1498,7 @@ export default function StocksTab({
       setMouvements([]);
       setTraceabilityEnabled(false);
       setTraceabilities([]);
+      setSavedTraceLots({});
       setSelectedMovementId('');
       setLotOrSerial('');
       setExpirationDate('');
@@ -2099,6 +2102,14 @@ export default function StocksTab({
                             setNewUgs(st.ugs || '');
                             setTraceabilityEnabled(st.traceabilityEnabled ?? false);
                             setTraceabilities(st.traceabilities ?? []);
+                            const initialLots: Record<string, string> = {};
+                            (st.traceabilities ?? []).forEach((tr, i) => {
+                              const k = tr.id || `idx_${i}`;
+                              if (tr.lotOrSerial && tr.lotOrSerial.trim()) {
+                                initialLots[k] = tr.lotOrSerial.trim();
+                              }
+                            });
+                            setSavedTraceLots(initialLots);
                             setShowStockForm(true);
 
                             // Reset selection and distribution states
@@ -2197,6 +2208,14 @@ export default function StocksTab({
                                   setNewUgs(st.ugs || '');
                                   setTraceabilityEnabled(st.traceabilityEnabled ?? false);
                                   setTraceabilities(st.traceabilities ?? []);
+                                  const initialLots: Record<string, string> = {};
+                                  (st.traceabilities ?? []).forEach((tr, i) => {
+                                    const k = tr.id || `idx_${i}`;
+                                    if (tr.lotOrSerial && tr.lotOrSerial.trim()) {
+                                      initialLots[k] = tr.lotOrSerial.trim();
+                                    }
+                                  });
+                                  setSavedTraceLots(initialLots);
                                   setShowStockForm(true);
 
                                   // Reset selection and distribution states
@@ -3173,56 +3192,71 @@ export default function StocksTab({
 
                       {traceabilities.length > 0 && (
                         <div className="flex flex-col gap-3">
-                          {traceabilities.map((trace, idx) => (
-                            <div
-                              key={trace.id || idx}
-                              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3 p-4 rounded-xl bg-white border"
-                              style={{ borderColor: '#dce1ea' }}
-                            >
-                              {/* 1. Emplacement. */}
-                              <div className="flex flex-col gap-1 min-w-0">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
-                                  Emplacement.
-                                </label>
-                                <select
-                                  value={trace.emplacement || 'Centrale des stocks'}
-                                  onChange={(e) => {
-                                    const updated = [...traceabilities];
-                                    updated[idx] = { ...updated[idx], emplacement: e.target.value };
-                                    setTraceabilities(updated);
-                                  }}
-                                  className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
-                                >
-                                  {ALL_LOCATIONS.map((loc) => {
-                                    if (loc === 'Centrale des stocks') {
+                          {traceabilities.map((trace, idx) => {
+                            const currentLot = (trace.lotOrSerial || '').trim();
+                            const savedKey = trace.id || `idx_${idx}`;
+                            const savedFromState = savedTraceLots[savedKey];
+                            const savedStockRecord = editingStockId
+                              ? stocks.find((s) => s.id === editingStockId)
+                              : undefined;
+                            const savedFromProp = savedStockRecord?.traceabilities
+                              ?.find((t, i) => (t.id && t.id === trace.id) || (!t.id && i === idx))
+                              ?.lotOrSerial?.trim();
+                            const effectiveSavedLot =
+                              savedFromState !== undefined ? savedFromState : savedFromProp;
+                            const isLotSaved = Boolean(
+                              currentLot && effectiveSavedLot && currentLot === effectiveSavedLot
+                            );
+
+                            return (
+                              <div
+                                key={trace.id || idx}
+                                className="grid grid-cols-3 gap-5 p-4 rounded-xl bg-white"
+                                style={{ border: 'none' }}
+                              >
+                                {/* 1. Emplacement. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                    Emplacement.
+                                  </label>
+                                  <select
+                                    value={trace.emplacement || 'Centrale des stocks'}
+                                    onChange={(e) => {
+                                      const updated = [...traceabilities];
+                                      updated[idx] = { ...updated[idx], emplacement: e.target.value };
+                                      setTraceabilities(updated);
+                                    }}
+                                    className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                  >
+                                    {ALL_LOCATIONS.map((loc) => {
+                                      if (loc === 'Centrale des stocks') {
+                                        return (
+                                          <option key={loc} value={loc}>
+                                            Centrale des stocks
+                                          </option>
+                                        );
+                                      }
+                                      const assignedTech = members.find(
+                                        (m) => m.role === 'Technicien' && m.locationLink === loc
+                                      );
+                                      const customName = getLocationCustomName(loc);
+                                      const label = assignedTech
+                                        ? `${assignedTech.name} — ${customName}`
+                                        : customName;
                                       return (
                                         <option key={loc} value={loc}>
-                                          Centrale des stocks
+                                          {label}
                                         </option>
                                       );
-                                    }
-                                    const assignedTech = members.find(
-                                      (m) => m.role === 'Technicien' && m.locationLink === loc
-                                    );
-                                    const customName = getLocationCustomName(loc);
-                                    const label = assignedTech
-                                      ? `${assignedTech.name} — ${customName}`
-                                      : customName;
-                                    return (
-                                      <option key={loc} value={loc}>
-                                        {label}
-                                      </option>
-                                    );
-                                  })}
-                                </select>
-                              </div>
+                                    })}
+                                  </select>
+                                </div>
 
-                              {/* 2. Numéro de lot ou série. (+ Code-barres & bouton Imprimer à côté) */}
-                              <div className="flex flex-col gap-1 min-w-0">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
-                                  Numéro de lot ou série.
-                                </label>
-                                <div className="flex items-center gap-2 flex-wrap">
+                                {/* 2. Numéro de lot ou série. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                    Numéro de lot ou série.
+                                  </label>
                                   <input
                                     type="text"
                                     value={trace.lotOrSerial || ''}
@@ -3232,130 +3266,107 @@ export default function StocksTab({
                                       setTraceabilities(updated);
                                     }}
                                     placeholder="Lot / Série"
-                                    className="flex-1 min-w-[120px] bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                    className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
                                   />
-                                  <div
-                                    className="inline-block bg-transparent shrink-0"
-                                    dangerouslySetInnerHTML={{
-                                      __html: generateBarcodeSVGString(trace.lotOrSerial || ''),
-                                    }}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => downloadBarcodeSVG(trace.lotOrSerial || '')}
-                                    style={{
-                                      backgroundColor: '#0f172a',
-                                      color: '#ffffff',
-                                      padding: '8px 14px',
-                                      fontSize: '16px',
-                                      borderRadius: '10px',
-                                    }}
-                                    className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0 shrink-0"
-                                    title="Imprimer / Télécharger"
-                                  >
-                                    Imprimer
-                                  </button>
                                 </div>
-                              </div>
 
-                              {/* 3. Date de péremption. */}
-                              <div className="flex flex-col gap-1 min-w-0">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
-                                  Date de péremption.
-                                </label>
-                                <input
-                                  type="date"
-                                  value={trace.expirationDate || ''}
-                                  onChange={(e) => {
-                                    const updated = [...traceabilities];
-                                    updated[idx] = {
-                                      ...updated[idx],
-                                      expirationDate: e.target.value || '',
-                                    };
-                                    setTraceabilities(updated);
-                                  }}
-                                  className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
-                                />
-                              </div>
+                                {/* 3. Date de péremption. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                    Date de péremption.
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={trace.expirationDate || ''}
+                                    onChange={(e) => {
+                                      const updated = [...traceabilities];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        expirationDate: e.target.value || '',
+                                      };
+                                      setTraceabilities(updated);
+                                    }}
+                                    className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                  />
+                                </div>
 
-                              {/* 4. Situation. */}
-                              <div className="flex flex-col gap-1 min-w-0">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
-                                  Situation.
-                                </label>
-                                <select
-                                  value={
-                                    trace.situation === 'Signalé manquant'
-                                      ? 'Signalé Manquant'
-                                      : trace.situation || 'Disponible'
-                                  }
-                                  onChange={(e) => {
-                                    const updated = [...traceabilities];
-                                    updated[idx] = {
-                                      ...updated[idx],
-                                      situation: e.target.value as any,
-                                    };
-                                    setTraceabilities(updated);
-                                  }}
-                                  className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
-                                >
-                                  <option value="Disponible">Disponible</option>
-                                  <option value="Utilisé">Utilisé</option>
-                                  <option value="Indisponible">Indisponible</option>
-                                  <option value="Signalé Manquant">Signalé Manquant</option>
-                                  <option value="Prêté">Prêté</option>
-                                </select>
-                              </div>
+                                {/* 4. Situation. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                    Situation.
+                                  </label>
+                                  <select
+                                    value={
+                                      trace.situation === 'Signalé manquant'
+                                        ? 'Signalé Manquant'
+                                        : trace.situation || 'Disponible'
+                                    }
+                                    onChange={(e) => {
+                                      const updated = [...traceabilities];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        situation: e.target.value as any,
+                                      };
+                                      setTraceabilities(updated);
+                                    }}
+                                    className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                  >
+                                    <option value="Disponible">Disponible</option>
+                                    <option value="Utilisé">Utilisé</option>
+                                    <option value="Indisponible">Indisponible</option>
+                                    <option value="Signalé Manquant">Signalé Manquant</option>
+                                    <option value="Prêté">Prêté</option>
+                                  </select>
+                                </div>
 
-                              {/* 5. Infos réservation. */}
-                              <div className="flex flex-col gap-1 min-w-0">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
-                                  Infos réservation.
-                                </label>
-                                <input
-                                  type="text"
-                                  value={trace.reservationInfo ?? ''}
-                                  onChange={(e) => {
-                                    const updated = [...traceabilities];
-                                    updated[idx] = {
-                                      ...updated[idx],
-                                      reservationInfo: e.target.value,
-                                    };
-                                    setTraceabilities(updated);
-                                  }}
-                                  placeholder="Infos réservation..."
-                                  className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
-                                />
-                              </div>
+                                {/* 5. Infos réservation. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                    Infos réservation.
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={trace.reservationInfo ?? ''}
+                                    onChange={(e) => {
+                                      const updated = [...traceabilities];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        reservationInfo: e.target.value,
+                                      };
+                                      setTraceabilities(updated);
+                                    }}
+                                    placeholder="Infos réservation..."
+                                    className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                  />
+                                </div>
 
-                              {/* 6. Volume. */}
-                              <div className="flex flex-col gap-1 min-w-0">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
-                                  Volume.
-                                </label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={trace.volume ?? 1}
-                                  onChange={(e) => {
-                                    const val = e.target.value === '' ? 1 : Number(e.target.value);
-                                    const updated = [...traceabilities];
-                                    updated[idx] = {
-                                      ...updated[idx],
-                                      volume: isNaN(val) ? 1 : val,
-                                    };
-                                    setTraceabilities(updated);
-                                  }}
-                                  className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
-                                />
-                              </div>
+                                {/* 6. Volume. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                    Volume.
+                                  </label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={trace.volume ?? 1}
+                                    onChange={(e) => {
+                                      const val = e.target.value === '' ? 1 : Number(e.target.value);
+                                      const updated = [...traceabilities];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        volume: isNaN(val) ? 1 : val,
+                                      };
+                                      setTraceabilities(updated);
+                                    }}
+                                    className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                  />
+                                </div>
 
-                              {/* 7. Commentaire. + Supprimer */}
-                              <div className="flex flex-col gap-1 min-w-0">
-                                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
-                                  Commentaire.
-                                </label>
-                                <div className="flex items-center gap-2">
+                                {/* 7. Commentaire. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                    Commentaire.
+                                  </label>
                                   <input
                                     type="text"
                                     value={trace.comment || ''}
@@ -3368,8 +3379,41 @@ export default function StocksTab({
                                       setTraceabilities(updated);
                                     }}
                                     placeholder="Commentaire..."
-                                    className="flex-1 min-w-0 bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                    className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
                                   />
+                                </div>
+
+                                {/* 8. Bouton Imprimer Code-Barres */}
+                                <div className="flex flex-col justify-end min-w-0">
+                                  <button
+                                    type="button"
+                                    disabled={!isLotSaved}
+                                    onClick={() => {
+                                      if (!isLotSaved) return;
+                                      downloadBarcodeSVG(trace.lotOrSerial || '');
+                                    }}
+                                    style={{
+                                      backgroundColor: '#0f172a',
+                                      color: '#ffffff',
+                                      padding: '12px 14px',
+                                      fontSize: '16px',
+                                      borderRadius: '13px',
+                                      opacity: !isLotSaved ? 0.45 : 1,
+                                      cursor: !isLotSaved ? 'not-allowed' : 'pointer',
+                                    }}
+                                    className="w-full font-sans font-bold active:scale-95 transition-all border-0"
+                                    title={
+                                      !isLotSaved
+                                        ? "Veuillez enregistrer le numéro de lot ou série avant d'imprimer le code-barres"
+                                        : 'Imprimer Code-Barres'
+                                    }
+                                  >
+                                    Imprimer Code-Barres
+                                  </button>
+                                </div>
+
+                                {/* 9. Bouton Supprimer */}
+                                <div className="flex flex-col justify-end min-w-0">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -3378,18 +3422,19 @@ export default function StocksTab({
                                     style={{
                                       backgroundColor: '#0f172a',
                                       color: '#ffffff',
-                                      padding: '8px 14px',
+                                      padding: '12px 14px',
                                       fontSize: '16px',
-                                      borderRadius: '10px',
+                                      borderRadius: '13px',
+                                      cursor: 'pointer',
                                     }}
-                                    className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0 shrink-0"
+                                    className="w-full font-sans font-bold active:scale-95 transition-all cursor-pointer border-0"
                                   >
                                     Supprimer
                                   </button>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>

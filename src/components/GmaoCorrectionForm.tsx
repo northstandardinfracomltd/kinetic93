@@ -2826,7 +2826,7 @@ export default function GmaoCorrectionForm({
       style={{ overflowX: 'hidden', maxWidth: '100%', width: '100%', overscrollBehaviorX: 'none', ...(isReduced ? {} : { minHeight: '100%' }) }}
     >
       {/* Action Buttons Group: Annuler + Réduire / Agrandir + Chrono (33.33% / 33.33% / 33.33% sur la même ligne) */}
-      <div className="w-full flex flex-row items-stretch !m-0 !p-0 shrink-0 relative" style={{ position: 'relative' }}>
+      <div className="w-full flex flex-row items-stretch !m-0 !p-0 shrink-0 relative border-t-0" style={{ position: 'relative', borderTop: 'none' }}>
         {/* Button Annuler */}
         <button
           type="button"
@@ -3298,7 +3298,7 @@ export default function GmaoCorrectionForm({
                       type="button"
                       onClick={() => setIsNewEquipmentDropdownOpen(!isNewEquipmentDropdownOpen)}
                       style={{
-                        backgroundColor: '#2563eb', // Nice bright blue
+                        backgroundColor: 'rgb(46, 84, 255)',
                         color: '#ffffff',
                         width: '100%',
                         padding: '8px 16px',
@@ -3306,8 +3306,9 @@ export default function GmaoCorrectionForm({
                         fontSize: '18px',
                         fontWeight: 'bold',
                         cursor: 'pointer',
+                        boxShadow: 'none',
                       }}
-                      className="hover:bg-blue-700 transition duration-150 ease-in-out font-sans flex items-center justify-center gap-1.5 shadow-sm"
+                      className="hover:opacity-90 transition duration-150 ease-in-out font-sans flex items-center justify-center gap-1.5"
                     >
                       <span>Nouveau matériel</span>
                     </button>
@@ -3724,38 +3725,24 @@ export default function GmaoCorrectionForm({
                   />
 
                   {/* Carré Miniature */}
-                  <div
-                    onClick={() => {
-                      if (photoUrl) {
+                  {photoUrl && (
+                    <div
+                      onClick={() => {
                         setPreviewModalPhoto({ url: photoUrl, title: "Photographie globale du défibrillateur" });
-                      } else {
-                        fileInputRef.current?.click();
-                      }
-                    }}
-                    className="w-14 h-14 rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center shrink-0 cursor-pointer overflow-hidden transition-all hover:border-slate-400 relative group"
-                    title={photoUrl ? "Miniature. (Cliquer pour agrandir)" : "Miniature. (Cliquer pour photographier)"}
-                  >
-                    {photoUrl ? (
-                      <>
-                        <img
-                          src={photoUrl}
-                          alt="Miniature."
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
-                          Voir
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center p-1 text-center select-none">
-                        <svg className="w-4 h-4 text-slate-400 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Miniature.</span>
+                      }}
+                      className="w-14 h-14 rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center shrink-0 cursor-pointer overflow-hidden transition-all hover:border-slate-400 relative group"
+                      title="Miniature. (Cliquer pour agrandir)"
+                    >
+                      <img
+                        src={photoUrl}
+                        alt="Miniature."
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
+                        Voir
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {photoUrl && (
                     <button
@@ -3763,9 +3750,9 @@ export default function GmaoCorrectionForm({
                       onClick={() => setPhotoUrl('')}
                       style={{
                         ...rowActionButton18Style,
-                        backgroundColor: '#ef4444',
+                        backgroundColor: '#d22d0b',
                       }}
-                      className="transition-colors cursor-pointer font-sans hover:bg-red-600"
+                      className="transition-colors cursor-pointer font-sans hover:opacity-90"
                     >
                       Supprimer
                     </button>
@@ -3802,38 +3789,24 @@ export default function GmaoCorrectionForm({
                   />
 
                   {/* Carré Miniature */}
-                  <div
-                    onClick={() => {
-                      if (photoArriereUrl) {
+                  {photoArriereUrl && (
+                    <div
+                      onClick={() => {
                         setPreviewModalPhoto({ url: photoArriereUrl, title: "Photographie arrière / étiquette" });
-                      } else {
-                        fileInputArriereRef.current?.click();
-                      }
-                    }}
-                    className="w-14 h-14 rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center shrink-0 cursor-pointer overflow-hidden transition-all hover:border-slate-400 relative group"
-                    title={photoArriereUrl ? "Miniature. (Cliquer pour agrandir)" : "Miniature. (Cliquer pour photographier)"}
-                  >
-                    {photoArriereUrl ? (
-                      <>
-                        <img
-                          src={photoArriereUrl}
-                          alt="Miniature."
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
-                          Voir
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center p-1 text-center select-none">
-                        <svg className="w-4 h-4 text-slate-400 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Miniature.</span>
+                      }}
+                      className="w-14 h-14 rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center shrink-0 cursor-pointer overflow-hidden transition-all hover:border-slate-400 relative group"
+                      title="Miniature. (Cliquer pour agrandir)"
+                    >
+                      <img
+                        src={photoArriereUrl}
+                        alt="Miniature."
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
+                        Voir
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {photoArriereUrl && (
                     <button
@@ -3841,9 +3814,9 @@ export default function GmaoCorrectionForm({
                       onClick={() => setPhotoArriereUrl('')}
                       style={{
                         ...rowActionButton18Style,
-                        backgroundColor: '#ef4444',
+                        backgroundColor: '#d22d0b',
                       }}
-                      className="transition-colors cursor-pointer font-sans hover:bg-red-600"
+                      className="transition-colors cursor-pointer font-sans hover:opacity-90"
                     >
                       Supprimer
                     </button>
@@ -3880,38 +3853,24 @@ export default function GmaoCorrectionForm({
                   />
 
                   {/* Carré Miniature */}
-                  <div
-                    onClick={() => {
-                      if (photoResultatTestUrl) {
+                  {photoResultatTestUrl && (
+                    <div
+                      onClick={() => {
                         setPreviewModalPhoto({ url: photoResultatTestUrl, title: "Résultat du test" });
-                      } else {
-                        fileInputResultatTestRef.current?.click();
-                      }
-                    }}
-                    className="w-14 h-14 rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center shrink-0 cursor-pointer overflow-hidden transition-all hover:border-slate-400 relative group"
-                    title={photoResultatTestUrl ? "Miniature. (Cliquer pour agrandir)" : "Miniature. (Cliquer pour photographier)"}
-                  >
-                    {photoResultatTestUrl ? (
-                      <>
-                        <img
-                          src={photoResultatTestUrl}
-                          alt="Miniature."
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
-                          Voir
-                        </div>
-                      </>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center p-1 text-center select-none">
-                        <svg className="w-4 h-4 text-slate-400 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Miniature.</span>
+                      }}
+                      className="w-14 h-14 rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center shrink-0 cursor-pointer overflow-hidden transition-all hover:border-slate-400 relative group"
+                      title="Miniature. (Cliquer pour agrandir)"
+                    >
+                      <img
+                        src={photoResultatTestUrl}
+                        alt="Miniature."
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
+                        Voir
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {photoResultatTestUrl && (
                     <button
@@ -3919,9 +3878,9 @@ export default function GmaoCorrectionForm({
                       onClick={() => setPhotoResultatTestUrl('')}
                       style={{
                         ...rowActionButton18Style,
-                        backgroundColor: '#ef4444',
+                        backgroundColor: '#d22d0b',
                       }}
-                      className="transition-colors cursor-pointer font-sans hover:bg-red-600"
+                      className="transition-colors cursor-pointer font-sans hover:opacity-90"
                     >
                       Supprimer
                     </button>
@@ -6943,7 +6902,8 @@ export default function GmaoCorrectionForm({
                   appearance: 'none', 
                   WebkitAppearance: 'none', 
                   MozAppearance: 'none',
-                  border: '1px solid #dedede',
+                  backgroundColor: '#fff',
+                  border: 'none',
                   borderRadius: '13px',
                   padding: '8px 12px',
                   boxSizing: 'border-box',
@@ -6993,8 +6953,9 @@ export default function GmaoCorrectionForm({
             className="w-full text-white font-medium focus:outline-none cursor-pointer text-center"
             style={{ 
               fontSize: '18px', 
-              border: '1px solid #3B5BEE',
-              backgroundColor: '#3B5BEE',
+              border: 'none',
+              backgroundColor: 'rgb(46, 84, 255)',
+              boxShadow: 'none',
               borderRadius: '13px',
               padding: '8px 12px',
               boxSizing: 'border-box',
