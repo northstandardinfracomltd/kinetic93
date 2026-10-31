@@ -541,6 +541,8 @@ export interface CompanyInfo {
   spreadsheetCommandesUrl?: string;
   spreadsheetStocks?: string;
   spreadsheetStocksUrl?: string;
+  spreadsheetStocksActivite?: string;
+  spreadsheetStocksActiviteUrl?: string;
   spreadsheetStocksDistribues?: string;
   spreadsheetStocksDistribuesUrl?: string;
   spreadsheetAchatsFournisseurs?: string;
@@ -592,6 +594,7 @@ export type SpreadsheetFieldKey =
   | 'spreadsheetSatisfaction'
   | 'spreadsheetCommandes'
   | 'spreadsheetStocks'
+  | 'spreadsheetStocksActivite'
   | 'spreadsheetStocksDistribues'
   | 'spreadsheetAchatsFournisseurs'
   | 'spreadsheetTemps'
@@ -627,6 +630,7 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetSatisfaction', urlKey: 'spreadsheetSatisfactionUrl', storageSuffix: 'spreadsheet_satisfaction', label: 'Spreadsheet Satisfaction.', id: 'settings-db-spreadsheet-satisfaction' },
   { key: 'spreadsheetCommandes', urlKey: 'spreadsheetCommandesUrl', storageSuffix: 'spreadsheet_commandes', label: 'Spreadsheet Commandes.', id: 'settings-db-spreadsheet-commandes' },
   { key: 'spreadsheetStocks', urlKey: 'spreadsheetStocksUrl', storageSuffix: 'spreadsheet_stocks', label: 'Spreadsheet Stocks.', id: 'settings-db-spreadsheet-stocks' },
+  { key: 'spreadsheetStocksActivite', urlKey: 'spreadsheetStocksActiviteUrl', storageSuffix: 'spreadsheet_stocks_activite', label: 'Spreadsheet Stocks Activité.', id: 'settings-db-spreadsheet-stocks-activite' },
   { key: 'spreadsheetAchatsFournisseurs', urlKey: 'spreadsheetAchatsFournisseursUrl', storageSuffix: 'spreadsheet_achats_fournisseurs', label: 'Spreadsheet Achats fournisseurs.', id: 'settings-db-spreadsheet-achats-fournisseurs' },
   { key: 'spreadsheetTemps', urlKey: 'spreadsheetTempsUrl', storageSuffix: 'spreadsheet_temps', label: 'Spreadsheet Temps.', id: 'settings-db-spreadsheet-temps' },
   { key: 'spreadsheetTicketsCaisse', urlKey: 'spreadsheetTicketsCaisseUrl', storageSuffix: 'spreadsheet_tickets_caisse', label: 'Spreadsheet Tickets Caisse.', id: 'settings-db-spreadsheet-tickets-caisse' },
@@ -648,17 +652,23 @@ export const EXTRA_SPREADSHEET_FIELDS: {
 export interface PointageLog {
   id: string;
   techName: string;
+  techEmail?: string;
   startDate: string;
   startTime: string;
   endDate?: string;
   endTime?: string;
   durationSeconds?: number;
+  amplitudeJournee?: string;
+  amplitudeCtt?: string;
+  trajetJournee?: string;
   isOngoing: boolean;
   comment?: string;
   trajetMatin?: string;
   trajetSoir?: string;
   tempsRepas?: string;
   tempsAdmin?: string;
+  _sheetRowNumber?: number;
+  _fromSpreadsheet?: boolean;
 }
 
 export type CttColumnTarget = 'Temps Trajet Matin' | 'Temps Trajet Soir' | 'Temps Repas';
@@ -947,6 +957,8 @@ export interface LogisticsNotification {
   description: string;
   ugs: string;
   commentaire?: string;
+  statut?: string;
+  _sheetRowNumber?: number;
 }
 
 export interface FormationRecord {

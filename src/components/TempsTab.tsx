@@ -301,7 +301,7 @@ export function getMonthlyWorkingDaysData(
 
     // 3) Pointage check
     const pt = pointages.find((p) => {
-      if (p.techName !== techName) return false;
+      if (!doesPointageMatchTech(p, techName, members)) return false;
       const pIso = parseToIso(p.startDate);
       return pIso === dateIso;
     });
@@ -970,17 +970,50 @@ export function generateMonthlyPDFHTML(
 </html>`;
 }
 
+function doesPointageMatchTech(
+  p: PointageLog | undefined | null,
+  techName: string,
+  members: Member[] = []
+): boolean {
+  if (!p || !techName) return false;
+  const safeTech = String(techName).trim().toLowerCase();
+  const pName = String(p.techName || '').trim().toLowerCase();
+  const pEmail = String(p.techEmail || '').trim().toLowerCase();
+  const pEmailPrefix = pEmail.includes('@')
+    ? pEmail.split('@')[0].replace(/[._-]+/g, ' ').trim().toLowerCase()
+    : pName.includes('@')
+    ? pName.split('@')[0].replace(/[._-]+/g, ' ').trim().toLowerCase()
+    : '';
+
+  if (pName === safeTech || pEmail === safeTech || (pEmailPrefix && pEmailPrefix === safeTech)) {
+    return true;
+  }
+
+  const matchedMember = (Array.isArray(members) ? members : []).find(
+    (m) => m && String(m.name || '').trim().toLowerCase() === safeTech
+  );
+  if (matchedMember && matchedMember.email) {
+    const mEmail = String(matchedMember.email).trim().toLowerCase();
+    const mPrefix = mEmail.includes('@')
+      ? mEmail.split('@')[0].replace(/[._-]+/g, ' ').trim().toLowerCase()
+      : '';
+    if (pEmail === mEmail || pName === mEmail || (mPrefix && (pName === mPrefix || pEmailPrefix === mPrefix))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function hasPointageInMonth(
   techName: string,
   year: number,
   monthIndex: number,
-  pointages: PointageLog[]
+  pointages: PointageLog[],
+  members: Member[] = []
 ): boolean {
   if (!pointages || !Array.isArray(pointages) || pointages.length === 0 || !techName) return false;
-  const safeTechName = String(techName).trim().toLowerCase();
   return pointages.some((p) => {
-    if (!p || !p.techName) return false;
-    if (String(p.techName).trim().toLowerCase() !== safeTechName) return false;
+    if (!doesPointageMatchTech(p, techName, members)) return false;
     const iso = parseToIso(p.startDate);
     if (!iso || iso.length < 7) return false;
     const parts = iso.split('-');
@@ -1343,13 +1376,56 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
     );
   };
 
-  // Extract technician list strictly from members of type Technicien
+  // Extract technician list from members of type Technicien + any technician present in pointages
   const techNamesFromMembers = (Array.isArray(members) ? members : [])
     .filter((m) => isTechnicianMember(m))
     .map((m) => (m && m.name ? String(m.name).trim() : ''))
     .filter((n): n is string => Boolean(n));
 
-  const technicians = Array.from(new Set(techNamesFromMembers)).sort();
+  const techNamesSet = new Set<string>(techNamesFromMembers);
+  const lowerTechNamesMap = new Map<string, string>();
+  techNamesFromMembers.forEach((n) => lowerTechNamesMap.set(n.toLowerCase(), n));
+
+  (Array.isArray(pointages) ? pointages : []).forEach((p) => {
+    if (!p || !p.startDate) return;
+    const alreadyMatched = Array.from(techNamesSet).some((tName) => doesPointageMatchTech(p, tName, members));
+    if (alreadyMatched) return;
+
+    const pEmail = String(p.techEmail || '').trim().toLowerCase();
+    const pName = String(p.techName || '').trim();
+    if (pEmail) {
+      const mByEmail = (Array.isArray(members) ? members : []).find(
+        (m) => m && String(m.email || '').trim().toLowerCase() === pEmail && m.name
+      );
+      if (mByEmail && mByEmail.name) {
+        const cleanMName = String(mByEmail.name).trim();
+        if (cleanMName && !lowerTechNamesMap.has(cleanMName.toLowerCase())) {
+          techNamesSet.add(cleanMName);
+          lowerTechNamesMap.set(cleanMName.toLowerCase(), cleanMName);
+        }
+        return;
+      }
+    }
+    if (pName && !pName.includes('@')) {
+      if (!lowerTechNamesMap.has(pName.toLowerCase())) {
+        techNamesSet.add(pName);
+        lowerTechNamesMap.set(pName.toLowerCase(), pName);
+      }
+    } else if (pEmail.includes('@')) {
+      const prefix = pEmail.split('@')[0] || '';
+      const formatted = prefix
+        .split(/[._-]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+      if (formatted && !lowerTechNamesMap.has(formatted.toLowerCase())) {
+        techNamesSet.add(formatted);
+        lowerTechNamesMap.set(formatted.toLowerCase(), formatted);
+      }
+    }
+  });
+
+  const technicians = Array.from(techNamesSet).sort();
 
   // Generate 12 recent months up to current month plus any additional months from pointages
   const now = new Date();
@@ -1411,7 +1487,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
   techToUse.forEach((tech) => {
     if (!tech) return;
     monthList.forEach((ml) => {
-      if (hasPointageInMonth(tech, ml.year, ml.monthIndex, pointages)) {
+      if (hasPointageInMonth(tech, ml.year, ml.monthIndex, pointages, members)) {
         rows.push({
           id: `${tech}-${ml.year}-${ml.monthIndex}`,
           techName: tech,

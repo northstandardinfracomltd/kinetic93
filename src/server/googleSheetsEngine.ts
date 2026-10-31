@@ -1752,18 +1752,21 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'URL du fichier', field: 'pdfDataUrl', aliases: ['urldufichier', 'urlfichier', 'lienpdf', 'pdfdataurl', 'urlpdf', 'fichierurl', 'lien'] },
   ],
   temps: [
-    { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idpointage', 'reference'] },
+    { header: 'Email (technicien).', field: 'techEmail', aliases: ['emailtechnicien', 'emaildutechnicien', 'technicienemail', 'mailtechnicien', 'email'] },
     { header: 'Technicien', field: 'techName', aliases: ['technicien', 'techname', 'collaborateur', 'employe', 'membre', 'nom', 'nometprenom', 'intervenant'] },
-    { header: 'Date', field: 'startDate', aliases: ['date', 'startdate', 'datedebut', 'datededebut', 'jour', 'datepointage'], type: 'date' },
-    { header: 'Début Journée', field: 'startTime', aliases: ['debutjournee', 'starttime', 'heuredebut', 'heurededebut', 'debut', 'entree'] },
+    { header: 'Date Journée.', field: 'startDate', aliases: ['datejournee', 'datedelajournee', 'date', 'startdate', 'datedebut', 'datededebut', 'jour', 'datepointage'], type: 'date' },
+    { header: 'Début Journée.', field: 'startTime', aliases: ['debutjournee', 'starttime', 'heuredebut', 'heurededebut', 'debut', 'entree'] },
+    { header: 'Fin Journée.', field: 'endTime', aliases: ['finjournee', 'endtime', 'heurefin', 'heuredefin', 'fin', 'sortie'] },
+    { header: 'Amplitude Journée.', field: 'amplitudeJournee', aliases: ['amplitudejournee', 'amplitude', 'duree', 'dureejournee', 'durationseconds', 'tempstravail', 'totaljournee'] },
+    { header: 'Titre de la période.', field: 'comment', aliases: ['titredelaperiode', 'titreperiode', 'commentaires', 'commentaire', 'comment', 'notes', 'observation', 'remarques'] },
+    { header: 'Temps Trajet Matin.', field: 'trajetMatin', aliases: ['tempstrajetmatin', 'trajetmatin', 'trajetaller'] },
+    { header: 'Temps Trajet Soir.', field: 'trajetSoir', aliases: ['tempstrajetsoir', 'trajetsoir', 'trajetretour'] },
+    { header: 'Temps Trajet Journée.', field: 'trajetJournee', aliases: ['tempstrajetjournee', 'trajetjournee', 'totaltrajet'] },
+    { header: 'Temps de repas.', field: 'tempsRepas', aliases: ['tempsderepas', 'tempsrepas', 'repas', 'pauserepas', 'pausemidi', 'pause'] },
+    { header: 'Amplitude Journée.', field: 'amplitudeCtt', aliases: ['amplitudejournee', 'amplitudectt', 'ctt'] },
+    { header: 'Temps Adminsitratif/Autres.', field: 'tempsAdmin', aliases: ['tempsadminsitratifautres', 'tempsadministratifautres', 'tempsadministratif', 'tempsadminsitratif', 'tempsadmin', 'administratif', 'autres'] },
+    { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idpointage', 'reference'] },
     { header: 'Date Fin', field: 'endDate', aliases: ['datefin', 'datedefin', 'enddate'], type: 'date' },
-    { header: 'Fin Journée', field: 'endTime', aliases: ['finjournee', 'endtime', 'heurefin', 'heuredefin', 'fin', 'sortie'] },
-    { header: 'Amplitude Journée', field: 'durationSeconds', aliases: ['amplitudejournee', 'amplitude', 'duree', 'dureejournee', 'durationseconds', 'tempstravail', 'totaljournee'] },
-    { header: 'Temps Trajet Matin', field: 'trajetMatin', aliases: ['tempstrajetmatin', 'trajetmatin', 'trajetaller'] },
-    { header: 'Temps Trajet Soir', field: 'trajetSoir', aliases: ['tempstrajetsoir', 'trajetsoir', 'trajetretour'] },
-    { header: 'Temps Repas', field: 'tempsRepas', aliases: ['tempsrepas', 'repas', 'pauserepas', 'pausemidi', 'pause'] },
-    { header: 'Temps Administratif/Autres', field: 'tempsAdmin', aliases: ['tempsadministratifautres', 'tempsadministratif', 'tempsadmin', 'administratif', 'autres'] },
-    { header: 'Commentaires', field: 'comment', aliases: ['commentaires', 'commentaire', 'comment', 'notes', 'observation', 'remarques'] },
     { header: 'En cours', field: 'isOngoing', aliases: ['encours', 'isongoing', 'statut', 'actif'], type: 'bool' },
   ],
   ticketsCaisse: [
@@ -2842,6 +2845,12 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
       ],
     },
   ],
+  historiqueNotifications: [
+    { header: 'UGS.', field: 'ugs', aliases: ['ugs', 'codeugs', 'referenceugs', 'inventaireugs'] },
+    { header: 'Description.', field: 'description', aliases: ['description', 'texte', 'message', 'alerte', 'intitule', 'evenement'] },
+    { header: 'Commentaire.', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'note', 'notes', 'observation'] },
+    { header: 'Statut.', field: 'statut', aliases: ['statut', 'status', 'etat', 'situation'] },
+  ],
 };
 GENERIC_CANONICAL_HEADERS.devisFactures = GENERIC_CANONICAL_HEADERS.commandes;
 GENERIC_CANONICAL_HEADERS.stocks = GENERIC_CANONICAL_HEADERS.stocksGlobaux;
@@ -2859,6 +2868,7 @@ function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = 
       tabType === 'stocksGlobaux' ||
       tabType === 'stocks' ||
       tabType === 'stocksDistribues' ||
+      tabType === 'historiqueNotifications' ||
       tabType === 'variables' ||
       tabType === 'reglages'
     ) {
@@ -4230,18 +4240,117 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.pdfUrl = merged.pdfUrl || merged.pdfDataUrl || '';
   } else if (tabType === 'temps') {
     merged.id = merged.id || `pt_${rowIndexZeroBased + 2}`;
-    merged.techName = merged.techName || '';
-    merged.startDate = normalizeDateStr(merged.startDate || '');
-    merged.startTime = merged.startTime || '08:00';
-    merged.isOngoing = Boolean(merged.isOngoing);
-    if (typeof merged.durationSeconds === 'string') {
-      const s = merged.durationSeconds.trim();
+    const rawEmailCol = String(
+      merged.techEmail ||
+        rawByHeader['Email (technicien).'] ||
+        rawByHeader['Email (technicien)'] ||
+        ''
+    ).trim();
+    const rawTechCol = String(
+      merged.techName ||
+        rawByHeader['Technicien.'] ||
+        rawByHeader['Technicien'] ||
+        ''
+    ).trim();
+
+    if (rawEmailCol && rawEmailCol.includes('@')) {
+      merged.techEmail = rawEmailCol;
+      if (!rawTechCol || rawTechCol.includes('@')) {
+        const localPart = rawEmailCol.split('@')[0] || '';
+        merged.techName = localPart
+          .split(/[._-]+/)
+          .filter(Boolean)
+          .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ') || rawEmailCol;
+      } else {
+        merged.techName = rawTechCol;
+      }
+    } else if (rawTechCol && rawTechCol.includes('@')) {
+      merged.techEmail = rawTechCol;
+      const localPart = rawTechCol.split('@')[0] || '';
+      merged.techName = localPart
+        .split(/[._-]+/)
+        .filter(Boolean)
+        .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ') || rawTechCol;
+    } else {
+      merged.techName = rawTechCol || rawEmailCol || '';
+      if (rawEmailCol) merged.techEmail = rawEmailCol;
+    }
+
+    const rawStartDate = String(
+      merged.startDate ||
+        rawByHeader['Date Journée.'] ||
+        rawByHeader['Date Journée'] ||
+        rawByHeader['Date.'] ||
+        rawByHeader['Date'] ||
+        ''
+    ).trim();
+    merged.startDate = normalizeDateStr(rawStartDate);
+    merged.startTime = String(
+      merged.startTime ||
+        rawByHeader['Début Journée.'] ||
+        rawByHeader['Début Journée'] ||
+        '08:00'
+    ).trim();
+    const rawEndTime = String(
+      merged.endTime ??
+        rawByHeader['Fin Journée.'] ??
+        rawByHeader['Fin Journée'] ??
+        ''
+    ).trim();
+    merged.endTime = rawEndTime;
+
+    const hasExplicitOngoingCol =
+      rawByHeader['En cours'] !== undefined ||
+      rawByHeader['En cours.'] !== undefined ||
+      parsedJsonFallback.isOngoing !== undefined;
+    if (hasExplicitOngoingCol && merged.isOngoing !== undefined) {
+      merged.isOngoing = Boolean(merged.isOngoing);
+    } else {
+      merged.isOngoing = Boolean((merged.startDate || merged.startTime) && !rawEndTime);
+    }
+
+    merged.comment = String(
+      merged.comment ??
+        rawByHeader['Titre de la période.'] ??
+        rawByHeader['Titre de la période'] ??
+        rawByHeader['Commentaires'] ??
+        ''
+    ).trim();
+    merged.trajetMatin = String(merged.trajetMatin || rawByHeader['Temps Trajet Matin.'] || rawByHeader['Temps Trajet Matin'] || '00:00').trim();
+    merged.trajetSoir = String(merged.trajetSoir || rawByHeader['Temps Trajet Soir.'] || rawByHeader['Temps Trajet Soir'] || '00:00').trim();
+    merged.trajetJournee = String(merged.trajetJournee || rawByHeader['Temps Trajet Journée.'] || rawByHeader['Temps Trajet Journée'] || '00:00').trim();
+    merged.tempsRepas = String(merged.tempsRepas || rawByHeader['Temps de repas.'] || rawByHeader['Temps de repas'] || rawByHeader['Temps Repas'] || '00:00').trim();
+    merged.tempsAdmin = String(
+      merged.tempsAdmin ||
+        rawByHeader['Temps Adminsitratif/Autres.'] ||
+        rawByHeader['Temps Administratif/Autres.'] ||
+        rawByHeader['Temps Administratif/Autres'] ||
+        '00:00'
+    ).trim();
+
+    const rawAmp = merged.durationSeconds ?? merged.amplitudeJournee ?? rawByHeader['Amplitude Journée.'] ?? rawByHeader['Amplitude Journée'];
+    if (typeof rawAmp === 'string') {
+      const s = rawAmp.trim();
       if (s.includes(':')) {
         const parts = s.split(':').map((p: string) => parseInt(p, 10) || 0);
-        merged.durationSeconds = (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+        if (parts.length === 3) {
+          merged.durationSeconds = (parts[0] || 0) * 3600 + (parts[1] || 0) * 60 + (parts[2] || 0);
+        } else {
+          merged.durationSeconds = (parts[0] || 0) * 3600 + (parts[1] || 0) * 60;
+        }
       } else {
         merged.durationSeconds = parseInt(s, 10) || 0;
       }
+    } else if (typeof rawAmp === 'number') {
+      merged.durationSeconds = rawAmp;
+    } else if (merged.startTime && merged.endTime) {
+      const sParts = String(merged.startTime).split(':').map((p: string) => parseInt(p, 10) || 0);
+      const eParts = String(merged.endTime).split(':').map((p: string) => parseInt(p, 10) || 0);
+      const sSec = (sParts[0] || 0) * 3600 + (sParts[1] || 0) * 60;
+      const eSec = (eParts[0] || 0) * 3600 + (eParts[1] || 0) * 60;
+      merged.durationSeconds = Math.max(0, eSec - sSec);
     }
   } else if (tabType === 'ticketsCaisse') {
     merged.id = merged.id || `exp_${rowIndexZeroBased + 2}`;
@@ -5436,6 +5545,28 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         merged.nom ||
         `sheet_gen_variables_${tenantId}_${rowIndexZeroBased + 2}`;
     }
+  } else if (tabType === 'historiqueNotifications') {
+    const rawKeys = Object.keys(rawByHeader);
+    if (rawKeys.length > 0) {
+      const fallbackColMap = resolveGenericColumnFieldMap(rawKeys, 'historiqueNotifications');
+      for (const [kIdx, def] of fallbackColMap.entries()) {
+        const rk = rawKeys[kIdx];
+        const rv = rk ? rawByHeader[rk] : '';
+        if (rv !== undefined && rv !== '' && (merged[def.field] === undefined || merged[def.field] === '')) {
+          merged[def.field] = rv;
+        }
+      }
+    }
+    merged.ugs = String(merged.ugs ?? rawByHeader['UGS.'] ?? rawByHeader['UGS'] ?? '').trim();
+    merged.description = String(
+      merged.description ?? rawByHeader['Description.'] ?? rawByHeader['Description. '] ?? rawByHeader['Description'] ?? ''
+    ).trim();
+    merged.commentaire = String(merged.commentaire ?? rawByHeader['Commentaire.'] ?? rawByHeader['Commentaire'] ?? '').trim();
+    merged.statut = String(merged.statut ?? rawByHeader['Statut.'] ?? rawByHeader['Statut'] ?? '').trim();
+    merged.horodatage = String(merged.horodatage || '').trim();
+    if (!merged.id || String(merged.id).startsWith('sheet_gen_') || merged.id === merged.ugs) {
+      merged.id = `lognotif_${tenantId}_row_${rowIndexZeroBased + 2}`;
+    }
   }
 
   if (!merged.id) {
@@ -6196,6 +6327,87 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.photoUrl = enriched.photoUrl || enriched.receiptUrl || '';
     enriched.category = enriched.category || 'Frais';
     enriched.status = enriched.status || 'Validé';
+  } else if (tabType === 'temps') {
+    const parseHHMMToMins = (val: any): number => {
+      if (val === undefined || val === null || val === '') return 0;
+      if (typeof val === 'number') return Math.floor(val / 60);
+      const s = String(val).trim();
+      if (!s) return 0;
+      if (s.includes(':')) {
+        const parts = s.split(':').map((p: string) => parseInt(p, 10) || 0);
+        return (parts[0] || 0) * 60 + (parts[1] || 0);
+      }
+      return parseInt(s, 10) || 0;
+    };
+    const formatMinsToHHMM = (mins: number): string => {
+      const safe = Math.max(0, Math.floor(mins || 0));
+      const h = String(Math.floor(safe / 60)).padStart(2, '0');
+      const m = String(safe % 60).padStart(2, '0');
+      return `${h}:${m}`;
+    };
+
+    let resolvedEmail = String(enriched.techEmail || '').trim();
+    const rawTechName = String(enriched.techName || '').trim();
+    if (!resolvedEmail && rawTechName.includes('@')) {
+      resolvedEmail = rawTechName;
+    }
+    if (!resolvedEmail && rawTechName) {
+      const targetTenantId = String(enriched.tenantId || enriched.envId || '').trim().toLowerCase();
+      const normTech = rawTechName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const masterTenants = getCachedMasterTenantsSync();
+      for (const mt of masterTenants) {
+        if (targetTenantId && mt.id.toLowerCase() !== targetTenantId && mt.code.toLowerCase() !== targetTenantId) {
+          continue;
+        }
+        const matchedUser = (mt.masterUsers || []).find(u => {
+          const local = (u.email.split('@')[0] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          return local === normTech;
+        });
+        if (matchedUser) {
+          resolvedEmail = matchedUser.email;
+          break;
+        }
+      }
+    }
+    enriched.techEmail = resolvedEmail || rawTechName;
+    enriched.techName = rawTechName || resolvedEmail;
+
+    const isoStart = normalizeDateStr(enriched.startDate || '');
+    if (isoStart && /^\d{4}-\d{2}-\d{2}$/.test(isoStart)) {
+      const [yyyy, mm, dd] = isoStart.split('-');
+      enriched.startDate = `${dd}/${mm}/${yyyy}`;
+    } else {
+      enriched.startDate = String(enriched.startDate || '').trim();
+    }
+
+    enriched.startTime = String(enriched.startTime || '08:00').trim();
+    const isOngoing = Boolean(enriched.isOngoing);
+    enriched.endTime = isOngoing ? '' : String(enriched.endTime || '').trim();
+
+    const tmMins = parseHHMMToMins(enriched.trajetMatin);
+    const tsMins = parseHHMMToMins(enriched.trajetSoir);
+    const tjMins = tmMins + tsMins;
+    const repasMins = parseHHMMToMins(enriched.tempsRepas);
+    const adminMins = parseHHMMToMins(enriched.tempsAdmin);
+
+    enriched.trajetMatin = formatMinsToHHMM(tmMins);
+    enriched.trajetSoir = formatMinsToHHMM(tsMins);
+    enriched.trajetJournee = formatMinsToHHMM(tjMins);
+    enriched.tempsRepas = formatMinsToHHMM(repasMins);
+    enriched.tempsAdmin = formatMinsToHHMM(adminMins);
+    enriched.comment = String(enriched.comment || '').trim();
+
+    if (isOngoing || !enriched.endTime) {
+      enriched.amplitudeJournee = '';
+      enriched.amplitudeCtt = '';
+    } else {
+      const sMins = parseHHMMToMins(enriched.startTime);
+      const eMins = parseHHMMToMins(enriched.endTime);
+      const ampMins = Math.max(0, eMins - sMins);
+      const cttMins = Math.max(0, ampMins - repasMins - tjMins);
+      enriched.amplitudeJournee = formatMinsToHHMM(ampMins);
+      enriched.amplitudeCtt = formatMinsToHHMM(cttMins);
+    }
   } else if (tabType === 'ged') {
     enriched.date = enriched.date || enriched.dateStr || '';
   } else if (tabType === 'messagesInternes') {
@@ -6326,6 +6538,11 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
           : (enriched[vf] ? normalizeYesNo(enriched[vf], 'Oui') : '');
     }
     enriched.infosTechnicien = enriched.infosTechnicien ?? '';
+  } else if (tabType === 'historiqueNotifications') {
+    enriched.ugs = String(enriched.ugs ?? '').trim();
+    enriched.description = String(enriched.description ?? '').trim();
+    enriched.commentaire = String(enriched.commentaire ?? '').trim();
+    enriched.statut = String(enriched.statut ?? '').trim();
   }
 
   // 1. Map via canonical definitions if tabType is known
@@ -6505,6 +6722,38 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
           .map(s => String(s).trim().toLowerCase())
       )
     );
+  }
+  if (tabType === 'historiqueNotifications') {
+    const ugs = String(item.ugs || '').trim().toLowerCase();
+    const desc = String(item.description || '').trim().toLowerCase();
+    const composite = ugs && desc ? `${ugs}@@${desc}` : '';
+    return [item.id, composite].filter(Boolean).map(s => String(s).trim().toLowerCase());
+  }
+  if (tabType === 'temps') {
+    const normDate = normalizeDateStr(item.startDate || '').trim().toLowerCase();
+    const techName = String(item.techName || '').trim().toLowerCase();
+    const techEmail = String(item.techEmail || '').trim().toLowerCase();
+    const emailPrefix = techEmail.includes('@')
+      ? techEmail.split('@')[0].replace(/[._-]+/g, ' ').trim().toLowerCase()
+      : '';
+    const startTime = String(item.startTime || '').trim().toLowerCase();
+    const keys: string[] = [];
+    if (item.id) keys.push(String(item.id).trim().toLowerCase());
+    if (normDate) {
+      if (techEmail) {
+        keys.push(`temps@@${techEmail}@@${normDate}`);
+        if (startTime) keys.push(`temps@@${techEmail}@@${normDate}@@${startTime}`);
+      }
+      if (techName) {
+        keys.push(`temps@@${techName}@@${normDate}`);
+        if (startTime) keys.push(`temps@@${techName}@@${normDate}@@${startTime}`);
+      }
+      if (emailPrefix && emailPrefix !== techName) {
+        keys.push(`temps@@${emailPrefix}@@${normDate}`);
+        if (startTime) keys.push(`temps@@${emailPrefix}@@${normDate}@@${startTime}`);
+      }
+    }
+    return Array.from(new Set(keys.filter(Boolean)));
   }
   if (tabType !== 'defibrillateurs') {
     return [item.id, item.identifiant, item.interventionReference, item.tourIdentifiant, item.reportId, item.numeroPiece, item.ref, item.numeroCommande, item.ugs, item.tourCode, item.reference, item.orderRef, item.nom]
@@ -7010,13 +7259,23 @@ export async function fetchTenantSheetCollection(
     }
     return false;
   };
+  const isStaleTempsSnap = (snap: CachedSheetResult | null | undefined): boolean => {
+    if (!snap || tabType !== 'temps' || !Array.isArray(snap.items)) return false;
+    return snap.items.some((it: any) => {
+      if (!it || typeof it !== 'object') return false;
+      if (!it.startDate && !it.techName && !it.techEmail) return true;
+      if (!it.techName && (it._rawSheetRow?.['Email (technicien).'] || it._rawSheetRow?.['Email (technicien)'])) return true;
+      if (!it.startDate && (it._rawSheetRow?.['Date Journée.'] || it._rawSheetRow?.['Date Journée'])) return true;
+      return false;
+    });
+  };
   if (!sheetMemoryCache.has(cacheKey)) {
     const diskSnap = loadDiskSnapshot(cacheKey);
     if (diskSnap && Array.isArray(diskSnap.items) && diskSnap.items.length > 0) {
       const isStaleVariablesSnap =
         tabType === 'variables' &&
         (diskSnap.items.some(hasUnmappedVariableKeys) || !Array.isArray(diskSnap.headers) || diskSnap.headers.length === 0);
-      if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap) && !isStaleMissionsSnap(diskSnap) && !isStaleSuspiciousSnap(diskSnap) && !isStaleReglagesSnap(diskSnap)) {
+      if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap) && !isStaleMissionsSnap(diskSnap) && !isStaleSuspiciousSnap(diskSnap) && !isStaleReglagesSnap(diskSnap) && !isStaleTempsSnap(diskSnap)) {
         if (tabType === 'defibrillateurs') {
           diskSnap.stats = computeSheetCollectionStats(diskSnap.items, 'defibrillateurs');
           saveDiskSnapshotAsync(cacheKey, diskSnap);
@@ -7043,7 +7302,7 @@ export async function fetchTenantSheetCollection(
     const isStaleVariablesCache =
       tabType === 'variables' &&
       (cached.items.some(hasUnmappedVariableKeys) || !Array.isArray(cached.headers) || cached.headers.length === 0);
-    if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached) && !isStaleMissionsSnap(cached) && !isStaleSuspiciousSnap(cached) && !isStaleReglagesSnap(cached)) {
+    if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached) && !isStaleMissionsSnap(cached) && !isStaleSuspiciousSnap(cached) && !isStaleReglagesSnap(cached) && !isStaleTempsSnap(cached)) {
       if (tabType === 'defibrillateurs') {
         cached.stats = computeSheetCollectionStats(cached.items, 'defibrillateurs');
       }
@@ -7177,6 +7436,9 @@ export async function fetchTenantSheetCollection(
           } else if (tabType === 'variables') {
             const hasRealVariableIdentity = Boolean(mapped.nom) || Boolean(mapped.identifiant);
             if (!hasRealVariableIdentity) continue;
+          } else if (tabType === 'temps') {
+            const hasRealTempsIdentity = Boolean(mapped.startDate) && (Boolean(mapped.techName) || Boolean(mapped.techEmail));
+            if (!hasRealTempsIdentity) continue;
           }
 
           if (deletedSet.size > 0) {
@@ -8079,6 +8341,14 @@ async function fetchLightweightSheetContextForColdUpsert(
           for (let i = 0; i < idRows.length; i++) {
             const r = idRows[i];
             if (!r || r.length === 0) continue;
+            if (tabType === 'temps') {
+              const mappedLead = mapSingleRow(r.map((c: any) => String(c ?? '').trim()), i + 2);
+              const rowKeys = getRecordLookupKeys(mappedLead, 'temps');
+              if (rowKeys.some(rk => targetKeys.has(rk))) {
+                rowsToFetchFull.set(recIdx, i + 2);
+                break;
+              }
+            }
             for (let c = 0; c < r.length; c++) {
               const cellVal = String(r[c] ?? '').trim().toLowerCase();
               if (cellVal && targetKeys.has(cellVal)) {
@@ -8816,6 +9086,9 @@ const MASTER_SHEET_SPREADSHEET_HEADER_TO_FIELD: Record<string, string> = {
   spreadsheetcommandes: 'spreadsheetCommandes',
   spreadsheetstocks: 'spreadsheetStocks',
   spreadsheetcentraledesstocks: 'spreadsheetStocks',
+  spreadsheetstocksactivite: 'spreadsheetStocksActivite',
+  spreadsheetstocksactivites: 'spreadsheetStocksActivite',
+  spreadsheetactivitestocks: 'spreadsheetStocksActivite',
   spreadsheetachatsfournisseurs: 'spreadsheetAchatsFournisseurs',
   spreadsheettemps: 'spreadsheetTemps',
   spreadsheetticketscaisse: 'spreadsheetTicketsCaisse',

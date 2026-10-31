@@ -982,6 +982,43 @@ export function ensureTenantMembersClient(rawMembers: any[], activeTenantId: str
     });
   }
 
+  // Also ensure any masterUsers (UserEmail1..10 / UserRole1..10 from Mega Admin Sheet) are included in members
+  const masterUsers = Array.isArray((tenantMatch as any)?.masterUsers) ? (tenantMatch as any).masterUsers : [];
+  for (const mu of masterUsers) {
+    const muEmail = String(mu?.email || '').trim();
+    if (!muEmail) continue;
+    const muEmailLower = muEmail.toLowerCase();
+    const existingMember = list.find((m: any) => m && String(m.email || '').trim().toLowerCase() === muEmailLower);
+    const isTechRole = String(mu?.role || mu?.rawRole || '').toLowerCase().includes('tech');
+    if (existingMember) {
+      if (isTechRole && (!existingMember.role || existingMember.role === 'Collaborateur')) {
+        existingMember.role = 'Technicien';
+      }
+      if (!existingMember.categorie && isTechRole) {
+        existingMember.categorie = 'Technicien';
+      }
+    } else {
+      const localPart = muEmail.split('@')[0] || 'Technicien';
+      const formattedName = localPart
+        .split(/[._-]+/)
+        .filter(Boolean)
+        .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+      list.push({
+        id: `mem-master-${effTenantId}-${mu.slotIndex || list.length + 1}`,
+        name: formattedName || muEmail,
+        email: muEmail,
+        role: isTechRole ? 'Technicien' : 'Administrateur',
+        categorie: isTechRole ? 'Technicien' : 'Administrateur',
+        status: 'Actif',
+        lastActive: 'En ligne',
+        pin: '1234',
+        envId: effTenantId,
+        tenantId: effTenantId,
+      });
+    }
+  }
+
   const vehiclePool = ['Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E'];
 
   const usedLocations = new Set(list.map((m: any) => m?.locationLink).filter(Boolean));
@@ -1166,7 +1203,7 @@ export async function fetchCollectionFromFirestore<T>(
     commercialDocs: { type: 'commandes', localKey: 'spreadsheet_commandes', infoKey: 'spreadsheetCommandes' },
     commercial_docs: { type: 'commandes', localKey: 'spreadsheet_commandes', infoKey: 'spreadsheetCommandes' },
     stocks: { type: 'stocksGlobaux', localKey: 'spreadsheet_stocks', infoKey: 'spreadsheetStocks' },
-    logistics_notifications: { type: 'historiqueNotifications', localKey: 'spreadsheet_stocks', infoKey: 'spreadsheetStocks' },
+    logistics_notifications: { type: 'historiqueNotifications', localKey: 'spreadsheet_stocks_activite', infoKey: 'spreadsheetStocksActivite' },
     achats_fournisseurs: { type: 'achatsFournisseurs', localKey: 'spreadsheet_achats_fournisseurs', infoKey: 'spreadsheetAchatsFournisseurs' },
     pointages: { type: 'temps', localKey: 'spreadsheet_temps', infoKey: 'spreadsheetTemps' },
     pointages_history: { type: 'temps', localKey: 'spreadsheet_temps', infoKey: 'spreadsheetTemps' },
@@ -3096,9 +3133,10 @@ export async function uploadMediaToFirebase(
   const fullMediaFileName = `${mediaId}.${ext}`;
 
   // 1. Store in Firestore appData collection (media_<mediaId>) so it is persisted in Firebase without triggering client-side Storage CORS errors
+  const createdAtIso = new Date().toISOString();
   try {
-    if (!isFirestoreQuotaExhausted()) {
-      const mediaDocRef = doc(db, 'appData', `media_${mediaId}`);
+    const mediaDocRef = doc(db, 'appData', `media_${mediaId}`);
+    await Promise.race([
       setDoc(mediaDocRef, {
         id: mediaId,
         mediaId,
@@ -3107,17 +3145,14 @@ export async function uploadMediaToFirebase(
         fileName: resolvedName,
         ext,
         dataUrl,
-        createdAt: new Date().toISOString(),
-      }).catch(() => {});
-    }
+        createdAt: createdAtIso,
+      }),
+      new Promise(resolve => setTimeout(resolve, 3500))
+    ]);
   } catch (_) {}
 
   // 2. Persist to server endpoint /api/firebase-media (with retry) so the https://.../api/firebase-media/<mediaId>.<ext> URL serves the binary file directly
   let serverHttpsUrl = '';
-  if (typeof window !== 'undefined') {
-    const origin = window.location.origin.replace(/^http:\/\//i, 'https://');
-    serverHttpsUrl = `${origin}/api/firebase-media/${fullMediaFileName}`;
-  }
   if (typeof fetch !== 'undefined') {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -3131,13 +3166,16 @@ export async function uploadMediaToFirebase(
             fileName: resolvedName,
             ext,
             dataUrl,
-            createdAt: new Date().toISOString(),
+            createdAt: createdAtIso,
           }),
         });
         if (res.ok) {
           const json = await res.json();
           if (json?.url && typeof json.url === 'string' && json.url.startsWith('http')) {
             serverHttpsUrl = json.url.replace(/^http:\/\//i, 'https://');
+          } else if (typeof window !== 'undefined') {
+            const origin = window.location.origin.replace(/^http:\/\//i, 'https://');
+            serverHttpsUrl = `${origin}/api/firebase-media/${fullMediaFileName}`;
           }
           break;
         }

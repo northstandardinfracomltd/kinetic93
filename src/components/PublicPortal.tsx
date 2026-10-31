@@ -66,7 +66,7 @@ import {
   TenantMessage,
 } from "../types";
 import EmargementsTab from "./EmargementsTab";
-import { REGIONS_FRANCAISES, INITIAL_TENANT_MESSAGES } from "../utils";
+import { REGIONS_FRANCAISES, INITIAL_TENANT_MESSAGES, getLocationCustomName } from "../utils";
 import { CanalMessagesSidePane } from "./CanalMessagesSidePane";
 import { idbSet } from "../idb";
 import { getRegionsForCountry } from "../utils/regions";
@@ -1420,7 +1420,8 @@ export default function PublicPortal({
   const [showNewDistribStockForm, setShowNewDistribStockForm] = useState<boolean>(false);
   const [newDistribStockId, setNewDistribStockId] = useState<string>("");
   const [newDistribVolumeDisponible, setNewDistribVolumeDisponible] = useState<number>(1);
-  const [newDistribTraceabilityEnabled, setNewDistribTraceabilityEnabled] = useState<boolean>(false);
+  const [newDistribCommentaire, setNewDistribCommentaire] = useState<string>("");
+  const [newDistribTraceabilityEnabled, setNewDistribTraceabilityEnabled] = useState<boolean>(true);
   const [showNewDistribTraceForm, setShowNewDistribTraceForm] = useState<boolean>(false);
   const [pendingNewDistribTraceabilities, setPendingNewDistribTraceabilities] = useState<StockTraceability[]>([]);
   const [newDistribLotOrSerial, setNewDistribLotOrSerial] = useState<string>("");
@@ -1444,70 +1445,269 @@ export default function PublicPortal({
   const [isSavingInventory, setIsSavingInventory] = useState<boolean>(false);
   const [stockFeedbackMsg, setStockFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // helper for technician stocks tab lookup & changes
+  // Sync techLocationLink with logged-in technician profile
+  useEffect(() => {
+    if (!authenticatedUser) return;
+    const emailLower = (authenticatedUser.email || "").trim().toLowerCase();
+    const nameLower = (authenticatedUser.name || "").trim().toLowerCase();
+    const matchedMember = (members || []).find(
+      (m) =>
+        (emailLower && (m.email || "").trim().toLowerCase() === emailLower) ||
+        (nameLower && (m.name || "").trim().toLowerCase() === nameLower),
+    );
+    const resolvedLoc =
+      matchedMember?.locationLink ||
+      authenticatedUser.locationLink ||
+      (authenticatedUser as any)?.startAddress ||
+      "";
+    if (resolvedLoc && resolvedLoc.trim() && resolvedLoc.trim() !== techLocationLink) {
+      setTechLocationLink(resolvedLoc.trim());
+    }
+  }, [authenticatedUser, members]);
+
+  // Helper to check if a traceability item is linked to the logged-in technician's location
+  const doesTraceMatchTechLocation = (
+    trace: StockTraceability,
+    stockMouvements?: StockMovement[],
+  ): boolean => {
+    const targetLoc = (techLocationLink || authenticatedUser?.locationLink || "").trim();
+    if (!targetLoc) return false;
+    let rawLoc = "";
+    if (trace.emplacement && trace.emplacement.trim()) {
+      rawLoc = trace.emplacement.trim();
+    } else if (stockMouvements && stockMouvements.length > 0) {
+      const matchedMv = stockMouvements.find((mv) => mv.id === trace.movementId);
+      if (matchedMv) {
+        if (matchedMv.type === "Réapprovisionnement fournisseur") {
+          rawLoc = "Centrale des stocks";
+        } else if (matchedMv.emplacement) {
+          rawLoc = matchedMv.emplacement.includes(" : ")
+            ? matchedMv.emplacement.split(" : ")[1].trim()
+            : matchedMv.emplacement.trim();
+        }
+      }
+    }
+    if (!rawLoc || rawLoc === "Centrale" || rawLoc === "Centrale des stocks") {
+      return targetLoc.toLowerCase() === "centrale des stocks";
+    }
+    const normRaw = rawLoc.toLowerCase();
+    const normTarget = targetLoc.toLowerCase();
+    if (normRaw === normTarget) return true;
+    const customName = (getLocationCustomName(targetLoc) || "").trim();
+    if (customName && normRaw === customName.toLowerCase()) return true;
+    const techName = (authenticatedUser?.name || "").trim();
+    if (techName) {
+      const labelWithTarget = `${techName} — ${targetLoc}`.toLowerCase();
+      const labelWithCustom = customName ? `${techName} — ${customName}`.toLowerCase() : "";
+      if (normRaw === labelWithTarget || (labelWithCustom && normRaw === labelWithCustom)) {
+        return true;
+      }
+    }
+    if (normRaw.includes(" — ")) {
+      const afterDash = normRaw.split(" — ").pop()?.trim() || "";
+      if (afterDash === normTarget || (customName && afterDash === customName.toLowerCase())) {
+        return true;
+      }
+    }
+    if (normRaw.includes(" : ")) {
+      const afterColon = normRaw.split(" : ").pop()?.trim() || "";
+      if (afterColon === normTarget || (customName && afterColon === customName.toLowerCase())) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const findStockVariable = (denomIdOrName?: string) => {
+    if (!denomIdOrName) return undefined;
+    const clean = String(denomIdOrName).trim().toLowerCase();
+    return (
+      (variables || []).find((v) => v.id === denomIdOrName) ||
+      (variables || []).find((v) => v.nom && v.nom.trim().toLowerCase() === clean)
+    );
+  };
+
+  // Lookup "Sélection d'un stock distribué." : list all stocks from Spreadsheet Stocks where >= 1 traceability item is linked to the logged-in technician's location
   const techActiveStocks = useMemo(() => {
     if (!techLocationLink) return [];
-    return distributedStocks.filter(
-      (item) =>
-        item.locationName &&
-        item.locationName.toLowerCase().trim() ===
-          techLocationLink.toLowerCase().trim(),
+    return (stocks || []).filter(
+      (st) =>
+        Array.isArray(st.traceabilities) &&
+        st.traceabilities.length > 0 &&
+        st.traceabilities.some((tr) => doesTraceMatchTechLocation(tr, st.mouvements)),
     );
-  }, [distributedStocks, techLocationLink]);
-
-  const selectedTechStock = useMemo(() => {
-    return distributedStocks.find(
-      (item) => item.id === selectedTechDistributedStockId,
-    );
-  }, [distributedStocks, selectedTechDistributedStockId]);
+  }, [stocks, techLocationLink, authenticatedUser, members]);
 
   const matchedStockRecord = useMemo(() => {
-    if (!selectedTechStock) return null;
-    return stocks.find(
-      (s) =>
-        s.id === selectedTechStock.stockId ||
-        s.denominationPieceId === selectedTechStock.denominationPieceId,
+    if (!selectedTechDistributedStockId) return null;
+    const directStock = (stocks || []).find((s) => s.id === selectedTechDistributedStockId);
+    if (directStock) return directStock;
+    const ds = (distributedStocks || []).find(
+      (item) => item.id === selectedTechDistributedStockId,
     );
-  }, [stocks, selectedTechStock]);
+    if (!ds) return null;
+    return (
+      (stocks || []).find(
+        (s) =>
+          s.id === ds.stockId ||
+          s.denominationPieceId === ds.denominationPieceId,
+      ) || null
+    );
+  }, [stocks, distributedStocks, selectedTechDistributedStockId]);
+
+  const selectedTechStock = useMemo(() => {
+    if (!selectedTechDistributedStockId) return undefined;
+    const directDs = (distributedStocks || []).find(
+      (item) => item.id === selectedTechDistributedStockId,
+    );
+    if (directDs && !matchedStockRecord) return directDs;
+    if (!matchedStockRecord) return undefined;
+    const matchingDs = (distributedStocks || []).find(
+      (item) =>
+        (item.stockId === matchedStockRecord.id ||
+          item.denominationPieceId === matchedStockRecord.denominationPieceId) &&
+        item.locationName &&
+        item.locationName.toLowerCase().trim() ===
+          (techLocationLink || "").toLowerCase().trim(),
+    );
+    const techTraces = (matchedStockRecord.traceabilities || []).filter((tr) =>
+      doesTraceMatchTechLocation(tr, matchedStockRecord.mouvements),
+    );
+    const traceDispoVol = techTraces
+      .filter((tr) => (tr.situation || "Disponible") === "Disponible")
+      .reduce((sum, tr) => sum + (Number(tr.volume ?? 1) || 0), 0);
+    const traceReserveVol = techTraces
+      .filter((tr) =>
+        Boolean(
+          tr.reservationInfo &&
+            tr.reservationInfo.trim() &&
+            tr.reservationInfo.trim() !== "—",
+        ),
+      )
+      .reduce((sum, tr) => sum + (Number(tr.volume ?? 1) || 0), 0);
+
+    return {
+      id: matchingDs?.id || matchedStockRecord.id,
+      denominationPieceId: matchedStockRecord.denominationPieceId,
+      stockId: matchedStockRecord.id,
+      ugs: matchedStockRecord.ugs,
+      locationName: (techLocationLink || matchingDs?.locationName || "Véhicule A") as any,
+      volumeDisponible:
+        techTraces.length > 0 ? traceDispoVol : (matchingDs?.volumeDisponible ?? 0),
+      volumeReserve:
+        techTraces.length > 0 ? traceReserveVol : (matchingDs?.volumeReserve ?? 0),
+      volumeEntrant: matchingDs?.volumeEntrant ?? 0,
+    } as DistributedStockLocation;
+  }, [
+    distributedStocks,
+    selectedTechDistributedStockId,
+    matchedStockRecord,
+    techLocationLink,
+    authenticatedUser,
+    members,
+  ]);
 
   const filteredTraceabilities = useMemo(() => {
-    if (!matchedStockRecord || !matchedStockRecord.traceabilities || !selectedTechStock) return [];
-    return matchedStockRecord.traceabilities.filter(
-      (t) => (t.situation === "Disponible" || t.situation === "Signalé manquant") &&
-             t.emplacement === selectedTechStock.locationName
+    if (!matchedStockRecord || !matchedStockRecord.traceabilities) return [];
+    return matchedStockRecord.traceabilities.filter((t) =>
+      doesTraceMatchTechLocation(t, matchedStockRecord.mouvements),
     );
-  }, [matchedStockRecord, selectedTechStock]);
+  }, [matchedStockRecord, techLocationLink, authenticatedUser, members]);
 
   const availableTraceabilitiesCount = useMemo(() => {
-    if (!matchedStockRecord || !matchedStockRecord.traceabilities || !selectedTechStock) return 0;
-    return matchedStockRecord.traceabilities.filter(
-      (t) => t.situation === "Disponible" && t.emplacement === selectedTechStock.locationName
-    ).length;
-  }, [matchedStockRecord, selectedTechStock]);
+    return filteredTraceabilities.filter((t) => (t.situation || "Disponible") === "Disponible").length;
+  }, [filteredTraceabilities]);
+
+  const persistUpdatedStocksList = async (updatedStocks: StockRecord[]) => {
+    const effTenant =
+      techTenantId ||
+      (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+      "demo";
+    if (onUpdateStocks) {
+      await onUpdateStocks(updatedStocks, effTenant);
+    }
+    const tenantKeys = [effTenant];
+    if (/^d\d+$/i.test(effTenant) || /^\d+$/.test(effTenant)) {
+      const numOnly = effTenant.replace(/^d/i, "");
+      tenantKeys.push(`D${numOnly}`, `d${numOnly}`, numOnly);
+    }
+    for (const tk of Array.from(new Set(tenantKeys.filter(Boolean)))) {
+      try {
+        localStorage.setItem(`defib_${tk}_stocks`, JSON.stringify(updatedStocks));
+        localStorage.setItem(`fs_cache_${tk}_stocks`, JSON.stringify(updatedStocks));
+        idbSet(`defib_${tk}_stocks`, updatedStocks).catch(() => {});
+      } catch (_) {}
+    }
+  };
 
   const handleUpdateTraceability = (traceId: string, updates: Partial<StockTraceability>) => {
-    if (!matchedStockRecord || !stocks || !onUpdateStocks) return;
+    if (!matchedStockRecord || !stocks) return;
+    const effLoc = techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
     const updatedTraceabilities = (matchedStockRecord.traceabilities || []).map((t) => {
       if (t.id === traceId) {
-        return { ...t, ...updates };
+        return { ...t, ...updates, emplacement: effLoc };
       }
       return t;
     });
+    const updatedStocks = stocks.map((st) => {
+      if (st.id === matchedStockRecord.id) {
+        return { ...st, traceabilityEnabled: true, traceabilities: updatedTraceabilities };
+      }
+      return st;
+    });
+    persistUpdatedStocksList(updatedStocks);
+  };
+
+  const handleDeleteTechTraceability = (traceId: string) => {
+    if (!matchedStockRecord || !stocks) return;
+    const updatedTraceabilities = (matchedStockRecord.traceabilities || []).filter(
+      (t) => t.id !== traceId,
+    );
     const updatedStocks = stocks.map((st) => {
       if (st.id === matchedStockRecord.id) {
         return { ...st, traceabilities: updatedTraceabilities };
       }
       return st;
     });
-    onUpdateStocks(updatedStocks);
+    persistUpdatedStocksList(updatedStocks);
+  };
+
+  const handleAddTechTraceabilityRow = () => {
+    if (!matchedStockRecord || !stocks) return;
+    const effLoc = techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
+    const newItem: StockTraceability = {
+      id: `TR-${matchedStockRecord.ugs || "0001"}-${Date.now()}-${(matchedStockRecord.traceabilities || []).length + 1}`,
+      movementId: "Autre",
+      emplacement: effLoc,
+      lotOrSerial: "",
+      expirationDate: "",
+      situation: "Disponible",
+      reservationInfo: "",
+      volume: 1,
+      comment: "",
+    };
+    const updatedTraceabilities = [...(matchedStockRecord.traceabilities || []), newItem];
+    const updatedStocks = stocks.map((st) => {
+      if (st.id === matchedStockRecord.id) {
+        return {
+          ...st,
+          traceabilityEnabled: true,
+          traceabilities: updatedTraceabilities,
+        };
+      }
+      return st;
+    });
+    persistUpdatedStocksList(updatedStocks);
   };
 
   const selectedStockVariable = useMemo(() => {
-    if (!selectedTechStock) return null;
-    return variables.find(
-      (v) => v.id === selectedTechStock.denominationPieceId,
+    if (!matchedStockRecord && !selectedTechStock) return null;
+    return (
+      findStockVariable(
+        matchedStockRecord?.denominationPieceId || selectedTechStock?.denominationPieceId,
+      ) || null
     );
-  }, [variables, selectedTechStock]);
+  }, [variables, matchedStockRecord, selectedTechStock]);
 
   // Dynamically calculate outgoing volumes for technician stocks (same as standard form)
   const getPieceOutgoingStats = useMemo(() => {
@@ -2625,6 +2825,16 @@ export default function PublicPortal({
           }),
       ]);
       window.dispatchEvent(new CustomEvent("defib_refresh_webapp_data", { detail: { tenantId: tid } }));
+      window.dispatchEvent(
+        new CustomEvent("defib-manual-refresh-spreadsheet", {
+          detail: { spreadsheetKey: "spreadsheetStocks", idSuffix: "stocks" },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("defib-manual-refresh-spreadsheet", {
+          detail: { spreadsheetKey: "spreadsheetVariables", idSuffix: "variables" },
+        }),
+      );
       window.dispatchEvent(new CustomEvent("defib_reload_tours"));
       window.dispatchEvent(new Event("focus"));
       window.dispatchEvent(new Event("storage"));
@@ -4390,9 +4600,67 @@ export default function PublicPortal({
     }
   }, [propPointages]);
 
+  const doesPointageMatchTech = (
+    p: any,
+    user?: { name?: string; email?: string } | null
+  ): boolean => {
+    if (!p || !user) return false;
+    const uName = String(user.name || "").trim().toLowerCase();
+    const uEmail = String(user.email || "").trim().toLowerCase();
+    const uEmailPrefix = uEmail.includes("@")
+      ? uEmail.split("@")[0].replace(/[._-]+/g, " ").trim().toLowerCase()
+      : "";
+    const pName = String(p.techName || "").trim().toLowerCase();
+    const pEmail = String(p.techEmail || "").trim().toLowerCase();
+    const pEmailPrefix = pEmail.includes("@")
+      ? pEmail.split("@")[0].replace(/[._-]+/g, " ").trim().toLowerCase()
+      : pName.includes("@")
+      ? pName.split("@")[0].replace(/[._-]+/g, " ").trim().toLowerCase()
+      : "";
+
+    if (uEmail && (pEmail === uEmail || pName === uEmail)) return true;
+    if (uName && (pName === uName || pEmailPrefix === uName)) return true;
+    if (uEmailPrefix && (pName === uEmailPrefix || pEmailPrefix === uEmailPrefix)) return true;
+    return false;
+  };
+
+  const parsePointageStartDateTime = (
+    startDateStr: string,
+    startTimeStr: string
+  ): Date => {
+    const cleanDate = String(startDateStr || "").trim();
+    const parts = cleanDate.split(/[-/]/);
+    const tParts = String(startTimeStr || "00:00").split(":");
+    const hours = parseInt(tParts[0], 10) || 0;
+    const mins = parseInt(tParts[1], 10) || 0;
+    if (parts.length === 3) {
+      let year: number;
+      let month: number;
+      let day: number;
+      if (parts[0].length === 4) {
+        year = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10) - 1;
+        day = parseInt(parts[2], 10);
+      } else {
+        day = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10) - 1;
+        year = parseInt(parts[2], 10);
+        if (year < 100) year += 2000;
+      }
+      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+        const date = new Date(year, month, day);
+        date.setHours(hours, mins, 0, 0);
+        return date;
+      }
+    }
+    const fallback = new Date();
+    fallback.setHours(hours, mins, 0, 0);
+    return fallback;
+  };
+
   const savePointages = (updated: PointageLog[]) => {
     setPointages(updated);
-    const envId = localStorage.getItem("defib_tenant_id") || "demo";
+    const envId = techTenantId || localStorage.getItem("defib_tenant_id") || "demo";
     localStorage.setItem(
       `defib_${envId}_pointages_history`,
       JSON.stringify(updated),
@@ -4408,32 +4676,10 @@ export default function PublicPortal({
   useEffect(() => {
     let interval: NodeJS.Timeout;
     const activePointage = pointages.find(
-      (p) => p.isOngoing && p.techName === authenticatedUser?.name,
+      (p) => p && p.isOngoing && doesPointageMatchTech(p, authenticatedUser),
     );
     if (activePointage) {
-      const getStartDateTime = (
-        startDateStr: string,
-        startTimeStr: string,
-      ): Date => {
-        const parts = startDateStr.split(/[-/]/);
-        const tParts = startTimeStr.split(":");
-        if (parts.length === 3) {
-          const day = parseInt(parts[0], 10);
-          const month = parseInt(parts[1], 10) - 1;
-          const year = parseInt(parts[2], 10);
-          const date = new Date(year, month, day);
-          date.setHours(parseInt(tParts[0], 10), parseInt(tParts[1], 10), 0, 0);
-          return date;
-        }
-        const fallback = new Date();
-        fallback.setHours(
-          parseInt(tParts[0], 10),
-          parseInt(tParts[1], 10),
-          0,
-          0,
-        );
-        return fallback;
-      };
+      const getStartDateTime = parsePointageStartDateTime;
 
       const startObj = getStartDateTime(
         activePointage.startDate,
@@ -5167,36 +5413,13 @@ export default function PublicPortal({
   const handleTogglePointage = () => {
     const now = new Date();
     const activeIdx = pointages.findIndex(
-      (p) => p.isOngoing && p.techName === authenticatedUser?.name,
+      (p) => p && p.isOngoing && doesPointageMatchTech(p, authenticatedUser),
     );
 
     if (activeIdx !== -1) {
       // Ending ongoingPointage
       const activePointage = pointages[activeIdx];
-
-      const getStartDateTime = (
-        startDateStr: string,
-        startTimeStr: string,
-      ): Date => {
-        const parts = startDateStr.split(/[-/]/);
-        const tParts = startTimeStr.split(":");
-        if (parts.length === 3) {
-          const day = parseInt(parts[0], 10);
-          const month = parseInt(parts[1], 10) - 1;
-          const year = parseInt(parts[2], 10);
-          const date = new Date(year, month, day);
-          date.setHours(parseInt(tParts[0], 10), parseInt(tParts[1], 10), 0, 0);
-          return date;
-        }
-        const fallback = new Date();
-        fallback.setHours(
-          parseInt(tParts[0], 10),
-          parseInt(tParts[1], 10),
-          0,
-          0,
-        );
-        return fallback;
-      };
+      const getStartDateTime = parsePointageStartDateTime;
 
       const startObj = getStartDateTime(
         activePointage.startDate || now.toLocaleDateString("fr-FR"),
@@ -5226,6 +5449,8 @@ export default function PublicPortal({
       const updated = [...pointages];
       updated[activeIdx] = {
         ...activePointage,
+        techName: activePointage.techName || authenticatedUser?.name || "Technicien connecté",
+        techEmail: activePointage.techEmail || authenticatedUser?.email || "",
         endDate: finalEndDate,
         endTime: finalEndTime,
         durationSeconds: finalDurationSeconds,
@@ -5241,10 +5466,11 @@ export default function PublicPortal({
     } else {
       // Starting new Pointage
       const currentTechName = authenticatedUser?.name || "Technicien connecté";
+      const currentTechEmail = authenticatedUser?.email || "";
       const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
       const alreadyHasPointageToday = pointages.some((p) => {
-        if (p.techName !== currentTechName) return false;
+        if (!doesPointageMatchTech(p, authenticatedUser)) return false;
         const pIso = getIsoDate(p.startDate);
         return pIso === todayIso;
       });
@@ -5261,9 +5487,10 @@ export default function PublicPortal({
       const newLog: PointageLog = {
         id: "pt-" + Date.now(),
         techName: currentTechName,
+        techEmail: currentTechEmail,
         startDate: now.toLocaleDateString("fr-FR"),
         startTime: currentHHMM,
-        endTime: currentHHMM,
+        endTime: "",
         isOngoing: true,
         trajetMatin: "00:00",
         trajetSoir: "00:00",
@@ -5315,7 +5542,7 @@ export default function PublicPortal({
         const duplicate = pointages.some(
           (p) =>
             p.id !== id &&
-            p.techName === targetP.techName &&
+            doesPointageMatchTech(p, { name: targetP.techName, email: targetP.techEmail }) &&
             getIsoDate(p.startDate) === newIso
         );
         if (duplicate) {
@@ -10536,7 +10763,7 @@ export default function PublicPortal({
                     className="font-sans font-bold mb-2"
                   />
 
-                  {/* Piece / Material Select */}
+                  {/* Piece / Material Select: Lookup from Spreadsheet Stocks where >= 1 traceability item is linked to logged-in technician's location */}
                   <select
                     value={selectedTechDistributedStockId}
                     onChange={(e) => {
@@ -10563,20 +10790,14 @@ export default function PublicPortal({
                     className="font-sans font-bold mb-2 cursor-pointer"
                   >
                     <option value="">Sélection d’un stock distribué.</option>
-                    {techActiveStocks.map((item) => {
-                      const matchedCentralStock = stocks.find(
-                        (s) =>
-                          s.id === item.stockId ||
-                          s.denominationPieceId === item.denominationPieceId,
-                      );
-                      const ugs = matchedCentralStock?.ugs || "";
-                      const vObj = variables.find(
-                        (v) => v.id === item.denominationPieceId,
-                      );
-                      const pieceName = vObj ? vObj.nom : "Pièce inconnue";
+                    {techActiveStocks.map((st) => {
+                      const ugs = st.ugs || "";
+                      const vObj = findStockVariable(st.denominationPieceId);
+                      const pieceName = vObj ? vObj.nom : (st.denominationPieceId || "Pièce inconnue");
+                      const pieceCat = vObj?.category ? ` (${vObj.category})` : "";
                       return (
-                        <option key={item.id} value={item.id}>
-                          {pieceName} {ugs ? `(UGS: ${ugs})` : ""}
+                        <option key={st.id} value={st.id}>
+                          {pieceName}{pieceCat} {ugs ? `[UGS: ${ugs}]` : ""}
                         </option>
                       );
                     })}
@@ -10613,9 +10834,29 @@ export default function PublicPortal({
                     <button
                       type="button"
                       onClick={() => {
-                        setShowNewDistribStockForm(!showNewDistribStockForm);
+                        const nextOpen = !showNewDistribStockForm;
+                        setShowNewDistribStockForm(nextOpen);
                         setSelectedTechDistributedStockId("");
                         setShowRapatriementForm(false);
+                        if (nextOpen) {
+                          setNewDistribTraceabilityEnabled(true);
+                          const effLoc = techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
+                          if (pendingNewDistribTraceabilities.length === 0) {
+                            setPendingNewDistribTraceabilities([
+                              {
+                                id: "tr_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+                                movementId: "Autre",
+                                emplacement: effLoc,
+                                lotOrSerial: "",
+                                expirationDate: "",
+                                situation: "Disponible",
+                                reservationInfo: "",
+                                volume: 1,
+                                comment: "",
+                              },
+                            ]);
+                          }
+                        }
                       }}
                       style={{
                         backgroundColor: "rgb(46, 84, 255)",
@@ -10683,14 +10924,19 @@ export default function PublicPortal({
                         Pour être sélectionnée, une pièce doit exister (être référencée) dans la centrale des stocks, et ne pas déjà être existante dans l’emplacement du technicien.
                       </div>
 
-                      {/* 1. Équipement de la centrale des stocks */}
+                      {/* 1. Équipement de la centrale des stocks : Lookup from Spreadsheet Stocks where NO traceability item is linked to logged-in technician's location */}
                       <div className="flex flex-col gap-1">
                         <label className="font-bold font-sans" style={{ color: "rgb(80, 97, 122)", fontSize: "16px" }}>
                           Équipement de la centrale des stocks *
                         </label>
                         <select
                           value={newDistribStockId}
-                          onChange={(e) => setNewDistribStockId(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setNewDistribStockId(val);
+                            const sel = (stocks || []).find((s) => s.id === val);
+                            setNewDistribCommentaire(sel?.commentaire || "");
+                          }}
                           style={{
                             color: "#000000",
                             fontSize: "18px",
@@ -10711,25 +10957,24 @@ export default function PublicPortal({
                           required
                         >
                           <option value="">Sélection d'une pièce.</option>
-                          {stocks
+                          {(stocks || [])
                             .filter((st) => {
                               if (!techLocationLink) return true;
-                              const exists = distributedStocks.some(
-                                (ds) =>
-                                  (ds.stockId === st.id || ds.denominationPieceId === st.denominationPieceId) &&
-                                  ds.locationName &&
-                                  ds.locationName.toLowerCase().trim() === techLocationLink.toLowerCase().trim()
-                              );
-                              return !exists;
+                              const hasLinkedTrace =
+                                Array.isArray(st.traceabilities) &&
+                                st.traceabilities.some((tr) =>
+                                  doesTraceMatchTechLocation(tr, st.mouvements),
+                                );
+                              return !hasLinkedTrace;
                             })
                             .map((st) => {
-                              const vObj = variables.find((v) => v.id === st.denominationPieceId);
-                              const pieceName = vObj ? vObj.nom : "Dénomination inconnue";
-                              const pieceCat = vObj ? vObj.category : "";
+                              const vObj = findStockVariable(st.denominationPieceId);
+                              const pieceName = vObj ? vObj.nom : (st.denominationPieceId || "Dénomination inconnue");
+                              const pieceCat = vObj?.category ? ` (${vObj.category})` : "";
                               const ugsLabel = st.ugs ? ` [UGS: ${st.ugs}]` : "";
                               return (
                                 <option key={st.id} value={st.id}>
-                                  {pieceName} ({pieceCat}){ugsLabel}
+                                  {pieceName}{pieceCat}{ugsLabel}
                                 </option>
                               );
                             })}
@@ -10789,299 +11034,449 @@ export default function PublicPortal({
                         />
                       </div>
 
-                      {/* 4. Activer la traçabilité des pièces */}
-                      <div
-                        className="flex items-center justify-between p-3 rounded-xl bg-white"
-                        style={{ border: "none", borderRadius: "13px" }}
-                      >
-                        <span className="font-bold font-sans text-[16px]" style={{ color: "rgb(80, 97, 122)" }}>
-                          Activer la traçabilité des pièces
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!newDistribTraceabilityEnabled) {
-                              setNewDistribTraceabilityEnabled(true);
-                            }
-                          }}
-                          disabled={newDistribTraceabilityEnabled}
-                          className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                            newDistribTraceabilityEnabled ? "cursor-not-allowed" : "cursor-pointer"
-                          }`}
-                          style={{
-                            backgroundColor: newDistribTraceabilityEnabled ? "#fe4eba" : "#cbd5e1",
-                          }}
-                        >
+                      {/* Section Inventaire de traçabilité (Même trame que dans le logiciel principal) */}
+                      <div className="pt-2 flex flex-col gap-4">
+                        <div className="flex justify-between items-center mb-1 select-none">
                           <span
-                            className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
+                            className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                             style={{
-                              transform: newDistribTraceabilityEnabled ? "translateX(20px)" : "translateX(0px)",
+                              color: "rgb(21 99 55)",
+                              backgroundColor: "rgb(61 220 132)",
+                              fontSize: "18px",
+                              border: "none",
+                              textTransform: "none",
+                              letterSpacing: "normal",
                             }}
-                          />
-                        </button>
-                      </div>
+                          >
+                            {t("Inventaire de traçabilité")}
+                          </span>
+                        </div>
 
-                      {/* Sub-section Inventaire de traçabilité pour nouveau stock */}
-                      {newDistribTraceabilityEnabled && (
-                        <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: "#f5f7fa", border: "none", boxShadow: "none", borderRadius: "14px" }}>
-                          <div className="flex flex-col gap-2.5 select-none w-full">
-                            <div>
-                              <span
-                                className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
-                                style={{
-                                  color: "#fff",
-                                  backgroundColor: "#5f1f66",
-                                  fontSize: "16px",
-                                }}
-                              >
-                                Inventaire de traçabilité
-                              </span>
-                            </div>
+                        {/* Commentaire. */}
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                            Commentaire.
+                          </label>
+                          <input
+                            type="text"
+                            value={newDistribCommentaire}
+                            onChange={(e) => setNewDistribCommentaire(e.target.value)}
+                            placeholder="Entrez votre commentaire..."
+                            style={{
+                              color: "#000000",
+                              fontSize: "18px",
+                              border: "none",
+                              borderRadius: "13px",
+                              padding: "10px 12px",
+                              backgroundColor: "#ffffff",
+                              width: "100%",
+                              boxSizing: "border-box",
+                              outline: "none",
+                              textAlign: "center",
+                            }}
+                            className="font-sans"
+                          />
+                        </div>
+
+                        {/* Activer la traçabilité des pièces. */}
+                        <div className="flex flex-col gap-2 mt-1">
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                            {t("Activer la traçabilité des pièces.")}
+                          </span>
+                          <div className="flex gap-4 mt-1 bg-transparent">
                             <button
                               type="button"
-                              onClick={() => setShowNewDistribTraceForm(!showNewDistribTraceForm)}
-                              style={{
-                                backgroundColor: "rgb(46, 84, 255)",
-                                color: "#ffffff",
-                                borderRadius: "11px",
-                                fontSize: "16px",
-                                fontWeight: "bold",
-                                padding: "12px 16px",
-                                border: "none",
-                                boxShadow: "none",
-                                width: "100%",
-                              }}
-                              className="font-sans active:scale-[0.98] transition-all w-full text-center cursor-pointer block"
+                              onClick={() => setNewDistribTraceabilityEnabled(true)}
+                              className="flex items-center gap-2 font-sans font-bold cursor-pointer select-none border-0 bg-transparent text-black"
+                              style={{ fontSize: "18px" }}
                             >
-                              Nouveau
+                              <span
+                                className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${
+                                  newDistribTraceabilityEnabled === true ? "border-[#2e54ff]" : "border-slate-300"
+                                }`}
+                                style={{ borderWidth: "1px" }}
+                              >
+                                {newDistribTraceabilityEnabled === true && (
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
+                                )}
+                              </span>
+                              Oui
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (pendingNewDistribTraceabilities.length > 0) {
+                                  alert(
+                                    "Impossible de désactiver la traçabilité car des pièces de traçabilité existent déjà dans le tableau.",
+                                  );
+                                  return;
+                                }
+                                setNewDistribTraceabilityEnabled(false);
+                              }}
+                              disabled={pendingNewDistribTraceabilities.length > 0}
+                              className={`flex items-center gap-2 font-sans font-bold select-none border-0 bg-transparent text-black ${
+                                pendingNewDistribTraceabilities.length > 0
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : "cursor-pointer"
+                              }`}
+                              style={{ fontSize: "18px" }}
+                            >
+                              <span
+                                className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${
+                                  newDistribTraceabilityEnabled === false ? "border-[#2e54ff]" : "border-slate-300"
+                                }`}
+                                style={{ borderWidth: "1px" }}
+                              >
+                                {newDistribTraceabilityEnabled === false && (
+                                  <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
+                                )}
+                              </span>
+                              Non
                             </button>
                           </div>
-
-                          {/* Traceability Sub-form for mobile vertical layout */}
-                          {showNewDistribTraceForm && (
-                            <div className="p-4 rounded-xl space-y-3 text-left font-sans animate-fadeIn" style={{ backgroundColor: "#f5f7fa", border: "none", boxShadow: "none" }}>
-                              {/* 1. Mouvement */}
-                              <div className="flex flex-col gap-1 w-full min-w-0">
-                                <label className="font-bold font-sans text-black text-[15px]">
-                                  Sélection du mouvement *
-                                </label>
-                                <select
-                                  value={newDistribMovementId}
-                                  onChange={(e) => setNewDistribMovementId(e.target.value)}
-                                  style={{
-                                    color: "#000000",
-                                    fontSize: "16px",
-                                    border: "none",
-                                    borderRadius: "10px",
-                                    padding: "8px 10px",
-                                    backgroundColor: "#ffffff",
-                                    width: "100%",
-                                    maxWidth: "100%",
-                                    boxSizing: "border-box",
-                                    textAlign: "center",
-                                    textAlignLast: "center",
-                                  }}
-                                  className="font-sans font-medium"
-                                >
-                                  <option value="Autre (Aucun mouvement)">Autre (Aucun mouvement)</option>
-                                  {newDistribStockId &&
-                                    (stocks.find((s) => s.id === newDistribStockId)?.mouvements || [])
-                                      .filter((mv) => mv.type !== "Annulation")
-                                      .map((mv) => (
-                                        <option key={mv.id} value={mv.id}>
-                                          {mv.date} - {mv.type} (Vol: {mv.volume})
-                                        </option>
-                                      ))}
-                                </select>
-                              </div>
-
-                              {/* 2. Lot ou Série */}
-                              <div className="flex flex-col gap-1 w-full min-w-0">
-                                <label className="font-bold font-sans text-black text-[15px]">
-                                  Numéro de lot ou série *
-                                </label>
-                                <input
-                                  type="text"
-                                  value={newDistribLotOrSerial}
-                                  onChange={(e) => setNewDistribLotOrSerial(e.target.value)}
-                                  placeholder="Numéro de lot ou série"
-                                  style={{
-                                    color: "#000000",
-                                    fontSize: "16px",
-                                    border: "none",
-                                    borderRadius: "10px",
-                                    padding: "8px 10px",
-                                    backgroundColor: "#ffffff",
-                                    width: "100%",
-                                    maxWidth: "100%",
-                                    boxSizing: "border-box",
-                                    textAlign: "center",
-                                  }}
-                                  className="font-sans font-semibold"
-                                />
-                              </div>
-
-                              {/* 3. Expiration */}
-                              <div className="flex flex-col gap-1 w-full min-w-0 overflow-hidden">
-                                <label className="font-bold font-sans text-black text-[15px]">
-                                  Date de péremption (si applicable).
-                                </label>
-                                <input
-                                  type="date"
-                                  value={newDistribExpirationDate}
-                                  onChange={(e) => setNewDistribExpirationDate(e.target.value)}
-                                  style={{
-                                    color: "#000000",
-                                    fontSize: "16px",
-                                    border: "none",
-                                    borderRadius: "10px",
-                                    padding: "8px 10px",
-                                    backgroundColor: "#ffffff",
-                                    width: "100%",
-                                    maxWidth: "100%",
-                                    minWidth: "0px",
-                                    boxSizing: "border-box",
-                                    display: "block",
-                                    WebkitAppearance: "none",
-                                    appearance: "none",
-                                    textAlign: "center",
-                                  }}
-                                  className="font-sans font-medium w-full min-w-0 max-w-full block box-border"
-                                />
-                              </div>
-
-                              {/* 4. Volume */}
-                              <div className="flex flex-col gap-1 w-full min-w-0">
-                                <label className="font-bold font-sans text-black text-[15px]">
-                                  Volume *
-                                </label>
-                                <input
-                                  type="number"
-                                  value={1}
-                                  disabled
-                                  readOnly
-                                  style={{
-                                    color: "#000000",
-                                    fontSize: "16px",
-                                    border: "none",
-                                    borderRadius: "10px",
-                                    padding: "8px 10px",
-                                    backgroundColor: "#ffffff",
-                                    width: "100%",
-                                    maxWidth: "100%",
-                                    boxSizing: "border-box",
-                                    textAlign: "center",
-                                    opacity: 1,
-                                    WebkitTextFillColor: "#000000",
-                                  }}
-                                  className="font-sans font-semibold cursor-not-allowed"
-                                />
-                              </div>
-
-                              {/* 5. Situation */}
-                              <div className="flex flex-col gap-1 w-full min-w-0">
-                                <label className="font-bold font-sans text-black text-[15px]">
-                                  Situation *
-                                </label>
-                                <select
-                                  value={newDistribSituation}
-                                  onChange={(e) => setNewDistribSituation(e.target.value as any)}
-                                  style={{
-                                    color: "#000000",
-                                    fontSize: "16px",
-                                    border: "none",
-                                    borderRadius: "10px",
-                                    padding: "8px 10px",
-                                    backgroundColor: "#ffffff",
-                                    width: "100%",
-                                    maxWidth: "100%",
-                                    boxSizing: "border-box",
-                                    textAlign: "center",
-                                    textAlignLast: "center",
-                                  }}
-                                  className="font-sans font-medium"
-                                >
-                                  <option value="Disponible">Disponible</option>
-                                  <option value="Utilisé">Utilisé</option>
-                                  <option value="Indisponible">Indisponible</option>
-                                  <option value="Signalé manquant">Signalé manquant</option>
-                                  <option value="Prêté">Prêté</option>
-                                </select>
-                              </div>
-
-                              <div className="flex items-center gap-2 pt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => setShowNewDistribTraceForm(false)}
-                                  className="flex-1 bg-[#0f172a] text-white font-bold py-2 rounded-lg text-[15px]"
-                                >
-                                  Annuler
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (!newDistribLotOrSerial.trim()) {
-                                      alert("Le numéro de lot ou série est requis.");
-                                      return;
-                                    }
-                                    const cleanLot = newDistribLotOrSerial.trim().toLowerCase();
-                                    const isDuplicate = pendingNewDistribTraceabilities.some(
-                                      (t) => t.lotOrSerial && t.lotOrSerial.trim().toLowerCase() === cleanLot
-                                    ) || stocks.some((st) => (st.traceabilities || []).some((t) => t.lotOrSerial && t.lotOrSerial.trim().toLowerCase() === cleanLot));
-                                    if (isDuplicate) {
-                                      alert("Ce numéro de lot ou de série existe déjà dans l'inventaire de traçabilité.");
-                                      return;
-                                    }
-                                    const newTraceItem: StockTraceability = {
-                                      id: "tr_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
-                                      movementId: newDistribMovementId || "Autre (Aucun mouvement)",
-                                      lotOrSerial: newDistribLotOrSerial.trim(),
-                                      expirationDate: newDistribExpirationDate || undefined,
-                                      volume: 1,
-                                      situation: newDistribSituation,
-                                      emplacement: techLocationLink || "Centrale des stocks",
-                                    };
-                                    setPendingNewDistribTraceabilities([...pendingNewDistribTraceabilities, newTraceItem]);
-                                    setNewDistribLotOrSerial("");
-                                    setNewDistribExpirationDate("");
-                                    setNewDistribMovementId("Autre (Aucun mouvement)");
-                                    setNewDistribSituation("Disponible");
-                                    setShowNewDistribTraceForm(false);
-                                  }}
-                                  className="flex-1 bg-[#2e54ff] text-white font-bold py-2 rounded-lg text-[15px]"
-                                >
-                                  Ajouter
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* List of pending traceabilities added */}
-                          {pendingNewDistribTraceabilities.length > 0 && (
-                            <div className="space-y-2 pt-2">
-                              <span className="text-xs font-bold text-slate-600 font-sans block">
-                                Pièces à ajouter ({pendingNewDistribTraceabilities.length}) :
-                              </span>
-                              {pendingNewDistribTraceabilities.map((t, i) => (
-                                <div key={t.id} className="flex items-center justify-between p-2.5 bg-white rounded-lg text-xs font-sans" style={{ border: "none", boxShadow: "none" }}>
-                                  <div>
-                                    <span className="font-bold text-black">{t.lotOrSerial}</span>
-                                    {t.expirationDate && <span className="text-slate-500 ml-2">(Périm. {t.expirationDate})</span>}
-                                    <span className="ml-2 text-purple-700 font-semibold">[{t.situation}]</span>
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setPendingNewDistribTraceabilities(pendingNewDistribTraceabilities.filter((_, idx) => idx !== i))}
-                                    className="text-red-500 font-bold hover:underline"
-                                  >
-                                    Supprimer
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
                         </div>
-                      )}
+
+                        {newDistribTraceabilityEnabled && (
+                          <div className="flex flex-col gap-4 mt-2">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const effLoc =
+                                    techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
+                                  const newItem: StockTraceability = {
+                                    id: `TR-${Date.now()}-${pendingNewDistribTraceabilities.length + 1}`,
+                                    movementId: "Autre",
+                                    emplacement: effLoc,
+                                    lotOrSerial: "",
+                                    expirationDate: "",
+                                    situation: "Disponible",
+                                    reservationInfo: "",
+                                    volume: 1,
+                                    comment: "",
+                                  };
+                                  setPendingNewDistribTraceabilities([
+                                    ...pendingNewDistribTraceabilities,
+                                    newItem,
+                                  ]);
+                                }}
+                                style={{
+                                  backgroundColor: "#0f172a",
+                                  color: "#ffffff",
+                                  padding: "10px 20px",
+                                  fontSize: "18px",
+                                  borderRadius: "13px",
+                                  cursor: "pointer",
+                                  border: "none",
+                                  boxShadow: "none",
+                                }}
+                                className="font-sans font-bold active:scale-95 transition-all border-0 text-white"
+                              >
+                                Nouvelle pièce
+                              </button>
+                            </div>
+
+                            {pendingNewDistribTraceabilities.length > 0 && (
+                              <div className="flex flex-col gap-3">
+                                {pendingNewDistribTraceabilities.map((trace, idx) => {
+                                  const currentLot = (trace.lotOrSerial || "").trim();
+                                  const isLotFilled = Boolean(currentLot);
+                                  const effLoc =
+                                    techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
+
+                                  return (
+                                    <div
+                                      key={trace.id || idx}
+                                      className="flex flex-col gap-4 p-4 rounded-xl"
+                                      style={{
+                                        backgroundColor: "#f5f7fa",
+                                        border: "none",
+                                        boxShadow: "none",
+                                      }}
+                                    >
+                                      {/* 1. Emplacement. (disabled & hidden, auto-set to logged technician's location) */}
+                                      <div className="hidden" style={{ display: "none" }}>
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          Emplacement.
+                                        </label>
+                                        <select
+                                          value={trace.emplacement || effLoc}
+                                          disabled
+                                          className="w-full bg-white text-black p-2 rounded font-sans text-xs"
+                                        >
+                                          <option value={effLoc}>{effLoc}</option>
+                                        </select>
+                                      </div>
+
+                                      {/* 2. Numéro de lot ou série. */}
+                                      <div className="flex flex-col gap-1 min-w-0">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          Numéro de lot ou série.
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={trace.lotOrSerial || ""}
+                                          onChange={(e) => {
+                                            const updated = [...pendingNewDistribTraceabilities];
+                                            updated[idx] = {
+                                              ...updated[idx],
+                                              emplacement: effLoc,
+                                              lotOrSerial: e.target.value,
+                                            };
+                                            setPendingNewDistribTraceabilities(updated);
+                                          }}
+                                          placeholder="Lot / Série"
+                                          style={{
+                                            backgroundColor: "#ffffff",
+                                            color: "#000000",
+                                            fontSize: "18px",
+                                            borderRadius: "13px",
+                                            border: "none",
+                                            padding: "10px 12px",
+                                            textAlign: "center",
+                                            width: "100%",
+                                            boxSizing: "border-box",
+                                          }}
+                                          className="w-full bg-white text-black font-sans"
+                                        />
+                                      </div>
+
+                                      {/* 3. Date de péremption. */}
+                                      <div className="flex flex-col gap-1 min-w-0">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          Date de péremption.
+                                        </label>
+                                        <input
+                                          type="date"
+                                          value={trace.expirationDate || ""}
+                                          onChange={(e) => {
+                                            const updated = [...pendingNewDistribTraceabilities];
+                                            updated[idx] = {
+                                              ...updated[idx],
+                                              emplacement: effLoc,
+                                              expirationDate: e.target.value || "",
+                                            };
+                                            setPendingNewDistribTraceabilities(updated);
+                                          }}
+                                          style={{
+                                            backgroundColor: "#ffffff",
+                                            color: "#000000",
+                                            fontSize: "18px",
+                                            borderRadius: "13px",
+                                            border: "none",
+                                            padding: "10px 12px",
+                                            textAlign: "center",
+                                            width: "100%",
+                                            boxSizing: "border-box",
+                                          }}
+                                          className="w-full bg-white text-black font-sans"
+                                        />
+                                      </div>
+
+                                      {/* 4. Situation. */}
+                                      <div className="flex flex-col gap-1 min-w-0">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          Situation.
+                                        </label>
+                                        <select
+                                          value={
+                                            trace.situation === "Signalé manquant"
+                                              ? "Signalé Manquant"
+                                              : trace.situation || "Disponible"
+                                          }
+                                          onChange={(e) => {
+                                            const updated = [...pendingNewDistribTraceabilities];
+                                            updated[idx] = {
+                                              ...updated[idx],
+                                              emplacement: effLoc,
+                                              situation: e.target.value as any,
+                                            };
+                                            setPendingNewDistribTraceabilities(updated);
+                                          }}
+                                          style={{
+                                            backgroundColor: "#ffffff",
+                                            color: "#000000",
+                                            fontSize: "18px",
+                                            borderRadius: "13px",
+                                            border: "none",
+                                            padding: "10px 12px",
+                                            textAlign: "center",
+                                            textAlignLast: "center",
+                                            width: "100%",
+                                            boxSizing: "border-box",
+                                            appearance: "none",
+                                            WebkitAppearance: "none",
+                                            MozAppearance: "none",
+                                          }}
+                                          className="w-full bg-white text-black font-sans"
+                                        >
+                                          <option value="Disponible">Disponible</option>
+                                          <option value="Utilisé">Utilisé</option>
+                                          <option value="Indisponible">Indisponible</option>
+                                          <option value="Signalé Manquant">Signalé Manquant</option>
+                                          <option value="Prêté">Prêté</option>
+                                        </select>
+                                      </div>
+
+                                      {/* 5. Infos réservation. */}
+                                      <div className="flex flex-col gap-1 min-w-0">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          Infos réservation.
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={trace.reservationInfo ?? ""}
+                                          onChange={(e) => {
+                                            const updated = [...pendingNewDistribTraceabilities];
+                                            updated[idx] = {
+                                              ...updated[idx],
+                                              emplacement: effLoc,
+                                              reservationInfo: e.target.value,
+                                            };
+                                            setPendingNewDistribTraceabilities(updated);
+                                          }}
+                                          placeholder="Infos réservation..."
+                                          style={{
+                                            backgroundColor: "#ffffff",
+                                            color: "#000000",
+                                            fontSize: "18px",
+                                            borderRadius: "13px",
+                                            border: "none",
+                                            padding: "10px 12px",
+                                            textAlign: "center",
+                                            width: "100%",
+                                            boxSizing: "border-box",
+                                          }}
+                                          className="w-full bg-white text-black font-sans"
+                                        />
+                                      </div>
+
+                                      {/* 6. Volume. */}
+                                      <div className="flex flex-col gap-1 min-w-0">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          Volume.
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={trace.volume ?? 1}
+                                          onChange={(e) => {
+                                            const val =
+                                              e.target.value === "" ? 1 : Number(e.target.value);
+                                            const updated = [...pendingNewDistribTraceabilities];
+                                            updated[idx] = {
+                                              ...updated[idx],
+                                              emplacement: effLoc,
+                                              volume: isNaN(val) ? 1 : val,
+                                            };
+                                            setPendingNewDistribTraceabilities(updated);
+                                          }}
+                                          style={{
+                                            backgroundColor: "#ffffff",
+                                            color: "#000000",
+                                            fontSize: "18px",
+                                            borderRadius: "13px",
+                                            border: "none",
+                                            padding: "10px 12px",
+                                            textAlign: "center",
+                                            width: "100%",
+                                            boxSizing: "border-box",
+                                          }}
+                                          className="w-full bg-white text-black font-sans"
+                                        />
+                                      </div>
+
+                                      {/* 7. Commentaire. */}
+                                      <div className="flex flex-col gap-1 min-w-0">
+                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          Commentaire.
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={trace.comment || ""}
+                                          onChange={(e) => {
+                                            const updated = [...pendingNewDistribTraceabilities];
+                                            updated[idx] = {
+                                              ...updated[idx],
+                                              emplacement: effLoc,
+                                              comment: e.target.value,
+                                            };
+                                            setPendingNewDistribTraceabilities(updated);
+                                          }}
+                                          placeholder="Commentaire..."
+                                          style={{
+                                            backgroundColor: "#ffffff",
+                                            color: "#000000",
+                                            fontSize: "18px",
+                                            borderRadius: "13px",
+                                            border: "none",
+                                            padding: "10px 12px",
+                                            textAlign: "center",
+                                            width: "100%",
+                                            boxSizing: "border-box",
+                                          }}
+                                          className="w-full bg-white text-black font-sans"
+                                        />
+                                      </div>
+
+                                      {/* 8. Bouton Imprimer Code-Barres */}
+                                      <div className="flex flex-col justify-end min-w-0">
+                                        <button
+                                          type="button"
+                                          disabled={!isLotFilled}
+                                          onClick={() => {
+                                            if (!isLotFilled) return;
+                                            downloadBarcodeSVG(trace.lotOrSerial || "");
+                                          }}
+                                          style={{
+                                            backgroundColor: "#0f172a",
+                                            color: "#ffffff",
+                                            padding: "12px 14px",
+                                            fontSize: "18px",
+                                            borderRadius: "13px",
+                                            boxShadow: "none",
+                                            opacity: !isLotFilled ? 0.45 : 1,
+                                            cursor: !isLotFilled ? "not-allowed" : "pointer",
+                                          }}
+                                          className="w-full font-sans font-bold active:scale-95 transition-all border-0"
+                                        >
+                                          Imprimer Code-Barres
+                                        </button>
+                                      </div>
+
+                                      {/* 9. Bouton Supprimer */}
+                                      <div className="flex flex-col justify-end min-w-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setPendingNewDistribTraceabilities(
+                                              pendingNewDistribTraceabilities.filter(
+                                                (_, i) => i !== idx,
+                                              ),
+                                            );
+                                          }}
+                                          style={{
+                                            backgroundColor: "#D22D0B",
+                                            color: "#ffffff",
+                                            padding: "12px 14px",
+                                            fontSize: "18px",
+                                            borderRadius: "13px",
+                                            boxShadow: "none",
+                                            cursor: "pointer",
+                                          }}
+                                          className="w-full font-sans font-bold active:scale-95 transition-all cursor-pointer border-0"
+                                        >
+                                          Supprimer
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
 
                       {/* Buttons: Annuler / Enregistrer (50% / 50%) */}
                       <div className="flex items-center gap-3 pt-2 w-full">
@@ -11091,6 +11486,7 @@ export default function PublicPortal({
                             setShowNewDistribStockForm(false);
                             setPendingNewDistribTraceabilities([]);
                             setNewDistribTraceabilityEnabled(false);
+                            setNewDistribCommentaire("");
                           }}
                           style={{
                             backgroundColor: "#0f172a",
@@ -11113,44 +11509,62 @@ export default function PublicPortal({
                               alert("Veuillez sélectionner un équipement de la centrale des stocks.");
                               return;
                             }
-                            const effLocation = techLocationLink || authenticatedUser?.locationLink || (authenticatedUser as any)?.startAddress || "Véhicule A";
+                            const effLocation =
+                              techLocationLink ||
+                              authenticatedUser?.locationLink ||
+                              (authenticatedUser as any)?.startAddress ||
+                              "Véhicule A";
                             if (!techLocationLink) {
                               setTechLocationLink(effLocation);
                             }
-                            const selectedStock = (stocks || []).find((s) => s.id === newDistribStockId);
+                            const selectedStock = (stocks || []).find(
+                              (s) => s.id === newDistribStockId,
+                            );
                             if (!selectedStock) return;
 
                             setIsSavingDistribStock(true);
                             try {
-                              const effTenant = techTenantId || (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) || "demo";
-                              let targetId = "";
+                              const effTenant =
+                                techTenantId ||
+                                (typeof window !== "undefined"
+                                  ? localStorage.getItem("defib_tenant_id")
+                                  : null) ||
+                                "demo";
                               let updatedDs = [...(distributedStocks || [])];
 
                               const existingIndex = updatedDs.findIndex(
                                 (ds) =>
-                                  (ds.stockId === selectedStock.id || ds.denominationPieceId === selectedStock.denominationPieceId) &&
+                                  (ds.stockId === selectedStock.id ||
+                                    ds.denominationPieceId ===
+                                      selectedStock.denominationPieceId) &&
                                   ds.locationName &&
-                                  ds.locationName.toLowerCase().trim() === effLocation.toLowerCase().trim()
+                                  ds.locationName.toLowerCase().trim() ===
+                                    effLocation.toLowerCase().trim(),
                               );
 
                               if (existingIndex !== -1) {
-                                targetId = updatedDs[existingIndex].id;
                                 updatedDs[existingIndex] = {
                                   ...updatedDs[existingIndex],
                                   ...(effTenant ? { envId: effTenant } : {}),
                                   tenantId: effTenant,
                                   locationName: effLocation as any,
-                                  volumeDisponible: updatedDs[existingIndex].volumeDisponible + Number(newDistribVolumeDisponible),
+                                  volumeDisponible:
+                                    updatedDs[existingIndex].volumeDisponible +
+                                    Number(newDistribVolumeDisponible),
                                 } as DistributedStockLocation;
                               } else {
-                                targetId = `dist_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
                                 const newItem: DistributedStockLocation = {
-                                  id: targetId,
-                                  denominationPieceId: selectedStock.denominationPieceId,
+                                  id: `dist_${Date.now()}_${Math.random()
+                                    .toString(36)
+                                    .substr(2, 5)}`,
+                                  denominationPieceId:
+                                    selectedStock.denominationPieceId,
                                   stockId: selectedStock.id,
                                   ugs: selectedStock.ugs,
                                   locationName: effLocation as any,
-                                  volumeDisponible: Number(newDistribVolumeDisponible),
+                                  volumeDisponible: Number(
+                                    newDistribVolumeDisponible,
+                                  ),
                                   volumeReserve: 0,
                                   volumeEntrant: 0,
                                 };
@@ -11161,121 +11575,138 @@ export default function PublicPortal({
                                 updatedDs = [newItem, ...updatedDs];
                               }
 
-                              // Update stock traceability if enabled
-                              let updatedStocksList = stocks || [];
-                              if (newDistribTraceabilityEnabled && stocks) {
-                                updatedStocksList = stocks.map((st) => {
-                                  if (st.id === selectedStock.id) {
-                                    return {
-                                      ...st,
-                                      traceabilityEnabled: true,
-                                      traceabilities: [...(st.traceabilities || []), ...pendingNewDistribTraceabilities],
-                                    };
-                                  }
-                                  return st;
-                                });
-                              }
+                              // Ensure at least 1 traceability item is linked to effLocation so the stock is linked to the logged-in technician
+                              const tracesToSave: StockTraceability[] =
+                                pendingNewDistribTraceabilities.length > 0
+                                  ? pendingNewDistribTraceabilities.map((t) => ({
+                                      ...t,
+                                      emplacement: effLocation,
+                                      volume: Number(t.volume ?? 1) || 1,
+                                    }))
+                                  : [
+                                      {
+                                        id:
+                                          "tr_" +
+                                          Date.now() +
+                                          "_" +
+                                          Math.random().toString(36).substr(2, 5),
+                                        movementId: "Autre",
+                                        emplacement: effLocation,
+                                        lotOrSerial: "",
+                                        expirationDate: "",
+                                        situation: "Disponible",
+                                        reservationInfo: "",
+                                        volume:
+                                          Number(newDistribVolumeDisponible) || 1,
+                                        comment: "",
+                                      },
+                                    ];
 
-                              // Immediate local storage & IndexedDB write across all active tenant aliases
+                              const updatedStocksList = (stocks || []).map((st) => {
+                                if (st.id === selectedStock.id) {
+                                  return {
+                                    ...st,
+                                    commentaire:
+                                      newDistribCommentaire !== undefined
+                                        ? newDistribCommentaire
+                                        : st.commentaire,
+                                    traceabilityEnabled: true,
+                                    traceabilities: [
+                                      ...(st.traceabilities || []),
+                                      ...tracesToSave,
+                                    ],
+                                  };
+                                }
+                                return st;
+                              });
+
                               const tenantKeys = [effTenant];
-                              if (/^d\d+$/i.test(effTenant) || /^\d+$/.test(effTenant)) {
+                              if (
+                                /^d\d+$/i.test(effTenant) ||
+                                /^\d+$/.test(effTenant)
+                              ) {
                                 const numOnly = effTenant.replace(/^d/i, "");
-                                tenantKeys.push(`D${numOnly}`, `d${numOnly}`, numOnly);
+                                tenantKeys.push(
+                                  `D${numOnly}`,
+                                  `d${numOnly}`,
+                                  numOnly,
+                                );
                               }
-                              const uniqueTenants = Array.from(new Set(tenantKeys.filter(Boolean)));
+                              const uniqueTenants = Array.from(
+                                new Set(tenantKeys.filter(Boolean)),
+                              );
                               for (const tk of uniqueTenants) {
-                                localStorage.setItem(`defib_${tk}_distributed_stocks`, JSON.stringify(updatedDs));
-                                localStorage.setItem(`fs_cache_${tk}_distributed_stocks`, JSON.stringify(updatedDs));
-                                localStorage.setItem(`defib_${tk}_stocks`, JSON.stringify(updatedStocksList));
-                                localStorage.setItem(`fs_cache_${tk}_stocks`, JSON.stringify(updatedStocksList));
+                                localStorage.setItem(
+                                  `defib_${tk}_distributed_stocks`,
+                                  JSON.stringify(updatedDs),
+                                );
+                                localStorage.setItem(
+                                  `fs_cache_${tk}_distributed_stocks`,
+                                  JSON.stringify(updatedDs),
+                                );
+                                localStorage.setItem(
+                                  `defib_${tk}_stocks`,
+                                  JSON.stringify(updatedStocksList),
+                                );
+                                localStorage.setItem(
+                                  `fs_cache_${tk}_stocks`,
+                                  JSON.stringify(updatedStocksList),
+                                );
                                 try {
-                                  idbSet(`defib_${tk}_distributed_stocks`, updatedDs).catch(() => {});
-                                  idbSet(`defib_${tk}_stocks`, updatedStocksList).catch(() => {});
+                                  idbSet(
+                                    `defib_${tk}_distributed_stocks`,
+                                    updatedDs,
+                                  ).catch(() => {});
+                                  idbSet(
+                                    `defib_${tk}_stocks`,
+                                    updatedStocksList,
+                                  ).catch(() => {});
                                 } catch (_) {}
                               }
 
-                              // Server background synchronization for active tenant
-                              try {
-                                const syncTenants = [effTenant];
-                                const syncPromises: Promise<any>[] = [];
-                                for (const st of syncTenants) {
-                                  syncPromises.push(
-                                    fetch("/api/sync-collection", {
-                                      method: "POST",
-                                      headers: { "Content-Type": "application/json" },
-                                      body: JSON.stringify({
-                                        collectionName: "distributed_stocks",
-                                        tenantId: st,
-                                        value: updatedDs,
-                                      }),
-                                    }).catch((e) => console.warn("Sync distrib error:", e))
-                                  );
-                                  syncPromises.push(
-                                    fetch("/api/sync-collection", {
-                                      method: "POST",
-                                      headers: { "Content-Type": "application/json" },
-                                      body: JSON.stringify({
-                                        collectionName: "stocks",
-                                        tenantId: st,
-                                        value: updatedStocksList,
-                                      }),
-                                    }).catch((e) => console.warn("Sync stocks error:", e))
-                                  );
-                                }
-                                await Promise.allSettled(syncPromises);
-                              } catch (syncErr) {
-                                console.warn("Server sync fallback:", syncErr);
-                              }
-
                               if (onUpdateDistributedStocks) {
-                                await onUpdateDistributedStocks(updatedDs, effTenant);
+                                await onUpdateDistributedStocks(
+                                  updatedDs,
+                                  effTenant,
+                                );
                               }
-                              if (newDistribTraceabilityEnabled && onUpdateStocks) {
-                                await onUpdateStocks(updatedStocksList, effTenant);
-                              }
-
-                              // Direct Firestore write guarantee for both primary tenant and aliases
-                              try {
-                                const fsPromises: Promise<any>[] = [
-                                  saveCollectionToFirestore("distributed_stocks", updatedDs, effTenant),
-                                  saveCollectionToFirestore("distributed_stocks", updatedDs, "demo")
-                                ];
-                                if (effTenant.toUpperCase().startsWith("D")) {
-                                  fsPromises.push(saveCollectionToFirestore("distributed_stocks", updatedDs, effTenant.toUpperCase()));
-                                }
-                                if (newDistribTraceabilityEnabled) {
-                                  fsPromises.push(saveCollectionToFirestore("stocks", updatedStocksList, effTenant));
-                                  fsPromises.push(saveCollectionToFirestore("stocks", updatedStocksList, "demo"));
-                                  if (effTenant.toUpperCase().startsWith("D")) {
-                                    fsPromises.push(saveCollectionToFirestore("stocks", updatedStocksList, effTenant.toUpperCase()));
-                                  }
-                                }
-                                await Promise.allSettled(fsPromises);
-                              } catch (fsErr) {
-                                console.warn("Direct Firestore save fallback:", fsErr);
+                              if (onUpdateStocks) {
+                                await onUpdateStocks(
+                                  updatedStocksList,
+                                  effTenant,
+                                );
                               }
 
-                              // Keep loader visible for brief feedback
-                              await new Promise((resolve) => setTimeout(resolve, 300));
+                              await new Promise((resolve) =>
+                                setTimeout(resolve, 250),
+                              );
 
                               if (onAddLogisticsNotification) {
-                                const name_technician = authenticatedUser?.name || "Un technicien";
-                                const location_name = techLocationLink || "Emplacement";
-                                const vObj = variables.find((v) => v.id === selectedStock.denominationPieceId);
-                                const pieceName = vObj?.nom || "Pièce inconnue";
-                                const ugsStr = selectedStock.ugs ? ` (${selectedStock.ugs})` : "";
+                                const name_technician =
+                                  authenticatedUser?.name || "Un technicien";
+                                const location_name =
+                                  techLocationLink || "Emplacement";
+                                const vObj = findStockVariable(
+                                  selectedStock.denominationPieceId,
+                                );
+                                const pieceName =
+                                  vObj?.nom || "Pièce inconnue";
+                                const ugsStr = selectedStock.ugs
+                                  ? ` (${selectedStock.ugs})`
+                                  : "";
                                 const ugsRef = `${pieceName}${ugsStr}`;
 
                                 onAddLogisticsNotification(
                                   `Le technicien ${name_technician} (${location_name}) a créé un nouveau stock distribué ${ugsRef}.`,
-                                  selectedStock.ugs || pieceName
+                                  selectedStock.ugs || pieceName,
                                 );
                               }
 
-                              setSelectedTechDistributedStockId(targetId);
+                              setSelectedTechDistributedStockId(selectedStock.id);
                               setShowNewDistribStockForm(false);
                               setNewDistribStockId("");
                               setNewDistribVolumeDisponible(1);
+                              setNewDistribCommentaire("");
                               setPendingNewDistribTraceabilities([]);
                               setNewDistribTraceabilityEnabled(false);
                               setStockFeedbackMsg({
@@ -11283,24 +11714,33 @@ export default function PublicPortal({
                                 text: "Nouveau stock distribué et traçabilité enregistrés avec succès.",
                               });
                             } catch (err: any) {
-                              console.error("Error saving distributed stock:", err);
+                              console.error(
+                                "Error saving distributed stock:",
+                                err,
+                              );
                               setStockFeedbackMsg({
                                 type: "error",
-                                text: "Erreur lors de l'enregistrement du stock : " + (err.message || "Erreur inconnue"),
+                                text:
+                                  "Erreur lors de l'enregistrement du stock : " +
+                                  (err.message || "Erreur inconnue"),
                               });
                             } finally {
                               setIsSavingDistribStock(false);
                             }
                           }}
                           style={{
-                            backgroundColor: isSavingDistribStock ? "rgb(120, 140, 240)" : "rgb(46, 84, 255)",
+                            backgroundColor: isSavingDistribStock
+                              ? "rgb(120, 140, 240)"
+                              : "rgb(46, 84, 255)",
                             color: "#ffffff",
                             fontSize: "18px",
                             borderRadius: "13px",
                             padding: "12px 16px",
                             border: "none",
                             boxShadow: "none",
-                            cursor: isSavingDistribStock ? "not-allowed" : "pointer",
+                            cursor: isSavingDistribStock
+                              ? "not-allowed"
+                              : "pointer",
                           }}
                           className="flex-1 font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
                         >
@@ -11786,864 +12226,436 @@ export default function PublicPortal({
                         </div>
                       </div>
 
-                      {/* Toggle: Activer la traçabilité des pièces */}
+                      {/* Section Inventaire de traçabilité (Même trame que dans le logiciel principal) */}
                       {matchedStockRecord && (
                         <div
-                          className="flex items-center justify-between p-4 mt-4"
-                          style={{
-                            backgroundColor: "#f5f7fa",
-                            border: "none",
-                            borderRadius: "14px",
-                          }}
-                        >
-                          <span
-                            className="font-bold font-sans text-[16px]"
-                            style={{ color: "rgb(80, 97, 122)" }}
-                          >
-                            Activer la traçabilité des pièces
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!matchedStockRecord || !stocks || !onUpdateStocks) return;
-                              if (matchedStockRecord.traceabilityEnabled) return;
-                              const updated = stocks.map((st) => {
-                                if (st.id === matchedStockRecord.id) {
-                                  return { ...st, traceabilityEnabled: true };
-                                }
-                                return st;
-                              });
-                              onUpdateStocks(updated);
-                            }}
-                            disabled={!!matchedStockRecord.traceabilityEnabled}
-                            className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
-                              matchedStockRecord.traceabilityEnabled ? "cursor-not-allowed" : "cursor-pointer"
-                            }`}
-                            style={{
-                              backgroundColor: matchedStockRecord.traceabilityEnabled ? "#fe4eba" : "#cbd5e1",
-                            }}
-                          >
-                            <span
-                              className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
-                              style={{
-                                transform: matchedStockRecord.traceabilityEnabled ? "translateX(20px)" : "translateX(0px)",
-                              }}
-                            />
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Section Inventaire de traçabilité */}
-                      {matchedStockRecord?.traceabilityEnabled && (
-                        <div
-                          className="p-4 rounded-[14px] space-y-4 mt-4"
+                          className="p-4 rounded-[14px] flex flex-col gap-4 mt-4"
                           style={{
                             backgroundColor: "#f5f7fa",
                             border: "none",
                             boxShadow: "none",
                           }}
                         >
-                          <div className="flex select-none">
+                          <div className="flex justify-between items-center mb-1 select-none">
                             <span
                               className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                               style={{
-                                color: "#fff",
-                                backgroundColor: "#5f1f66",
-                                fontSize: "16px",
+                                color: "rgb(21 99 55)",
+                                backgroundColor: "rgb(61 220 132)",
+                                fontSize: "18px",
                                 border: "none",
                                 textTransform: "none",
                                 letterSpacing: "normal",
                               }}
                             >
-                              Inventaire de traçabilité
+                              {t("Inventaire de traçabilité")}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-3 w-full">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowNewWebappTraceForm(false);
-                                if (isInventoryMode) {
-                                  // CONFIRM
-                                  if (!matchedStockRecord || !stocks || !onUpdateStocks) return;
-                                  let hasPassedToMissing = false;
-                                  const updatedTraceabilities = (matchedStockRecord.traceabilities || []).map((t) => {
-                                    if (t.situation === "Disponible" || t.situation === "Signalé manquant") {
-                                      const isChecked = checkedTraceabilityIds[t.id];
-                                      let newSituation = t.situation;
-                                      if (isChecked) {
-                                        if (t.situation === "Disponible") {
-                                          // do nothing
-                                        } else if (t.situation === "Signalé manquant") {
-                                          newSituation = "Disponible";
-                                        }
-                                      } else {
-                                        if (t.situation === "Disponible") {
-                                          newSituation = "Signalé manquant";
-                                          hasPassedToMissing = true;
-                                        } else if (t.situation === "Signalé manquant") {
-                                          newSituation = "Signalé manquant";
-                                        }
-                                      }
-                                      return { ...t, situation: newSituation };
-                                    }
-                                    return t;
-                                  });
-
-                                  if (onAddLogisticsNotification) {
-                                    const name_technician = authenticatedUser?.name || "Un technicien";
-                                    const location_name = selectedTechStock?.locationName || techLocationLink || "Emplacement";
-                                    const pieceName = selectedStockVariable?.nom || "Pièce inconnue";
-                                    const ugs = matchedStockRecord?.ugs ? ` (${matchedStockRecord.ugs})` : "";
-                                    const ugsRef = `${pieceName}${ugs}`;
-                                    onAddLogisticsNotification(
-                                      `Le technicien ${name_technician} (${location_name}) a effectué l’inventaire pour la pièce ${ugsRef}.`,
-                                      matchedStockRecord?.ugs || pieceName
-                                    );
-                                  }
-
-                                  const updatedStocks = stocks.map((st) => {
-                                    if (st.id === matchedStockRecord.id) {
-                                      return { ...st, traceabilities: updatedTraceabilities };
-                                    }
-                                    return st;
-                                  });
-                                  onUpdateStocks(updatedStocks);
-                                  setIsInventoryMode(false);
-                                } else {
-                                  // PROCEED
-                                  const initialChecked: Record<string, boolean> = {};
-                                  filteredTraceabilities.forEach((t) => {
-                                    initialChecked[t.id] = false;
-                                  });
-                                  setCheckedTraceabilityIds(initialChecked);
-                                  setIsInventoryMode(true);
-                                }
+                          {/* Commentaire. */}
+                          <div className="flex flex-col gap-1">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                              Commentaire.
+                            </label>
+                            <input
+                              type="text"
+                              value={matchedStockRecord.commentaire || ""}
+                              onChange={(e) => {
+                                const updatedStocks = (stocks || []).map((st) =>
+                                  st.id === matchedStockRecord.id
+                                    ? { ...st, commentaire: e.target.value }
+                                    : st,
+                                );
+                                persistUpdatedStocksList(updatedStocks);
                               }}
+                              placeholder="Entrez votre commentaire..."
                               style={{
-                                backgroundColor: isInventoryMode ? "#2563eb" : "#0f172a",
-                                color: "#ffffff",
-                                borderRadius: "13px",
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
                                 fontSize: "18px",
-                                fontWeight: "bold",
-                                padding: "12px 16px",
-                                border: "none",
-                                boxShadow: "none",
-                                cursor: "pointer",
-                              }}
-                              className="flex-1 font-sans active:scale-[0.98] transition-all text-center"
-                            >
-                              {isInventoryMode ? "Confirmer l’inventaire" : "Inventaire"}
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsInventoryMode(false);
-                                setShowNewWebappTraceForm(!showNewWebappTraceForm);
-                              }}
-                              style={{
-                                backgroundColor: "rgb(46, 84, 255)",
-                                color: "#ffffff",
                                 borderRadius: "13px",
-                                fontSize: "18px",
-                                fontWeight: "bold",
-                                padding: "12px 16px",
                                 border: "none",
-                                boxShadow: "none",
-                                cursor: "pointer",
-                              }}
-                              className="flex-1 font-sans active:scale-[0.98] transition-all hover:opacity-90 text-center"
-                            >
-                              Nouveau
-                            </button>
-                          </div>
-
-                          {/* Form Nouveau inventaire de traçabilité */}
-                          {showNewWebappTraceForm && (
-                            <div
-                              className="p-4 my-3 flex flex-col gap-4 font-sans text-xs rounded-xl animate-fadeIn"
-                              style={{
-                                backgroundColor: "#f5f7fa",
-                                border: "none",
-                                boxShadow: "none",
-                                borderRadius: "16px",
+                                padding: "10px 12px",
+                                textAlign: "center",
                                 width: "100%",
                                 boxSizing: "border-box",
                               }}
-                            >
-                              {/* Forms stacked vertically (one above another) for responsive layout */}
-                              <div className="flex flex-col gap-3.5 w-full">
-                                {/* 1. Sélection du mouvement */}
-                                <div className="flex flex-col gap-1 w-full">
-                                  <label className="font-bold font-sans" style={{ color: "#000000", fontSize: "16px" }}>
-                                    Sélection du mouvement *
-                                  </label>
-                                  <select
-                                    value={newWebappMovementId}
-                                    onChange={(e) => setNewWebappMovementId(e.target.value)}
-                                    style={{
-                                      color: "#000000",
-                                      fontSize: "18px",
-                                      border: "none",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                      width: "100%",
-                                      boxSizing: "border-box",
-                                      outline: "none",
-                                      textAlign: "center",
-                                      textAlignLast: "center",
-                                      appearance: "none",
-                                      WebkitAppearance: "none",
-                                      MozAppearance: "none",
-                                    }}
-                                    className="font-sans font-medium cursor-pointer"
-                                    required
-                                  >
-                                    <option value="Autre (Aucun mouvement)">Autre (Aucun mouvement)</option>
-                                    {(matchedStockRecord?.mouvements || [])
-                                      .filter((mv) => mv.type !== "Annulation")
-                                      .map((mv) => (
-                                        <option key={mv.id} value={mv.id}>
-                                          {mv.date} - {mv.type} (Vol: {mv.volume})
-                                        </option>
-                                      ))}
-                                  </select>
-                                </div>
+                              className="w-full bg-white text-black font-sans"
+                            />
+                          </div>
 
-                                {/* 2. Numéro de lot ou série */}
-                                <div className="flex flex-col gap-1 w-full">
-                                  <label className="font-bold font-sans" style={{ color: "#000000", fontSize: "16px" }}>
-                                    Numéro de lot ou série *
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={newWebappLotOrSerial}
-                                    onChange={(e) => setNewWebappLotOrSerial(e.target.value)}
-                                    placeholder="Numéro de lot ou série"
-                                    style={{
-                                      color: "#000000",
-                                      fontSize: "18px",
-                                      border: "none",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                      width: "100%",
-                                      boxSizing: "border-box",
-                                      outline: "none",
-                                      textAlign: "center",
-                                    }}
-                                    className="font-sans font-semibold"
-                                    required
-                                  />
-                                </div>
+                          {/* Activer la traçabilité des pièces. */}
+                          <div className="flex flex-col gap-2 mt-1">
+                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                              {t("Activer la traçabilité des pièces.")}
+                            </span>
+                            <div className="flex gap-4 mt-1 bg-transparent">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updatedStocks = (stocks || []).map((st) =>
+                                    st.id === matchedStockRecord.id
+                                      ? { ...st, traceabilityEnabled: true }
+                                      : st,
+                                  );
+                                  persistUpdatedStocksList(updatedStocks);
+                                }}
+                                className="flex items-center gap-2 font-sans font-bold cursor-pointer select-none border-0 bg-transparent text-black"
+                                style={{ fontSize: "18px" }}
+                              >
+                                <span
+                                  className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${
+                                    matchedStockRecord.traceabilityEnabled !== false
+                                      ? "border-[#2e54ff]"
+                                      : "border-slate-300"
+                                  }`}
+                                  style={{ borderWidth: "1px" }}
+                                >
+                                  {matchedStockRecord.traceabilityEnabled !== false && (
+                                    <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
+                                  )}
+                                </span>
+                                Oui
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (filteredTraceabilities.length > 0) {
+                                    alert(
+                                      "Impossible de désactiver la traçabilité car des pièces de traçabilité existent déjà dans le tableau.",
+                                    );
+                                    return;
+                                  }
+                                  const updatedStocks = (stocks || []).map((st) =>
+                                    st.id === matchedStockRecord.id
+                                      ? { ...st, traceabilityEnabled: false }
+                                      : st,
+                                  );
+                                  persistUpdatedStocksList(updatedStocks);
+                                }}
+                                disabled={filteredTraceabilities.length > 0}
+                                className={`flex items-center gap-2 font-sans font-bold select-none border-0 bg-transparent text-black ${
+                                  filteredTraceabilities.length > 0
+                                    ? "opacity-50 cursor-not-allowed"
+                                    : "cursor-pointer"
+                                }`}
+                                style={{ fontSize: "18px" }}
+                              >
+                                <span
+                                  className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${
+                                    matchedStockRecord.traceabilityEnabled === false
+                                      ? "border-[#2e54ff]"
+                                      : "border-slate-300"
+                                  }`}
+                                  style={{ borderWidth: "1px" }}
+                                >
+                                  {matchedStockRecord.traceabilityEnabled === false && (
+                                    <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
+                                  )}
+                                </span>
+                                Non
+                              </button>
+                            </div>
+                          </div>
 
-                                {/* 3. Date de péremption */}
-                                <div className="flex flex-col gap-1 w-full min-w-0 overflow-hidden">
-                                  <label className="font-bold font-sans" style={{ color: "#000000", fontSize: "16px" }}>
-                                    Date de péremption (si applicable).
-                                  </label>
-                                  <input
-                                    type="date"
-                                    value={newWebappExpirationDate}
-                                    onChange={(e) => setNewWebappExpirationDate(e.target.value)}
-                                    style={{
-                                      color: "#000000",
-                                      fontSize: "18px",
-                                      border: "none",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                      width: "100%",
-                                      maxWidth: "100%",
-                                      minWidth: "0px",
-                                      boxSizing: "border-box",
-                                      display: "block",
-                                      WebkitAppearance: "none",
-                                      appearance: "none",
-                                      outline: "none",
-                                      textAlign: "center",
-                                    }}
-                                    className="font-sans font-medium w-full min-w-0 max-w-full block box-border"
-                                  />
-                                </div>
-
-                                {/* 4. Volume (disabled) */}
-                                <div className="flex flex-col gap-1 w-full">
-                                  <label className="font-bold font-sans" style={{ color: "#000000", fontSize: "16px" }}>
-                                    Volume *
-                                  </label>
-                                  <input
-                                    type="number"
-                                    value={1}
-                                    disabled
-                                    readOnly
-                                    style={{
-                                      color: "#000000",
-                                      fontSize: "18px",
-                                      border: "none",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                      width: "100%",
-                                      boxSizing: "border-box",
-                                      opacity: 1,
-                                      WebkitTextFillColor: "#000000",
-                                      textAlign: "center",
-                                    }}
-                                    className="font-sans font-semibold cursor-not-allowed"
-                                  />
-                                </div>
-
-                                {/* 5. Situation */}
-                                <div className="flex flex-col gap-1 w-full">
-                                  <label className="font-bold font-sans" style={{ color: "#000000", fontSize: "16px" }}>
-                                    Situation *
-                                  </label>
-                                  <select
-                                    value={newWebappSituation}
-                                    onChange={(e) =>
-                                      setNewWebappSituation(
-                                        e.target.value as
-                                          | "Disponible"
-                                          | "Utilisé"
-                                          | "Indisponible"
-                                          | "Signalé manquant"
-                                          | "Prêté"
-                                      )
-                                    }
-                                    style={{
-                                      color: "#000000",
-                                      fontSize: "18px",
-                                      border: "none",
-                                      borderRadius: "13px",
-                                      padding: "10px 12px",
-                                      backgroundColor: "#ffffff",
-                                      width: "100%",
-                                      boxSizing: "border-box",
-                                      outline: "none",
-                                      textAlign: "center",
-                                      textAlignLast: "center",
-                                      appearance: "none",
-                                      WebkitAppearance: "none",
-                                      MozAppearance: "none",
-                                    }}
-                                    className="font-sans font-medium cursor-pointer"
-                                    required
-                                  >
-                                    <option value="Disponible">Disponible</option>
-                                    <option value="Utilisé">Utilisé</option>
-                                    <option value="Indisponible">Indisponible</option>
-                                    <option value="Signalé manquant">Signalé manquant</option>
-                                    <option value="Prêté">Prêté</option>
-                                  </select>
-                                </div>
-                              </div>
-
-                              {/* Actions */}
-                              <div className="flex items-center gap-3 pt-2 w-full">
+                          {matchedStockRecord.traceabilityEnabled !== false && (
+                            <div className="flex flex-col gap-4 mt-2">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => setShowNewWebappTraceForm(false)}
+                                  onClick={handleAddTechTraceabilityRow}
                                   style={{
                                     backgroundColor: "#0f172a",
                                     color: "#ffffff",
+                                    padding: "10px 20px",
                                     fontSize: "18px",
                                     borderRadius: "13px",
-                                    padding: "12px 16px",
-                                    border: "none",
                                     cursor: "pointer",
-                                  }}
-                                  className="flex-1 font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
-                                >
-                                  Annuler
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={isSavingWebappTrace}
-                                  onClick={async () => {
-                                    if (!newWebappLotOrSerial.trim()) {
-                                      alert("Le numéro de lot ou série est requis.");
-                                      return;
-                                    }
-
-                                    const cleanLot = newWebappLotOrSerial.trim().toLowerCase();
-                                    const isDuplicateLot = stocks.some((st) =>
-                                      (st.traceabilities || []).some(
-                                        (t) => t.lotOrSerial && t.lotOrSerial.trim().toLowerCase() === cleanLot
-                                      )
-                                    );
-                                    if (isDuplicateLot) {
-                                      alert("Ce numéro de lot ou de série existe déjà dans l'inventaire de traçabilité.");
-                                      return;
-                                    }
-
-                                    if (!matchedStockRecord || !stocks || !onUpdateStocks) return;
-
-                                    setIsSavingWebappTrace(true);
-                                    try {
-                                      const newTrace: StockTraceability = {
-                                        id: "tr_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
-                                        movementId: newWebappMovementId || "Autre (Aucun mouvement)",
-                                        lotOrSerial: newWebappLotOrSerial.trim(),
-                                        expirationDate: newWebappExpirationDate || undefined,
-                                        volume: 1,
-                                        situation: newWebappSituation || "Disponible",
-                                        emplacement: selectedTechStock?.locationName || techLocationLink || "Centrale des stocks",
-                                      };
-
-                                      const currentTraces = matchedStockRecord.traceabilities || [];
-                                      const updatedTraceabilities = [...currentTraces, newTrace];
-
-                                      const updatedStocks = stocks.map((st) => {
-                                        if (st.id === matchedStockRecord.id) {
-                                          return {
-                                            ...st,
-                                            traceabilityEnabled: true,
-                                            traceabilities: updatedTraceabilities,
-                                          };
-                                        }
-                                        return st;
-                                      });
-
-                                      await onUpdateStocks(updatedStocks);
-
-                                      // Direct local storage & server sync guarantee across all tenant aliases
-                                      const effTenant = techTenantId || (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) || "demo";
-                                      const tenantKeys = [effTenant];
-                                      if (/^d\d+$/i.test(effTenant) || /^\d+$/.test(effTenant)) {
-                                        const numOnly = effTenant.replace(/^d/i, "");
-                                        tenantKeys.push(`D${numOnly}`, `d${numOnly}`, numOnly);
-                                      }
-                                      for (const tk of Array.from(new Set(tenantKeys))) {
-                                        localStorage.setItem(`defib_${tk}_stocks`, JSON.stringify(updatedStocks));
-                                        localStorage.setItem(`fs_cache_${tk}_stocks`, JSON.stringify(updatedStocks));
-                                        try {
-                                          idbSet(`defib_${tk}_stocks`, updatedStocks).catch(() => {});
-                                        } catch (_) {}
-                                      }
-
-                                      try {
-                                        const syncTenants = [effTenant];
-                                        const syncPromises = syncTenants.map((st) =>
-                                          fetch("/api/sync-collection", {
-                                            method: "POST",
-                                            headers: { "Content-Type": "application/json" },
-                                            body: JSON.stringify({
-                                              collectionName: "stocks",
-                                              tenantId: st,
-                                              value: updatedStocks,
-                                            }),
-                                          }).catch((e) => console.warn("Sync stock trace error:", e))
-                                        );
-                                        await Promise.allSettled(syncPromises);
-                                      } catch (syncErr) {
-                                        console.warn("Direct server sync fallback:", syncErr);
-                                      }
-
-                                      try {
-                                        const fsPromises: Promise<any>[] = [
-                                          saveCollectionToFirestore("stocks", updatedStocks, effTenant)
-                                        ];
-                                        if (effTenant.toUpperCase().startsWith("D")) {
-                                          fsPromises.push(saveCollectionToFirestore("stocks", updatedStocks, effTenant.toUpperCase()));
-                                        }
-                                        await Promise.allSettled(fsPromises);
-                                      } catch (fsErr) {
-                                        console.warn("Direct Firestore trace save fallback:", fsErr);
-                                      }
-
-                                      setShowNewWebappTraceForm(false);
-                                      setStockFeedbackMsg({
-                                        type: "success",
-                                        text: "Inventaire de traçabilité enregistré avec succès.",
-                                      });
-
-                                      if (onAddLogisticsNotification) {
-                                        const name_technician = authenticatedUser?.name || "Un technicien";
-                                        const location_name = selectedTechStock?.locationName || techLocationLink || "Emplacement";
-                                        const pieceName = selectedStockVariable?.nom || "Pièce inconnue";
-                                        const ugsStr = matchedStockRecord?.ugs ? ` (${matchedStockRecord.ugs})` : "";
-                                        const ugsRef = `${pieceName}${ugsStr}`;
-                                        const lotStr = newWebappLotOrSerial.trim();
-
-                                        onAddLogisticsNotification(
-                                          `Le technicien ${name_technician} (${location_name}) a modifié la pièce ${ugsRef}, pièce(s) : ${lotStr}.`,
-                                          matchedStockRecord?.ugs || pieceName
-                                        );
-                                      }
-                                      setNewWebappLotOrSerial("");
-                                      setNewWebappExpirationDate("");
-                                      setNewWebappSituation("Disponible");
-                                      setNewWebappMovementId("Autre (Aucun mouvement)");
-                                    } catch (err: any) {
-                                      console.error("Error saving webapp trace:", err);
-                                      setStockFeedbackMsg({
-                                        type: "error",
-                                        text: "Erreur lors de l'enregistrement de la traçabilité : " + (err.message || "Erreur inconnue"),
-                                      });
-                                    } finally {
-                                      setIsSavingWebappTrace(false);
-                                    }
-                                  }}
-                                  style={{
-                                    backgroundColor: "rgb(46, 84, 255)",
-                                    color: "#ffffff",
-                                    fontSize: "18px",
-                                    borderRadius: "13px",
-                                    padding: "12px 16px",
                                     border: "none",
                                     boxShadow: "none",
-                                    opacity: isSavingWebappTrace ? 0.5 : 1,
-                                    cursor: isSavingWebappTrace ? "not-allowed" : "pointer",
                                   }}
-                                  className="flex-1 font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
+                                  className="font-sans font-bold active:scale-95 transition-all border-0 text-white"
                                 >
-                                  {isSavingWebappTrace ? (
-                                    <span className="flex items-center justify-center gap-2">
-                                      <Loader2 className="w-5 h-5 animate-spin inline" />
-                                      Enregistrement...
-                                    </span>
-                                  ) : (
-                                    "Enregistrer"
-                                  )}
+                                  Nouvelle pièce
                                 </button>
                               </div>
-                            </div>
-                          )}
 
-                          {isInventoryMode && (
-                            <p className="font-sans font-medium" style={{ color: "#000000", fontSize: "18px" }}>
-                              Cochez les lignes des matériels dont vous disposez dans votre emplacement.
-                            </p>
-                          )}
+                              {filteredTraceabilities.length > 0 && (
+                                <div className="flex flex-col gap-3">
+                                  {filteredTraceabilities.map((trace, idx) => {
+                                    const currentLot = (trace.lotOrSerial || "").trim();
+                                    const isLotFilled = Boolean(currentLot);
+                                    const effLoc =
+                                      techLocationLink ||
+                                      authenticatedUser?.locationLink ||
+                                      "Véhicule A";
 
-                          <div
-                            className="overflow-x-auto rounded-xl mt-2 bg-white"
-                            style={{
-                              border: "none",
-                              boxShadow: "none",
-                            }}
-                          >
-                            <table className="w-full text-left font-sans border-collapse text-xs">
-                              <thead>
-                                <tr
-                                  className="bg-white"
-                                  style={{
-                                    borderBottom: "1px solid oklch(0.88 0 0)",
-                                  }}
-                                >
-                                  {isInventoryMode && (
-                                    <th
-                                      className="px-3 py-3 font-semibold text-black font-sans text-center"
-                                      style={{ fontSize: "16px", color: "#000000", width: "60px" }}
-                                    >
-                                      Select.
-                                    </th>
-                                  )}
-                                  <th
-                                    className="px-3 py-3 font-semibold text-black font-sans"
-                                    style={{ fontSize: "16px", color: "#000000", whiteSpace: "nowrap" }}
-                                  >
-                                    Barre-code.
-                                  </th>
-                                  <th
-                                    className="px-3 py-3 font-semibold text-black font-sans"
-                                    style={{ fontSize: "16px", color: "#000000", whiteSpace: "nowrap" }}
-                                  >
-                                    Numéro de lot ou série.
-                                  </th>
-                                  <th
-                                    className="px-3 py-3 font-semibold text-black font-sans"
-                                    style={{ fontSize: "16px", color: "#000000", whiteSpace: "nowrap" }}
-                                  >
-                                    Date de péremption.
-                                  </th>
-                                  <th
-                                    className="px-3 py-3 text-center font-semibold text-black font-sans"
-                                    style={{ fontSize: "16px", color: "#000000", whiteSpace: "nowrap" }}
-                                  >
-                                    Volume.
-                                  </th>
-                                  <th
-                                    className="px-3 py-3 font-semibold text-black font-sans"
-                                    style={{ fontSize: "16px", color: "#000000", whiteSpace: "nowrap" }}
-                                  >
-                                    Situation.
-                                  </th>
-                                  <th
-                                    className="px-3 py-3 font-semibold text-black font-sans"
-                                    style={{ fontSize: "16px", color: "#000000", whiteSpace: "nowrap" }}
-                                  >
-                                    Commentaire.
-                                  </th>
-                                  <th
-                                    className="px-3 py-3 font-semibold text-black font-sans"
-                                    style={{ fontSize: "16px", color: "#000000", whiteSpace: "nowrap" }}
-                                  >
-                                    Mouvement d’origine.
-                                  </th>
-                                </tr>
-                              </thead>
-                              <tbody className="bg-white">
-                                {filteredTraceabilities.length === 0 ? (
-                                  <tr>
-                                    <td
-                                      colSpan={isInventoryMode ? 8 : 7}
-                                      className="text-center text-xs text-slate-400 py-4 font-sans bg-white"
-                                    >
-                                      Aucun matériel de traçabilité enregistré.
-                                    </td>
-                                  </tr>
-                                ) : (
-                                  filteredTraceabilities.map((trace, idx) => {
                                     return (
-                                      <tr
-                                        key={trace.id}
-                                        className="hover:bg-slate-50 transition-all font-sans bg-white text-black"
+                                      <div
+                                        key={trace.id || idx}
+                                        className="flex flex-col gap-4 p-4 rounded-xl"
                                         style={{
-                                          borderBottom:
-                                            idx === filteredTraceabilities.length - 1
-                                              ? "none"
-                                              : "1px solid oklch(0.88 0 0)",
+                                          backgroundColor: "#f5f7fa",
+                                          border: "none",
+                                          boxShadow: "none",
                                         }}
                                       >
-                                        {isInventoryMode && (
-                                          <td className="px-3 py-2 text-center bg-white align-middle">
-                                            <div
-                                              onClick={() => {
-                                                setCheckedTraceabilityIds((prev) => ({
-                                                  ...prev,
-                                                  [trace.id]: !prev[trace.id],
-                                                }));
-                                              }}
-                                              className="cursor-pointer flex items-center justify-center mx-auto"
-                                              style={{ width: "28px", height: "28px" }}
-                                            >
-                                              <div
-                                                className="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all bg-white"
-                                                style={{
-                                                  borderColor: checkedTraceabilityIds[trace.id] ? "#fe4eba" : "#cbd5e1",
-                                                  borderWidth: "2px",
-                                                }}
-                                              >
-                                                {checkedTraceabilityIds[trace.id] && (
-                                                  <div
-                                                    className="w-3 h-3 rounded-full"
-                                                    style={{ backgroundColor: "#fe4eba" }}
-                                                  />
-                                                )}
-                                              </div>
-                                            </div>
-                                          </td>
-                                        )}
-                                        {/* Code-barres */}
-                                        <td className="px-3 py-2 bg-white align-middle">
-                                          <div className="flex items-center gap-2">
-                                            <div
-                                              className="hidden md:inline-block"
-                                              dangerouslySetInnerHTML={{
-                                                __html: generateBarcodeSVGString(trace.lotOrSerial),
-                                              }}
-                                            />
-                                            <button
-                                              type="button"
-                                              onClick={() => downloadBarcodeSVG(trace.lotOrSerial)}
-                                              style={{
-                                                backgroundColor: "#0f172a",
-                                                color: "#ffffff",
-                                                padding: "10px 20px",
-                                                fontSize: "18px",
-                                                borderRadius: "13px",
-                                              }}
-                                              className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0"
-                                              title="Imprimer / Télécharger"
-                                            >
-                                              Imprimer
-                                            </button>
-                                          </div>
-                                        </td>
-                                        {/* Numéro de lot ou série */}
-                                        <td className="px-3 py-2 bg-white align-middle">
+                                        {/* 1. Emplacement. (disabled & hidden, auto-set to logged technician's location) */}
+                                        <div className="hidden" style={{ display: "none" }}>
+                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                            Emplacement.
+                                          </label>
+                                          <select
+                                            value={trace.emplacement || effLoc}
+                                            disabled
+                                            className="w-full bg-white text-black p-2 rounded font-sans text-xs"
+                                          >
+                                            <option value={effLoc}>{effLoc}</option>
+                                          </select>
+                                        </div>
+
+                                        {/* 2. Numéro de lot ou série. */}
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                            Numéro de lot ou série.
+                                          </label>
                                           <input
                                             type="text"
-                                            value={trace.lotOrSerial}
-                                            disabled={!isInventoryMode}
+                                            value={trace.lotOrSerial || ""}
                                             onChange={(e) => {
-                                              handleUpdateTraceability(trace.id, { lotOrSerial: e.target.value });
+                                              handleUpdateTraceability(trace.id, {
+                                                lotOrSerial: e.target.value,
+                                              });
                                             }}
-                                            onBlur={() => {
-                                              if (isInventoryMode && onAddLogisticsNotification) {
-                                                const name_technician = authenticatedUser?.name || "Un technicien";
-                                                const location_name = selectedTechStock?.locationName || techLocationLink || "Emplacement";
-                                                const pieceName = selectedStockVariable?.nom || "Pièce inconnue";
-                                                const ugsStr = matchedStockRecord?.ugs ? ` (${matchedStockRecord.ugs})` : "";
-                                                const ugsRef = `${pieceName}${ugsStr}`;
-                                                const lotStr = trace.lotOrSerial || "non spécifié";
-                                                onAddLogisticsNotification(
-                                                  `Le technicien ${name_technician} (${location_name}) a modifié la pièce ${ugsRef}, pièce(s) : ${lotStr}.`,
-                                                  matchedStockRecord?.ugs || pieceName
-                                                );
-                                              }
-                                            }}
-                                            className={`w-full font-semibold font-sans text-center ${!isInventoryMode ? "cursor-not-allowed text-black" : "bg-white text-black"}`}
+                                            placeholder="Lot / Série"
                                             style={{
                                               backgroundColor: "#ffffff",
                                               color: "#000000",
                                               fontSize: "18px",
                                               borderRadius: "13px",
                                               border: "none",
-                                              padding: "6px 12px",
-                                              minHeight: "42px",
-                                              opacity: 1,
-                                              WebkitTextFillColor: "#000000",
+                                              padding: "10px 12px",
                                               textAlign: "center",
+                                              width: "100%",
+                                              boxSizing: "border-box",
                                             }}
+                                            className="w-full bg-white text-black font-sans"
                                           />
-                                        </td>
-                                        {/* Date de péremption */}
-                                        <td className="px-3 py-2 bg-white align-middle">
+                                        </div>
+
+                                        {/* 3. Date de péremption. */}
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                            Date de péremption.
+                                          </label>
                                           <input
                                             type="date"
                                             value={trace.expirationDate || ""}
-                                            disabled={!isInventoryMode}
                                             onChange={(e) => {
-                                              handleUpdateTraceability(trace.id, { expirationDate: e.target.value });
+                                              handleUpdateTraceability(trace.id, {
+                                                expirationDate: e.target.value || "",
+                                              });
                                             }}
-                                            className={`w-full font-sans text-center ${!isInventoryMode ? "cursor-not-allowed text-black" : "bg-white text-black"}`}
                                             style={{
                                               backgroundColor: "#ffffff",
                                               color: "#000000",
                                               fontSize: "18px",
                                               borderRadius: "13px",
                                               border: "none",
-                                              padding: "6px 12px",
-                                              minHeight: "42px",
-                                              opacity: 1,
-                                              WebkitTextFillColor: "#000000",
+                                              padding: "10px 12px",
                                               textAlign: "center",
+                                              width: "100%",
+                                              boxSizing: "border-box",
                                             }}
+                                            className="w-full bg-white text-black font-sans"
                                           />
-                                        </td>
-                                        {/* Volume */}
-                                        <td className="px-3 py-2 bg-white text-center align-middle">
-                                          <input
-                                            type="number"
-                                            value={trace.volume}
-                                            disabled
-                                            readOnly
-                                            className="text-center font-sans cursor-not-allowed"
-                                            style={{
-                                              width: "80px",
-                                              backgroundColor: "#ffffff",
-                                              color: "#000000",
-                                              fontSize: "18px",
-                                              borderRadius: "13px",
-                                              border: "none",
-                                              padding: "6px 12px",
-                                              minHeight: "42px",
-                                              opacity: 1,
-                                              WebkitTextFillColor: "#000000",
-                                              textAlign: "center",
-                                            }}
-                                          />
-                                        </td>
-                                        {/* Situation */}
-                                        <td className="px-3 py-2 bg-white font-medium align-middle">
-                                          <input
-                                            type="text"
-                                            value={trace.situation}
-                                            disabled
-                                            readOnly
-                                            className="w-full text-center font-bold font-sans cursor-not-allowed"
-                                            style={{
-                                              backgroundColor: "#ffffff",
-                                              color: "#000000",
-                                              fontSize: "18px",
-                                              borderRadius: "13px",
-                                              border: "none",
-                                              padding: "6px 12px",
-                                              minHeight: "42px",
-                                              minWidth: "220px",
-                                              opacity: 1,
-                                              WebkitTextFillColor: "#000000",
-                                              textAlign: "center",
-                                            }}
-                                          />
-                                        </td>
-                                        {/* Commentaire */}
-                                        <td className="px-3 py-2 bg-white align-middle">
-                                          <input
-                                            type="text"
-                                            value={trace.comment || ""}
-                                            disabled={!isInventoryMode}
-                                            onChange={(e) => {
-                                              handleUpdateTraceability(trace.id, { comment: e.target.value });
-                                            }}
-                                            placeholder={isInventoryMode ? "Saisir un commentaire" : ""}
-                                            className={`w-full font-sans text-center ${!isInventoryMode ? "cursor-not-allowed text-black" : "bg-white text-black"}`}
-                                            style={{
-                                              backgroundColor: "#ffffff",
-                                              color: "#000000",
-                                              fontSize: "18px",
-                                              borderRadius: "13px",
-                                              border: "none",
-                                              padding: "6px 12px",
-                                              minHeight: "42px",
-                                              minWidth: "220px",
-                                              opacity: 1,
-                                              WebkitTextFillColor: "#000000",
-                                              textAlign: "center",
-                                            }}
-                                          />
-                                        </td>
-                                        {/* Mouvement d'origine */}
-                                        <td className="px-3 py-2 bg-white align-middle">
+                                        </div>
+
+                                        {/* 4. Situation. */}
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                            Situation.
+                                          </label>
                                           <select
-                                            value={trace.movementId}
-                                            disabled
-                                            className="w-full font-sans cursor-not-allowed appearance-none text-center"
+                                            value={
+                                              trace.situation === "Signalé manquant"
+                                                ? "Signalé Manquant"
+                                                : trace.situation || "Disponible"
+                                            }
+                                            onChange={(e) => {
+                                              handleUpdateTraceability(trace.id, {
+                                                situation: e.target.value as any,
+                                              });
+                                            }}
                                             style={{
                                               backgroundColor: "#ffffff",
                                               color: "#000000",
                                               fontSize: "18px",
                                               borderRadius: "13px",
                                               border: "none",
-                                              padding: "6px 12px",
-                                              minHeight: "42px",
-                                              minWidth: "280px",
-                                              opacity: 1,
-                                              WebkitTextFillColor: "#000000",
+                                              padding: "10px 12px",
+                                              textAlign: "center",
+                                              textAlignLast: "center",
+                                              width: "100%",
+                                              boxSizing: "border-box",
                                               appearance: "none",
                                               WebkitAppearance: "none",
                                               MozAppearance: "none",
-                                              backgroundImage: "none",
-                                              textAlign: "center",
-                                              textAlignLast: "center",
                                             }}
+                                            className="w-full bg-white text-black font-sans"
                                           >
-                                            <option value="" disabled hidden>
-                                              Sélectionnez un mouvement
-                                            </option>
-                                            <option value="Autre">Autre (Aucun mouvement)</option>
-                                            {(matchedStockRecord?.mouvements || [])
-                                              .filter((mv) => mv.type !== "Annulation")
-                                              .map((mv) => (
-                                                <option key={mv.id} value={mv.id}>
-                                                  {mv.date} - {mv.type} (Vol: {mv.volume})
-                                                </option>
-                                              ))}
+                                            <option value="Disponible">Disponible</option>
+                                            <option value="Utilisé">Utilisé</option>
+                                            <option value="Indisponible">Indisponible</option>
+                                            <option value="Signalé Manquant">Signalé Manquant</option>
+                                            <option value="Prêté">Prêté</option>
                                           </select>
-                                        </td>
-                                      </tr>
+                                        </div>
+
+                                        {/* 5. Infos réservation. */}
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                            Infos réservation.
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={trace.reservationInfo ?? ""}
+                                            onChange={(e) => {
+                                              handleUpdateTraceability(trace.id, {
+                                                reservationInfo: e.target.value,
+                                              });
+                                            }}
+                                            placeholder="Infos réservation..."
+                                            style={{
+                                              backgroundColor: "#ffffff",
+                                              color: "#000000",
+                                              fontSize: "18px",
+                                              borderRadius: "13px",
+                                              border: "none",
+                                              padding: "10px 12px",
+                                              textAlign: "center",
+                                              width: "100%",
+                                              boxSizing: "border-box",
+                                            }}
+                                            className="w-full bg-white text-black font-sans"
+                                          />
+                                        </div>
+
+                                        {/* 6. Volume. */}
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                            Volume.
+                                          </label>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            value={trace.volume ?? 1}
+                                            onChange={(e) => {
+                                              const val =
+                                                e.target.value === ""
+                                                  ? 1
+                                                  : Number(e.target.value);
+                                              handleUpdateTraceability(trace.id, {
+                                                volume: isNaN(val) ? 1 : val,
+                                              });
+                                            }}
+                                            style={{
+                                              backgroundColor: "#ffffff",
+                                              color: "#000000",
+                                              fontSize: "18px",
+                                              borderRadius: "13px",
+                                              border: "none",
+                                              padding: "10px 12px",
+                                              textAlign: "center",
+                                              width: "100%",
+                                              boxSizing: "border-box",
+                                            }}
+                                            className="w-full bg-white text-black font-sans"
+                                          />
+                                        </div>
+
+                                        {/* 7. Commentaire. */}
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                            Commentaire.
+                                          </label>
+                                          <input
+                                            type="text"
+                                            value={trace.comment || ""}
+                                            onChange={(e) => {
+                                              handleUpdateTraceability(trace.id, {
+                                                comment: e.target.value,
+                                              });
+                                            }}
+                                            placeholder="Commentaire..."
+                                            style={{
+                                              backgroundColor: "#ffffff",
+                                              color: "#000000",
+                                              fontSize: "18px",
+                                              borderRadius: "13px",
+                                              border: "none",
+                                              padding: "10px 12px",
+                                              textAlign: "center",
+                                              width: "100%",
+                                              boxSizing: "border-box",
+                                            }}
+                                            className="w-full bg-white text-black font-sans"
+                                          />
+                                        </div>
+
+                                        {/* 8. Bouton Imprimer Code-Barres */}
+                                        <div className="flex flex-col justify-end min-w-0">
+                                          <button
+                                            type="button"
+                                            disabled={!isLotFilled}
+                                            onClick={() => {
+                                              if (!isLotFilled) return;
+                                              downloadBarcodeSVG(trace.lotOrSerial || "");
+                                            }}
+                                            style={{
+                                              backgroundColor: "#0f172a",
+                                              color: "#ffffff",
+                                              padding: "12px 14px",
+                                              fontSize: "18px",
+                                              borderRadius: "13px",
+                                              boxShadow: "none",
+                                              opacity: !isLotFilled ? 0.45 : 1,
+                                              cursor: !isLotFilled ? "not-allowed" : "pointer",
+                                            }}
+                                            className="w-full font-sans font-bold active:scale-95 transition-all border-0"
+                                          >
+                                            Imprimer Code-Barres
+                                          </button>
+                                        </div>
+
+                                        {/* 9. Bouton Supprimer */}
+                                        <div className="flex flex-col justify-end min-w-0">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              handleDeleteTechTraceability(trace.id);
+                                            }}
+                                            style={{
+                                              backgroundColor: "#D22D0B",
+                                              color: "#ffffff",
+                                              padding: "12px 14px",
+                                              fontSize: "18px",
+                                              borderRadius: "13px",
+                                              boxShadow: "none",
+                                              cursor: "pointer",
+                                            }}
+                                            className="w-full font-sans font-bold active:scale-95 transition-all cursor-pointer border-0"
+                                          >
+                                            Supprimer
+                                          </button>
+                                        </div>
+                                      </div>
                                     );
-                                  })
-                                )}
-                              </tbody>
-                            </table>
-                          </div>
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -12981,10 +12993,8 @@ export default function PublicPortal({
                   {/* Period control button (PLACED FIRST) */}
                   {(() => {
                     const safeAllPointages = Array.isArray(pointages) ? pointages.filter(Boolean) : [];
-                    const currentTechName = authenticatedUser?.name || "";
                     const activePointage = safeAllPointages.find(
-                      (p) =>
-                        p && p.isOngoing && p.techName && String(p.techName).trim().toLowerCase() === currentTechName.trim().toLowerCase(),
+                      (p) => p && p.isOngoing && doesPointageMatchTech(p, authenticatedUser),
                     );
                     const isTracking = !!activePointage;
 
@@ -13116,8 +13126,7 @@ export default function PublicPortal({
                       }
 
                       const safeAllPointages = Array.isArray(pointages) ? pointages.filter(Boolean) : [];
-                      const currentTechName = authenticatedUser?.name || "";
-                      const techPointages = safeAllPointages.filter((p) => p && p.techName && String(p.techName).trim().toLowerCase() === currentTechName.trim().toLowerCase());
+                      const techPointages = safeAllPointages.filter((p) => p && doesPointageMatchTech(p, authenticatedUser));
                       const weeksMap = new Map<string, TechWeekVolume>();
 
                       techPointages.forEach((p) => {
@@ -13332,9 +13341,8 @@ export default function PublicPortal({
                                 });
                               };
 
-                              const safeTech = currentTech.trim().toLowerCase();
                               const safePointages = (Array.isArray(pointages) ? pointages : []).filter(
-                                (p) => p && p.techName && String(p.techName).trim().toLowerCase() === safeTech
+                                (p) => p && doesPointageMatchTech(p, authenticatedUser)
                               );
 
                               safePointages.forEach((p) => {
@@ -13533,7 +13541,7 @@ export default function PublicPortal({
 
                       const weekPointages = (Array.isArray(pointages) ? pointages : [])
                         .filter((p) => {
-                          if (!p || !p.techName || String(p.techName).trim().toLowerCase() !== currentTech) return false;
+                          if (!p || !doesPointageMatchTech(p, authenticatedUser)) return false;
                           if (p.isOngoing) return true;
                           const iso = getIsoDate(p.startDate);
                           if (!iso) return false;

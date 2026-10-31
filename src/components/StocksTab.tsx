@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { jsPDF } from 'jspdf';
 import { t } from '../utils/translate';
 import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, StockTraceability, Member, LogisticsNotification, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
-import { getLocationCustomName, generateRandomShortCode } from '../utils';
+import { getLocationCustomName, generateRandomShortCode, formatDateToFR } from '../utils';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { Check, X } from 'lucide-react';
@@ -182,6 +183,11 @@ export default function StocksTab({
       window.dispatchEvent(
         new CustomEvent('defib-manual-refresh-spreadsheet', {
           detail: { spreadsheetKey: 'spreadsheetStocks', idSuffix: 'stocks' },
+        })
+      );
+      window.dispatchEvent(
+        new CustomEvent('defib-manual-refresh-spreadsheet', {
+          detail: { spreadsheetKey: 'spreadsheetStocksActivite', idSuffix: 'logistics_notifications' },
         })
       );
     } finally {
@@ -1061,9 +1067,85 @@ export default function StocksTab({
   const [stockStorageFilter, setStockStorageFilter] = useState<'Tous' | 'ReqPrev2M' | 'ReqPrev2to6M'>('Tous');
   const [stockPieceFilter, setStockPieceFilter] = useState<string>('');
   const [stockUgsFilter, setStockUgsFilter] = useState<string>('');
+  const [stockEmplacementFilter, setStockEmplacementFilter] = useState<string>('');
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Table fit view ("Minimiser et ajuster l’affichage") state & refs
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [isTableFitView, setIsTableFitView] = useState<boolean>(false);
+  const [tableFitScale, setTableFitScale] = useState<number>(1);
+  const naturalTableWidthRef = useRef<number>(1300);
+
+  const toggleTableFitView = () => {
+    setIsTableFitView((prev) => {
+      const next = !prev;
+      if (next) {
+        if (tableContainerRef.current) {
+          const sWidth = tableContainerRef.current.scrollWidth;
+          if (sWidth > 500) {
+            naturalTableWidthRef.current = sWidth;
+          }
+          const clientW = tableContainerRef.current.clientWidth;
+          const naturalW = naturalTableWidthRef.current || 1300;
+          const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
+          setTableFitScale(scale);
+        }
+      } else {
+        setTableFitScale(1);
+      }
+      return next;
+    });
+  };
+
+  const getEmplacementFormattedLabel = (loc: string): string => {
+    if (!loc) return 'Centrale des stocks';
+    if (loc === 'Centrale des stocks' || loc === 'Centrale') {
+      return 'Centrale des stocks';
+    }
+    const assignedTech = members.find(
+      (m) => m.role === 'Technicien' && m.locationLink === loc
+    );
+    const customName = getLocationCustomName(loc);
+    return assignedTech ? `${assignedTech.name} — ${customName}` : customName;
+  };
+
+  const resolveStockTraceLocation = (trace: StockTraceability, stockMouvements?: StockMovement[]): string => {
+    let rawLoc = '';
+    if (trace.emplacement && trace.emplacement.trim()) {
+      rawLoc = trace.emplacement.trim();
+    } else if (stockMouvements && stockMouvements.length > 0) {
+      const matchedMv = stockMouvements.find((mv) => mv.id === trace.movementId);
+      if (matchedMv) {
+        if (matchedMv.type === 'Réapprovisionnement fournisseur') {
+          rawLoc = 'Centrale des stocks';
+        } else if (matchedMv.emplacement) {
+          rawLoc = matchedMv.emplacement.includes(' : ')
+            ? matchedMv.emplacement.split(' : ')[1].trim()
+            : matchedMv.emplacement.trim();
+        }
+      }
+    }
+    if (!rawLoc || rawLoc === 'Centrale') return 'Centrale des stocks';
+    return rawLoc;
+  };
+
+  const doesTraceMatchLocation = (
+    trace: StockTraceability,
+    targetLoc: string,
+    stockMouvements?: StockMovement[]
+  ): boolean => {
+    if (!targetLoc) return true;
+    const resolved = resolveStockTraceLocation(trace, stockMouvements);
+    if (resolved === targetLoc) return true;
+    const customName = getLocationCustomName(targetLoc);
+    if (customName && resolved.toLowerCase() === customName.trim().toLowerCase()) return true;
+    const fullLabel = getEmplacementFormattedLabel(targetLoc);
+    if (fullLabel && resolved.toLowerCase() === fullLabel.trim().toLowerCase()) return true;
+    return false;
+  };
 
   const activeStocksTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
   const recentSearchesStorageKey = `defib_${activeStocksTenantId}_recent_stocks_searches`;
@@ -1626,6 +1708,11 @@ export default function StocksTab({
     const matchesPiece = !stockPieceFilter || st.denominationPieceId === stockPieceFilter || (vObj && vObj.id === stockPieceFilter);
     const ugsFilterTrimmed = stockUgsFilter.trim().toLowerCase();
     const matchesUgs = !ugsFilterTrimmed || (st.ugs || '0001').toLowerCase().includes(ugsFilterTrimmed);
+    const matchesEmplacement = !stockEmplacementFilter || (
+      Array.isArray(st.traceabilities) &&
+      st.traceabilities.length > 0 &&
+      st.traceabilities.some((tr) => doesTraceMatchLocation(tr, stockEmplacementFilter, st.mouvements))
+    );
     
     const query = stockSearchQuery.trim().toLowerCase();
     const matchesSearch = !query || 
@@ -1636,8 +1723,333 @@ export default function StocksTab({
       (st.livraisonDate && st.livraisonDate.toLowerCase().includes(query)) ||
       (st.reapprovisionnementDate && st.reapprovisionnementDate.toLowerCase().includes(query));
       
-    return matchesStorage && matchesPiece && matchesUgs && matchesSearch;
+    return matchesStorage && matchesPiece && matchesUgs && matchesEmplacement && matchesSearch;
   });
+
+  useEffect(() => {
+    if (!tableContainerRef.current) return;
+    const updateWidth = () => {
+      if (!tableContainerRef.current) return;
+      const clientW = tableContainerRef.current.clientWidth;
+      if (!isTableFitView) {
+        const sWidth = tableContainerRef.current.scrollWidth;
+        if (sWidth > 500) {
+          naturalTableWidthRef.current = sWidth;
+        }
+        setTableFitScale(1);
+      } else {
+        const naturalW = naturalTableWidthRef.current || 1300;
+        const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
+        setTableFitScale(scale);
+      }
+    };
+    const timer = setTimeout(updateWidth, 80);
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(tableContainerRef.current);
+    window.addEventListener('resize', updateWidth);
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, [filteredStocks.length, showStockForm, isTableFitView]);
+
+  const handleDownloadInventoryPDF = () => {
+    if (!stockEmplacementFilter) return;
+
+    const matchingStocks = stocks.filter((st) =>
+      Array.isArray(st.traceabilities) &&
+      st.traceabilities.length > 0 &&
+      st.traceabilities.some((tr) => doesTraceMatchLocation(tr, stockEmplacementFilter, st.mouvements))
+    );
+
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const pageW = 297;
+    const pageH = 210;
+    const marginX = 8;
+    const contentW = pageW - marginX * 2; // 281 mm
+    const maxBottomY = pageH - 12;
+
+    const locationLabel = getEmplacementFormattedLabel(stockEmplacementFilter);
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = now.getFullYear();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const dateStr = `${dd}/${mm}/${yyyy} à ${hh}:${min}`;
+
+    const truncateText = (text: string, maxW: number): string => {
+      const s = String(text ?? '-').replace(/[\r\n]+/g, ' ').trim() || '-';
+      if (doc.getTextWidth(s) <= maxW) return s;
+      let truncated = s;
+      const ellipsis = '…';
+      while (truncated.length > 1 && doc.getTextWidth(truncated + ellipsis) > maxW) {
+        truncated = truncated.slice(0, -1);
+      }
+      return truncated + ellipsis;
+    };
+
+    const drawCell = (
+      text: string,
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      opts?: { bold?: boolean; fillRgb?: [number, number, number]; align?: 'left' | 'center' | 'right'; fontSize?: number }
+    ) => {
+      const fill = opts?.fillRgb || [255, 255, 255];
+      doc.setFillColor(fill[0], fill[1], fill[2]);
+      doc.setDrawColor(220, 225, 234); // #DCE1EA
+      doc.setLineWidth(0.2);
+      doc.rect(x, y, w, h, 'FD');
+
+      doc.setFont('helvetica', opts?.bold ? 'bold' : 'normal');
+      doc.setFontSize(opts?.fontSize || 7.5);
+      doc.setTextColor(0, 0, 0);
+
+      const padX = 1.5;
+      const rendered = truncateText(text, Math.max(2, w - padX * 2));
+      const textY = y + h / 2;
+      const align = opts?.align || 'left';
+      if (align === 'center') {
+        doc.text(rendered, x + w / 2, textY, { align: 'center', baseline: 'middle' });
+      } else if (align === 'right') {
+        doc.text(rendered, x + w - padX, textY, { align: 'right', baseline: 'middle' });
+      } else {
+        doc.text(rendered, x + padX, textY, { align: 'left', baseline: 'middle' });
+      }
+    };
+
+    let cursorY = 10;
+
+    // Document Header
+    const compName = companyInfo?.name || 'Defibeo';
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`INVENTAIRE PDF — EMPLACEMENT : ${locationLabel}`, marginX, cursorY);
+
+    cursorY += 5.5;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(80, 97, 122);
+    doc.text(
+      `${compName} — Généré le ${dateStr} — ${matchingStocks.length} référence(s) de stock ayant au moins 1 pièce dans cet emplacement`,
+      marginX,
+      cursorY
+    );
+
+    cursorY += 5;
+
+    const traceCols: { header: string; width: number; align?: 'left' | 'center' | 'right' }[] = [
+      { header: 'Emplacement.', width: 52, align: 'left' },
+      { header: 'Numéro de lot ou série.', width: 42, align: 'left' },
+      { header: 'Date de péremption.', width: 30, align: 'center' },
+      { header: 'Situation.', width: 32, align: 'center' },
+      { header: 'Infos réservation.', width: 48, align: 'left' },
+      { header: 'Volume.', width: 20, align: 'center' },
+      { header: 'Commentaire.', width: 57, align: 'left' },
+    ]; // Total = 281 mm
+
+    matchingStocks.forEach((st, stIdx) => {
+      const vObj = variables.find(
+        (v) =>
+          v.id === st.denominationPieceId ||
+          (v.nom &&
+            st.denominationPieceId &&
+            v.nom.trim().toLowerCase() === String(st.denominationPieceId).trim().toLowerCase())
+      );
+      const pieceName = vObj
+        ? `${vObj.identifiant ? `[${vObj.identifiant}] ` : ''}${vObj.nom}${vObj.marque && vObj.marque !== 'Standard' ? ` (${vObj.marque})` : ''}`
+        : st.denominationPieceId || 'Pièce ou service';
+      const pieceCategory = vObj?.category || '-';
+      const resolvedDenomId = vObj ? vObj.id : st.denominationPieceId;
+      const prev = getPrevoianceForVariable(resolvedDenomId, st.quantite);
+      const besoin2M = st.besoinProjete2Mois !== undefined ? Math.max(st.besoinProjete2Mois, prev.bis2M) : prev.bis2M;
+      const besoin2to6M = st.besoinProjete2a6Mois !== undefined ? Math.max(st.besoinProjete2a6Mois, prev.bis2to6M) : prev.bis2to6M;
+      const totalToOrder = st.totalACommander !== undefined ? Math.max(st.totalACommander, prev.totalToOrder) : prev.totalToOrder;
+
+      const matchingTraces = (st.traceabilities || []).filter((tr) =>
+        doesTraceMatchLocation(tr, stockEmplacementFilter, st.mouvements)
+      );
+      const totalVolInEmplacement = matchingTraces.reduce((acc, tr) => acc + (Number(tr.volume) || 1), 0);
+
+      const usageLabels = (st.usageRecommandeIds || [])
+        .map((uid) => {
+          const vm = variables.find((v) => v.id === uid || v.nom === uid);
+          if (!vm) return uid;
+          return vm.marque && vm.marque !== 'Standard' ? `${vm.marque} ${vm.nom}` : vm.nom;
+        })
+        .filter(Boolean)
+        .join(', ') || '-';
+
+      const f1 = st.fournisseur1
+        ? `${st.fournisseur1}${st.referenceFournisseur1 ? ` (Réf: ${st.referenceFournisseur1})` : ''}${st.prixAchatFournisseur1 !== undefined ? ` - ${Number(st.prixAchatFournisseur1).toFixed(2)} €` : ''}`
+        : '-';
+      const f2 = st.fournisseur2
+        ? `${st.fournisseur2}${st.referenceFournisseur2 ? ` (Réf: ${st.referenceFournisseur2})` : ''}${st.prixAchatFournisseur2 !== undefined ? ` - ${Number(st.prixAchatFournisseur2).toFixed(2)} €` : ''}`
+        : '-';
+      const f3 = st.fournisseur3
+        ? `${st.fournisseur3}${st.referenceFournisseur3 ? ` (Réf: ${st.referenceFournisseur3})` : ''}${st.prixAchatFournisseur3 !== undefined ? ` - ${Number(st.prixAchatFournisseur3).toFixed(2)} €` : ''}`
+        : '-';
+
+      // Estimate block height needed for stock header + properties + table header + at least 1 trace row
+      const minBlockHeight = 46;
+      if (cursorY + minBlockHeight > maxBottomY) {
+        doc.addPage('a4', 'landscape');
+        cursorY = 10;
+      }
+
+      // Stock Title Banner
+      drawCell(
+        `${stIdx + 1}. Pièce ou service : ${pieceName} (${pieceCategory}) — UGS : ${st.ugs || '0001'} — Volume à cet emplacement : ${totalVolInEmplacement} (${matchingTraces.length} pièce(s))`,
+        marginX,
+        cursorY,
+        contentW,
+        7,
+        { bold: true, fillRgb: [245, 247, 250], fontSize: 8.5 }
+      );
+      cursorY += 7;
+
+      // Stock Properties Grid (4 rows of 4 cells = 16 fields covering all StockRecord properties)
+      const colW = contentW / 4;
+      const propRowH = 6;
+      const propRows: [string, string, string, string][] = [
+        [
+          `UGS. : ${st.ugs || '0001'}`,
+          `Qté disponible (Centrale). : ${st.quantite ?? 0}`,
+          `Qté réservée. : ${st.quantiteReservee ?? 0}`,
+          `Qté totale. : ${(Number(st.quantite) || 0) + (Number(st.quantiteReservee) || 0)}`,
+        ],
+        [
+          `Tarif fournisseur. : ${(st.valeurAchat ?? 0).toFixed(2)} €`,
+          `Marge. : ${(st.marge ?? 0).toFixed(2)} €`,
+          `Tarif de vente HT. : ${(st.prixVenteHt ?? 0).toFixed(2)} €`,
+          `Inv. traça. actif. : ${st.traceabilityEnabled ? 'Oui' : 'Non'}`,
+        ],
+        [
+          `Besoin projeté 2 mois. : ${besoin2M}`,
+          `Besoin projeté 2 à 6 mois. : ${besoin2to6M}`,
+          `Total à commander. : ${totalToOrder}`,
+          `Garantie (Mois). : ${st.garantieMois ?? 0} | Colis/Unité. : ${st.nombreColisParUnite ?? 1}`,
+        ],
+        [
+          `Poids Net (kg). : ${st.poidsNet || '0'}`,
+          `Dimensions (L×l×H). : ${st.dimensionLongueur || '0'} × ${st.dimensionLargeur || '0'} × ${st.dimensionHauteur || '0'}`,
+          `Frais Stockage / Transport. : ${(st.fraisFixeCoutStockage ?? 0).toFixed(2)} € / ${(st.fraisFixeCoutTransport ?? 0).toFixed(2)} €`,
+          `Usage recommandé. : ${usageLabels}`,
+        ],
+        [
+          `Fournisseur 1. : ${f1}`,
+          `Fournisseur 2. : ${f2}`,
+          `Fournisseur 3. : ${f3}`,
+          `Commentaire stock. : ${st.commentaire || '-'}`,
+        ],
+      ];
+
+      for (const pRow of propRows) {
+        if (cursorY + propRowH > maxBottomY) {
+          doc.addPage('a4', 'landscape');
+          cursorY = 10;
+        }
+        for (let c = 0; c < 4; c++) {
+          drawCell(pRow[c], marginX + c * colW, cursorY, colW, propRowH, { fontSize: 7 });
+        }
+        cursorY += propRowH;
+      }
+
+      cursorY += 1.5;
+
+      // Traceability Table Header for this Stock
+      const trHeaderH = 6.5;
+      const trRowH = 6;
+      const drawTraceHeader = () => {
+        let hx = marginX;
+        for (const col of traceCols) {
+          drawCell(col.header, hx, cursorY, col.width, trHeaderH, {
+            bold: true,
+            fillRgb: [245, 247, 250],
+            align: col.align || 'left',
+            fontSize: 7.5,
+          });
+          hx += col.width;
+        }
+        cursorY += trHeaderH;
+      };
+
+      if (cursorY + trHeaderH + trRowH > maxBottomY) {
+        doc.addPage('a4', 'landscape');
+        cursorY = 10;
+      }
+      drawTraceHeader();
+
+      // Traceability Rows attributed to this emplacement
+      for (const tr of matchingTraces) {
+        if (cursorY + trRowH > maxBottomY) {
+          doc.addPage('a4', 'landscape');
+          cursorY = 10;
+          drawTraceHeader();
+        }
+        const resolvedLoc = resolveStockTraceLocation(tr, st.mouvements);
+        const empLabel = getEmplacementFormattedLabel(resolvedLoc);
+        const expStr = tr.expirationDate ? (formatDateToFR(tr.expirationDate) || tr.expirationDate) : '-';
+        const sitStr = tr.situation === 'Signalé manquant' ? 'Signalé Manquant' : (tr.situation || 'Disponible');
+        const resInfo = getReservationInfoText(tr);
+        const volStr = tr.volume !== undefined && tr.volume !== null ? String(tr.volume) : '1';
+        const commStr = tr.comment || '-';
+
+        const rowVals = [
+          empLabel,
+          tr.lotOrSerial || '-',
+          expStr,
+          sitStr,
+          resInfo,
+          volStr,
+          commStr,
+        ];
+
+        let cx = marginX;
+        for (let c = 0; c < traceCols.length; c++) {
+          drawCell(rowVals[c], cx, cursorY, traceCols[c].width, trRowH, {
+            align: traceCols[c].align || 'left',
+            fontSize: 7.2,
+          });
+          cx += traceCols[c].width;
+        }
+        cursorY += trRowH;
+      }
+
+      cursorY += 6;
+    });
+
+    // Add page numbering footer on all pages
+    const totalPages = doc.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Page ${p} / ${totalPages}`, pageW - marginX, pageH - 5, {
+        align: 'right',
+        baseline: 'bottom',
+      });
+    }
+
+    const safeLocSlug = locationLabel
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9_-]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .toLowerCase();
+    const cleanDate = new Date().toISOString().slice(0, 10);
+    doc.save(`inventaire_stocks_${safeLocSlug || 'emplacement'}_${cleanDate}.pdf`);
+  };
 
   return (
     <div className="space-y-6 animate-fadeIn" id="stocks-tab-container-harmonized">
@@ -1787,6 +2199,10 @@ export default function StocksTab({
                       const val = e.target.value;
                       if (val === 'open-filters') {
                         setIsFilterSidePaneOpen(true);
+                      } else if (val === 'toggle-fit-view') {
+                        toggleTableFitView();
+                      } else if (val === 'download-inventory-pdf') {
+                        handleDownloadInventoryPDF();
                       } else if (val === 'spreadsheet-editor') {
                         if (resolvedSpreadsheetUrl) {
                           openTenantSpreadsheetUrl(resolvedSpreadsheetUrl);
@@ -1800,6 +2216,14 @@ export default function StocksTab({
                     <option value="open-filters">
                       {t("Appliquer des filtres")}
                     </option>
+                    <option value="toggle-fit-view">
+                      {isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
+                    </option>
+                    {stockEmplacementFilter && (
+                      <option value="download-inventory-pdf">
+                        {t("Télécharger Inventaire PDF")}
+                      </option>
+                    )}
                     <option value="spreadsheet-editor" disabled={!resolvedSpreadsheetUrl}>
                       {t("Ouvrir l’éditeur SpreadSheets")}
                     </option>
@@ -2037,8 +2461,31 @@ export default function StocksTab({
 
           {/* Stock Table List */}
           <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left font-sans border-collapse text-xs" id="stocks-record-table" style={{ border: '0px solid transparent', borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
+            <div
+              ref={tableContainerRef}
+              className={isTableFitView ? 'overflow-x-hidden' : 'overflow-x-auto'}
+              style={isTableFitView ? { width: '100%', overflowX: 'hidden' } : undefined}
+            >
+              <table
+                ref={tableRef}
+                className="w-full text-left font-sans border-collapse text-xs"
+                id="stocks-record-table"
+                style={{
+                  border: '0px solid transparent',
+                  borderTop: '0px solid transparent',
+                  borderBottom: '0px solid transparent',
+                  ...(isTableFitView
+                    ? {
+                        zoom: tableFitScale,
+                        width: `${naturalTableWidthRef.current || 1300}px`,
+                        minWidth: `${naturalTableWidthRef.current || 1300}px`,
+                        transition: 'zoom 0.15s ease',
+                      }
+                    : {
+                        width: '100%',
+                      }),
+                }}
+              >
                 <thead>
                   <tr className="bg-white" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
                     <th className="px-4 py-3.5 w-14 text-left whitespace-nowrap" style={thStyle}>Miniature.</th>
@@ -2181,16 +2628,6 @@ export default function StocksTab({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  onNavigateToDistributedStocks?.(st.ugs || '');
-                                }}
-                                style={rowActionButtonStyle}
-                                className="cursor-pointer font-sans"
-                              >
-                                Distribution
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
                                   setEditingStockId(st.id);
                                   setNewDenomStr(st.denominationPieceId);
                                   setNewQty(st.quantite);
@@ -2321,6 +2758,9 @@ export default function StocksTab({
                   borderRadius: '13px',
                   flex: 1,
                   width: '50%',
+                  backgroundColor: '#D22D0B',
+                  color: '#ffffff',
+                  boxShadow: 'none',
                 }}
                 className="flex-1 transition-colors cursor-pointer"
               >
@@ -2333,11 +2773,12 @@ export default function StocksTab({
                 id="btn-submit-stock-form"
                 style={{
                   ...rowActionButton18Style,
+                  borderRadius: '13px',
                   flex: 1,
                   width: '50%',
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'none',
                 }}
                 className="flex-1 transition-all cursor-pointer"
               >
@@ -2406,23 +2847,44 @@ export default function StocksTab({
                     )}
                   </div>
                 </div>
-                <select
-                  value={newDenomStr}
-                  onChange={(e) => setNewDenomStr(e.target.value)}
-                  className="focus:outline-none w-full cursor-pointer font-sans"
-                  required
-                >
-                  <option value="" disabled>Sélectionnez une pièce ou service.</option>
-                  {groupedStockVariables.map(group => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.items.map(v => (
-                        <option key={v.id} value={v.id}>
-                          {v.identifiant ? `[${v.identifiant}] ` : ''}{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="w-14 h-14 shrink-0 rounded-md bg-white border overflow-hidden relative flex items-center justify-center p-1.5"
+                    style={{ backgroundColor: '#ffffff', borderColor: 'oklch(0.92 0.01 258.78)', borderWidth: '1px' }}
+                  >
+                    {(() => {
+                      const selectedPieceVar = variables.find(
+                        v => v.id === newDenomStr || (v.nom && newDenomStr && v.nom.trim().toLowerCase() === String(newDenomStr).trim().toLowerCase())
+                      );
+                      const imgUrl = selectedPieceVar?.imageUrl || '';
+                      return imgUrl ? (
+                        <img
+                          src={imgUrl}
+                          alt=""
+                          className="w-full h-full object-contain"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : null;
+                    })()}
+                  </div>
+                  <select
+                    value={newDenomStr}
+                    onChange={(e) => setNewDenomStr(e.target.value)}
+                    className="flex-1 min-w-0 focus:outline-none w-full cursor-pointer font-sans"
+                    required
+                  >
+                    <option value="" disabled>Sélectionnez une pièce ou service.</option>
+                    {groupedStockVariables.map(group => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.items.map(v => (
+                          <option key={v.id} value={v.id}>
+                            {v.identifiant ? `[${v.identifiant}] ` : ''}{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* UGS Reference Code - 1/4 Width on Row */}
@@ -3048,23 +3510,6 @@ export default function StocksTab({
                   >
                     {t("Inventaire de traçabilité")}
                   </span>
-                  <div className="flex gap-2 items-center">
-                    <button
-                      type="submit"
-                      form="equipement-stock-form"
-                      style={{
-                        backgroundColor: '#2e54ff',
-                        color: '#ffffff',
-                        padding: '10px 20px',
-                        fontSize: '18px',
-                        borderRadius: '13px',
-                        boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
-                      }}
-                      className="font-sans font-bold active:scale-95 transition-all cursor-pointer border-0 text-white"
-                    >
-                      Enregistrer
-                    </button>
-                  </div>
                 </div>
 
                 {/* Commentaire. */}
@@ -3396,8 +3841,9 @@ export default function StocksTab({
                                       backgroundColor: '#0f172a',
                                       color: '#ffffff',
                                       padding: '12px 14px',
-                                      fontSize: '16px',
+                                      fontSize: '18px',
                                       borderRadius: '13px',
+                                      boxShadow: 'none',
                                       opacity: !isLotSaved ? 0.45 : 1,
                                       cursor: !isLotSaved ? 'not-allowed' : 'pointer',
                                     }}
@@ -3420,11 +3866,12 @@ export default function StocksTab({
                                       setTraceabilities(traceabilities.filter((_, i) => i !== idx));
                                     }}
                                     style={{
-                                      backgroundColor: '#0f172a',
+                                      backgroundColor: '#D22D0B',
                                       color: '#ffffff',
                                       padding: '12px 14px',
-                                      fontSize: '16px',
+                                      fontSize: '18px',
                                       borderRadius: '13px',
+                                      boxShadow: 'none',
                                       cursor: 'pointer',
                                     }}
                                     className="w-full font-sans font-bold active:scale-95 transition-all cursor-pointer border-0"
@@ -3454,32 +3901,41 @@ export default function StocksTab({
           onClick={() => setIsNotifDrawerOpen(false)}
         >
           <div 
-            className="relative w-full max-w-xl bg-white flex flex-col overflow-hidden animate-slideLeft h-full"
+            className="relative w-full max-w-xl flex flex-col overflow-hidden animate-slideLeft h-full"
             onClick={(e) => e.stopPropagation()}
             style={{
+              backgroundColor: '#F5F7FA',
               boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
-              borderLeft: '1px solid #e2e8f0',
+              borderLeft: 'none',
             }}
           >
             {/* Notifications List */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-4 pb-28 bg-slate-50/50">
-              {logisticsNotifications.map((alert) => (
+            <div
+              className="flex-1 overflow-y-auto p-5 space-y-4 pb-28"
+              style={{ backgroundColor: '#F5F7FA' }}
+            >
+              {logisticsNotifications
+                .filter((alert) => String(alert.statut || '').trim().toLowerCase() !== 'delete')
+                .map((alert) => (
                 <div 
                   key={alert.id} 
                   className="p-4 rounded-xl bg-white space-y-3 font-sans"
                   style={{
-                    border: '1px solid #a6a6a6',
+                    backgroundColor: '#ffffff',
+                    border: 'none',
                     boxShadow: 'none',
                   }}
                 >
-                  <div>
-                    <span 
-                      className="inline-block px-3 py-1 rounded-full text-white font-medium text-sm"
-                      style={{ backgroundColor: '#7C2882', color: '#ffffff' }}
-                    >
-                      {alert.horodatage}
-                    </span>
-                  </div>
+                  {alert.horodatage && (
+                    <div>
+                      <span 
+                        className="inline-block px-3 py-1 rounded-full text-white font-medium text-sm"
+                        style={{ backgroundColor: '#7C2882', color: '#ffffff' }}
+                      >
+                        {alert.horodatage}
+                      </span>
+                    </div>
+                  )}
                   <div className="text-[16px] text-[#000] font-normal">
                     UGS : <span className="font-semibold text-[#000]">{alert.ugs}</span>
                   </div>
@@ -3498,7 +3954,7 @@ export default function StocksTab({
                         }
                       }}
                       placeholder="Entrez un commentaire."
-                      className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-50/50 resize-y min-h-[60px] focus:outline-none focus:ring-0 focus:border-slate-300"
+                      className="w-full p-2.5 text-[16px] text-[#000] border border-[#dce1ea] rounded-lg bg-white resize-y min-h-[60px] focus:outline-none focus:ring-0 focus:border-[#dce1ea]"
                     />
                   </div>
 
@@ -3507,23 +3963,26 @@ export default function StocksTab({
                       type="button"
                       onClick={() => {
                         if (saveLogisticsNotifications) {
-                          const updated = logisticsNotifications.filter(n => n.id !== alert.id);
+                          const updated = logisticsNotifications.map(n =>
+                            n.id === alert.id ? { ...n, statut: 'Delete' } : n
+                          );
                           saveLogisticsNotifications(updated);
                         }
                       }}
                       style={{
                         width: '50%',
-                        backgroundColor: '#2563eb',
+                        backgroundColor: '#D22D0B',
                         color: '#ffffff',
                         borderRadius: '10px',
                         padding: '10px 0',
                         fontSize: '18px',
                         fontWeight: '600',
                         border: 'none',
+                        boxShadow: 'none',
                         cursor: 'pointer',
                         textAlign: 'center'
                       }}
-                      className="hover:bg-blue-700 transition-colors flex-1"
+                      className="hover:opacity-90 transition-opacity flex-1"
                     >
                       Terminer
                     </button>
@@ -3531,23 +3990,23 @@ export default function StocksTab({
                       type="button"
                       onClick={() => {
                         setIsNotifDrawerOpen(false);
-                        if (onNavigateToDistributedStocks) {
-                          onNavigateToDistributedStocks(alert.ugs);
-                        }
+                        setShowStockForm(false);
+                        setStockSearchQuery(alert.ugs || '');
                       }}
                       style={{
                         width: '50%',
-                        backgroundColor: '#0f172a',
+                        backgroundColor: '#2E54FF',
                         color: '#ffffff',
                         borderRadius: '10px',
                         padding: '10px 0',
                         fontSize: '18px',
                         fontWeight: '600',
                         border: 'none',
+                        boxShadow: 'none',
                         cursor: 'pointer',
                         textAlign: 'center'
                       }}
-                      className="hover:bg-neutral-800 transition-colors flex-1"
+                      className="hover:opacity-90 transition-opacity flex-1"
                     >
                       Consulter
                     </button>
@@ -3562,7 +4021,7 @@ export default function StocksTab({
                 onClick={() => setIsNotifDrawerOpen(false)}
                 style={{
                   width: '100%',
-                  backgroundColor: '#0f172a',
+                  backgroundColor: '#D22D0B',
                   color: '#ffffff',
                   fontSize: '18px',
                   fontWeight: '600',
@@ -3572,7 +4031,7 @@ export default function StocksTab({
                   border: 'none',
                   boxShadow: 'none',
                 }}
-                className="hover:bg-neutral-800 transition-colors"
+                className="hover:opacity-90 transition-opacity"
               >
                 Fermer
               </button>
@@ -3609,6 +4068,39 @@ export default function StocksTab({
           className="fixed inset-0 z-[99990] flex justify-end"
           id="stocks-filter-side-pane-container"
         >
+          <style>{`
+            #stocks-filter-side-pane select {
+              appearance: none !important;
+              -webkit-appearance: none !important;
+              -moz-appearance: none !important;
+              background-image: none !important;
+              border: 1px solid #DCE1EA !important;
+            }
+            #stocks-filter-side-pane select::-ms-expand {
+              display: none !important;
+            }
+            #stocks-filter-side-pane input {
+              border: 1px solid #DCE1EA !important;
+            }
+            #stocks-filter-side-pane input::placeholder {
+              color: #BECADB !important;
+              opacity: 1 !important;
+              font-weight: 100 !important;
+              font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+            }
+            #stocks-filter-side-pane input::-webkit-input-placeholder {
+              color: #BECADB !important;
+              opacity: 1 !important;
+              font-weight: 100 !important;
+              font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+            }
+            #stocks-filter-side-pane input::-moz-placeholder {
+              color: #BECADB !important;
+              opacity: 1 !important;
+              font-weight: 100 !important;
+              font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+            }
+          `}</style>
           {/* Backdrop */}
           <div
             onClick={() => setIsFilterSidePaneOpen(false)}
@@ -3667,6 +4159,7 @@ export default function StocksTab({
                         if (opt.value === 'Tous') {
                           setStockPieceFilter('');
                           setStockUgsFilter('');
+                          setStockEmplacementFilter('');
                         }
                       }}
                       style={{
@@ -3678,7 +4171,7 @@ export default function StocksTab({
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
                         color: isSelected ? '#ffffff' : '#50617A',
-                        border: isSelected ? '1px solid #2e54ff' : '1px solid rgb(218, 218, 218)',
+                        border: isSelected ? '1px solid #2e54ff' : '1px solid #DCE1EA',
                         boxShadow: 'none',
                         transition: 'all 0.15s ease'
                       }}
@@ -3688,6 +4181,66 @@ export default function StocksTab({
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Filtre Emplacement (pièce(s) de l’inventaire). */}
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="stocks-filter-emplacement-select"
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 600,
+                    color: '#50617A',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
+                  {t("Emplacement (pièce(s) de l’inventaire).")}
+                </label>
+                <select
+                  id="stocks-filter-emplacement-select"
+                  value={stockEmplacementFilter}
+                  onChange={(e) => setStockEmplacementFilter(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '1px solid #DCE1EA',
+                    borderRadius: '13px',
+                    fontSize: '18px',
+                    fontWeight: 100,
+                    backgroundColor: '#ffffff',
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    outline: 'none',
+                    cursor: 'pointer',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'none',
+                    backgroundImage: 'none',
+                  }}
+                >
+                  <option value="">{t("Tous")}</option>
+                  {ALL_LOCATIONS.map((loc) => {
+                    if (loc === 'Centrale des stocks') {
+                      return (
+                        <option key={loc} value={loc}>
+                          Centrale des stocks
+                        </option>
+                      );
+                    }
+                    const assignedTech = members.find(
+                      (m) => m.role === 'Technicien' && m.locationLink === loc
+                    );
+                    const customName = getLocationCustomName(loc);
+                    const label = assignedTech
+                      ? `${assignedTech.name} — ${customName}`
+                      : customName;
+                    return (
+                      <option key={loc} value={loc}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
 
               {/* Filtre Pièce ou service. */}
@@ -3710,7 +4263,7 @@ export default function StocksTab({
                   style={{
                     width: '100%',
                     padding: '12px',
-                    border: '1px solid #dedede',
+                    border: '1px solid #DCE1EA',
                     borderRadius: '13px',
                     fontSize: '18px',
                     fontWeight: 100,
@@ -3719,6 +4272,10 @@ export default function StocksTab({
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                     outline: 'none',
                     cursor: 'pointer',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                    MozAppearance: 'none',
+                    backgroundImage: 'none',
                   }}
                 >
                   <option value="">{t("Tous")}</option>
@@ -3756,7 +4313,7 @@ export default function StocksTab({
                   style={{
                     width: '100%',
                     padding: '12px',
-                    border: '1px solid #dedede',
+                    border: '1px solid #DCE1EA',
                     borderRadius: '13px',
                     fontSize: '18px',
                     fontWeight: 100,
@@ -3775,7 +4332,7 @@ export default function StocksTab({
                 type="button"
                 onClick={() => setIsFilterSidePaneOpen(false)}
                 style={{
-                  backgroundColor: '#0f172a',
+                  backgroundColor: '#D22D0B',
                   color: '#ffffff',
                   fontSize: '18px',
                   fontWeight: 'bold',

@@ -1196,8 +1196,8 @@ async function startServer() {
       return next();
     }
 
-    // Allow public read of uploaded media binary by exact ID (used in PDF reports & <img src>)
-    if (req.method === 'GET' && subPath.startsWith('/firebase-media/')) {
+    // Allow public upload and read of uploaded media binary by exact ID (used in technician WebApp, PDF reports & <img src>)
+    if (subPath === '/firebase-media' || subPath.startsWith('/firebase-media/')) {
       return next();
     }
 
@@ -4986,7 +4986,7 @@ async function warmupDefibrillateursStore() {
     stocks: 'spreadsheetStocks',
     stocksGlobaux: 'spreadsheetStocks',
     stocksDistribues: 'spreadsheetStocks',
-    historiqueNotifications: 'spreadsheetStocks',
+    historiqueNotifications: 'spreadsheetStocksActivite',
     achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
     temps: 'spreadsheetTemps',
     ticketsCaisse: 'spreadsheetTicketsCaisse',
@@ -6987,7 +6987,7 @@ async function warmupDefibrillateursStore() {
     try { fs.mkdirSync(MEDIA_ASSETS_DIR, { recursive: true }); } catch (_) {}
   }
 
-  app.post("/api/firebase-media", (req, res) => {
+  app.post("/api/firebase-media", async (req, res) => {
     try {
       const { mediaId, tenantId, category, fileName, ext, dataUrl, createdAt } = req.body || {};
       if (!mediaId || !dataUrl) {
@@ -7023,7 +7023,10 @@ async function warmupDefibrillateursStore() {
 
       try {
         const docRef = doc(db, 'appData', `media_${baseId}`);
-        safeServerSetDoc(docRef, payload).catch(() => {});
+        await Promise.race([
+          setDoc(docRef, payload),
+          new Promise(resolve => setTimeout(resolve, 3500))
+        ]);
       } catch (_) {}
 
       const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();

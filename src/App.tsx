@@ -1303,7 +1303,7 @@ export default function App() {
         stocksCentrale: 'spreadsheetStocks',
         stocksGlobaux: 'spreadsheetStocks',
         stocksDistribues: 'spreadsheetStocks',
-        historiqueNotifications: 'spreadsheetStocks',
+        historiqueNotifications: 'spreadsheetStocksActivite',
         crm: 'spreadsheetCrm',
         reglagesCrm: 'spreadsheetReglagesCrm',
         satisfaction: 'spreadsheetSatisfaction',
@@ -1509,6 +1509,59 @@ export default function App() {
                 }
                 return mutated ? updated : prev;
               });
+            } else if (tabType === 'historiqueNotifications' && Array.isArray(data?.records) && data.records.length > 0) {
+              setLogisticsNotifications(prev => {
+                let mutated = false;
+                const updated = prev.map(n => {
+                  const matched = data.records.find(
+                    (r: any) =>
+                      (r.id && String(r.id).trim().toLowerCase() === String(n.id || '').trim().toLowerCase()) ||
+                      (r.ugs &&
+                        r.description &&
+                        String(r.ugs).trim().toLowerCase() === String(n.ugs || '').trim().toLowerCase() &&
+                        String(r.description).trim().toLowerCase() === String(n.description || '').trim().toLowerCase())
+                  );
+                  if (matched && typeof matched._sheetRowNumber === 'number' && n._sheetRowNumber !== matched._sheetRowNumber) {
+                    mutated = true;
+                    return { ...n, _sheetRowNumber: matched._sheetRowNumber };
+                  }
+                  return n;
+                });
+                if (mutated) {
+                  safeSetLocalStorage(`defib_${effectiveTid}_logistics_notifications`, JSON.stringify(updated));
+                }
+                return mutated ? updated : prev;
+              });
+            } else if (tabType === 'temps' && Array.isArray(data?.records) && data.records.length > 0) {
+              setPointages(prev => {
+                let mutated = false;
+                const updated = prev.map(p => {
+                  const matched = data.records.find(
+                    (r: any) =>
+                      r &&
+                      ((r.id && p.id && String(r.id).trim().toLowerCase() === String(p.id).trim().toLowerCase()) ||
+                        (r.startDate &&
+                          p.startDate &&
+                          String(r.startDate).trim() === String(p.startDate).trim() &&
+                          ((r.techName && p.techName && String(r.techName).trim().toLowerCase() === String(p.techName).trim().toLowerCase()) ||
+                            (r.techEmail && p.techEmail && String(r.techEmail).trim().toLowerCase() === String(p.techEmail).trim().toLowerCase()))))
+                  );
+                  if (matched && typeof matched._sheetRowNumber === 'number' && p._sheetRowNumber !== matched._sheetRowNumber) {
+                    mutated = true;
+                    return {
+                      ...p,
+                      _sheetRowNumber: matched._sheetRowNumber,
+                      techEmail: p.techEmail || matched.techEmail,
+                      techName: p.techName || matched.techName,
+                    };
+                  }
+                  return p;
+                });
+                if (mutated) {
+                  safeSetLocalStorage(`defib_${effectiveTid}_pointages_history`, JSON.stringify(updated));
+                }
+                return mutated ? updated : prev;
+              });
             }
           })
           .catch(() => {});
@@ -1554,7 +1607,8 @@ export default function App() {
           horodatage: nowStr,
           description: `Niveau de stock disponible pour "${refName}" passé de ${oldItem.quantite} à ${item.quantite}.`,
           ugs: item.ugs || refName || item.id,
-          commentaire: ''
+          commentaire: '',
+          statut: ''
         });
       }
     });
@@ -1670,7 +1724,8 @@ export default function App() {
           horodatage: nowStr,
           description: `Niveau de stock distribué disponible pour "${refName}"${locName} passé de ${oldItem.volumeDisponible} à ${item.volumeDisponible}.`,
           ugs: item.ugs || refName || item.id,
-          commentaire: ''
+          commentaire: '',
+          statut: ''
         });
       }
     });
@@ -2023,7 +2078,7 @@ export default function App() {
   }, []);
 
   const saveLogisticsNotifications = (updated: LogisticsNotification[]) => {
-    syncCompartmentToGoogleSheets('historiqueNotifications', logisticsNotifications, updated, ['id', 'ugs']);
+    syncCompartmentToGoogleSheets('historiqueNotifications', logisticsNotifications, updated, ['id']);
     setLogisticsNotifications(updated);
     localStorage.setItem(`defib_${tenantId}_logistics_notifications`, JSON.stringify(updated));
     if (isFirebaseLoaded && tenantId) {
@@ -2044,11 +2099,12 @@ export default function App() {
       horodatage: nowStr,
       description,
       ugs: ugs || 'GÉNÉRAL',
-      commentaire: ''
+      commentaire: '',
+      statut: ''
     };
     setLogisticsNotifications((prev) => {
       const updated = [newNotif, ...prev];
-      syncCompartmentToGoogleSheets('historiqueNotifications', prev, updated, ['id', 'ugs']);
+      syncCompartmentToGoogleSheets('historiqueNotifications', prev, updated, ['id']);
       localStorage.setItem(`defib_${tenantId}_logistics_notifications`, JSON.stringify(updated));
       if (isFirebaseLoaded && tenantId) {
         saveCollectionToFirestore('logistics_notifications', updated, tenantId);
@@ -3863,10 +3919,67 @@ export default function App() {
             setAchatsFournisseurs(items);
             safeSetLocalStorage(`defib_${activeTid}_achats_fournisseurs`, JSON.stringify(items));
             break;
-          case 'temps':
-            setPointages(items);
-            safeSetLocalStorage(`defib_${activeTid}_pointages_history`, JSON.stringify(items));
+          case 'temps': {
+            const validTempsItems = (Array.isArray(items) ? items : []).filter(
+              (it: any) => it && it.startDate && (it.techName || it.techEmail)
+            );
+            setPointages(prev => {
+              const normDateKey = (d: any) => {
+                const s = String(d || '').trim();
+                const m1 = s.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+                if (m1) return `${m1[3]}-${m1[2]}-${m1[1]}`;
+                return s;
+              };
+              const sameTechAndDate = (a: any, b: any) => {
+                if (!a || !b) return false;
+                if (a.id && b.id && String(a.id) === String(b.id)) return true;
+                if (a._sheetRowNumber && b._sheetRowNumber && a._sheetRowNumber === b._sheetRowNumber) return true;
+                const da = normDateKey(a.startDate);
+                const db = normDateKey(b.startDate);
+                if (!da || !db || da !== db) return false;
+                const na = String(a.techName || '').trim().toLowerCase();
+                const nb = String(b.techName || '').trim().toLowerCase();
+                const ea = String(a.techEmail || '').trim().toLowerCase();
+                const eb = String(b.techEmail || '').trim().toLowerCase();
+                const pa = ea.includes('@') ? ea.split('@')[0].replace(/[._-]+/g, ' ').trim() : '';
+                const pb = eb.includes('@') ? eb.split('@')[0].replace(/[._-]+/g, ' ').trim() : '';
+                if (ea && (ea === eb || ea === nb)) return true;
+                if (eb && eb === na) return true;
+                if (na && (na === nb || na === pb)) return true;
+                if (nb && nb === pa) return true;
+                return false;
+              };
+
+              const merged = validTempsItems.map((sheetPt: any) => {
+                const localMatch = (Array.isArray(prev) ? prev : []).find(lp => sameTechAndDate(lp, sheetPt));
+                if (localMatch) {
+                  return {
+                    ...localMatch,
+                    ...sheetPt,
+                    id: localMatch.id || sheetPt.id,
+                    techName: localMatch.techName && !localMatch.techName.includes('@') ? localMatch.techName : (sheetPt.techName || localMatch.techName),
+                    techEmail: sheetPt.techEmail || localMatch.techEmail,
+                  };
+                }
+                return sheetPt;
+              });
+
+              // Preserve any active ongoing pointage in local state that hasn't finished round-tripping to the sheet yet
+              for (const lp of Array.isArray(prev) ? prev : []) {
+                if (lp && lp.isOngoing && lp.startDate && (lp.techName || lp.techEmail)) {
+                  const alreadyInSheet = merged.some(mp => sameTechAndDate(mp, lp));
+                  if (!alreadyInSheet) {
+                    merged.unshift(lp);
+                  }
+                }
+              }
+
+              safeSetLocalStorage(`defib_${activeTid}_pointages_history`, JSON.stringify(merged));
+              loadedDataRef.current.pointages = JSON.stringify(merged);
+              return merged;
+            });
             break;
+          }
           case 'ticketsCaisse':
             setExpenses(items);
             safeSetLocalStorage(`defib_${activeTid}_expenses`, JSON.stringify(items));
@@ -4169,7 +4282,7 @@ export default function App() {
   // Also load any configured secondary Google Spreadsheets for the active tenant on startup and whenever spreadsheet URLs change
   useEffect(() => {
     if (
-      !isLoggedIn ||
+      (!isLoggedIn && !isPublicPortalOpen) ||
       !tenantId ||
       tenantId.toLowerCase() === 'megaadmin' ||
       localStorage.getItem('defib_logged_user_role') === 'megaadmin' ||
@@ -8138,15 +8251,32 @@ export default function App() {
   };
 
   const savePointages = (updated: PointageLog[]) => {
-    syncCompartmentToGoogleSheets('temps', pointages, updated, ['id']);
+    let activeTechSessionTenantId = '';
+    try {
+      const rawSession = localStorage.getItem('defib_active_tech_session');
+      if (rawSession) {
+        const parsedSession = JSON.parse(rawSession);
+        if (parsedSession?.tenantId) {
+          activeTechSessionTenantId = String(parsedSession.tenantId).trim();
+        }
+      }
+    } catch (_) {}
+    const effectiveTenantId =
+      (view === 'public' && techTenant ? techTenant : '') ||
+      activeTechSessionTenantId ||
+      tenantId ||
+      localStorage.getItem('defib_tenant_id') ||
+      'demo';
+
+    syncCompartmentToGoogleSheets('temps', pointages, updated, ['id'], undefined, effectiveTenantId);
     setPointages(updated);
     try {
-      localStorage.setItem(`defib_${tenantId}_pointages_history`, JSON.stringify(updated));
+      localStorage.setItem(`defib_${effectiveTenantId}_pointages_history`, JSON.stringify(updated));
     } catch (e) {
       console.warn('Storage quota exceeded in savePointages:', e);
     }
-    if (isFirebaseLoaded && tenantId) {
-      saveCollectionToFirestore('pointages', updated, tenantId);
+    if (isFirebaseLoaded && effectiveTenantId) {
+      saveCollectionToFirestore('pointages', updated, effectiveTenantId);
     }
   };
 

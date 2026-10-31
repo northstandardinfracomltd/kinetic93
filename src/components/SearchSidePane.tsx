@@ -90,20 +90,34 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
           opacity: 1 !important;
           font-size: 18px !important;
         }
+        #${paneId} ::-webkit-scrollbar {
+          display: none !important;
+          width: 0px !important;
+          height: 0px !important;
+        }
       `}</style>
       <div
-        className="relative w-full sm:w-[480px] bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out"
+        className="relative w-full sm:w-[480px] shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out"
         id={paneId}
         onClick={(e) => e.stopPropagation()}
         style={{
           height: '100vh',
           minHeight: '100dvh',
           maxHeight: '100dvh',
-          borderLeft: '1px solid #e2e8f0',
+          borderLeft: 'none',
+          backgroundColor: '#F5F7FA',
         }}
       >
         {/* Search field at the very top - No title, No line divider */}
-        <div className="p-4 pt-5 pb-3 bg-white shrink-0">
+        <div
+          className="px-4 pt-5 pb-3 shrink-0"
+          style={{
+            backgroundColor: '#F5F7FA',
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
           <input
             type="text"
             value={search}
@@ -112,21 +126,34 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
             autoFocus
             style={{
               width: '100%',
+              maxWidth: '100%',
+              boxSizing: 'border-box',
               padding: '13px 18px',
               borderRadius: '13px',
-              border: '1px solid rgb(201, 191, 205)',
+              border: '1px solid #DCE1EA',
               fontSize: '18px',
               color: '#000000',
               outline: 'none',
               backgroundColor: '#ffffff',
               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              display: 'block',
             }}
             className="w-full text-black placeholder:text-black placeholder:text-[18px] placeholder:opacity-100 focus:border-blue-500 transition-colors"
           />
         </div>
 
         {/* Item List */}
-        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+        <div
+          className="flex-1 overflow-y-auto px-4 pb-24 space-y-2"
+          style={{
+            backgroundColor: '#F5F7FA',
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+        >
           {allowEmpty && (
             <div
               onClick={() => {
@@ -134,11 +161,14 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
                 onClose();
                 setSearch('');
               }}
-              className={`p-3.5 rounded-xl cursor-pointer transition-all border ${
-                emptySelected
-                  ? 'bg-[#ecefff] border-[#2e54ff]'
-                  : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-              }`}
+              style={{
+                backgroundColor: '#ffffff',
+                border: 'none',
+                width: '100%',
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+              }}
+              className="w-full p-3.5 rounded-xl cursor-pointer transition-all bg-white"
             >
               <span
                 style={{
@@ -163,7 +193,6 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
             </div>
           ) : (
             filteredItems.map((item, idx) => {
-              const isSelected = item.id === selectedId;
               return (
                 <div
                   key={`${item.id}_${idx}`}
@@ -172,11 +201,14 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
                     onClose();
                     setSearch('');
                   }}
-                  className={`p-3.5 rounded-xl cursor-pointer transition-all border flex items-center justify-between gap-3 ${
-                    isSelected
-                      ? 'bg-[#ecefff] border-[#2e54ff]'
-                      : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
+                  style={{
+                    backgroundColor: '#ffffff',
+                    border: 'none',
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                  }}
+                  className="w-full p-3.5 rounded-xl cursor-pointer transition-all flex items-center justify-between gap-3 bg-white"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     {item.imageUrl && (
@@ -232,20 +264,29 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
           )}
         </div>
 
-        {/* Floating Black "Fermer" Button at Bottom */}
-        <div className="p-4 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        {/* Floating "Fermer" Button at Bottom */}
+        <div
+          className="absolute bottom-0 left-0 right-0 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pointer-events-none z-20"
+          style={{
+            background: 'transparent',
+            backgroundColor: 'transparent',
+            border: 'none',
+            boxShadow: 'none',
+          }}
+        >
           <button
             type="button"
             onClick={() => {
               onClose();
               setSearch('');
             }}
-            className="w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
+            className="w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] flex items-center justify-center font-sans pointer-events-auto"
             style={{
-              backgroundColor: '#0f172a',
+              backgroundColor: '#D22D0B',
               color: '#ffffff',
               fontSize: '18px',
               border: 'none',
+              boxShadow: 'none',
               cursor: 'pointer',
               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
             }}

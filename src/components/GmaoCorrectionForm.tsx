@@ -1302,8 +1302,17 @@ export default function GmaoCorrectionForm({
     );
   };
 
+  const photoLocalPreviewRef = useRef<string>('');
+  const photoArriereLocalPreviewRef = useRef<string>('');
+  const photoTestLocalPreviewRef = useRef<string>('');
+  const loadedReportIdRef = useRef<string>('');
+
   useEffect(() => {
     if (report) {
+      const currentReportKey = String(report.id || report.missionId || report.interventionReference || 'loaded_report');
+      const isSameReportSession = loadedReportIdRef.current === currentReportKey;
+      loadedReportIdRef.current = currentReportKey;
+
       const defibIdFound = report.defibId || report.defibSnapshot?.id || initialDefibId || '';
       setSelectedDefibId(defibIdFound);
       setSnapshot(getInitialSnapshot());
@@ -1312,9 +1321,9 @@ export default function GmaoCorrectionForm({
       if (report.techName) setTechName(report.techName);
       if (report.date) setInterventionDate(report.date);
       if (report.siteMission) setMissionSite(report.siteMission === 'ATELIER SAV' ? 'ATELIER SAV' : 'DÉPLACEMENT');
-      setPhotoUrl(report.photoUrl || report.defibSnapshot?.photoUrl || '');
-      setPhotoArriereUrl(report.photoArriereUrl || '');
-      setPhotoResultatTestUrl(report.photoResultatTestUrl || '');
+      setPhotoUrl(prev => (isSameReportSession && prev) ? prev : (report.photoUrl || report.defibSnapshot?.photoUrl || ''));
+      setPhotoArriereUrl(prev => (isSameReportSession && prev) ? prev : (report.photoArriereUrl || ''));
+      setPhotoResultatTestUrl(prev => (isSameReportSession && prev) ? prev : (report.photoResultatTestUrl || ''));
       setInterventionReference(report.interventionReference || '');
       setAutreReference(report.autreReference || report.customReference || '');
       setMaterielInterchangeClient(report.materielInterchangeClient || 'Non');
@@ -1762,6 +1771,25 @@ export default function GmaoCorrectionForm({
     }));
   };
 
+  const verifyAndApplyUploadedPhotoUrl = (
+    uploadedUrl: string | undefined,
+    fallbackBase64: string,
+    setter: React.Dispatch<React.SetStateAction<string>>
+  ) => {
+    if (!uploadedUrl || !uploadedUrl.startsWith('http')) {
+      setter(fallbackBase64);
+      return;
+    }
+    const probe = new Image();
+    probe.onload = () => {
+      setter(uploadedUrl);
+    };
+    probe.onerror = () => {
+      setter(fallbackBase64);
+    };
+    probe.src = uploadedUrl;
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -1792,37 +1820,34 @@ export default function GmaoCorrectionForm({
           if (ctx) {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6); // 60% quality is perfect and very small
+            photoLocalPreviewRef.current = compressedBase64;
             setPhotoUrl(compressedBase64);
             const uploadedUrl = await uploadMediaToFirebase(
               compressedBase64,
               'photos',
               file.name || `rapport_photo_globale_${Date.now()}.jpg`
             );
-            if (uploadedUrl && uploadedUrl.startsWith('http')) {
-              setPhotoUrl(uploadedUrl);
-            }
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, compressedBase64, setPhotoUrl);
           } else {
+            photoLocalPreviewRef.current = base64Str;
             setPhotoUrl(base64Str);
             const uploadedUrl = await uploadMediaToFirebase(
               base64Str,
               'photos',
               file.name || `rapport_photo_globale_${Date.now()}.jpg`
             );
-            if (uploadedUrl && uploadedUrl.startsWith('http')) {
-              setPhotoUrl(uploadedUrl);
-            }
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoUrl);
           }
         };
         img.onerror = async () => {
+          photoLocalPreviewRef.current = base64Str;
           setPhotoUrl(base64Str);
           const uploadedUrl = await uploadMediaToFirebase(
             base64Str,
             'photos',
             file.name || `rapport_photo_globale_${Date.now()}.jpg`
           );
-          if (uploadedUrl && uploadedUrl.startsWith('http')) {
-            setPhotoUrl(uploadedUrl);
-          }
+          verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoUrl);
         };
       };
       reader.readAsDataURL(file);
@@ -1859,37 +1884,34 @@ export default function GmaoCorrectionForm({
           if (ctx) {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+            photoArriereLocalPreviewRef.current = compressedBase64;
             setPhotoArriereUrl(compressedBase64);
             const uploadedUrl = await uploadMediaToFirebase(
               compressedBase64,
               'photos',
               file.name || `rapport_photo_arriere_${Date.now()}.jpg`
             );
-            if (uploadedUrl && uploadedUrl.startsWith('http')) {
-              setPhotoArriereUrl(uploadedUrl);
-            }
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, compressedBase64, setPhotoArriereUrl);
           } else {
+            photoArriereLocalPreviewRef.current = base64Str;
             setPhotoArriereUrl(base64Str);
             const uploadedUrl = await uploadMediaToFirebase(
               base64Str,
               'photos',
               file.name || `rapport_photo_arriere_${Date.now()}.jpg`
             );
-            if (uploadedUrl && uploadedUrl.startsWith('http')) {
-              setPhotoArriereUrl(uploadedUrl);
-            }
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoArriereUrl);
           }
         };
         img.onerror = async () => {
+          photoArriereLocalPreviewRef.current = base64Str;
           setPhotoArriereUrl(base64Str);
           const uploadedUrl = await uploadMediaToFirebase(
             base64Str,
             'photos',
             file.name || `rapport_photo_arriere_${Date.now()}.jpg`
           );
-          if (uploadedUrl && uploadedUrl.startsWith('http')) {
-            setPhotoArriereUrl(uploadedUrl);
-          }
+          verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoArriereUrl);
         };
       };
       reader.readAsDataURL(file);
@@ -1926,37 +1948,34 @@ export default function GmaoCorrectionForm({
           if (ctx) {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+            photoTestLocalPreviewRef.current = compressedBase64;
             setPhotoResultatTestUrl(compressedBase64);
             const uploadedUrl = await uploadMediaToFirebase(
               compressedBase64,
               'photos',
               file.name || `rapport_photo_test_${Date.now()}.jpg`
             );
-            if (uploadedUrl && uploadedUrl.startsWith('http')) {
-              setPhotoResultatTestUrl(uploadedUrl);
-            }
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, compressedBase64, setPhotoResultatTestUrl);
           } else {
+            photoTestLocalPreviewRef.current = base64Str;
             setPhotoResultatTestUrl(base64Str);
             const uploadedUrl = await uploadMediaToFirebase(
               base64Str,
               'photos',
               file.name || `rapport_photo_test_${Date.now()}.jpg`
             );
-            if (uploadedUrl && uploadedUrl.startsWith('http')) {
-              setPhotoResultatTestUrl(uploadedUrl);
-            }
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoResultatTestUrl);
           }
         };
         img.onerror = async () => {
+          photoTestLocalPreviewRef.current = base64Str;
           setPhotoResultatTestUrl(base64Str);
           const uploadedUrl = await uploadMediaToFirebase(
             base64Str,
             'photos',
             file.name || `rapport_photo_test_${Date.now()}.jpg`
           );
-          if (uploadedUrl && uploadedUrl.startsWith('http')) {
-            setPhotoResultatTestUrl(uploadedUrl);
-          }
+          verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoResultatTestUrl);
         };
       };
       reader.readAsDataURL(file);
@@ -3737,6 +3756,11 @@ export default function GmaoCorrectionForm({
                         src={photoUrl}
                         alt="Miniature."
                         className="w-full h-full object-cover"
+                        onError={() => {
+                          if (photoLocalPreviewRef.current && photoUrl !== photoLocalPreviewRef.current) {
+                            setPhotoUrl(photoLocalPreviewRef.current);
+                          }
+                        }}
                       />
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
                         Voir
@@ -3747,7 +3771,10 @@ export default function GmaoCorrectionForm({
                   {photoUrl && (
                     <button
                       type="button"
-                      onClick={() => setPhotoUrl('')}
+                      onClick={() => {
+                        photoLocalPreviewRef.current = '';
+                        setPhotoUrl('');
+                      }}
                       style={{
                         ...rowActionButton18Style,
                         backgroundColor: '#d22d0b',
@@ -3801,6 +3828,11 @@ export default function GmaoCorrectionForm({
                         src={photoArriereUrl}
                         alt="Miniature."
                         className="w-full h-full object-cover"
+                        onError={() => {
+                          if (photoArriereLocalPreviewRef.current && photoArriereUrl !== photoArriereLocalPreviewRef.current) {
+                            setPhotoArriereUrl(photoArriereLocalPreviewRef.current);
+                          }
+                        }}
                       />
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
                         Voir
@@ -3811,7 +3843,10 @@ export default function GmaoCorrectionForm({
                   {photoArriereUrl && (
                     <button
                       type="button"
-                      onClick={() => setPhotoArriereUrl('')}
+                      onClick={() => {
+                        photoArriereLocalPreviewRef.current = '';
+                        setPhotoArriereUrl('');
+                      }}
                       style={{
                         ...rowActionButton18Style,
                         backgroundColor: '#d22d0b',
@@ -3865,6 +3900,11 @@ export default function GmaoCorrectionForm({
                         src={photoResultatTestUrl}
                         alt="Miniature."
                         className="w-full h-full object-cover"
+                        onError={() => {
+                          if (photoTestLocalPreviewRef.current && photoResultatTestUrl !== photoTestLocalPreviewRef.current) {
+                            setPhotoResultatTestUrl(photoTestLocalPreviewRef.current);
+                          }
+                        }}
                       />
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-bold">
                         Voir
@@ -3875,7 +3915,10 @@ export default function GmaoCorrectionForm({
                   {photoResultatTestUrl && (
                     <button
                       type="button"
-                      onClick={() => setPhotoResultatTestUrl('')}
+                      onClick={() => {
+                        photoTestLocalPreviewRef.current = '';
+                        setPhotoResultatTestUrl('');
+                      }}
                       style={{
                         ...rowActionButton18Style,
                         backgroundColor: '#d22d0b',
@@ -6850,15 +6893,9 @@ export default function GmaoCorrectionForm({
       >
         {/* Horizontal Sections Carousel Selector */}
         <div className="relative w-full max-w-full overflow-hidden">
-          {/* Left Fade Overlay */}
-          <div className="absolute left-0 top-0 bottom-0 w-6 bg-gradient-to-r from-[#f5f7fa] to-transparent pointer-events-none z-10" />
-          
-          {/* Right Fade Overlay */}
-          <div className="absolute right-0 top-0 bottom-0 w-6 bg-gradient-to-l from-[#f5f7fa] to-transparent pointer-events-none z-10" />
-
           <div 
             ref={pillsContainerRef}
-            className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 whitespace-nowrap px-4"
+            className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 whitespace-nowrap px-0"
             style={{
               WebkitOverflowScrolling: 'touch',
               maxWidth: '100%',
@@ -6921,18 +6958,18 @@ export default function GmaoCorrectionForm({
             </div>
 
             {selectedErrorCode && (
-              <div className="bg-white space-y-3 animate-fadeIn">
-                <p className="text-black font-medium leading-relaxed" style={{ fontSize: '18px' }}>
+              <div className="space-y-3 animate-fadeIn" style={{ backgroundColor: 'transparent' }}>
+                <p className="text-black font-medium leading-relaxed" style={{ fontSize: '18px', backgroundColor: 'transparent' }}>
                   {ERROR_CODES_DB.find(e => e.label === selectedErrorCode)?.description}
                 </p>
                 <div className="pt-1">
                   <button
                     type="button"
                     onClick={() => setSelectedErrorCode('')}
-                    style={{ fontSize: '18px' }}
-                    className="w-full py-2.5 bg-[#0f172a] hover:bg-neutral-900 text-white font-bold rounded-xl transition-all cursor-pointer"
+                    style={{ fontSize: '18px', backgroundColor: '#D22D0B', boxShadow: 'none' }}
+                    className="w-full py-2.5 text-white font-bold rounded-xl transition-all cursor-pointer hover:opacity-90"
                   >
-                    Fermer
+                    Fermer l’aide d’erreur
                   </button>
                 </div>
               </div>
