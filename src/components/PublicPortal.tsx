@@ -1443,7 +1443,99 @@ export default function PublicPortal({
   const [isSavingDistribStock, setIsSavingDistribStock] = useState<boolean>(false);
   const [isSavingWebappTrace, setIsSavingWebappTrace] = useState<boolean>(false);
   const [isSavingInventory, setIsSavingInventory] = useState<boolean>(false);
+  const [isSavingTechStockChanges, setIsSavingTechStockChanges] = useState<boolean>(false);
   const [stockFeedbackMsg, setStockFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [techCachedStocks, setTechCachedStocks] = useState<StockRecord[]>(() => {
+    if (Array.isArray(stocks) && stocks.length > 0) return stocks;
+    try {
+      const tid =
+        propTenantId ||
+        (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+        "demo";
+      const raw =
+        localStorage.getItem(`defib_${tid}_stocks`) ||
+        localStorage.getItem(`defib_${tid.toUpperCase()}_stocks`) ||
+        localStorage.getItem(`defib_${tid.toLowerCase()}_stocks`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  useEffect(() => {
+    if (techCachedStocks.length === 0 && Array.isArray(stocks) && stocks.length > 0) {
+      setTechCachedStocks(stocks);
+    }
+  }, [stocks, techCachedStocks.length]);
+
+  const effectiveTechStocksList = useMemo(() => {
+    return techCachedStocks.length > 0 ? techCachedStocks : (stocks || []);
+  }, [techCachedStocks, stocks]);
+
+  const serializeStockTraceabilities = (traceList: StockTraceability[]): string => {
+    const sanitizePipe = (val: any) => String(val ?? "").replace(/[|;]/g, " ").trim();
+    return (traceList || [])
+      .map((tr) =>
+        [
+          sanitizePipe(tr.emplacement || "Centrale des stocks"),
+          sanitizePipe(tr.lotOrSerial || ""),
+          sanitizePipe(tr.expirationDate || ""),
+          sanitizePipe(tr.situation || "Disponible"),
+          sanitizePipe(tr.reservationInfo || ""),
+          tr.volume !== undefined && tr.volume !== null && String(tr.volume).trim() !== ""
+            ? String(tr.volume).trim()
+            : "1",
+          sanitizePipe(tr.comment || ""),
+        ].join("|"),
+      )
+      .join(";")
+      .slice(0, 50000);
+  };
+
+  const refreshTechStocksFromSpreadsheet = async (forceRefresh = true) => {
+    const effTenant =
+      techTenantId ||
+      (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+      "demo";
+    const sheetUrl = getTenantSpreadsheetUrl("spreadsheetStocks", companyInfo, effTenant);
+    try {
+      const res = await fetch(
+        `/api/sheets/collection?tenantId=${encodeURIComponent(effTenant)}&type=stocksGlobaux&refresh=${forceRefresh}${
+          sheetUrl ? `&spreadsheetUrl=${encodeURIComponent(sheetUrl)}` : ""
+        }&_t=${Date.now()}`,
+        { cache: "no-store" },
+      );
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.fromSpreadsheet && Array.isArray(data.items)) {
+          setTechCachedStocks(data.items);
+          const tenantKeys = [effTenant, effTenant.toUpperCase(), effTenant.toLowerCase()];
+          for (const tk of Array.from(new Set(tenantKeys.filter(Boolean)))) {
+            try {
+              localStorage.setItem(`defib_${tk}_stocks`, JSON.stringify(data.items));
+              localStorage.setItem(`fs_cache_${tk}_stocks`, JSON.stringify(data.items));
+              idbSet(`defib_${tk}_stocks`, data.items).catch(() => {});
+            } catch (_) {}
+          }
+          return data.items as StockRecord[];
+        }
+      }
+    } catch (err) {
+      console.warn("Could not refresh tech stocks from spreadsheet:", err);
+    }
+    return null;
+  };
+
+  const prevActiveTabForStocksRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeTab === "stocks" && prevActiveTabForStocksRef.current !== "stocks") {
+      refreshTechStocksFromSpreadsheet(true);
+    }
+    prevActiveTabForStocksRef.current = activeTab;
+  }, [activeTab, techTenantId]);
 
   // Sync techLocationLink with logged-in technician profile
   useEffect(() => {
@@ -1493,7 +1585,11 @@ export default function PublicPortal({
     const normRaw = rawLoc.toLowerCase();
     const normTarget = targetLoc.toLowerCase();
     if (normRaw === normTarget) return true;
-    const customName = (getLocationCustomName(targetLoc) || "").trim();
+    const customName = (
+      companyInfo?.customLocationNames?.[targetLoc] ||
+      getLocationCustomName(targetLoc) ||
+      ""
+    ).trim();
     if (customName && normRaw === customName.toLowerCase()) return true;
     const techName = (authenticatedUser?.name || "").trim();
     if (techName) {
@@ -1530,30 +1626,40 @@ export default function PublicPortal({
   // Lookup "Sélection d'un stock distribué." : list all stocks from Spreadsheet Stocks where >= 1 traceability item is linked to the logged-in technician's location
   const techActiveStocks = useMemo(() => {
     if (!techLocationLink) return [];
-    return (stocks || []).filter(
+    return effectiveTechStocksList.filter(
       (st) =>
         Array.isArray(st.traceabilities) &&
         st.traceabilities.length > 0 &&
         st.traceabilities.some((tr) => doesTraceMatchTechLocation(tr, st.mouvements)),
     );
-  }, [stocks, techLocationLink, authenticatedUser, members]);
+  }, [effectiveTechStocksList, techLocationLink, authenticatedUser, members]);
 
   const matchedStockRecord = useMemo(() => {
     if (!selectedTechDistributedStockId) return null;
-    const directStock = (stocks || []).find((s) => s.id === selectedTechDistributedStockId);
+    const selClean = String(selectedTechDistributedStockId).trim().toLowerCase();
+    const directStock = effectiveTechStocksList.find(
+      (s) =>
+        s.id === selectedTechDistributedStockId ||
+        (s.ugs &&
+          (String(s.ugs).trim().toLowerCase() === selClean ||
+            `stk_${String(s.ugs).trim().toLowerCase()}` === selClean)) ||
+        (s.denominationPieceId &&
+          String(s.denominationPieceId).trim().toLowerCase() === selClean),
+    );
     if (directStock) return directStock;
     const ds = (distributedStocks || []).find(
       (item) => item.id === selectedTechDistributedStockId,
     );
     if (!ds) return null;
     return (
-      (stocks || []).find(
+      effectiveTechStocksList.find(
         (s) =>
           s.id === ds.stockId ||
+          (s.ugs && ds.ugs && String(s.ugs).trim() === String(ds.ugs).trim()) ||
           s.denominationPieceId === ds.denominationPieceId,
       ) || null
     );
-  }, [stocks, distributedStocks, selectedTechDistributedStockId]);
+  }, [effectiveTechStocksList, distributedStocks, selectedTechDistributedStockId]);
 
   const selectedTechStock = useMemo(() => {
     if (!selectedTechDistributedStockId) return undefined;
@@ -1618,30 +1724,99 @@ export default function PublicPortal({
     return filteredTraceabilities.filter((t) => (t.situation || "Disponible") === "Disponible").length;
   }, [filteredTraceabilities]);
 
-  const persistUpdatedStocksList = async (updatedStocks: StockRecord[]) => {
+  // Update local cache immediately while typing/editing without triggering background reset loops
+  const updateLocalTechStocksCache = (updatedStocks: StockRecord[]) => {
+    const normalized = updatedStocks.map((st) => ({
+      ...st,
+      inventaire: Array.isArray(st.traceabilities)
+        ? serializeStockTraceabilities(st.traceabilities)
+        : st.inventaire,
+    }));
+    setTechCachedStocks(normalized);
     const effTenant =
       techTenantId ||
       (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
       "demo";
-    if (onUpdateStocks) {
-      await onUpdateStocks(updatedStocks, effTenant);
-    }
-    const tenantKeys = [effTenant];
+    const tenantKeys = [effTenant, effTenant.toUpperCase(), effTenant.toLowerCase()];
     if (/^d\d+$/i.test(effTenant) || /^\d+$/.test(effTenant)) {
       const numOnly = effTenant.replace(/^d/i, "");
       tenantKeys.push(`D${numOnly}`, `d${numOnly}`, numOnly);
     }
     for (const tk of Array.from(new Set(tenantKeys.filter(Boolean)))) {
       try {
-        localStorage.setItem(`defib_${tk}_stocks`, JSON.stringify(updatedStocks));
-        localStorage.setItem(`fs_cache_${tk}_stocks`, JSON.stringify(updatedStocks));
-        idbSet(`defib_${tk}_stocks`, updatedStocks).catch(() => {});
+        localStorage.setItem(`defib_${tk}_stocks`, JSON.stringify(normalized));
+        localStorage.setItem(`fs_cache_${tk}_stocks`, JSON.stringify(normalized));
+        idbSet(`defib_${tk}_stocks`, normalized).catch(() => {});
       } catch (_) {}
+    }
+    return normalized;
+  };
+
+  const persistUpdatedStocksList = async (updatedStocks: StockRecord[], directSheetUpsert = true) => {
+    const normalized = updateLocalTechStocksCache(updatedStocks);
+    const effTenant =
+      techTenantId ||
+      (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+      "demo";
+    if (onUpdateStocks) {
+      await onUpdateStocks(normalized, effTenant);
+    }
+    if (directSheetUpsert) {
+      try {
+        const sheetUrl = getTenantSpreadsheetUrl("spreadsheetStocks", companyInfo, effTenant);
+        const enrichedRecords = normalized.map((s) => {
+          const vObj = findStockVariable(s.denominationPieceId);
+          return {
+            ...s,
+            denominationPieceNom: vObj ? vObj.nom : (s as any).denominationPieceNom || s.denominationPieceId || "",
+            inventaire: Array.isArray(s.traceabilities)
+              ? serializeStockTraceabilities(s.traceabilities)
+              : s.inventaire || "",
+          };
+        });
+        const targetRecords = matchedStockRecord
+          ? enrichedRecords.filter(
+              (r) =>
+                r.id === matchedStockRecord.id ||
+                (r.ugs && matchedStockRecord.ugs && r.ugs === matchedStockRecord.ugs),
+            )
+          : enrichedRecords;
+        await fetch("/api/sheets/upsert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantId: effTenant,
+            type: "stocksGlobaux",
+            spreadsheetUrl: sheetUrl || undefined,
+            records: targetRecords.length > 0 ? targetRecords : enrichedRecords,
+          }),
+        });
+      } catch (err) {
+        console.warn("Direct sheet upsert warning for tech stocks:", err);
+      }
+    }
+  };
+
+  const handleSaveTechStockChanges = async () => {
+    setIsSavingTechStockChanges(true);
+    try {
+      await persistUpdatedStocksList(effectiveTechStocksList, true);
+      setStockFeedbackMsg({
+        type: "success",
+        text: "Modifications enregistrées avec succès dans le spreadsheet Stocks.",
+      });
+    } catch (err: any) {
+      setStockFeedbackMsg({
+        type: "error",
+        text: "Erreur lors de l'enregistrement : " + (err?.message || "Erreur inconnue"),
+      });
+    } finally {
+      setIsSavingTechStockChanges(false);
     }
   };
 
   const handleUpdateTraceability = (traceId: string, updates: Partial<StockTraceability>) => {
-    if (!matchedStockRecord || !stocks) return;
+    if (!matchedStockRecord) return;
     const effLoc = techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
     const updatedTraceabilities = (matchedStockRecord.traceabilities || []).map((t) => {
       if (t.id === traceId) {
@@ -1649,31 +1824,40 @@ export default function PublicPortal({
       }
       return t;
     });
-    const updatedStocks = stocks.map((st) => {
+    const updatedStocks = effectiveTechStocksList.map((st) => {
       if (st.id === matchedStockRecord.id) {
-        return { ...st, traceabilityEnabled: true, traceabilities: updatedTraceabilities };
+        return {
+          ...st,
+          traceabilityEnabled: true,
+          traceabilities: updatedTraceabilities,
+          inventaire: serializeStockTraceabilities(updatedTraceabilities),
+        };
       }
       return st;
     });
-    persistUpdatedStocksList(updatedStocks);
+    updateLocalTechStocksCache(updatedStocks);
   };
 
   const handleDeleteTechTraceability = (traceId: string) => {
-    if (!matchedStockRecord || !stocks) return;
+    if (!matchedStockRecord) return;
     const updatedTraceabilities = (matchedStockRecord.traceabilities || []).filter(
       (t) => t.id !== traceId,
     );
-    const updatedStocks = stocks.map((st) => {
+    const updatedStocks = effectiveTechStocksList.map((st) => {
       if (st.id === matchedStockRecord.id) {
-        return { ...st, traceabilities: updatedTraceabilities };
+        return {
+          ...st,
+          traceabilities: updatedTraceabilities,
+          inventaire: serializeStockTraceabilities(updatedTraceabilities),
+        };
       }
       return st;
     });
-    persistUpdatedStocksList(updatedStocks);
+    updateLocalTechStocksCache(updatedStocks);
   };
 
   const handleAddTechTraceabilityRow = () => {
-    if (!matchedStockRecord || !stocks) return;
+    if (!matchedStockRecord) return;
     const effLoc = techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
     const newItem: StockTraceability = {
       id: `TR-${matchedStockRecord.ugs || "0001"}-${Date.now()}-${(matchedStockRecord.traceabilities || []).length + 1}`,
@@ -1687,17 +1871,18 @@ export default function PublicPortal({
       comment: "",
     };
     const updatedTraceabilities = [...(matchedStockRecord.traceabilities || []), newItem];
-    const updatedStocks = stocks.map((st) => {
+    const updatedStocks = effectiveTechStocksList.map((st) => {
       if (st.id === matchedStockRecord.id) {
         return {
           ...st,
           traceabilityEnabled: true,
           traceabilities: updatedTraceabilities,
+          inventaire: serializeStockTraceabilities(updatedTraceabilities),
         };
       }
       return st;
     });
-    persistUpdatedStocksList(updatedStocks);
+    updateLocalTechStocksCache(updatedStocks);
   };
 
   const selectedStockVariable = useMemo(() => {
@@ -1861,18 +2046,15 @@ export default function PublicPortal({
     // Get updated traceabilities
     let countToUpdate = Number(rapatrimentVolume) || 0;
     const updatedTraceabilities = (matchedStockRecord.traceabilities || []).map((t) => {
-      let isAtThisLocation = t.emplacement === selectedTechStock.locationName;
-      if (!t.emplacement) {
-        const matchedMv = (matchedStockRecord.mouvements || []).find(mv => mv.id === t.movementId);
-        if (matchedMv && matchedMv.emplacement) {
-          const loc = matchedMv.emplacement.includes(" : ") ? matchedMv.emplacement.split(" : ")[1] : matchedMv.emplacement;
-          if (loc === selectedTechStock.locationName) {
-            isAtThisLocation = true;
-          }
-        }
-      }
+      const isAtThisLocation = doesTraceMatchTechLocation(t, matchedStockRecord.mouvements);
 
-      if (isAtThisLocation && (t.situation === "Disponible" || t.situation === "Signalé manquant") && countToUpdate > 0) {
+      if (
+        isAtThisLocation &&
+        (t.situation === "Disponible" ||
+          t.situation === "Signalé manquant" ||
+          (t.situation as string) === "Signalé Manquant") &&
+        countToUpdate > 0
+      ) {
         countToUpdate--;
         return {
           ...t,
@@ -1884,28 +2066,29 @@ export default function PublicPortal({
 
     // Check if any traceabilities remain at this location
     const hasRemainingTraceabilities = updatedTraceabilities.some((t) => {
-      let currentLoc = t.emplacement;
-      if (!currentLoc) {
-        const matchedMv = (matchedStockRecord.mouvements || []).find(mv => mv.id === t.movementId);
-        if (matchedMv && matchedMv.emplacement) {
-          currentLoc = matchedMv.emplacement.includes(" : ") ? matchedMv.emplacement.split(" : ")[1] : matchedMv.emplacement;
-        }
-      }
-      const isAtThisLocation = currentLoc === selectedTechStock.locationName;
-      return isAtThisLocation && (t.situation === "Indisponible" || t.situation === "Signalé manquant" || t.situation === "Prêté" || t.situation === "Disponible");
+      const isAtThisLocation = doesTraceMatchTechLocation(t, matchedStockRecord.mouvements);
+      return (
+        isAtThisLocation &&
+        (t.situation === "Indisponible" ||
+          t.situation === "Signalé manquant" ||
+          (t.situation as string) === "Signalé Manquant" ||
+          t.situation === "Prêté" ||
+          t.situation === "Disponible")
+      );
     });
 
-    const shouldKeep = newVolDispo > 0 || 
-                       (selectedTechStock.volumeReserve || 0) > 0 || 
-                       (selectedTechStock.volumeEntrant || 0) > 0 || 
-                       (matchedStockRecord.traceabilityEnabled ? hasRemainingTraceabilities : false);
+    const shouldKeep =
+      newVolDispo > 0 ||
+      (selectedTechStock.volumeReserve || 0) > 0 ||
+      (selectedTechStock.volumeEntrant || 0) > 0 ||
+      (matchedStockRecord.traceabilityEnabled ? hasRemainingTraceabilities : false);
 
     // update distributed stock
     if (onUpdateDistributedStocks && distributedStocks) {
       let updatedDs: DistributedStockLocation[];
       if (!shouldKeep) {
         // Delete this distributed stock location
-        updatedDs = distributedStocks.filter(it => it.id !== selectedTechStock.id);
+        updatedDs = distributedStocks.filter((it) => it.id !== selectedTechStock.id);
       } else {
         // Keep but update volumeDisponible
         updatedDs = distributedStocks.map((it) => {
@@ -1922,19 +2105,18 @@ export default function PublicPortal({
     }
 
     // update central stocks and traceabilities
-    if (onUpdateStocks) {
-      const updatedStocks = stocks.map((st) => {
-        if (st.id === matchedStockRecord.id) {
-          return {
-            ...st,
-            mouvements: updatedMovements,
-            traceabilities: updatedTraceabilities,
-          };
-        }
-        return st;
-      });
-      onUpdateStocks(updatedStocks);
-    }
+    const updatedStocks = effectiveTechStocksList.map((st) => {
+      if (st.id === matchedStockRecord.id) {
+        return {
+          ...st,
+          mouvements: updatedMovements,
+          traceabilities: updatedTraceabilities,
+          inventaire: serializeStockTraceabilities(updatedTraceabilities),
+        };
+      }
+      return st;
+    });
+    persistUpdatedStocksList(updatedStocks, true);
 
     if (onAddLogisticsNotification) {
       const name_technician = authenticatedUser?.name || "Un technicien";
@@ -2794,16 +2976,40 @@ export default function PublicPortal({
               }
             }
           }),
-        fetchCollectionFromFirestore<GeneratedReport[]>("generatedReports", tid)
-          .then((remoteReports) => {
-            if (Array.isArray(remoteReports)) {
-              setGeneratedReports(remoteReports);
-              try {
-                localStorage.setItem(`defib_${tid}_generated_reports`, JSON.stringify(remoteReports));
-                localStorage.setItem("defib_generated_reports", JSON.stringify(remoteReports));
-              } catch (_) {}
+        Promise.allSettled([
+          fetchCollectionFromFirestore<GeneratedReport[]>("generatedReports", tid),
+          fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(tid)}&type=rapportsPdf&refresh=true&_=${Date.now()}`)
+            .then(async (resp) => (resp.ok ? resp.json() : null))
+            .catch(() => null),
+        ]).then(([fsRes, sheetRes]) => {
+          const fsReports: GeneratedReport[] =
+            fsRes.status === "fulfilled" && Array.isArray(fsRes.value) ? fsRes.value : [];
+          const sheetPayload = sheetRes.status === "fulfilled" ? sheetRes.value : null;
+          const sheetReports: GeneratedReport[] = Array.isArray(sheetPayload?.items)
+            ? sheetPayload.items
+            : Array.isArray(sheetPayload)
+              ? sheetPayload
+              : [];
+          if (fsReports.length > 0 || sheetReports.length > 0) {
+            const byKey = new Map<string, GeneratedReport>();
+            [...fsReports, ...sheetReports].forEach((rep: any) => {
+              if (!rep) return;
+              const key = String(rep.interventionReference || rep.reportNumber || rep.id || "").trim();
+              if (!key) return;
+              const prev = byKey.get(key);
+              byKey.set(key, prev ? { ...prev, ...rep } : rep);
+            });
+            const mergedReports = Array.from(byKey.values());
+            setGeneratedReports(mergedReports);
+            if (onUpdateGeneratedReports) {
+              onUpdateGeneratedReports(mergedReports);
             }
-          }),
+            try {
+              localStorage.setItem(`defib_${tid}_generated_reports`, JSON.stringify(mergedReports));
+              localStorage.setItem("defib_generated_reports", JSON.stringify(mergedReports));
+            } catch (_) {}
+          }
+        }),
         fetchCollectionFromFirestore<PointageLog[]>("pointages", tid)
           .then((remotePts) => {
             if (Array.isArray(remotePts)) {
@@ -2823,21 +3029,15 @@ export default function PublicPortal({
               } catch (_) {}
             }
           }),
+        refreshTechStocksFromSpreadsheet(true),
       ]);
       window.dispatchEvent(new CustomEvent("defib_refresh_webapp_data", { detail: { tenantId: tid } }));
-      window.dispatchEvent(
-        new CustomEvent("defib-manual-refresh-spreadsheet", {
-          detail: { spreadsheetKey: "spreadsheetStocks", idSuffix: "stocks" },
-        }),
-      );
       window.dispatchEvent(
         new CustomEvent("defib-manual-refresh-spreadsheet", {
           detail: { spreadsheetKey: "spreadsheetVariables", idSuffix: "variables" },
         }),
       );
       window.dispatchEvent(new CustomEvent("defib_reload_tours"));
-      window.dispatchEvent(new Event("focus"));
-      window.dispatchEvent(new Event("storage"));
       const elapsed = Date.now() - startMs;
       if (elapsed < 900) {
         await new Promise((r) => setTimeout(r, 900 - elapsed));
@@ -2858,7 +3058,7 @@ export default function PublicPortal({
     }
     if (hasAutoRefreshedAfterLoginRef.current !== userKey) {
       hasAutoRefreshedAfterLoginRef.current = userKey;
-      if (["interventions", "rapports", "planning", "stocks"].includes(activeTab)) {
+      if (["interventions", "rapports", "planning"].includes(activeTab)) {
         handleRefreshWebappData();
       }
     }
@@ -2951,9 +3151,58 @@ export default function PublicPortal({
     }
   }, [propGeneratedReports]);
 
+  useEffect(() => {
+    const tid =
+      techTenantId ||
+      authenticatedUser?.envId ||
+      (authenticatedUser as any)?.tenantId ||
+      localStorage.getItem("defib_tenant_id") ||
+      "demo";
+    let cancelled = false;
+    const sheetUrl = getTenantSpreadsheetUrl("spreadsheetRapportsPdf", companyInfo);
+    const qs = new URLSearchParams({
+      tenantId: tid,
+      type: "rapportsPdf",
+    });
+    if (sheetUrl) qs.set("spreadsheetUrl", sheetUrl);
+    fetch(`/api/sheets/collection?${qs.toString()}`)
+      .then(async (resp) => (resp.ok ? resp.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        const sheetItems: GeneratedReport[] = Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data)
+            ? data
+            : [];
+        if (sheetItems.length === 0) return;
+        setGeneratedReports((prev) => {
+          const byKey = new Map<string, GeneratedReport>();
+          [...prev, ...sheetItems].forEach((rep: any) => {
+            if (!rep) return;
+            const key = String(rep.interventionReference || rep.reportNumber || rep.id || "").trim();
+            if (!key) return;
+            const existing = byKey.get(key);
+            byKey.set(key, existing ? { ...existing, ...rep } : rep);
+          });
+          return Array.from(byKey.values());
+        });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [techTenantId, authenticatedUser?.envId, companyInfo?.spreadsheetRapportsPdf]);
+
   const saveReports = (updated: GeneratedReport[]) => {
     setGeneratedReports(updated);
+    const activeTid =
+      techTenantId ||
+      authenticatedUser?.envId ||
+      (authenticatedUser as any)?.tenantId ||
+      localStorage.getItem("defib_tenant_id") ||
+      "demo";
     try {
+      localStorage.setItem(`defib_${activeTid}_generated_reports`, JSON.stringify(updated));
       localStorage.setItem("defib_generated_reports", JSON.stringify(updated));
     } catch (e) {
       console.warn(
@@ -2961,6 +3210,7 @@ export default function PublicPortal({
         e,
       );
     }
+    saveCollectionToFirestore("generatedReports", updated, activeTid).catch(() => {});
     if (onUpdateGeneratedReports) {
       onUpdateGeneratedReports(updated);
     }
@@ -4594,10 +4844,163 @@ export default function PublicPortal({
     ];
   });
 
-  useEffect(() => {
-    if (propPointages) {
-      setPointages(propPointages);
+  const lastPointageMutationRef = useRef<number>(0);
+
+  const resolveCurrentTechIdentity = (): { name: string; email: string } => {
+    const rawName = String(authenticatedUser?.name || "").trim();
+    const rawEmail = String(authenticatedUser?.email || "").trim();
+    if (rawEmail && rawEmail.includes("@") && rawName && !rawName.includes("@")) {
+      return { name: rawName, email: rawEmail };
     }
+
+    const envId = techTenantId || localStorage.getItem("defib_tenant_id") || "demo";
+    let candidateMembers: any[] = Array.isArray(members) ? [...members] : [];
+    try {
+      const storedMembers = localStorage.getItem(`defib_${envId}_members`);
+      if (storedMembers) {
+        const parsed = JSON.parse(storedMembers);
+        if (Array.isArray(parsed)) {
+          candidateMembers = [...candidateMembers, ...parsed];
+        }
+      }
+    } catch (_) {}
+
+    const norm = (s: string) =>
+      String(s || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, "");
+
+    const targetNameNorm = norm(rawName);
+    const targetEmailNorm = norm(rawEmail);
+
+    for (const m of candidateMembers) {
+      if (!m || typeof m !== "object") continue;
+      const mEmail = String(m.email || m.mail || m.courriel || "").trim();
+      const mFullName =
+        String(m.name || "").trim() ||
+        `${String(m.firstName || m.prenom || "").trim()} ${String(m.lastName || m.nom || "").trim()}`.trim();
+      const mRevName =
+        `${String(m.lastName || m.nom || "").trim()} ${String(m.firstName || m.prenom || "").trim()}`.trim();
+      const mEmailPrefix = mEmail.includes("@")
+        ? mEmail.split("@")[0].replace(/[._-]+/g, " ").trim()
+        : "";
+
+      const matched =
+        (rawEmail && mEmail.toLowerCase() === rawEmail.toLowerCase()) ||
+        (targetNameNorm &&
+          (norm(mFullName) === targetNameNorm ||
+            norm(mRevName) === targetNameNorm ||
+            norm(mEmailPrefix) === targetNameNorm)) ||
+        (targetEmailNorm && norm(mEmail) === targetEmailNorm);
+
+      if (matched) {
+        return {
+          name: mFullName || rawName || mEmailPrefix || "Technicien connecté",
+          email: mEmail || (rawEmail.includes("@") ? rawEmail : ""),
+        };
+      }
+    }
+
+    if (rawName.includes("@") && !rawEmail) {
+      const localPart = rawName.split("@")[0] || "";
+      const pretty =
+        localPart
+          .split(/[._-]+/)
+          .filter(Boolean)
+          .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(" ") || rawName;
+      return { name: pretty, email: rawName };
+    }
+
+    return {
+      name: rawName || "Technicien connecté",
+      email: rawEmail,
+    };
+  };
+
+  useEffect(() => {
+    if (!propPointages || !Array.isArray(propPointages)) return;
+    // Do not overwrite local pointages within 10s of a technician action if propPointages is still stale
+    const isRecentLocalMutation = Date.now() - lastPointageMutationRef.current < 10000;
+    const envId = techTenantId || localStorage.getItem("defib_tenant_id") || "demo";
+
+    setPointages((prev) => {
+      let cachedActiveList: PointageLog[] = [];
+      try {
+        const rawActive = localStorage.getItem(`defib_${envId}_active_pointage`);
+        if (rawActive) {
+          const parsed = JSON.parse(rawActive);
+          if (Array.isArray(parsed)) cachedActiveList = parsed;
+          else if (parsed && typeof parsed === "object") cachedActiveList = [parsed];
+        }
+      } catch (_) {}
+
+      const normDate = (d: any) => {
+        const s = String(d || "").trim();
+        const m = s.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+        return m ? `${m[3]}-${m[2]}-${m[1]}` : s;
+      };
+
+      const isSameEntry = (a: any, b: any) => {
+        if (!a || !b) return false;
+        if (a.id && b.id && String(a.id) === String(b.id)) return true;
+        if (a._sheetRowNumber && b._sheetRowNumber && a._sheetRowNumber === b._sheetRowNumber) return true;
+        const da = normDate(a.startDate);
+        const db = normDate(b.startDate);
+        if (!da || !db || da !== db) return false;
+        return doesPointageMatchTech(a, { name: b.techName, email: b.techEmail });
+      };
+
+      const localPool = [...(Array.isArray(prev) ? prev : [])];
+      for (const cap of cachedActiveList) {
+        if (cap && !localPool.some((lp) => isSameEntry(lp, cap))) {
+          localPool.unshift(cap);
+        }
+      }
+
+      if (propPointages.length === 0 && localPool.some((lp) => lp && (lp.isOngoing || isRecentLocalMutation))) {
+        return localPool;
+      }
+
+      const merged = propPointages.map((pp) => {
+        const localMatch = localPool.find((lp) => isSameEntry(lp, pp));
+        if (localMatch) {
+          const localJustStopped = !localMatch.isOngoing && localMatch.endTime && pp.isOngoing;
+          if (localJustStopped || (localMatch.isOngoing && isRecentLocalMutation)) {
+            return {
+              ...pp,
+              ...localMatch,
+              _sheetRowNumber: (pp as any)._sheetRowNumber || (localMatch as any)._sheetRowNumber,
+              techEmail: localMatch.techEmail || pp.techEmail,
+              techName: localMatch.techName || pp.techName,
+            };
+          }
+          return {
+            ...localMatch,
+            ...pp,
+            startTime: pp.startTime || localMatch.startTime,
+            techEmail: pp.techEmail || localMatch.techEmail,
+            techName:
+              localMatch.techName && !localMatch.techName.includes("@")
+                ? localMatch.techName
+                : pp.techName || localMatch.techName,
+          };
+        }
+        return pp;
+      });
+
+      for (const lp of localPool) {
+        if (lp && (lp.isOngoing || isRecentLocalMutation)) {
+          if (!merged.some((mp) => isSameEntry(mp, lp))) {
+            merged.unshift(lp);
+          }
+        }
+      }
+
+      return merged;
+    });
   }, [propPointages]);
 
   const doesPointageMatchTech = (
@@ -4659,12 +5062,26 @@ export default function PublicPortal({
   };
 
   const savePointages = (updated: PointageLog[]) => {
+    lastPointageMutationRef.current = Date.now();
     setPointages(updated);
     const envId = techTenantId || localStorage.getItem("defib_tenant_id") || "demo";
-    localStorage.setItem(
-      `defib_${envId}_pointages_history`,
-      JSON.stringify(updated),
-    );
+    try {
+      localStorage.setItem(
+        `defib_${envId}_pointages_history`,
+        JSON.stringify(updated),
+      );
+      const activeOngoing = (Array.isArray(updated) ? updated : []).filter(
+        (p) => p && p.isOngoing,
+      );
+      if (activeOngoing.length > 0) {
+        localStorage.setItem(
+          `defib_${envId}_active_pointage`,
+          JSON.stringify(activeOngoing),
+        );
+      } else {
+        localStorage.removeItem(`defib_${envId}_active_pointage`);
+      }
+    } catch (_) {}
     if (onUpdatePointages) {
       onUpdatePointages(updated);
     }
@@ -4908,7 +5325,27 @@ export default function PublicPortal({
         const cleanLng = (liveMember.startAddressLng !== undefined && liveMember.startAddressLng !== null && String(liveMember.startAddressLng).toLowerCase() !== 'null' && String(liveMember.startAddressLng).toLowerCase() !== 'nan' && !isNaN(Number(liveMember.startAddressLng))) ? String(liveMember.startAddressLng) : "";
         setTechStartLat(cleanLat);
         setTechStartLng(cleanLng);
-        setTechSignature(liveMember.signature);
+        const envId = localStorage.getItem("defib_tenant_id") || "demo";
+        const fallbackSig =
+          liveMember.signature ||
+          authenticatedUser.signature ||
+          localStorage.getItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`) ||
+          undefined;
+        setTechSignature(fallbackSig);
+        fetchCollectionFromFirestore<any[]>("tech_signatures", undefined, envId)
+          .then((sigList) => {
+            if (Array.isArray(sigList)) {
+              const found = sigList.find(
+                (s) =>
+                  (s.name && s.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) ||
+                  (s.email && authenticatedUser.email && s.email.trim().toLowerCase() === authenticatedUser.email.trim().toLowerCase())
+              );
+              if (found && (found.signature || found.rawDataUrl)) {
+                setTechSignature(found.signature || found.rawDataUrl);
+              }
+            }
+          })
+          .catch(() => {});
       } else {
         // Fallback or read from localStorage if any
         if (authenticatedUser.locationLink) {
@@ -4926,7 +5363,25 @@ export default function PublicPortal({
         const cleanLocalLng = (rawLocalLng && rawLocalLng.toLowerCase() !== 'null' && rawLocalLng.toLowerCase() !== 'undefined' && rawLocalLng.toLowerCase() !== 'nan') ? rawLocalLng : "";
         setTechStartLat(cleanLocalLat);
         setTechStartLng(cleanLocalLng);
-        setTechSignature(authenticatedUser.signature);
+        const fallbackSig =
+          authenticatedUser.signature ||
+          localStorage.getItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`) ||
+          undefined;
+        setTechSignature(fallbackSig);
+        fetchCollectionFromFirestore<any[]>("tech_signatures", undefined, envId)
+          .then((sigList) => {
+            if (Array.isArray(sigList)) {
+              const found = sigList.find(
+                (s) =>
+                  (s.name && s.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) ||
+                  (s.email && authenticatedUser.email && s.email.trim().toLowerCase() === authenticatedUser.email.trim().toLowerCase())
+              );
+              if (found && (found.signature || found.rawDataUrl)) {
+                setTechSignature(found.signature || found.rawDataUrl);
+              }
+            }
+          })
+          .catch(() => {});
       }
 
       // Load stored starting address if any, preferring the liveMember fields
@@ -4971,6 +5426,7 @@ export default function PublicPortal({
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (techSignature) {
           const img = new Image();
+          img.crossOrigin = "anonymous";
           img.onload = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0);
@@ -5412,18 +5868,25 @@ export default function PublicPortal({
   // Submit WORK TIME Pointage (Tab 3)
   const handleTogglePointage = () => {
     const now = new Date();
+    const resolvedTech = resolveCurrentTechIdentity();
     const activeIdx = pointages.findIndex(
-      (p) => p && p.isOngoing && doesPointageMatchTech(p, authenticatedUser),
+      (p) => p && p.isOngoing && doesPointageMatchTech(p, resolvedTech),
     );
+
+    const fmtDateDDMMYYYY = (d: Date) =>
+      `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 
     if (activeIdx !== -1) {
       // Ending ongoingPointage
       const activePointage = pointages[activeIdx];
       const getStartDateTime = parsePointageStartDateTime;
 
+      const preservedStartDate = activePointage.startDate || fmtDateDDMMYYYY(now);
+      const preservedStartTime = activePointage.startTime || "08:00";
+
       const startObj = getStartDateTime(
-        activePointage.startDate || now.toLocaleDateString("fr-FR"),
-        activePointage.startTime,
+        preservedStartDate,
+        preservedStartTime,
       );
       const diffSeconds = Math.max(
         1,
@@ -5432,14 +5895,14 @@ export default function PublicPortal({
       const finalDurationSeconds = Math.min(10 * 3600, diffSeconds);
 
       // If duration exceeded 10 hours, adjust the end date and time to be exactly 10 hours after starting
-      let finalEndDate = now.toLocaleDateString("fr-FR");
+      let finalEndDate = fmtDateDDMMYYYY(now);
       let finalEndTime =
         String(now.getHours()).padStart(2, "0") +
         ":" +
         String(now.getMinutes()).padStart(2, "0");
       if (diffSeconds > 10 * 3600) {
         const tenHoursLater = new Date(startObj.getTime() + 10 * 3600 * 1000);
-        finalEndDate = tenHoursLater.toLocaleDateString("fr-FR");
+        finalEndDate = fmtDateDDMMYYYY(tenHoursLater);
         finalEndTime =
           String(tenHoursLater.getHours()).padStart(2, "0") +
           ":" +
@@ -5449,11 +5912,17 @@ export default function PublicPortal({
       const updated = [...pointages];
       updated[activeIdx] = {
         ...activePointage,
-        techName: activePointage.techName || authenticatedUser?.name || "Technicien connecté",
-        techEmail: activePointage.techEmail || authenticatedUser?.email || "",
+        techName: activePointage.techName || resolvedTech.name || "Technicien connecté",
+        techEmail: activePointage.techEmail || resolvedTech.email || "",
+        startDate: preservedStartDate,
+        startTime: preservedStartTime,
         endDate: finalEndDate,
         endTime: finalEndTime,
         durationSeconds: finalDurationSeconds,
+        trajetMatin: activePointage.trajetMatin || "00:00",
+        trajetSoir: activePointage.trajetSoir || "00:00",
+        tempsRepas: activePointage.tempsRepas || "00:00",
+        tempsAdmin: activePointage.tempsAdmin || "00:00",
         comment:
           activePointage.comment && activePointage.comment.trim()
             ? activePointage.comment.trim()
@@ -5465,12 +5934,12 @@ export default function PublicPortal({
       alert("Pointage arrêté avec succès.");
     } else {
       // Starting new Pointage
-      const currentTechName = authenticatedUser?.name || "Technicien connecté";
-      const currentTechEmail = authenticatedUser?.email || "";
+      const currentTechName = resolvedTech.name || "Technicien connecté";
+      const currentTechEmail = resolvedTech.email || "";
       const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
       const alreadyHasPointageToday = pointages.some((p) => {
-        if (!doesPointageMatchTech(p, authenticatedUser)) return false;
+        if (!doesPointageMatchTech(p, resolvedTech)) return false;
         const pIso = getIsoDate(p.startDate);
         return pIso === todayIso;
       });
@@ -5484,11 +5953,14 @@ export default function PublicPortal({
         String(now.getHours()).padStart(2, "0") +
         ":" +
         String(now.getMinutes()).padStart(2, "0");
+      const techSlug = (currentTechEmail || currentTechName)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
       const newLog: PointageLog = {
-        id: "pt-" + Date.now(),
+        id: `pt_${todayIso}_${techSlug || Date.now()}`,
         techName: currentTechName,
         techEmail: currentTechEmail,
-        startDate: now.toLocaleDateString("fr-FR"),
+        startDate: fmtDateDDMMYYYY(now),
         startTime: currentHHMM,
         endTime: "",
         isOngoing: true,
@@ -5784,20 +6256,47 @@ export default function PublicPortal({
         "signatures",
         `signature_tech_${authenticatedUser.id || authenticatedUser.email || authenticatedUser.name || "user"}.png`
       );
-      setTechSignature(uploadedUrl);
+      const finalSigUrl = uploadedUrl || rawDataUrl;
+      setTechSignature(finalSigUrl);
       const updatedMembers = members.map((m) => {
         if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
-          return { ...m, signature: uploadedUrl };
+          return { ...m, signature: finalSigUrl };
         }
         return m;
       });
       onUpdateMembers(updatedMembers);
-      const updatedUser = { ...authenticatedUser, signature: uploadedUrl };
+      const updatedUser = { ...authenticatedUser, signature: finalSigUrl };
       setAuthenticatedUser(updatedUser);
       localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
       const envId = localStorage.getItem("defib_tenant_id") || "demo";
-      localStorage.setItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`, uploadedUrl);
-      saveCollectionToFirestore(envId, "members", updatedMembers);
+      localStorage.setItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`, finalSigUrl);
+      await saveCollectionToFirestore("members", updatedMembers, envId);
+      try {
+        const existingSigs = (await fetchCollectionFromFirestore<any[]>("tech_signatures", undefined, envId)) || [];
+        const filteredSigs = Array.isArray(existingSigs)
+          ? existingSigs.filter(
+              (s) =>
+                !(
+                  (s.name && s.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) ||
+                  (s.email && authenticatedUser.email && s.email.trim().toLowerCase() === authenticatedUser.email.trim().toLowerCase())
+                )
+            )
+          : [];
+        const nextSigs = [
+          ...filteredSigs,
+          {
+            id: authenticatedUser.id || authenticatedUser.email || authenticatedUser.name,
+            name: authenticatedUser.name,
+            email: authenticatedUser.email || "",
+            signature: finalSigUrl,
+            rawDataUrl,
+            updatedAt: new Date().toISOString(),
+          },
+        ];
+        await saveCollectionToFirestore("tech_signatures", nextSigs, envId);
+      } catch (e) {
+        console.error("Failed to save tech_signatures to Firestore:", e);
+      }
     }
     setActiveSettingsSection(null);
   };
@@ -6446,9 +6945,21 @@ export default function PublicPortal({
                     }}
                     onSave={(updatedReport) => {
                       const reportId = "REP-" + Date.now();
+                      const cleanInterventionRef =
+                        updatedReport.interventionReference ||
+                        updatedReport.reportNumber ||
+                        "INT-2026-" + String(Date.now()).slice(-5);
                       const submission = {
                         ...updatedReport,
                         id: reportId,
+                        interventionReference: cleanInterventionRef,
+                        reportNumber: cleanInterventionRef,
+                        isUpcoming: false,
+                        upcoming: false,
+                        isFuture: false,
+                        status: "Modération",
+                        statut: "Modération",
+                        missionStatus: "Effectué",
                         techName:
                           authenticatedUser?.name || "Technicien connecté",
                         date:
@@ -6458,6 +6969,37 @@ export default function PublicPortal({
                       };
 
                       saveReports([submission, ...generatedReports]);
+
+                      const activeTid =
+                        techTenantId ||
+                        authenticatedUser?.envId ||
+                        (authenticatedUser as any)?.tenantId ||
+                        localStorage.getItem("defib_tenant_id") ||
+                        "demo";
+                      const rapportsPdfSheetUrl = getTenantSpreadsheetUrl("spreadsheetRapportsPdf", companyInfo);
+                      const gererSheetUrl = getTenantSpreadsheetUrl("spreadsheetGestionApresIntervention", companyInfo);
+
+                      fetch("/api/sheets/upsert", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          tenantId: activeTid,
+                          type: "rapportsPdf",
+                          records: [submission],
+                          spreadsheetUrl: rapportsPdfSheetUrl || undefined,
+                        }),
+                      }).catch(() => {});
+
+                      fetch("/api/sheets/upsert", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          tenantId: activeTid,
+                          type: "gestionApresIntervention",
+                          records: [submission],
+                          spreadsheetUrl: gererSheetUrl || undefined,
+                        }),
+                      }).catch(() => {});
 
                       // NOTE: Auto-update other equip list and email sending is bypassed at this stage
                       // It will occur automatically once validated from the main GMAO workspace.
@@ -6523,55 +7065,22 @@ export default function PublicPortal({
                       setReportActivePassageNum(null);
                     }}
                     onSave={(updatedReport) => {
-                      if (reportToEdit) {
-                        const baseSubmission = {
-                          ...reportToEdit,
-                          ...updatedReport,
-                          validated: false, // Require validation in GMAO tab again
-                        };
-                        const submission = {
-                          ...baseSubmission,
-                          commentaire: mergeReportModerationComment(
-                            reportToEdit.commentaire,
-                            baseSubmission,
-                            defibrillateurs,
-                            stocks,
-                            variables,
-                            tours
-                          ),
-                        };
+                      const cleanInterventionRef =
+                        updatedReport.interventionReference ||
+                        reportToEdit?.interventionReference ||
+                        updatedReport.reportNumber ||
+                        reportToEdit?.reportNumber ||
+                        "INT-2026-" + String(Date.now()).slice(-5);
 
-                        const updatedReports = generatedReports.map(r => r.id === reportToEdit.id ? submission : r);
-                        saveReports(updatedReports);
-                        const activeTid = localStorage.getItem('defib_tenant_id') || 'demo';
-                        const gererSheetUrl = getTenantSpreadsheetUrl('spreadsheetGestionApresIntervention', companyInfo);
-                        fetch('/api/sheets/upsert', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            tenantId: activeTid,
-                            type: 'gestionApresIntervention',
-                            records: [submission],
-                            spreadsheetUrl: gererSheetUrl || undefined,
-                          }),
-                        }).catch(() => {});
-
-                        alert(
-                          `Le rapport "${submission.title}" a été modifié avec succès (en attente de validation sur le logiciel principal) !`,
-                        );
-                        setIsReportOverlayOpen(false);
-                        setIsReportOverlayMinimized(false);
-                        setReportToEdit(null);
-                        setSelectedDefibId("");
-                        setSelectedDefibData(null);
-                        setReportActiveTourId("");
-                        setReportActivePassageNum(null);
-                        return;
-                      }
-
-                      const matchingExistingIndex = generatedReports.findIndex(r => 
-                        (updatedReport.interventionReference && r.interventionReference === updatedReport.interventionReference) ||
-                        (updatedReport.missionId && r.missionId === updatedReport.missionId)
+                      const matchingExistingIndex = generatedReports.findIndex(
+                        (r) =>
+                          (reportToEdit?.id && r.id === reportToEdit.id) ||
+                          (updatedReport.id && r.id === updatedReport.id) ||
+                          (cleanInterventionRef &&
+                            (r.interventionReference === cleanInterventionRef ||
+                              r.reportNumber === cleanInterventionRef)) ||
+                          ((updatedReport.missionId || reportToEdit?.missionId) &&
+                            r.missionId === (updatedReport.missionId || reportToEdit?.missionId)),
                       );
 
                       let updatedReportsList = [...generatedReports];
@@ -6581,46 +7090,76 @@ export default function PublicPortal({
                         const existingRep = generatedReports[matchingExistingIndex];
                         const baseSub = {
                           ...existingRep,
+                          ...(reportToEdit || {}),
                           ...updatedReport,
-                          id: existingRep.id,
+                          id: existingRep.id || reportToEdit?.id || "REP-" + Date.now(),
+                          interventionReference: cleanInterventionRef,
+                          reportNumber: cleanInterventionRef,
                           isUpcoming: false,
-                          status: 'Modération',
-                          missionStatus: 'Effectué',
-                          techName: authenticatedUser?.name || existingRep.techName || "Technicien connecté",
-                          date: updatedReport.date || new Date().toLocaleString("fr-FR"),
+                          upcoming: false,
+                          isFuture: false,
+                          status: "Modération",
+                          statut: "Modération",
+                          missionStatus: "Effectué",
+                          techName:
+                            authenticatedUser?.name ||
+                            updatedReport.techName ||
+                            existingRep.techName ||
+                            reportToEdit?.techName ||
+                            "Technicien connecté",
+                          date:
+                            updatedReport.date && updatedReport.date !== "À venir"
+                              ? updatedReport.date
+                              : new Date().toLocaleString("fr-FR"),
                           validated: false,
                         };
                         submission = {
                           ...baseSub,
                           commentaire: mergeReportModerationComment(
-                            existingRep.commentaire,
+                            existingRep.commentaire || reportToEdit?.commentaire,
                             baseSub,
                             defibrillateurs,
                             stocks,
                             variables,
-                            tours
+                            tours,
                           ),
                         };
                         updatedReportsList[matchingExistingIndex] = submission;
                       } else {
-                        const reportId = "REP-" + Date.now();
+                        const reportId =
+                          reportToEdit?.id || updatedReport.id || "REP-" + Date.now();
                         const baseSub = {
+                          ...(reportToEdit || {}),
                           ...updatedReport,
                           id: reportId,
-                          techName: authenticatedUser?.name || "Technicien connecté",
-                          date: updatedReport.date || new Date().toLocaleString("fr-FR"),
+                          interventionReference: cleanInterventionRef,
+                          reportNumber: cleanInterventionRef,
+                          isUpcoming: false,
+                          upcoming: false,
+                          isFuture: false,
+                          status: "Modération",
+                          statut: "Modération",
+                          missionStatus: "Effectué",
+                          techName:
+                            authenticatedUser?.name ||
+                            updatedReport.techName ||
+                            reportToEdit?.techName ||
+                            "Technicien connecté",
+                          date:
+                            updatedReport.date && updatedReport.date !== "À venir"
+                              ? updatedReport.date
+                              : new Date().toLocaleString("fr-FR"),
                           validated: false,
-                          missionStatus: 'Effectué',
                         };
                         submission = {
                           ...baseSub,
                           commentaire: mergeReportModerationComment(
-                            updatedReport.commentaire,
+                            updatedReport.commentaire || reportToEdit?.commentaire,
                             baseSub,
                             defibrillateurs,
                             stocks,
                             variables,
-                            tours
+                            tours,
                           ),
                         };
                         updatedReportsList = [submission, ...generatedReports];
@@ -6628,14 +7167,32 @@ export default function PublicPortal({
 
                       saveReports(updatedReportsList);
                       if (submission) {
-                        const activeTid = localStorage.getItem('defib_tenant_id') || 'demo';
-                        const gererSheetUrl = getTenantSpreadsheetUrl('spreadsheetGestionApresIntervention', companyInfo);
-                        fetch('/api/sheets/upsert', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
+                        const activeTid =
+                          techTenantId ||
+                          authenticatedUser?.envId ||
+                          (authenticatedUser as any)?.tenantId ||
+                          localStorage.getItem("defib_tenant_id") ||
+                          "demo";
+                        const rapportsPdfSheetUrl = getTenantSpreadsheetUrl("spreadsheetRapportsPdf", companyInfo);
+                        const gererSheetUrl = getTenantSpreadsheetUrl("spreadsheetGestionApresIntervention", companyInfo);
+
+                        fetch("/api/sheets/upsert", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
                           body: JSON.stringify({
                             tenantId: activeTid,
-                            type: 'gestionApresIntervention',
+                            type: "rapportsPdf",
+                            records: [submission],
+                            spreadsheetUrl: rapportsPdfSheetUrl || undefined,
+                          }),
+                        }).catch(() => {});
+
+                        fetch("/api/sheets/upsert", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            tenantId: activeTid,
+                            type: "gestionApresIntervention",
                             records: [submission],
                             spreadsheetUrl: gererSheetUrl || undefined,
                           }),
@@ -7041,6 +7598,8 @@ export default function PublicPortal({
                         `Le rapport "${submission.title}" a été enregistré avec succès (en attente de validation sur le logiciel principal) !`,
                       );
                       setIsReportOverlayOpen(false);
+                      setIsReportOverlayMinimized(false);
+                      setReportToEdit(null);
                       setSelectedDefibId("");
                       setSelectedDefibData(null);
                       setReportActiveTourId("");
@@ -8752,7 +9311,7 @@ export default function PublicPortal({
                                 const btnEl = e.currentTarget;
                                 setClickedWebappNavTab({ id: tab.value, key: Date.now() });
                                 setActiveTab(tab.value);
-                                if (["interventions", "rapports", "planning", "stocks"].includes(tab.value)) {
+                                if (["interventions", "rapports", "planning"].includes(tab.value)) {
                                   handleRefreshWebappData();
                                 }
                                 const contentArea = document.getElementById("tab-content-area");
@@ -8831,7 +9390,7 @@ export default function PublicPortal({
                             const nextTab = e.target.value as WebappTab;
                             if (!nextTab) return;
                             setActiveTab(nextTab);
-                            if (["interventions", "rapports", "planning", "stocks"].includes(nextTab)) {
+                            if (["interventions", "rapports", "planning"].includes(nextTab)) {
                               handleRefreshWebappData();
                             }
                             const contentArea = document.getElementById("tab-content-area");
@@ -10894,9 +11453,32 @@ export default function PublicPortal({
                       width: "100%",
                       opacity: isRefreshingWebappData ? 0.5 : 1,
                     }}
-                    className="flex items-center justify-center gap-2 font-bold mb-4"
+                    className="flex items-center justify-center gap-2 font-bold mb-2"
                   >
                     {t("Actualiser les données")}
+                  </button>
+
+                  {/* Button: Enregistrer */}
+                  <button
+                    type="button"
+                    disabled={isSavingTechStockChanges}
+                    onClick={handleSaveTechStockChanges}
+                    style={{
+                      backgroundColor: "rgb(46, 84, 255)",
+                      color: "#ffffff",
+                      fontSize: "18px",
+                      fontWeight: "bold",
+                      borderRadius: "12px",
+                      padding: "14px 20px",
+                      border: "none",
+                      boxShadow: "none",
+                      cursor: isSavingTechStockChanges ? "not-allowed" : "pointer",
+                      width: "100%",
+                      opacity: isSavingTechStockChanges ? 0.7 : 1,
+                    }}
+                    className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 font-bold mb-4"
+                  >
+                    {isSavingTechStockChanges ? t("Enregistrement...") : t("Enregistrer")}
                   </button>
 
                   {/* Form for Nouveau stock distribué */}
@@ -10934,7 +11516,7 @@ export default function PublicPortal({
                           onChange={(e) => {
                             const val = e.target.value;
                             setNewDistribStockId(val);
-                            const sel = (stocks || []).find((s) => s.id === val);
+                            const sel = effectiveTechStocksList.find((s) => s.id === val);
                             setNewDistribCommentaire(sel?.commentaire || "");
                           }}
                           style={{
@@ -10957,7 +11539,7 @@ export default function PublicPortal({
                           required
                         >
                           <option value="">Sélection d'une pièce.</option>
-                          {(stocks || [])
+                          {effectiveTechStocksList
                             .filter((st) => {
                               if (!techLocationLink) return true;
                               const hasLinkedTrace =
@@ -11517,7 +12099,7 @@ export default function PublicPortal({
                             if (!techLocationLink) {
                               setTechLocationLink(effLocation);
                             }
-                            const selectedStock = (stocks || []).find(
+                            const selectedStock = effectiveTechStocksList.find(
                               (s) => s.id === newDistribStockId,
                             );
                             if (!selectedStock) return;
@@ -11602,8 +12184,12 @@ export default function PublicPortal({
                                       },
                                     ];
 
-                              const updatedStocksList = (stocks || []).map((st) => {
+                              const updatedStocksList = effectiveTechStocksList.map((st) => {
                                 if (st.id === selectedStock.id) {
+                                  const nextTraces = [
+                                    ...(st.traceabilities || []),
+                                    ...tracesToSave,
+                                  ];
                                   return {
                                     ...st,
                                     commentaire:
@@ -11611,10 +12197,8 @@ export default function PublicPortal({
                                         ? newDistribCommentaire
                                         : st.commentaire,
                                     traceabilityEnabled: true,
-                                    traceabilities: [
-                                      ...(st.traceabilities || []),
-                                      ...tracesToSave,
-                                    ],
+                                    traceabilities: nextTraces,
+                                    inventaire: serializeStockTraceabilities(nextTraces),
                                   };
                                 }
                                 return st;
@@ -11644,22 +12228,10 @@ export default function PublicPortal({
                                   `fs_cache_${tk}_distributed_stocks`,
                                   JSON.stringify(updatedDs),
                                 );
-                                localStorage.setItem(
-                                  `defib_${tk}_stocks`,
-                                  JSON.stringify(updatedStocksList),
-                                );
-                                localStorage.setItem(
-                                  `fs_cache_${tk}_stocks`,
-                                  JSON.stringify(updatedStocksList),
-                                );
                                 try {
                                   idbSet(
                                     `defib_${tk}_distributed_stocks`,
                                     updatedDs,
-                                  ).catch(() => {});
-                                  idbSet(
-                                    `defib_${tk}_stocks`,
-                                    updatedStocksList,
                                   ).catch(() => {});
                                 } catch (_) {}
                               }
@@ -11670,12 +12242,7 @@ export default function PublicPortal({
                                   effTenant,
                                 );
                               }
-                              if (onUpdateStocks) {
-                                await onUpdateStocks(
-                                  updatedStocksList,
-                                  effTenant,
-                                );
-                              }
+                              await persistUpdatedStocksList(updatedStocksList, true);
 
                               await new Promise((resolve) =>
                                 setTimeout(resolve, 250),
@@ -11950,282 +12517,6 @@ export default function PublicPortal({
                         </div>
                       </div>
 
-                      {/* Section 2: Mouvements (Table layout with scroll horizontally) */}
-                      <div
-                        className="p-4 rounded-[14px] space-y-3"
-                        style={{
-                          backgroundColor: "#f5f7fa",
-                          border: "none",
-                          boxShadow: "none",
-                        }}
-                      >
-                        <div className="flex select-none">
-                          <span
-                            className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
-                            style={{
-                              color: "#fff",
-                              backgroundColor: "#5f1f66",
-                              fontSize: "16px",
-                              border: "none",
-                              textTransform: "none",
-                              letterSpacing: "normal",
-                            }}
-                          >
-                            Mouvements
-                          </span>
-                        </div>
-
-                        <div
-                          className="overflow-x-auto rounded-xl mt-2 bg-white"
-                          style={{
-                            border: "none",
-                            boxShadow: "none",
-                          }}
-                        >
-                          <table className="w-full text-left font-sans border-collapse text-xs">
-                            <thead>
-                              <tr
-                                className="bg-white"
-                                style={{
-                                  borderBottom: "1px solid oklch(0.88 0 0)",
-                                }}
-                              >
-                                <th
-                                  className="px-3 py-3 text-center font-semibold text-black font-sans"
-                                  style={{
-                                    fontSize: "16px",
-                                    color: "#000000",
-                                    whiteSpace: "nowrap",
-                                    cursor: "default",
-                                  }}
-                                >
-                                  Indicateur.
-                                </th>
-                                <th
-                                  className="px-3 py-3 font-semibold text-black font-sans"
-                                  style={{
-                                    fontSize: "16px",
-                                    color: "#000000",
-                                    whiteSpace: "nowrap",
-                                    cursor: "default",
-                                  }}
-                                >
-                                  Circulation.
-                                </th>
-                                <th
-                                  className="px-3 py-3 font-semibold text-black font-sans"
-                                  style={{
-                                    fontSize: "16px",
-                                    color: "#000000",
-                                    whiteSpace: "nowrap",
-                                    cursor: "default",
-                                  }}
-                                >
-                                  Raccordement.
-                                </th>
-                                <th
-                                  className="px-3 py-3 text-center font-semibold text-black font-sans"
-                                  style={{
-                                    fontSize: "16px",
-                                    color: "#000000",
-                                    whiteSpace: "nowrap",
-                                    cursor: "default",
-                                  }}
-                                >
-                                  Volume.
-                                </th>
-                                <th
-                                  className="px-3 py-3 text-center font-semibold text-black font-sans"
-                                  style={{
-                                    fontSize: "16px",
-                                    color: "#000000",
-                                    whiteSpace: "nowrap",
-                                    cursor: "default",
-                                  }}
-                                >
-                                  Suivi du colis.
-                                </th>
-                                <th
-                                  className="px-3 py-3 text-center font-semibold text-black font-sans"
-                                  style={{
-                                    fontSize: "16px",
-                                    color: "#000000",
-                                    whiteSpace: "nowrap",
-                                    cursor: "default",
-                                  }}
-                                >
-                                  Date.
-                                </th>
-                                <th
-                                  className="px-3 py-3 text-center font-semibold text-black font-sans"
-                                  style={{
-                                    fontSize: "16px",
-                                    color: "#000000",
-                                    whiteSpace: "nowrap",
-                                    cursor: "default",
-                                  }}
-                                >
-                                  Situation.
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white">
-                              {(matchedStockRecord?.mouvements || []).length ===
-                              0 ? (
-                                <tr>
-                                  <td
-                                    colSpan={7}
-                                    className="text-center text-xs text-slate-400 py-4 font-sans bg-white"
-                                  >
-                                    Aucun mouvement enregistré pour ce stock.
-                                  </td>
-                                </tr>
-                              ) : (
-                                (matchedStockRecord?.mouvements || []).map(
-                                  (mv, index, arr) => {
-                                    return (
-                                      <tr
-                                        key={mv.id}
-                                        className="hover:bg-slate-50 transition-all font-sans bg-white text-black"
-                                        style={{
-                                          borderBottom:
-                                            index === arr.length - 1
-                                              ? "none"
-                                              : "1px solid oklch(0.88 0 0)",
-                                        }}
-                                      >
-                                        {/* Indicator (Pink text with 18px arrow) */}
-                                        <td
-                                          className="px-3 py-2 whitespace-nowrap bg-white text-center"
-                                          style={{ cursor: "default" }}
-                                        >
-                                          <span
-                                            className="inline-flex items-center justify-center font-bold font-sans"
-                                            style={{
-                                              color: "#fa53d5",
-                                              fontSize: "18px",
-                                              lineHeight: "1",
-                                              cursor: "default",
-                                            }}
-                                          >
-                                            {mv.type ===
-                                            "Réapprovisionnement fournisseur"
-                                              ? "↓"
-                                              : mv.type === "Distribution"
-                                                ? "→"
-                                                : mv.type === "Expédition directe au client"
-                                                  ? "↗"
-                                                  : mv.type === "Annulation"
-                                                    ? "↑"
-                                                    : "←"}
-                                          </span>
-                                        </td>
-                                        {/* Type / Circulation */}
-                                        <td
-                                          className="px-3 py-2 bg-white font-medium text-black"
-                                          style={{
-                                            fontSize: "16px",
-                                            whiteSpace: "nowrap",
-                                            color: "#000000",
-                                            cursor: "default",
-                                          }}
-                                        >
-                                          {mv.type || ""}
-                                        </td>
-                                        {/* Raccordement */}
-                                        <td
-                                          className="px-3 py-2 bg-white font-medium text-black"
-                                          style={{
-                                            fontSize: "16px",
-                                            whiteSpace: "nowrap",
-                                            color: "#000000",
-                                            cursor: "default",
-                                          }}
-                                        >
-                                          {mv.emplacement || ""}
-                                        </td>
-                                        {/* Volume */}
-                                        <td
-                                          className="px-3 py-2 text-center bg-white font-semibold text-black"
-                                          style={{
-                                            fontSize: "16px",
-                                            whiteSpace: "nowrap",
-                                            color: "#000000",
-                                            cursor: "default",
-                                          }}
-                                        >
-                                          {mv.volume !== undefined &&
-                                          mv.volume !== null
-                                            ? mv.volume
-                                            : ""}
-                                        </td>
-                                        {/* Suivi du colis */}
-                                        <td
-                                          className="px-3 py-2 text-center bg-white text-black font-semibold font-sans"
-                                          style={{
-                                            fontSize: "16px",
-                                            whiteSpace: "nowrap",
-                                            color: "#000000",
-                                            cursor: "default",
-                                          }}
-                                        >
-                                          {mv.trackingLink ? (
-                                            <a
-                                              href={
-                                                mv.trackingLink.startsWith(
-                                                  "http",
-                                                )
-                                                  ? mv.trackingLink
-                                                  : `https://${mv.trackingLink}`
-                                              }
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="text-[#fa53d5] hover:underline font-bold font-sans"
-                                              style={{ cursor: "pointer" }}
-                                              title="Suivre le colis"
-                                            >
-                                              Ouvrir le lien
-                                            </a>
-                                          ) : (
-                                            ""
-                                          )}
-                                        </td>
-                                        {/* Date */}
-                                        <td
-                                          className="px-3 py-2 text-center bg-white font-medium text-black"
-                                          style={{
-                                            fontSize: "16px",
-                                            whiteSpace: "nowrap",
-                                            color: "#000000",
-                                            cursor: "default",
-                                          }}
-                                        >
-                                          {mv.date
-                                            ? new Date(
-                                                mv.date,
-                                              ).toLocaleDateString("fr-FR")
-                                            : ""}
-                                        </td>
-                                        {/* Situation */}
-                                        <td
-                                          className="px-3 py-2 text-center bg-white font-medium text-black"
-                                          style={{
-                                            fontSize: "16px",
-                                            cursor: "default",
-                                          }}
-                                        >
-                                          {mv.statut || ""}
-                                        </td>
-                                      </tr>
-                                    );
-                                  },
-                                )
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-
                       {/* Section Inventaire de traçabilité (Même trame que dans le logiciel principal) */}
                       {matchedStockRecord && (
                         <div
@@ -12261,12 +12552,12 @@ export default function PublicPortal({
                               type="text"
                               value={matchedStockRecord.commentaire || ""}
                               onChange={(e) => {
-                                const updatedStocks = (stocks || []).map((st) =>
+                                const updatedStocks = effectiveTechStocksList.map((st) =>
                                   st.id === matchedStockRecord.id
                                     ? { ...st, commentaire: e.target.value }
                                     : st,
                                 );
-                                persistUpdatedStocksList(updatedStocks);
+                                updateLocalTechStocksCache(updatedStocks);
                               }}
                               placeholder="Entrez votre commentaire..."
                               style={{
@@ -12293,12 +12584,12 @@ export default function PublicPortal({
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const updatedStocks = (stocks || []).map((st) =>
+                                  const updatedStocks = effectiveTechStocksList.map((st) =>
                                     st.id === matchedStockRecord.id
                                       ? { ...st, traceabilityEnabled: true }
                                       : st,
                                   );
-                                  persistUpdatedStocksList(updatedStocks);
+                                  updateLocalTechStocksCache(updatedStocks);
                                 }}
                                 className="flex items-center gap-2 font-sans font-bold cursor-pointer select-none border-0 bg-transparent text-black"
                                 style={{ fontSize: "18px" }}
@@ -12326,12 +12617,12 @@ export default function PublicPortal({
                                     );
                                     return;
                                   }
-                                  const updatedStocks = (stocks || []).map((st) =>
+                                  const updatedStocks = effectiveTechStocksList.map((st) =>
                                     st.id === matchedStockRecord.id
                                       ? { ...st, traceabilityEnabled: false }
                                       : st,
                                   );
-                                  persistUpdatedStocksList(updatedStocks);
+                                  updateLocalTechStocksCache(updatedStocks);
                                 }}
                                 disabled={filteredTraceabilities.length > 0}
                                 className={`flex items-center gap-2 font-sans font-bold select-none border-0 bg-transparent text-black ${
@@ -12686,19 +12977,13 @@ export default function PublicPortal({
                              type="button"
                              onClick={() => {
                                const isTraceActive = matchedStockRecord?.traceabilityEnabled ?? false;
-                               const n = isTraceActive && matchedStockRecord?.traceabilities 
-                                 ? matchedStockRecord.traceabilities.filter((t) => {
-                                     if (t.situation !== "Disponible") return false;
-                                     let currentLoc = t.emplacement;
-                                     if (!currentLoc) {
-                                       const matchedMv = (matchedStockRecord.mouvements || []).find(mv => mv.id === t.movementId);
-                                       if (matchedMv && matchedMv.emplacement) {
-                                         currentLoc = matchedMv.emplacement.includes(" : ") ? matchedMv.emplacement.split(" : ")[1] : matchedMv.emplacement;
-                                       }
-                                     }
-                                     return currentLoc === selectedTechStock.locationName;
-                                   }).length 
-                                 : (selectedTechStock?.volumeDisponible || 0);
+                               const n =
+                                 isTraceActive && matchedStockRecord?.traceabilities
+                                   ? matchedStockRecord.traceabilities.filter((t) => {
+                                       if ((t.situation || "Disponible") !== "Disponible") return false;
+                                       return doesTraceMatchTechLocation(t, matchedStockRecord.mouvements);
+                                     }).length
+                                   : selectedTechStock?.volumeDisponible || 0;
                                setRapatrimentVolume(n > 0 ? n : 0);
                                setRapatrimentTrackingLink("");
                                setRapatrimentDate(
@@ -12790,19 +13075,13 @@ export default function PublicPortal({
                                 >
                                   {(() => {
                                     const isTraceActive = matchedStockRecord?.traceabilityEnabled ?? false;
-                                    const n = isTraceActive && matchedStockRecord?.traceabilities
-                                      ? matchedStockRecord.traceabilities.filter((t) => {
-                                          if (t.situation !== "Disponible") return false;
-                                          let currentLoc = t.emplacement;
-                                          if (!currentLoc) {
-                                            const matchedMv = (matchedStockRecord.mouvements || []).find(mv => mv.id === t.movementId);
-                                            if (matchedMv && matchedMv.emplacement) {
-                                              currentLoc = matchedMv.emplacement.includes(" : ") ? matchedMv.emplacement.split(" : ")[1] : matchedMv.emplacement;
-                                            }
-                                          }
-                                          return currentLoc === selectedTechStock.locationName;
-                                        }).length
-                                      : (selectedTechStock?.volumeDisponible || 0);
+                                    const n =
+                                      isTraceActive && matchedStockRecord?.traceabilities
+                                        ? matchedStockRecord.traceabilities.filter((t) => {
+                                            if ((t.situation || "Disponible") !== "Disponible") return false;
+                                            return doesTraceMatchTechLocation(t, matchedStockRecord.mouvements);
+                                          }).length
+                                        : selectedTechStock?.volumeDisponible || 0;
                                     if (n <= 0) {
                                       return <option value={0}>0</option>;
                                     }
@@ -14748,7 +15027,7 @@ export default function PublicPortal({
                     }
                     #tab-localisation-screen input::placeholder {
                       font-size: 18px !important;
-                      color: #9ca3af !important;
+                      color: #BECADB !important;
                     }
                   `}</style>
 
@@ -14803,9 +15082,10 @@ export default function PublicPortal({
                   {activeSettingsSection === "pointage" && (
                     <div className="space-y-4 pt-2 text-left animate-fadeIn">
                       <div
-                        className="bg-white border px-4 py-[25px]"
+                        className="px-4 py-[25px]"
                         style={{
-                          borderColor: "rgb(201, 190, 205)",
+                          backgroundColor: "#F5F7FA",
+                          border: "none",
                           borderRadius: "14px",
                         }}
                       >
@@ -14841,8 +15121,8 @@ export default function PublicPortal({
                               className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
                               style={{
                                 backgroundColor: hidePointage
-                                  ? "#fe4eba"
-                                  : "#cbd5e1",
+                                  ? "#2E54FF"
+                                  : "#CFD5DB",
                               }}
                             >
                               <span
@@ -14862,13 +15142,7 @@ export default function PublicPortal({
                       {(() => {
                         const rules = loadCttGlobalRules();
                         return (
-                          <div
-                            className="bg-white border px-4 py-5 space-y-2.5"
-                            style={{
-                              borderColor: "rgb(201, 190, 205)",
-                              borderRadius: "14px",
-                            }}
-                          >
+                          <div className="space-y-2.5">
                             <h3
                               style={{
                                 fontSize: "18px",
@@ -14876,6 +15150,7 @@ export default function PublicPortal({
                                 color: "#000000",
                                 fontFamily: "var(--font-sans), sans-serif",
                                 margin: 0,
+                                marginBottom: "12px",
                               }}
                             >
                               Réglages de l’entreprise.
@@ -14929,9 +15204,10 @@ export default function PublicPortal({
                   {activeSettingsSection === "localisation" && (
                     <div className="space-y-4 pt-2 text-left animate-fadeIn">
                       <div
-                        className="bg-white border px-4 py-[25px]"
+                        className="px-4 py-[25px]"
                         style={{
-                          borderColor: "rgb(201, 190, 205)",
+                          backgroundColor: "#F5F7FA",
+                          border: "none",
                           borderRadius: "14px",
                         }}
                       >
@@ -14953,8 +15229,8 @@ export default function PublicPortal({
                               style={{
                                 backgroundColor:
                                   gpsSharingLink === "Partagé"
-                                    ? "rgb(254, 78, 187)"
-                                    : "#cbd5e1",
+                                    ? "#2E54FF"
+                                    : "#CFD5DB",
                               }}
                             >
                               <span
@@ -14972,22 +15248,19 @@ export default function PublicPortal({
                       </div>
 
                       <div style={{ marginTop: "12px" }}>
-                        <a
-                          href="https://defibeo.com/school/"
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <p
                           style={{
                             fontSize: "18px",
-                            color: "#3556ec",
-                            textDecoration: "underline",
-                            fontWeight: "bold",
+                            color: "#000000",
+                            textDecoration: "none",
+                            margin: 0,
                           }}
-                          className="font-sans block hover:opacity-85 text-blue-600 cursor-pointer"
+                          className="font-sans block text-black no-underline"
                         >
                           Vous devez partager avec{" "}
                           {companyInfo?.gmailPartageLocalisation || "(Manquant)"},
                           consultez l’aide.
-                        </a>
+                        </p>
                       </div>
 
                       <button
@@ -15041,11 +15314,11 @@ export default function PublicPortal({
                             fontSize: "18px",
                             padding: "14px",
                             borderRadius: "13px",
-                            border: "1px solid rgb(201, 191, 205)",
+                            border: "1px solid #DCE1EA",
                             outline: "none",
                             color: "rgb(0, 0, 0)",
                           }}
-                          className="w-full bg-white focus:border-indigo-500 font-sans"
+                          className="w-full bg-white focus:border-indigo-500 font-sans placeholder-[#BECADB]"
                         />
                       </div>
 
@@ -15068,11 +15341,11 @@ export default function PublicPortal({
                               fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
+                              border: "1px solid #DCE1EA",
                               outline: "none",
                               color: "rgb(0, 0, 0)",
                             }}
-                            className="w-full bg-white focus:border-indigo-500 font-sans"
+                            className="w-full bg-white focus:border-indigo-500 font-sans placeholder-[#BECADB]"
                           />
                         </div>
 
@@ -15094,11 +15367,11 @@ export default function PublicPortal({
                               fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
+                              border: "1px solid #DCE1EA",
                               outline: "none",
                               color: "rgb(0, 0, 0)",
                             }}
-                            className="w-full bg-white focus:border-indigo-500 font-sans"
+                            className="w-full bg-white focus:border-indigo-500 font-sans placeholder-[#BECADB]"
                           />
                         </div>
                       </div>
@@ -15120,7 +15393,7 @@ export default function PublicPortal({
                               fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
+                              border: "1px solid #DCE1EA",
                               outline: "none",
                               color: "rgb(0, 0, 0)",
                               appearance: "none",
@@ -15156,7 +15429,7 @@ export default function PublicPortal({
                               fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
+                              border: "1px solid #DCE1EA",
                               outline: "none",
                               color: "rgb(0, 0, 0)",
                               appearance: "none",
@@ -15215,13 +15488,13 @@ export default function PublicPortal({
                               fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
+                              border: "1px solid #DCE1EA",
                               outline: "none",
                               color: "rgb(0, 0, 0)",
                               backgroundColor: "#f3f4f6",
                               cursor: "not-allowed",
                             }}
-                            className="w-full"
+                            className="w-full placeholder-[#BECADB]"
                           />
                         </div>
 
@@ -15250,13 +15523,13 @@ export default function PublicPortal({
                               fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
+                              border: "1px solid #DCE1EA",
                               outline: "none",
                               color: "rgb(0, 0, 0)",
                               backgroundColor: "#f3f4f6",
                               cursor: "not-allowed",
                             }}
-                            className="w-full"
+                            className="w-full placeholder-[#BECADB]"
                           />
                         </div>
                       </div>
@@ -15276,7 +15549,7 @@ export default function PublicPortal({
                             fontSize: "18px",
                             padding: "14px",
                             borderRadius: "13px",
-                            border: "1px solid rgb(201, 191, 205)",
+                            border: "1px solid #DCE1EA",
                             outline: "none",
                             color: "rgb(0, 0, 0)",
                             appearance: "none",
@@ -15309,7 +15582,7 @@ export default function PublicPortal({
                             fontSize: "18px",
                             padding: "14px",
                             borderRadius: "13px",
-                            border: "1px solid rgb(201, 191, 205)",
+                            border: "1px solid #DCE1EA",
                             outline: "none",
                             color: "rgb(0, 0, 0)",
                             appearance: "none",
@@ -15349,12 +15622,6 @@ export default function PublicPortal({
                   {activeSettingsSection === "signature" && (
                     <div className="space-y-4 pt-2 text-left animate-fadeIn">
                       <div className="space-y-3 text-left">
-                        <label
-                          style={{ fontSize: "18px", color: "#000000" }}
-                          className="block font-bold text-black select-none"
-                        >
-                          Signature.
-                        </label>
                         <p
                           style={{
                             fontSize: "16px",
@@ -15369,9 +15636,10 @@ export default function PublicPortal({
                         </p>
 
                         <div
-                          className="p-3 bg-white relative"
+                          className="p-3 relative"
                           style={{
-                            border: "1px solid #c9bfcd",
+                            backgroundColor: "#F5F7FA",
+                            border: "none",
                             borderRadius: "13px",
                             maxWidth: "400px",
                           }}
@@ -15380,7 +15648,7 @@ export default function PublicPortal({
                             ref={sigCanvasRef}
                             width={380}
                             height={150}
-                            className="w-full h-[150px] bg-white cursor-crosshair touch-none"
+                            className="w-full h-[150px] cursor-crosshair touch-none"
                             onMouseDown={startSigDrawing}
                             onMouseMove={drawSig}
                             onMouseUp={stopSigDrawing}
@@ -15388,7 +15656,7 @@ export default function PublicPortal({
                             onTouchStart={startSigDrawing}
                             onTouchMove={drawSig}
                             onTouchEnd={stopSigDrawing}
-                            style={{ borderRadius: "6px" }}
+                            style={{ borderRadius: "6px", backgroundColor: "#F5F7FA" }}
                           />
                           <div className="flex justify-between items-center mt-2">
                             <button
@@ -15426,56 +15694,29 @@ export default function PublicPortal({
 
                   {/* SECTION 6: INSTALLER L'APP */}
                   {activeSettingsSection === "installer" && (
-                    <div className="space-y-4 pt-2 text-left animate-fadeIn">
-                      <div
-                        className="bg-white overflow-hidden text-left flex flex-col justify-between"
-                        style={{
-                          border: "1px solid #c9bfcd",
-                          borderRadius: "13px",
-                        }}
-                        id="webapp-add-to-home-screen-card"
+                    <div className="pt-2 text-left animate-fadeIn" id="webapp-add-to-home-screen-card">
+                      <p
+                        className="font-sans leading-relaxed"
+                        style={{ fontSize: "16px", color: "#000000", margin: 0 }}
                       >
-                        <div className="p-5 pb-2 space-y-1">
-                          <h4
-                            className="font-bold font-sans"
-                            style={{ fontSize: "18px", color: "#000000" }}
-                          >
-                            {t("Ajouter à l'écran d'accueil.")}
-                          </h4>
-                          <p
-                            className="font-sans leading-relaxed"
-                            style={{ fontSize: "16px", color: "#000000" }}
-                          >
-                            {t(
-                              "Sur iPhone ou iPad, depuis Safari (iOS 26), touchez l’icône Partager (le carré avec une flèche vers le haut), faites défiler le menu vers le bas puis sélectionnez Sur l’écran d’accueil (carré avec un « + »). Vérifiez ensuite que l’option Ouvrir en tant qu’app web est bien activée, puis appuyez sur Ajouter en haut à droite."
-                            )}
-                          </p>
-                        </div>
-                        <div className="w-full flex justify-center items-end pt-2">
-                          <img
-                            src="https://civilprom.s3.eu-north-1.amazonaws.com/Illustration+Add+To+Home+Screen.svg"
-                            alt="Illustration Add To Home Screen"
-                            className="w-full h-auto block select-none pointer-events-none"
-                            style={{ marginBottom: 0, display: "block" }}
-                            referrerPolicy="no-referrer"
-                          />
-                        </div>
-                      </div>
+                        {t(
+                          "Sur iPhone ou iPad, depuis Safari (iOS 26), touchez l’icône Partager (le carré avec une flèche vers le haut), faites défiler le menu vers le bas puis sélectionnez Sur l’écran d’accueil (carré avec un « + »). Vérifiez ensuite que l’option Ouvrir en tant qu’app web est bien activée, puis appuyez sur Ajouter en haut à droite."
+                        )}
+                      </p>
                     </div>
                   )}
 
                   {/* SECTION 7: GOOGLE CALENDAR */}
                   {activeSettingsSection === "google-calendar" && (
                     <div className="space-y-4 pt-2 text-left animate-fadeIn">
-                      <h3 className="text-lg font-bold text-slate-800">
-                        Intégration Google Calendar
-                      </h3>
-
                       {syncStatusMsg && (
                         <p
                           style={{
                             fontSize: "18px",
-                            color: "rgb(254, 78, 187)",
+                            color:
+                              syncStatusMsg.type === "error"
+                                ? "rgb(210, 45, 11)"
+                                : "rgb(254, 78, 187)",
                             textAlign: "center",
                           }}
                         >
@@ -15483,7 +15724,7 @@ export default function PublicPortal({
                         </p>
                       )}
 
-                      {showDomainHelp && (
+                      {false && showDomainHelp && (
                         <div
                           className="p-4 bg-amber-50 text-amber-800 border border-amber-200 rounded-[12px] space-y-2"
                           id="domain-authorization-guide"
@@ -15953,29 +16194,31 @@ export default function PublicPortal({
                   )}
 
                   {/* Actualiser les données button */}
-                  <button
-                    type="button"
-                    disabled={isRefreshingWebappData}
-                    onClick={handleRefreshWebappData}
-                    style={{
-                      backgroundColor: "#0f172a",
-                      color: "#ffffff",
-                      fontSize: "18px",
-                      fontWeight: "bold",
-                      borderRadius: "12px",
-                      padding: "14px 20px",
-                      border: "none",
-                      cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
-                      width: "100%",
-                    }}
-                    className={`w-full transition-opacity flex items-center justify-center gap-2 font-bold mt-4 ${
-                      isRefreshingWebappData
-                        ? "cursor-not-allowed opacity-50"
-                        : "hover:opacity-90 cursor-pointer"
-                    }`}
-                  >
-                    <span>{t("Actualiser les données")}</span>
-                  </button>
+                  {activeSettingsSection !== "installer" && (
+                    <button
+                      type="button"
+                      disabled={isRefreshingWebappData}
+                      onClick={handleRefreshWebappData}
+                      style={{
+                        backgroundColor: "#0f172a",
+                        color: "#ffffff",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                        borderRadius: "12px",
+                        padding: "14px 20px",
+                        border: "none",
+                        cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
+                        width: "100%",
+                      }}
+                      className={`w-full transition-opacity flex items-center justify-center gap-2 font-bold mt-4 ${
+                        isRefreshingWebappData
+                          ? "cursor-not-allowed opacity-50"
+                          : "hover:opacity-90 cursor-pointer"
+                      }`}
+                    >
+                      <span>{t("Actualiser les données")}</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>

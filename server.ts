@@ -3870,6 +3870,10 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     ged: 'ged',
     suspicious_activity_logs: 'observateurActionsSuspectes',
     observateurActionsSuspectes: 'observateurActionsSuspectes',
+    spontaneous_events: 'autresEvents',
+    spontaneousEvents: 'autresEvents',
+    autresEvents: 'autresEvents',
+    autres_events: 'autresEvents',
   };
   const optionalSheetTabMap: Record<string, SheetTabType> = {
     variables: 'variables',
@@ -5004,6 +5008,7 @@ async function warmupDefibrillateursStore() {
     communicationPortailClient: 'spreadsheetCommunicationPortailClient',
     observateurActionsSuspectes: 'spreadsheetObservateurActionsSuspectes',
     exportations: 'spreadsheetExportations',
+    autresEvents: 'spreadsheetAutresEvents',
   };
 
   function getSheetTabFieldCandidates(tabType: SheetTabType): string[] {
@@ -7492,6 +7497,7 @@ async function warmupDefibrillateursStore() {
             'spreadsheetSatisfaction',
             'spreadsheetCommandes',
             'spreadsheetStocks',
+            'spreadsheetStocksActivite',
             'spreadsheetAchatsFournisseurs',
             'spreadsheetTemps',
             'spreadsheetTicketsCaisse',
@@ -7509,6 +7515,7 @@ async function warmupDefibrillateursStore() {
             'spreadsheetCommunicationPortailClient',
             'spreadsheetObservateurActionsSuspectes',
             'spreadsheetExportations',
+            'spreadsheetAutresEvents',
           ];
 
           const existingInMem = serverMemoryStore.get(collectionKey);

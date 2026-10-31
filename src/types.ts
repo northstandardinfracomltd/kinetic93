@@ -579,6 +579,8 @@ export interface CompanyInfo {
   spreadsheetObservateurActionsSuspectesUrl?: string;
   spreadsheetExportations?: string;
   spreadsheetExportationsUrl?: string;
+  spreadsheetAutresEvents?: string;
+  spreadsheetAutresEventsUrl?: string;
 }
 
 export type SpreadsheetFieldKey =
@@ -612,7 +614,8 @@ export type SpreadsheetFieldKey =
   | 'spreadsheetApparenceRapportsPdf'
   | 'spreadsheetCommunicationPortailClient'
   | 'spreadsheetObservateurActionsSuspectes'
-  | 'spreadsheetExportations';
+  | 'spreadsheetExportations'
+  | 'spreadsheetAutresEvents';
 
 export const EXTRA_SPREADSHEET_FIELDS: {
   key: SpreadsheetFieldKey;
@@ -647,6 +650,7 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetApparenceRapportsPdf', urlKey: 'spreadsheetApparenceRapportsPdfUrl', storageSuffix: 'spreadsheet_apparence_rapports_pdf', label: 'Spreadsheet Apparence des rapports PDF.', id: 'settings-db-spreadsheet-apparence-rapports-pdf' },
   { key: 'spreadsheetCommunicationPortailClient', urlKey: 'spreadsheetCommunicationPortailClientUrl', storageSuffix: 'spreadsheet_communication_portail_client', label: 'Spreadsheet Communication portail client.', id: 'settings-db-spreadsheet-communication-portail-client' },
   { key: 'spreadsheetObservateurActionsSuspectes', urlKey: 'spreadsheetObservateurActionsSuspectesUrl', storageSuffix: 'spreadsheet_observateur_actions_suspectes', label: 'Spreadsheet Observateur des actions suspectes.', id: 'settings-db-spreadsheet-observateur-actions-suspectes' },
+  { key: 'spreadsheetAutresEvents', urlKey: 'spreadsheetAutresEventsUrl', storageSuffix: 'spreadsheet_autres_events', label: 'Spreadsheet Autres Events.', id: 'settings-db-spreadsheet-autres-events' },
 ];
 
 export interface PointageLog {

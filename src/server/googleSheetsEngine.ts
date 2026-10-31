@@ -47,7 +47,8 @@ export type SheetTabType =
   | 'apparenceRapportsPdf'
   | 'communicationPortailClient'
   | 'observateurActionsSuspectes'
-  | 'exportations';
+  | 'exportations'
+  | 'autresEvents';
 
 export interface GlobalGoogleSheetsConfig {
   apiKey?: string;
@@ -2851,6 +2852,13 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Commentaire.', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'note', 'notes', 'observation'] },
     { header: 'Statut.', field: 'statut', aliases: ['statut', 'status', 'etat', 'situation'] },
   ],
+  autresEvents: [
+    { header: 'Email (technicien).', field: 'techEmail', aliases: ['emailtechnicien', 'email', 'technicienemail', 'mailtechnicien', 'technicien'] },
+    { header: 'Date.', field: 'date', aliases: ['date', 'dateevent', 'dateevenement', 'datejournee'] },
+    { header: 'Créneau.', field: 'creneau', aliases: ['creneau', 'heure', 'horaire', 'slot'] },
+    { header: 'Intitulé.', field: 'intitule', aliases: ['intitule', 'titre', 'objet', 'nom', 'evenement'] },
+    { header: 'Commentaire.', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'details', 'description', 'note', 'notes'] },
+  ],
 };
 GENERIC_CANONICAL_HEADERS.devisFactures = GENERIC_CANONICAL_HEADERS.commandes;
 GENERIC_CANONICAL_HEADERS.stocks = GENERIC_CANONICAL_HEADERS.stocksGlobaux;
@@ -2869,6 +2877,7 @@ function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = 
       tabType === 'stocks' ||
       tabType === 'stocksDistribues' ||
       tabType === 'historiqueNotifications' ||
+      tabType === 'autresEvents' ||
       tabType === 'variables' ||
       tabType === 'reglages'
     ) {
@@ -4239,7 +4248,6 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.pdfDataUrl = merged.pdfDataUrl || merged.pdfUrl || '';
     merged.pdfUrl = merged.pdfUrl || merged.pdfDataUrl || '';
   } else if (tabType === 'temps') {
-    merged.id = merged.id || `pt_${rowIndexZeroBased + 2}`;
     const rawEmailCol = String(
       merged.techEmail ||
         rawByHeader['Email (technicien).'] ||
@@ -4278,6 +4286,32 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       if (rawEmailCol) merged.techEmail = rawEmailCol;
     }
 
+    // Cross-reference cached membresEnvironnement to enrich techName / techEmail
+    for (const [ck, cVal] of sheetMemoryCache.entries()) {
+      if (ck.includes(':membresEnvironnement:') && Array.isArray(cVal?.items)) {
+        for (const m of cVal.items) {
+          if (!m || typeof m !== 'object') continue;
+          const mEmail = String(m.email || '').trim();
+          const mName =
+            String(m.name || '').trim() ||
+            `${String(m.firstName || '').trim()} ${String(m.lastName || '').trim()}`.trim();
+          if (merged.techEmail && mEmail && mEmail.toLowerCase() === merged.techEmail.toLowerCase()) {
+            if (mName) merged.techName = mName;
+            break;
+          } else if (
+            !merged.techEmail &&
+            merged.techName &&
+            mName &&
+            mName.toLowerCase() === merged.techName.toLowerCase() &&
+            mEmail
+          ) {
+            merged.techEmail = mEmail;
+            break;
+          }
+        }
+      }
+    }
+
     const rawStartDate = String(
       merged.startDate ||
         rawByHeader['Date Journée.'] ||
@@ -4287,6 +4321,14 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         ''
     ).trim();
     merged.startDate = normalizeDateStr(rawStartDate);
+    const techSlug = String(merged.techEmail || merged.techName || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+    merged.id =
+      merged.id ||
+      (merged.startDate && techSlug
+        ? `pt_${merged.startDate}_${techSlug}`
+        : `pt_${rowIndexZeroBased + 2}`);
     merged.startTime = String(
       merged.startTime ||
         rawByHeader['Début Journée.'] ||
@@ -5567,6 +5609,78 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     if (!merged.id || String(merged.id).startsWith('sheet_gen_') || merged.id === merged.ugs) {
       merged.id = `lognotif_${tenantId}_row_${rowIndexZeroBased + 2}`;
     }
+  } else if (tabType === 'autresEvents') {
+    const rawKeys = Object.keys(rawByHeader);
+    if (rawKeys.length > 0) {
+      const fallbackColMap = resolveGenericColumnFieldMap(rawKeys, 'autresEvents');
+      for (const [kIdx, def] of fallbackColMap.entries()) {
+        const rk = rawKeys[kIdx];
+        const rv = rk ? rawByHeader[rk] : '';
+        if (rv !== undefined && rv !== '' && (merged[def.field] === undefined || merged[def.field] === '')) {
+          merged[def.field] = rv;
+        }
+      }
+    }
+    const rawEmail = String(
+      merged.techEmail ??
+        rawByHeader['Email (technicien).'] ??
+        rawByHeader['Email (technicien)'] ??
+        rawByHeader['Email'] ??
+        ''
+    ).trim();
+    const rawTechName = String(merged.techName ?? '').trim();
+    merged.techEmail = rawEmail;
+    merged.techName = rawTechName;
+
+    for (const [ck, cVal] of sheetMemoryCache.entries()) {
+      if (ck.includes(':membresEnvironnement:') && Array.isArray(cVal?.items)) {
+        for (const m of cVal.items) {
+          if (!m || typeof m !== 'object') continue;
+          const mEmail = String(m.email || '').trim();
+          const mName =
+            String(m.name || '').trim() ||
+            `${String(m.firstName || '').trim()} ${String(m.lastName || '').trim()}`.trim();
+          if (merged.techEmail && mEmail && mEmail.toLowerCase() === merged.techEmail.toLowerCase()) {
+            if (mName) merged.techName = mName;
+            break;
+          } else if (
+            !merged.techEmail &&
+            merged.techName &&
+            mName &&
+            mName.toLowerCase() === merged.techName.toLowerCase() &&
+            mEmail
+          ) {
+            merged.techEmail = mEmail;
+            break;
+          } else if (
+            !merged.techName &&
+            merged.techEmail &&
+            mName &&
+            mName.toLowerCase() === merged.techEmail.toLowerCase()
+          ) {
+            merged.techName = mName;
+            if (mEmail) merged.techEmail = mEmail;
+            break;
+          }
+        }
+      }
+    }
+    if (!merged.techName && merged.techEmail) {
+      merged.techName = merged.techEmail;
+    }
+
+    const rawDate = String(merged.date ?? rawByHeader['Date.'] ?? rawByHeader['Date'] ?? '').trim();
+    merged.date = normalizeDateStr(rawDate);
+    merged.creneau = String(merged.creneau ?? rawByHeader['Créneau.'] ?? rawByHeader['Créneau'] ?? '').trim();
+    merged.intitule = String(merged.intitule ?? rawByHeader['Intitulé.'] ?? rawByHeader['Intitulé'] ?? '').trim();
+    merged.commentaire = String(merged.commentaire ?? rawByHeader['Commentaire.'] ?? rawByHeader['Commentaire'] ?? '').trim();
+
+    if (!merged.id || String(merged.id).startsWith('sheet_gen_')) {
+      const slug = `${merged.techEmail || merged.techName}_${merged.date}_${merged.creneau}_${merged.intitule}`
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+      merged.id = slug ? `spont_${slug}` : `spont_${tenantId}_row_${rowIndexZeroBased + 2}`;
+    }
   }
 
   if (!merged.id) {
@@ -5799,7 +5913,9 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
         ? 'Non'
         : 'Oui');
 
-    // Populate prefixed section keys for canonical mapping
+    // Populate prefixed section keys and explicit 126-column fields for canonical mapping
+    enriched.numeroAtlasante = snap.numeroAtlasante || enriched.numeroAtlasante || '';
+    enriched.versionLogiciel = snap.versionLogiciel || enriched.versionLogiciel || '';
     enriched._s5_fabrication = snap.fabrication || enriched.fabrication || '';
     enriched._s5_miseEnService = snap.miseEnService || enriched.miseEnService || '';
     enriched._s6_modeleElectrodeA = snap.modeleElectrodeA || snap.modeleElectrodeAId || enriched.modeleElectrodeA || '';
@@ -5812,6 +5928,11 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.destockElectrodeA ||
       snap.destockElectrodeA ||
       '';
+    enriched.hasPadpakA = enriched.hasPadpakA || snap.hasPadpakA || 'Non';
+    enriched.lotPadpakA = enriched.lotPadpakA || snap.lotPadpakA || '';
+    enriched.peremptionPadpakA = enriched.peremptionPadpakA || snap.peremptionPadpakA || '';
+    enriched.electrodeAConformeSante = enriched.electrodeAConformeSante || snap.electrodeAConformeSante || 'Oui';
+    enriched.commentaireElectrodeA = enriched.commentaireElectrodeA || snap.commentaireElectrodeA || '';
     enriched._s6s_modeleElectrodeSecoursA =
       snap.modeleElectrodeSecoursA ||
       snap.modeleElectrodeASecoursId ||
@@ -5843,6 +5964,11 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.destockElectrodeP ||
       snap.destockElectrodeP ||
       '';
+    enriched.hasPadpakP = enriched.hasPadpakP || snap.hasPadpakP || 'Non';
+    enriched.lotPadpakP = enriched.lotPadpakP || snap.lotPadpakP || '';
+    enriched.peremptionPadpakP = enriched.peremptionPadpakP || snap.peremptionPadpakP || '';
+    enriched.electrodePConformeSante = enriched.electrodePConformeSante || snap.electrodePConformeSante || 'Oui';
+    enriched.commentaireElectrodeP = enriched.commentaireElectrodeP || snap.commentaireElectrodeP || '';
     enriched._s7s_modeleElectrodeSecoursP =
       snap.modeleElectrodeSecoursP ||
       snap.modeleElectrodePSecoursId ||
@@ -5876,6 +6002,10 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.destockBatterie ||
       snap.destockBatterie ||
       '';
+    enriched.pourcentageChargeNouvelleBatterie =
+      enriched.pourcentageChargeNouvelleBatterie || snap.pourcentageChargeNouvelleBatterie || '';
+    enriched.batterieConformeSante = enriched.batterieConformeSante || snap.batterieConformeSante || 'Oui';
+    enriched.commentaireBatterie = enriched.commentaireBatterie || snap.commentaireBatterie || '';
     enriched._s9_modelePile = snap.modelePile || snap.modelePileId || enriched.modelePile || '';
     enriched._s9_lotPile = snap.lotPile || enriched.lotPile || '';
     enriched._s9_fabricationPile = snap.fabricationPile || enriched.fabricationPile || '';
@@ -6189,7 +6319,8 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       }
     }
 
-    const trList = Array.isArray(enriched.traceabilities) ? enriched.traceabilities : [];
+    const hasExplicitTraceArray = Array.isArray(record.traceabilities);
+    const trList = hasExplicitTraceArray ? record.traceabilities : [];
     const sanitizePipeOut = (val: any) => String(val ?? '').replace(/[|;]/g, ' ').trim();
     const serializedInventaire =
       trList.length > 0
@@ -6206,6 +6337,8 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
               ].join('|')
             )
             .join(';')
+        : hasExplicitTraceArray
+        ? ''
         : String(enriched.inventaire || '').trim();
     enriched.inventaire = serializedInventaire.slice(0, 50000);
 
@@ -6353,19 +6486,57 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     }
     if (!resolvedEmail && rawTechName) {
       const targetTenantId = String(enriched.tenantId || enriched.envId || '').trim().toLowerCase();
-      const normTech = rawTechName.toLowerCase().replace(/[^a-z0-9]/g, '');
-      const masterTenants = getCachedMasterTenantsSync();
-      for (const mt of masterTenants) {
-        if (targetTenantId && mt.id.toLowerCase() !== targetTenantId && mt.code.toLowerCase() !== targetTenantId) {
-          continue;
+      const normTech = rawTechName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
+
+      // First look up in cached membresEnvironnement
+      for (const [ck, cVal] of sheetMemoryCache.entries()) {
+        if (!ck.includes(':membresEnvironnement:') || !Array.isArray(cVal?.items)) continue;
+        if (targetTenantId && !ck.toLowerCase().startsWith(`${targetTenantId}:`)) continue;
+        for (const m of cVal.items) {
+          if (!m || typeof m !== 'object') continue;
+          const mEmail = String(m.email || '').trim();
+          const mFullName =
+            String(m.name || '').trim() ||
+            `${String(m.firstName || '').trim()} ${String(m.lastName || '').trim()}`.trim();
+          const mRevName =
+            `${String(m.lastName || '').trim()} ${String(m.firstName || '').trim()}`.trim();
+          const normFull = mFullName
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]/g, '');
+          const normRev = mRevName
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]/g, '');
+          const normLocal = (mEmail.split('@')[0] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (mEmail && (normFull === normTech || normRev === normTech || normLocal === normTech)) {
+            resolvedEmail = mEmail;
+            break;
+          }
         }
-        const matchedUser = (mt.masterUsers || []).find(u => {
-          const local = (u.email.split('@')[0] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-          return local === normTech;
-        });
-        if (matchedUser) {
-          resolvedEmail = matchedUser.email;
-          break;
+        if (resolvedEmail) break;
+      }
+
+      if (!resolvedEmail) {
+        const masterTenants = getCachedMasterTenantsSync();
+        for (const mt of masterTenants) {
+          if (targetTenantId && mt.id.toLowerCase() !== targetTenantId && mt.code.toLowerCase() !== targetTenantId) {
+            continue;
+          }
+          const matchedUser = (mt.masterUsers || []).find(u => {
+            const local = (u.email.split('@')[0] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            return local === normTech;
+          });
+          if (matchedUser) {
+            resolvedEmail = matchedUser.email;
+            break;
+          }
         }
       }
     }
@@ -6543,6 +6714,42 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.description = String(enriched.description ?? '').trim();
     enriched.commentaire = String(enriched.commentaire ?? '').trim();
     enriched.statut = String(enriched.statut ?? '').trim();
+  } else if (tabType === 'autresEvents') {
+    let resolvedEmail = String(enriched.techEmail ?? '').trim();
+    const resolvedName = String(enriched.techName ?? '').trim();
+    if (!resolvedEmail && resolvedName) {
+      if (resolvedName.includes('@')) {
+        resolvedEmail = resolvedName;
+      } else {
+        for (const [ck, cVal] of sheetMemoryCache.entries()) {
+          if (ck.includes(':membresEnvironnement:') && Array.isArray(cVal?.items)) {
+            for (const m of cVal.items) {
+              if (!m || typeof m !== 'object') continue;
+              const mEmail = String(m.email || '').trim();
+              const mName =
+                String(m.name || '').trim() ||
+                `${String(m.firstName || '').trim()} ${String(m.lastName || '').trim()}`.trim();
+              if (mName && mName.toLowerCase() === resolvedName.toLowerCase() && mEmail) {
+                resolvedEmail = mEmail;
+                break;
+              }
+            }
+            if (resolvedEmail) break;
+          }
+        }
+      }
+    }
+    enriched.techEmail = resolvedEmail || resolvedName;
+    const rawDate = String(enriched.date ?? '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      const [yyyy, mm, dd] = rawDate.split('-');
+      enriched.date = `${dd}/${mm}/${yyyy}`;
+    } else {
+      enriched.date = formatDateDisplay(rawDate) || rawDate;
+    }
+    enriched.creneau = String(enriched.creneau ?? '').trim();
+    enriched.intitule = String(enriched.intitule ?? '').trim();
+    enriched.commentaire = String(enriched.commentaire ?? '').trim();
   }
 
   // 1. Map via canonical definitions if tabType is known
@@ -6727,6 +6934,14 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
     const ugs = String(item.ugs || '').trim().toLowerCase();
     const desc = String(item.description || '').trim().toLowerCase();
     const composite = ugs && desc ? `${ugs}@@${desc}` : '';
+    return [item.id, composite].filter(Boolean).map(s => String(s).trim().toLowerCase());
+  }
+  if (tabType === 'autresEvents') {
+    const email = String(item.techEmail || item.techName || '').trim().toLowerCase();
+    const dt = normalizeDateStr(item.date || '').trim().toLowerCase();
+    const cr = String(item.creneau || '').trim().toLowerCase();
+    const intit = String(item.intitule || '').trim().toLowerCase();
+    const composite = email && dt && cr && intit ? `${email}@@${dt}@@${cr}@@${intit}` : '';
     return [item.id, composite].filter(Boolean).map(s => String(s).trim().toLowerCase());
   }
   if (tabType === 'temps') {
@@ -8457,7 +8672,10 @@ export async function upsertRecordsToTenantSheet(
       const reglagesMissingNewHeaders =
         tabType === 'reglages' &&
         !headers.some(h => normalizeHeaderKey(h).includes('expressiondalerte1') || normalizeHeaderKey(h).includes('expressionalerte1'));
-      if ((!hasRemoteHeaders || clientMissingAutreContratHeaders || missionsMissingNewHeaders || variablesMissingNewHeaders || defibMissingNewHeaders || reglagesMissingNewHeaders) && accessToken) {
+      const rapportsPdfMissingNewHeaders =
+        tabType === 'rapportsPdf' &&
+        !headers.some(h => normalizeHeaderKey(h).includes('section11commentaireinterne'));
+      if ((!hasRemoteHeaders || clientMissingAutreContratHeaders || missionsMissingNewHeaders || variablesMissingNewHeaders || defibMissingNewHeaders || reglagesMissingNewHeaders || rapportsPdfMissingNewHeaders) && accessToken) {
         const lightCtx = await fetchLightweightSheetContextForColdUpsert(
           extracted.spreadsheetId,
           extracted.gid,
@@ -8586,6 +8804,12 @@ export async function upsertRecordsToTenantSheet(
         ? {
             ...existingItem,
             ...rec,
+            ...(tabType === 'temps' && existingItem.startTime && existingItem.isOngoing && !rec.isOngoing
+              ? { startTime: existingItem.startTime }
+              : {}),
+            ...(tabType === 'temps' && existingItem.techEmail && !rec.techEmail
+              ? { techEmail: existingItem.techEmail }
+              : {}),
             ...(resolvedRowNum ? { _sheetRowNumber: resolvedRowNum } : {}),
             _rawSheetRow: {
               ...(existingItem._rawSheetRow || {}),
@@ -9110,6 +9334,9 @@ const MASTER_SHEET_SPREADSHEET_HEADER_TO_FIELD: Record<string, string> = {
   spreadsheetobservateurdesactionssuspectes: 'spreadsheetObservateurActionsSuspectes',
   spreadsheetobservateuractionssuspectes: 'spreadsheetObservateurActionsSuspectes',
   spreadsheetexportations: 'spreadsheetExportations',
+  spreadsheetautresevents: 'spreadsheetAutresEvents',
+  spreadsheetautresevent: 'spreadsheetAutresEvents',
+  spreadsheetautresevenements: 'spreadsheetAutresEvents',
 };
 
 const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [

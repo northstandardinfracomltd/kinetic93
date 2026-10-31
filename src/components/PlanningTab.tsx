@@ -9,6 +9,7 @@ import { playTechSound2 } from '../utils/technicianAudio';
 export interface SpontaneousEvent {
   id: string;
   techName: string;
+  techEmail?: string;
   date: string;
   creneau: string;
   intitule: string;
@@ -227,6 +228,49 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   const [formCommentaire, setFormCommentaire] = useState<string>('');
   const [formError, setFormError] = useState<string>('');
 
+  const resolveLocalAutresEventsUrl = (info?: CompanyInfo): string => {
+    const direct = String(info?.spreadsheetAutresEvents || info?.spreadsheetAutresEventsUrl || '').trim();
+    if (direct && direct.includes('docs.google.com/spreadsheets')) return direct;
+    try {
+      const tid = (
+        authenticatedUser?.tenantId ||
+        authenticatedUser?.envId ||
+        localStorage.getItem('defib_tenant_id') ||
+        'demo'
+      ).trim();
+      const candidates = [
+        localStorage.getItem(`defib_${tid}_spreadsheet_autres_events`),
+        localStorage.getItem(`defib_${tid.toUpperCase()}_spreadsheet_autres_events`),
+        localStorage.getItem(`defib_${tid.toLowerCase()}_spreadsheet_autres_events`),
+        localStorage.getItem('defib_spreadsheet_autres_events'),
+      ];
+      for (const c of candidates) {
+        if (c && c.trim().includes('docs.google.com/spreadsheets')) {
+          return c.trim();
+        }
+      }
+      const savedComp =
+        localStorage.getItem(`defib_${tid}_company_info`) ||
+        localStorage.getItem(`defib_${tid.toUpperCase()}_company_info`) ||
+        localStorage.getItem('defib_company_info');
+      if (savedComp) {
+        const parsed = JSON.parse(savedComp);
+        const u = String(parsed?.spreadsheetAutresEvents || parsed?.spreadsheetAutresEventsUrl || '').trim();
+        if (u && u.includes('docs.google.com/spreadsheets')) return u;
+      }
+    } catch (_) {}
+    return '';
+  };
+
+  const [autresEventsSheetUrl, setAutresEventsSheetUrl] = useState<string>(() =>
+    resolveLocalAutresEventsUrl(companyInfo)
+  );
+
+  useEffect(() => {
+    const u = resolveLocalAutresEventsUrl(companyInfo);
+    if (u) setAutresEventsSheetUrl(u);
+  }, [companyInfo, authenticatedUser]);
+
   const [spontaneousEvents, setSpontaneousEvents] = useState<SpontaneousEvent[]>(() => {
     try {
       const tid = localStorage.getItem('defib_tenant_id') || 'demo';
@@ -238,6 +282,68 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     return [];
   });
 
+  const fetchAutresEventsFromSheet = React.useCallback(async (forceRefresh = false) => {
+    try {
+      const tid = (
+        authenticatedUser?.tenantId ||
+        authenticatedUser?.envId ||
+        localStorage.getItem('defib_tenant_id') ||
+        'demo'
+      ).trim();
+      const localUrl = resolveLocalAutresEventsUrl(companyInfo);
+      const urlParam = localUrl ? `&spreadsheetUrl=${encodeURIComponent(localUrl)}` : '';
+      const refreshParam = forceRefresh ? '&forceRefresh=true' : '';
+      const sessionTok = localStorage.getItem('defib_session_token') || '';
+      const res = await fetch(
+        `/api/sheets/collection?tenantId=${encodeURIComponent(tid)}&type=autresEvents${urlParam}${refreshParam}`,
+        {
+          headers: {
+            ...(sessionTok ? { 'x-defibeo-session': sessionTok } : {}),
+            'x-defibeo-tenant': tid,
+          },
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const resolvedSheetUrl = String(data?.spreadsheetUrl || localUrl || '').trim();
+        if (resolvedSheetUrl && resolvedSheetUrl.includes('docs.google.com/spreadsheets')) {
+          setAutresEventsSheetUrl(resolvedSheetUrl);
+          try {
+            localStorage.setItem(`defib_${tid}_spreadsheet_autres_events`, resolvedSheetUrl);
+          } catch (_) {}
+        } else if (data?.status === 'no_spreadsheet' && !localUrl) {
+          setAutresEventsSheetUrl('');
+        }
+        if (Array.isArray(data?.items) && (data.fromSpreadsheet || data.items.length > 0)) {
+          const mapped: SpontaneousEvent[] = data.items
+            .filter((it: any) => it && (it.date || it.intitule || it.creneau || it.techEmail || it.techName))
+            .map((it: any, idx: number) => ({
+              id: String(it.id || `spont_${tid}_${idx}`),
+              techName: String(it.techName || it.techEmail || '').trim(),
+              techEmail: String(it.techEmail || '').trim(),
+              date: toIsoDateStr(it.date),
+              creneau: String(it.creneau || '').trim(),
+              intitule: String(it.intitule || '').trim(),
+              commentaire: String(it.commentaire || '').trim(),
+              createdAt: it.createdAt || '',
+            }));
+          setSpontaneousEvents(mapped);
+          localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(mapped));
+          localStorage.setItem('defib_spontaneous_events', JSON.stringify(mapped));
+          return;
+        }
+      }
+      const remote = await fetchCollectionFromFirestore<SpontaneousEvent[]>('spontaneous_events');
+      if (remote && Array.isArray(remote)) {
+        setSpontaneousEvents(remote);
+        localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(remote));
+        localStorage.setItem('defib_spontaneous_events', JSON.stringify(remote));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [companyInfo, authenticatedUser]);
+
   useEffect(() => {
     const loadEvents = async () => {
       try {
@@ -246,25 +352,25 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
         if (saved) {
           setSpontaneousEvents(JSON.parse(saved));
         }
-        const remote = await fetchCollectionFromFirestore<SpontaneousEvent[]>('spontaneous_events');
-        if (remote && Array.isArray(remote)) {
-          setSpontaneousEvents(remote);
-          localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(remote));
-          localStorage.setItem('defib_spontaneous_events', JSON.stringify(remote));
-        }
-      } catch (e) {
-        console.error(e);
-      }
+      } catch (_) {}
+      await fetchAutresEventsFromSheet(false);
     };
 
     loadEvents();
-    window.addEventListener('storage', loadEvents);
-    window.addEventListener('defib_spontaneous_events_updated', loadEvents);
-    return () => {
-      window.removeEventListener('storage', loadEvents);
-      window.removeEventListener('defib_spontaneous_events_updated', loadEvents);
+    const onLocalSync = () => {
+      try {
+        const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+        const saved = localStorage.getItem(`defib_${tid}_spontaneous_events`) || localStorage.getItem('defib_spontaneous_events');
+        if (saved) setSpontaneousEvents(JSON.parse(saved));
+      } catch (_) {}
     };
-  }, []);
+    window.addEventListener('storage', onLocalSync);
+    window.addEventListener('defib_spontaneous_events_updated', onLocalSync);
+    return () => {
+      window.removeEventListener('storage', onLocalSync);
+      window.removeEventListener('defib_spontaneous_events_updated', onLocalSync);
+    };
+  }, [fetchAutresEventsFromSheet]);
 
   const saveSpontaneousEvents = (updated: SpontaneousEvent[]) => {
     setSpontaneousEvents(updated);
@@ -365,12 +471,17 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
   // Active member object strictly for selected technician
   const isTechSelected = Boolean(selectedTech && selectedTech.trim() !== '' && selectedTech !== 'Tous' && selectedTech !== 'Sélectionner un technicien');
+  const hasAutresEventsSpreadsheet = Boolean(
+    (autresEventsSheetUrl && autresEventsSheetUrl.trim().includes('docs.google.com/spreadsheets')) ||
+    resolveLocalAutresEventsUrl(companyInfo)
+  );
+  const canUseSpontaneousEvent = isTechSelected && hasAutresEventsSpreadsheet;
 
   useEffect(() => {
-    if (!isTechSelected && isSpontaneousFormOpen) {
+    if (!canUseSpontaneousEvent && isSpontaneousFormOpen) {
       setIsSpontaneousFormOpen(false);
     }
-  }, [isTechSelected, isSpontaneousFormOpen]);
+  }, [canUseSpontaneousEvent, isSpontaneousFormOpen]);
 
   const activeMember = useMemo(() => {
     if (!selectedTech || selectedTech.trim() === '' || selectedTech === 'Tous') {
@@ -688,14 +799,8 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     if (isRefreshing) return;
     setIsRefreshing(true);
     try {
-      const tid = localStorage.getItem('defib_tenant_id') || 'demo';
       try {
-        const remoteEvts = await fetchCollectionFromFirestore<SpontaneousEvent[]>('spontaneous_events');
-        if (remoteEvts && Array.isArray(remoteEvts)) {
-          setSpontaneousEvents(remoteEvts);
-          localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(remoteEvts));
-          localStorage.setItem('defib_spontaneous_events', JSON.stringify(remoteEvts));
-        }
+        await fetchAutresEventsFromSheet(true);
       } catch (e) {
         console.warn('Could not refresh spontaneous events:', e);
       }
@@ -732,16 +837,28 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       setFormError('Veuillez sélectionner un technicien.');
       return;
     }
+    if (!hasAutresEventsSpreadsheet) {
+      setFormError('Aucun Spreadsheet Autres Events configuré pour cet environnement.');
+      return;
+    }
     if (!formDate || !formCreneau || !formIntitule.trim() || !formCommentaire.trim()) {
       setFormError('Tous les champs sont requis.');
       return;
     }
 
     const techForEvent = selectedTech;
+    const resolvedTechEmail = String(
+      activeMember?.email ||
+        (techForEvent.includes('@') ? techForEvent : '') ||
+        authenticatedUser?.email ||
+        ''
+    ).trim();
+    const dateFr = getFormattedDateFR(formDate) || formDate;
 
     const newEvt: SpontaneousEvent = {
       id: `spont_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       techName: techForEvent,
+      techEmail: resolvedTechEmail,
       date: formDate,
       creneau: formCreneau,
       intitule: formIntitule.trim(),
@@ -751,6 +868,40 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
     const updated = [...spontaneousEvents, newEvt];
     saveSpontaneousEvents(updated);
+
+    const tid = (
+      authenticatedUser?.tenantId ||
+      authenticatedUser?.envId ||
+      localStorage.getItem('defib_tenant_id') ||
+      'demo'
+    ).trim();
+    const effectiveSheetUrl = autresEventsSheetUrl || resolveLocalAutresEventsUrl(companyInfo);
+    const sessionTok = localStorage.getItem('defib_session_token') || '';
+    fetch('/api/sheets/upsert', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(sessionTok ? { 'x-defibeo-session': sessionTok } : {}),
+        'x-defibeo-tenant': tid,
+      },
+      body: JSON.stringify({
+        tenantId: tid,
+        type: 'autresEvents',
+        spreadsheetUrl: effectiveSheetUrl,
+        records: [
+          {
+            ...newEvt,
+            techEmail: resolvedTechEmail || techForEvent,
+            date: dateFr,
+            'Email (technicien).': resolvedTechEmail || techForEvent,
+            'Date.': dateFr,
+            'Créneau.': formCreneau,
+            'Intitulé.': formIntitule.trim(),
+            'Commentaire.': formCommentaire.trim(),
+          },
+        ],
+      }),
+    }).catch(() => {});
 
     // Auto switch calendar month/year if needed
     if (formDate.includes('-')) {
@@ -774,6 +925,28 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   const handleDeleteSpontaneousEvent = (id: string) => {
     const updated = spontaneousEvents.filter(e => e.id !== id);
     saveSpontaneousEvents(updated);
+    const tid = (
+      authenticatedUser?.tenantId ||
+      authenticatedUser?.envId ||
+      localStorage.getItem('defib_tenant_id') ||
+      'demo'
+    ).trim();
+    const effectiveSheetUrl = autresEventsSheetUrl || resolveLocalAutresEventsUrl(companyInfo);
+    const sessionTok = localStorage.getItem('defib_session_token') || '';
+    fetch('/api/sheets/delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(sessionTok ? { 'x-defibeo-session': sessionTok } : {}),
+        'x-defibeo-tenant': tid,
+      },
+      body: JSON.stringify({
+        tenantId: tid,
+        type: 'autresEvents',
+        spreadsheetUrl: effectiveSheetUrl,
+        ids: [id],
+      }),
+    }).catch(() => {});
   };
 
   return (
@@ -860,12 +1033,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           ))}
         </select>
 
-        {/* Bouton Ajouter événement spontané / Enregistrer (Désactivé si aucun technicien n'est sélectionné) */}
+        {/* Bouton Ajouter événement spontané / Enregistrer (Désactivé si aucun technicien n'est sélectionné ou pas de Spreadsheet Autres Events) */}
         <button
           type="button"
-          disabled={!isTechSelected}
+          disabled={!canUseSpontaneousEvent}
           onClick={() => {
-            if (!isTechSelected) return;
+            if (!canUseSpontaneousEvent) return;
             if (isSpontaneousFormOpen) {
               handleSaveSpontaneousEvent();
             } else {
@@ -873,21 +1046,27 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
               setIsSpontaneousFormOpen(true);
             }
           }}
-          title={!isTechSelected ? "Veuillez sélectionner un technicien pour ajouter un événement spontané" : undefined}
+          title={
+            !hasAutresEventsSpreadsheet
+              ? "Aucun Spreadsheet Autres Events dédié n'est configuré pour cet environnement"
+              : !isTechSelected
+              ? "Veuillez sélectionner un technicien pour ajouter un événement spontané"
+              : undefined
+          }
           className={`w-full font-bold transition-all duration-150 focus:outline-none text-center flex items-center justify-center select-none ${
-            isTechSelected
+            canUseSpontaneousEvent
               ? "text-white cursor-pointer hover:opacity-95"
               : "text-neutral-400 cursor-not-allowed opacity-60"
           }`}
           style={{
-            backgroundColor: isTechSelected ? "rgb(46, 84, 255)" : "rgb(229, 231, 235)",
-            color: isTechSelected ? "#ffffff" : "rgb(156, 163, 175)",
+            backgroundColor: canUseSpontaneousEvent ? "rgb(46, 84, 255)" : "rgb(229, 231, 235)",
+            color: canUseSpontaneousEvent ? "#ffffff" : "rgb(156, 163, 175)",
             borderRadius: "14px",
             padding: "14px 12px",
             fontSize: "18px",
             border: "none",
             boxShadow: "none",
-            cursor: isTechSelected ? "pointer" : "not-allowed",
+            cursor: canUseSpontaneousEvent ? "pointer" : "not-allowed",
           }}
         >
           {isSpontaneousFormOpen ? "Enregistrer" : "Ajouter événement spontané"}
@@ -915,11 +1094,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
         </button>
 
         {/* Mini Form Evénement spontané */}
-        {isSpontaneousFormOpen && isTechSelected && (
+        {isSpontaneousFormOpen && canUseSpontaneousEvent && (
           <div
-            className="bg-white p-4 space-y-4 my-2 select-none"
+            className="p-4 space-y-4 my-2 select-none"
             style={{
-              border: "1px solid rgb(201, 190, 205)",
+              backgroundColor: "#F5F7FA",
+              border: "none",
               borderRadius: "14px",
             }}
           >
@@ -946,14 +1126,14 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                     (e.currentTarget as any).showPicker?.();
                   } catch (_) {}
                 }}
-                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden cursor-pointer"
+                className="w-full bg-white text-black placeholder-[#BECADB] font-medium transition-all duration-150 focus:outline-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-inner-spin-button]:hidden cursor-pointer"
                 style={{
                   fontSize: "18px",
                   padding: "14px",
                   borderRadius: "13px",
-                  border: "1px solid rgb(201, 191, 205)",
+                  border: "1px solid #DCE1EA",
                   outline: "none",
-                  color: "rgb(0, 0, 0)",
+                  color: formDate ? "rgb(0, 0, 0)" : "#BECADB",
                   WebkitAppearance: "none",
                   appearance: "none",
                 }}
@@ -971,14 +1151,20 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                   setFormCreneau(e.target.value);
                   if (formError) setFormError('');
                 }}
-                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none cursor-pointer"
+                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none appearance-none text-center cursor-pointer"
                 style={{
                   fontSize: "18px",
                   padding: "14px",
                   borderRadius: "13px",
-                  border: "1px solid rgb(201, 191, 205)",
+                  border: "1px solid #DCE1EA",
                   outline: "none",
-                  color: "rgb(0, 0, 0)",
+                  color: formCreneau ? "rgb(0, 0, 0)" : "#BECADB",
+                  WebkitAppearance: "none",
+                  MozAppearance: "none",
+                  appearance: "none",
+                  backgroundImage: "none",
+                  textAlign: "center",
+                  textAlignLast: "center",
                 }}
               >
                 <option value="">Sélectionner un créneau</option>
@@ -1003,12 +1189,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                   setFormIntitule(e.target.value);
                   if (formError) setFormError('');
                 }}
-                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
+                className="w-full bg-white text-black placeholder-[#BECADB] font-medium transition-all duration-150 focus:outline-none"
                 style={{
                   fontSize: "18px",
                   padding: "14px",
                   borderRadius: "13px",
-                  border: "1px solid rgb(201, 191, 205)",
+                  border: "1px solid #DCE1EA",
                   outline: "none",
                   color: "rgb(0, 0, 0)",
                 }}
@@ -1028,12 +1214,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                   setFormCommentaire(e.target.value);
                   if (formError) setFormError('');
                 }}
-                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none"
+                className="w-full bg-white text-black placeholder-[#BECADB] font-medium transition-all duration-150 focus:outline-none"
                 style={{
                   fontSize: "18px",
                   padding: "14px",
                   borderRadius: "13px",
-                  border: "1px solid rgb(201, 191, 205)",
+                  border: "1px solid #DCE1EA",
                   outline: "none",
                   color: "rgb(0, 0, 0)",
                 }}
@@ -1050,7 +1236,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                 }}
                 className="w-full font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer select-none"
                 style={{
-                  backgroundColor: "#0f172a",
+                  backgroundColor: "rgb(210, 45, 11)",
                   borderRadius: "13px",
                   color: "#ffffff",
                   padding: "14px 20px",
@@ -1243,24 +1429,143 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         )}
                       </div>
 
-                      {/* Tournée(s) en cours ce jour (sans border/padding/background, texte en rose) */}
+                      {/* Tournée(s) en cours ce jour + sub-divs des missions de chaque tournée */}
                       {dayActiveTours.length > 0 && (
-                        <div className="space-y-1">
-                          {dayActiveTours.map((tItem, idx) => (
-                            <div
-                              key={`day-tour-${tItem.tourId}-${idx}`}
-                              className="flex items-center gap-2 text-[16px] font-bold"
-                              style={{ color: "#2e54ff" }}
-                            >
-                              <span
-                                className="w-2.5 h-2.5 rounded-full shrink-0"
-                                style={{ backgroundColor: "#2e54ff" }}
-                              />
-                              <span>
-                                Tournée : {tItem.title}
-                              </span>
-                            </div>
-                          ))}
+                        <div className="space-y-2.5">
+                          {dayActiveTours.map((tItem, idx) => {
+                            const rawTourMissions = Array.isArray(tItem.tour?.missions)
+                              ? tItem.tour.missions
+                              : Array.isArray(tItem.tour?.passages)
+                              ? tItem.tour.passages
+                              : [];
+                            const nonDraftTourMissions = rawTourMissions.filter((m: any) => {
+                              if (!m) return false;
+                              const st = String(m.status || '').trim().toLowerCase();
+                              return st !== 'brouillon' && st !== 'draft';
+                            });
+                            const tourStartIso = toIsoDateStr(tItem.tour?.startDate);
+                            const missionsForThisTourDay = nonDraftTourMissions.filter((m: any) => {
+                              const mIso = getMissionIsoDate(m);
+                              if (mIso) {
+                                return mIso === isoDate;
+                              }
+                              return tourStartIso === isoDate;
+                            });
+
+                            return (
+                              <div key={`day-tour-${tItem.tourId}-${idx}`} className="space-y-1.5">
+                                <div
+                                  className="flex items-center gap-2 text-[16px] font-bold"
+                                  style={{ color: "#2e54ff" }}
+                                >
+                                  <span
+                                    className="w-2.5 h-2.5 rounded-full shrink-0"
+                                    style={{ backgroundColor: "#2e54ff" }}
+                                  />
+                                  <span>
+                                    Tournée : {tItem.title}
+                                  </span>
+                                </div>
+
+                                {missionsForThisTourDay.length > 0 && (
+                                  <div className="space-y-1.5 pl-5">
+                                    {missionsForThisTourDay.map((m: any, mSubIdx: number) => {
+                                      const defib = defibrillateurs.find(
+                                        (d: any) =>
+                                          d &&
+                                          (d.identifiant === m.defibIdentifiant ||
+                                            d.id === m.defibIdentifiant ||
+                                            (m.identifiant && d.identifiant === m.identifiant) ||
+                                            (m.defibId && d.id === m.defibId))
+                                      );
+                                      const other = otherEquipments.find(
+                                        (o: any) =>
+                                          o &&
+                                          (o.identifiant === m.defibIdentifiant ||
+                                            o.id === m.defibIdentifiant ||
+                                            (m.identifiant && o.identifiant === m.identifiant) ||
+                                            (m.defibId && o.id === m.defibId))
+                                      );
+                                      const clientObj = clients.find(
+                                        (c: any) =>
+                                          c &&
+                                          (c.id === m.clientId ||
+                                            c.id === defib?.clientId ||
+                                            c.id === other?.clientId ||
+                                            (c.denomination &&
+                                              (m.clientDenomination || m.clientName || m.client) &&
+                                              String(c.denomination).toLowerCase() ===
+                                                String(m.clientDenomination || m.clientName || m.client).toLowerCase()))
+                                      );
+
+                                      const mClientName =
+                                        m.clientDenomination ||
+                                        m.clientName ||
+                                        m.client ||
+                                        clientObj?.denomination ||
+                                        defib?.client ||
+                                        defib?.exploitant ||
+                                        defib?.nomPrenomSite ||
+                                        other?.client ||
+                                        'NC';
+
+                                      const mCity =
+                                        m.ville ||
+                                        defib?.ville ||
+                                        other?.ville ||
+                                        clientObj?.ville ||
+                                        '';
+                                      const mPostcode =
+                                        m.cp ||
+                                        m.codePostal ||
+                                        defib?.cp ||
+                                        defib?.codePostal ||
+                                        other?.codePostal ||
+                                        other?.cp ||
+                                        clientObj?.codePostal ||
+                                        clientObj?.cp ||
+                                        '';
+                                      const mVillePostcode = [mCity, mPostcode].filter(Boolean).join(' ') || 'NC';
+
+                                      const mReasons =
+                                        Array.isArray(m.reasons) && m.reasons.length > 0
+                                          ? m.reasons.join(', ')
+                                          : m.reason ||
+                                            m.motif ||
+                                            m.typePrestation ||
+                                            m.equipmentType ||
+                                            'Maintenance';
+
+                                      const mCreneau =
+                                        m.estimatedSlot ||
+                                        m.creneau ||
+                                        m.slot ||
+                                        m.creneauHoraire ||
+                                        m.estimatedTime ||
+                                        m.time ||
+                                        '--:--';
+
+                                      return (
+                                        <div
+                                          key={`tour-sub-mission-${tItem.tourId}-${m.id || mSubIdx}`}
+                                          style={{
+                                            backgroundColor: "rgb(230, 197, 255)",
+                                            color: "rgb(89, 22, 144)",
+                                            borderRadius: "10px",
+                                            padding: "8px 12px",
+                                            fontSize: "15px",
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          Client : {mClientName}. Ville : {mVillePostcode}. Raison(s) : {mReasons}. Créneau : {mCreneau}.
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
 
@@ -1324,7 +1629,11 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           if (!selectedTech || selectedTech.trim() === '' || selectedTech === 'Tous') return false;
                           const evtTech = normalizeName(evt.techName);
                           const selTech = normalizeName(selectedTech);
-                          return evtTech === selTech;
+                          if (evtTech && evtTech === selTech) return true;
+                          const activeEmail = String(activeMember?.email || '').trim().toLowerCase();
+                          const evtEmail = String(evt.techEmail || (evt.techName?.includes('@') ? evt.techName : '') || '').trim().toLowerCase();
+                          if (activeEmail && evtEmail && activeEmail === evtEmail) return true;
+                          return false;
                         });
 
                         return daySpontaneousEvents.map((evt) => (

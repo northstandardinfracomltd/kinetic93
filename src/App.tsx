@@ -1339,6 +1339,13 @@ export default function App() {
       const fieldKey = tabToFieldKey[tabType];
       const resolvedSpreadsheetUrl = fieldKey ? getTenantSpreadsheetUrl(fieldKey, companyInfoRef.current) : '';
 
+      const normTempsDate = (d: any): string => {
+        const s = String(d || '').trim();
+        const m1 = s.match(/^(\d{2})[-/](\d{2})[-/](\d{4})$/);
+        if (m1) return `${m1[3]}-${m1[2]}-${m1[1]}`;
+        return s;
+      };
+
       const extractKeys = (item: any): string[] => {
         if (!item || typeof item !== 'object') return [];
         const out: string[] = [];
@@ -1353,6 +1360,17 @@ export default function App() {
         }
         if (item.identifiant && !out.includes(String(item.identifiant).trim())) {
           out.push(String(item.identifiant).trim());
+        }
+        if (tabType === 'temps') {
+          const dKey = normTempsDate(item.startDate);
+          const eKey = String(item.techEmail || '').trim().toLowerCase();
+          const nKey = String(item.techName || '').trim().toLowerCase();
+          if (dKey && eKey) out.push(`temps@@${dKey}@@${eKey}`);
+          if (dKey && nKey) out.push(`temps@@${dKey}@@${nKey}`);
+          if (dKey && eKey.includes('@')) {
+            const prefix = eKey.split('@')[0].replace(/[._-]+/g, ' ').trim();
+            if (prefix) out.push(`temps@@${dKey}@@${prefix}`);
+          }
         }
         return out;
       };
@@ -1377,9 +1395,10 @@ export default function App() {
         if (!oi || typeof oi !== 'object') continue;
         const oiId = oi.id !== undefined && oi.id !== null ? String(oi.id).trim().toLowerCase() : '';
         const oKeys = extractKeys(oi);
+        const hasAnyMatchingKeyInNew = oKeys.some(k => newKeySet.has(k.toLowerCase()));
         const wasDeleted = oiId
-          ? !newIdSet.has(oiId)
-          : oKeys.length > 0 && !oKeys.some(k => newKeySet.has(k.toLowerCase()));
+          ? !newIdSet.has(oiId) && !hasAnyMatchingKeyInNew
+          : oKeys.length > 0 && !hasAnyMatchingKeyInNew;
         if (wasDeleted) {
           if (typeof oi._sheetRowNumber === 'number' && oi._sheetRowNumber >= 2) {
             deletedKeys.push(`row:${oi._sheetRowNumber}`);
@@ -1434,22 +1453,35 @@ export default function App() {
         if (oi.id !== undefined && oi.id !== null && String(oi.id).trim() !== '') {
           oldById.set(String(oi.id).trim().toLowerCase(), oi);
         }
-        const pk = extractKeys(oi)[0];
-        if (pk) oldMap.set(pk.toLowerCase(), oi);
+        for (const k of extractKeys(oi)) {
+          if (k) oldMap.set(k.toLowerCase(), oi);
+        }
       }
 
       const changedRecords: any[] = [];
       for (const ni of safeNew) {
         if (!ni || typeof ni !== 'object') continue;
         const niId = ni.id !== undefined && ni.id !== null ? String(ni.id).trim().toLowerCase() : '';
-        const pk = extractKeys(ni)[0];
-        const prev = (niId ? oldById.get(niId) : undefined) || (pk ? oldMap.get(pk.toLowerCase()) : undefined);
+        const nKeys = extractKeys(ni);
+        let prev = niId ? oldById.get(niId) : undefined;
+        if (!prev) {
+          for (const k of nKeys) {
+            const candidate = oldMap.get(k.toLowerCase());
+            if (candidate) {
+              prev = candidate;
+              break;
+            }
+          }
+        }
         if (!prev) {
           changedRecords.push(ni);
         } else if (JSON.stringify(prev) !== JSON.stringify(ni)) {
           changedRecords.push({
             ...ni,
             ...(prev._sheetRowNumber && !ni._sheetRowNumber ? { _sheetRowNumber: prev._sheetRowNumber } : {}),
+            ...(tabType === 'temps' && prev.startTime && prev.isOngoing && !ni.isOngoing
+              ? { startTime: prev.startTime }
+              : {}),
           });
         }
       }
@@ -1617,6 +1649,7 @@ export default function App() {
       saveLogisticsNotifications([...newNotifs, ...logisticsNotifications]);
     }
 
+    lastLocalSheetMutationRef.current = Date.now();
     setStocks(updated);
     const strS = JSON.stringify(updated);
     const sTenantAliases = Array.from(getTenantAliases(effectiveTenantId));
@@ -3394,16 +3427,21 @@ export default function App() {
   }, [getTenantTourPrefix, tenantId]);
 
   const gestionApresMapRef = useRef<Map<string, any>>(new Map());
+  const variablesRef = useRef<Variable[]>(variables);
+  useEffect(() => {
+    variablesRef.current = variables;
+  }, [variables]);
 
   const applyGestionApresToReport = useCallback((rep: any, gaiRecord?: any) => {
     if (!rep) return rep;
     const refKey = String(rep.interventionReference || rep.reportNumber || rep.id || '').trim().toLowerCase();
     const gai = gaiRecord || (refKey ? gestionApresMapRef.current.get(refKey) : undefined);
     if (!gai) return rep;
+    const currentVars = variablesRef.current || [];
     const resolvedFlags = Array.isArray(gai.drapeaux)
       ? gai.drapeaux.map((fl: any, idx: number) => {
           const nom = String(fl?.nom || fl?.name || fl || '').trim();
-          const matchedVar = variables.find(
+          const matchedVar = currentVars.find(
             (v: any) =>
               (v.category === 'Drapeau GMAO' || v.category === 'Drapeau post-intervention') &&
               ((fl?.id && v.id === fl.id) || (nom && String(v.nom || '').trim().toLowerCase() === nom.toLowerCase()))
@@ -3433,7 +3471,7 @@ export default function App() {
       nextRep[`alerteInfo${i}`] = a ? String(a.info || '') : String(gai[`alerteInfo${i}`] || '');
     }
     return nextRep;
-  }, [variables]);
+  }, []);
 
   const syncSingleGestionApresIntervention = useCallback((rep: any) => {
     if (!rep) return;
@@ -3495,7 +3533,8 @@ export default function App() {
         devisFactures: 'spreadsheetCommandes',
         stocksGlobaux: 'spreadsheetStocks',
         stocksDistribues: 'spreadsheetStocks',
-        historiqueNotifications: 'spreadsheetStocks',
+        historiqueNotifications: 'spreadsheetStocksActivite',
+        autresEvents: 'spreadsheetAutresEvents',
         achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
         temps: 'spreadsheetTemps',
         ticketsCaisse: 'spreadsheetTicketsCaisse',
@@ -3904,11 +3943,17 @@ export default function App() {
             safeSetLocalStorage(`defib_${activeTid}_commercial_docs`, JSON.stringify(items));
             break;
           case 'stocksGlobaux':
-            setStocks(items);
+            if (!forceRefresh && Date.now() - lastLocalSheetMutationRef.current < 15000) {
+              break;
+            }
+            setStocks(prev => (JSON.stringify(prev) === JSON.stringify(items) ? prev : items));
             safeSetLocalStorage(`defib_${activeTid}_stocks`, JSON.stringify(items));
             break;
           case 'stocksDistribues':
-            setDistributedStocks(items);
+            if (!forceRefresh && Date.now() - lastLocalSheetMutationRef.current < 15000) {
+              break;
+            }
+            setDistributedStocks(prev => (JSON.stringify(prev) === JSON.stringify(items) ? prev : items));
             safeSetLocalStorage(`defib_${activeTid}_distributed_stocks`, JSON.stringify(items));
             break;
           case 'historiqueNotifications':
@@ -3950,23 +3995,63 @@ export default function App() {
                 return false;
               };
 
+              let cachedActiveList: any[] = [];
+              try {
+                const rawActive = localStorage.getItem(`defib_${activeTid}_active_pointage`);
+                if (rawActive) {
+                  const parsedActive = JSON.parse(rawActive);
+                  if (Array.isArray(parsedActive)) {
+                    cachedActiveList = parsedActive;
+                  } else if (parsedActive && typeof parsedActive === 'object') {
+                    cachedActiveList = [parsedActive];
+                  }
+                }
+              } catch (_) {}
+
+              const isRecentlyMutated = Date.now() - lastLocalSheetMutationRef.current < 15000;
+              const localPool = [...(Array.isArray(prev) ? prev : [])];
+              for (const cap of cachedActiveList) {
+                if (cap && !localPool.some(lp => sameTechAndDate(lp, cap))) {
+                  localPool.unshift(cap);
+                }
+              }
+
               const merged = validTempsItems.map((sheetPt: any) => {
-                const localMatch = (Array.isArray(prev) ? prev : []).find(lp => sameTechAndDate(lp, sheetPt));
+                const localMatch = localPool.find(lp => sameTechAndDate(lp, sheetPt));
                 if (localMatch) {
+                  // If local was just stopped (isOngoing === false && endTime) while sheet still has isOngoing === true, keep local's finished fields
+                  const preferLocalFinished = !localMatch.isOngoing && localMatch.endTime && sheetPt.isOngoing;
+                  const preferLocalOngoing = localMatch.isOngoing && isRecentlyMutated;
+                  if (preferLocalFinished || preferLocalOngoing) {
+                    return {
+                      ...sheetPt,
+                      ...localMatch,
+                      _sheetRowNumber: sheetPt._sheetRowNumber || localMatch._sheetRowNumber,
+                      techEmail: localMatch.techEmail || sheetPt.techEmail,
+                      techName:
+                        localMatch.techName && !localMatch.techName.includes('@')
+                          ? localMatch.techName
+                          : sheetPt.techName || localMatch.techName,
+                    };
+                  }
                   return {
                     ...localMatch,
                     ...sheetPt,
                     id: localMatch.id || sheetPt.id,
-                    techName: localMatch.techName && !localMatch.techName.includes('@') ? localMatch.techName : (sheetPt.techName || localMatch.techName),
+                    startTime: sheetPt.startTime || localMatch.startTime,
+                    techName:
+                      localMatch.techName && !localMatch.techName.includes('@')
+                        ? localMatch.techName
+                        : sheetPt.techName || localMatch.techName,
                     techEmail: sheetPt.techEmail || localMatch.techEmail,
                   };
                 }
                 return sheetPt;
               });
 
-              // Preserve any active ongoing pointage in local state that hasn't finished round-tripping to the sheet yet
-              for (const lp of Array.isArray(prev) ? prev : []) {
-                if (lp && lp.isOngoing && lp.startDate && (lp.techName || lp.techEmail)) {
+              // Preserve any active ongoing pointage (or recently mutated pointage) in local state/cache that hasn't finished round-tripping to the sheet yet
+              for (const lp of localPool) {
+                if (lp && lp.startDate && (lp.techName || lp.techEmail) && (lp.isOngoing || isRecentlyMutated)) {
                   const alreadyInSheet = merged.some(mp => sameTechAndDate(mp, lp));
                   if (!alreadyInSheet) {
                     merged.unshift(lp);
@@ -4019,7 +4104,7 @@ export default function App() {
             break;
           }
           case 'variables':
-            setVariables(items);
+            setVariables(prev => (JSON.stringify(prev) === JSON.stringify(items) ? prev : items));
             safeSetLocalStorage(`defib_${activeTid}_variables`, JSON.stringify(items));
             break;
           case 'ged':
@@ -4279,6 +4364,11 @@ export default function App() {
     };
   }, [refreshGenericSheetCompartment]);
 
+  const refreshGenericSheetCompartmentRef = useRef(refreshGenericSheetCompartment);
+  useEffect(() => {
+    refreshGenericSheetCompartmentRef.current = refreshGenericSheetCompartment;
+  }, [refreshGenericSheetCompartment]);
+
   // Also load any configured secondary Google Spreadsheets for the active tenant on startup and whenever spreadsheet URLs change
   useEffect(() => {
     if (
@@ -4319,7 +4409,7 @@ export default function App() {
     ];
     const runAll = (force = false) => {
       secondaryTabTypes.forEach((tt) => {
-        refreshGenericSheetCompartment(tt, force);
+        refreshGenericSheetCompartmentRef.current(tt, force);
       });
     };
     const timer = setTimeout(() => {
@@ -4333,7 +4423,7 @@ export default function App() {
       clearTimeout(timer);
       window.removeEventListener('defib-tenant-spreadsheets-updated', handleSheetsUpdated);
     };
-  }, [isLoggedIn, tenantId, isFirebaseLoaded, loadedTenantIdState, refreshGenericSheetCompartment]);
+  }, [isLoggedIn, isPublicPortalOpen, tenantId, isFirebaseLoaded, loadedTenantIdState]);
 
   const [isRefreshingCrm, setIsRefreshingCrm] = useState<boolean>(false);
   const handleManualRefreshCrm = async () => {
@@ -8262,19 +8352,35 @@ export default function App() {
       }
     } catch (_) {}
     const effectiveTenantId =
-      (view === 'public' && techTenant ? techTenant : '') ||
       activeTechSessionTenantId ||
       tenantId ||
       localStorage.getItem('defib_tenant_id') ||
       'demo';
 
-    syncCompartmentToGoogleSheets('temps', pointages, updated, ['id'], undefined, effectiveTenantId);
+    lastLocalSheetMutationRef.current = Date.now();
+    loadedDataRef.current.pointages = JSON.stringify(updated);
     setPointages(updated);
+
+    const activeOngoing = (Array.isArray(updated) ? updated : []).filter(p => p && p.isOngoing);
     try {
       localStorage.setItem(`defib_${effectiveTenantId}_pointages_history`, JSON.stringify(updated));
+      if (activeOngoing.length > 0) {
+        localStorage.setItem(`defib_${effectiveTenantId}_active_pointage`, JSON.stringify(activeOngoing));
+      } else {
+        localStorage.removeItem(`defib_${effectiveTenantId}_active_pointage`);
+      }
     } catch (e) {
       console.warn('Storage quota exceeded in savePointages:', e);
     }
+
+    syncCompartmentToGoogleSheets(
+      'temps',
+      pointages,
+      updated,
+      ['id', 'startDate', 'techEmail', 'techName'],
+      effectiveTenantId
+    );
+
     if (isFirebaseLoaded && effectiveTenantId) {
       saveCollectionToFirestore('pointages', updated, effectiveTenantId);
     }

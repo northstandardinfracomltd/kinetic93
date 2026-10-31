@@ -927,6 +927,76 @@ export default function GmaoCorrectionForm({
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
   const [tempLat, setTempLat] = useState<number>(48.8566);
   const [tempLng, setTempLng] = useState<number>(2.3522);
+  const [isUpdatingGpsCoords, setIsUpdatingGpsCoords] = useState(false);
+
+  const handleRefreshCoordsFromAddress = async () => {
+    if (isUpdatingGpsCoords) return;
+    const addressParts = [
+      snapshot.numVoie,
+      snapshot.cp,
+      snapshot.ville,
+      snapshot.region,
+      snapshot.pays || 'France',
+    ]
+      .map(part => String(part || '').trim())
+      .filter(Boolean);
+
+    if (addressParts.length === 0) return;
+
+    setIsUpdatingGpsCoords(true);
+    try {
+      const fullQuery = addressParts.join(', ');
+      const shortQuery = [snapshot.numVoie, snapshot.cp, snapshot.ville]
+        .map(part => String(part || '').trim())
+        .filter(Boolean)
+        .join(' ');
+      let foundLat: number | null = null;
+      let foundLng: number | null = null;
+
+      const isFrance = !snapshot.pays || snapshot.pays.toLowerCase().includes('france');
+      if (isFrance && shortQuery.length >= 3) {
+        try {
+          const banRes = await fetch(
+            `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(shortQuery)}&limit=1`
+          );
+          if (banRes.ok) {
+            const banData = await banRes.json();
+            const coords = banData?.features?.[0]?.geometry?.coordinates;
+            if (Array.isArray(coords) && coords.length >= 2) {
+              foundLng = Number(coords[0]);
+              foundLat = Number(coords[1]);
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (foundLat === null || foundLng === null || isNaN(foundLat) || isNaN(foundLng)) {
+        const nomRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(fullQuery)}`
+        );
+        if (nomRes.ok) {
+          const nomData = await nomRes.json();
+          if (Array.isArray(nomData) && nomData.length > 0 && nomData[0].lat && nomData[0].lon) {
+            foundLat = parseFloat(nomData[0].lat);
+            foundLng = parseFloat(nomData[0].lon);
+          }
+        }
+      }
+
+      if (foundLat !== null && foundLng !== null && !isNaN(foundLat) && !isNaN(foundLng)) {
+        const latStr = foundLat.toFixed(6);
+        const lngStr = foundLng.toFixed(6);
+        handleSnapshotChange('latitude', latStr);
+        handleSnapshotChange('longitude', lngStr);
+        setTempLat(foundLat);
+        setTempLng(foundLng);
+      }
+    } catch (err) {
+      console.warn('Erreur lors du géocodage de l’adresse :', err);
+    } finally {
+      setIsUpdatingGpsCoords(false);
+    }
+  };
 
   // Active Section horizontal navigation bar on mobile
   const [activeSection, setActiveSection] = useState<number>(0);
@@ -2381,36 +2451,20 @@ export default function GmaoCorrectionForm({
     }
 
     if (errors.length > 0) {
-      const firstErr = (errors[0] || '').toLowerCase();
-      if (firstErr.includes("section 11") || firstErr.includes("prêt à l’usage")) {
-        setActiveSection(11);
-      } else if (firstErr.includes("section 9") || firstErr.includes("arrivée")) {
-        setActiveSection(9);
-      } else if (firstErr.includes("section 10") || firstErr.includes("kit") || firstErr.includes("trousse") || firstErr.includes("serviettes")) {
-        setActiveSection(10);
-      } else if (firstErr.includes("section 8") || firstErr.includes("batterie") || firstErr.includes("(b)")) {
-        setActiveSection(8);
-      } else if (firstErr.includes("section 7") || firstErr.includes("pédiatrique") || firstErr.includes("(p)")) {
-        setActiveSection(7);
-      } else if (firstErr.includes("section 6") || firstErr.includes("adulte") || firstErr.includes("électrode a") || firstErr.includes("(a)")) {
-        setActiveSection(6);
-      } else if (firstErr.includes("fabrication.") || firstErr.includes("mise en service.") || firstErr.includes("fin de garantie.")) {
-        setActiveSection(5);
-      } else if (firstErr.includes("client")) {
-        setActiveSection(2);
-      } else if (firstErr.includes("identifiant") || firstErr.includes("série") || firstErr.includes("modèle") || firstErr.includes("type de défibrillateur")) {
-        setActiveSection(1);
-      }
+      setActiveSection(11);
+      const scrollToAlertBox = () => {
+        setTimeout(() => {
+          const box = document.getElementById('custom-alert-info-box');
+          if (box) {
+            box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
+        }, 60);
+      };
 
       if (!hasClickedOnce) {
         setAlertInfoErrors(errors);
         setHasClickedOnce(true);
-        const overlay = document.getElementById('report-form-overlay');
-        if (overlay) {
-          overlay.scrollTo({ top: 0, behavior: 'smooth' });
-        } else {
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
+        scrollToAlertBox();
         return;
       } else {
         const hasBlocking = errors.some(err => {
@@ -2428,13 +2482,7 @@ export default function GmaoCorrectionForm({
         });
         if (hasBlocking) {
           setAlertInfoErrors(errors);
-          setErrorText("Veuillez corriger les erreurs bloquantes avant d'enregistrer.");
-          const overlay = document.getElementById('report-form-overlay');
-          if (overlay) {
-            overlay.scrollTo({ top: 0, behavior: 'smooth' });
-          } else {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }
+          scrollToAlertBox();
           return;
         }
       }
@@ -2636,8 +2684,54 @@ export default function GmaoCorrectionForm({
       onUpdateStocks(updatedStocks);
     }
 
+    const resolveVarLabel = (idOrVal?: string): string => {
+      const raw = String(idOrVal || '').trim();
+      if (!raw) return '';
+      const found = (variables || []).find(
+        v =>
+          v.id === raw ||
+          (v.nom && v.nom.trim().toLowerCase() === raw.toLowerCase()) ||
+          (v.identifiant && v.identifiant.trim().toLowerCase() === raw.toLowerCase())
+      );
+      if (found) return found.nom || raw;
+      return raw;
+    };
+
+    const resolveSelectionLabel = (selId?: string, customVal?: string): string => {
+      if (!selId) return '';
+      if (selId === 'Autre') return customVal || 'Autre';
+      const traceAndSt = getTraceAndStock(selId);
+      if (traceAndSt) {
+        const varLabel = resolveVarLabel(traceAndSt.stock.denominationPieceId);
+        return traceAndSt.trace?.lotOrSerial
+          ? `${varLabel || traceAndSt.stock.ugs || selId} (${traceAndSt.trace.lotOrSerial})`
+          : (varLabel || traceAndSt.stock.ugs || selId);
+      }
+      return resolveVarLabel(selId);
+    };
+
+    const matchedClientObj = (clients || []).find(c => c.id === finalSnapshot.clientId);
+    const resolvedClientName =
+      matchedClientObj?.denomination ||
+      (finalSnapshot as any).clientName ||
+      finalSnapshot.nomSite ||
+      finalSnapshot.clientId ||
+      '';
+
+    const resolvedInterventionReference =
+      (interventionReference && String(interventionReference).trim()) ||
+      (report?.interventionReference && String(report.interventionReference).trim()) ||
+      `INT-2026-${String(Date.now()).slice(-5)}`;
+
     const savedReportPayload = {
       ...report,
+      isUpcoming: false,
+      upcoming: false,
+      isFuture: false,
+      validated: false,
+      status: 'Modération',
+      statut: 'Modération',
+      missionStatus: 'Effectué',
       title: reportTitle,
       reportTitle,
       techName: techName,
@@ -2648,18 +2742,24 @@ export default function GmaoCorrectionForm({
       identifiant: finalSnapshot.identifiant.toUpperCase(),
       numeroSerie: finalSnapshot.numeroSerie || '',
       categorie: finalSnapshot.categorie || 'Défibrillateur',
-      modele: finalSnapshot.modele || finalSnapshot.modeleId || '',
+      modele: resolveVarLabel(finalSnapshot.modele || finalSnapshot.modeleId),
+      modeleId: finalSnapshot.modeleId || finalSnapshot.modele || '',
       typeDefibrillateur,
+      numeroAtlasante: finalSnapshot.numeroAtlasante || '',
+      versionLogiciel: finalSnapshot.versionLogiciel || '',
       denomination: finalSnapshot.nomSite || finalSnapshot.denomination || '',
       emplacement: finalSnapshot.commentaireAdresse || finalSnapshot.emplacement || '',
       clientId: finalSnapshot.clientId || '',
+      clientName: resolvedClientName,
+      entreprise: resolvedClientName,
       nomPrenomSite: finalSnapshot.nomPrenomSite || '',
       telephoneSite: finalSnapshot.telephoneSite || '',
       emailSite: finalSnapshot.emailSite || '',
       contrat: finalSnapshot.contrat || 'Non',
       referenceContrat: finalSnapshot.referenceContrat || '',
       nomContrat: finalSnapshot.nomContrat || '',
-      modeleCoffret: finalSnapshot.modeleCoffret || finalSnapshot.modeleCoffretId || '',
+      modeleCoffret: resolveVarLabel(finalSnapshot.modeleCoffret || finalSnapshot.modeleCoffretId),
+      modeleCoffretId: finalSnapshot.modeleCoffretId || finalSnapshot.modeleCoffret || '',
       numeroLotCoffret: finalSnapshot.numeroLotCoffret || '',
       commentaireCoffret: finalSnapshot.commentaireCoffret || '',
       numVoie: finalSnapshot.numVoie || '',
@@ -2672,18 +2772,37 @@ export default function GmaoCorrectionForm({
       fabrication: finalSnapshot.fabrication || '',
       miseEnService: finalSnapshot.miseEnService || '',
       finGarantie: finalSnapshot.finGarantie || '',
-      modeleElectrodeA: finalSnapshot.modeleElectrodeA || finalSnapshot.modeleElectrodeAId || '',
+      modeleElectrodeA: resolveVarLabel(finalSnapshot.modeleElectrodeA || finalSnapshot.modeleElectrodeAId),
+      modeleElectrodeAId: finalSnapshot.modeleElectrodeAId || finalSnapshot.modeleElectrodeA || '',
       lotElectrodeA: finalSnapshot.lotElectrodeA || '',
       peremptionElectrodeA: finalSnapshot.peremptionElectrodeA || '',
-      modeleElectrodeP: finalSnapshot.modeleElectrodeP || finalSnapshot.modeleElectrodePId || '',
+      modeleElectrodeSecoursA: resolveVarLabel((finalSnapshot as any).modeleElectrodeSecoursA || finalSnapshot.modeleElectrodeASecoursId),
+      lotElectrodeSecoursA: finalSnapshot.lotElectrodeASecours || '',
+      peremptionElectrodeSecoursA: finalSnapshot.peremptionSecoursElectrodeA || '',
+      hasPadpakA: finalSnapshot.hasPadpakA || 'Non',
+      lotPadpakA: finalSnapshot.lotPadpakA || '',
+      peremptionPadpakA: finalSnapshot.peremptionPadpakA || '',
+      commentaireElectrodeA: finalSnapshot.commentaireElectrodeA || '',
+      modeleElectrodeP: resolveVarLabel(finalSnapshot.modeleElectrodeP || finalSnapshot.modeleElectrodePId),
+      modeleElectrodePId: finalSnapshot.modeleElectrodePId || finalSnapshot.modeleElectrodeP || '',
       lotElectrodeP: finalSnapshot.lotElectrodeP || '',
       peremptionElectrodeP: finalSnapshot.peremptionElectrodeP || '',
-      modeleBatterie: finalSnapshot.modeleBatterie || finalSnapshot.modeleBatterieId || '',
+      modeleElectrodeSecoursP: resolveVarLabel((finalSnapshot as any).modeleElectrodeSecoursP || finalSnapshot.modeleElectrodePSecoursId),
+      lotElectrodeSecoursP: finalSnapshot.lotElectrodePSecours || '',
+      peremptionElectrodeSecoursP: finalSnapshot.peremptionSecoursElectrodeP || '',
+      hasPadpakP: finalSnapshot.hasPadpakP || 'Non',
+      lotPadpakP: finalSnapshot.lotPadpakP || '',
+      peremptionPadpakP: finalSnapshot.peremptionPadpakP || '',
+      commentaireElectrodeP: finalSnapshot.commentaireElectrodeP || '',
+      modeleBatterie: resolveVarLabel(finalSnapshot.modeleBatterie || finalSnapshot.modeleBatterieId),
+      modeleBatterieId: finalSnapshot.modeleBatterieId || finalSnapshot.modeleBatterie || '',
       lotBatterie: finalSnapshot.lotBatterie || '',
       fabricationBatterie: finalSnapshot.fabricationBatterie || '',
       miseEnServiceBatterie: finalSnapshot.insertionBatterie || finalSnapshot.miseEnServiceBatterie || '',
+      insertionBatterie: finalSnapshot.insertionBatterie || finalSnapshot.miseEnServiceBatterie || '',
       peremptionBatterie: finalSnapshot.peremptionBatterie || '',
       pourcentageBatterie: finalSnapshot.pourcentageBatterie || '',
+      commentaireBatterie: finalSnapshot.commentaireBatterie || '',
       conforme: finalSnapshot.conforme || 'Oui',
       diagnosticCommentaire: finalSnapshot.commentaire || '',
       internalComment: snapshot.commentaireInterne || '',
@@ -2692,6 +2811,9 @@ export default function GmaoCorrectionForm({
       photoUrl: photoUrl || undefined,
       photo2Url: photoArriereUrl || undefined,
       photo3Url: photoResultatTestUrl || undefined,
+      pieceJointe1Url: attachments[0]?.url || attachments[0]?.name || '',
+      pieceJointe2Url: attachments[1]?.url || attachments[1]?.name || '',
+      pieceJointe3Url: attachments[2]?.url || attachments[2]?.name || '',
       pieceJointeDevisName: Array.isArray(attachments) && attachments.length > 0
         ? attachments.map(a => a.url || a.name).filter(Boolean).join(', ')
         : undefined,
@@ -2714,7 +2836,8 @@ export default function GmaoCorrectionForm({
       clientPinCode: clientPinCode,
       
       // Points 0, 3, 4, 5, 8, 10
-      interventionReference,
+      interventionReference: resolvedInterventionReference,
+      reportNumber: resolvedInterventionReference,
       autreReference,
       materielInterchangeClient,
       commentaireChangement,
@@ -2728,7 +2851,7 @@ export default function GmaoCorrectionForm({
 
       // Section 3 additions
       coffretRemplace,
-      selectionCoffretRemplace,
+      selectionCoffretRemplace: coffretRemplace === 'Oui' ? resolveSelectionLabel(selectionCoffretRemplace, customCoffretRemplace) || selectionCoffretRemplace : '',
       customCoffretRemplace,
       origineCoffretInstalle: coffretRemplace === 'Oui' ? origineCoffretInstalle : '',
       equipeAlarme,
@@ -2760,7 +2883,7 @@ export default function GmaoCorrectionForm({
       batterieRemplacee,
       selectionBatterieRemplacee,
       origineBatterieInstallee: batterieRemplacee === 'Oui' ? origineBatterieInstallee : '',
-      pourcentageChargeNouvelleBatterie: batterieRemplacee === 'Oui' ? pourcentageChargeNouvelleBatterie : undefined,
+      pourcentageChargeNouvelleBatterie: batterieRemplacee === 'Oui' ? pourcentageChargeNouvelleBatterie : '',
       batterieConformeSante,
 
       // Section 10 kit de secours additionnels
@@ -2835,7 +2958,7 @@ export default function GmaoCorrectionForm({
     setTimeout(() => {
       onSave(savedReportPayload);
       setIsSaving(false);
-    }, 3000);
+    }, 400);
   };
 
   return (
@@ -2923,74 +3046,6 @@ export default function GmaoCorrectionForm({
 
       {!isReduced && (
         <>
-
-      {alertInfoErrors && alertInfoErrors.length > 0 && (() => {
-        const isErrorBlocking = (err: string) => {
-          const lower = err.toLowerCase();
-          if (lower.includes("semble invalide")) return false;
-          return lower.includes("bloquant") || 
-                 lower.includes("obligatoire") || 
-                 lower.includes("associer un client") || 
-                 lower.includes("doit-être renseigné") ||
-                 lower.includes("doit être renseigné") ||
-                 lower.includes("invalide") ||
-                 lower.includes("requis");
-        };
-        const blockingErrors = alertInfoErrors.filter(isErrorBlocking);
-        const potentialErrors = alertInfoErrors.filter(err => !isErrorBlocking(err));
-
-        return (
-          <div 
-            className="p-5 font-sans animate-fadeIn space-y-4" 
-            style={{ 
-              backgroundColor: '#501655', 
-              color: '#ffffff',
-              fontSize: '18px',
-              borderRadius: '0px',
-              border: 'none',
-              maxWidth: '100%',
-              margin: '12px auto'
-            }} 
-            id="custom-alert-info-box"
-          >
-            {blockingErrors.length > 0 && (
-              <div>
-                <div className="font-bold flex items-center gap-1.5" style={{ color: '#ffffff', fontSize: '18px' }}>
-                  Veuillez corriger le(s) erreur(s) bloquante(s) :
-                </div>
-                <ul className="list-disc pl-5 mt-1.5 space-y-1" style={{ color: '#ffffff', fontSize: '18px' }}>
-                  {blockingErrors.map((err, idx) => (
-                    <li key={idx}>
-                      {err}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {potentialErrors.length > 0 && (
-              <div className={blockingErrors.length > 0 ? "mt-4" : ""}>
-                <div className="font-bold flex items-center gap-1.5" style={{ color: '#ffffff', fontSize: '18px' }}>
-                  Potentielles erreurs détectées :
-                </div>
-                <ul className="list-disc pl-5 mt-1.5 space-y-1" style={{ color: '#ffffff', fontSize: '18px' }}>
-                  {potentialErrors.map((err, idx) => (
-                    <li key={idx}>
-                      {err}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        );
-      })()}
-
-      {errorText && (
-        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-semibold" style={{ maxWidth: '100%', margin: 'auto' }} id="correction-error">
-          {errorText}
-        </div>
-      )}
 
       {/* Main core form */}
       <form onSubmit={handleSubmit} id="gmao-correction-form" noValidate className="space-y-0 w-full max-w-full overflow-x-hidden flex-1 pb-0" style={{ overflowX: 'hidden', maxWidth: '100%', width: '100%' }}>
@@ -4562,7 +4617,23 @@ export default function GmaoCorrectionForm({
               </div>
             </div>
 
-            <div className="pt-2">
+            <div className="pt-2 space-y-2.5">
+              <button
+                type="button"
+                disabled={isUpdatingGpsCoords}
+                onClick={handleRefreshCoordsFromAddress}
+                style={{
+                  ...rowActionButton18Style,
+                  width: '100%',
+                  textTransform: 'none',
+                  backgroundColor: 'rgb(46, 84, 255)',
+                  boxShadow: 'none',
+                  opacity: isUpdatingGpsCoords ? 0.65 : 1,
+                }}
+                className="font-sans"
+              >
+                {isUpdatingGpsCoords ? 'Actualisation...' : 'Actualiser coordonnées'}
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -6867,6 +6938,68 @@ export default function GmaoCorrectionForm({
                 placeholder="Entrez un commentaire."
               />
             </div>
+
+            {alertInfoErrors && alertInfoErrors.length > 0 && (() => {
+              const isErrorBlocking = (err: string) => {
+                const lower = err.toLowerCase();
+                if (lower.includes("semble invalide")) return false;
+                return lower.includes("bloquant") || 
+                       lower.includes("obligatoire") || 
+                       lower.includes("associer un client") || 
+                       lower.includes("doit-être renseigné") ||
+                       lower.includes("doit être renseigné") ||
+                       lower.includes("invalide") ||
+                       lower.includes("requis");
+              };
+              const blockingErrors = alertInfoErrors.filter(isErrorBlocking);
+              const potentialErrors = alertInfoErrors.filter(err => !isErrorBlocking(err));
+
+              return (
+                <div 
+                  className="p-5 font-sans animate-fadeIn space-y-4 mt-4" 
+                  style={{ 
+                    backgroundColor: '#D22D0B', 
+                    color: '#ffffff',
+                    fontSize: '18px',
+                    borderRadius: '13px',
+                    border: 'none',
+                    maxWidth: '100%',
+                    position: 'static',
+                  }} 
+                  id="custom-alert-info-box"
+                >
+                  {blockingErrors.length > 0 && (
+                    <div>
+                      <div className="font-bold flex items-center gap-1.5" style={{ color: '#ffffff', fontSize: '18px' }}>
+                        Veuillez corriger le(s) erreur(s) bloquante(s) :
+                      </div>
+                      <ul className="list-disc pl-5 mt-1.5 space-y-1" style={{ color: '#ffffff', fontSize: '18px' }}>
+                        {blockingErrors.map((err, idx) => (
+                          <li key={idx}>
+                            {err}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {potentialErrors.length > 0 && (
+                    <div className={blockingErrors.length > 0 ? "mt-4" : ""}>
+                      <div className="font-bold flex items-center gap-1.5" style={{ color: '#ffffff', fontSize: '18px' }}>
+                        Potentielles erreurs détectées :
+                      </div>
+                      <ul className="list-disc pl-5 mt-1.5 space-y-1" style={{ color: '#ffffff', fontSize: '18px' }}>
+                        {potentialErrors.map((err, idx) => (
+                          <li key={idx}>
+                            {err}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
         </div>
@@ -6875,7 +7008,7 @@ export default function GmaoCorrectionForm({
 
       {/* Fixed Error Code Helper Box */}
       <div 
-        className="sticky bottom-0 left-0 right-0 bg-[#f5f7fa] border-none p-2.5 px-3 z-40 space-y-2 w-full max-w-full overflow-x-hidden shrink-0 animate-fade-in !mt-0" 
+        className="sticky bottom-0 left-0 right-0 bg-[#f5f7fa] border-none py-2.5 px-0 z-40 space-y-2 w-full max-w-full overflow-x-hidden shrink-0 animate-fade-in !mt-0" 
         style={{ 
           backgroundColor: '#f5f7fa',
           border: 'none',
@@ -6893,12 +7026,15 @@ export default function GmaoCorrectionForm({
       >
         {/* Horizontal Sections Carousel Selector */}
         <div className="relative w-full max-w-full overflow-hidden">
+          <div className="absolute left-0 top-0 bottom-0 w-7 bg-gradient-to-r from-[#f5f7fa] via-[#f5f7fa]/85 to-transparent pointer-events-none z-10" />
+          <div className="absolute right-0 top-0 bottom-0 w-7 bg-gradient-to-l from-[#f5f7fa] via-[#f5f7fa]/85 to-transparent pointer-events-none z-10" />
           <div 
             ref={pillsContainerRef}
-            className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 whitespace-nowrap px-0"
+            className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 whitespace-nowrap px-2"
             style={{
               WebkitOverflowScrolling: 'touch',
               maxWidth: '100%',
+              width: '100%',
               touchAction: 'pan-x'
             }}
           >
@@ -6928,7 +7064,7 @@ export default function GmaoCorrectionForm({
         </div>
 
         {isDefibrillator && (
-          <>
+          <div className="w-full px-3 space-y-2">
             <div className="w-full">
               <select
                 value={selectedErrorCode}
@@ -6974,36 +7110,38 @@ export default function GmaoCorrectionForm({
                 </div>
               </div>
             )}
-          </>
+          </div>
         )}
 
-        <div className="w-full">
-          <button
-            type="submit"
-            disabled={isSaving}
-            form="gmao-correction-form"
-            onClick={() => {
-              if (!isMainSoftware) {
-                playTechSound3();
-              }
-            }}
-            className="w-full text-white font-medium focus:outline-none cursor-pointer text-center"
-            style={{ 
-              fontSize: '18px', 
-              border: 'none',
-              backgroundColor: 'rgb(46, 84, 255)',
-              boxShadow: 'none',
-              borderRadius: '13px',
-              padding: '8px 12px',
-              boxSizing: 'border-box',
-              display: 'block',
-              width: '100%',
-              opacity: isSaving ? 0.6 : 1
-            }}
-          >
-            {isSaving ? "Enregistrement..." : "Valider et enregistrer"}
-          </button>
-        </div>
+        {activeSection === 11 && (
+          <div className="w-full px-3">
+            <button
+              type="submit"
+              disabled={isSaving}
+              form="gmao-correction-form"
+              onClick={() => {
+                if (!isMainSoftware) {
+                  playTechSound3();
+                }
+              }}
+              className="w-full text-white font-medium focus:outline-none cursor-pointer text-center"
+              style={{ 
+                fontSize: '18px', 
+                border: 'none',
+                backgroundColor: 'rgb(46, 84, 255)',
+                boxShadow: 'none',
+                borderRadius: '13px',
+                padding: '8px 12px',
+                boxSizing: 'border-box',
+                display: 'block',
+                width: '100%',
+                opacity: isSaving ? 0.6 : 1
+              }}
+            >
+              {isSaving ? "Enregistrement..." : "Valider et enregistrer"}
+            </button>
+          </div>
+        )}
       </div>
 
       {isMapPickerOpen && (
