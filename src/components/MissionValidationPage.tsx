@@ -165,17 +165,17 @@ export default function MissionValidationPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans relative" id="validation-viewport-wrapper">
+    <div className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans relative" style={{ backgroundColor: 'rgb(245, 247, 250)' }} id="validation-viewport-wrapper">
       <style>{`
         body {
-          background: #ffffff !important;
+          background: rgb(245, 247, 250) !important;
         }
 
         #validation-card input, #validation-card select, #validation-card textarea {
-          border: 1px solid #dedede !important;
+          border: 1px solid #DCE1EA !important;
           border-radius: 13px !important;
           padding: 14px !important;
-          font-size: 16px !important;
+          font-size: 18px !important;
           font-weight: 300 !important;
           color: #000000 !important;
           background-color: #ffffff !important;
@@ -184,24 +184,30 @@ export default function MissionValidationPage() {
           font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
         }
 
+        #validation-card input::placeholder, #validation-card select::placeholder, #validation-card textarea::placeholder {
+          color: #BECADB !important;
+          opacity: 1 !important;
+          font-size: 18px !important;
+        }
+
         #validation-card button {
           transition: 0s !important;
         }
 
         #validation-card input:focus, #validation-card select:focus, #validation-card textarea:focus, #validation-card button:focus,
         #validation-card input:hover, #validation-card select:hover, #validation-card textarea:hover, #validation-card button:hover {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid rgb(46, 84, 255) !important;
           outline-offset: 3px !important;
         }
       `}</style>
 
       <div className="sm:mx-auto w-full max-w-lg">
         {/* Outer Container */}
-        <div className="bg-white p-2 sm:p-4 relative overflow-hidden" id="validation-card">
+        <div className="p-2 sm:p-4 relative overflow-hidden" style={{ backgroundColor: 'rgb(245, 247, 250)' }} id="validation-card">
           
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <Loader2 className="w-8 h-8 animate-spin text-[#fa53d5]" />
+              <Loader2 className="w-8 h-8 animate-spin text-[rgb(46,84,255)]" />
               <p className="text-sm text-slate-500 font-sans">{t("Chargement des informations de l'intervention...")}</p>
             </div>
           ) : (
@@ -282,11 +288,9 @@ export default function MissionValidationPage() {
                     onClick={handleValidate}
                     disabled={isSubmitting || submittedStatus === 'validated'}
                     style={{
-                      backgroundColor: submittedStatus === 'validated' ? '#94a3b8' : 'rgb(53, 86, 236)',
+                      backgroundColor: submittedStatus === 'validated' ? '#94a3b8' : 'rgb(46, 84, 255)',
                       color: '#ffffff',
-                      boxShadow: submittedStatus === 'validated'
-                        ? 'none'
-                        : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                      boxShadow: 'none',
                       borderRadius: '12px',
                       fontSize: '18px',
                       padding: '14px 20px',
@@ -315,9 +319,9 @@ export default function MissionValidationPage() {
                     onClick={() => setShowRefusalForm(true)}
                     disabled={isSubmitting}
                     style={{
-                      backgroundColor: 'rgb(220, 38, 38)',
+                      backgroundColor: 'rgb(210, 45, 11)',
                       color: '#ffffff',
-                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(185, 28, 28) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                      boxShadow: 'none',
                       borderRadius: '12px',
                       fontSize: '18px',
                       padding: '14px 20px',
@@ -352,10 +356,10 @@ export default function MissionValidationPage() {
                       placeholder={t("Veuillez détailler la raison ou proposer des dates et créneaux...")}
                       className="w-full text-black"
                       style={{
-                        border: '1px solid #dedede',
+                        border: '1px solid #DCE1EA',
                         borderRadius: '13px',
                         padding: '14px',
-                        fontSize: '16px',
+                        fontSize: '18px',
                         color: '#000000',
                         backgroundColor: '#ffffff',
                         outline: 'none',
@@ -376,9 +380,9 @@ export default function MissionValidationPage() {
                       onClick={handleConfirmRefusal}
                       disabled={isSubmitting}
                       style={{
-                        backgroundColor: 'rgb(220, 38, 38)',
+                        backgroundColor: 'rgb(210, 45, 11)',
                         color: '#ffffff',
-                        boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(185, 28, 28) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                        boxShadow: 'none',
                         borderRadius: '12px',
                         fontSize: '18px',
                         padding: '14px 20px',

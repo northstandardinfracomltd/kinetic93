@@ -399,7 +399,7 @@ html.is-edge [style*="font-weight:100"] {
 }
 
 #advanced-search-input::placeholder {
-  color: #000000 !important;
+  color: #BECADB !important;
   opacity: 1 !important;
 }
 

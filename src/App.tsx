@@ -13292,7 +13292,7 @@ export default function App() {
                     background: rgb(245, 247, 250) !important;
                     border: none !important;
                     font-size: 18px !important;
-                    color: rgb(80, 97, 122) !important;
+                    color: #000000 !important;
                   }
                   #fsm-tab-container .fsm-card input::placeholder,
                   #fsm-tab-container .fsm-card textarea::placeholder,
@@ -13445,12 +13445,18 @@ export default function App() {
                   #fsm-filter-side-pane label,
                   #fsm-filter-side-pane h3,
                   #fsm-filter-side-pane span,
+                  #fsm-filter-side-pane select,
+                  #fsm-filter-side-pane input,
                   #fsm-team-side-pane label,
                   #fsm-team-side-pane h4,
                   #fsm-team-side-pane span,
                   #fsm-team-side-pane div:not(button) {
                     color: #000000 !important;
                     font-size: 18px !important;
+                  }
+                  #fsm-tab-container .fsm-deletable-pill {
+                    font-size: 16px !important;
+                    border: none !important;
                   }
                   .fsm-group-selected-pill:hover,
                   .fsm-deletable-pill:hover {
@@ -13877,7 +13883,7 @@ export default function App() {
                               border: '1px solid #dedede',
                               borderRadius: '13px',
                               padding: '10px 14px',
-                              fontSize: '15px',
+                              fontSize: '18px',
                               fontWeight: '100',
                               color: '#000000',
                               backgroundColor: '#ffffff',
@@ -13904,7 +13910,7 @@ export default function App() {
                               border: '1px solid #dedede',
                               borderRadius: '13px',
                               padding: '10px 14px',
-                              fontSize: '15px',
+                              fontSize: '18px',
                               fontWeight: '100',
                               color: '#000000',
                               backgroundColor: '#ffffff',
@@ -13935,7 +13941,7 @@ export default function App() {
                               border: '1px solid #dedede',
                               borderRadius: '13px',
                               padding: '10px 14px',
-                              fontSize: '15px',
+                              fontSize: '18px',
                               fontWeight: '100',
                               color: '#000000',
                               backgroundColor: '#ffffff',
@@ -13970,7 +13976,7 @@ export default function App() {
                               border: '1px solid #dedede',
                               borderRadius: '13px',
                               padding: '10px 14px',
-                              fontSize: '15px',
+                              fontSize: '18px',
                               fontWeight: '100',
                               color: '#000000',
                               backgroundColor: '#ffffff',
@@ -14077,31 +14083,6 @@ export default function App() {
                             </div>
                           </label>
                         </div>
-
-                        {/* Reset button if any filter is active */}
-                        {(fsmRegionFilter !== 'Tous' || fsmTechFilter !== 'Tous' || fsmPlannerFilter !== 'Tous' || fsmClientFilter !== 'Tous' || fsmRejectedOrRefusedFilter || (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0)) && (
-                          <div className="pt-4">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFsmRegionFilter('Tous');
-                                setFsmTechFilter('Tous');
-                                setFsmPlannerFilter('Tous');
-                                setFsmClientFilter('Tous');
-                                setFsmRejectedOrRefusedFilter(false);
-                                setFsmOnlyMyZoneFilter(false);
-                                try {
-                                  const curTenant = localStorage.getItem('defib_tenant_id') || 'demo';
-                                  localStorage.removeItem(`defib_${curTenant}_fsm_only_my_zone`);
-                                } catch (_) {}
-                              }}
-                              className="w-full text-center py-2 text-[18px] cursor-pointer font-sans underline"
-                              style={{ color: '#000000', fontSize: '18px' }}
-                            >
-                              Réinitialiser tous les filtres
-                            </button>
-                          </div>
-                        )}
                       </div>
 
                       {/* Bouton floating full width Fermer */}
@@ -14457,33 +14438,49 @@ export default function App() {
                             zIndex: 50,
                           }}
                         >
-                          <button
-                            onClick={() => {
-                              setIsCreatingGroup(true);
-                              setEditingGroupId(null);
-                              setGroupTitle('');
-                              setGroupPlanners([]);
-                              setGroupTechnicians([]);
-                              setGroupRegions([]);
-                            }}
-                            style={{
-                              width: '100%',
-                              backgroundColor: 'rgb(46, 84, 255)',
-                              background: 'rgb(46, 84, 255)',
-                              color: '#ffffff',
-                              fontSize: '18px',
-                              fontWeight: '600',
-                              padding: '14px 20px',
-                              borderRadius: '12px',
-                              cursor: 'pointer',
-                              border: 'none',
-                              boxShadow: 'none',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                            }}
-                            className="hover:opacity-90 transition-all"
-                          >
-                            Nouveau groupe et zone
-                          </button>
+                          {(() => {
+                            const hasGroupesZonesSpreadsheet = Boolean(
+                              getTenantSpreadsheetUrl('spreadsheetGroupesZones', companyInfo)
+                            );
+                            return (
+                              <button
+                                type="button"
+                                disabled={!hasGroupesZonesSpreadsheet}
+                                onClick={() => {
+                                  if (!hasGroupesZonesSpreadsheet) return;
+                                  setIsCreatingGroup(true);
+                                  setEditingGroupId(null);
+                                  setGroupTitle('');
+                                  setGroupPlanners([]);
+                                  setGroupTechnicians([]);
+                                  setGroupRegions([]);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  backgroundColor: 'rgb(46, 84, 255)',
+                                  background: 'rgb(46, 84, 255)',
+                                  color: '#ffffff',
+                                  fontSize: '18px',
+                                  fontWeight: '600',
+                                  padding: '14px 20px',
+                                  borderRadius: '12px',
+                                  cursor: hasGroupesZonesSpreadsheet ? 'pointer' : 'not-allowed',
+                                  opacity: hasGroupesZonesSpreadsheet ? 1 : 0.45,
+                                  border: 'none',
+                                  boxShadow: 'none',
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+                                }}
+                                className={hasGroupesZonesSpreadsheet ? "hover:opacity-90 transition-all" : "transition-all cursor-not-allowed opacity-45"}
+                                title={
+                                  !hasGroupesZonesSpreadsheet
+                                    ? "Veuillez renseigner un lien Google Spreadsheets Groupes et Zones dans MEGA ADMIN pour créer un groupe"
+                                    : undefined
+                                }
+                              >
+                                Nouveau groupe et zone
+                              </button>
+                            );
+                          })()}
                           <button
                             onClick={() => setIsFsmTeamPaneOpen(false)}
                             style={{
@@ -14941,7 +14938,6 @@ export default function App() {
                       referrerPolicy="no-referrer"
                     />
                     <p className="text-lg font-bold text-black mb-1">{translate("Aucune tournée sélectionnée.")}</p>
-                    <p className="text-sm text-neutral-500">{translate("Veuillez sélectionner une tournée dans le menu déroulant ci-dessus.")}</p>
                   </div>
                 ) : filteredTours.length === 0 ? (
                   <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
@@ -15054,12 +15050,12 @@ export default function App() {
                                           <span 
                                             className="rounded-full flex items-center justify-center font-bold font-sans shrink-0"
                                             style={{
-                                              background: '#3ddc84',
-                                              color: '#156337',
+                                              background: 'rgb(61, 220, 132)',
+                                              color: 'rgb(21, 99, 55)',
                                               fontSize: '18px',
-                                              padding: '11px 10px 9px 10px',
-                                              width: '30px',
-                                              height: '30px',
+                                              padding: '9px 9px 9px',
+                                              width: '35px',
+                                              height: '35px',
                                             }}
                                           >
                                             {selectedFsmMissionIds.length}
@@ -15871,8 +15867,9 @@ export default function App() {
                                                                 fontFamily: "DefibeoMain, Civilprom, sans-serif",
                                                                 border: "none",
                                                                 boxShadow: "none",
+                                                                fontSize: "16px",
                                                               }}
-                                                              className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[15px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none"
+                                                              className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[16px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none"
                                                               title="Cliquez pour supprimer"
                                                             >
                                                               {reasonStr}{matchVar?.dureePrestation ? ` (${matchVar.dureePrestation} min)` : ''}
@@ -16134,8 +16131,9 @@ export default function App() {
                                                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                                               border: 'none',
                                                               boxShadow: 'none',
+                                                              fontSize: '16px',
                                                             }}
-                                                            className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[15px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none max-w-full truncate"
+                                                            className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[16px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none max-w-full truncate"
                                                             title="Cliquez pour supprimer"
                                                           >
                                                             {displayLabel} (x1)
@@ -16223,7 +16221,7 @@ export default function App() {
                                                   }
                                                 }
                                               }}
-                                              placeholder="Saisir un commentaire privé pour le technicien..."
+                                              placeholder="Entrez une observation destinée au technicien..."
                                               className="w-full px-3 py-2 text-[18px] bg-white border border-slate-200 focus:border-[#0000FF] rounded-lg outline-none text-slate-900 font-normal transition-all resize-none overflow-hidden"
                                               style={{ minHeight: '46px', height: '46px', lineHeight: '20px' }}
                                             />
@@ -16341,7 +16339,7 @@ export default function App() {
 
                                             return (
                                               <div className="pt-1 flex flex-wrap items-center justify-between gap-2 bg-transparent">
-                                                <span className="text-slate-700 font-medium" style={{ fontSize: '15px' }}>
+                                                <span className="font-medium" style={{ fontSize: '18px', color: '#000000', cursor: 'default' }}>
                                                   À cette adresse postale, il y a {urgentDefibsCount} autre(s) défibrillateur(s) et {urgentMaterielsCount} autres matériels avec Pro.Main. Urgente.
                                                 </span>
                                                 <div className="flex flex-wrap items-center gap-2">
@@ -16365,8 +16363,8 @@ export default function App() {
                                                     style={{
                                                       backgroundColor: '#0f172a',
                                                       color: '#ffffff',
-                                                      borderRadius: '10px',
-                                                      padding: '7px 14px',
+                                                      borderRadius: '13px',
+                                                      padding: '10px 18px',
                                                       fontSize: '18px',
                                                       fontWeight: 100,
                                                       border: 'none',
@@ -16397,8 +16395,8 @@ export default function App() {
                                                     style={{
                                                       backgroundColor: '#0f172a',
                                                       color: '#ffffff',
-                                                      borderRadius: '10px',
-                                                      padding: '7px 14px',
+                                                      borderRadius: '13px',
+                                                      padding: '10px 18px',
                                                       fontSize: '18px',
                                                       fontWeight: 100,
                                                       border: 'none',
@@ -16415,11 +16413,11 @@ export default function App() {
                                           })()}
 
                                           {/* Bottom row: Transférer & Supprimer */}
-                                          <div className="pt-2 grid grid-cols-1 md:grid-cols-4 gap-3 w-full bg-transparent items-end">
+                                          <div className="pt-2 flex flex-col md:flex-row gap-3 w-full bg-transparent md:items-end">
                                             {/* Transférer section */}
-                                            <div className="space-y-0.5 bg-transparent md:col-span-3">
+                                            <div className="space-y-0.5 bg-transparent flex-1 min-w-0">
                                               <label className="block mb-1 fsm-label-style" style={{ fontSize: '18px' }}>Transférer.</label>
-                                              <div className="flex gap-2">
+                                              <div className="flex flex-col sm:flex-row gap-2">
                                                 <select
                                                   id={`transfer-select-${m.id}`}
                                                   style={{
@@ -16489,8 +16487,13 @@ export default function App() {
                                                     fontWeight: 'bold',
                                                     cursor: 'pointer',
                                                     border: 'none',
+                                                    width: '185px',
+                                                    minWidth: '185px',
+                                                    display: 'flex',
+                                                    justifyContent: 'center',
+                                                    alignItems: 'center',
                                                   }}
-                                                  className="hover:opacity-90 transition-opacity whitespace-nowrap"
+                                                  className="hover:opacity-90 transition-opacity whitespace-nowrap shrink-0"
                                                 >
                                                   Transférer
                                                 </button>
@@ -16498,7 +16501,7 @@ export default function App() {
                                             </div>
 
                                             {/* Supprimer button */}
-                                            <div className="bg-transparent flex flex-col justify-end md:col-span-1">
+                                            <div className="bg-transparent flex flex-col justify-end shrink-0">
                                               <button
                                                 type="button"
                                                 onClick={() => {
@@ -16514,8 +16517,9 @@ export default function App() {
                                                   border: 'none',
                                                   fontSize: '18px',
                                                   fontWeight: '500',
-                                                  padding: '12px 16px',
-                                                  width: '100%',
+                                                  padding: '12px 18px',
+                                                  width: '185px',
+                                                  minWidth: '185px',
                                                   display: 'flex',
                                                   justifyContent: 'center',
                                                   alignItems: 'center',
@@ -17256,14 +17260,15 @@ export default function App() {
                               return (
                                 <div 
                                   style={{
-                                    color: 'rgb(80 97 122)',
-                                    backgroundColor: 'rgb(233 237 241)',
+                                    color: 'rgb(210 45 11)',
+                                    backgroundColor: 'rgb(255 230 225)',
+                                    fontSize: '16px',
                                     border: 'none',
                                     cursor: 'default'
                                   }}
-                                  className="font-semibold text-sm px-4 py-3 rounded-xl flex items-center gap-2.5 mx-0.5"
+                                  className="font-semibold px-4 py-3 rounded-xl flex items-center gap-2.5 mx-0.5"
                                 >
-                                  <span>
+                                  <span style={{ color: 'rgb(210 45 11)', fontSize: '16px' }}>
                                     Compétences : {compsStr}
                                   </span>
                                 </div>
@@ -17351,7 +17356,7 @@ export default function App() {
                                   style={{ width: '200px', height: 'auto' }}
                                   referrerPolicy="no-referrer"
                                 />
-                                Aucune mission.
+                                Aucune mission dans la tournée.
                               </div>
                             ) : (
                               <div className="space-y-4 bg-transparent">
@@ -17375,12 +17380,12 @@ export default function App() {
                                         <span 
                                           className="rounded-full flex items-center justify-center font-bold font-sans shrink-0"
                                           style={{
-                                            background: '#3ddc84',
-                                            color: '#156337',
+                                            background: 'rgb(61, 220, 132)',
+                                            color: 'rgb(21, 99, 55)',
                                             fontSize: '18px',
-                                            padding: '11px 10px 9px 10px',
-                                            width: '30px',
-                                            height: '30px',
+                                            padding: '9px 9px 9px',
+                                            width: '35px',
+                                            height: '35px',
                                           }}
                                         >
                                           {selectedFsmMissionIds.length}
@@ -18327,8 +18332,9 @@ export default function App() {
                                                                 fontFamily: "DefibeoMain, Civilprom, sans-serif",
                                                                 border: "none",
                                                                 boxShadow: "none",
+                                                                fontSize: "16px",
                                                               }}
-                                                              className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[15px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none"
+                                                              className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[16px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none"
                                                               title="Cliquez pour supprimer"
                                                             >
                                                               {reasonStr}{matchVar?.dureePrestation ? ` (${matchVar.dureePrestation} min)` : ''}
@@ -18610,8 +18616,9 @@ export default function App() {
                                                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                                       border: 'none',
                                                       boxShadow: 'none',
+                                                      fontSize: '16px',
                                                     }}
-                                                    className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[15px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none max-w-full truncate"
+                                                    className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[16px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none max-w-full truncate"
                                                     title="Cliquez pour supprimer"
                                                   >
                                                     {displayLabel} (x1)
@@ -18698,7 +18705,7 @@ export default function App() {
                                           }
                                         }
                                       }}
-                                      placeholder="Saisir un commentaire privé pour le technicien..."
+                                      placeholder="Entrez une observation destinée au technicien..."
                                       className="w-full px-3 py-2 text-[18px] bg-white border border-slate-200 focus:border-[#0000FF] rounded-lg outline-none text-slate-900 font-normal transition-all resize-none overflow-hidden"
                                       style={{ minHeight: '46px', height: '46px', lineHeight: '20px' }}
                                     />
@@ -18816,7 +18823,7 @@ export default function App() {
 
                                     return (
                                       <div className="pt-1 flex flex-wrap items-center justify-between gap-2 bg-transparent">
-                                        <span className="font-medium" style={{ fontSize: '16px', color: '#000', cursor: 'default' }}>
+                                        <span className="font-medium" style={{ fontSize: '18px', color: '#000000', cursor: 'default' }}>
                                           À cette adresse postale, il y a {urgentDefibsCount} autre(s) défibrillateur(s) et {urgentMaterielsCount} autres matériels avec Pro.Main. Urgente.
                                         </span>
                                         <div className="flex flex-wrap items-center gap-2">
@@ -18840,8 +18847,8 @@ export default function App() {
                                             style={{
                                               backgroundColor: '#0f172a',
                                               color: '#ffffff',
-                                              borderRadius: '10px',
-                                              padding: '10px 16px',
+                                              borderRadius: '13px',
+                                              padding: '10px 18px',
                                               fontSize: '18px',
                                               fontWeight: 100,
                                               border: 'none',
@@ -18872,8 +18879,8 @@ export default function App() {
                                             style={{
                                               backgroundColor: '#0f172a',
                                               color: '#ffffff',
-                                              borderRadius: '10px',
-                                              padding: '10px 16px',
+                                              borderRadius: '13px',
+                                              padding: '10px 18px',
                                               fontSize: '18px',
                                               fontWeight: 100,
                                               border: 'none',
@@ -19005,13 +19012,16 @@ export default function App() {
                                           <div className="bg-transparent flex flex-col justify-end">
                                             <a
                                               href={reportHref}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              onClick={() => {
+                                              onClick={(e) => {
+                                                e.preventDefault();
                                                 triggerFsmPillWave(`consulter-rapport-mission-${m.id}`);
                                                 if (refIntervention) {
                                                   setGmaoSearchQuery(refIntervention);
                                                 }
+                                                setActiveTab('gmao');
+                                                try {
+                                                  window.history.pushState({}, '', reportHref);
+                                                } catch (_) {}
                                               }}
                                               style={{
                                                 color: '#fff',

@@ -1013,7 +1013,7 @@ export default function DefibTab({
   };
 
   const filterInputStyle: React.CSSProperties = {
-    border: '1px solid #dedede',
+    border: '1px solid #DCE1EA',
     borderRadius: '13px',
     padding: '9px 19px',
     fontSize: '18px',
@@ -4776,6 +4776,10 @@ export default function DefibTab({
                       color: rgb(222, 222, 222) !important;
                       opacity: 1 !important;
                     }
+                    #records-table tbody tr:hover,
+                    #records-table tbody tr:hover > td {
+                      background-color: rgb(245, 247, 250) !important;
+                    }
                   `}</style>
                   <input
                     ref={searchInputRef}
@@ -4918,8 +4922,8 @@ export default function DefibTab({
                 className="p-4 flex items-center justify-between gap-4 animate-fadeIn" 
                 id="bulk-actions-status-bar"
                 style={{
-                  backgroundColor: '#ffffff',
-                  border: '1px solid rgb(231, 231, 231)',
+                  backgroundColor: 'rgb(245, 247, 250)',
+                  border: 'none',
                   borderRadius: '16px',
                 }}
               >
@@ -5651,7 +5655,7 @@ export default function DefibTab({
                       key={`${df.id}_${dfRowIdx}`}
                       id={`defib-row-${df.id}`}
                       onClick={(e) => openEditForm(df, e)}
-                      className={`group hover:bg-[#f5f7fa] transition-all cursor-pointer ${
+                      className={`group hover:bg-[rgb(245,247,250)] transition-all cursor-pointer ${
                         isChecked ? 'bg-[#ecefff]/60' : ''
                       }`}
                       style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #2e54ff' } : undefined}
@@ -7516,7 +7520,7 @@ export default function DefibTab({
                               }}
                               className="transition-opacity select-none"
                             >
-                              Voir les {otherMaterielsCount} autre(s) matériel(s).
+                              Voir les {otherMaterielsCount} autre(s) matériel(s)
                             </button>
                           </div>
                         </div>
@@ -7684,7 +7688,7 @@ export default function DefibTab({
                       </div>
 
                       {schedules.map((sch, schIdx) => (
-                        <div key={schIdx} style={{ borderRadius: '13px', border: 'none', backgroundColor: '#f5f7fa' }} className="p-3 relative space-y-3">
+                        <div key={schIdx} style={{ borderRadius: '13px', border: 'none', backgroundColor: '#f5f7fa', padding: 0 }} className="p-0 relative space-y-3">
                           <button
                             type="button"
                             onClick={() => handleRemoveSchedule(schIdx)}
@@ -7967,22 +7971,6 @@ export default function DefibTab({
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <label htmlFor="form-prochaine-maint" className="block text-[10px] font-bold text-slate-400 uppercase">Prochaine maintenance.</label>
-                          {derniereMaintenance && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const computed = computeProchaineMaintenance(derniereMaintenance);
-                                if (computed) {
-                                  setProchaineMaintenance(toISODateOnly(computed));
-                                  isProchaineMaintenanceCustomRef.current = false;
-                                }
-                              }}
-                              className="text-[10px] text-blue-600 hover:text-blue-800 cursor-pointer font-sans uppercase underline bg-transparent border-0 p-0"
-                              title="Recalculer automatiquement (+ 1 an par rapport à Dernière maintenance)"
-                            >
-                              Auto
-                            </button>
-                          )}
                         </div>
                         <SafeDateInput
                           id="form-prochaine-maint"
@@ -9070,6 +9058,49 @@ export default function DefibTab({
                     {/* Yes/No Choices of Category */}
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                       
+                      {/* FSM Autorisé */}
+                      <div className="p-2 space-y-1">
+                        <span className="block text-[9px] font-bold text-slate-400 uppercase">Maintenance autorisée.</span>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setFsmAutorise('Oui')}
+                            className="inline-flex items-center cursor-pointer gap-2 select-none"
+                            style={{ fontSize: '16px', color: '#000' }}
+                          >
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: fsmAutorise === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
+                              {fsmAutorise === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
+                            </span>
+                            Oui
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFsmAutorise('Non')}
+                            className="inline-flex items-center cursor-pointer gap-2 select-none"
+                            style={{ fontSize: '16px', color: '#000' }}
+                          >
+                            <span
+                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
+                              style={{
+                                borderWidth: '1px',
+                                borderColor: fsmAutorise === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
+                                backgroundColor: 'transparent',
+                              }}
+                            >
+                              {fsmAutorise === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
+                            </span>
+                            Non
+                          </button>
+                        </div>
+                      </div>
+
                       {/* Loué */}
                       <div className="p-2 space-y-1">
                         <span className="block text-[9px] font-bold text-slate-400 uppercase">Loué.</span>
@@ -9330,49 +9361,6 @@ export default function DefibTab({
                         </div>
                       </div>
 
-                      {/* FSM Autorisé */}
-                      <div className="p-2 space-y-1">
-                        <span className="block text-[9px] font-bold text-slate-400 uppercase">Maintenance autorisée.</span>
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setFsmAutorise('Oui')}
-                            className="inline-flex items-center cursor-pointer gap-2 select-none"
-                            style={{ fontSize: '16px', color: '#000' }}
-                          >
-                            <span
-                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
-                              style={{
-                                borderWidth: '1px',
-                                borderColor: fsmAutorise === 'Oui' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
-                                backgroundColor: 'transparent',
-                              }}
-                            >
-                              {fsmAutorise === 'Oui' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
-                            </span>
-                            Oui
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFsmAutorise('Non')}
-                            className="inline-flex items-center cursor-pointer gap-2 select-none"
-                            style={{ fontSize: '16px', color: '#000' }}
-                          >
-                            <span
-                              className="w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-transparent"
-                              style={{
-                                borderWidth: '1px',
-                                borderColor: fsmAutorise === 'Non' ? '#2e54ff' : 'oklch(0.92 0.01 258.78)',
-                                backgroundColor: 'transparent',
-                              }}
-                            >
-                              {fsmAutorise === 'Non' && <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />}
-                            </span>
-                            Non
-                          </button>
-                        </div>
-                      </div>
-
                       {/* Email Mensuel Auto-Vigilence */}
                       <div className="p-2 space-y-1">
                         <span className="block text-[9px] font-bold text-slate-400 uppercase">{t("Email mensuel d'auto-vigilance")}.</span>
@@ -9560,7 +9548,7 @@ export default function DefibTab({
 
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
                       {/* Âge Victime */}
-                      <div className="space-y-1 sm:col-span-4">
+                      <div className="space-y-1 sm:col-span-2">
                         <label htmlFor="form-age" className="block text-[10px] font-bold text-slate-400 uppercase">Âge de la victime.</label>
                         <input
                           type="number"
@@ -9568,7 +9556,7 @@ export default function DefibTab({
                           value={ageVictime}
                           onChange={(e) => setAgeVictime(e.target.value)}
                           className="w-full px-2 py-1 border border-slate-200 rounded text-xs text-slate-800"
-                          style={{ maxWidth: '240px' }}
+                          style={{ width: '120px', maxWidth: '120px' }}
                         />
                       </div>
                     </div>
@@ -10686,18 +10674,24 @@ export default function DefibTab({
           >
           {/* Scroll Area containing all fields */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28">
+            <style>{`
+              #filter-side-pane select,
+              #filter-side-pane input:not([type="radio"]):not([type="checkbox"]) {
+                border-color: #DCE1EA !important;
+              }
+              #filter-side-pane input::placeholder,
+              #filter-side-pane textarea::placeholder,
+              #advanced-search-input::placeholder {
+                color: #BECADB !important;
+                font-size: 18px !important;
+                opacity: 1 !important;
+              }
+            `}</style>
             
             {/* Termes de recherche avancée */}
             <div className="space-y-1.5">
-              <div className="flex items-center justify-between px-1">
-                <label 
-                  htmlFor="advanced-search-input"
-                  className="text-[18px] font-sans font-semibold" 
-                  style={{ fontWeight: 100, cursor: 'pointer', color: '#000000', fontSize: '18px' }}
-                >
-                  Termes de recherche avancée.
-                </label>
-                {(draftFilters.advancedSearchTerms || []).length > 0 && (
+              {(draftFilters.advancedSearchTerms || []).length > 0 && (
+                <div className="flex items-center justify-end px-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -10710,30 +10704,49 @@ export default function DefibTab({
                   >
                     Effacer tout
                   </button>
-                )}
-              </div>
+                </div>
+              )}
               <p className="text-[18px] font-sans leading-tight px-1" style={{ color: '#000000', fontSize: '18px' }}>
                 Pour chaque terme, entrez au moins 2 lettres et saisissez ‘Entrée’, une virgule ou collez une liste.
               </p>
 
               <div className="w-full pt-0.5">
                 <div 
-                  className="w-full grid grid-cols-2 border p-0.5 bg-transparent"
-                  style={{ borderColor: '#dadada', backgroundColor: 'transparent', borderRadius: '14px' }}
+                  className="w-full grid grid-cols-2 items-center"
+                  style={{
+                    backgroundColor: '#dfe6ff',
+                    borderRadius: '14px',
+                    border: 'none',
+                    padding: '4px',
+                    minHeight: '45px',
+                  }}
                 >
                   <button
                     type="button"
                     onClick={() => setDraftFilters(prev => ({ ...prev, advancedSearchOperator: 'OR' }))}
-                    style={{
-                      backgroundColor: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '#2e54ff' : 'transparent',
-                      color: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '#ffffff' : '#000000',
-                      borderRadius: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '15px' : '14px',
-                      fontSize: '18px',
-                    }}
-                    className={`py-1 font-sans text-center transition-all cursor-pointer ${
+                    style={
                       (draftFilters.advancedSearchOperator || 'OR') === 'OR'
-                        ? 'font-semibold shadow-xs'
-                        : 'hover:bg-slate-50/50'
+                        ? {
+                            backgroundColor: 'rgb(46, 84, 255)',
+                            color: 'rgb(255, 255, 255)',
+                            borderRadius: '11px',
+                            fontSize: '18px',
+                            padding: '8px',
+                            border: 'none',
+                          }
+                        : {
+                            backgroundColor: 'transparent',
+                            color: '#2e54ff',
+                            borderRadius: '11px',
+                            fontSize: '18px',
+                            padding: '8px',
+                            border: 'none',
+                          }
+                    }
+                    className={`font-sans text-center transition-all cursor-pointer ${
+                      (draftFilters.advancedSearchOperator || 'OR') === 'OR'
+                        ? 'font-semibold'
+                        : ''
                     }`}
                   >
                     OU
@@ -10741,16 +10754,29 @@ export default function DefibTab({
                   <button
                     type="button"
                     onClick={() => setDraftFilters(prev => ({ ...prev, advancedSearchOperator: 'AND' }))}
-                    style={{
-                      backgroundColor: draftFilters.advancedSearchOperator === 'AND' ? '#2e54ff' : 'transparent',
-                      color: draftFilters.advancedSearchOperator === 'AND' ? '#ffffff' : '#000000',
-                      borderRadius: draftFilters.advancedSearchOperator === 'AND' ? '15px' : '14px',
-                      fontSize: '18px',
-                    }}
-                    className={`py-1 font-sans text-center transition-all cursor-pointer ${
+                    style={
                       draftFilters.advancedSearchOperator === 'AND'
-                        ? 'font-semibold shadow-xs'
-                        : 'hover:bg-slate-50/50'
+                        ? {
+                            backgroundColor: 'rgb(46, 84, 255)',
+                            color: 'rgb(255, 255, 255)',
+                            borderRadius: '11px',
+                            fontSize: '18px',
+                            padding: '8px',
+                            border: 'none',
+                          }
+                        : {
+                            backgroundColor: 'transparent',
+                            color: '#2e54ff',
+                            borderRadius: '11px',
+                            fontSize: '18px',
+                            padding: '8px',
+                            border: 'none',
+                          }
+                    }
+                    className={`font-sans text-center transition-all cursor-pointer ${
+                      draftFilters.advancedSearchOperator === 'AND'
+                        ? 'font-semibold'
+                        : ''
                     }`}
                   >
                     ET
@@ -10763,7 +10789,7 @@ export default function DefibTab({
                 onClick={() => advancedInputRef.current?.focus()}
                 style={{
                   minHeight: '80px',
-                  border: '1px solid #dedede',
+                  border: '1px solid #DCE1EA',
                   borderRadius: '13px',
                   padding: '8px 12px',
                   backgroundColor: '#ffffff',
@@ -10788,7 +10814,7 @@ export default function DefibTab({
                       handleRemoveAdvancedTerm(tIdx);
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = '#dc2626';
+                      e.currentTarget.style.backgroundColor = 'rgb(210, 45, 11)';
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.backgroundColor = '#0f172a';
@@ -10809,20 +10835,13 @@ export default function DefibTab({
                       userSelect: 'none',
                       transition: 'background-color 0.15s ease',
                     }}
-                    className="hover:!bg-red-600 cursor-pointer"
+                    className="hover:!bg-[rgb(210,45,11)] cursor-pointer"
                   >
                     <span>{term}</span>
                   </span>
                 ))}
 
                 {/* Inline text input that automatically expands */}
-                <style>{`
-                  #advanced-search-input::placeholder {
-                    color: #50617A !important;
-                    font-size: 18px !important;
-                    opacity: 1 !important;
-                  }
-                `}</style>
                 <input
                   ref={advancedInputRef}
                   id="advanced-search-input"
@@ -10840,7 +10859,7 @@ export default function DefibTab({
                     }
                   }}
                   placeholder={(draftFilters.advancedSearchTerms || []).length === 0 ? "Entrez vos termes, mots-clés, villes, numéros de série, etc." : ""}
-                  className="flex-1 min-w-[120px] bg-transparent outline-none border-none text-[18px] text-black font-sans font-light placeholder:text-[#50617A] placeholder:opacity-100"
+                  className="flex-1 min-w-[120px] bg-transparent outline-none border-none text-[18px] text-black font-sans font-light placeholder:text-[#BECADB] placeholder:opacity-100"
                   style={{
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                     padding: '2px 4px',
@@ -10952,7 +10971,7 @@ export default function DefibTab({
             </div>
 
             {/* Filter 3: Action Requise 3-6 Mois */}
-            <div className="py-1 flex items-center justify-between gap-4">
+            <div className="py-1 flex flex-col items-start gap-2">
               <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Action requise 3 à 6 mois.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
@@ -10996,7 +11015,7 @@ export default function DefibTab({
             </div>
 
             {/* Filter 4: Action Requise 3 Mois */}
-            <div className="py-1 flex items-center justify-between gap-4">
+            <div className="py-1 flex flex-col items-start gap-2">
               <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Action requise 3 mois.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
@@ -11040,7 +11059,7 @@ export default function DefibTab({
             </div>
 
             {/* Filter 5: Action Requise Expirée */}
-            <div className="py-1 flex items-center justify-between gap-4">
+            <div className="py-1 flex flex-col items-start gap-2">
               <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Action requise expirée.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
@@ -11084,7 +11103,7 @@ export default function DefibTab({
             </div>
 
             {/* Filter 6: Rejeté(s) en intervention */}
-            <div className="py-1 flex items-center justify-between gap-4">
+            <div className="py-1 flex flex-col items-start gap-2">
               <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Rejeté(s) en intervention.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
@@ -11278,7 +11297,7 @@ export default function DefibTab({
             </div>
 
             {/* Client List */}
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
+            <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-2" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
               {clientSearchTarget === 'filter' && (
                 <div
                   onClick={() => {
@@ -11344,26 +11363,30 @@ export default function DefibTab({
             </div>
 
             {/* Floating "Fermer" Button at Bottom */}
-            <div className="p-4 shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsSidePaneClientOpen(false);
-                  setClientSidePaneSearch('');
-                }}
-                className="w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
-                style={{
-                  backgroundColor: 'rgb(210, 45, 11)',
-                  color: '#ffffff',
-                  fontSize: '18px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                }}
-              >
-                Fermer
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSidePaneClientOpen(false);
+                setClientSidePaneSearch('');
+              }}
+              className="absolute bottom-5 left-4 right-4 z-20 py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] flex items-center justify-center font-sans"
+              style={{
+                position: 'absolute',
+                bottom: '20px',
+                left: '16px',
+                right: '16px',
+                zIndex: 20,
+                backgroundColor: 'rgb(210, 45, 11)',
+                color: '#ffffff',
+                fontSize: '18px',
+                border: 'none',
+                boxShadow: 'none',
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+              }}
+            >
+              Fermer
+            </button>
           </div>
         </div>,
         document.body
@@ -11433,7 +11456,7 @@ export default function DefibTab({
             </div>
 
             {/* Variable List */}
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
+            <div className="flex-1 overflow-y-auto px-4 pb-24 space-y-2" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
               {activeVariableSidePane.allowEmpty && (
                 <div
                   onClick={() => {
@@ -11501,26 +11524,30 @@ export default function DefibTab({
             </div>
 
             {/* Floating "Fermer" Button at Bottom */}
-            <div className="p-4 shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveVariableSidePane(null);
-                  setVariableSidePaneSearch('');
-                }}
-                className="w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
-                style={{
-                  backgroundColor: 'rgb(210, 45, 11)',
-                  color: '#ffffff',
-                  fontSize: '18px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
-                }}
-              >
-                Fermer
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveVariableSidePane(null);
+                setVariableSidePaneSearch('');
+              }}
+              className="absolute bottom-5 left-4 right-4 z-20 py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] flex items-center justify-center font-sans"
+              style={{
+                position: 'absolute',
+                bottom: '20px',
+                left: '16px',
+                right: '16px',
+                zIndex: 20,
+                backgroundColor: 'rgb(210, 45, 11)',
+                color: '#ffffff',
+                fontSize: '18px',
+                border: 'none',
+                boxShadow: 'none',
+                cursor: 'pointer',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
+              }}
+            >
+              Fermer
+            </button>
           </div>
         </div>,
         document.body
@@ -11571,7 +11598,7 @@ export default function DefibTab({
                         fontWeight: 600,
                         borderRadius: '14px',
                         padding: '12px 18px',
-                        backgroundColor: isHidden ? 'rgb(210, 45, 11)' : '#e7ebf0',
+                        backgroundColor: isHidden ? 'rgb(210, 45, 11)' : '#FFF',
                         color: isHidden ? '#ffffff' : '#000000',
                         border: 'none',
                         boxShadow: 'none',

@@ -265,35 +265,30 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
         </div>
 
         {/* Floating "Fermer" Button at Bottom */}
-        <div
-          className="absolute bottom-0 left-0 right-0 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pointer-events-none z-20"
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            setSearch('');
+          }}
+          className="absolute bottom-5 left-4 right-4 z-20 py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] flex items-center justify-center font-sans"
           style={{
-            background: 'transparent',
-            backgroundColor: 'transparent',
+            position: 'absolute',
+            bottom: '20px',
+            left: '16px',
+            right: '16px',
+            zIndex: 20,
+            backgroundColor: 'rgb(210, 45, 11)',
+            color: '#ffffff',
+            fontSize: '18px',
             border: 'none',
             boxShadow: 'none',
+            cursor: 'pointer',
+            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
           }}
         >
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              setSearch('');
-            }}
-            className="w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] flex items-center justify-center font-sans pointer-events-auto"
-            style={{
-              backgroundColor: 'rgb(210, 45, 11)',
-              color: '#ffffff',
-              fontSize: '18px',
-              border: 'none',
-              boxShadow: 'none',
-              cursor: 'pointer',
-              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-            }}
-          >
-            Fermer
-          </button>
-        </div>
+          Fermer
+        </button>
       </div>
     </div>,
     document.body

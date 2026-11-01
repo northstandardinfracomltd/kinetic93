@@ -714,20 +714,20 @@ export default function AutresMaterielsTab({
     if (item.clientId) {
       const direct = clientMap.get(item.clientId);
       if (direct) return direct;
-      const lowerRef = String(item.clientId).trim().toLowerCase();
+      const lowerRef = String(item.clientId || '').trim().toLowerCase();
       const byNameOrCode = clients.find(
         c =>
-          (c.denomination && c.denomination.trim().toLowerCase() === lowerRef) ||
-          (c.clientIdField && c.clientIdField.trim().toLowerCase() === lowerRef)
+          (c.denomination && String(c.denomination).trim().toLowerCase() === lowerRef) ||
+          (c.clientIdField && String(c.clientIdField).trim().toLowerCase() === lowerRef)
       );
       if (byNameOrCode) return byNameOrCode;
     }
     if (item.clientIdField) {
-      const lowerCode = String(item.clientIdField).trim().toLowerCase();
+      const lowerCode = String(item.clientIdField || '').trim().toLowerCase();
       const byCode = clients.find(
         c =>
-          (c.clientIdField && c.clientIdField.trim().toLowerCase() === lowerCode) ||
-          (c.id && c.id.trim().toLowerCase() === lowerCode)
+          (c.clientIdField && String(c.clientIdField).trim().toLowerCase() === lowerCode) ||
+          (c.id && String(c.id).trim().toLowerCase() === lowerCode)
       );
       if (byCode) return byCode;
     }
@@ -859,21 +859,48 @@ export default function AutresMaterielsTab({
   // Open Form for Edit
   const handleOpenEditForm = (item: OtherEquipment) => {
     setEditingItem(item);
-    setClientId(item.clientId);
-    setNomPrenomSite(item.nomPrenomSite);
-    setTelephoneSite(item.telephoneSite);
-    setEmailSite(item.emailSite);
-    setContrat(item.contrat);
-    setNomContrat(item.nomContrat);
-    setReferenceContrat(item.referenceContrat);
-    setDebutContrat(item.debutContrat);
-    setFinContrat(item.finContrat);
+    setClientId(item.clientId || '');
+    setNomPrenomSite(item.nomPrenomSite || '');
+    setTelephoneSite(item.telephoneSite || '');
+    setEmailSite(item.emailSite || '');
+    setContrat(item.contrat || 'Non');
+    setNomContrat(item.nomContrat || '');
+    setReferenceContrat(item.referenceContrat || '');
+    setDebutContrat(item.debutContrat || '');
+    setFinContrat(item.finContrat || '');
     setPayeurId(item.payeurId || '');
     setClientIdField(item.clientIdField || '');
-    setNumeroVoie(item.numeroVoie);
+    setNumeroVoie(item.numeroVoie || (item as any).numVoie || '');
     if (item.horaires) {
       try {
-        setSchedules(JSON.parse(item.horaires));
+        const parsed = typeof item.horaires === 'string' ? JSON.parse(item.horaires) : item.horaires;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSchedules(
+            parsed.map((s: any) => ({
+              days: Array.isArray(s?.days) ? s.days : [],
+              fermetureMidi: Boolean(s?.fermetureMidi),
+              openMorning: s?.openMorning || '09:00',
+              closeMorning: s?.closeMorning || '12:00',
+              openAfternoon: s?.openAfternoon || '14:00',
+              closeAfternoon: s?.closeAfternoon || '18:00',
+              openContinuous: s?.openContinuous || '09:00',
+              closeContinuous: s?.closeContinuous || '17:00',
+            }))
+          );
+        } else {
+          setSchedules([
+            {
+              days: [],
+              fermetureMidi: false,
+              openMorning: '09:00',
+              closeMorning: '12:00',
+              openAfternoon: '14:00',
+              closeAfternoon: '18:00',
+              openContinuous: '09:00',
+              closeContinuous: '17:00'
+            }
+          ]);
+        }
       } catch (e) {
         setSchedules([
           {
@@ -902,8 +929,8 @@ export default function AutresMaterielsTab({
         }
       ]);
     }
-    setVille(item.ville);
-    setCodePostal(item.codePostal);
+    setVille(item.ville || '');
+    setCodePostal(item.codePostal || (item as any).cp || '');
     setRegion(item.region || '');
     setPays(item.pays || 'France');
     setLatitude(item.latitude || '');
@@ -919,7 +946,7 @@ export default function AutresMaterielsTab({
     setDerniereMaintenance(item.derniereMaintenance || '');
     setSortieUsine(item.sortieUsine || '');
     setProchaineMaintenance(item.prochaineMaintenance || '');
-    setCategorie(item.categorie);
+    setCategorie(item.categorie || 'Extincteur');
 
     // Fallback/load identifiant
     if (!item.identifiant) {
@@ -929,10 +956,21 @@ export default function AutresMaterielsTab({
       ].filter(Boolean);
       item.identifiant = generateRandomShortCode(existingIds);
     }
-    setIdentifiant(item.identifiant);
+    setIdentifiant(item.identifiant || '');
 
     setTournee(item.tournee || 'Centre');
-    setSpecifiques(item.specifiques || {});
+    let parsedSpecifiques: Record<string, any> = {};
+    if (item.specifiques) {
+      if (typeof item.specifiques === 'string') {
+        try {
+          const parsed = JSON.parse(item.specifiques);
+          if (parsed && typeof parsed === 'object') parsedSpecifiques = parsed;
+        } catch (_) {}
+      } else if (typeof item.specifiques === 'object') {
+        parsedSpecifiques = item.specifiques;
+      }
+    }
+    setSpecifiques(parsedSpecifiques);
     
     const cl = getLinkedClientForItem(item);
     if (cl) {
@@ -1019,8 +1057,8 @@ export default function AutresMaterielsTab({
       referenceContrat,
       debutContrat,
       finContrat,
-      payeurId: payeurId.trim(),
-      clientIdField: clientIdField.trim(),
+      payeurId: String(payeurId || '').trim(),
+      clientIdField: String(clientIdField || '').trim(),
       numeroVoie,
       ville,
       codePostal,
@@ -1259,7 +1297,7 @@ export default function AutresMaterielsTab({
         typeof val === 'string' && val.toLowerCase().includes(lower)
       );
       return (
-        item.categorie.toLowerCase().includes(lower) ||
+        (item.categorie || '').toLowerCase().includes(lower) ||
         (item.identifiant || '').toLowerCase().includes(lower) ||
         clName.toLowerCase().includes(lower) ||
         (item.ville || '').toLowerCase().includes(lower) ||
@@ -1277,8 +1315,8 @@ export default function AutresMaterielsTab({
     if (isInitialView) {
       const now = Date.now();
       const getCacheTs = (item: OtherEquipment): number => {
-        const k1 = item.id ? item.id.trim().toLowerCase() : '';
-        const k2 = item.identifiant ? item.identifiant.trim().toLowerCase() : '';
+        const k1 = item.id ? String(item.id).trim().toLowerCase() : '';
+        const k2 = item.identifiant ? String(item.identifiant).trim().toLowerCase() : '';
         const ts =
           (k1 && recentOtherTimestamps[k1]) ||
           (k2 && recentOtherTimestamps[k2]) ||
@@ -1437,6 +1475,12 @@ export default function AutresMaterielsTab({
 
   return (
     <div className="w-full font-sans select-text pb-12" id="autres-materiels-tab-container">
+      <style>{`
+        #autres-materiels-tab-container tbody tr:hover,
+        #autres-materiels-tab-container tbody tr:hover > td {
+          background-color: rgb(245, 247, 250) !important;
+        }
+      `}</style>
       {!isFormOpen ? (
         <>
           {/* Top action block & Search metrics */}
@@ -1952,8 +1996,8 @@ export default function AutresMaterielsTab({
               className="p-4 flex items-center justify-between gap-4 animate-fadeIn" 
               id="bulk-actions-status-bar"
               style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid rgb(231, 231, 231)',
+                backgroundColor: 'rgb(245, 247, 250)',
+                border: 'none',
                 borderRadius: '16px',
                 maxWidth: '98%',
                 margin: '16px auto',
@@ -2230,8 +2274,8 @@ export default function AutresMaterielsTab({
                         <tr 
                           key={`${item.id}_${rowIdx}`} 
                           onClick={() => handleOpenEditForm(item)}
-                          className={`group hover:bg-[#f5f7fa] transition-all cursor-pointer ${
-                            isRowChecked ? 'bg-[#ecefff]/60' : ''
+                          className={`group hover:bg-[rgb(245,247,250)] transition-all cursor-pointer ${
+                            isRowChecked ? 'bg-[rgb(245,247,250)]' : ''
                           }`}
                           style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #2e54ff' } : undefined}
                         >
@@ -2424,9 +2468,9 @@ export default function AutresMaterielsTab({
                 style={{
                   ...rowActionButton18Style,
                   width: '100%',
-                  backgroundColor: '#2e54ff',
+                  backgroundColor: 'rgb(46, 84, 255)',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'none'
                 }}
                 className="w-full transition-all cursor-pointer border-0"
               >
@@ -2445,7 +2489,7 @@ export default function AutresMaterielsTab({
               #materiel-core-form select,
               #materiel-core-form textarea {
                 padding: 12px !important;
-                border: 1px solid #dedede !important;
+                border: 1px solid #DCE1EA !important;
                 border-radius: 13px !important;
                 font-size: 16px !important;
                 font-weight: 100 !important;
@@ -2468,8 +2512,10 @@ export default function AutresMaterielsTab({
                 transition: all 0s !important;
               }
               #materiel-core-form input:not([type="radio"]):not([type="checkbox"])::placeholder,
-              #materiel-core-form textarea::placeholder {
-                color: #000000 !important;
+              #materiel-core-form textarea::placeholder,
+              #materiel-core-form input:not([type="radio"]):not([type="checkbox"])::-webkit-input-placeholder,
+              #materiel-core-form textarea::-webkit-input-placeholder {
+                color: #BECADB !important;
                 opacity: 1 !important;
                 font-weight: 100 !important;
                 font-family: "DefibeoMain", "Civilprom", sans-serif !important;
@@ -2589,7 +2635,7 @@ export default function AutresMaterielsTab({
                         type="text" 
                         value={identifiant} 
                         readOnly 
-                        className="bg-slate-50 border border-slate-200 text-slate-600 font-mono font-semibold cursor-not-allowed flex-1 rounded p-2 focus:outline-none"
+                        className="bg-slate-50 border border-[#DCE1EA] text-slate-600 font-mono font-semibold cursor-not-allowed flex-1 rounded p-2 focus:outline-none"
                         style={{
                           fontSize: '15.5px'
                         }}
@@ -2862,7 +2908,10 @@ export default function AutresMaterielsTab({
                     }
                   }
 
-                  const searchAddressValue = numeroVoie.trim() || [numeroVoie.trim(), codePostal.trim(), ville.trim()].filter(Boolean).join(' ');
+                  const safeVoie = String(numeroVoie || '').trim();
+                  const safeCp = String(codePostal || '').trim();
+                  const safeVille = String(ville || '').trim();
+                  const searchAddressValue = safeVoie || [safeVoie, safeCp, safeVille].filter(Boolean).join(' ');
 
                   return (
                     <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
@@ -2989,7 +3038,7 @@ export default function AutresMaterielsTab({
                     <select
                       value={pays}
                       onChange={(e) => setPays(e.target.value)}
-                      className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-700 font-semibold"
+                      className="w-full px-2.5 py-1.5 border border-[#DCE1EA] rounded-lg text-xs bg-white text-slate-700 font-semibold"
                     >
                       <option value="France">France</option>
                       <option value="Espagne">Espagne</option>
@@ -3088,7 +3137,7 @@ export default function AutresMaterielsTab({
                   </div>
 
                   {schedules.map((sch, schIdx) => (
-                    <div key={schIdx} style={{ borderRadius: '13px', border: 'none', backgroundColor: 'rgb(245, 247, 250)' }} className="p-3 relative space-y-3">
+                    <div key={schIdx} style={{ borderRadius: '13px', border: 'none', backgroundColor: 'rgb(245, 247, 250)', padding: 0 }} className="p-0 relative space-y-3">
                       <button
                         type="button"
                         onClick={() => handleRemoveSchedule(schIdx)}

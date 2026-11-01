@@ -983,7 +983,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           className="planning-side-select w-full appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center cursor-pointer"
           style={{
             backgroundColor: "rgb(245, 247, 250)",
-            color: "rgb(80, 97, 122)",
+            color: "#000000",
             border: "none",
             borderRadius: "14px",
             padding: "14px 12px",
@@ -1007,14 +1007,14 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       </div>
 
       {/* Field Mois */}
-      <div className="px-0 select-none pb-2 space-y-2">
+      <div className="px-0 select-none pb-2 space-y-4">
         <select
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(Number(e.target.value))}
           className="planning-side-select w-full appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center cursor-pointer"
           style={{
             backgroundColor: "rgb(245, 247, 250)",
-            color: "rgb(80, 97, 122)",
+            color: "#000000",
             border: "none",
             borderRadius: "14px",
             padding: "14px 12px",
