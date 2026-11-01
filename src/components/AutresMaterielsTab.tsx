@@ -582,6 +582,22 @@ export default function AutresMaterielsTab({
   const [tempLat, setTempLat] = useState<number>(48.8566);
   const [tempLng, setTempLng] = useState<number>(2.3522);
 
+  const handleManualUpdateCoordinates = async () => {
+    const query = [numeroVoie, codePostal, ville, region, pays].filter(Boolean).join(', ');
+    if (query.trim().length > 5) {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          setLatitude(data[0].lat);
+          setLongitude(data[0].lon);
+        }
+      } catch (e) {
+        console.error('Geocoding error:', e);
+      }
+    }
+  };
+
   const [schedules, setSchedules] = useState<{
     days: string[];
     fermetureMidi: boolean;
@@ -758,6 +774,16 @@ export default function AutresMaterielsTab({
       setClientSearchText(labelStr);
     } else {
       setClientSearchText('');
+      setNomPrenomSite('');
+      setTelephoneSite('');
+      setEmailSite('');
+      setContrat('Non');
+      setNomContrat('');
+      setReferenceContrat('');
+      setDebutContrat('');
+      setFinContrat('');
+      setPayeurId('');
+      setClientIdField('');
     }
     setIsClientDropdownOpen(false);
   };
@@ -1935,8 +1961,21 @@ export default function AutresMaterielsTab({
             >
               <div className="flex items-center gap-2">
                 <span 
-                  className="w-6 h-6 text-white rounded-full flex items-center justify-center text-xs font-bold font-sans shrink-0"
-                  style={{ backgroundColor: '#2e54ff' }}
+                  className="rounded-full inline-flex items-center justify-center font-bold font-sans shrink-0"
+                  style={{
+                    backgroundColor: 'rgb(61, 220, 132)',
+                    color: 'rgb(21, 99, 55)',
+                    fontSize: '18px',
+                    height: '35px',
+                    width: '35px',
+                    lineHeight: 1,
+                    padding: 0,
+                    margin: 0,
+                    textAlign: 'center',
+                    textBoxTrim: 'trim-both' as any,
+                    textBoxEdge: 'cap alphabetic' as any,
+                    cursor: 'default',
+                  }}
                 >
                   {selectedIds.length}
                 </span>
@@ -2298,7 +2337,7 @@ export default function AutresMaterielsTab({
                             <div className="inline-flex gap-1.5">
                               <button
                                 onClick={() => handleOpenEditForm(item)}
-                                style={rowActionButton18Style}
+                                style={{ ...rowActionButton18Style, backgroundColor: 'rgb(46, 84, 255)' }}
                                 className="transition-colors cursor-pointer"
                               >
                                 Modifier
@@ -2307,7 +2346,7 @@ export default function AutresMaterielsTab({
                                 onClick={() => {
                                   handleDeleteItem(item.id);
                                 }}
-                                style={rowActionButton18Style}
+                                style={{ ...rowActionButton18Style, backgroundColor: 'rgb(210, 45, 11)' }}
                                 className="transition-colors cursor-pointer"
                               >
                                 Supprimer
@@ -2345,6 +2384,7 @@ export default function AutresMaterielsTab({
                 id="btn-close-materiel-modal"
                 style={{
                   ...rowActionButton18Style,
+                  backgroundColor: 'rgb(210, 45, 11)',
                   width: '100%',
                 }}
                 className="w-full transition-colors cursor-pointer"
@@ -2612,66 +2652,17 @@ export default function AutresMaterielsTab({
                         Rechercher
                       </button>
                     </div>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={clientSearchText}
-                        onFocus={() => setIsClientDropdownOpen(true)}
-                        onChange={(e) => {
-                          setClientSearchText(e.target.value);
-                          setIsClientDropdownOpen(true);
-                          if (clientId) {
-                            setClientId('');
-                          }
-                        }}
-                        onBlur={() => {
-                          setTimeout(() => setIsClientDropdownOpen(false), 250);
-                        }}
-                        placeholder="Rechercher un client."
-                        className="w-full bg-white border border-slate-200 rounded p-2 text-xs"
-                        style={{
-                          fontSize: '15.5px'
-                        }}
-                      />
-                      {clientSearchText && !clientId && (
-                        <button
-                          type="button"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            setClientSearchText('');
-                            setClientId('');
-                            setIsClientDropdownOpen(true);
-                          }}
-                          className="absolute right-3 top-2 text-slate-400 hover:text-slate-600 text-sm font-bold cursor-pointer"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                    
-                    {isClientDropdownOpen && (
-                      <div className="absolute z-50 left-0 right-0 max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-lg mt-1 shadow-lg divide-y divide-slate-100">
-                        {filteredClientsForDropdown.length === 0 ? (
-                          <div className="p-3 text-slate-500 font-sans text-xs">Aucun client trouvé</div>
-                        ) : (
-                          filteredClientsForDropdown.map(c => {
-                            const labelStr = `${c.denomination} (${c.siret || c.id})`;
-                            return (
-                              <button
-                                key={c.id}
-                                type="button"
-                                onMouseDown={() => {
-                                  handleClientSelect(c.id);
-                                }}
-                                className="w-full text-left px-3 py-2 text-sm text-slate-800 hover:bg-[#ecefff] transition-colors font-semibold border-0 cursor-pointer"
-                              >
-                                {labelStr}
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-                    )}
+                    <select
+                      value={clientId}
+                      onChange={(e) => handleClientSelect(e.target.value)}
+                    >
+                      <option value="">Sélectionnez un client...</option>
+                      {clients.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.denomination}{c.clientIdField ? ` (${c.clientIdField})` : c.siret ? ` (${c.siret})` : ''}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Nom et prenom */}
@@ -2903,7 +2894,7 @@ export default function AutresMaterielsTab({
                             color: '#ffffff',
                             borderRadius: '10px',
                             padding: '10px 16px',
-                            fontSize: '16px',
+                            fontSize: '18px',
                             fontWeight: 100,
                             border: 'none',
                             opacity: otherDefibsCount === 0 ? 0.4 : 1,
@@ -2930,7 +2921,7 @@ export default function AutresMaterielsTab({
                             color: '#ffffff',
                             borderRadius: '10px',
                             padding: '10px 16px',
-                            fontSize: '16px',
+                            fontSize: '18px',
                             fontWeight: 100,
                             border: 'none',
                             opacity: otherMaterielsCount === 0 ? 0.4 : 1,
@@ -3042,7 +3033,15 @@ export default function AutresMaterielsTab({
                   </div>
                 </div>
 
-                <div className="pt-1">
+                <div className="pt-1 space-y-2">
+                  <button
+                    type="button"
+                    onClick={handleManualUpdateCoordinates}
+                    style={{ ...rowActionButton18Style, width: '100%', textTransform: 'none' }}
+                    className="font-sans"
+                  >
+                    Actualiser les coordonnées
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -3090,16 +3089,19 @@ export default function AutresMaterielsTab({
 
                   {schedules.map((sch, schIdx) => (
                     <div key={schIdx} style={{ borderRadius: '13px', border: 'none', backgroundColor: 'rgb(245, 247, 250)' }} className="p-3 relative space-y-3">
-                      {schedules.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveSchedule(schIdx)}
-                          style={{ borderRadius: '13px', fontSize: '16px' }}
-                          className="absolute top-2 right-2 px-3 py-1 font-bold text-white bg-[#991b1b] hover:bg-[#7f1d1d] active:scale-95 transition-all cursor-pointer font-sans"
-                        >
-                          Supprimer
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSchedule(schIdx)}
+                        style={{
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          backgroundColor: 'rgb(210, 45, 11)',
+                          padding: '8px 16px',
+                        }}
+                        className="absolute top-2 right-2 font-bold text-white hover:opacity-90 active:scale-95 transition-all cursor-pointer font-sans"
+                      >
+                        Supprimer
+                      </button>
 
                       {/* Midi closing toggle - styled as radio pink */}
                       <div className="flex items-center gap-2 select-none">

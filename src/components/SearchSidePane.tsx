@@ -86,7 +86,7 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
     >
       <style>{`
         #${paneId} input::placeholder {
-          color: #000000 !important;
+          color: #BECADB !important;
           opacity: 1 !important;
           font-size: 18px !important;
         }
@@ -105,14 +105,14 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
           minHeight: '100dvh',
           maxHeight: '100dvh',
           borderLeft: 'none',
-          backgroundColor: '#F5F7FA',
+          backgroundColor: 'rgb(245, 247, 250)',
         }}
       >
         {/* Search field at the very top - No title, No line divider */}
         <div
           className="px-4 pt-5 pb-3 shrink-0"
           style={{
-            backgroundColor: '#F5F7FA',
+            backgroundColor: 'rgb(245, 247, 250)',
             width: '100%',
             maxWidth: '100%',
             boxSizing: 'border-box',
@@ -138,7 +138,7 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
               display: 'block',
             }}
-            className="w-full text-black placeholder:text-black placeholder:text-[18px] placeholder:opacity-100 focus:border-blue-500 transition-colors"
+            className="w-full text-black placeholder:text-[#BECADB] placeholder:text-[18px] placeholder:opacity-100 focus:border-blue-500 transition-colors"
           />
         </div>
 
@@ -146,7 +146,7 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
         <div
           className="flex-1 overflow-y-auto px-4 pb-24 space-y-2"
           style={{
-            backgroundColor: '#F5F7FA',
+            backgroundColor: 'rgb(245, 247, 250)',
             width: '100%',
             maxWidth: '100%',
             boxSizing: 'border-box',
@@ -162,13 +162,13 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
                 setSearch('');
               }}
               style={{
-                backgroundColor: '#ffffff',
+                backgroundColor: '#FFF',
                 border: 'none',
                 width: '100%',
                 maxWidth: '100%',
                 boxSizing: 'border-box',
               }}
-              className="w-full p-3.5 rounded-xl cursor-pointer transition-all bg-white"
+              className="w-full p-3.5 rounded-xl cursor-pointer transition-all bg-[#FFF]"
             >
               <span
                 style={{
@@ -202,13 +202,13 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
                     setSearch('');
                   }}
                   style={{
-                    backgroundColor: '#ffffff',
+                    backgroundColor: '#FFF',
                     border: 'none',
                     width: '100%',
                     maxWidth: '100%',
                     boxSizing: 'border-box',
                   }}
-                  className="w-full p-3.5 rounded-xl cursor-pointer transition-all flex items-center justify-between gap-3 bg-white"
+                  className="w-full p-3.5 rounded-xl cursor-pointer transition-all flex items-center justify-between gap-3 bg-[#FFF]"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     {item.imageUrl && (
@@ -282,7 +282,7 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
             }}
             className="w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] flex items-center justify-center font-sans pointer-events-auto"
             style={{
-              backgroundColor: '#D22D0B',
+              backgroundColor: 'rgb(210, 45, 11)',
               color: '#ffffff',
               fontSize: '18px',
               border: 'none',

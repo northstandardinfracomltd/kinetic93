@@ -5009,6 +5009,7 @@ async function warmupDefibrillateursStore() {
     observateurActionsSuspectes: 'spreadsheetObservateurActionsSuspectes',
     exportations: 'spreadsheetExportations',
     autresEvents: 'spreadsheetAutresEvents',
+    groupesZones: 'spreadsheetGroupesZones',
   };
 
   function getSheetTabFieldCandidates(tabType: SheetTabType): string[] {
@@ -7516,6 +7517,7 @@ async function warmupDefibrillateursStore() {
             'spreadsheetObservateurActionsSuspectes',
             'spreadsheetExportations',
             'spreadsheetAutresEvents',
+            'spreadsheetGroupesZones',
           ];
 
           const existingInMem = serverMemoryStore.get(collectionKey);

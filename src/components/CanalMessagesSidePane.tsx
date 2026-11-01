@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db, saveCollectionToFirestore, getCollectionKey, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion } from '../firebase';
-import { TenantMessage, CompanyInfo, getTenantSpreadsheetUrl } from '../types';
+import { saveCollectionToFirestore } from '../firebase';
+import { TenantMessage, CompanyInfo, Member, getTenantSpreadsheetUrl } from '../types';
 import { t } from '../utils/translate';
 
 export const CANAL_TAGS = [
@@ -28,6 +27,7 @@ interface CanalMessagesSidePaneProps {
   onMessagesRead?: () => void;
   embedded?: boolean;
   companyInfo?: CompanyInfo;
+  members?: Member[];
 }
 
 export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
@@ -40,6 +40,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   onMessagesRead,
   embedded = false,
   companyInfo,
+  members = [],
 }) => {
   const hasMessagesSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetMessagesInternes', companyInfo));
   const [messageInput, setMessageInput] = useState('');
@@ -47,23 +48,143 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const deleteMenuRef = useRef<HTMLDivElement | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    touchStartPosRef.current = null;
+  };
+
+  useEffect(() => {
+    return () => clearLongPressTimer();
+  }, []);
+
+  // Resolve current user's full name & email using members list and companyInfo
+  const resolvedCurrentUser = useMemo(() => {
+    const email = (currentUser?.email || '').trim();
+    let name = (currentUser?.name || '').trim();
+
+    if (email && members.length > 0) {
+      const matched = members.find(
+        (m) => m && m.email && m.email.trim().toLowerCase() === email.toLowerCase()
+      );
+      if (matched?.name?.trim()) {
+        name = matched.name.trim();
+      }
+    }
+    if ((!name || name === 'Membre' || name === 'Technicien') && email && companyInfo?.adminEmail) {
+      if (companyInfo.adminEmail.trim().toLowerCase() === email.toLowerCase() && companyInfo.adminName?.trim()) {
+        name = companyInfo.adminName.trim();
+      }
+    }
+    if (!email && name && name !== 'Membre' && name !== 'Technicien' && members.length > 0) {
+      const matchedByName = members.find(
+        (m) => m && m.name && m.name.trim().toLowerCase() === name.toLowerCase()
+      );
+      if (matchedByName?.email?.trim()) {
+        return { email: matchedByName.email.trim(), name: matchedByName.name.trim() || name };
+      }
+    }
+    return {
+      email,
+      name: name || email || 'Membre',
+    };
+  }, [currentUser, members, companyInfo]);
+
+  // Helper to resolve any message's author display name and email
+  const resolveMessageAuthor = (msg: TenantMessage) => {
+    const rawAuthorEmail = (msg.authorEmail || '').trim();
+    const rawAuthorName = (msg.authorName || '').trim();
+
+    let email = rawAuthorEmail;
+    let name = rawAuthorName;
+
+    if (!email && rawAuthorName.includes('@')) {
+      email = rawAuthorName;
+      name = '';
+    }
+    if (name === 'Membre' || name.includes('@')) {
+      name = '';
+    }
+
+    if (email && members.length > 0) {
+      const matched = members.find(
+        (m) => m && m.email && m.email.trim().toLowerCase() === email.toLowerCase()
+      );
+      if (matched?.name?.trim()) {
+        name = matched.name.trim();
+      }
+    }
+
+    if (!name && email && companyInfo?.adminEmail && companyInfo.adminEmail.trim().toLowerCase() === email.toLowerCase()) {
+      if (companyInfo.adminName?.trim()) {
+        name = companyInfo.adminName.trim();
+      }
+    }
+
+    if (!name && email && resolvedCurrentUser.email && resolvedCurrentUser.email.toLowerCase() === email.toLowerCase()) {
+      if (resolvedCurrentUser.name && resolvedCurrentUser.name !== 'Membre' && !resolvedCurrentUser.name.includes('@')) {
+        name = resolvedCurrentUser.name;
+      }
+    }
+
+    if (!email && name && members.length > 0) {
+      const matchedByName = members.find(
+        (m) => m && m.name && m.name.trim().toLowerCase() === name.toLowerCase()
+      );
+      if (matchedByName?.email?.trim()) {
+        email = matchedByName.email.trim();
+      }
+    }
+
+    if (!name && email) {
+      const localPart = email.split('@')[0] || '';
+      name = localPart
+        .split(/[._-]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ') || email;
+    }
+
+    const isMine = Boolean(
+      (resolvedCurrentUser.email &&
+        email &&
+        resolvedCurrentUser.email.trim().toLowerCase() === email.trim().toLowerCase()) ||
+        (resolvedCurrentUser.name &&
+          name &&
+          name !== 'Membre' &&
+          resolvedCurrentUser.name.trim().toLowerCase() === name.trim().toLowerCase())
+    );
+
+    return {
+      displayName: name || 'Membre',
+      email,
+      isMine,
+    };
+  };
 
   // Auto scroll to bottom
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
   };
 
-  // Close context menu on outside click with capture phase to avoid any stopPropagation issues
+  // Close context menu on outside click without blocking the Supprimer button click
   useEffect(() => {
     if (!contextMenu) return;
-    const handleClose = () => setContextMenu(null);
-    window.addEventListener('click', handleClose, true);
-    window.addEventListener('pointerdown', handleClose, true);
-    window.addEventListener('contextmenu', handleClose, true);
+    const handleOutsidePointerDown = (e: Event) => {
+      if (deleteMenuRef.current && e.target instanceof Node && deleteMenuRef.current.contains(e.target)) {
+        return;
+      }
+      setContextMenu(null);
+    };
+    window.addEventListener('pointerdown', handleOutsidePointerDown);
     return () => {
-      window.removeEventListener('click', handleClose, true);
-      window.removeEventListener('pointerdown', handleClose, true);
-      window.removeEventListener('contextmenu', handleClose, true);
+      window.removeEventListener('pointerdown', handleOutsidePointerDown);
     };
   }, [contextMenu]);
 
@@ -94,7 +215,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     }
   }, [isOpen]);
 
-  // Real-time Firestore sync & auto-refresh dynamic polling every 1s
+  // Real-time sync & periodic polling from Google Sheets
   useEffect(() => {
     if (!isOpen || !tenantId) return;
     if (!hasMessagesSpreadsheet) {
@@ -104,12 +225,10 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
 
     let isMounted = true;
 
-    // 1. Polling de secours périodique (toutes les 30s) avec timeout strict + Google Sheets sync
     const fetchLatestServerMessages = async () => {
       const controller = new AbortController();
       const timerId = setTimeout(() => controller.abort(), 6000);
       try {
-        // Check Google Spreadsheet first if configured
         const sheetRes = await fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(tenantId)}&type=messagesInternes`, {
           signal: controller.signal,
         }).catch(() => null);
@@ -118,17 +237,22 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           if (sheetData?.fromSpreadsheet && Array.isArray(sheetData.items) && (sheetData.items.length > 0 || sheetData.hasRemoteHeaders)) {
             const mappedList: TenantMessage[] = sheetData.items
               .filter((m: any) => m && (m.content || m.text))
-              .map((m: any, idx: number) => ({
-                id: m.id || `msg_sheet_${idx + 2}`,
-                authorName: m.authorName || m.sender || 'Membre',
-                authorEmail: m.authorEmail || '',
-                tag: 'All',
-                content: m.content || m.text || '',
-                createdAt: Number(m.createdAt) || Date.now(),
-                dateStr: m.dateStr || m.time || '',
-                tenantId,
-                envId: tenantId,
-              }));
+              .map((m: any, idx: number) => {
+                const rawEmail = String(m.authorEmail || m['Nom Prénom (Username).'] || m['Nom Prénom (Username)'] || '').trim();
+                const rawName = String(m.authorName || m.sender || '').trim();
+                return {
+                  id: m.id || `msg_${m._sheetRowNumber || idx + 2}`,
+                  authorName: rawName || rawEmail || 'Membre',
+                  authorEmail: rawEmail || (rawName.includes('@') ? rawName : ''),
+                  tag: 'All',
+                  content: String(m.content || m.text || '').trim(),
+                  createdAt: Number(m.createdAt) || Date.now(),
+                  dateStr: String(m.dateStr || m.time || '').trim(),
+                  tenantId,
+                  envId: tenantId,
+                  _sheetRowNumber: m._sheetRowNumber,
+                } as TenantMessage & { _sheetRowNumber?: number };
+              });
             clearTimeout(timerId);
             setMessages((prev) => {
               if (JSON.stringify(prev) !== JSON.stringify(mappedList)) {
@@ -148,7 +272,6 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       }
     };
 
-    // 2. Écoute des événements cross-tab storage pour mise à jour immédiate (0ms)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === `defib_${tenantId}_tenant_messages` && e.newValue) {
         try {
@@ -161,10 +284,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // Initial check
     fetchLatestServerMessages();
-
-    // Timer auto-refresh fallback toutes les 30s
     const refreshTimer = setInterval(fetchLatestServerMessages, 30000);
 
     return () => {
@@ -181,7 +301,6 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     }
   }, [messages.length, isOpen]);
 
-  // All messages in a single unified thread for the tenant
   const displayedMessages = messages;
 
   const handleSendMessage = async (e?: React.FormEvent) => {
@@ -199,10 +318,14 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       minute: '2-digit',
     })}`;
 
-    const newMsg: TenantMessage = {
+    const senderEmail = resolvedCurrentUser.email || '';
+    const senderName = resolvedCurrentUser.name || senderEmail || 'Membre';
+
+    const newMsg: TenantMessage & Record<string, any> = {
       id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      authorName: currentUser.name || 'Membre',
-      authorEmail: currentUser.email || '',
+      authorName: senderName,
+      authorEmail: senderEmail,
+      'Nom Prénom (Username).': senderEmail || senderName,
       tag: 'All',
       content: text,
       createdAt: Date.now(),
@@ -223,7 +346,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     localStorage.setItem(`defib_${tenantId}_messages_last_seen`, String(Date.now()));
 
     try {
-      fetch('/api/sheets/upsert', {
+      await fetch('/api/sheets/upsert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -243,7 +366,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       }).catch(() => {});
       await saveCollectionToFirestore('tenantMessages', updated, tenantId);
     } catch (err) {
-      console.error('Erreur lors de la sauvegarde du message dans Firestore:', err);
+      console.error('Erreur lors de la sauvegarde du message:', err);
     }
 
     setTimeout(() => {
@@ -253,19 +376,44 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   };
 
   const handleDeleteMessage = async (msgId: string) => {
+    const targetMsg = messages.find((m) => m.id === msgId) as (TenantMessage & { _sheetRowNumber?: number }) | undefined;
     const updated = messages.filter((m) => m.id !== msgId);
     setMessages(updated);
     setContextMenu(null);
     localStorage.setItem(`defib_${tenantId}_tenant_messages`, JSON.stringify(updated));
 
+    const deleteKeys: string[] = [msgId];
+    if (targetMsg) {
+      const sheetRow = Number(targetMsg._sheetRowNumber);
+      if (sheetRow > 0) {
+        deleteKeys.push(`row:${sheetRow}`, `msg_${sheetRow}`, `msg_sheet_${sheetRow}`);
+      }
+      const idMatch = String(msgId).match(/^msg_(?:sheet_)?(\d+)$/i);
+      if (idMatch && idMatch[1]) {
+        const parsedRow = Number(idMatch[1]);
+        if (parsedRow > 0) {
+          deleteKeys.push(`row:${parsedRow}`, `msg_${parsedRow}`, `msg_sheet_${parsedRow}`);
+        }
+      }
+      const dStr = String(targetMsg.dateStr || '').trim().toLowerCase();
+      const cStr = String(targetMsg.content || '').trim().toLowerCase();
+      const eStr = String(targetMsg.authorEmail || '').trim().toLowerCase();
+      if (dStr && cStr) {
+        deleteKeys.push(`msg@@${dStr}@@${cStr}`);
+        if (eStr) {
+          deleteKeys.push(`msg@@${eStr}@@${dStr}@@${cStr}`);
+        }
+      }
+    }
+
     try {
-      fetch('/api/sheets/delete', {
+      await fetch('/api/sheets/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantId,
           type: 'messagesInternes',
-          keys: [msgId],
+          keys: Array.from(new Set(deleteKeys.filter(Boolean))),
         }),
       }).catch(() => {});
       fetch('/api/sync-collection', {
@@ -279,20 +427,55 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       }).catch(() => {});
       await saveCollectionToFirestore('tenantMessages', updated, tenantId);
     } catch (err) {
-      console.error('Erreur lors de la suppression du message dans Firestore:', err);
+      console.error('Erreur lors de la suppression du message:', err);
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent, msgId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const maxX = typeof window !== 'undefined' ? window.innerWidth - 140 : e.clientX;
-    const maxY = typeof window !== 'undefined' ? window.innerHeight - 60 : e.clientY;
+  const openDeleteMenuAt = (clientX: number, clientY: number, msgId: string) => {
+    const maxX = typeof window !== 'undefined' ? window.innerWidth - 150 : clientX;
+    const maxY = typeof window !== 'undefined' ? window.innerHeight - 65 : clientY;
     setContextMenu({
-      x: Math.max(10, Math.min(e.clientX, maxX)),
-      y: Math.max(10, Math.min(e.clientY, maxY)),
+      x: Math.max(10, Math.min(clientX, maxX)),
+      y: Math.max(10, Math.min(clientY, maxY)),
       messageId: msgId,
     });
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, msgId: string, isMine: boolean) => {
+    if (!isMine) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openDeleteMenuAt(e.clientX, e.clientY, msgId);
+  };
+
+  const handleMessageTouchStart = (e: React.TouchEvent, msgId: string, isMine: boolean) => {
+    if (!isMine) return;
+    clearLongPressTimer();
+    const touch = e.touches[0];
+    if (!touch) return;
+    const startX = touch.clientX;
+    const startY = touch.clientY;
+    touchStartPosRef.current = { x: startX, y: startY };
+
+    longPressTimerRef.current = setTimeout(() => {
+      openDeleteMenuAt(startX, startY, msgId);
+      longPressTimerRef.current = null;
+    }, 2000);
+  };
+
+  const handleMessageTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartPosRef.current || !longPressTimerRef.current) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dx = Math.abs(touch.clientX - touchStartPosRef.current.x);
+    const dy = Math.abs(touch.clientY - touchStartPosRef.current.y);
+    if (dx > 10 || dy > 10) {
+      clearLongPressTimer();
+    }
+  };
+
+  const handleMessageTouchEnd = () => {
+    clearLongPressTimer();
   };
 
   if (!isOpen || typeof document === 'undefined') return null;
@@ -302,8 +485,8 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       id="canal-messages-sidepane"
       className={
         embedded
-          ? "relative w-full h-full flex-1 bg-white flex flex-col overflow-hidden font-sans border-0 shadow-none rounded-none"
-          : "relative w-full max-w-[760px] sm:w-[650px] lg:w-[760px] bg-[#fbfbfb] shadow-2xl flex flex-col h-full overflow-hidden animate-slideLeft font-sans"
+          ? "relative w-full h-full flex-1 min-h-0 bg-white flex flex-col overflow-hidden font-sans border-0 shadow-none rounded-none"
+          : "relative w-full max-w-[760px] sm:w-[650px] lg:w-[760px] bg-white shadow-2xl flex flex-col h-full min-h-0 overflow-hidden animate-slideLeft font-sans"
       }
       onClick={(e) => e.stopPropagation()}
       style={{
@@ -311,36 +494,40 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
       }}
     >
-      {/* MESSAGES LIST AREA (LEAVE EMPTY WHEN NO MESSAGES) */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4 bg-[#f8f9fa]">
+      {/* MESSAGES LIST AREA (IN-SCROLL CONTAINER) */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4 bg-white">
         {displayedMessages.map((msg) => {
-          const isMine =
-            currentUser.email &&
-            msg.authorEmail &&
-            currentUser.email.trim().toLowerCase() === msg.authorEmail.trim().toLowerCase();
+          const { displayName, isMine } = resolveMessageAuthor(msg);
 
           return (
             <div
               key={msg.id}
               className={`flex flex-col ${isMine ? 'items-end' : 'items-start'} group`}
-              onContextMenu={(e) => handleContextMenu(e, msg.id)}
+              onContextMenu={(e) => handleContextMenu(e, msg.id, isMine)}
+              onTouchStart={(e) => handleMessageTouchStart(e, msg.id, isMine)}
+              onTouchMove={handleMessageTouchMove}
+              onTouchEnd={handleMessageTouchEnd}
+              onTouchCancel={handleMessageTouchEnd}
             >
-              {/* Author Name + Dot + Horodatée (font color black) */}
+              {/* Label above each message: Nom Prénom + Horodatage (no dot, color rgb(80, 97, 122), font-size 14px) */}
               <div
                 className={`flex items-center gap-2 mb-1.5 px-1 ${
                   isMine ? 'flex-row-reverse text-right' : 'flex-row text-left'
                 }`}
+                style={{
+                  color: 'rgb(80, 97, 122)',
+                  fontSize: '14px',
+                }}
               >
-                <span className="font-bold text-black" style={{ fontSize: '14px' }}>
-                  {msg.authorName || t('Membre')}
+                <span
+                  className="font-bold"
+                  style={{ color: 'rgb(80, 97, 122)', fontSize: '14px' }}
+                >
+                  {displayName}
                 </span>
                 <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: '#334155' }}
-                />
-                <span
-                  className="text-[13px] font-normal"
-                  style={{ color: '#000000' }}
+                  className="font-normal"
+                  style={{ color: 'rgb(80, 97, 122)', fontSize: '14px' }}
                 >
                   {msg.dateStr}
                 </span>
@@ -351,20 +538,21 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 className="rounded-2xl transition-all relative select-text"
                 style={{
                   maxWidth: isMine ? '88%' : '92%',
-                  backgroundColor: '#ebedee',
-                  fontSize: '17px',
-                  border: '1px solid #dadada6e',
+                  backgroundColor: 'rgb(245, 247, 250)',
+                  fontSize: '18px',
+                  border: 'none',
                   boxShadow: 'none',
                   padding: '10px 14px',
                   color: '#000000',
                   cursor: 'default',
+                  WebkitTouchCallout: isMine ? 'none' : 'default',
                 }}
-                title={t('Clic droit pour supprimer')}
+                title={isMine ? t('Clic droit ou appui long pour supprimer') : undefined}
               >
                 <p
                   className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
                   style={{
-                    fontSize: '17px',
+                    fontSize: '18px',
                     color: '#000000',
                     cursor: 'default',
                   }}
@@ -378,32 +566,34 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* BOTTOM INPUT BAR (STICKY BOTTOM, BORDER-TOP FULL WIDTH #dadada) */}
+      {/* BOTTOM INPUT BAR (STICKY BOTTOM, FLOATING WITHOUT BACKGROUND OR BORDER-TOP) */}
       <div
         className={
           embedded
-            ? "sticky bottom-0 z-20 w-full px-2 pt-2 pb-2 sm:pb-2.5 bg-white shadow-none shrink-0"
-            : "sticky bottom-0 z-10 w-full p-2.5 sm:p-4 shrink-0 bg-[#fbfbfb]"
+            ? "sticky bottom-0 z-20 w-full px-2 pt-2 pb-2 sm:pb-2.5 bg-transparent shadow-none shrink-0"
+            : "sticky bottom-0 z-10 w-full p-2.5 sm:p-4 shrink-0 bg-transparent"
         }
         style={{
-          background: embedded ? '#ffffff' : '#fbfbfb',
-          backgroundColor: embedded ? '#ffffff' : '#fbfbfb',
-          borderTop: '1px solid #dadada',
+          background: 'transparent',
+          backgroundColor: 'transparent',
+          borderTop: 'none',
           boxShadow: 'none',
         }}
       >
-        <form onSubmit={(e) => {
-          if (!hasMessagesSpreadsheet) {
-            e.preventDefault();
-            return;
-          }
-          handleSendMessage(e);
-        }}>
+        <form
+          onSubmit={(e) => {
+            if (!hasMessagesSpreadsheet) {
+              e.preventDefault();
+              return;
+            }
+            handleSendMessage(e);
+          }}
+        >
           <div
             className="flex items-center gap-2 bg-white rounded-2xl p-1.5 sm:p-2 pl-3 sm:pl-4 transition-all shadow-none"
-            style={{ border: '1px solid #dadada', boxShadow: 'none' }}
+            style={{ border: '1px solid #DCE1EA', boxShadow: 'none' }}
           >
-            {/* Message textarea: auto-height, max 350 chars, texte & placeholder centrés verticalement */}
+            {/* Message textarea */}
             <textarea
               ref={textareaRef}
               rows={1}
@@ -413,7 +603,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               onChange={(e) => {
                 setMessageInput(e.target.value);
                 e.target.style.height = 'auto';
-                e.target.style.height = `${Math.max(28, Math.min(e.target.scrollHeight, 180))}px`;
+                e.target.style.height = `${Math.max(32, Math.min(e.target.scrollHeight, 180))}px`;
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
@@ -421,34 +611,48 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                   if (hasMessagesSpreadsheet) handleSendMessage();
                 }
               }}
-              placeholder={!hasMessagesSpreadsheet ? "Veuillez configurer le Spreadsheet Messages Internes dans les paramètres du tenant." : "Entrez votre message."}
-              className={`flex-1 bg-transparent border-0 outline-none text-black px-1 placeholder:text-slate-400 resize-none overflow-y-auto text-[16px] sm:text-[18px] ${!hasMessagesSpreadsheet ? 'cursor-not-allowed opacity-60' : ''}`}
+              placeholder={
+                !hasMessagesSpreadsheet
+                  ? 'Veuillez configurer le Spreadsheet Messages Internes dans les paramètres du tenant.'
+                  : 'Entrez votre message.'
+              }
+              className={`flex-1 self-center bg-transparent border-0 outline-none text-[#000000] px-1 placeholder:text-[#BECADB] resize-none overflow-y-auto text-[18px] ${
+                !hasMessagesSpreadsheet ? 'cursor-not-allowed opacity-60' : ''
+              }`}
               style={{
+                fontSize: '18px',
+                color: '#000000',
                 lineHeight: '24px',
-                minHeight: '28px',
-                height: '28px',
+                minHeight: '32px',
+                height: '32px',
                 maxHeight: '180px',
-                display: 'flex',
-                alignItems: 'center',
+                paddingTop: '5px',
+                paddingBottom: '3px',
                 margin: 'auto 0',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
               }}
             />
 
-            {/* Submit button: responsive font-size, centré verticalement */}
+            {/* Submit button */}
             <button
               type="submit"
               disabled={!messageInput.trim() || !hasMessagesSpreadsheet}
               id="btn-send-canal-message"
-              className="inline-flex items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center text-[15px] sm:text-[18px]"
+              className="inline-flex items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center"
               style={{
                 backgroundColor: 'rgb(46, 84, 255)',
+                fontSize: '18px',
+                border: 'none',
                 boxShadow: 'none',
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                opacity: (!messageInput.trim() || !hasMessagesSpreadsheet) ? 0.45 : 1,
-                cursor: (!messageInput.trim() || !hasMessagesSpreadsheet) ? 'not-allowed' : 'pointer',
+                opacity: !messageInput.trim() || !hasMessagesSpreadsheet ? 0.45 : 1,
+                cursor: !messageInput.trim() || !hasMessagesSpreadsheet ? 'not-allowed' : 'pointer',
               }}
-              title={!hasMessagesSpreadsheet ? "Veuillez renseigner l'URL du Spreadsheet Messages Internes dans les paramètres du tenant." : undefined}
+              title={
+                !hasMessagesSpreadsheet
+                  ? "Veuillez renseigner l'URL du Spreadsheet Messages Internes dans les paramètres du tenant."
+                  : undefined
+              }
             >
               <span>{t('Envoyer')}</span>
             </button>
@@ -459,10 +663,11 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 type="button"
                 onClick={onClose}
                 id="btn-close-canal-sidepane"
-                className="inline-flex items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center hover:opacity-90 active:scale-[0.98] text-[15px] sm:text-[18px]"
+                className="inline-flex items-center justify-center px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-white transition-all cursor-pointer border-0 shrink-0 self-center hover:opacity-90 active:scale-[0.98]"
                 style={{
                   backgroundColor: '#0f172a',
                   color: '#ffffff',
+                  fontSize: '18px',
                   border: 'none',
                   boxShadow: 'none',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -475,10 +680,9 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
         </form>
       </div>
 
-      {/* CONTEXT MENU ON RIGHT CLICK TO DELETE MESSAGE */}
+      {/* CONTEXT MENU ON RIGHT CLICK OR MOBILE LONG PRESS TO DELETE MESSAGE */}
       {contextMenu && (
         <>
-          {/* Backdrop transparent pour masquer immédiatement le bouton quand on clique en dehors */}
           <div
             className="fixed inset-0 z-[99999]"
             onClick={() => setContextMenu(null)}
@@ -488,6 +692,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             }}
           />
           <div
+            ref={deleteMenuRef}
             className="fixed z-[100000] p-0 animate-scaleIn"
             style={{
               top: `${contextMenu.y}px`,
@@ -504,7 +709,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               id="btn-delete-canal-message"
               className="px-5 py-2.5 rounded-xl font-bold transition-all cursor-pointer shadow-md hover:opacity-90 active:scale-95"
               style={{
-                backgroundColor: 'rgb(163, 20, 20)',
+                backgroundColor: 'rgb(210, 45, 11)',
                 color: '#ffffff',
                 border: 'none',
                 fontSize: '18px',
@@ -548,3 +753,4 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     document.body
   );
 };
+

@@ -10,7 +10,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { fetchCollectionFromFirestore, uploadMediaToFirebase } from '../firebase';
 import { fetchGoogleDriveStatus } from '../utils/googleDrive';
-import { generateReportModerationComment } from '../utils/moderationComment';
+import { generateReportModerationComment, mergeReportPostInterventionAlerts, buildFlatAlertFields } from '../utils/moderationComment';
 import { playTechSound3 } from '../utils/technicianAudio';
 
 interface GmaoCorrectionFormProps {
@@ -849,9 +849,11 @@ export default function GmaoCorrectionForm({
   // Report fields
   const [clientPinCode, setClientPinCode] = useState(report?.clientPinCode || report?.defibSnapshot?.clientPinCode || '');
   const [reportTitle, setReportTitle] = useState(() => {
-    const rawTitle = report?.reportTitle || report?.title;
+    const rawTitle = String(report?.reportTitle || report?.title || '').trim();
     if (!rawTitle) return 'RAPPORT D’INTERVENTION';
-    if (rawTitle === 'RAPPORT TECHNIQUE DÉFIBRILLATEUR') return 'RAPPORT D’INTERVENTION';
+    if (rawTitle === 'RAPPORT TECHNIQUE DÉFIBRILLATEUR' || /^rapport d['’]intervention gmao$/i.test(rawTitle)) {
+      return 'RAPPORT D’INTERVENTION';
+    }
     return rawTitle;
   });
   const [techName, setTechName] = useState(() => {
@@ -1387,7 +1389,12 @@ export default function GmaoCorrectionForm({
       setSelectedDefibId(defibIdFound);
       setSnapshot(getInitialSnapshot());
       setClientPinCode(report.clientPinCode || '');
-      setReportTitle(report.title || 'RAPPORT D’INTERVENTION');
+      const rawRepTitle = String(report.reportTitle || report.title || '').trim();
+      const normRepTitle =
+        !rawRepTitle || rawRepTitle === 'RAPPORT TECHNIQUE DÉFIBRILLATEUR' || /^rapport d['’]intervention gmao$/i.test(rawRepTitle)
+          ? 'RAPPORT D’INTERVENTION'
+          : rawRepTitle;
+      setReportTitle(normRepTitle);
       if (report.techName) setTechName(report.techName);
       if (report.date) setInterventionDate(report.date);
       if (report.siteMission) setMissionSite(report.siteMission === 'ATELIER SAV' ? 'ATELIER SAV' : 'DÉPLACEMENT');
@@ -2944,7 +2951,7 @@ export default function GmaoCorrectionForm({
       serviceEmettreId
     };
 
-    // Auto-generate moderation comment for the "Gérer" side pane ONLY when report is no longer upcoming (Modération or Validés)
+    // Auto-generate moderation comment and post-intervention alerts for the "Gérer" side pane ONLY when report is no longer upcoming (Modération or Validés)
     if (!savedReportPayload.isUpcoming) {
       savedReportPayload.commentaire = generateReportModerationComment(
         { ...savedReportPayload, commentaire: report?.commentaire },
@@ -2952,6 +2959,13 @@ export default function GmaoCorrectionForm({
         stocks,
         variables
       );
+      const mergedAlerts = mergeReportPostInterventionAlerts(
+        { ...savedReportPayload, postInterventionAlerts: report?.postInterventionAlerts },
+        defibrillateurs,
+        stocks,
+        variables
+      );
+      Object.assign(savedReportPayload, buildFlatAlertFields(mergedAlerts));
     }
 
     setIsSaving(true);
@@ -2979,7 +2993,7 @@ export default function GmaoCorrectionForm({
             width: shouldShowChronoAndReduce ? '33.3333%' : '100%',
             borderRadius: '0px',
             padding: '14px 8px',
-            backgroundColor: '#0f172a',
+            backgroundColor: 'rgb(210, 45, 11)',
             color: '#ffffff',
             border: 'none',
             margin: 0,
@@ -3000,8 +3014,8 @@ export default function GmaoCorrectionForm({
               width: '33.3333%',
               borderRadius: '0px',
               padding: '14px 8px',
-              backgroundColor: '#e5e7eb',
-              color: '#000000',
+              backgroundColor: 'rgb(15, 23, 42)',
+              color: '#ffffff',
               fontSize: '18px',
               fontWeight: 'bold',
               border: 'none',
@@ -3012,7 +3026,7 @@ export default function GmaoCorrectionForm({
               margin: 0,
               position: 'relative',
             }}
-            className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none !mt-0"
+            className="transition-colors cursor-pointer font-sans hover:opacity-90 text-center select-none !mt-0"
           >
             {isReduced ? "Agrandir" : "Réduire"}
           </button>

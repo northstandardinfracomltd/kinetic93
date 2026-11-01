@@ -959,7 +959,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             onClick={() => setIsExtendedViewOpen(true)}
             className="w-full font-bold transition-all duration-150 focus:outline-none text-center flex items-center justify-center select-none cursor-pointer text-white hover:opacity-95 active:scale-[0.99]"
             style={{
-              backgroundColor: "rgb(22, 93, 252)",
+              backgroundColor: "rgb(46, 84, 255)",
               borderRadius: "14px",
               padding: "14px 12px",
               fontSize: "18px",
@@ -980,9 +980,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             userManuallySelectedRef.current = true;
             setSelectedTech(e.target.value);
           }}
-          className="w-full appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center cursor-pointer"
+          className="planning-side-select w-full appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center cursor-pointer"
           style={{
-            backgroundColor: "#f5f7fa",
+            backgroundColor: "rgb(245, 247, 250)",
             color: "rgb(80, 97, 122)",
             border: "none",
             borderRadius: "14px",
@@ -1011,9 +1011,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
         <select
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(Number(e.target.value))}
-          className="w-full appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center cursor-pointer"
+          className="planning-side-select w-full appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center cursor-pointer"
           style={{
-            backgroundColor: "#f5f7fa",
+            backgroundColor: "rgb(245, 247, 250)",
             color: "rgb(80, 97, 122)",
             border: "none",
             borderRadius: "14px",
@@ -1419,7 +1419,8 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         {holidayName && (
                           <div className="flex flex-wrap items-center gap-2">
                             <span
-                              className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0 select-none"
+                              className="px-3.5 py-1.5 rounded-full text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0 select-none"
+                              style={{ backgroundColor: "rgb(210, 45, 11)" }}
                               title={`Jour férié : ${holidayName}`}
                             >
                               <span className="shrink-0 whitespace-nowrap">Jour férié :&nbsp;</span>
@@ -1698,297 +1699,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           </div>
                         ));
                       })()}
-
-                      {/* Missions */}
-                      {dayMissions.map(({ tour, mission }, mIdx) => {
-                        if (!mission || !tour) return null;
-                        // Find associated equipment & client
-                        const defib = defibrillateurs.find(
-                          (d: any) =>
-                            d && (
-                              d.identifiant === mission.defibIdentifiant ||
-                              d.id === mission.defibIdentifiant ||
-                              (mission.identifiant && d.identifiant === mission.identifiant) ||
-                              (mission.defibId && d.id === mission.defibId)
-                            )
-                        );
-
-                        const other = otherEquipments.find(
-                          (o: any) =>
-                            o && (
-                              o.identifiant === mission.defibIdentifiant ||
-                              o.id === mission.defibIdentifiant ||
-                              (mission.identifiant && o.identifiant === mission.identifiant) ||
-                              (mission.defibId && o.id === mission.defibId)
-                            )
-                        );
-
-                        const clientObj = clients.find(
-                          c =>
-                            c && (
-                              c.id === mission.clientId ||
-                              c.id === defib?.clientId ||
-                              c.id === other?.clientId ||
-                              (c.denomination && mission.clientDenomination && String(c.denomination).toLowerCase() === String(mission.clientDenomination).toLowerCase())
-                            )
-                        );
-
-                        const tourTitle = tour.title || tour.name || 'Tournée';
-
-                        const clientName =
-                          mission.clientDenomination ||
-                          mission.client ||
-                          clientObj?.denomination ||
-                          mission.clientName ||
-                          defib?.exploitant ||
-                          defib?.nomPrenomSite ||
-                          '';
-
-                        const eqTypeStr = String(mission.equipmentType || '');
-                        const reasonStr = String(mission.reason || '');
-                        const defibIdentStr = String(mission.defibIdentifiant || '');
-
-                        const isFormationMission =
-                          eqTypeStr === 'Formation' ||
-                          eqTypeStr.toLowerCase().includes('formation') ||
-                          Boolean(mission.formationId) ||
-                          reasonStr.toLowerCase().includes('formation') ||
-                          defibIdentStr === 'Formation';
-
-                        const typeVal = isFormationMission
-                          ? 'Formation'
-                          : (mission.equipmentType || (defib ? 'Défibrillateur' : (other ? other.categorie : 'Défibrillateur')));
-
-                        const situationVal = mission.status || mission.missionStatus || mission.situation || 'À faire';
-
-                        const identifiant = (() => {
-                          if (isFormationMission) {
-                            if (mission.formationId) return String(mission.formationId);
-                            if (mission.interventionReference) return String(mission.interventionReference);
-                            if (
-                              defibIdentStr &&
-                              defibIdentStr !== 'Formation' &&
-                              defibIdentStr !== reasonStr &&
-                              !defibIdentStr.toLowerCase().includes('formation')
-                            ) {
-                              return defibIdentStr;
-                            }
-                            return String(mission.id || 'FMT-001');
-                          }
-                          return String(
-                            mission.defibIdentifiant ||
-                            mission.identifiant ||
-                            defib?.identifiant ||
-                            other?.identifiant ||
-                            ''
-                          );
-                        })();
-
-                        const siteName = (() => {
-                          if (isFormationMission) return '';
-                          let rawVal = '';
-                          if (defib) {
-                            rawVal = defib.nomSite || '';
-                          } else if (other) {
-                            rawVal = other.nomPrenomSite || other.nomSite || '';
-                          } else if (mission.site || mission.siteName) {
-                            rawVal = mission.site || mission.siteName || '';
-                          }
-                          if (
-                            !rawVal ||
-                            rawVal === 'Représentant Standard' ||
-                            rawVal === 'Représentant standard' ||
-                            rawVal === 'Non renseigné' ||
-                            rawVal === 'Nom du Site'
-                          ) {
-                            return '';
-                          }
-                          return rawVal;
-                        })();
-
-                        const locationStr = (() => {
-                          if (mission.ville) {
-                            return `${mission.ville}${mission.codePostal ? ` (${mission.codePostal})` : ''}`;
-                          }
-                          if (defib) {
-                            const parts = [defib.numVoie, defib.cp, defib.ville].filter(Boolean);
-                            if (parts.length > 0) return parts.join(', ');
-                          }
-                          if (other) {
-                            const parts = [other.numeroVoie, other.codePostal, other.ville].filter(Boolean);
-                            if (parts.length > 0) return parts.join(', ');
-                          }
-                          if (mission.address) return String(mission.address);
-                          if (clientObj) {
-                            const parts = [clientObj.adresse, clientObj.codePostal, clientObj.ville].filter(Boolean);
-                            if (parts.length > 0) return parts.join(', ');
-                          }
-                          return '';
-                        })();
-
-                        const creneauVal = mission.estimatedSlot || mission.creneau || mission.slot || mission.creneauHoraire || mission.estimatedTime || mission.time || '';
-                        const missionKey = `plan-${tour.id || 'tour'}-${mission.id || mIdx}`;
-                        const isExpanded = !!expandedMissions[missionKey];
-
-                        const isConsultEnabled = (() => {
-                          const norm = (s?: string) =>
-                            (s || '')
-                              .trim()
-                              .toLowerCase()
-                              .normalize("NFD")
-                              .replace(/[\u0300-\u036f]/g, "");
-
-                          // Critère 1: La tournée de la mission en question est en statut « À faire »
-                          const tourStatusNorm = norm(tour.status);
-                          if (tourStatusNorm !== 'a faire') return false;
-
-                          // Critère 2: La mission est en statut « À faire » ou « Accepté Client »
-                          // Par défaut disabled si pas de statut ou autre
-                          const rawStatus = mission.status || mission.missionStatus || mission.situation;
-                          if (!rawStatus) return false;
-
-                          const missionStatusNorm = norm(rawStatus);
-                          return (
-                            missionStatusNorm === 'a faire' ||
-                            missionStatusNorm === 'accepte client' ||
-                            missionStatusNorm === 'accepte par le client'
-                          );
-                        })();
-
-                        return (
-                          <div
-                            key={`m-${mIdx}`}
-                            className="bg-white p-4 space-y-3"
-                            style={{
-                              border: "1px solid rgb(201, 190, 205)",
-                              borderRadius: "14px",
-                            }}
-                          >
-                            {/* Gélules Client, Créneau, Type et Situation & Boutons Consulter / Dérouler */}
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-                                {/* Gélule 1 : Client */}
-                                <span
-                                  className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
-                                  title={`Client : ${clientName || 'NC'}`}
-                                >
-                                  <span className="shrink-0 whitespace-nowrap">Client :&nbsp;</span>
-                                  <span className="truncate whitespace-nowrap">{clientName || 'NC'}</span>
-                                </span>
-
-                                {/* Gélule 2 : Créneau */}
-                                <span
-                                  className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
-                                  title={`Créneau : ${creneauVal}`}
-                                >
-                                  <span className="shrink-0 whitespace-nowrap">Créneau :&nbsp;</span>
-                                  <span className="truncate whitespace-nowrap">{creneauVal}</span>
-                                </span>
-
-                                {/* Gélule 3 : Type */}
-                                <span
-                                  className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
-                                  title={`Type : ${typeVal}`}
-                                >
-                                  <span className="shrink-0 whitespace-nowrap">Type :&nbsp;</span>
-                                  <span className="truncate whitespace-nowrap">{typeVal}</span>
-                                </span>
-
-                                {/* Gélule 4 : Situation */}
-                                <span
-                                  className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
-                                  title={`Situation : ${situationVal}`}
-                                >
-                                  <span className="shrink-0 whitespace-nowrap">Situation :&nbsp;</span>
-                                  <span className="truncate whitespace-nowrap">{situationVal}</span>
-                                </span>
-                              </div>
-
-                              <div className="flex flex-col gap-2 w-full sm:w-auto mx-0 sm:ml-10 sm:mr-2.5 shrink-0 select-none">
-                                <button
-                                  type="button"
-                                  disabled={!isConsultEnabled}
-                                  onClick={() => {
-                                    if (isConsultEnabled) {
-                                      handleConsultMission(tour, mission);
-                                    }
-                                  }}
-                                  title={
-                                    !isConsultEnabled
-                                      ? "Consultation accessible uniquement si la tournée est « À faire » et la mission est « À faire » ou « Accepté Client »"
-                                      : "Consulter la mission dans l'onglet Interventions"
-                                  }
-                                  style={{
-                                    color: "rgb(255, 255, 255)",
-                                    background: isConsultEnabled ? "rgb(20, 87, 236)" : "rgb(156, 163, 175)",
-                                    boxShadow: isConsultEnabled
-                                      ? "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset"
-                                      : "none",
-                                    padding: "10px 20px",
-                                    fontSize: "18px",
-                                    border: "none",
-                                    borderRadius: "13px",
-                                    fontWeight: 700,
-                                    cursor: isConsultEnabled ? "pointer" : "not-allowed",
-                                    opacity: isConsultEnabled ? 1 : 0.45,
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: "6px"
-                                  }}
-                                  className="w-full sm:w-auto shrink-0 select-none transition-all"
-                                >
-                                  {t("Consulter")}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleMissionExpanded(missionKey)}
-                                  style={{
-                                    color: "rgb(255, 255, 255)",
-                                    background: "rgb(20, 87, 236)",
-                                    boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgb(255 255 255 / 29%) 0px 6px 12px inset",
-                                    padding: "10px 20px",
-                                    fontSize: "18px",
-                                    border: "none",
-                                    borderRadius: "13px",
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    gap: "6px"
-                                  }}
-                                  className="w-full sm:w-auto shrink-0 select-none"
-                                >
-                                  {isExpanded ? "Réduire" : "Dérouler"}
-                                </button>
-                              </div>
-                            </div>
-
-                            {/* Details (Déroulés si actif) */}
-                            {isExpanded && (
-                              <div className="space-y-1.5 text-[16px] text-black pt-2" style={{ color: "#000", fontSize: "16px" }}>
-                                <div>
-                                  <span className="font-bold">Tournée : </span>
-                                  <span>{tourTitle}</span>
-                                </div>
-                                <div>
-                                  <span className="font-bold">Site : </span>
-                                  <span>{siteName}</span>
-                                </div>
-                                <div>
-                                  <span className="font-bold">Localisation : </span>
-                                  <span>{locationStr}</span>
-                                </div>
-                                <div>
-                                  <span className="font-bold">Identifiant : </span>
-                                  <span>{identifiant}</span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
                     </div>
                   );
                 })}

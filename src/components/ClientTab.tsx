@@ -1407,6 +1407,7 @@ export default function ClientTab({
               style={{
                 ...rowActionButton18Style,
                 width: '100%',
+                backgroundColor: 'rgb(210, 45, 11)',
               }}
               className="w-full transition-colors cursor-pointer"
             >
@@ -2912,16 +2913,19 @@ export default function ClientTab({
                         const count = getClientDefibVolume(client);
                         return (
                           <span
-                            className="inline-flex items-center justify-center rounded-full font-sans"
+                            className="inline-flex items-center justify-center rounded-full font-sans shrink-0"
                             style={{
                               background: '#3ddc84',
                               color: '#156337',
                               fontSize: '18px',
-                              padding: '0px',
+                              padding: 0,
+                              margin: 0,
                               lineHeight: 1,
                               textAlign: 'center',
                               width: '30px',
                               height: '30px',
+                              textBoxTrim: 'trim-both' as any,
+                              textBoxEdge: 'cap alphabetic' as any,
                             }}
                           >
                             {count}
@@ -2975,7 +2979,7 @@ export default function ClientTab({
                               type="button"
                               onClick={() => openEditModal(client)}
                               id={`btn-edit-client-${client.id}`}
-                              style={rowActionButton18Style}
+                              style={{ ...rowActionButton18Style, backgroundColor: 'rgb(46, 84, 255)' }}
                               className="cursor-pointer"
                             >
                               Modifier
@@ -2991,6 +2995,7 @@ export default function ClientTab({
                               id={`btn-delete-client-${client.id}`}
                               style={{
                                 ...rowActionButton18Style,
+                                backgroundColor: 'rgb(210, 45, 11)',
                                 opacity: isDeleteDisabled ? 0.4 : 1,
                                 cursor: isDeleteDisabled ? 'not-allowed' : 'pointer'
                               }}

@@ -302,18 +302,21 @@ const createCustomIcon = (colorHex: string, activeFocused: boolean, isChecked: b
         <div style="
           width: 20px;
           height: 20px;
+          box-sizing: border-box;
           border-radius: 50%;
           background-color: #ffffff;
-          border: 2.5px solid #2e54ff;
+          border: 1px solid #2e54ff;
           box-shadow: 0 2px 6px rgba(254, 78, 186, 0.4);
           display: flex;
           align-items: center;
           justify-content: center;
+          padding: 0;
+          margin: 0;
           ${scaleStyle}
           transition: all 0.2s ease-in-out;
           cursor: pointer;
         ">
-          <div style="width: 9px; height: 9px; border-radius: 50%; background-color: #2e54ff;"></div>
+          <div style="width: 10px; height: 10px; border-radius: 50%; background-color: #2e54ff; display: block; margin: auto; flex-shrink: 0;"></div>
         </div>
       `,
       className: 'custom-leaflet-icon',
@@ -539,7 +542,7 @@ export default function MapModal({
   };
 
   const cancelFiltersButtonStyle: React.CSSProperties = {
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgb(210, 45, 11)',
     borderRadius: '12px',
     fontSize: '18px',
     padding: '9px 19px',
@@ -1164,17 +1167,21 @@ export default function MapModal({
               >
                 <span
                   style={{
-                    backgroundColor: 'rgb(61 220 132)',
+                    backgroundColor: 'rgb(61, 220, 132)',
                     color: '#156337',
                     height: '30px',
                     width: '30px',
                     borderRadius: '9999px',
-                    padding: '2px 6px',
+                    padding: 0,
+                    lineHeight: 1,
+                    textAlign: 'center',
                     fontSize: '18px',
                     fontWeight: 'bold',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    textBoxTrim: 'trim-both' as any,
+                    textBoxEdge: 'cap alphabetic' as any,
                   }}
                 >
                   {selectedIds.length}
@@ -1320,7 +1327,7 @@ export default function MapModal({
             }}
             id="btn-map-filters"
             style={{
-              backgroundColor: '#0f172a',
+              backgroundColor: 'rgb(46, 84, 255)',
               borderRadius: '12px',
               fontSize: '18px',
               padding: '9px 19px',
@@ -1340,8 +1347,8 @@ export default function MapModal({
             {activeFiltersCount > 0 && (
               <span
                 style={{
-                  backgroundColor: '#2e54ff',
-                  color: '#ffffff',
+                  backgroundColor: '#ffffff',
+                  color: 'rgb(46, 84, 255)',
                   borderRadius: '9999px',
                   padding: '2px 8px',
                   fontSize: '13px',
@@ -1354,13 +1361,13 @@ export default function MapModal({
             )}
           </button>
 
-          {/* Floating Close Button in signature blue style */}
+          {/* Floating Close Button */}
           <button
             type="button"
             onClick={onClose}
             id="btn-map-close"
             style={{
-              backgroundColor: '#2e54ff',
+              backgroundColor: 'rgb(210, 45, 11)',
               boxShadow: 'none',
               borderRadius: '12px',
               fontSize: '18px',

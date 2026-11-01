@@ -3,7 +3,7 @@ import { getRegionsForCountry } from './utils/regions';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion, fetchRemoteDeletedDefibKeys, findTenantInList, ensureTenantMembersClient, ensureTenantCustomLocationNames } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { idbSet, idbGet, idbClear } from './idb';
-import { generateReportModerationComment, hasReportAlerts, mergeReportModerationComment } from './utils/moderationComment';
+import { generateReportModerationComment, hasReportAlerts, mergeReportModerationComment, mergeReportPostInterventionAlerts, buildFlatAlertFields } from './utils/moderationComment';
 import { t, getLanguage, setLanguage, startDOMTranslation } from './utils/translate';
 const translate = t;
 import { Client, Variable, Defibrillateur, SupportTicket, Member, CompanyInfo, PointageLog, StockRecord, CommercialDoc, CommercialDocItem, GedDocument, Memo, OtherEquipment, PointageAutoVigilance, DistributedStockLocation, AchatFournisseur, AppNotification, VeilleRecord, LogisticsNotification, FormationRecord, StagiaireRecord, EmargementRecord, TeamWorkGroup, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, TenantMessage, EXTRA_SPREADSHEET_FIELDS, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from './types';
@@ -843,6 +843,13 @@ export default function App() {
 
   const [activeTab, rawSetActiveTab] = useState<AppTab>(() => {
     try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get('tab');
+        if (tabParam === 'gmao') {
+          return 'gmao';
+        }
+      }
       if (localStorage.getItem('open_settings_after_reload') === 'true') {
         return 'parametres';
       }
@@ -965,7 +972,16 @@ export default function App() {
   const [isFsmSearchFocused, setIsFsmSearchFocused] = useState(false);
   const fsmSearchInputRef = useRef<HTMLInputElement>(null);
   const [defibSearchQuery, setDefibSearchQuery] = useState('');
-  const [gmaoSearchQuery, setGmaoSearchQuery] = useState('');
+  const [gmaoSearchQuery, setGmaoSearchQuery] = useState(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const searchParam = params.get('gmaoSearch');
+        if (searchParam) return searchParam;
+      }
+    } catch (_) {}
+    return '';
+  });
   const [isGmaoSearchFocused, setIsGmaoSearchFocused] = useState(false);
   const gmaoSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -1186,6 +1202,13 @@ export default function App() {
 
   // FSM Stats hidden state (always hidden initially when opening the tab)
   const [isFsmStatsHidden, setIsFsmStatsHidden] = useState<boolean>(true);
+  const [isFsmTechSkillsHidden, setIsFsmTechSkillsHidden] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('defib_hide_fsm_tech_skills') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
 
   useEffect(() => {
     if (activeTab === 'fsm') {
@@ -1256,12 +1279,13 @@ export default function App() {
   const [groupRegions, setGroupRegions] = useState<string[]>([]);
 
   const saveTeamWorkGroups = (updated: TeamWorkGroup[]) => {
+    const prevGroups = teamWorkGroups;
     setTeamWorkGroups(updated);
     const curTenant = tenantId || 'demo';
-    saveCollectionToFirestore('teamWorkGroups', updated, curTenant);
     try {
       localStorage.setItem(`defib_${curTenant}_team_work_groups`, JSON.stringify(updated));
     } catch (_) {}
+    syncCompartmentToGoogleSheets('groupesZones', prevGroups, updated, ['id'], curTenant);
   };
 
   const toggleFsmMissionExpanded = (missionKey: string) => {
@@ -1327,7 +1351,8 @@ export default function App() {
         reglages: 'spreadsheetReglages',
         membresEquipe: 'spreadsheetMembresEnvironnement',
         membresEnvironnement: 'spreadsheetMembresEnvironnement',
-        groupesTravail: 'spreadsheetGroupesTravail',
+        groupesTravail: 'spreadsheetGroupesZones',
+        groupesZones: 'spreadsheetGroupesZones',
         intituleEmplacements: 'spreadsheetIntituleEmplacements',
         connecteurs: 'spreadsheetConnecteurs',
         apparenceRapportsPdf: 'spreadsheetApparenceRapportsPdf',
@@ -1517,6 +1542,27 @@ export default function App() {
                 });
                 if (mutated) {
                   safeSetLocalStorage(`defib_${effectiveTid}_variables`, JSON.stringify(updated));
+                }
+                return mutated ? updated : prev;
+              });
+            } else if (tabType === 'groupesZones' && data && Array.isArray(data.records) && data.records.length > 0) {
+              setTeamWorkGroups(prev => {
+                let mutated = false;
+                const updated = prev.map(g => {
+                  const matched = data.records.find(
+                    (r: any) =>
+                      r &&
+                      ((r.id && g.id && String(r.id).trim().toLowerCase() === String(g.id).trim().toLowerCase()) ||
+                        (r.title && g.title && String(r.title).trim().toLowerCase() === String(g.title).trim().toLowerCase()))
+                  );
+                  if (matched && typeof matched._sheetRowNumber === 'number' && g._sheetRowNumber !== matched._sheetRowNumber) {
+                    mutated = true;
+                    return { ...g, _sheetRowNumber: matched._sheetRowNumber, _fromSpreadsheet: true };
+                  }
+                  return g;
+                });
+                if (mutated) {
+                  safeSetLocalStorage(`defib_${effectiveTid}_team_work_groups`, JSON.stringify(updated));
                 }
                 return mutated ? updated : prev;
               });
@@ -3453,23 +3499,25 @@ export default function App() {
           };
         })
       : rep.drapeaux || [];
-    const alerts = Array.isArray(gai.postInterventionAlerts)
-      ? gai.postInterventionAlerts
-      : Array.isArray(rep.postInterventionAlerts)
-      ? rep.postInterventionAlerts
-      : [];
+    const baseAlerts =
+      Array.isArray(gai.postInterventionAlerts) && gai.postInterventionAlerts.length > 0
+        ? gai.postInterventionAlerts
+        : Array.isArray(rep.postInterventionAlerts)
+        ? rep.postInterventionAlerts
+        : [];
+    const tempRep = {
+      ...rep,
+      commentaire: gai.commentaireInterne !== undefined ? gai.commentaireInterne : (gai.commentaire ?? rep.commentaire ?? ''),
+      postInterventionAlerts: baseAlerts,
+    };
+    const alerts = mergeReportPostInterventionAlerts(tempRep, [], [], currentVars, []);
     const nextRep: any = {
       ...rep,
       drapeaux: resolvedFlags,
-      commentaire: gai.commentaireInterne !== undefined ? gai.commentaireInterne : (gai.commentaire ?? rep.commentaire ?? ''),
+      commentaire: tempRep.commentaire,
       disableClientEmail: gai.disableClientEmail !== undefined ? Boolean(gai.disableClientEmail) : Boolean(rep.disableClientEmail),
-      postInterventionAlerts: alerts,
+      ...buildFlatAlertFields(alerts),
     };
-    for (let i = 1; i <= 15; i++) {
-      const a = alerts[i - 1];
-      nextRep[`alerteTraite${i}`] = a ? Boolean(a.traite) : Boolean(gai[`alerteTraite${i}`]);
-      nextRep[`alerteInfo${i}`] = a ? String(a.info || '') : String(gai[`alerteInfo${i}`] || '');
-    }
     return nextRep;
   }, []);
 
@@ -3478,23 +3526,29 @@ export default function App() {
     const ref = String(rep.interventionReference || rep.reportNumber || rep.id || '').trim();
     if (!ref) return;
     const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
-    const alerts = Array.isArray(rep.postInterventionAlerts) ? rep.postInterventionAlerts.slice(0, 15) : [];
+    const alerts = rep._alertsManuallyEdited
+      ? (Array.isArray(rep.postInterventionAlerts) ? rep.postInterventionAlerts.slice(0, 15) : [])
+      : mergeReportPostInterventionAlerts(rep, [], [], variablesRef.current || [], []);
+    const mergedComment = mergeReportModerationComment(
+      rep.commentaire,
+      rep,
+      [],
+      [],
+      variablesRef.current || [],
+      []
+    );
     const payloadRecord: any = {
       id: ref,
       interventionReference: ref,
       drapeaux: Array.isArray(rep.drapeaux) ? rep.drapeaux : [],
-      commentaire: rep.commentaire ?? '',
-      commentaireInterne: rep.commentaire ?? '',
+      commentaire: mergedComment,
+      commentaireInterne: mergedComment,
       disableClientEmail: Boolean(rep.disableClientEmail),
-      postInterventionAlerts: alerts,
+      ...buildFlatAlertFields(alerts),
     };
-    for (let i = 1; i <= 15; i++) {
-      const a = alerts[i - 1];
-      payloadRecord[`alerteTraite${i}`] = a ? Boolean(a.traite) : false;
-      payloadRecord[`alerteInfo${i}`] = a ? String(a.info || '') : '';
-    }
     gestionApresMapRef.current.set(ref.toLowerCase(), payloadRecord);
     const sheetUrl = getTenantSpreadsheetUrl('spreadsheetGestionApresIntervention', companyInfoRef.current);
+    if (!sheetUrl || !sheetUrl.trim()) return;
     fetch('/api/sheets/upsert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3551,6 +3605,7 @@ export default function App() {
         apparenceRapportsPdf: 'spreadsheetApparenceRapportsPdf',
         communicationPortailClient: 'spreadsheetCommunicationPortailClient',
         observateurActionsSuspectes: 'spreadsheetObservateurActionsSuspectes',
+        groupesZones: 'spreadsheetGroupesZones',
       };
 
       const persistSecondarySpreadsheetUrl = (fieldKey: string, resolvedUrl?: string) => {
@@ -3653,6 +3708,10 @@ export default function App() {
           case 'observateurActionsSuspectes':
             setSuspiciousActivityLogs([]);
             try { localStorage.removeItem(`defib_${activeTid}_suspicious_activity_logs`); } catch (_) {}
+            break;
+          case 'groupesZones':
+            setTeamWorkGroups([]);
+            try { localStorage.removeItem(`defib_${activeTid}_team_work_groups`); } catch (_) {}
             break;
           default:
             break;
@@ -4305,6 +4364,37 @@ export default function App() {
             setSuspiciousActivityLogs(mergedLogs);
             break;
           }
+          case 'groupesZones': {
+            const normalizedGroups: TeamWorkGroup[] = items
+              .filter((r: any) => r && (r.id || r.title))
+              .map((r: any, idx: number) => ({
+                id: String(r.id || `twg-${idx + 2}`).trim(),
+                title: String(r.title || '').trim(),
+                planners: Array.isArray(r.planners)
+                  ? r.planners.map((p: any) => String(p || '').trim()).filter(Boolean)
+                  : String(r.planners || '')
+                      .split(/[,;\n]+/)
+                      .map((p: string) => p.trim())
+                      .filter(Boolean),
+                technicians: Array.isArray(r.technicians)
+                  ? r.technicians.map((t: any) => String(t || '').trim()).filter(Boolean)
+                  : String(r.technicians || '')
+                      .split(/[,;\n]+/)
+                      .map((t: string) => t.trim())
+                      .filter(Boolean),
+                regions: Array.isArray(r.regions)
+                  ? r.regions.map((reg: any) => String(reg || '').trim()).filter(Boolean)
+                  : String(r.regions || '')
+                      .split(/[,;\n]+/)
+                      .map((reg: string) => reg.trim())
+                      .filter(Boolean),
+                ...(r._sheetRowNumber ? { _sheetRowNumber: r._sheetRowNumber } : {}),
+                _fromSpreadsheet: true,
+              }));
+            setTeamWorkGroups(normalizedGroups);
+            safeSetLocalStorage(`defib_${activeTid}_team_work_groups`, JSON.stringify(normalizedGroups));
+            break;
+          }
           default:
             break;
         }
@@ -4347,6 +4437,7 @@ export default function App() {
       spreadsheetApparenceRapportsPdf: 'apparenceRapportsPdf',
       spreadsheetCommunicationPortailClient: 'communicationPortailClient',
       spreadsheetObservateurActionsSuspectes: 'observateurActionsSuspectes',
+      spreadsheetGroupesZones: 'groupesZones',
     };
 
     const handleManualSheetRefresh = (e: Event) => {
@@ -4406,6 +4497,7 @@ export default function App() {
       'apparenceRapportsPdf',
       'communicationPortailClient',
       'observateurActionsSuspectes',
+      'groupesZones',
     ];
     const runAll = (force = false) => {
       secondaryTabTypes.forEach((tt) => {
@@ -5565,7 +5657,7 @@ export default function App() {
     if (total === 0) return "N/A";
 
     const pct = (finalEffectuees / total) * 100;
-    return pct % 1 === 0 ? `${pct.toFixed(0)} %` : `${pct.toFixed(1).replace('.', ',')} %`;
+    return pct % 1 === 0 ? `${pct.toFixed(0)}%` : `${pct.toFixed(1).replace('.', ',')}%`;
   }, [selectedFsmMonth, fsmMissionCounts, fsmTours]);
 
   const optimizeFsmTour = async (
@@ -7082,9 +7174,19 @@ export default function App() {
                   return itKeys.some(k => targetKeys.includes(k));
                 });
                 if (matchedSheetReport) {
+                  const localTitle = String(rawReport?.reportTitle || rawReport?.title || '').trim();
+                  const sheetTitle = String(matchedSheetReport?.reportTitle || matchedSheetReport?.title || '').trim();
+                  const resolvedTitle =
+                    localTitle && localTitle !== 'RAPPORT TECHNIQUE DÉFIBRILLATEUR' && !/^rapport d['’]intervention gmao$/i.test(localTitle)
+                      ? localTitle
+                      : sheetTitle && sheetTitle !== 'RAPPORT TECHNIQUE DÉFIBRILLATEUR' && !/^rapport d['’]intervention gmao$/i.test(sheetTitle)
+                      ? sheetTitle
+                      : 'RAPPORT D’INTERVENTION';
                   report = {
                     ...report,
                     ...matchedSheetReport,
+                    title: resolvedTitle,
+                    reportTitle: resolvedTitle,
                     defibSnapshot: {
                       ...(report.defibSnapshot || {}),
                       ...(matchedSheetReport.defibSnapshot || {}),
@@ -7760,7 +7862,11 @@ export default function App() {
     const pdfShowDemandeDevisDetails = effectiveCompanyInfo.pdfShowDemandeDevisDetails === 'Oui';
 
     const totalPages = hasLastPage ? 6 : 5;
-    const docTitle = report.reportTitle || report.title || 'Rapport d’intervention GMAO';
+    const rawDocTitle = String(report.reportTitle || report.title || snapshot.reportTitle || snapshot.title || '').trim();
+    const docTitle =
+      !rawDocTitle || rawDocTitle === 'RAPPORT TECHNIQUE DÉFIBRILLATEUR' || /^rapport d['’]intervention gmao$/i.test(rawDocTitle)
+        ? 'RAPPORT D’INTERVENTION'
+        : rawDocTitle;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -9044,7 +9150,6 @@ export default function App() {
         syncTasks.push(syncBackground<any[]>('fsmMissionCounts', 'fsm_mission_counts', setFsmMissionCounts));
         syncTasks.push(syncBackground<Memo[]>('memos', 'memos', setMemos));
         syncTasks.push(syncBackground<PointageAutoVigilance[]>('pointagesAutoVigilance', 'pointages_auto_vigilance', setPointagesAutoVigilance));
-        syncTasks.push(syncBackground<TeamWorkGroup[]>('teamWorkGroups', 'team_work_groups', setTeamWorkGroups));
 
         const currentEmail = loggedUser?.email?.trim().toLowerCase();
         if (currentEmail && tenantId && tenantId !== 'demo') {
@@ -11811,7 +11916,7 @@ export default function App() {
   };
 
   // Cross-tab single instance guard (Logiciel principal ou Webapp)
-  if (isDuplicateTab) {
+  if (isDuplicateTab && !(typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'gmao')) {
     return (
       <div 
         className="fixed inset-0 z-[999999] flex flex-col items-center justify-center text-center font-sans p-6 select-none" 
@@ -12589,7 +12694,7 @@ export default function App() {
       </aside>
 
       {/* RIGHT SIDE CONTAINER */}
-      <div className="flex-1 min-w-0 flex flex-col min-h-screen bg-white">
+      <div className={`flex-1 min-w-0 flex flex-col bg-white ${activeTab === 'messagerie' ? 'h-screen max-h-screen overflow-hidden' : 'min-h-screen'}`}>
         {isSubscriptionInactive && (
           <div 
             className="sticky top-0 z-[100] w-full bg-[#F9383C] text-white py-3.5 px-6 flex items-center justify-between font-sans shadow-md"
@@ -13070,7 +13175,7 @@ export default function App() {
               <div className="space-y-6 animate-fadeIn" id="fsm-tab-container">
                 <style>{`
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-fsm-input),
-                  #fsm-tab-container select:not(#select-fsm-tour-manage):not(#fsm-bulk-assign-tour-dropdown),
+                  #fsm-tab-container select:not(#select-fsm-tour-manage):not(#fsm-bulk-assign-tour-dropdown):not(.planning-side-select),
                   #fsm-tab-container textarea {
                     padding: 12px !important;
                     border: 1px solid #DCE1EA !important;
@@ -13084,6 +13189,13 @@ export default function App() {
                     outline: none !important;
                     transition: all 0s !important;
                   }
+                  #fsm-tab-container select.planning-side-select {
+                    background-color: rgb(245, 247, 250) !important;
+                    background: rgb(245, 247, 250) !important;
+                    border: none !important;
+                    font-size: 18px !important;
+                    color: rgb(80, 97, 122) !important;
+                  }
                   #fsm-tab-container .fsm-card input::placeholder,
                   #fsm-tab-container .fsm-card textarea::placeholder,
                   #fsm-tab-container input:not(#search-fsm-input)::placeholder,
@@ -13093,8 +13205,8 @@ export default function App() {
                   }
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-fsm-input),
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-fsm-input),
-                  #fsm-tab-container select:hover:not(:disabled):not(#fsm-more-options-dropdown):not(#select-fsm-tour-manage):not(#fsm-bulk-assign-tour-dropdown),
-                  #fsm-tab-container select:focus:not(:disabled):not(#fsm-more-options-dropdown):not(#select-fsm-tour-manage):not(#fsm-bulk-assign-tour-dropdown),
+                  #fsm-tab-container select:hover:not(:disabled):not(#fsm-more-options-dropdown):not(#select-fsm-tour-manage):not(#fsm-bulk-assign-tour-dropdown):not(.planning-side-select),
+                  #fsm-tab-container select:focus:not(:disabled):not(#fsm-more-options-dropdown):not(#select-fsm-tour-manage):not(#fsm-bulk-assign-tour-dropdown):not(.planning-side-select),
                   #fsm-tab-container textarea:hover:not(:disabled),
                   #fsm-tab-container textarea:focus:not(:disabled),
                   #fsm-tab-container #search-fsm-input:hover,
@@ -13166,8 +13278,9 @@ export default function App() {
                   #fsm-stats-container {
                     width: 100% !important;
                     max-width: 100% !important;
-                    background: transparent !important;
-                    background-color: transparent !important;
+                    background: rgb(245, 247, 250) !important;
+                    background-color: rgb(245, 247, 250) !important;
+                    border: none !important;
                     box-sizing: border-box !important;
                   }
                   #fsm-tab-container select#select-fsm-month-stats,
@@ -13220,6 +13333,7 @@ export default function App() {
                   #fsm-planning-side-pane-body {
                     background-color: #ffffff !important;
                     background: #ffffff !important;
+                    border-left: none !important;
                   }
                   #fsm-filter-side-pane,
                   #fsm-filter-side-pane-body,
@@ -13237,8 +13351,14 @@ export default function App() {
                   #fsm-team-side-pane h4,
                   #fsm-team-side-pane span,
                   #fsm-team-side-pane div:not(button) {
-                    color: #50617A !important;
+                    color: #000000 !important;
                     font-size: 18px !important;
+                  }
+                  .fsm-group-selected-pill:hover,
+                  .fsm-deletable-pill:hover {
+                    background-color: rgb(210, 45, 11) !important;
+                    background: rgb(210, 45, 11) !important;
+                    color: #ffffff !important;
                   }
                 `}</style>
 
@@ -13286,6 +13406,14 @@ export default function App() {
                                     } catch (_) {}
                                     return next;
                                   });
+                                } else if (val === 'toggle-tech-skills') {
+                                  setIsFsmTechSkillsHidden(prev => {
+                                    const next = !prev;
+                                    try {
+                                      localStorage.setItem('defib_hide_fsm_tech_skills', String(next));
+                                    } catch (_) {}
+                                    return next;
+                                  });
                                 } else if (val === 'spreadsheet-tournees') {
                                   if (tourneesUrl) openTenantSpreadsheetUrl(tourneesUrl);
                                 } else if (val === 'spreadsheet-missions') {
@@ -13294,6 +13422,7 @@ export default function App() {
                                   setIsFsmFilterSidePaneOpen(true);
                                 } else if (val === 'open-groups') {
                                   setIsFsmTeamPaneOpen(true);
+                                  refreshGenericSheetCompartment('groupesZones', true);
                                 } else if (val === 'avisage-form-template') {
                                   openTenantSpreadsheetUrl('https://consoledefibeo.deroesch.com/validation-passage?ref=demo&tenant=D');
                                 }
@@ -13305,6 +13434,9 @@ export default function App() {
                               </option>
                               <option value="toggle-stats">
                                 {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer les statistiques")}
+                              </option>
+                              <option value="toggle-tech-skills">
+                                {isFsmTechSkillsHidden ? translate("Afficher infos compétences techniciens") : translate("Masquer infos compétences techniciens")}
                               </option>
                               <option value="spreadsheet-tournees" disabled={!tourneesUrl}>
                                 {translate("Ouvrir l’éditeur Spreadsheets Tournées")}
@@ -13380,7 +13512,7 @@ export default function App() {
                       </button>
 
                       {/* Field recherche (Search input) */}
-                      <div className="relative w-full sm:w-48">
+                      <div className="relative w-full sm:w-64">
                         <input
                           ref={fsmSearchInputRef}
                           type="text"
@@ -13524,166 +13656,6 @@ export default function App() {
                       </div>
                     </div>
                   </div>
-
-                  {/* Bulk Selection Action Status Bar */}
-                  {selectedFsmMissionIds.length > 0 && (() => {
-                    const isInATrier = activeDateFilter === 'A trier' || (() => {
-                      const aTrierTour = fsmTours.find((t: any) => t.id === 'a-trier');
-                      const aTrierMissionIds = new Set((aTrierTour?.missions || []).map((m: any) => m.id));
-                      return selectedFsmMissionIds.length > 0 && selectedFsmMissionIds.every(id => aTrierMissionIds.has(id));
-                    })();
-                    const draftToursForLookup = fsmTours.filter(t => isDraftTour(t));
-
-                    return (
-                    <div 
-                      className="p-4 flex flex-wrap items-center justify-between gap-4 animate-fadeIn w-full" 
-                      id="fsm-bulk-actions-status-bar"
-                      style={{
-                        backgroundColor: 'rgb(245 247 250)',
-                        border: 'none',
-                        borderRadius: '16px',
-                        marginTop: '12px',
-                      }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span 
-                          className="rounded-full flex items-center justify-center font-bold font-sans shrink-0"
-                          style={{
-                            background: '#3ddc84',
-                            color: '#156337',
-                            fontSize: '18px',
-                            padding: '11px 10px 9px 10px',
-                            width: '30px',
-                            height: '30px',
-                          }}
-                        >
-                          {selectedFsmMissionIds.length}
-                        </span>
-                        <span 
-                          className="font-sans"
-                          style={{ fontSize: '18px', color: '#000000', fontWeight: '100', cursor: 'default' }}
-                        >
-                          Sélectionné(s)
-                        </span>
-                      </div>
-                      
-                      <div className="flex flex-wrap items-center gap-2">
-                        {/* À trier */}
-                        <button
-                          type="button"
-                          disabled={isInATrier}
-                          onClick={() => {
-                            if (isInATrier) return;
-                            bulkMoveFsmMissionsToATrier();
-                          }}
-                          id="btn-bulk-a-trier"
-                          style={{
-                            backgroundColor: 'rgb(15, 23, 42)',
-                            background: 'rgb(15, 23, 42)',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '13px',
-                            padding: '9px 18px',
-                            fontSize: '18px',
-                            fontWeight: '600',
-                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                            cursor: isInATrier ? 'not-allowed' : 'pointer',
-                            opacity: isInATrier ? 0.45 : 1,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            height: '42px',
-                            boxSizing: 'border-box',
-                            lineHeight: '1.25',
-                          }}
-                          className={`${isInATrier ? 'cursor-not-allowed opacity-45' : 'hover:opacity-90'} transition-opacity`}
-                        >
-                          À trier
-                        </button>
-                        
-                        {/* Transférer (System Lookup Dropdown des tournées existantes en statut brouillon) */}
-                        <div className="relative inline-flex items-center">
-                          <button
-                            type="button"
-                            id="btn-bulk-assign-tour"
-                            style={{
-                              backgroundColor: 'rgb(15, 23, 42)',
-                              background: 'rgb(15, 23, 42)',
-                              color: '#ffffff',
-                              border: 'none',
-                              borderRadius: '13px',
-                              padding: '9px 18px',
-                              fontSize: '18px',
-                              fontWeight: '600',
-                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                              cursor: 'pointer',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              height: '42px',
-                              boxSizing: 'border-box',
-                              lineHeight: '1.25',
-                            }}
-                            className="hover:opacity-90 transition-opacity pointer-events-none"
-                          >
-                            Transférer
-                          </button>
-                          <select
-                            id="fsm-bulk-assign-tour-dropdown"
-                            aria-label="Transférer"
-                            value=""
-                            onChange={(e) => {
-                              const targetTourId = e.target.value;
-                              if (targetTourId) {
-                                bulkAssignFsmMissionsToTour(targetTourId);
-                              }
-                            }}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
-                          >
-                            <option value="" disabled>
-                              {draftToursForLookup.length === 0
-                                ? 'Aucune tournée en brouillon disponible'
-                                : 'Sélectionner une tournée en brouillon'}
-                            </option>
-                            {draftToursForLookup.map(t => (
-                              <option key={t.id} value={t.id}>
-                                {t.title || `Tournée ${t.id}`} ({t.startDate || 'Date non définie'})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Supprimer */}
-                        <button
-                          type="button"
-                          onClick={bulkCancelFsmMissions}
-                          id="btn-bulk-cancel-intervention"
-                          style={{
-                            backgroundColor: 'rgb(15, 23, 42)',
-                            background: 'rgb(15, 23, 42)',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '13px',
-                            padding: '9px 18px',
-                            fontSize: '18px',
-                            fontWeight: '600',
-                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            height: '42px',
-                            boxSizing: 'border-box',
-                            lineHeight: '1.25',
-                          }}
-                          className="hover:opacity-90 transition-opacity"
-                        >
-                          Supprimer
-                        </button>
-                      </div>
-                    </div>
-                    );
-                  })()}
                 </div>
 
                 {/* Side-pane popup pour le planning */}
@@ -13703,7 +13675,7 @@ export default function App() {
                         background: '#ffffff',
                         boxShadow: 'none',
                         borderRadius: '0px',
-                        borderLeft: '1px solid #e2e8f0',
+                        borderLeft: 'none',
                       }}
                     >
                       {/* Body side-pane : Vue Planning */}
@@ -13732,7 +13704,7 @@ export default function App() {
                         />
                       </div>
 
-                      {/* Bouton noir floating full width Fermer */}
+                      {/* Bouton floating full width Fermer */}
                       <button
                         onClick={() => setFsmPlanningSidePaneOpen(false)}
                         style={{
@@ -13741,7 +13713,8 @@ export default function App() {
                           left: '16px',
                           right: '16px',
                           width: 'calc(100% - 32px)',
-                          backgroundColor: '#0f172a',
+                          backgroundColor: 'rgb(210, 45, 11)',
+                          background: 'rgb(210, 45, 11)',
                           color: '#ffffff',
                           fontSize: '18px',
                           fontWeight: '600',
@@ -13752,7 +13725,7 @@ export default function App() {
                           boxShadow: 'none',
                           border: 'none',
                         }}
-                        className="hover:bg-neutral-800 transition-colors"
+                        className="hover:opacity-90 transition-opacity"
                       >
                         Fermer
                       </button>
@@ -13784,17 +13757,11 @@ export default function App() {
                       <div
                         id="fsm-filter-side-pane-body"
                         className="flex-1 overflow-y-auto p-6 space-y-6 pb-28 font-sans"
-                        style={{ backgroundColor: '#F5F7FA', background: '#F5F7FA', color: '#50617A', fontSize: '18px' }}
+                        style={{ backgroundColor: '#F5F7FA', background: '#F5F7FA', color: '#000000', fontSize: '18px' }}
                       >
-                        <div>
-                          <h3 style={{ fontSize: '18px', fontWeight: 'bold', fontFamily: '"DefibeoMain", "Civilprom", sans-serif', color: '#50617A' }}>
-                            Filtres
-                          </h3>
-                        </div>
-
                         {/* Filter: Région */}
                         <div>
-                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#50617A', fontSize: '18px' }}>
+                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#000000', fontSize: '18px' }}>
                             Région
                           </label>
                           <select
@@ -13821,7 +13788,7 @@ export default function App() {
 
                         {/* Filter: Technicien */}
                         <div>
-                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#50617A', fontSize: '18px' }}>
+                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#000000', fontSize: '18px' }}>
                             Technicien
                           </label>
                           <select
@@ -13852,7 +13819,7 @@ export default function App() {
 
                         {/* Filter: Employé */}
                         <div>
-                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#50617A', fontSize: '18px' }}>
+                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#000000', fontSize: '18px' }}>
                             Employé
                           </label>
                           <select
@@ -13887,7 +13854,7 @@ export default function App() {
 
                         {/* Filter: Client. */}
                         <div>
-                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#50617A', fontSize: '18px' }}>
+                          <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ color: '#000000', fontSize: '18px' }}>
                             Client.
                           </label>
                           <select
@@ -13912,68 +13879,95 @@ export default function App() {
                           </select>
                         </div>
 
-                        {/* Filter: Rejeté Technicien ou Refus Client (Apple-like toggle) */}
+                        {/* Filter: Rejeté Technicien ou Refus Client */}
                         <div className="pt-2">
-                          <label className="flex items-center justify-between cursor-pointer select-none" style={{ color: '#50617A', fontSize: '18px' }}>
-                            <span className="text-[18px] font-sans font-semibold" style={{ color: '#50617A', fontSize: '18px' }}>
+                          <label
+                            onClick={() => setFsmRejectedOrRefusedFilter(!fsmRejectedOrRefusedFilter)}
+                            className="flex items-center justify-between cursor-pointer select-none"
+                            style={{ color: '#000000', fontSize: '18px' }}
+                          >
+                            <span className="text-[18px] font-sans font-semibold" style={{ color: '#000000', fontSize: '18px' }}>
                               Rejeté Technicien ou Refus Client
                             </span>
                             <div
-                              onClick={() => setFsmRejectedOrRefusedFilter(!fsmRejectedOrRefusedFilter)}
-                              className={`w-12 h-7 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out ${
-                                fsmRejectedOrRefusedFilter ? 'bg-[#34c759]' : 'bg-neutral-300'
-                              }`}
+                              style={{
+                                width: '34px',
+                                height: '18px',
+                                borderRadius: '9999px',
+                                backgroundColor: fsmRejectedOrRefusedFilter ? '#2e54ff' : '#cbd5e1',
+                                position: 'relative',
+                                transition: 'background-color 0.2s ease',
+                                padding: '2px',
+                                flexShrink: 0,
+                              }}
                             >
                               <div
-                                className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
-                                  fsmRejectedOrRefusedFilter ? 'translate-x-5' : 'translate-x-0'
-                                }`}
+                                style={{
+                                  width: '14px',
+                                  height: '14px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#ffffff',
+                                  position: 'absolute',
+                                  top: '2px',
+                                  left: fsmRejectedOrRefusedFilter ? '18px' : '2px',
+                                  transition: 'left 0.2s ease',
+                                }}
                               />
                             </div>
                           </label>
                         </div>
 
-                        {/* Filter: Données de ma zone/groupe uniquement (Apple-like toggle) */}
+                        {/* Filter: Données de ma zone/groupe uniquement */}
                         <div className="pt-2">
                           <label 
+                            onClick={() => {
+                              if (teamWorkGroups.length === 0) return;
+                              const nextVal = !fsmOnlyMyZoneFilter;
+                              setFsmOnlyMyZoneFilter(nextVal);
+                              try {
+                                const curTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+                                localStorage.setItem(`defib_${curTenant}_fsm_only_my_zone`, String(nextVal));
+                              } catch (_) {}
+                            }}
                             className={`flex items-center justify-between select-none ${
                               teamWorkGroups.length > 0 ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                             }`}
-                            style={{ color: '#50617A', fontSize: '18px' }}
+                            style={{ color: '#000000', fontSize: '18px' }}
                             title={teamWorkGroups.length === 0 ? "Aucune zone/groupe créée dans les Réglages de l'équipe" : undefined}
                           >
                             <div className="flex flex-col pr-2">
-                              <span className="text-[18px] font-sans font-semibold" style={{ color: '#50617A', fontSize: '18px' }}>
+                              <span className="text-[18px] font-sans font-semibold" style={{ color: '#000000', fontSize: '18px' }}>
                                 Données de ma zone/groupe uniquement
                               </span>
                               {teamWorkGroups.length === 0 && (
-                                <span className="text-[18px]" style={{ color: '#50617A', fontSize: '18px' }}>
+                                <span className="text-[18px]" style={{ color: '#000000', fontSize: '18px' }}>
                                   Désactivé (aucune zone configurée)
                                 </span>
                               )}
                             </div>
                             <div
-                              onClick={() => {
-                                if (teamWorkGroups.length === 0) return;
-                                const nextVal = !fsmOnlyMyZoneFilter;
-                                setFsmOnlyMyZoneFilter(nextVal);
-                                try {
-                                  const curTenant = localStorage.getItem('defib_tenant_id') || 'demo';
-                                  localStorage.setItem(`defib_${curTenant}_fsm_only_my_zone`, String(nextVal));
-                                } catch (_) {}
+                              style={{
+                                width: '34px',
+                                height: '18px',
+                                borderRadius: '9999px',
+                                backgroundColor: fsmOnlyMyZoneFilter && teamWorkGroups.length > 0 ? '#2e54ff' : '#cbd5e1',
+                                position: 'relative',
+                                transition: 'background-color 0.2s ease',
+                                padding: '2px',
+                                flexShrink: 0,
                               }}
-                              className={`w-12 h-7 flex items-center rounded-full p-1 transition-colors duration-200 ease-in-out shrink-0 ${
-                                teamWorkGroups.length === 0
-                                  ? 'bg-neutral-200 cursor-not-allowed'
-                                  : fsmOnlyMyZoneFilter
-                                  ? 'bg-[#34c759] cursor-pointer'
-                                  : 'bg-neutral-300 cursor-pointer'
-                              }`}
                             >
                               <div
-                                className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
-                                  fsmOnlyMyZoneFilter && teamWorkGroups.length > 0 ? 'translate-x-5' : 'translate-x-0'
-                                }`}
+                                style={{
+                                  width: '14px',
+                                  height: '14px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#ffffff',
+                                  position: 'absolute',
+                                  top: '2px',
+                                  left: fsmOnlyMyZoneFilter && teamWorkGroups.length > 0 ? '18px' : '2px',
+                                  transition: 'left 0.2s ease',
+                                }}
                               />
                             </div>
                           </label>
@@ -13997,7 +13991,7 @@ export default function App() {
                                 } catch (_) {}
                               }}
                               className="w-full text-center py-2 text-[18px] cursor-pointer font-sans underline"
-                              style={{ color: '#50617A', fontSize: '18px' }}
+                              style={{ color: '#000000', fontSize: '18px' }}
                             >
                               Réinitialiser tous les filtres
                             </button>
@@ -14005,7 +13999,7 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Bouton noir floating full width Fermer */}
+                      {/* Bouton floating full width Fermer */}
                       <button
                         onClick={() => setIsFsmFilterSidePaneOpen(false)}
                         style={{
@@ -14014,7 +14008,8 @@ export default function App() {
                           left: '16px',
                           right: '16px',
                           width: 'calc(100% - 32px)',
-                          backgroundColor: '#0f172a',
+                          backgroundColor: 'rgb(210, 45, 11)',
+                          background: 'rgb(210, 45, 11)',
                           color: '#ffffff',
                           fontSize: '18px',
                           fontWeight: '600',
@@ -14025,7 +14020,7 @@ export default function App() {
                           boxShadow: 'none',
                           border: 'none',
                         }}
-                        className="hover:bg-neutral-800 transition-colors"
+                        className="hover:opacity-90 transition-opacity"
                       >
                         Fermer
                       </button>
@@ -14061,7 +14056,7 @@ export default function App() {
                       <div
                         id="fsm-team-side-pane-body"
                         className="flex-1 overflow-y-auto p-6 space-y-6 pb-32 font-sans"
-                        style={{ backgroundColor: '#F5F7FA', background: '#F5F7FA', color: '#50617A', fontSize: '18px' }}
+                        style={{ backgroundColor: '#F5F7FA', background: '#F5F7FA', color: '#000000', fontSize: '18px' }}
                       >
                         {/* If in creation or edit mode, show form */}
                         {(isCreatingGroup || editingGroupId) ? (
@@ -14069,13 +14064,13 @@ export default function App() {
                             className="space-y-5 p-5 rounded-2xl animate-fadeIn"
                             style={{ background: '#E9EBEF', backgroundColor: '#E9EBEF', border: 'none' }}
                           >
-                            <h4 style={{ fontSize: '18px', fontWeight: 'bold', color: '#50617A', fontFamily: "'Civilprom', 'DefibeoMain', sans-serif" }}>
+                            <h4 style={{ fontSize: '18px', fontWeight: 'bold', color: '#000000', fontFamily: "'Civilprom', 'DefibeoMain', sans-serif" }}>
                               {editingGroupId ? "Modifier le groupe" : "Nouveau groupe et zone"}
                             </h4>
 
                             {/* Titre du groupe (one line max 20 car.) */}
                             <div>
-                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
+                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#000000', fontSize: '18px' }}>
                                 Titre du groupe.
                               </label>
                               <input
@@ -14094,21 +14089,21 @@ export default function App() {
                                   fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                                 }}
                               />
-                              <div className="text-right mt-1" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
+                              <div className="text-right mt-1" style={{ cursor: 'default', color: '#000000', fontSize: '18px' }}>
                                 {groupTitle.length} / 20
                               </div>
                             </div>
 
                             {/* Planificateur(s) (exclure techniciens) */}
                             <div>
-                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
+                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#000000', fontSize: '18px' }}>
                                 Planificateur(s)
                               </label>
                               {(() => {
                                 const nonTechMembers = members.filter(m => !isTechnicianMember(m));
                                 if (nonTechMembers.length === 0) {
                                   return (
-                                    <div className="italic" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
+                                    <div className="italic" style={{ cursor: 'default', color: '#000000', fontSize: '18px' }}>
                                       Aucun planificateur disponible
                                     </div>
                                   );
@@ -14126,6 +14121,7 @@ export default function App() {
                                               isSelected ? prev.filter(n => n !== m.name) : [...prev, m.name]
                                             );
                                           }}
+                                          className={isSelected ? 'fsm-group-selected-pill transition-colors' : 'transition-colors'}
                                           style={{
                                             borderRadius: '1000px',
                                             padding: '8px 18px',
@@ -14133,7 +14129,7 @@ export default function App() {
                                             fontWeight: isSelected ? '600' : '400',
                                             backgroundColor: isSelected ? '#0f172a' : '#ffffff',
                                             color: isSelected ? '#ffffff' : '#000000',
-                                            border: isSelected ? '1px solid #000000' : '1px solid #dedede',
+                                            border: 'none',
                                             cursor: 'pointer',
                                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                                           }}
@@ -14149,14 +14145,14 @@ export default function App() {
 
                             {/* Technicien(s) (exclure membres classiques) */}
                             <div>
-                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
+                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#000000', fontSize: '18px' }}>
                                 Technicien(s)
                               </label>
                               {(() => {
                                 const techMembers = members.filter(m => isTechnicianMember(m));
                                 if (techMembers.length === 0) {
                                   return (
-                                    <div className="italic" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
+                                    <div className="italic" style={{ cursor: 'default', color: '#000000', fontSize: '18px' }}>
                                       Aucun technicien disponible
                                     </div>
                                   );
@@ -14174,6 +14170,7 @@ export default function App() {
                                               isSelected ? prev.filter(n => n !== m.name) : [...prev, m.name]
                                             );
                                           }}
+                                          className={isSelected ? 'fsm-group-selected-pill transition-colors' : 'transition-colors'}
                                           style={{
                                             borderRadius: '1000px',
                                             padding: '8px 18px',
@@ -14181,7 +14178,7 @@ export default function App() {
                                             fontWeight: isSelected ? '600' : '400',
                                             backgroundColor: isSelected ? '#0f172a' : '#ffffff',
                                             color: isSelected ? '#ffffff' : '#000000',
-                                            border: isSelected ? '1px solid #000000' : '1px solid #dedede',
+                                            border: 'none',
                                             cursor: 'pointer',
                                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                                           }}
@@ -14197,10 +14194,10 @@ export default function App() {
 
                             {/* Région(s) */}
                             <div>
-                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#50617A', fontSize: '18px' }}>
+                              <label className="block text-[18px] font-semibold mb-1.5 font-sans" style={{ cursor: 'default', color: '#000000', fontSize: '18px' }}>
                                 Région(s)
                               </label>
-                              <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto p-1 bg-white border border-neutral-200 rounded-xl">
+                              <div className="flex flex-wrap gap-2">
                                 {getRegionsForCountry('France').map(r => {
                                   const isSelected = groupRegions.includes(r);
                                   return (
@@ -14212,6 +14209,7 @@ export default function App() {
                                           isSelected ? prev.filter(x => x !== r) : [...prev, r]
                                         );
                                       }}
+                                      className={isSelected ? 'fsm-group-selected-pill transition-colors' : 'transition-colors'}
                                       style={{
                                         borderRadius: '1000px',
                                         padding: '8px 18px',
@@ -14219,7 +14217,7 @@ export default function App() {
                                         fontWeight: isSelected ? '600' : '400',
                                         backgroundColor: isSelected ? '#0f172a' : '#ffffff',
                                         color: isSelected ? '#ffffff' : '#000000',
-                                        border: isSelected ? '1px solid #000000' : '1px solid #dedede',
+                                        border: 'none',
                                         cursor: 'pointer',
                                         fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                                       }}
@@ -14231,14 +14229,16 @@ export default function App() {
                               </div>
                             </div>
 
-                            {/* Button Enregistrer (Bleu, 18px) */}
-                            <div className="flex items-center gap-3 pt-2">
+                            {/* Button Enregistrer (Bleu, 18px, full width) */}
+                            <div className="flex items-center gap-3 pt-2 w-full">
                               <button
                                 type="button"
                                 onClick={handleSaveTeamWorkGroup}
                                 style={{
                                   ...blueButtonStyle,
-                                  backgroundColor: '#2e54ff',
+                                  width: '100%',
+                                  backgroundColor: 'rgb(46, 84, 255)',
+                                  background: 'rgb(46, 84, 255)',
                                   color: '#ffffff',
                                   borderRadius: '12px',
                                   padding: '12px 24px',
@@ -14248,7 +14248,7 @@ export default function App() {
                                   border: 'none',
                                   fontFamily: "'DefibeoMain', 'Civilprom', sans-serif"
                                 }}
-                                className="hover:opacity-95 transition-opacity"
+                                className="w-full hover:opacity-95 transition-opacity"
                               >
                                 {editingGroupId ? "Enregistrer" : "Créer le groupe"}
                               </button>
@@ -14268,11 +14268,12 @@ export default function App() {
                                   backgroundColor: '#E9EBEF',
                                   border: 'none',
                                   boxShadow: 'none',
-                                  cursor: 'default'
+                                  cursor: 'default',
+                                  color: '#000000'
                                 }}
                               >
                                 <div className="flex items-center justify-between gap-2" style={{ cursor: 'default' }}>
-                                  <h4 style={{ fontSize: '18px', fontWeight: 'bold', color: '#50617A', cursor: 'default' }}>
+                                  <h4 style={{ fontSize: '18px', fontWeight: 'bold', color: '#000000', cursor: 'default' }}>
                                     {g.title}
                                   </h4>
                                   <div className="flex items-center gap-2">
@@ -14280,11 +14281,12 @@ export default function App() {
                                       type="button"
                                       onClick={() => handleEditTeamWorkGroup(g)}
                                       style={{
-                                        backgroundColor: '#0f172a',
+                                        backgroundColor: 'rgb(46, 84, 255)',
+                                        background: 'rgb(46, 84, 255)',
                                         color: '#ffffff',
                                         borderRadius: '11px',
                                         padding: '7px 16px',
-                                        fontSize: '16px',
+                                        fontSize: '18px',
                                         fontWeight: 600,
                                         border: 'none',
                                         cursor: 'pointer',
@@ -14298,11 +14300,12 @@ export default function App() {
                                       type="button"
                                       onClick={() => handleDeleteTeamWorkGroup(g.id)}
                                       style={{
-                                        backgroundColor: '#dc2626',
+                                        backgroundColor: 'rgb(210, 45, 11)',
+                                        background: 'rgb(210, 45, 11)',
                                         color: '#ffffff',
                                         borderRadius: '11px',
                                         padding: '7px 16px',
-                                        fontSize: '16px',
+                                        fontSize: '18px',
                                         fontWeight: 600,
                                         border: 'none',
                                         cursor: 'pointer',
@@ -14315,18 +14318,18 @@ export default function App() {
                                   </div>
                                 </div>
 
-                                <div className="space-y-1.5" style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>
-                                  <div style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>
-                                    <span className="font-semibold" style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>Planificateur(s) : </span>
-                                    <span style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>{g.planners && g.planners.length > 0 ? g.planners.join(', ') : 'Aucun'}</span>
+                                <div className="space-y-1.5" style={{ cursor: 'default', fontSize: '18px', color: '#000000' }}>
+                                  <div style={{ cursor: 'default', fontSize: '18px', color: '#000000' }}>
+                                    <span className="font-semibold" style={{ cursor: 'default', fontSize: '18px', color: '#000000' }}>Planificateur(s) : </span>
+                                    <span style={{ cursor: 'default', fontSize: '18px', color: '#000000' }}>{g.planners && g.planners.length > 0 ? g.planners.join(', ') : 'Aucun'}</span>
                                   </div>
-                                  <div style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>
-                                    <span className="font-semibold" style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>Technicien(s) : </span>
-                                    <span style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>{g.technicians && g.technicians.length > 0 ? g.technicians.join(', ') : 'Aucun'}</span>
+                                  <div style={{ cursor: 'default', fontSize: '18px', color: '#000000' }}>
+                                    <span className="font-semibold" style={{ cursor: 'default', fontSize: '18px', color: '#000000' }}>Technicien(s) : </span>
+                                    <span style={{ cursor: 'default', fontSize: '18px', color: '#000000' }}>{g.technicians && g.technicians.length > 0 ? g.technicians.join(', ') : 'Aucun'}</span>
                                   </div>
-                                  <div style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>
-                                    <span className="font-semibold" style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>Région(s) : </span>
-                                    <span style={{ cursor: 'default', fontSize: '18px', color: '#50617A' }}>{g.regions && g.regions.length > 0 ? g.regions.join(', ') : 'Aucune'}</span>
+                                  <div style={{ cursor: 'default', fontSize: '18px', color: '#000000' }}>
+                                    <span className="font-semibold" style={{ cursor: 'default', fontSize: '18px', color: '#000000' }}>Région(s) : </span>
+                                    <span style={{ cursor: 'default', fontSize: '18px', color: '#000000' }}>{g.regions && g.regions.length > 0 ? g.regions.join(', ') : 'Aucune'}</span>
                                   </div>
                                 </div>
                               </div>
@@ -14360,7 +14363,8 @@ export default function App() {
                             }}
                             style={{
                               width: '100%',
-                              backgroundColor: '#2e54ff',
+                              backgroundColor: 'rgb(46, 84, 255)',
+                              background: 'rgb(46, 84, 255)',
                               color: '#ffffff',
                               fontSize: '18px',
                               fontWeight: '600',
@@ -14368,7 +14372,7 @@ export default function App() {
                               borderRadius: '12px',
                               cursor: 'pointer',
                               border: 'none',
-                              boxShadow: '0 4px 12px rgba(53, 86, 236, 0.25)',
+                              boxShadow: 'none',
                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                             }}
                             className="hover:opacity-90 transition-all"
@@ -14379,7 +14383,8 @@ export default function App() {
                             onClick={() => setIsFsmTeamPaneOpen(false)}
                             style={{
                               width: '100%',
-                              backgroundColor: '#0f172a',
+                              backgroundColor: 'rgb(210, 45, 11)',
+                              background: 'rgb(210, 45, 11)',
                               color: '#ffffff',
                               fontSize: '18px',
                               fontWeight: '600',
@@ -14450,9 +14455,9 @@ export default function App() {
                         alignItems: 'center',
                         gap: '12px',
                         padding: '10px 14px',
-                        backgroundColor: 'transparent',
-                        background: 'transparent',
-                        border: '1px solid rgb(218, 218, 218)',
+                        backgroundColor: 'rgb(245, 247, 250)',
+                        background: 'rgb(245, 247, 250)',
+                        border: 'none',
                         borderRadius: '16px',
                         boxSizing: 'border-box'
                       }}
@@ -14466,7 +14471,8 @@ export default function App() {
                             <button
                               type="button"
                               id="btn-fsm-month-stats"
-                              className="inline-flex items-center justify-center text-center select-none hover:opacity-90 active:scale-95 transition-all"
+                              onMouseDown={() => triggerFsmPillWave('fsm-month-stats-btn')}
+                              className={`relative overflow-hidden inline-flex items-center justify-center text-center select-none hover:opacity-90 transition-all ${fsmClickedPill?.id === 'fsm-month-stats-btn' ? 'sidebar-nav-click-shrink-wave' : ''}`}
                               style={{
                                 backgroundColor: '#0f172a',
                                 border: 'none',
@@ -14487,6 +14493,7 @@ export default function App() {
                             <select
                               id="select-fsm-month-stats"
                               value={selectedFsmMonth}
+                              onMouseDown={() => triggerFsmPillWave('fsm-month-stats-btn')}
                               onChange={(e) => setSelectedFsmMonth(e.target.value)}
                               title={translate("Sélectionner le mois")}
                               style={{
@@ -14516,21 +14523,22 @@ export default function App() {
                         id="fsm-avg-intervention-time-indicator"
                         style={{
                           padding: '9px 20px',
-                          backgroundColor: 'transparent',
-                          border: '1px solid rgb(218, 218, 218)',
+                          backgroundColor: 'rgb(233, 235, 239)',
+                          background: 'rgb(233, 235, 239)',
+                          border: 'none',
                           borderRadius: '1000px',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          fontSize: '15px',
+                          fontSize: '18px',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                           color: '#000000',
                           cursor: 'default',
                         }}
                       >
-                        <span style={{ fontWeight: 400, color: '#000000', marginRight: '6px' }}>
+                        <span style={{ fontWeight: 400, color: '#000000', marginRight: '6px', fontSize: '18px' }}>
                           {translate("Temps moyen d’une intervention :")}
                         </span>
-                        <span style={{ fontWeight: 700, color: '#000000' }}>
+                        <span style={{ fontWeight: 700, color: '#000000', fontSize: '18px' }}>
                           {avgInterventionMinutesStr}
                         </span>
                       </div>
@@ -14540,21 +14548,22 @@ export default function App() {
                         id="fsm-co2-preserved-indicator"
                         style={{
                           padding: '9px 20px',
-                          backgroundColor: 'transparent',
-                          border: '1px solid rgb(218, 218, 218)',
+                          backgroundColor: 'rgb(233, 235, 239)',
+                          background: 'rgb(233, 235, 239)',
+                          border: 'none',
                           borderRadius: '1000px',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          fontSize: '15px',
+                          fontSize: '18px',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                           color: '#000000',
                           cursor: 'default',
                         }}
                       >
-                        <span style={{ fontWeight: 700, color: '#000000', marginRight: '6px' }}>
+                        <span style={{ fontWeight: 700, color: '#000000', marginRight: '6px', fontSize: '18px' }}>
                           {formattedCo2Str} kg
                         </span>
-                        <span style={{ fontWeight: 400, color: '#000000' }}>
+                        <span style={{ fontWeight: 400, color: '#000000', fontSize: '18px' }}>
                           {translate("Co2e d’émissions préservée(s)")}
                         </span>
                       </div>
@@ -14564,21 +14573,22 @@ export default function App() {
                         id="fsm-mission-completion-rate-indicator"
                         style={{
                           padding: '9px 20px',
-                          backgroundColor: 'transparent',
-                          border: '1px solid rgb(218, 218, 218)',
+                          backgroundColor: 'rgb(233, 235, 239)',
+                          background: 'rgb(233, 235, 239)',
+                          border: 'none',
                           borderRadius: '1000px',
                           display: 'inline-flex',
                           alignItems: 'center',
-                          fontSize: '15px',
+                          fontSize: '18px',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                           color: '#000000',
                           cursor: 'default',
                         }}
                       >
-                        <span style={{ fontWeight: 400, color: '#000000', marginRight: '6px' }}>
+                        <span style={{ fontWeight: 400, color: '#000000', marginRight: '6px', fontSize: '18px' }}>
                           {translate("Taux de complétion des missions :")}
                         </span>
-                        <span style={{ fontWeight: 700, color: '#000000' }}>
+                        <span style={{ fontWeight: 700, color: '#000000', fontSize: '18px' }}>
                           {missionCompletionRateStr}
                         </span>
                       </div>
@@ -14900,8 +14910,175 @@ export default function App() {
 
                             {/* Tour missions list */}
                             <div className="p-4 space-y-4">
-                              {t.missions.length === 0 ? null : (
+                              {t.missions.length === 0 ? (
+                                <div className="py-6 text-center font-sans bg-white rounded-xl" style={{ color: '#000000', fontSize: '16px', border: 'none' }}>
+                                  <img
+                                    src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
+                                    alt=""
+                                    className="mx-auto mb-4 block select-none pointer-events-none"
+                                    style={{ width: '200px', height: 'auto' }}
+                                    referrerPolicy="no-referrer"
+                                  />
+                                  Aucune mission à trier.
+                                </div>
+                              ) : (
                                 <div className="space-y-4 bg-transparent">
+                                  {/* Bulk Selection Action Status Bar (juste au-dessus de Sélectionner toutes les missions) */}
+                                  {selectedFsmMissionIds.length > 0 && (() => {
+                                    const isInATrier = true;
+                                    const draftToursForLookup = fsmTours.filter(tr => isDraftTour(tr));
+
+                                    return (
+                                      <div 
+                                        className="p-4 flex flex-wrap items-center justify-between gap-4 animate-fadeIn w-full" 
+                                        id="fsm-bulk-actions-status-bar"
+                                        style={{
+                                          backgroundColor: 'rgb(233, 235, 239)',
+                                          background: 'rgb(233, 235, 239)',
+                                          border: 'none',
+                                          borderRadius: '16px',
+                                        }}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <span 
+                                            className="rounded-full flex items-center justify-center font-bold font-sans shrink-0"
+                                            style={{
+                                              background: '#3ddc84',
+                                              color: '#156337',
+                                              fontSize: '18px',
+                                              padding: '11px 10px 9px 10px',
+                                              width: '30px',
+                                              height: '30px',
+                                            }}
+                                          >
+                                            {selectedFsmMissionIds.length}
+                                          </span>
+                                          <span 
+                                            className="font-sans"
+                                            style={{ fontSize: '18px', color: '#000000', fontWeight: '100', cursor: 'default' }}
+                                          >
+                                            Sélectionné(s)
+                                          </span>
+                                        </div>
+                                        
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          {/* À trier */}
+                                          <button
+                                            type="button"
+                                            disabled={isInATrier}
+                                            onClick={() => {
+                                              if (isInATrier) return;
+                                              bulkMoveFsmMissionsToATrier();
+                                            }}
+                                            id="btn-bulk-a-trier"
+                                            style={{
+                                              backgroundColor: 'rgb(46, 84, 255)',
+                                              background: 'rgb(46, 84, 255)',
+                                              color: '#ffffff',
+                                              border: 'none',
+                                              borderRadius: '13px',
+                                              padding: '9px 18px',
+                                              fontSize: '18px',
+                                              fontWeight: '600',
+                                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                              cursor: isInATrier ? 'not-allowed' : 'pointer',
+                                              opacity: isInATrier ? 0.45 : 1,
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              height: '42px',
+                                              boxSizing: 'border-box',
+                                              lineHeight: '1.25',
+                                            }}
+                                            className={`${isInATrier ? 'cursor-not-allowed opacity-45' : 'hover:opacity-90'} transition-opacity`}
+                                          >
+                                            À trier
+                                          </button>
+                                          
+                                          {/* Transférer */}
+                                          <div className="relative inline-flex items-center">
+                                            <button
+                                              type="button"
+                                              id="btn-bulk-assign-tour"
+                                              style={{
+                                                backgroundColor: 'rgb(15, 23, 42)',
+                                                background: 'rgb(15, 23, 42)',
+                                                color: '#ffffff',
+                                                border: 'none',
+                                                borderRadius: '13px',
+                                                padding: '9px 18px',
+                                                fontSize: '18px',
+                                                fontWeight: '600',
+                                                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                height: '42px',
+                                                boxSizing: 'border-box',
+                                                lineHeight: '1.25',
+                                              }}
+                                              className="hover:opacity-90 transition-opacity pointer-events-none"
+                                            >
+                                              Transférer
+                                            </button>
+                                            <select
+                                              id="fsm-bulk-assign-tour-dropdown"
+                                              aria-label="Transférer"
+                                              value=""
+                                              onChange={(e) => {
+                                                const targetTourId = e.target.value;
+                                                if (targetTourId) {
+                                                  bulkAssignFsmMissionsToTour(targetTourId);
+                                                }
+                                              }}
+                                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                                            >
+                                              <option value="" disabled>
+                                                {draftToursForLookup.length === 0
+                                                  ? 'Aucune tournée en brouillon disponible'
+                                                  : 'Sélectionner une tournée en brouillon'}
+                                              </option>
+                                              {draftToursForLookup.map(tr => (
+                                                <option key={tr.id} value={tr.id}>
+                                                  {tr.title || `Tournée ${tr.id}`} ({tr.startDate || 'Date non définie'})
+                                                </option>
+                                              ))}
+                                            </select>
+                                          </div>
+
+                                          {/* Supprimer */}
+                                          <button
+                                            type="button"
+                                            onClick={bulkCancelFsmMissions}
+                                            id="btn-bulk-cancel-intervention"
+                                            style={{
+                                              backgroundColor: 'rgb(210, 45, 11)',
+                                              background: 'rgb(210, 45, 11)',
+                                              color: '#ffffff',
+                                              border: 'none',
+                                              borderRadius: '13px',
+                                              padding: '9px 18px',
+                                              fontSize: '18px',
+                                              fontWeight: '600',
+                                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                              cursor: 'pointer',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              height: '42px',
+                                              boxSizing: 'border-box',
+                                              lineHeight: '1.25',
+                                            }}
+                                            className="hover:opacity-90 transition-opacity"
+                                          >
+                                            Supprimer
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+
                                   {/* Radio check pour sélectionner toutes les missions de la tournée */}
                                   {(() => {
                                     const tourMissionIds = (t.missions || []).map((m: any) => m.id);
@@ -15010,13 +15187,15 @@ export default function App() {
                                                   key={label}
                                                   style={{
                                                     color: '#fff',
-                                                    fontSize: '14px',
-                                                    padding: '4.5px 15px',
+                                                    fontSize: '18px',
+                                                    padding: '8px 16px',
+                                                    borderRadius: '1000px',
+                                                    fontWeight: 700,
                                                     border: 'none',
                                                     background: getCapsuleBgColor(rawVal),
                                                     cursor: 'default'
                                                   }}
-                                                  className="inline-flex items-center rounded-full font-sans font-medium"
+                                                  className="inline-flex items-center rounded-full font-sans font-bold"
                                                 >
                                                   <span className="font-extrabold mr-1">{label}</span>
                                                   {formatted}
@@ -15036,13 +15215,15 @@ export default function App() {
                                                   <span 
                                                     style={{
                                                       color: '#fff',
-                                                      fontSize: '14px',
-                                                      padding: '4.5px 15px',
+                                                      fontSize: '18px',
+                                                      padding: '8px 16px',
+                                                      borderRadius: '1000px',
+                                                      fontWeight: 700,
                                                       border: 'none',
                                                       background: '#0f172a',
                                                       cursor: 'default'
                                                     }}
-                                                    className="inline-flex items-center rounded-full font-sans font-medium"
+                                                    className="inline-flex items-center rounded-full font-sans font-bold"
                                                   >
                                                     {modelName}
                                                   </span>
@@ -15062,13 +15243,15 @@ export default function App() {
                                                   <span 
                                                     style={{
                                                       color: '#fff',
-                                                      fontSize: '14px',
-                                                      padding: '4.5px 15px',
+                                                      fontSize: '18px',
+                                                      padding: '8px 16px',
+                                                      borderRadius: '1000px',
+                                                      fontWeight: 700,
                                                       border: 'none',
                                                       background: '#0f172a',
                                                       cursor: 'default'
                                                     }}
-                                                    className="inline-flex items-center rounded-full font-sans font-medium"
+                                                    className="inline-flex items-center rounded-full font-sans font-bold"
                                                   >
                                                     {modelName}
                                                   </span>
@@ -15335,7 +15518,7 @@ export default function App() {
                                                   className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
                                                   title="Forcer la date et le créneau"
                                                 >
-                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#64748b' }}>
+                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
                                                     Forcer
                                                   </span>
                                                   <div
@@ -15392,7 +15575,7 @@ export default function App() {
                                                   className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
                                                   title="Forcer la date et le créneau"
                                                 >
-                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#64748b' }}>
+                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
                                                     Forcer
                                                   </span>
                                                   <div
@@ -15575,8 +15758,10 @@ export default function App() {
                                                               }}
                                                               style={{
                                                                 fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                                                                border: "none",
+                                                                boxShadow: "none",
                                                               }}
-                                                              className="cursor-pointer inline-flex items-center rounded-full bg-white border border-slate-200 text-slate-800 text-[15px] px-3.5 py-1.5 font-medium hover:bg-[#8e1010] hover:border-[#8e1010] hover:text-white transition-all duration-150 select-none"
+                                                              className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[15px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none"
                                                               title="Cliquez pour supprimer"
                                                             >
                                                               {reasonStr}{matchVar?.dureePrestation ? ` (${matchVar.dureePrestation} min)` : ''}
@@ -15758,7 +15943,7 @@ export default function App() {
                                                             className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none shrink-0"
                                                             title="Envoyée au client"
                                                           >
-                                                            <span style={{ fontSize: '13px', fontWeight: 600, color: isSent ? '#2e54ff' : '#64748b' }}>
+                                                            <span style={{ fontSize: '13px', fontWeight: 600, color: isSent ? '#2e54ff' : '#000000' }}>
                                                               Envoyée au client
                                                             </span>
                                                             <div
@@ -15794,7 +15979,7 @@ export default function App() {
                                                             className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none shrink-0"
                                                             title="Fourniture par le client"
                                                           >
-                                                            <span style={{ fontSize: '13px', fontWeight: 600, color: isProvided ? '#2e54ff' : '#64748b' }}>
+                                                            <span style={{ fontSize: '13px', fontWeight: 600, color: isProvided ? '#2e54ff' : '#000000' }}>
                                                               Fourniture par le client
                                                             </span>
                                                             <div
@@ -15836,8 +16021,10 @@ export default function App() {
                                                             }}
                                                             style={{
                                                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                                              border: 'none',
+                                                              boxShadow: 'none',
                                                             }}
-                                                            className="cursor-pointer inline-flex items-center rounded-full bg-white border border-slate-200 text-slate-800 text-[15px] px-3.5 py-1.5 font-medium hover:bg-red-800 hover:border-red-800 hover:text-white transition-all duration-150 select-none max-w-full truncate"
+                                                            className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[15px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none max-w-full truncate"
                                                             title="Cliquez pour supprimer"
                                                           >
                                                             {displayLabel} (x1)
@@ -15914,20 +16101,20 @@ export default function App() {
                                               value={m.commentaireInterne || ''}
                                               onChange={(e) => {
                                                 updateFsmMission(t.id, m.id, { commentaireInterne: e.target.value });
-                                                e.target.style.height = '48px';
-                                                e.target.style.height = `${Math.max(48, e.target.scrollHeight)}px`;
+                                                e.target.style.height = '46px';
+                                                e.target.style.height = `${Math.max(46, e.target.scrollHeight)}px`;
                                               }}
                                               ref={(el) => {
                                                 if (el) {
-                                                  el.style.height = '48px';
+                                                  el.style.height = '46px';
                                                   if (el.value) {
-                                                    el.style.height = `${Math.max(48, el.scrollHeight)}px`;
+                                                    el.style.height = `${Math.max(46, el.scrollHeight)}px`;
                                                   }
                                                 }
                                               }}
                                               placeholder="Saisir un commentaire privé pour le technicien..."
                                               className="w-full px-3 py-2 text-[18px] bg-white border border-slate-200 focus:border-[#0000FF] rounded-lg outline-none text-slate-900 font-normal transition-all resize-none overflow-hidden"
-                                              style={{ minHeight: '48px', height: '48px', lineHeight: '28px' }}
+                                              style={{ minHeight: '46px', height: '46px', lineHeight: '20px' }}
                                             />
                                           </div>
 
@@ -16210,7 +16397,8 @@ export default function App() {
                                                 style={{
                                                   color: '#fff',
                                                   boxShadow: 'none',
-                                                  background: '#2e54ff',
+                                                  background: 'rgb(210, 45, 11)',
+                                                  backgroundColor: 'rgb(210, 45, 11)',
                                                   borderRadius: '13px',
                                                   border: 'none',
                                                   fontSize: '18px',
@@ -16277,8 +16465,8 @@ export default function App() {
                               {/* Gélule n% Planifiée(s) */}
                               <div
                                 style={{
-                                  backgroundColor: 'rgb(233 237 241)',
-                                  color: 'rgb(80 97 122)',
+                                  backgroundColor: 'rgb(61, 220, 132)',
+                                  color: 'rgb(19, 100, 55)',
                                   borderRadius: '1000px',
                                   padding: '10px 18px',
                                   maxHeight: '45px',
@@ -16300,8 +16488,8 @@ export default function App() {
                               {/* Gélule n% Effectuées */}
                               <div
                                 style={{
-                                  backgroundColor: 'rgb(233 237 241)',
-                                  color: 'rgb(80 97 122)',
+                                  backgroundColor: 'rgb(61, 220, 132)',
+                                  color: 'rgb(19, 100, 55)',
                                   borderRadius: '1000px',
                                   padding: '10px 18px',
                                   maxHeight: '45px',
@@ -16344,6 +16532,8 @@ export default function App() {
                                     }}
                                     style={{
                                       ...rowActionButtonStyle,
+                                      backgroundColor: 'rgb(210, 45, 11)',
+                                      background: 'rgb(210, 45, 11)',
                                       position: 'relative',
                                       overflow: 'hidden',
                                       padding: '12px 20px',
@@ -16944,7 +17134,7 @@ export default function App() {
                             </div>
 
                             {/* Technician skills line */}
-                            {(() => {
+                            {!isFsmTechSkillsHidden && (() => {
                               if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
                                 return null;
                               }
@@ -17054,6 +17244,162 @@ export default function App() {
                               </div>
                             ) : (
                               <div className="space-y-4 bg-transparent">
+                                {/* Bulk Selection Action Status Bar (juste au-dessus de Sélectionner toutes les missions) */}
+                                {selectedFsmMissionIds.length > 0 && (() => {
+                                  const isInATrier = false;
+                                  const draftToursForLookup = fsmTours.filter(tr => isDraftTour(tr));
+
+                                  return (
+                                    <div 
+                                      className="p-4 flex flex-wrap items-center justify-between gap-4 animate-fadeIn w-full" 
+                                      id="fsm-bulk-actions-status-bar"
+                                      style={{
+                                        backgroundColor: 'rgb(233, 235, 239)',
+                                        background: 'rgb(233, 235, 239)',
+                                        border: 'none',
+                                        borderRadius: '16px',
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <span 
+                                          className="rounded-full flex items-center justify-center font-bold font-sans shrink-0"
+                                          style={{
+                                            background: '#3ddc84',
+                                            color: '#156337',
+                                            fontSize: '18px',
+                                            padding: '11px 10px 9px 10px',
+                                            width: '30px',
+                                            height: '30px',
+                                          }}
+                                        >
+                                          {selectedFsmMissionIds.length}
+                                        </span>
+                                        <span 
+                                          className="font-sans"
+                                          style={{ fontSize: '18px', color: '#000000', fontWeight: '100', cursor: 'default' }}
+                                        >
+                                          Sélectionné(s)
+                                        </span>
+                                      </div>
+                                      
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        {/* À trier */}
+                                        <button
+                                          type="button"
+                                          disabled={isInATrier}
+                                          onClick={() => {
+                                            if (isInATrier) return;
+                                            bulkMoveFsmMissionsToATrier();
+                                          }}
+                                          id="btn-bulk-a-trier"
+                                          style={{
+                                            backgroundColor: 'rgb(46, 84, 255)',
+                                            background: 'rgb(46, 84, 255)',
+                                            color: '#ffffff',
+                                            border: 'none',
+                                            borderRadius: '13px',
+                                            padding: '9px 18px',
+                                            fontSize: '18px',
+                                            fontWeight: '600',
+                                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                            cursor: isInATrier ? 'not-allowed' : 'pointer',
+                                            opacity: isInATrier ? 0.45 : 1,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            height: '42px',
+                                            boxSizing: 'border-box',
+                                            lineHeight: '1.25',
+                                          }}
+                                          className={`${isInATrier ? 'cursor-not-allowed opacity-45' : 'hover:opacity-90'} transition-opacity`}
+                                        >
+                                          À trier
+                                        </button>
+                                        
+                                        {/* Transférer */}
+                                        <div className="relative inline-flex items-center">
+                                          <button
+                                            type="button"
+                                            id="btn-bulk-assign-tour"
+                                            style={{
+                                              backgroundColor: 'rgb(15, 23, 42)',
+                                              background: 'rgb(15, 23, 42)',
+                                              color: '#ffffff',
+                                              border: 'none',
+                                              borderRadius: '13px',
+                                              padding: '9px 18px',
+                                              fontSize: '18px',
+                                              fontWeight: '600',
+                                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                              cursor: 'pointer',
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center',
+                                              height: '42px',
+                                              boxSizing: 'border-box',
+                                              lineHeight: '1.25',
+                                            }}
+                                            className="hover:opacity-90 transition-opacity pointer-events-none"
+                                          >
+                                            Transférer
+                                          </button>
+                                          <select
+                                            id="fsm-bulk-assign-tour-dropdown"
+                                            aria-label="Transférer"
+                                            value=""
+                                            onChange={(e) => {
+                                              const targetTourId = e.target.value;
+                                              if (targetTourId) {
+                                                bulkAssignFsmMissionsToTour(targetTourId);
+                                              }
+                                            }}
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                                          >
+                                            <option value="" disabled>
+                                              {draftToursForLookup.length === 0
+                                                ? 'Aucune tournée en brouillon disponible'
+                                                : 'Sélectionner une tournée en brouillon'}
+                                            </option>
+                                            {draftToursForLookup.map(tr => (
+                                              <option key={tr.id} value={tr.id}>
+                                                {tr.title || `Tournée ${tr.id}`} ({tr.startDate || 'Date non définie'})
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </div>
+
+                                        {/* Supprimer */}
+                                        <button
+                                          type="button"
+                                          onClick={bulkCancelFsmMissions}
+                                          id="btn-bulk-cancel-intervention"
+                                          style={{
+                                            backgroundColor: 'rgb(210, 45, 11)',
+                                            background: 'rgb(210, 45, 11)',
+                                            color: '#ffffff',
+                                            border: 'none',
+                                            borderRadius: '13px',
+                                            padding: '9px 18px',
+                                            fontSize: '18px',
+                                            fontWeight: '600',
+                                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            height: '42px',
+                                            boxSizing: 'border-box',
+                                            lineHeight: '1.25',
+                                          }}
+                                          className="hover:opacity-90 transition-opacity"
+                                        >
+                                          Supprimer
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
                                 {/* Radio check pour sélectionner toutes les missions de la tournée */}
                                 {(() => {
                                   const tourMissionIds = (t.missions || []).map((m: any) => m.id);
@@ -17182,15 +17528,18 @@ export default function App() {
                                           })()}
                                           <div
                                             style={{
-                                              background: '#3ddc84',
-                                              color: '#156337',
+                                              background: 'rgb(210, 45, 11)',
+                                              backgroundColor: 'rgb(210, 45, 11)',
+                                              color: '#FFF',
                                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                              fontWeight: 610,
+                                              fontWeight: 700,
                                               fontSize: '18px',
-                                              padding: '11px 10px 9px 10px',
-                                              width: '30px',
-                                              height: '30px',
-                                              borderRadius: '50%',
+                                              padding: 0,
+                                              width: '43px',
+                                              height: '43px',
+                                              minWidth: '43px',
+                                              minHeight: '43px',
+                                              borderRadius: '9999px',
                                               display: 'flex',
                                               alignItems: 'center',
                                               justifyContent: 'center',
@@ -17232,8 +17581,8 @@ export default function App() {
                                                 backgroundColor: '#fee2e2',
                                                 color: '#b91c1c',
                                                 borderRadius: '1000px',
-                                                padding: '4px 12px',
-                                                fontSize: '14px',
+                                                padding: '8px 16px',
+                                                fontSize: '18px',
                                                 fontWeight: 700,
                                                 border: '1px solid #fca5a5',
                                                 cursor: 'default'
@@ -17263,13 +17612,15 @@ export default function App() {
                                                 key={label}
                                                 style={{
                                                   color: '#fff',
-                                                  fontSize: '14px',
-                                                  padding: '4.5px 15px',
+                                                  fontSize: '18px',
+                                                  padding: '8px 16px',
+                                                  borderRadius: '1000px',
+                                                  fontWeight: 700,
                                                   border: 'none',
                                                   background: getCapsuleBgColor(rawVal),
                                                   cursor: 'default'
                                                 }}
-                                                className="inline-flex items-center rounded-full font-sans font-medium"
+                                                className="inline-flex items-center rounded-full font-sans font-bold"
                                               >
                                                 <span className="font-extrabold mr-1">{label}</span>
                                                 {formatted}
@@ -17289,13 +17640,15 @@ export default function App() {
                                                 <span 
                                                   style={{
                                                     color: '#fff',
-                                                    fontSize: '14px',
-                                                    padding: '4.5px 15px',
+                                                    fontSize: '18px',
+                                                    padding: '8px 16px',
+                                                    borderRadius: '1000px',
+                                                    fontWeight: 700,
                                                     border: 'none',
                                                     background: '#0f172a',
                                                     cursor: 'default'
                                                   }}
-                                                  className="inline-flex items-center rounded-full font-sans font-medium"
+                                                  className="inline-flex items-center rounded-full font-sans font-bold"
                                                 >
                                                   {modelName}
                                                 </span>
@@ -17315,13 +17668,15 @@ export default function App() {
                                                 <span 
                                                   style={{
                                                     color: '#fff',
-                                                    fontSize: '14px',
-                                                    padding: '4.5px 15px',
+                                                    fontSize: '18px',
+                                                    padding: '8px 16px',
+                                                    borderRadius: '1000px',
+                                                    fontWeight: 700,
                                                     border: 'none',
                                                     background: '#0f172a',
                                                     cursor: 'default'
                                                   }}
-                                                  className="inline-flex items-center rounded-full font-sans font-medium"
+                                                  className="inline-flex items-center rounded-full font-sans font-bold"
                                                 >
                                                   {modelName}
                                                 </span>
@@ -17600,7 +17955,7 @@ export default function App() {
                                                     className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
                                                     title="Forcer la date et le créneau"
                                                   >
-                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#64748b' }}>
+                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
                                                       Forcer
                                                     </span>
                                                     <div
@@ -17657,7 +18012,7 @@ export default function App() {
                                                     className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
                                                     title="Forcer la date et le créneau"
                                                   >
-                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#64748b' }}>
+                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
                                                       Forcer
                                                     </span>
                                                     <div
@@ -17859,8 +18214,10 @@ export default function App() {
                                                               }}
                                                               style={{
                                                                 fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                                                                border: "none",
+                                                                boxShadow: "none",
                                                               }}
-                                                              className="cursor-pointer inline-flex items-center rounded-full bg-white border border-slate-200 text-slate-800 text-[15px] px-3.5 py-1.5 font-medium hover:bg-[#8e1010] hover:border-[#8e1010] hover:text-white transition-all duration-150 select-none"
+                                                              className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[15px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none"
                                                               title="Cliquez pour supprimer"
                                                             >
                                                               {reasonStr}{matchVar?.dureePrestation ? ` (${matchVar.dureePrestation} min)` : ''}
@@ -18062,7 +18419,7 @@ export default function App() {
                                                     className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none shrink-0"
                                                     title="Envoyée au client"
                                                   >
-                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isSent ? '#2e54ff' : '#64748b' }}>
+                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isSent ? '#2e54ff' : '#000000' }}>
                                                       Envoyée au client
                                                     </span>
                                                     <div
@@ -18098,7 +18455,7 @@ export default function App() {
                                                     className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none shrink-0"
                                                     title="Fourniture par le client"
                                                   >
-                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isProvided ? '#2e54ff' : '#64748b' }}>
+                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isProvided ? '#2e54ff' : '#000000' }}>
                                                       Fourniture par le client
                                                     </span>
                                                     <div
@@ -18140,8 +18497,10 @@ export default function App() {
                                                     }}
                                                     style={{
                                                       fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                                      border: 'none',
+                                                      boxShadow: 'none',
                                                     }}
-                                                    className="cursor-pointer inline-flex items-center rounded-full bg-white border border-slate-200 text-slate-800 text-[15px] px-3.5 py-1.5 font-medium hover:bg-red-800 hover:border-red-800 hover:text-white transition-all duration-150 select-none max-w-full truncate"
+                                                    className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[15px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none max-w-full truncate"
                                                     title="Cliquez pour supprimer"
                                                   >
                                                     {displayLabel} (x1)
@@ -18217,20 +18576,20 @@ export default function App() {
                                       value={m.commentaireInterne || ''}
                                       onChange={(e) => {
                                         updateFsmMission(t.id, m.id, { commentaireInterne: e.target.value });
-                                        e.target.style.height = '48px';
-                                        e.target.style.height = `${Math.max(48, e.target.scrollHeight)}px`;
+                                        e.target.style.height = '46px';
+                                        e.target.style.height = `${Math.max(46, e.target.scrollHeight)}px`;
                                       }}
                                       ref={(el) => {
                                         if (el) {
-                                          el.style.height = '48px';
+                                          el.style.height = '46px';
                                           if (el.value) {
-                                            el.style.height = `${Math.max(48, el.scrollHeight)}px`;
+                                            el.style.height = `${Math.max(46, el.scrollHeight)}px`;
                                           }
                                         }
                                       }}
                                       placeholder="Saisir un commentaire privé pour le technicien..."
                                       className="w-full px-3 py-2 text-[18px] bg-white border border-slate-200 focus:border-[#0000FF] rounded-lg outline-none text-slate-900 font-normal transition-all resize-none overflow-hidden"
-                                      style={{ minHeight: '48px', height: '48px', lineHeight: '28px' }}
+                                      style={{ minHeight: '46px', height: '46px', lineHeight: '20px' }}
                                     />
                                   </div>
 
@@ -18497,18 +18856,79 @@ export default function App() {
                                       {/* Show technician rejection reason underneath Situation if Rejet mission */}
                                       {((m.status || '').toLowerCase().trim() === 'rejet mission' || (m.status || '').toLowerCase().trim() === 'rejet') && m.rejectionReason && (
                                         <div 
-                                          className="mt-2 p-2.5 bg-amber-50 text-amber-900 border border-amber-200 rounded-xl text-xs font-sans space-y-0.5"
-                                          style={{ wordBreak: 'break-word' }}
+                                          className="mt-2 font-sans"
+                                          style={{
+                                            backgroundColor: 'transparent',
+                                            background: 'transparent',
+                                            padding: 0,
+                                            border: 'none',
+                                            fontSize: '18px',
+                                            color: 'rgb(210, 45, 11)',
+                                            fontStyle: 'normal',
+                                            wordBreak: 'break-word'
+                                          }}
                                         >
-                                          <span className="font-bold text-amber-700 block">Motif de rejet technicien :</span>
-                                          <p className="italic m-0">{m.rejectionReason}</p>
+                                          {m.rejectionReason}
                                         </div>
                                       )}
                                     </div>
 
-                                    {/* Soumettre au client button */}
+                                    {/* Soumettre au client / Consulter le rapport button */}
                                     {(() => {
                                       const currentSit = m.status || 'Brouillon';
+                                      const sitNorm = String(currentSit).trim().toLowerCase();
+                                      const isEffectueSit = sitNorm === 'effectué' || sitNorm === 'effectue' || sitNorm === 'effectuée';
+
+                                      if (isEffectueSit) {
+                                        const refIntervention = (() => {
+                                          if (m.interventionReference) return m.interventionReference;
+                                          const matchedReport = generatedReports.find((r: any) => 
+                                            (r.missionId && r.missionId === m.id) || 
+                                            (r.defibIdentifiant && r.defibIdentifiant === m.defibIdentifiant)
+                                          );
+                                          return matchedReport?.interventionReference || "";
+                                        })();
+                                        const reportHref = `?tab=gmao&gmaoSearch=${encodeURIComponent(refIntervention)}`;
+
+                                        return (
+                                          <div className="bg-transparent flex flex-col justify-end">
+                                            <a
+                                              href={reportHref}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              onClick={() => {
+                                                triggerFsmPillWave(`consulter-rapport-mission-${m.id}`);
+                                                if (refIntervention) {
+                                                  setGmaoSearchQuery(refIntervention);
+                                                }
+                                              }}
+                                              style={{
+                                                color: '#fff',
+                                                boxShadow: 'none',
+                                                background: 'rgb(46, 84, 255)',
+                                                backgroundColor: 'rgb(46, 84, 255)',
+                                                borderRadius: '13px',
+                                                border: 'none',
+                                                fontSize: '18px',
+                                                fontWeight: '500',
+                                                padding: '12px 16px',
+                                                width: '100%',
+                                                display: 'flex',
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                cursor: 'pointer',
+                                                position: 'relative',
+                                                overflow: 'hidden',
+                                                textDecoration: 'none'
+                                              }}
+                                              className={`cursor-pointer ${fsmClickedPill?.id === `consulter-rapport-mission-${m.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                                            >
+                                              Consulter le rapport
+                                            </a>
+                                          </div>
+                                        );
+                                      }
+
                                       const canSubmitToClient = ['Brouillon', 'Attente Client', 'Refusé Client'].includes(currentSit);
                                       return (
                                         <div className="bg-transparent flex flex-col justify-end">
@@ -18557,7 +18977,8 @@ export default function App() {
                                         style={{
                                           color: '#fff',
                                           boxShadow: 'none',
-                                          background: '#2e54ff',
+                                          background: 'rgb(210, 45, 11)',
+                                          backgroundColor: 'rgb(210, 45, 11)',
                                           borderRadius: '13px',
                                           border: 'none',
                                           fontSize: '18px',
@@ -19410,12 +19831,28 @@ export default function App() {
                     border-radius: 0px !important;
                   }
                   #gmao-tab-container #gmao-filter-side-pane label,
-                  #gmao-tab-container #gmao-filter-side-pane .gmao-label-style,
+                  #gmao-tab-container #gmao-filter-side-pane .gmao-label-style {
+                    color: #50617A !important;
+                    font-size: 18px !important;
+                  }
                   #gmao-tab-container #gmao-manage-side-pane label,
                   #gmao-tab-container #gmao-manage-side-pane .gmao-label-style,
                   #gmao-tab-container #gmao-manage-side-pane .gmao-sidepane-text {
-                    color: #50617A !important;
+                    color: #000000 !important;
                     font-size: 18px !important;
+                  }
+                  #gmao-tab-container #gmao-manage-side-pane label.gmao-alert-radio-label,
+                  #gmao-tab-container #gmao-manage-side-pane label.gmao-alert-radio-label span {
+                    color: #000000 !important;
+                    font-size: 16px !important;
+                  }
+                  #gmao-tab-container #gmao-manage-side-pane input.gmao-alert-info-input {
+                    border: 1px solid #DCE1EA !important;
+                    border-color: #DCE1EA !important;
+                  }
+                  #gmao-tab-container #gmao-manage-side-pane input.gmao-alert-info-input::placeholder {
+                    color: #BECADB !important;
+                    opacity: 1 !important;
                   }
                   #gmao-tab-container select.padding-with-dot {
                     padding-left: 27px !important;
@@ -19825,7 +20262,10 @@ export default function App() {
                             // — À VENIR : Gérer (Enabled), Corriger (Disabled), Valider (Disabled), Télécharger (Disabled)
                             // — MODÉRATION : Gérer (Enabled), Corriger (Enabled), Valider (Enabled), Télécharger (Enabled)
                             // — VALIDÉS : Gérer (Enabled), Corriger (Enabled), Valider (Disabled), Télécharger (Enabled)
-                            const isGererDisabled = !isGmaoController;
+                            const hasGestionApresSpreadsheet = Boolean(
+                              getTenantSpreadsheetUrl('spreadsheetGestionApresIntervention', companyInfo)?.trim()
+                            );
+                            const isGererDisabled = !isGmaoController || !hasGestionApresSpreadsheet;
                             const isCorrigerDisabled = isUpcoming || !isGmaoController;
                             const isValiderDisabled = isUpcoming || isValidated || !isGmaoController;
                             const isTelechargerDisabled = isUpcoming;
@@ -20547,7 +20987,7 @@ export default function App() {
                         }}
                       >
                         {/* Drawer Body without inner padding/border div */}
-                        <div className="flex-1 overflow-y-auto p-6 pb-28 space-y-6 bg-transparent font-sans" style={{ color: '#50617A', fontSize: '18px' }}>
+                        <div className="flex-1 overflow-y-auto p-6 pb-28 space-y-6 bg-transparent font-sans" style={{ color: '#000000', fontSize: '18px' }}>
                           {showGmaoFormConflictBanner && (
                             <ConcurrentAccessBanner
                               message="Un autre membre de votre environnement édite actuellement ces mêmes informations. Attention aux délais de synchronisation et aux risques d'incohérence."
@@ -20558,7 +20998,7 @@ export default function App() {
                           {/* 1. Field: Drapeau ou indicateur */}
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
-                              <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
+                              <label className="block text-[18px] font-medium text-[#000000]" style={{ color: '#000000', fontSize: '18px' }}>
                                 Drapeau ou indicateur.
                               </label>
                               <button
@@ -20652,17 +21092,39 @@ export default function App() {
 
                           {/* 2. Field: Situation. */}
                           <div className="space-y-1.5 pt-1">
-                            <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
+                            <label className="block text-[18px] font-medium text-[#000000]" style={{ color: '#000000', fontSize: '18px' }}>
                               Situation.
                             </label>
                             <select
                               value={managingReport.missionStatus || (managingReport.isUpcoming ? 'Brouillon' : 'Effectué')}
                               onChange={(e) => {
                                 const val = e.target.value;
+                                const baseRep = { ...managingReport, missionStatus: val };
+                                const nextAlerts = mergeReportPostInterventionAlerts(
+                                  baseRep,
+                                  defibrillateurs,
+                                  stocks,
+                                  variables,
+                                  fsmTours
+                                );
+                                const nextComment = mergeReportModerationComment(
+                                  baseRep.commentaire,
+                                  baseRep,
+                                  defibrillateurs,
+                                  stocks,
+                                  variables,
+                                  fsmTours
+                                );
+                                const updatedRep = {
+                                  ...baseRep,
+                                  commentaire: nextComment,
+                                  ...buildFlatAlertFields(nextAlerts),
+                                };
                                 const updatedReports = generatedReports.map(r => 
-                                  r.id === managingReport.id ? { ...r, missionStatus: val } : r
+                                  r.id === managingReport.id ? updatedRep : r
                                 );
                                 saveReports(updatedReports);
+                                syncSingleGestionApresIntervention(updatedRep);
                                 if (managingReport.missionId || managingReport.interventionReference) {
                                   const updatedTours = fsmTours.map((t: any) => ({
                                     ...t,
@@ -20693,7 +21155,7 @@ export default function App() {
                           {/* Field: Raison de rejet (visible if situation is Rejet mission or intervention impossible) */}
                           {(managingReport.missionStatus === 'Rejet mission' || managingReport.conforme === 'Intervention impossible' || managingReport.statutMaintenance === 'IMPOSSIBLE') && (
                             <div className="space-y-1.5 pt-1">
-                              <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
+                              <label className="block text-[18px] font-medium text-[#000000]" style={{ color: '#000000', fontSize: '18px' }}>
                                 Raison de rejet de mission.
                               </label>
                               <input
@@ -20702,8 +21164,25 @@ export default function App() {
                                 value={managingReport.rejectionReason || managingReport.reasonImpossible || managingReport.techCommentaireArrivee || ''}
                                 onChange={(e) => {
                                   const val = e.target.value;
+                                  const baseRep = {
+                                    ...managingReport,
+                                    rejectionReason: val,
+                                    reasonImpossible: val,
+                                    techCommentaireArrivee: val,
+                                  };
+                                  const nextAlerts = mergeReportPostInterventionAlerts(
+                                    baseRep,
+                                    defibrillateurs,
+                                    stocks,
+                                    variables,
+                                    fsmTours
+                                  );
+                                  const updatedRep = {
+                                    ...baseRep,
+                                    ...buildFlatAlertFields(nextAlerts),
+                                  };
                                   const updatedReports = generatedReports.map(r => 
-                                    r.id === managingReport.id ? { ...r, rejectionReason: val, reasonImpossible: val, techCommentaireArrivee: val } : r
+                                    r.id === managingReport.id ? updatedRep : r
                                   );
                                   saveReports(updatedReports);
                                   if (managingReport.missionId || managingReport.interventionReference) {
@@ -20727,7 +21206,7 @@ export default function App() {
 
                           {/* 3. Field: Commentaire du technicien. (Disabled textarea showing technician comment from Missions des Tournées / section 11) */}
                           <div className="space-y-2 pt-1">
-                            <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
+                            <label className="block text-[18px] font-medium text-[#000000]" style={{ color: '#000000', fontSize: '18px' }}>
                               Commentaire du technicien.
                             </label>
                             <textarea
@@ -20763,7 +21242,7 @@ export default function App() {
 
                           {/* 4. Field: Commentaire interne */}
                           <div className="space-y-1.5 pt-1">
-                            <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
+                            <label className="block text-[18px] font-medium text-[#000000]" style={{ color: '#000000', fontSize: '18px' }}>
                               Commentaire interne.
                             </label>
                             <textarea
@@ -20798,37 +21277,28 @@ export default function App() {
 
                           {/* 4b. Sub-div: Alertes et potentielles erreurs. (up to 15 sub-fields) */}
                           {(() => {
-                            const rawAlerts: { traite: boolean; info: string }[] = Array.isArray(managingReport.postInterventionAlerts)
-                              ? managingReport.postInterventionAlerts
-                              : (() => {
-                                  const list: { traite: boolean; info: string }[] = [];
-                                  let maxIdx = 0;
-                                  for (let i = 1; i <= 15; i++) {
-                                    if (managingReport[`alerteTraite${i}`] || managingReport[`alerteInfo${i}`]) {
-                                      maxIdx = i;
-                                    }
-                                  }
-                                  for (let i = 1; i <= maxIdx; i++) {
-                                    list.push({
-                                      traite: Boolean(managingReport[`alerteTraite${i}`]),
-                                      info: String(managingReport[`alerteInfo${i}`] || ''),
-                                    });
-                                  }
-                                  return list;
-                                })();
-                            const displayAlerts = rawAlerts.length > 0 ? rawAlerts.slice(0, 15) : [{ traite: false, info: '' }];
+                            const rawAlerts: { traite: boolean; info: string }[] = managingReport._alertsManuallyEdited
+                              ? (Array.isArray(managingReport.postInterventionAlerts) ? managingReport.postInterventionAlerts : [])
+                              : mergeReportPostInterventionAlerts(
+                                  managingReport,
+                                  defibrillateurs,
+                                  stocks,
+                                  variables,
+                                  fsmTours
+                                );
+                            const displayAlerts =
+                              rawAlerts.length > 0
+                                ? rawAlerts.slice(0, 15)
+                                : managingReport._alertsManuallyEdited
+                                ? []
+                                : [{ traite: false, info: '' }];
 
                             const updateAlerts = (nextAlerts: { traite: boolean; info: string }[], syncImmediately = false) => {
                               const capped = nextAlerts.slice(0, 15);
-                              const flatFields: Record<string, any> = {};
-                              for (let i = 1; i <= 15; i++) {
-                                const item = capped[i - 1];
-                                flatFields[`alerteTraite${i}`] = item ? Boolean(item.traite) : false;
-                                flatFields[`alerteInfo${i}`] = item ? String(item.info || '') : '';
-                              }
+                              const flatFields = buildFlatAlertFields(capped);
                               const updatedRep = {
                                 ...managingReport,
-                                postInterventionAlerts: capped,
+                                _alertsManuallyEdited: true,
                                 ...flatFields,
                               };
                               const updatedReports = generatedReports.map(r =>
@@ -20843,7 +21313,7 @@ export default function App() {
                             return (
                               <div className="space-y-3 pt-1">
                                 <div className="flex items-center justify-between">
-                                  <label className="block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
+                                  <label className="block text-[18px] font-medium text-[#000000]" style={{ color: '#000000', fontSize: '18px' }}>
                                     Alertes et potentielles erreurs.
                                   </label>
                                   {displayAlerts.length < 15 && (
@@ -20864,7 +21334,8 @@ export default function App() {
                                   {displayAlerts.map((alertItem, aIdx) => (
                                     <div
                                       key={aIdx}
-                                      className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 bg-white/80"
+                                      className="flex items-center gap-3 py-1 bg-transparent border-0"
+                                      style={{ backgroundColor: 'transparent', border: 'none' }}
                                     >
                                       {/* Radio check « Traité. » */}
                                       <label
@@ -20874,21 +21345,37 @@ export default function App() {
                                           );
                                           updateAlerts(next, true);
                                         }}
-                                        className="inline-flex items-center gap-2 cursor-pointer select-none shrink-0"
-                                        style={{ color: '#50617A', fontSize: '16px' }}
+                                        className="gmao-alert-radio-label inline-flex items-center gap-2 cursor-pointer select-none shrink-0"
+                                        style={{ color: '#000000', fontSize: '16px' }}
                                       >
                                         <span
-                                          className="w-5 h-5 rounded-full flex items-center justify-center border transition-colors"
+                                          className="w-5 h-5 rounded-full flex items-center justify-center transition-colors shrink-0"
                                           style={{
+                                            width: '20px',
+                                            height: '20px',
+                                            borderRadius: '9999px',
+                                            borderWidth: '1px',
+                                            borderStyle: 'solid',
                                             borderColor: alertItem.traite ? '#2e54ff' : '#94a3b8',
-                                            backgroundColor: alertItem.traite ? '#2e54ff' : '#ffffff',
+                                            backgroundColor: '#ffffff',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
                                           }}
                                         >
                                           {alertItem.traite && (
-                                            <span className="w-2 h-2 rounded-full bg-white" />
+                                            <span
+                                              className="rounded-full block"
+                                              style={{
+                                                width: '10px',
+                                                height: '10px',
+                                                borderRadius: '9999px',
+                                                backgroundColor: '#2e54ff',
+                                              }}
+                                            />
                                           )}
                                         </span>
-                                        <span className="font-medium text-[#50617A]" style={{ fontSize: '16px' }}>
+                                        <span className="font-medium text-[#000000]" style={{ color: '#000000', fontSize: '16px' }}>
                                           Traité.
                                         </span>
                                       </label>
@@ -20905,22 +21392,34 @@ export default function App() {
                                           updateAlerts(next, false);
                                         }}
                                         placeholder="Informations sur l’alerte."
-                                        className="flex-1 p-2 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
+                                        style={{
+                                          borderColor: '#DCE1EA',
+                                          borderWidth: '1px',
+                                          borderStyle: 'solid',
+                                        }}
+                                        className="gmao-alert-info-input flex-1 p-2 text-[16px] text-[#000] border border-[#DCE1EA] placeholder:text-[#BECADB] rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-[#DCE1EA] font-sans"
                                       />
 
-                                      {displayAlerts.length > 1 && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const next = displayAlerts.filter((_, idx) => idx !== aIdx);
-                                            updateAlerts(next, true);
-                                          }}
-                                          title="Supprimer cette alerte"
-                                          className="text-slate-400 hover:text-rose-600 px-1.5 py-1 text-[18px] font-bold cursor-pointer bg-transparent border-0"
-                                        >
-                                          ×
-                                        </button>
-                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const next = displayAlerts.filter((_, idx) => idx !== aIdx);
+                                          updateAlerts(next, true);
+                                        }}
+                                        style={{
+                                          ...rowActionButtonStyle,
+                                          fontSize: '18px',
+                                          backgroundColor: 'rgb(210, 45, 11)',
+                                          color: '#ffffff',
+                                          padding: '6px 14px',
+                                          borderRadius: '10px',
+                                          border: 'none',
+                                          cursor: 'pointer',
+                                        }}
+                                        className="shrink-0 font-medium transition-all hover:opacity-90 cursor-pointer"
+                                      >
+                                        Supprimer
+                                      </button>
                                     </div>
                                   ))}
                                 </div>
@@ -20930,7 +21429,7 @@ export default function App() {
 
                           {/* 5. Toggle: Désactiver l'email au client. */}
                           <div className="flex items-center justify-between pt-1">
-                            <span className="gmao-sidepane-text block text-[18px] font-medium text-[#50617A]" style={{ color: '#50617A', fontSize: '18px' }}>
+                            <span className="gmao-sidepane-text block text-[18px] font-medium text-[#000000]" style={{ color: '#000000', fontSize: '18px' }}>
                               Désactiver l’email au client.
                             </span>
                             <button
@@ -20975,7 +21474,7 @@ export default function App() {
                             type="button"
                             onClick={() => setManagingReportId(null)}
                             style={{
-                              backgroundColor: '#0f172a',
+                              backgroundColor: 'rgb(210, 45, 11)',
                               color: '#ffffff',
                               fontSize: '18px',
                               fontWeight: '600',
@@ -20985,7 +21484,7 @@ export default function App() {
                               cursor: 'pointer',
                               boxShadow: 'none'
                             }}
-                            className="flex-1 py-3 px-4 hover:bg-slate-800 transition-all flex items-center justify-center font-sans"
+                            className="flex-1 py-3 px-4 hover:opacity-90 transition-all flex items-center justify-center font-sans"
                           >
                             Fermer
                           </button>
@@ -20993,8 +21492,31 @@ export default function App() {
                             type="button"
                             onClick={() => {
                               if (managingReport) {
-                                syncSingleGestionApresIntervention(managingReport);
-                                if (!managingReport.isUpcoming && managingReport.status !== 'À venir') {
+                                const finalComment =
+                                  managingReport.commentaire !== undefined && managingReport.commentaire !== null && managingReport.commentaire !== ''
+                                    ? mergeReportModerationComment(managingReport.commentaire, managingReport, defibrillateurs, stocks, variables, fsmTours)
+                                    : (!managingReport.isUpcoming
+                                        ? generateReportModerationComment(managingReport, defibrillateurs, stocks, variables, fsmTours)
+                                        : mergeReportModerationComment('', managingReport, defibrillateurs, stocks, variables, fsmTours));
+                                const finalAlerts = managingReport._alertsManuallyEdited
+                                  ? (Array.isArray(managingReport.postInterventionAlerts) ? managingReport.postInterventionAlerts : [])
+                                  : mergeReportPostInterventionAlerts(
+                                      managingReport,
+                                      defibrillateurs,
+                                      stocks,
+                                      variables,
+                                      fsmTours
+                                    );
+                                const enrichedManagingRep = {
+                                  ...managingReport,
+                                  commentaire: finalComment,
+                                  ...buildFlatAlertFields(finalAlerts),
+                                };
+                                const nextReports = generatedReports.map(r =>
+                                  r.id === managingReport.id ? enrichedManagingRep : r
+                                );
+                                syncSingleGestionApresIntervention(enrichedManagingRep);
+                                if (!enrichedManagingRep.isUpcoming && enrichedManagingRep.status !== 'À venir') {
                                   const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
                                   fetch('/api/sheets/upsert', {
                                     method: 'POST',
@@ -21002,12 +21524,14 @@ export default function App() {
                                     body: JSON.stringify({
                                       tenantId: activeTid,
                                       type: 'rapportsPdf',
-                                      records: [managingReport],
+                                      records: [enrichedManagingRep],
                                     }),
                                   }).catch(() => {});
                                 }
+                                saveReports(nextReports);
+                              } else {
+                                saveReports(generatedReports);
                               }
-                              saveReports(generatedReports);
                               setManagingReportId(null);
                             }}
                             style={{
@@ -21068,7 +21592,7 @@ export default function App() {
                         onClick={(e) => e.stopPropagation()}
                         style={{
                           boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
-                          borderLeft: '1px solid #e2e8f0',
+                          borderLeft: 'none',
                         }}
                       >
                         <div className="flex-1 overflow-y-auto overflow-x-hidden bg-white font-sans relative w-full max-w-full" style={{ overflowX: 'hidden', overscrollBehaviorX: 'none' }}>
@@ -21080,18 +21604,26 @@ export default function App() {
                             hideReduceAndTimer={true}
                             forceSmartphoneLayout={true}
                             onSave={(updatedReport) => {
+                              const combinedRep = { ...repToEdit, ...updatedReport };
                               const mergedComment = mergeReportModerationComment(
                                 updatedReport.commentaire ?? repToEdit?.commentaire,
-                                { ...repToEdit, ...updatedReport },
+                                combinedRep,
+                                defibrillateurs,
+                                stocks,
+                                variables,
+                                fsmTours
+                              );
+                              const mergedAlerts = mergeReportPostInterventionAlerts(
+                                combinedRep,
                                 defibrillateurs,
                                 stocks,
                                 variables,
                                 fsmTours
                               );
                               const mergedReport = {
-                                ...repToEdit,
-                                ...updatedReport,
+                                ...combinedRep,
                                 commentaire: mergedComment,
+                                ...buildFlatAlertFields(mergedAlerts),
                                 _sheetRowNumber: updatedReport._sheetRowNumber ?? (repToEdit as any)?._sheetRowNumber,
                               };
                               const updatedReports = generatedReports.map(r =>
@@ -21102,7 +21634,7 @@ export default function App() {
                                   : r
                               );
                               saveReports(updatedReports);
-                              syncGestionApresInterventionRow(mergedReport);
+                              syncSingleGestionApresIntervention(mergedReport);
 
                               // Explicitly upsert the edited report row to the Rapports PDF spreadsheet
                               const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
@@ -23241,7 +23773,7 @@ export default function App() {
           )}
 
           {activeTab === 'messagerie' && (
-            <div className="w-full h-full flex-1 flex flex-col min-h-[calc(100vh-2px)] overflow-hidden bg-white">
+            <div className="w-full h-full flex-1 min-h-0 flex flex-col overflow-hidden bg-white">
               <CanalMessagesSidePane
                 isOpen={true}
                 embedded={true}
@@ -23259,6 +23791,7 @@ export default function App() {
                 setMessages={setTenantMessages}
                 onMessagesRead={handleMessagesRead}
                 companyInfo={companyInfo}
+                members={members}
               />
             </div>
           )}

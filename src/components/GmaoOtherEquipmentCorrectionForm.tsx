@@ -732,7 +732,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
               width: '33.3333%',
               borderRadius: '0px',
               padding: '14px 8px',
-              backgroundColor: '#0f172a',
+              backgroundColor: 'rgb(210, 45, 11)',
               color: '#ffffff',
               border: 'none',
               margin: 0,
@@ -751,8 +751,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
               width: '33.3333%',
               borderRadius: '0px',
               padding: '14px 8px',
-              backgroundColor: '#e5e7eb',
-              color: '#000000',
+              backgroundColor: 'rgb(15, 23, 42)',
+              color: '#ffffff',
               fontSize: '18px',
               fontWeight: 'bold',
               border: 'none',
@@ -763,7 +763,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
               margin: 0,
               position: 'relative',
             }}
-            className="transition-colors cursor-pointer font-sans hover:bg-gray-300 text-center select-none !mt-0"
+            className="transition-colors cursor-pointer font-sans hover:opacity-90 text-center select-none !mt-0"
           >
             {isReduced ? "Agrandir" : "Réduire"}
           </button>

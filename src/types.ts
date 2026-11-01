@@ -581,6 +581,8 @@ export interface CompanyInfo {
   spreadsheetExportationsUrl?: string;
   spreadsheetAutresEvents?: string;
   spreadsheetAutresEventsUrl?: string;
+  spreadsheetGroupesZones?: string;
+  spreadsheetGroupesZonesUrl?: string;
 }
 
 export type SpreadsheetFieldKey =
@@ -615,7 +617,8 @@ export type SpreadsheetFieldKey =
   | 'spreadsheetCommunicationPortailClient'
   | 'spreadsheetObservateurActionsSuspectes'
   | 'spreadsheetExportations'
-  | 'spreadsheetAutresEvents';
+  | 'spreadsheetAutresEvents'
+  | 'spreadsheetGroupesZones';
 
 export const EXTRA_SPREADSHEET_FIELDS: {
   key: SpreadsheetFieldKey;
@@ -651,6 +654,7 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetCommunicationPortailClient', urlKey: 'spreadsheetCommunicationPortailClientUrl', storageSuffix: 'spreadsheet_communication_portail_client', label: 'Spreadsheet Communication portail client.', id: 'settings-db-spreadsheet-communication-portail-client' },
   { key: 'spreadsheetObservateurActionsSuspectes', urlKey: 'spreadsheetObservateurActionsSuspectesUrl', storageSuffix: 'spreadsheet_observateur_actions_suspectes', label: 'Spreadsheet Observateur des actions suspectes.', id: 'settings-db-spreadsheet-observateur-actions-suspectes' },
   { key: 'spreadsheetAutresEvents', urlKey: 'spreadsheetAutresEventsUrl', storageSuffix: 'spreadsheet_autres_events', label: 'Spreadsheet Autres Events.', id: 'settings-db-spreadsheet-autres-events' },
+  { key: 'spreadsheetGroupesZones', urlKey: 'spreadsheetGroupesZonesUrl', storageSuffix: 'spreadsheet_groupes_zones', label: 'Spreadsheet Groupes et Zones.', id: 'settings-db-spreadsheet-groupes-zones' },
 ];
 
 export interface PointageLog {
@@ -1028,6 +1032,8 @@ export interface TeamWorkGroup {
   regions: string[];
   createdAt?: string;
   updatedAt?: string;
+  _sheetRowNumber?: number;
+  _fromSpreadsheet?: boolean;
 }
 
 export type SuspiciousActionType =

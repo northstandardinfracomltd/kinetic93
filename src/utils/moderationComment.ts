@@ -122,7 +122,7 @@ export const getReportSpecificAlerts = (
   fsmTours: any[] = []
 ): string[] => {
   if (!report) return [];
-  const snap = report.fullDataSnapshot || {};
+  const snap = report.defibSnapshot || report.fullDataSnapshot || {};
   const alerts: string[] = [];
 
   // 1. Section 5 — Dates : Préconisation de remplacement.
@@ -280,7 +280,11 @@ export const getReportSpecificAlerts = (
     const repDefibId = String(report.defibIdentifiant || snap.defibIdentifiant || '').trim();
 
     for (const tour of fsmTours) {
-      const points = Array.isArray(tour?.points) ? tour.points : [];
+      const points = [
+        ...(Array.isArray(tour?.missions) ? tour.missions : []),
+        ...(Array.isArray(tour?.passages) ? tour.passages : []),
+        ...(Array.isArray(tour?.points) ? tour.points : []),
+      ];
       for (const pt of points) {
         const ptId = String(pt.id || '').trim();
         const ptIntervRef = String(pt.interventionReference || '').trim();
@@ -322,7 +326,19 @@ export const hasReportAlerts = (
   const specificAlerts = getReportSpecificAlerts(report, defibrillateurs, stocks, variables, fsmTours);
   if (specificAlerts.length > 0) return true;
 
-  const existingComment = String(report.commentaire || report.fullDataSnapshot?.commentaire || '');
+  if (
+    Array.isArray(report.postInterventionAlerts) &&
+    report.postInterventionAlerts.some((a: any) => a && String(a.info || '').trim() !== '')
+  ) {
+    return true;
+  }
+  for (let i = 1; i <= 15; i++) {
+    if (report[`alerteInfo${i}`] && String(report[`alerteInfo${i}`]).trim() !== '') {
+      return true;
+    }
+  }
+
+  const existingComment = String(report.commentaire || report.defibSnapshot?.commentaire || report.fullDataSnapshot?.commentaire || '');
   if (existingComment.includes('! Le technicien ')) return true;
 
   return false;
@@ -510,3 +526,129 @@ export const mergeReportModerationComment = (
 
   return lines.join('\n');
 };
+
+export const extractExistingReportAlerts = (report: any): { traite: boolean; info: string }[] => {
+  if (!report) return [];
+  const fromArray: { traite: boolean; info: string }[] = Array.isArray(report.postInterventionAlerts)
+    ? report.postInterventionAlerts.map((it: any) => ({
+        traite: Boolean(it?.traite),
+        info: String(it?.info || '').trim(),
+      }))
+    : [];
+
+  let maxFlatIdx = 0;
+  for (let i = 1; i <= 15; i++) {
+    const rawT = report[`alerteTraite${i}`];
+    const rawI = String(report[`alerteInfo${i}`] ?? '').trim();
+    const isT =
+      rawT === true ||
+      String(rawT ?? '').trim().toLowerCase() === 'oui' ||
+      String(rawT ?? '').trim().toLowerCase() === 'true' ||
+      String(rawT ?? '').trim().toLowerCase() === '1';
+    if (isT || rawI) {
+      maxFlatIdx = i;
+    }
+  }
+
+  const fromFlat: { traite: boolean; info: string }[] = [];
+  for (let i = 1; i <= maxFlatIdx; i++) {
+    const rawT = report[`alerteTraite${i}`];
+    const isT =
+      rawT === true ||
+      String(rawT ?? '').trim().toLowerCase() === 'oui' ||
+      String(rawT ?? '').trim().toLowerCase() === 'true' ||
+      String(rawT ?? '').trim().toLowerCase() === '1';
+    fromFlat.push({
+      traite: isT,
+      info: String(report[`alerteInfo${i}`] ?? '').trim(),
+    });
+  }
+
+  if (fromArray.length === 0) return fromFlat;
+  if (fromFlat.length === 0) return fromArray;
+
+  const merged = [...fromArray];
+  for (const fl of fromFlat) {
+    if (fl.info && !merged.some((m) => m.info.toLowerCase() === fl.info.toLowerCase())) {
+      merged.push(fl);
+    }
+  }
+  return merged.slice(0, 15);
+};
+
+export const mergeReportPostInterventionAlerts = (
+  report: any,
+  defibrillateurs: any[] = [],
+  stocks: any[] = [],
+  variables: any[] = [],
+  fsmTours: any[] = []
+): { traite: boolean; info: string }[] => {
+  if (!report) return [];
+  const rawExisting = extractExistingReportAlerts(report);
+  if (report._alertsManuallyEdited) {
+    return rawExisting.slice(0, 15);
+  }
+
+  // Keep non-empty existing items so auto-generated alerts start at index 0 (alerteInfo1) if no real alerts exist yet
+  const list: { traite: boolean; info: string }[] = rawExisting.filter(
+    (it) => it.info.trim() !== '' || it.traite
+  );
+
+  const specificAlerts = getReportSpecificAlerts(report, defibrillateurs, stocks, variables, fsmTours);
+  const commentLines = String(report.commentaire ?? report.commentaireInterne ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith('! Le technicien '));
+
+  const allAlertStrings = [...specificAlerts];
+  for (const cl of commentLines) {
+    if (!allAlertStrings.includes(cl)) {
+      allAlertStrings.push(cl);
+    }
+  }
+
+  const rejectPrefix = '! Le technicien à rejeté la mission pour la raison suivante :';
+  const precoPrefix = '! Le technicien mentionne une préconisation de remplacement du défibrillateur';
+
+  for (const alertLine of allAlertStrings) {
+    const clean = alertLine.trim();
+    if (!clean) continue;
+
+    if (clean.startsWith(rejectPrefix)) {
+      const existingIdx = list.findIndex((it) => it.info.startsWith(rejectPrefix));
+      if (existingIdx !== -1) {
+        list[existingIdx] = { ...list[existingIdx], info: clean };
+        continue;
+      }
+    } else if (clean.startsWith(precoPrefix)) {
+      const existingIdx = list.findIndex((it) => it.info.startsWith(precoPrefix));
+      if (existingIdx !== -1) {
+        list[existingIdx] = { ...list[existingIdx], info: clean };
+        continue;
+      }
+    }
+
+    const exists = list.some((it) => it.info.trim().toLowerCase() === clean.toLowerCase());
+    if (!exists && list.length < 15) {
+      list.push({ traite: false, info: clean });
+    }
+  }
+
+  return list.slice(0, 15);
+};
+
+export const buildFlatAlertFields = (
+  alerts: { traite: boolean; info: string }[]
+): Record<string, any> => {
+  const capped = Array.isArray(alerts) ? alerts.slice(0, 15) : [];
+  const out: Record<string, any> = {
+    postInterventionAlerts: capped,
+  };
+  for (let i = 1; i <= 15; i++) {
+    const item = capped[i - 1];
+    out[`alerteTraite${i}`] = item ? Boolean(item.traite) : false;
+    out[`alerteInfo${i}`] = item ? String(item.info || '').trim() : '';
+  }
+  return out;
+};
+

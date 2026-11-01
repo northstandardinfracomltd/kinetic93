@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Member } from '../types';
 import { SpontaneousEvent } from './PlanningTab';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore } from '../firebase';
+import { getActiveTenantCountry, getHolidaysForYear, SupportedCountry } from '../utils/holidays';
 
 interface PlanningExtendedViewModalProps {
   isOpen: boolean;
@@ -136,6 +137,31 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
   const [currentYear, setCurrentYear] = useState<number>(() => {
     return typeof initialYear === 'number' ? initialYear : today.getFullYear();
   });
+
+  const [activeCountry, setActiveCountry] = useState<SupportedCountry>(() =>
+    getActiveTenantCountry()
+  );
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setActiveCountry(getActiveTenantCountry());
+    };
+    handleUpdate();
+    window.addEventListener('defib_lang_changed', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('defib_lang_changed', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, []);
+
+  const holidaysMap = useMemo(() => {
+    return {
+      ...getHolidaysForYear(currentYear - 1, activeCountry),
+      ...getHolidaysForYear(currentYear, activeCountry),
+      ...getHolidaysForYear(currentYear + 1, activeCountry),
+    };
+  }, [currentYear, activeCountry]);
 
   // Real-time clock for the vertical red cursor bar
   const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
@@ -455,15 +481,17 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     return groups;
   }, [daysInMonth]);
 
-  // Helpers to retrieve values for mission 3 lines
+  // Helpers to retrieve values for mission details
   const getMissionDetails = useCallback((mission: any) => {
     if (!mission) {
       return {
-        creneau: '',
+        creneau: '--:--',
         identifiant: '',
-        clientName: '',
+        clientName: 'NC',
         siteName: '',
         locationStr: '',
+        villePostcode: 'NC',
+        reasons: 'Maintenance',
         isDefib: true
       };
     }
@@ -492,12 +520,21 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           c.id === mission.clientId ||
           c.id === defib?.clientId ||
           c.id === other?.clientId ||
-          (c.denomination && mission.clientDenomination && String(c.denomination).toLowerCase() === String(mission.clientDenomination).toLowerCase())
+          (c.denomination &&
+            (mission.clientDenomination || mission.clientName || mission.client) &&
+            String(c.denomination).toLowerCase() === String(mission.clientDenomination || mission.clientName || mission.client).toLowerCase())
         )
     );
 
-    // Line 1: Creneau & Identifiant
-    const creneau = mission.estimatedSlot || mission.creneau || mission.slot || mission.creneauHoraire || mission.estimatedTime || mission.time || '';
+    const creneau =
+      mission.estimatedSlot ||
+      mission.creneau ||
+      mission.slot ||
+      mission.creneauHoraire ||
+      mission.estimatedTime ||
+      mission.time ||
+      '--:--';
+
     const identifiant = (() => {
       if (mission.formationId) return String(mission.formationId);
       if (mission.defibIdentifiant && mission.defibIdentifiant !== 'Formation') return String(mission.defibIdentifiant);
@@ -508,16 +545,43 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       return '';
     })();
 
-    // Line 2: Client & Site
-    const clientName = (
+    const clientName =
       mission.clientDenomination ||
+      mission.clientName ||
       mission.client ||
       clientObj?.denomination ||
-      mission.clientName ||
+      defib?.client ||
       defib?.exploitant ||
       defib?.nomPrenomSite ||
-      ''
-    );
+      other?.client ||
+      'NC';
+
+    const mCity =
+      mission.ville ||
+      defib?.ville ||
+      other?.ville ||
+      clientObj?.ville ||
+      '';
+    const mPostcode =
+      mission.cp ||
+      mission.codePostal ||
+      defib?.cp ||
+      defib?.codePostal ||
+      other?.codePostal ||
+      other?.cp ||
+      clientObj?.codePostal ||
+      clientObj?.cp ||
+      '';
+    const villePostcode = [mCity, mPostcode].filter(Boolean).join(' ') || 'NC';
+
+    const reasons =
+      Array.isArray(mission.reasons) && mission.reasons.length > 0
+        ? mission.reasons.join(', ')
+        : mission.reason ||
+          mission.motif ||
+          mission.typePrestation ||
+          mission.equipmentType ||
+          'Maintenance';
 
     const siteName = (() => {
       let raw = '';
@@ -536,7 +600,6 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       return raw;
     })();
 
-    // Line 3: Localisation
     const locationStr = (() => {
       if (mission.ville) {
         return `${mission.ville}${mission.codePostal ? ` (${mission.codePostal})` : ''}`;
@@ -556,7 +619,6 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       return '';
     })();
 
-    // Determine if mission is Défibrillateur or Autre Matériel
     const eqType = String(mission.equipmentType || '').toLowerCase();
     const isFormation = eqType.includes('formation') || Boolean(mission.formationId);
     let isDefib = true;
@@ -576,6 +638,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       clientName,
       siteName,
       locationStr,
+      villePostcode,
+      reasons,
       isDefib
     };
   }, [clients, defibrillateurs, otherEquipments]);
@@ -681,34 +745,19 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     >
       {/* Header Bar */}
       <div className="bg-white border-b border-neutral-200 px-4 py-3 sm:px-6 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        {/* Left: Title */}
-        <div className="flex items-center gap-3">
-          <span
-            style={{
-              letterSpacing: '0px',
-              color: '#000',
-              cursor: 'default',
-              fontSize: '22px',
-              fontWeight: 'bold'
-            }}
-          >
-            Planning vue étendue
-          </span>
-        </div>
-
-        {/* Center: Month Navigation Controls */}
+        {/* Left: Month Navigation Controls */}
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={handlePrevMonth}
-            className="transition-colors cursor-pointer hover:opacity-80"
+            className="transition-colors cursor-pointer hover:opacity-90 font-bold"
             style={{
               fontSize: '18px',
               borderRadius: '13px',
               padding: '10px 20px',
               border: 'none',
-              background: '#edededa6',
-              color: '#000'
+              backgroundColor: 'rgb(46, 84, 255)',
+              color: '#fff'
             }}
             title="Mois précédent"
           >
@@ -720,7 +769,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             style={{
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
               fontSize: '24px',
-              lineHeight: '1.2'
+              lineHeight: '1.2',
+              letterSpacing: '0px'
             }}
           >
             {MONTH_NAMES_FR[currentMonth]} {currentYear}
@@ -729,14 +779,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={handleNextMonth}
-            className="transition-colors cursor-pointer hover:opacity-80"
+            className="transition-colors cursor-pointer hover:opacity-90 font-bold"
             style={{
               fontSize: '18px',
               borderRadius: '13px',
               padding: '10px 20px',
               border: 'none',
-              background: '#edededa6',
-              color: '#000'
+              backgroundColor: 'rgb(46, 84, 255)',
+              color: '#fff'
             }}
             title="Mois suivant"
           >
@@ -746,14 +796,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={handleCurrentMonth}
-            className="transition-colors cursor-pointer hover:opacity-80 ml-1"
+            className="transition-colors cursor-pointer hover:opacity-90 ml-1 font-bold"
             style={{
               fontSize: '18px',
               borderRadius: '13px',
               padding: '10px 20px',
               border: 'none',
-              background: '#edededa6',
-              color: '#000'
+              backgroundColor: 'rgb(46, 84, 255)',
+              color: '#fff'
             }}
             title="Revenir au mois en cours"
           >
@@ -773,14 +823,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             type="button"
             disabled={isRefreshing}
             onClick={handleRefresh}
-            className="transition-colors cursor-pointer disabled:opacity-50 hover:opacity-80"
+            className="transition-colors cursor-pointer disabled:opacity-50 hover:opacity-90 font-bold"
             style={{
               fontSize: '18px',
               borderRadius: '13px',
               padding: '10px 20px',
               border: 'none',
-              background: '#edededa6',
-              color: '#000'
+              backgroundColor: '#1D0245',
+              color: '#fff'
             }}
             title="Recharger les données sans recharger la page"
           >
@@ -790,14 +840,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={onClose}
-            className="transition-colors cursor-pointer ml-2 hover:opacity-90"
+            className="transition-colors cursor-pointer ml-2 hover:opacity-90 font-bold"
             style={{
               fontSize: '18px',
               borderRadius: '13px',
               padding: '10px 20px',
               border: 'none',
               color: '#fff',
-              background: '#0f172a'
+              backgroundColor: 'rgb(210, 45, 11)'
             }}
           >
             Fermer
@@ -808,12 +858,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       {/* Sub-header / Legend Bar */}
       <div className="bg-neutral-50 border-b border-neutral-200 px-4 py-2 sm:px-6 flex flex-wrap items-center gap-5 text-xs font-medium shrink-0">
         <div className="flex items-center gap-1.5">
-          <span className="w-3.5 h-3.5 rounded-xs bg-[#165dfc] inline-block shrink-0" />
-          <span className="text-neutral-800 font-semibold">Mission Défibrillateur</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-3.5 h-3.5 rounded-xs bg-[#0891b2] inline-block shrink-0" />
-          <span className="text-neutral-800 font-semibold">Autre Matériel</span>
+          <span className="w-3.5 h-3.5 rounded-xs inline-block shrink-0" style={{ backgroundColor: 'rgb(230, 197, 255)' }} />
+          <span className="text-neutral-800 font-semibold">Mission planifiée</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-3.5 h-3.5 rounded-xs bg-[#9333ea] inline-block shrink-0" />
@@ -855,33 +901,48 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
 
               {/* Row 2: Days (1 to 31) */}
               <tr className="border-b border-neutral-300 bg-white text-neutral-800 text-xs">
-                {daysInMonth.map((d) => (
-                  <th
-                    key={`day-header-${d.isoDate}`}
-                    id={d.isToday ? "extended-planning-today-col" : undefined}
-                    className={`relative border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none w-[200px] min-w-[200px] max-w-[200px] ${
-                      d.isToday
-                        ? 'bg-pink-100/80 text-[#2e54ff] border-b-2 border-b-[#2e54ff]'
-                        : d.isWeekend
-                        ? 'bg-neutral-100/60 text-neutral-400'
-                        : 'bg-white text-neutral-700'
-                    }`}
-                  >
-                    <div className="text-[11px] uppercase tracking-wider">{d.dayShort}</div>
-                    <div className={`text-sm font-bold ${d.isToday ? 'text-[#2e54ff]' : 'text-neutral-900'}`}>
-                      {d.day}
-                    </div>
+                {daysInMonth.map((d) => {
+                  const holidayName = holidaysMap[d.isoDate];
+                  return (
+                    <th
+                      key={`day-header-${d.isoDate}`}
+                      id={d.isToday ? "extended-planning-today-col" : undefined}
+                      className={`relative border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none w-[200px] min-w-[200px] max-w-[200px] align-bottom ${
+                        d.isToday
+                          ? 'bg-pink-100/80 text-[#2e54ff] border-b-2 border-b-[#2e54ff]'
+                          : d.isWeekend
+                          ? 'bg-neutral-100/60 text-neutral-400'
+                          : 'bg-white text-neutral-700'
+                      }`}
+                    >
+                      {holidayName && (
+                        <div className="flex justify-center mb-1">
+                          <span
+                            className="px-2.5 py-0.5 rounded-full text-white font-medium text-[11px] inline-flex items-center max-w-full min-w-0 select-none"
+                            style={{ backgroundColor: 'rgb(210, 45, 11)' }}
+                            title={`Jour férié : ${holidayName}`}
+                          >
+                            <span className="shrink-0 whitespace-nowrap">Jour férié :&nbsp;</span>
+                            <span className="truncate whitespace-nowrap">{holidayName}</span>
+                          </span>
+                        </div>
+                      )}
+                      <div className="text-[11px] uppercase tracking-wider">{d.dayShort}</div>
+                      <div className={`text-sm font-bold ${d.isToday ? 'text-[#2e54ff]' : 'text-neutral-900'}`}>
+                        {d.day}
+                      </div>
 
-                    {/* Red Pin for current time cursor on today's header */}
-                    {d.isToday && (
-                      <div
-                        className="absolute bottom-0 w-2.5 h-2.5 -mb-1 -ml-1 rounded-full bg-[#ef4444] z-30 shadow-xs pointer-events-none"
-                        style={{ left: `${todayCursorPercent}%` }}
-                        title={`Curseur temps réel : ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`}
-                      />
-                    )}
-                  </th>
-                ))}
+                      {/* Red Pin for current time cursor on today's header */}
+                      {d.isToday && (
+                        <div
+                          className="absolute bottom-0 w-2.5 h-2.5 -mb-1 -ml-1 rounded-full bg-[#ef4444] z-30 shadow-xs pointer-events-none"
+                          style={{ left: `${todayCursorPercent}%` }}
+                          title={`Curseur temps réel : ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`}
+                        />
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
 
@@ -1024,24 +1085,13 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   />
                                 )}
 
-                                {/* Day missions: placed under the pink barrette, horizontally shifted based on time */}
+                                {/* Day missions: placed under the barrette */}
                                 {dayMissions.length > 0 && (
                                   <div className="space-y-1.5">
                                     {dayMissions.map((m: any, mIdx: number) => {
                                       const details = getMissionDetails(m);
-
-                                      // Line 1: Créneau - Identifiant
-                                      const line1 = [details.creneau, details.identifiant].filter(Boolean).join(' - ');
-                                      // Line 2: Client - Site
-                                      const line2 = [details.clientName, details.siteName].filter(Boolean).join(' - ');
-                                      // Line 3: Localisation
-                                      const line3 = details.locationStr;
-
-                                      const barColor = details.isDefib ? '#165dfc' : '#0891b2';
-                                      const timeOffset = getTimeOffsetPercent(details.creneau);
-                                      // Shift horizontally between 0px and 40px depending on time
-                                      const marginLeftPx = Math.round(timeOffset * 40);
                                       const isBeingDragged = draggedMission?.missionId === String(m.id);
+                                      const fullMissionText = `Client : ${details.clientName}. Ville : ${details.villePostcode}. Raison(s) : ${details.reasons}. Créneau : ${details.creneau}.`;
 
                                       return (
                                         <div
@@ -1065,40 +1115,20 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                             setDraggedMission(null);
                                             setDragOverTarget(null);
                                           }}
-                                          className="w-[150px] max-w-[150px] select-none cursor-grab active:cursor-grabbing overflow-hidden transition-all shadow-xs hover:brightness-110"
+                                          className="w-full select-none cursor-grab active:cursor-grabbing transition-all shadow-xs hover:brightness-95 whitespace-normal break-words"
                                           style={{
-                                            marginLeft: `${marginLeftPx}px`,
-                                            backgroundColor: barColor,
+                                            backgroundColor: 'rgb(230, 197, 255)',
+                                            color: 'rgb(89, 22, 144)',
                                             borderRadius: '10px',
                                             padding: '8px 12px',
-                                            fontSize: '12px',
-                                            color: '#fff',
-                                            lineHeight: '16px',
+                                            fontSize: '13px',
+                                            fontWeight: 600,
+                                            lineHeight: '1.35',
                                             opacity: isBeingDragged ? 0.45 : 1,
                                           }}
-                                          title={`Créneau : ${details.creneau || 'Non spécifié'} — Glisser-déposer vers une tournée`}
+                                          title={`${fullMissionText} — Glisser-déposer vers une tournée`}
                                         >
-                                          {/* Line 1: Créneau - Identifiant */}
-                                          <div
-                                            className="truncate whitespace-nowrap overflow-hidden text-ellipsis block font-semibold"
-                                            style={{ fontSize: '12px', lineHeight: '16px', color: '#fff' }}
-                                          >
-                                            {line1 || 'Mission'}
-                                          </div>
-                                          {/* Line 2: Client - Site */}
-                                          <div
-                                            className="truncate whitespace-nowrap overflow-hidden text-ellipsis block"
-                                            style={{ fontSize: '12px', lineHeight: '16px', color: '#fff' }}
-                                          >
-                                            {line2 || 'Client'}
-                                          </div>
-                                          {/* Line 3: Localisation */}
-                                          <div
-                                            className="truncate whitespace-nowrap overflow-hidden text-ellipsis block"
-                                            style={{ fontSize: '12px', lineHeight: '16px', color: '#fff' }}
-                                          >
-                                            {line3 || '-'}
-                                          </div>
+                                          {fullMissionText}
                                         </div>
                                       );
                                     })}

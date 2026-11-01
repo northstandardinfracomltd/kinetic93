@@ -48,7 +48,8 @@ export type SheetTabType =
   | 'communicationPortailClient'
   | 'observateurActionsSuspectes'
   | 'exportations'
-  | 'autresEvents';
+  | 'autresEvents'
+  | 'groupesZones';
 
 export interface GlobalGoogleSheetsConfig {
   apiKey?: string;
@@ -1780,27 +1781,49 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Total TTC (€)', field: 'amount', aliases: ['totalttc', 'totalttceuro', 'montantttc', 'ttc', 'amount', 'montant', 'total', 'prixttc'], type: 'number' },
     { header: 'Catégorie', field: 'category', aliases: ['categorie', 'category', 'type', 'typedepense', 'nature'] },
     { header: 'Statut', field: 'status', aliases: ['statut', 'status', 'etat', 'validation'] },
-    { header: 'Photographie ou fichier du justificatif', field: 'receiptUrl', aliases: ['photographieoufichierdujustificatif', 'justificatif', 'photo', 'photographie', 'fichier', 'receipturl', 'image', 'ticket', 'piecejointe'] },
+    {
+      header: 'URL Partagé Fichier Google Drive.',
+      field: 'receiptUrl',
+      aliases: [
+        'urlpartagefichiergoogledrive',
+        'urlpartagedufichiergoogledrive',
+        'urlgoogledrive',
+        'liengoogledrive',
+        'photographieoufichierdujustificatif',
+        'photographieoufichier',
+        'justificatif',
+        'photo',
+        'photographie',
+        'fichier',
+        'receipturl',
+        'photourl',
+        'image',
+        'ticket',
+        'piecejointe',
+        'url',
+        'lien',
+      ],
+    },
   ],
   releveConcurrentiel: [
     { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idreleve', 'reference'] },
-    { header: 'Commune', field: 'commune', aliases: ['commune', 'ville', 'entreprise', 'client', 'collectivite', 'etablissement', 'organisme', 'nom'] },
-    { header: 'Volume', field: 'volume', aliases: ['volume', 'quantite', 'nombre', 'nbdae', 'nombredefibrillateurs', 'parc', 'tailleparc'], type: 'number' },
-    { header: 'Mainteneur', field: 'mainteneurActuel', aliases: ['mainteneur', 'mainteneuractuel', 'concurrent', 'prestataire', 'prestataireactuel', 'fournisseuractuel'] },
-    { header: 'Prochaine Maint.', field: 'prochaineMaintenance', aliases: ['prochainemaint', 'prochainemaintenance', 'echeance', 'dateecheance', 'fincontrat', 'renouvellement', 'dateprochainemaintenance'], type: 'date' },
-    { header: 'Contact', field: 'contactNomPrenom', aliases: ['contact', 'contactnomprenom', 'nometprenom', 'nomprenom', 'interlocuteur', 'responsable'] },
-    { header: 'Email', field: 'contactEmail', aliases: ['email', 'contactemail', 'mail', 'courriel', 'emailcontact'] },
-    { header: 'Téléphone', field: 'contactTelephone', aliases: ['telephone', 'contacttelephone', 'tel', 'phone', 'portable', 'telephonecontact'] },
-    { header: 'Date de relevé', field: 'createdAt', aliases: ['datedereleve', 'datereleve', 'createdat', 'date', 'datecreation'], type: 'date' },
+    { header: 'Commune ou Entreprise.', field: 'commune', aliases: ['communeouentreprise', 'commune', 'ville', 'entreprise', 'client', 'collectivite', 'etablissement', 'organisme', 'nom', 'denomination'] },
+    { header: 'Volume (Chiffres).', field: 'volume', aliases: ['volumechiffres', 'volumechiffre', 'volume', 'quantite', 'nombre', 'nbdae', 'nombredefibrillateurs', 'parc', 'tailleparc'], type: 'number' },
+    { header: 'Mainteneur actuel.', field: 'mainteneurActuel', aliases: ['mainteneuractuel', 'mainteneur', 'concurrent', 'prestataire', 'prestataireactuel', 'fournisseuractuel'] },
+    { header: 'Prochaine maintenance.', field: 'prochaineMaintenance', aliases: ['prochainemaintenance', 'prochainemaint', 'echeance', 'dateecheance', 'fincontrat', 'renouvellement', 'dateprochainemaintenance'], type: 'date' },
+    { header: 'Contact Nom/Prénom.', field: 'contactNomPrenom', aliases: ['contactnomprenom', 'contact', 'nometprenom', 'nomprenom', 'interlocuteur', 'responsable'] },
+    { header: 'Contact Email.', field: 'contactEmail', aliases: ['contactemail', 'email', 'mail', 'courriel', 'emailcontact'] },
+    { header: 'Contact Téléphone.', field: 'contactTelephone', aliases: ['contacttelephone', 'telephone', 'tel', 'phone', 'portable', 'telephonecontact'] },
+    { header: 'Date de relevé', field: 'createdAt', aliases: ['datedereleve', 'datereleve', 'createdat', 'date', 'datecreation', 'horodatage'], type: 'date' },
   ],
   messagesInternes: [
     { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idmessage'] },
-    { header: 'Expéditeur', field: 'authorName', aliases: ['expediteur', 'sender', 'authorname', 'auteur', 'collaborateur', 'utilisateur', 'membre', 'nom', 'de'] },
-    { header: 'Email', field: 'authorEmail', aliases: ['email', 'authoremail', 'mail', 'courriel'] },
-    { header: 'Rôle', field: 'role', aliases: ['role', 'fonction', 'statut', 'poste'] },
     { header: 'Canal.', field: 'tag', aliases: ['canal', 'channel', 'tag', 'destinataire', 'conversation', 'sujet'] },
-    { header: 'Message', field: 'content', aliases: ['message', 'text', 'content', 'texte', 'contenu', 'corps'] },
-    { header: 'Date & Heure', field: 'dateStr', aliases: ['dateheure', 'dateetheure', 'datestr', 'heure', 'time', 'horaire', 'horodatage', 'date'] },
+    { header: 'Horodatage.', field: 'dateStr', aliases: ['horodatage', 'dateheure', 'dateetheure', 'datestr', 'heure', 'time', 'horaire', 'date'] },
+    { header: 'Nom Prénom (Username).', field: 'authorEmail', aliases: ['nomprenomusername', 'nomprenom', 'nometprenom', 'username', 'email', 'authoremail', 'mail', 'courriel', 'utilisateur', 'collaborateur'] },
+    { header: 'Expéditeur', field: 'authorName', aliases: ['expediteur', 'sender', 'authorname', 'auteur', 'membre', 'nom', 'de'] },
+    { header: 'Rôle', field: 'role', aliases: ['role', 'fonction', 'statut', 'poste'] },
+    { header: 'Message.', field: 'content', aliases: ['message', 'text', 'content', 'texte', 'contenu', 'corps'] },
     { header: 'Timestamp', field: 'createdAt', aliases: ['timestamp', 'createdat'] },
   ],
   ged: [
@@ -2859,6 +2882,13 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Intitulé.', field: 'intitule', aliases: ['intitule', 'titre', 'objet', 'nom', 'evenement'] },
     { header: 'Commentaire.', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'details', 'description', 'note', 'notes'] },
   ],
+  groupesZones: [
+    { header: 'id', field: 'id', aliases: ['id', 'identifiant', 'idgroupe', 'groupeid'] },
+    { header: 'title', field: 'title', aliases: ['title', 'titre', 'titredugroupe', 'nom', 'intitule'] },
+    { header: 'planners', field: 'planners', aliases: ['planners', 'planificateurs', 'planificateur'] },
+    { header: 'technicians', field: 'technicians', aliases: ['technicians', 'techniciens', 'technicien'] },
+    { header: 'regions', field: 'regions', aliases: ['regions', 'region', 'zones', 'zone'] },
+  ],
 };
 GENERIC_CANONICAL_HEADERS.devisFactures = GENERIC_CANONICAL_HEADERS.commandes;
 GENERIC_CANONICAL_HEADERS.stocks = GENERIC_CANONICAL_HEADERS.stocksGlobaux;
@@ -2878,6 +2908,7 @@ function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = 
       tabType === 'stocksDistribues' ||
       tabType === 'historiqueNotifications' ||
       tabType === 'autresEvents' ||
+      tabType === 'groupesZones' ||
       tabType === 'variables' ||
       tabType === 'reglages'
     ) {
@@ -4411,32 +4442,182 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.amountHt = parsedHt;
     merged.tva = parsedTva;
     merged.amountTva = parsedTva;
-    merged.receiptUrl = merged.receiptUrl || merged.photoUrl || '';
-    merged.photoUrl = merged.photoUrl || merged.receiptUrl || '';
+    const rawKeys = Object.keys(rawByHeader);
+    if (rawKeys.length > 0) {
+      const fallbackColMap = resolveGenericColumnFieldMap(rawKeys, 'ticketsCaisse');
+      for (const [kIdx, def] of fallbackColMap.entries()) {
+        const rk = rawKeys[kIdx];
+        const rv = rk ? rawByHeader[rk] : '';
+        if (rv !== undefined && rv !== '' && (merged[def.field] === undefined || merged[def.field] === '')) {
+          merged[def.field] = rv;
+        }
+      }
+    }
+    const resolvedReceiptUrl = String(
+      merged.receiptUrl ||
+        merged.photoUrl ||
+        rawByHeader['URL Partagé Fichier Google Drive.'] ||
+        rawByHeader['URL Partagé Fichier Google Drive'] ||
+        rawByHeader['Photographie ou fichier du justificatif'] ||
+        rawByHeader['Photographie ou fichier.'] ||
+        rawByHeader['Photographie ou fichier'] ||
+        ''
+    ).trim();
+    merged.receiptUrl = resolvedReceiptUrl;
+    merged.photoUrl = resolvedReceiptUrl;
     merged.category = merged.category || 'Frais';
     merged.status = merged.status || 'Validé';
   } else if (tabType === 'releveConcurrentiel') {
+    const rawKeys = Object.keys(rawByHeader);
+    if (rawKeys.length > 0) {
+      const fallbackColMap = resolveGenericColumnFieldMap(rawKeys, 'releveConcurrentiel');
+      for (const [kIdx, def] of fallbackColMap.entries()) {
+        const rk = rawKeys[kIdx];
+        const rv = rk ? rawByHeader[rk] : '';
+        if (rv !== undefined && rv !== '' && (merged[def.field] === undefined || merged[def.field] === '')) {
+          merged[def.field] = rv;
+        }
+      }
+    }
     merged.id = merged.id || `vc_${rowIndexZeroBased + 2}`;
-    merged.commune = merged.commune || '';
-    merged.volume = typeof merged.volume === 'number' ? merged.volume : (parseInt(String(merged.volume || '0'), 10) || 0);
-    merged.mainteneurActuel = merged.mainteneurActuel || '';
-    merged.prochaineMaintenance = normalizeDateStr(merged.prochaineMaintenance || '');
-    merged.contactNomPrenom = merged.contactNomPrenom || '';
-    merged.contactEmail = merged.contactEmail || '';
-    merged.contactTelephone = merged.contactTelephone || '';
+    merged.commune = String(
+      merged.commune ||
+        rawByHeader['Commune ou Entreprise.'] ||
+        rawByHeader['Commune ou Entreprise'] ||
+        rawByHeader['Commune.'] ||
+        rawByHeader['Commune'] ||
+        ''
+    ).trim();
+    const rawVol =
+      (merged.volume !== undefined && merged.volume !== '' && merged.volume !== 0 ? merged.volume : undefined) ??
+      rawByHeader['Volume (Chiffres).'] ??
+      rawByHeader['Volume (Chiffres)'] ??
+      rawByHeader['Volume (Chiffre).'] ??
+      rawByHeader['Volume (Chiffre)'] ??
+      rawByHeader['Volume.'] ??
+      rawByHeader['Volume'] ??
+      merged.volume ??
+      0;
+    merged.volume = typeof rawVol === 'number' ? rawVol : (parseInt(String(rawVol || '0'), 10) || 0);
+    merged.mainteneurActuel = String(
+      merged.mainteneurActuel ||
+        rawByHeader['Mainteneur actuel.'] ||
+        rawByHeader['Mainteneur actuel'] ||
+        rawByHeader['Mainteneur'] ||
+        ''
+    ).trim();
+    merged.prochaineMaintenance = normalizeDateStr(
+      merged.prochaineMaintenance ||
+        rawByHeader['Prochaine maintenance.'] ||
+        rawByHeader['Prochaine maintenance'] ||
+        ''
+    );
+    merged.contactNomPrenom = String(
+      merged.contactNomPrenom ||
+        rawByHeader['Contact Nom/Prénom.'] ||
+        rawByHeader['Contact Nom/Prénom'] ||
+        rawByHeader['Contact'] ||
+        ''
+    ).trim();
+    merged.contactEmail = String(
+      merged.contactEmail ||
+        rawByHeader['Contact Email.'] ||
+        rawByHeader['Contact Email'] ||
+        rawByHeader['Email'] ||
+        ''
+    ).trim();
+    merged.contactTelephone = String(
+      merged.contactTelephone ||
+        rawByHeader['Contact Téléphone.'] ||
+        rawByHeader['Contact Téléphone'] ||
+        rawByHeader['Téléphone'] ||
+        ''
+    ).trim();
   } else if (tabType === 'messagesInternes') {
     merged.id = merged.id || `msg_${rowIndexZeroBased + 2}`;
-    merged.authorName = merged.authorName || merged.sender || 'Membre';
-    merged.sender = merged.sender || merged.authorName;
-    merged.authorEmail = merged.authorEmail || '';
+    const rawUsernameCol = String(
+      rawByHeader['Nom Prénom (Username).'] ||
+      rawByHeader['Nom Prénom (Username)'] ||
+      rawByHeader['Username'] ||
+      rawByHeader['Email'] ||
+      merged.authorEmail ||
+      merged.authorName ||
+      merged.sender ||
+      ''
+    ).trim();
+
+    let resolvedEmail = String(merged.authorEmail || '').trim();
+    let resolvedName = String(merged.authorName || merged.sender || '').trim();
+
+    if (rawUsernameCol) {
+      if (rawUsernameCol.includes('@')) {
+        resolvedEmail = rawUsernameCol;
+        if (!resolvedName || resolvedName === 'Membre' || resolvedName.includes('@')) {
+          resolvedName = '';
+        }
+      } else {
+        if (!resolvedName || resolvedName === 'Membre') {
+          resolvedName = rawUsernameCol;
+        }
+      }
+    }
+
+    // Try to resolve member Name / Email from cached tenant members or master tenant info
+    const cachedMembers =
+      (tenantId && latestReadCache.get(`${tenantId}:membresEnvironnement`)?.items) || [];
+    if (resolvedEmail && (!resolvedName || resolvedName === 'Membre')) {
+      const matchedMember = cachedMembers.find(
+        (m: any) => m && m.email && String(m.email).trim().toLowerCase() === resolvedEmail.toLowerCase()
+      );
+      if (matchedMember && matchedMember.name) {
+        resolvedName = String(matchedMember.name).trim();
+      } else if (tenantId && masterTenantsCache?.tenants) {
+        const tInfo = masterTenantsCache.tenants.find(
+          (t: any) =>
+            String(t.id || '').toLowerCase() === String(tenantId).toLowerCase() ||
+            String(t.identifiant || '').toLowerCase() === String(tenantId).toLowerCase()
+        );
+        if (
+          tInfo &&
+          tInfo.adminEmail &&
+          String(tInfo.adminEmail).trim().toLowerCase() === resolvedEmail.toLowerCase() &&
+          tInfo.adminName
+        ) {
+          resolvedName = String(tInfo.adminName).trim();
+        }
+      }
+    } else if (!resolvedEmail && resolvedName && resolvedName !== 'Membre') {
+      const matchedMember = cachedMembers.find(
+        (m: any) => m && m.name && String(m.name).trim().toLowerCase() === resolvedName.toLowerCase()
+      );
+      if (matchedMember && matchedMember.email) {
+        resolvedEmail = String(matchedMember.email).trim();
+      }
+    }
+
+    merged.authorEmail = resolvedEmail;
+    merged.authorName = resolvedName || resolvedEmail || 'Membre';
+    merged.sender = merged.authorName;
     merged.role = merged.role || 'Administrateur';
     merged.tag = 'All';
     merged.channel = 'All';
-    merged.content = merged.content || merged.text || '';
-    merged.text = merged.text || merged.content;
+    merged.content = String(
+      merged.content ||
+      merged.text ||
+      rawByHeader['Message.'] ||
+      rawByHeader['Message'] ||
+      ''
+    ).trim();
+    merged.text = merged.content;
     merged.createdAt = merged.createdAt ? (isNaN(Number(merged.createdAt)) ? Date.parse(String(merged.createdAt)) || Date.now() : Number(merged.createdAt)) : Date.now();
-    merged.dateStr = merged.dateStr || merged.time || new Date(merged.createdAt).toLocaleDateString('fr-FR');
-    merged.time = merged.time || merged.dateStr;
+    merged.dateStr = String(
+      merged.dateStr ||
+      merged.time ||
+      rawByHeader['Horodatage.'] ||
+      rawByHeader['Horodatage'] ||
+      new Date(merged.createdAt).toLocaleDateString('fr-FR')
+    ).trim();
+    merged.time = merged.dateStr;
   } else if (tabType === 'ged') {
     merged.id = merged.id || `ged_${rowIndexZeroBased + 2}`;
     merged.title = merged.title || '';
@@ -5681,6 +5862,34 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         .replace(/[^a-z0-9]/g, '');
       merged.id = slug ? `spont_${slug}` : `spont_${tenantId}_row_${rowIndexZeroBased + 2}`;
     }
+  } else if (tabType === 'groupesZones') {
+    const parseStringArray = (val: any): string[] => {
+      if (Array.isArray(val)) {
+        return val.map(v => String(v || '').trim()).filter(Boolean);
+      }
+      const str = String(val ?? '').trim();
+      if (!str) return [];
+      if (str.startsWith('[') && str.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(str);
+          if (Array.isArray(parsed)) {
+            return parsed.map(v => String(v || '').trim()).filter(Boolean);
+          }
+        } catch (_) {}
+      }
+      return str
+        .split(/[,;\n]+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+    };
+
+    const rawId = String(merged.id ?? rawByHeader['id'] ?? rawByHeader['ID'] ?? '').trim();
+    const rawTitle = String(merged.title ?? rawByHeader['title'] ?? rawByHeader['Title'] ?? rawByHeader['Titre'] ?? '').trim();
+    merged.id = rawId && !rawId.startsWith('sheet_gen_') ? rawId : `twg-${rowIndexZeroBased + 2}`;
+    merged.title = rawTitle;
+    merged.planners = parseStringArray(merged.planners ?? rawByHeader['planners'] ?? rawByHeader['Planners']);
+    merged.technicians = parseStringArray(merged.technicians ?? rawByHeader['technicians'] ?? rawByHeader['Technicians']);
+    merged.regions = parseStringArray(merged.regions ?? rawByHeader['regions'] ?? rawByHeader['Regions']);
   }
 
   if (!merged.id) {
@@ -6456,8 +6665,18 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.amountHT = enriched.amountHT ?? enriched.amountHt ?? 0;
     enriched.tva = enriched.tva ?? enriched.amountTva ?? 0;
     enriched.amount = enriched.amount ?? enriched.amountTtc ?? 0;
-    enriched.receiptUrl = enriched.receiptUrl || enriched.photoUrl || '';
-    enriched.photoUrl = enriched.photoUrl || enriched.receiptUrl || '';
+    const cleanReceiptUrl = String(
+      enriched.receiptUrl ||
+        enriched.photoUrl ||
+        enriched['URL Partagé Fichier Google Drive.'] ||
+        enriched['URL Partagé Fichier Google Drive'] ||
+        ''
+    ).trim();
+    enriched.receiptUrl = cleanReceiptUrl;
+    enriched.photoUrl = cleanReceiptUrl;
+    enriched['URL Partagé Fichier Google Drive.'] = cleanReceiptUrl;
+    enriched['URL Partagé Fichier Google Drive'] = cleanReceiptUrl;
+    enriched['Photographie ou fichier du justificatif'] = cleanReceiptUrl;
     enriched.category = enriched.category || 'Frais';
     enriched.status = enriched.status || 'Validé';
   } else if (tabType === 'temps') {
@@ -6582,13 +6801,28 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
   } else if (tabType === 'ged') {
     enriched.date = enriched.date || enriched.dateStr || '';
   } else if (tabType === 'messagesInternes') {
-    enriched.authorName = enriched.authorName || enriched.sender || '';
+    const emailToStore = String(
+      enriched.authorEmail ||
+      enriched['Nom Prénom (Username).'] ||
+      enriched['Nom Prénom (Username)'] ||
+      enriched.authorName ||
+      enriched.sender ||
+      ''
+    ).trim();
+    enriched.authorEmail = emailToStore;
+    enriched['Nom Prénom (Username).'] = emailToStore;
+    enriched['Nom Prénom (Username)'] = emailToStore;
+    enriched.authorName = String(enriched.authorName || enriched.sender || emailToStore || '').trim();
     enriched.tag = 'All';
     enriched.channel = 'All';
     enriched['Canal.'] = 'All';
     enriched['Canal'] = 'All';
     enriched.content = enriched.content || enriched.text || '';
+    enriched['Message.'] = enriched.content;
+    enriched['Message'] = enriched.content;
     enriched.dateStr = enriched.dateStr || enriched.time || '';
+    enriched['Horodatage.'] = enriched.dateStr;
+    enriched['Horodatage'] = enriched.dateStr;
   } else if (tabType === 'membresEnvironnement') {
     if (Array.isArray(enriched.competences)) {
       enriched.competences = enriched.competences.join(', ');
@@ -6750,6 +6984,66 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.creneau = String(enriched.creneau ?? '').trim();
     enriched.intitule = String(enriched.intitule ?? '').trim();
     enriched.commentaire = String(enriched.commentaire ?? '').trim();
+  } else if (tabType === 'groupesZones') {
+    const serializeArray = (val: any): string => {
+      if (Array.isArray(val)) {
+        return val.map(v => String(v ?? '').trim()).filter(Boolean).join(', ');
+      }
+      return String(val ?? '').trim();
+    };
+    enriched.id = String(enriched.id ?? '').trim();
+    enriched.title = String(enriched.title ?? '').trim();
+    enriched.planners = serializeArray(enriched.planners);
+    enriched.technicians = serializeArray(enriched.technicians);
+    enriched.regions = serializeArray(enriched.regions);
+  } else if (tabType === 'releveConcurrentiel') {
+    const cleanCommune = String(
+      enriched.commune ??
+        enriched['Commune ou Entreprise.'] ??
+        enriched['Commune ou Entreprise'] ??
+        ''
+    ).trim();
+    const cleanVol =
+      enriched.volume !== undefined && enriched.volume !== null && String(enriched.volume).trim() !== ''
+        ? String(enriched.volume).trim()
+        : String(
+            enriched['Volume (Chiffres).'] ??
+              enriched['Volume (Chiffres)'] ??
+              enriched['Volume (Chiffre).'] ??
+              enriched['Volume (Chiffre)'] ??
+              '0'
+          ).trim();
+    enriched.commune = cleanCommune;
+    enriched['Commune ou Entreprise.'] = cleanCommune;
+    enriched['Commune ou Entreprise'] = cleanCommune;
+    enriched['Commune'] = cleanCommune;
+    enriched.volume = cleanVol;
+    enriched['Volume (Chiffres).'] = cleanVol;
+    enriched['Volume (Chiffres)'] = cleanVol;
+    enriched['Volume (Chiffre).'] = cleanVol;
+    enriched['Volume (Chiffre)'] = cleanVol;
+    enriched['Volume'] = cleanVol;
+    enriched.mainteneurActuel = String(enriched.mainteneurActuel ?? '').trim();
+    enriched['Mainteneur actuel.'] = enriched.mainteneurActuel;
+    enriched['Mainteneur actuel'] = enriched.mainteneurActuel;
+    const rawProch = String(enriched.prochaineMaintenance ?? '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawProch)) {
+      const [yyyy, mm, dd] = rawProch.split('-');
+      enriched.prochaineMaintenance = `${dd}/${mm}/${yyyy}`;
+    } else {
+      enriched.prochaineMaintenance = formatDateDisplay(rawProch) || rawProch;
+    }
+    enriched['Prochaine maintenance.'] = enriched.prochaineMaintenance;
+    enriched['Prochaine maintenance'] = enriched.prochaineMaintenance;
+    enriched.contactNomPrenom = String(enriched.contactNomPrenom ?? '').trim();
+    enriched['Contact Nom/Prénom.'] = enriched.contactNomPrenom;
+    enriched['Contact Nom/Prénom'] = enriched.contactNomPrenom;
+    enriched.contactEmail = String(enriched.contactEmail ?? '').trim();
+    enriched['Contact Email.'] = enriched.contactEmail;
+    enriched['Contact Email'] = enriched.contactEmail;
+    enriched.contactTelephone = String(enriched.contactTelephone ?? '').trim();
+    enriched['Contact Téléphone.'] = enriched.contactTelephone;
+    enriched['Contact Téléphone'] = enriched.contactTelephone;
   }
 
   // 1. Map via canonical definitions if tabType is known
@@ -6944,6 +7238,9 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
     const composite = email && dt && cr && intit ? `${email}@@${dt}@@${cr}@@${intit}` : '';
     return [item.id, composite].filter(Boolean).map(s => String(s).trim().toLowerCase());
   }
+  if (tabType === 'groupesZones') {
+    return [item.id, item.title].filter(Boolean).map(s => String(s).trim().toLowerCase());
+  }
   if (tabType === 'temps') {
     const normDate = normalizeDateStr(item.startDate || '').trim().toLowerCase();
     const techName = String(item.techName || '').trim().toLowerCase();
@@ -6968,6 +7265,21 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
         if (startTime) keys.push(`temps@@${emailPrefix}@@${normDate}@@${startTime}`);
       }
     }
+    return Array.from(new Set(keys.filter(Boolean)));
+  }
+  if (tabType === 'messagesInternes') {
+    const dateStr = String(item.dateStr || item.time || '').trim().toLowerCase();
+    const content = String(item.content || item.text || '').trim().toLowerCase();
+    const authorEmail = String(item.authorEmail || '').trim().toLowerCase();
+    const sheetRow = Number(item._sheetRowNumber);
+    const keys = [
+      item.id ? String(item.id).trim().toLowerCase() : '',
+      sheetRow > 0 ? `row:${sheetRow}` : '',
+      sheetRow > 0 ? `msg_${sheetRow}` : '',
+      sheetRow > 0 ? `msg_sheet_${sheetRow}` : '',
+      dateStr && content ? `msg@@${dateStr}@@${content}` : '',
+      authorEmail && dateStr && content ? `msg@@${authorEmail}@@${dateStr}@@${content}` : '',
+    ];
     return Array.from(new Set(keys.filter(Boolean)));
   }
   if (tabType !== 'defibrillateurs') {
@@ -9337,6 +9649,9 @@ const MASTER_SHEET_SPREADSHEET_HEADER_TO_FIELD: Record<string, string> = {
   spreadsheetautresevents: 'spreadsheetAutresEvents',
   spreadsheetautresevent: 'spreadsheetAutresEvents',
   spreadsheetautresevenements: 'spreadsheetAutresEvents',
+  spreadsheetgroupesetzones: 'spreadsheetGroupesZones',
+  spreadsheetgroupeszones: 'spreadsheetGroupesZones',
+  spreadsheetgroupestravail: 'spreadsheetGroupesZones',
 };
 
 const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [

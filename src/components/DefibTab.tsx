@@ -2043,110 +2043,82 @@ export default function DefibTab({
     setSchedules(prev => prev.filter((_, i) => i !== idx));
   };
 
-  // Ref to track the loaded address so we don't auto-geocode on initial open
+  // Ref to track the loaded address
   const loadedAddressRef = React.useRef({ numVoie: '', cp: '', ville: '', pays: '' });
 
-  // Auto geocode address on interactive change/typing
-  useEffect(() => {
+  // Manual geocode address on button click
+  const handleManualUpdateCoordinates = () => {
     const trimmedVoie = numVoie.trim();
     const trimmedCp = cp.trim();
     const trimmedVille = ville.trim();
+    const trimmedRegion = region.trim();
     const trimmedPays = pays.trim();
 
-    // Check if current fields are identical to what was loaded (to prevent overwriting custom coords on form open)
-    if (
-      trimmedVoie === loadedAddressRef.current.numVoie &&
-      trimmedCp === loadedAddressRef.current.cp &&
-      trimmedVille === loadedAddressRef.current.ville &&
-      trimmedPays === loadedAddressRef.current.pays
-    ) {
-      return;
-    }
+    const queryParts = [trimmedVoie, trimmedCp, trimmedVille, trimmedRegion, trimmedPays].filter(Boolean);
+    if (queryParts.length === 0) return;
 
-    const queryParts = [];
-    if (trimmedVoie) queryParts.push(trimmedVoie);
-    if (trimmedCp) queryParts.push(trimmedCp);
-    if (trimmedVille) queryParts.push(trimmedVille);
+    const isFranceInstance = !trimmedPays || trimmedPays.toLowerCase() === 'france' || trimmedPays.toLowerCase() === 'fr';
 
-    // Only geocode if we have at least a street or a city typed
-    if (queryParts.length === 0 || (!trimmedVille && !trimmedVoie)) {
-      return;
-    }
+    const runNominatimFallback = () => {
+      let structuredUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1`;
+      if (trimmedVoie) structuredUrl += `&street=${encodeURIComponent(trimmedVoie)}`;
+      if (trimmedCp) structuredUrl += `&postalcode=${encodeURIComponent(trimmedCp)}`;
+      if (trimmedVille) structuredUrl += `&city=${encodeURIComponent(trimmedVille)}`;
+      if (trimmedRegion) structuredUrl += `&state=${encodeURIComponent(trimmedRegion)}`;
+      if (trimmedPays) structuredUrl += `&country=${encodeURIComponent(trimmedPays)}`;
 
-    const delayDebounceFn = setTimeout(() => {
-      const isFranceInstance = !trimmedPays || trimmedPays.toLowerCase() === 'france' || trimmedPays.toLowerCase() === 'fr';
-
-      if (isFranceInstance) {
-        // Use the high-accuracy official French government database
-        const frenchSearchQuery = `${trimmedVoie} ${trimmedCp} ${trimmedVille}`.trim();
-        const apiGovUrl = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(frenchSearchQuery)}&limit=1`;
-
-        fetch(apiGovUrl)
-          .then(res => res.json())
-          .then(data => {
-            if (data && data.features && data.features.length > 0) {
-              const feature = data.features[0];
-              if (feature.geometry && feature.geometry.coordinates) {
-                const [lon, lat] = feature.geometry.coordinates;
-                if (lat !== undefined && lon !== undefined) {
-                  setLatitude(parseFloat(lat).toFixed(6));
-                  setLongitude(parseFloat(lon).toFixed(6));
+      fetch(structuredUrl)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.length > 0 && data[0].lat && data[0].lon) {
+            setLatitude(parseFloat(data[0].lat).toFixed(6));
+            setLongitude(parseFloat(data[0].lon).toFixed(6));
+          } else {
+            const searchQuery = [trimmedVoie, trimmedCp, trimmedVille, trimmedRegion, trimmedPays].filter(Boolean).join(', ');
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`)
+              .then(res => res.json())
+              .then(fallbackData => {
+                if (fallbackData && fallbackData.length > 0 && fallbackData[0].lat && fallbackData[0].lon) {
+                  setLatitude(parseFloat(fallbackData[0].lat).toFixed(6));
+                  setLongitude(parseFloat(fallbackData[0].lon).toFixed(6));
                 }
+              })
+              .catch(err => console.warn('Free-form geocoding fallback error:', err));
+          }
+        })
+        .catch(err => {
+          console.warn('Geocoding error:', err);
+        });
+    };
+
+    if (isFranceInstance && (trimmedVoie || trimmedCp || trimmedVille)) {
+      const frenchSearchQuery = [trimmedVoie, trimmedCp, trimmedVille].filter(Boolean).join(' ').trim();
+      const apiGovUrl = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(frenchSearchQuery)}&limit=1`;
+
+      fetch(apiGovUrl)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.features && data.features.length > 0) {
+            const feature = data.features[0];
+            if (feature.geometry && feature.geometry.coordinates) {
+              const [lon, lat] = feature.geometry.coordinates;
+              if (lat !== undefined && lon !== undefined) {
+                setLatitude(parseFloat(lat).toFixed(6));
+                setLongitude(parseFloat(lon).toFixed(6));
+                return;
               }
             }
-          })
-          .catch(err => {
-            console.warn('Official French geocoding API error:', err);
-          });
-      } else {
-        // Fallback or non-France countries: Try structured and then unstructured Nominatim
-        let structuredUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1`;
-        if (trimmedVoie) {
-          structuredUrl += `&street=${encodeURIComponent(trimmedVoie)}`;
-        }
-        if (trimmedCp) {
-          structuredUrl += `&postalcode=${encodeURIComponent(trimmedCp)}`;
-        }
-        if (trimmedVille) {
-          structuredUrl += `&city=${encodeURIComponent(trimmedVille)}`;
-        }
-        if (trimmedPays) {
-          structuredUrl += `&country=${encodeURIComponent(trimmedPays)}`;
-        }
-
-        fetch(structuredUrl)
-          .then(res => res.json())
-          .then(data => {
-            if (data && data.length > 0 && data[0].lat && data[0].lon) {
-              setLatitude(parseFloat(data[0].lat).toFixed(6));
-              setLongitude(parseFloat(data[0].lon).toFixed(6));
-            } else {
-              const freeQueryParts = [];
-              if (trimmedVoie) freeQueryParts.push(trimmedVoie);
-              if (trimmedCp) freeQueryParts.push(trimmedCp);
-              if (trimmedVille) freeQueryParts.push(trimmedVille);
-              if (trimmedPays) freeQueryParts.push(trimmedPays);
-              const searchQuery = freeQueryParts.join(', ');
-
-              fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`)
-                .then(res => res.json())
-                .then(fallbackData => {
-                  if (fallbackData && fallbackData.length > 0 && fallbackData[0].lat && fallbackData[0].lon) {
-                    setLatitude(parseFloat(fallbackData[0].lat).toFixed(6));
-                    setLongitude(parseFloat(fallbackData[0].lon).toFixed(6));
-                  }
-                })
-                .catch(err => console.warn('Free-form geocoding fallback error:', err));
-            }
-          })
-          .catch(err => {
-            console.warn('Geocoding error:', err);
-          });
-      }
-    }, 800);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [numVoie, cp, ville, pays]);
+          }
+          runNominatimFallback();
+        })
+        .catch(err => {
+          console.warn('Official French geocoding API error:', err);
+          runNominatimFallback();
+        });
+    } else {
+      runNominatimFallback();
+    }
+  };
 
   // Section 5 - Dates
   const [finGarantie, setFinGarantie] = useState('');
@@ -4953,13 +4925,19 @@ export default function DefibTab({
               >
                 <div className="flex items-center gap-2">
                   <span 
-                    className="rounded-full flex items-center justify-center font-bold font-sans shrink-0"
+                    className="rounded-full inline-flex items-center justify-center font-bold font-sans shrink-0"
                     style={{
-                      backgroundColor: 'rgb(61 220 132)',
+                      backgroundColor: 'rgb(61, 220, 132)',
                       color: '#156337',
                       fontSize: '18px',
                       height: '35px',
                       width: '35px',
+                      lineHeight: 1,
+                      padding: 0,
+                      margin: 0,
+                      textAlign: 'center',
+                      textBoxTrim: 'trim-both' as any,
+                      textBoxEdge: 'cap alphabetic' as any,
                       cursor: 'default',
                     }}
                   >
@@ -6008,7 +5986,7 @@ export default function DefibTab({
                               e.stopPropagation();
                               openEditForm(df, e);
                             }}
-                            style={rowActionButton18Style}
+                            style={{ ...rowActionButton18Style, backgroundColor: 'rgb(46, 84, 255)' }}
                           >
                             Modifier
                           </button>
@@ -6063,7 +6041,7 @@ export default function DefibTab({
                               setSelectedIds(prev => prev.filter(id => !keySet.has(String(id).trim().toLowerCase())));
                               onDeleteDefib(df.identifiant || df.id);
                             }}
-                            style={rowActionButton18Style}
+                            style={{ ...rowActionButton18Style, backgroundColor: 'rgb(210, 45, 11)' }}
                             className="cursor-pointer"
                             title={t("Supprimer")}
                           >
@@ -6197,6 +6175,7 @@ export default function DefibTab({
                 id="btn-close-defib-modal"
                 style={{
                   ...rowActionButton18Style,
+                  backgroundColor: 'rgb(210, 45, 11)',
                   width: '100%',
                 }}
                 className="w-full transition-colors cursor-pointer"
@@ -7493,7 +7472,7 @@ export default function DefibTab({
                                 color: '#ffffff',
                                 borderRadius: '10px',
                                 padding: '10px 16px',
-                                fontSize: '16px',
+                                fontSize: '18px',
                                 fontWeight: 100,
                                 border: 'none',
                                 opacity: otherDefibsCount === 0 ? 0.4 : 1,
@@ -7529,7 +7508,7 @@ export default function DefibTab({
                                 color: '#ffffff',
                                 borderRadius: '10px',
                                 padding: '10px 16px',
-                                fontSize: '16px',
+                                fontSize: '18px',
                                 fontWeight: 100,
                                 border: 'none',
                                 opacity: otherMaterielsCount === 0 ? 0.4 : 1,
@@ -7647,7 +7626,15 @@ export default function DefibTab({
                       </div>
                     </div>
 
-                    <div className="pt-1">
+                    <div className="pt-1 space-y-2">
+                      <button
+                        type="button"
+                        onClick={handleManualUpdateCoordinates}
+                        style={{ ...rowActionButton18Style, width: '100%', textTransform: 'none' }}
+                        className="font-sans"
+                      >
+                        Actualiser les coordonnées
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -7698,16 +7685,19 @@ export default function DefibTab({
 
                       {schedules.map((sch, schIdx) => (
                         <div key={schIdx} style={{ borderRadius: '13px', border: 'none', backgroundColor: '#f5f7fa' }} className="p-3 relative space-y-3">
-                          {schedules.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveSchedule(schIdx)}
-                              style={{ borderRadius: '13px', fontSize: '16px' }}
-                              className="absolute top-2 right-2 px-3 py-1 font-bold text-white bg-[#991b1b] hover:bg-[#7f1d1d] active:scale-95 transition-all cursor-pointer font-sans"
-                            >
-                              Supprimer
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSchedule(schIdx)}
+                            style={{
+                              borderRadius: '13px',
+                              fontSize: '18px',
+                              backgroundColor: 'rgb(210, 45, 11)',
+                              padding: '8px 16px',
+                            }}
+                            className="absolute top-2 right-2 font-bold text-white hover:opacity-90 active:scale-95 transition-all cursor-pointer font-sans"
+                          >
+                            Supprimer
+                          </button>
 
                           {/* Midi closing toggle - styled as radio pink */}
                           <div className="flex items-center gap-2 select-none">
@@ -10702,7 +10692,7 @@ export default function DefibTab({
                 <label 
                   htmlFor="advanced-search-input"
                   className="text-[18px] font-sans font-semibold" 
-                  style={{ fontWeight: 100, cursor: 'pointer', color: '#50617A', fontSize: '18px' }}
+                  style={{ fontWeight: 100, cursor: 'pointer', color: '#000000', fontSize: '18px' }}
                 >
                   Termes de recherche avancée.
                 </label>
@@ -10713,7 +10703,7 @@ export default function DefibTab({
                       setDraftFilters(prev => ({ ...prev, advancedSearchTerms: [] }));
                       setAdvancedSearchInputValue('');
                     }}
-                    style={{ color: '#50617A', fontSize: '18px' }}
+                    style={{ color: '#000000', fontSize: '18px' }}
                     className="text-[18px] hover:text-red-600 font-sans cursor-pointer bg-transparent border-0 p-0 transition-colors"
                     title="Effacer tous les termes"
                   >
@@ -10721,7 +10711,7 @@ export default function DefibTab({
                   </button>
                 )}
               </div>
-              <p className="text-[18px] font-sans leading-tight px-1" style={{ color: '#50617A', fontSize: '18px' }}>
+              <p className="text-[18px] font-sans leading-tight px-1" style={{ color: '#000000', fontSize: '18px' }}>
                 Pour chaque terme, entrez au moins 2 lettres et saisissez ‘Entrée’, une virgule ou collez une liste.
               </p>
 
@@ -10735,7 +10725,7 @@ export default function DefibTab({
                     onClick={() => setDraftFilters(prev => ({ ...prev, advancedSearchOperator: 'OR' }))}
                     style={{
                       backgroundColor: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '#2e54ff' : 'transparent',
-                      color: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '#ffffff' : '#50617A',
+                      color: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '#ffffff' : '#000000',
                       borderRadius: (draftFilters.advancedSearchOperator || 'OR') === 'OR' ? '15px' : '14px',
                       fontSize: '18px',
                     }}
@@ -10752,7 +10742,7 @@ export default function DefibTab({
                     onClick={() => setDraftFilters(prev => ({ ...prev, advancedSearchOperator: 'AND' }))}
                     style={{
                       backgroundColor: draftFilters.advancedSearchOperator === 'AND' ? '#2e54ff' : 'transparent',
-                      color: draftFilters.advancedSearchOperator === 'AND' ? '#ffffff' : '#50617A',
+                      color: draftFilters.advancedSearchOperator === 'AND' ? '#ffffff' : '#000000',
                       borderRadius: draftFilters.advancedSearchOperator === 'AND' ? '15px' : '14px',
                       fontSize: '18px',
                     }}
@@ -10863,7 +10853,7 @@ export default function DefibTab({
             {/* Filter: Client (Remonté directement en dessous du field des termes de recherche) */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between px-1">
-                <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>
+                <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>
                   Client.
                 </span>
                 <button
@@ -10962,7 +10952,7 @@ export default function DefibTab({
 
             {/* Filter 3: Action Requise 3-6 Mois */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Action requise 3 à 6 mois.</span>
+              <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Action requise 3 à 6 mois.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -10980,7 +10970,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Oui</span>
+                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -10999,14 +10989,14 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Non</span>
+                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Non</span>
                 </button>
               </div>
             </div>
 
             {/* Filter 4: Action Requise 3 Mois */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Action requise 3 mois.</span>
+              <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Action requise 3 mois.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -11024,7 +11014,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Oui</span>
+                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -11043,14 +11033,14 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Non</span>
+                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Non</span>
                 </button>
               </div>
             </div>
 
             {/* Filter 5: Action Requise Expirée */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Action requise expirée.</span>
+              <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Action requise expirée.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -11068,7 +11058,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Oui</span>
+                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -11087,14 +11077,14 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Non</span>
+                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Non</span>
                 </button>
               </div>
             </div>
 
             {/* Filter 6: Rejeté(s) en intervention */}
             <div className="py-1 flex items-center justify-between gap-4">
-              <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Rejeté(s) en intervention.</span>
+              <span className="text-[18px] font-sans font-semibold" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Rejeté(s) en intervention.</span>
               <div className="flex items-center gap-4">
                 {/* Oui Option */}
                 <button
@@ -11112,7 +11102,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Oui</span>
+                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Oui</span>
                 </button>
 
                 {/* Non Option */}
@@ -11131,7 +11121,7 @@ export default function DefibTab({
                       <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff] transition-all scale-100" />
                     )}
                   </div>
-                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#50617A', fontSize: '18px' }}>Non</span>
+                  <span className="text-[18px] font-sans" style={{ fontWeight: 100, color: '#000000', fontSize: '18px' }}>Non</span>
                 </button>
               </div>
             </div>
@@ -11164,7 +11154,7 @@ export default function DefibTab({
                 setIsFilterPaneOpen(false);
               }}
               style={{
-                backgroundColor: '#0f172a',
+                backgroundColor: 'rgb(210, 45, 11)',
                 color: '#ffffff',
                 borderRadius: '13px',
                 fontSize: '18px',
@@ -11246,24 +11236,25 @@ export default function DefibTab({
           <style>{`
             #client-search-side-pane input::placeholder,
             #variable-search-side-pane input::placeholder {
-              color: #000000 !important;
+              color: #BECADB !important;
               opacity: 1 !important;
               font-size: 18px !important;
             }
           `}</style>
           <div 
-            className="relative w-full sm:w-[480px] bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out"
+            className="relative w-full sm:w-[480px] shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out"
             id="client-search-side-pane"
             onClick={(e) => e.stopPropagation()}
             style={{
               height: '100vh',
               minHeight: '100dvh',
               maxHeight: '100dvh',
-              borderLeft: '1px solid #e2e8f0',
+              borderLeft: 'none',
+              backgroundColor: 'rgb(245, 247, 250)',
             }}
           >
             {/* Search field at the very top - No title, No line divider */}
-            <div className="p-4 pt-5 pb-3 bg-white shrink-0">
+            <div className="p-4 pt-5 pb-3 shrink-0" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
               <input
                 type="text"
                 value={clientSidePaneSearch}
@@ -11274,19 +11265,19 @@ export default function DefibTab({
                   width: '100%',
                   padding: '13px 18px',
                   borderRadius: '13px',
-                  border: '1px solid rgb(201, 191, 205)',
+                  border: '1px solid #DCE1EA',
                   fontSize: '18px',
                   color: '#000000',
                   outline: 'none',
                   backgroundColor: '#ffffff',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                 }}
-                className="w-full text-black placeholder:text-black placeholder:text-[18px] placeholder:opacity-100 focus:border-blue-500 transition-colors"
+                className="w-full text-black placeholder:text-[#BECADB] placeholder:text-[18px] placeholder:opacity-100 focus:border-blue-500 transition-colors"
               />
             </div>
 
             {/* Client List */}
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
               {clientSearchTarget === 'filter' && (
                 <div
                   onClick={() => {
@@ -11294,11 +11285,8 @@ export default function DefibTab({
                     setIsSidePaneClientOpen(false);
                     setClientSidePaneSearch('');
                   }}
-                  className={`p-3.5 rounded-xl cursor-pointer transition-all border ${
-                    draftFilters.clientId === 'Tous' 
-                      ? 'bg-[#ecefff] border-[#2e54ff]' 
-                      : 'bg-slate-50 border-slate-200 hover:border-slate-300'
-                  }`}
+                  style={{ backgroundColor: '#FFF', border: 'none' }}
+                  className="p-3.5 rounded-xl cursor-pointer transition-all bg-[#FFF]"
                 >
                   <span 
                     style={{ 
@@ -11322,9 +11310,6 @@ export default function DefibTab({
                 </div>
               ) : (
                 filteredSidePaneClients.map((c) => {
-                  const isSelected = clientSearchTarget === 'filter' 
-                    ? draftFilters.clientId === c.id 
-                    : c.id === clientId;
                   return (
                     <div
                       key={c.id}
@@ -11337,11 +11322,8 @@ export default function DefibTab({
                         setIsSidePaneClientOpen(false);
                         setClientSidePaneSearch('');
                       }}
-                      className={`p-3.5 rounded-xl cursor-pointer transition-all border ${
-                        isSelected 
-                          ? 'bg-[#ecefff] border-[#2e54ff]' 
-                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                      }`}
+                      style={{ backgroundColor: '#FFF', border: 'none' }}
+                      className="p-3.5 rounded-xl cursor-pointer transition-all bg-[#FFF]"
                     >
                       <span 
                         style={{ 
@@ -11360,8 +11342,8 @@ export default function DefibTab({
               )}
             </div>
 
-            {/* Floating Black "Fermer" Button at Bottom */}
-            <div className="p-4 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            {/* Floating "Fermer" Button at Bottom */}
+            <div className="p-4 shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
               <button
                 type="button"
                 onClick={() => {
@@ -11370,7 +11352,7 @@ export default function DefibTab({
                 }}
                 className="w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
                 style={{
-                  backgroundColor: '#0f172a',
+                  backgroundColor: 'rgb(210, 45, 11)',
                   color: '#ffffff',
                   fontSize: '18px',
                   border: 'none',
@@ -11409,24 +11391,25 @@ export default function DefibTab({
         >
           <style>{`
             #variable-search-side-pane input::placeholder {
-              color: #000000 !important;
+              color: #BECADB !important;
               opacity: 1 !important;
               font-size: 18px !important;
             }
           `}</style>
           <div 
-            className="relative w-full sm:w-[480px] bg-white shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out"
+            className="relative w-full sm:w-[480px] shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out"
             id="variable-search-side-pane"
             onClick={(e) => e.stopPropagation()}
             style={{
               height: '100vh',
               minHeight: '100dvh',
               maxHeight: '100dvh',
-              borderLeft: '1px solid #e2e8f0',
+              borderLeft: 'none',
+              backgroundColor: 'rgb(245, 247, 250)',
             }}
           >
             {/* Search field at the very top - No title, No line divider */}
-            <div className="p-4 pt-5 pb-3 bg-white shrink-0">
+            <div className="p-4 pt-5 pb-3 shrink-0" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
               <input
                 type="text"
                 value={variableSidePaneSearch}
@@ -11437,19 +11420,19 @@ export default function DefibTab({
                   width: '100%',
                   padding: '13px 18px',
                   borderRadius: '13px',
-                  border: '1px solid rgb(201, 191, 205)',
+                  border: '1px solid #DCE1EA',
                   fontSize: '18px',
                   color: '#000000',
                   outline: 'none',
                   backgroundColor: '#ffffff',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                 }}
-                className="w-full text-black placeholder:text-black placeholder:text-[18px] placeholder:opacity-100 focus:border-blue-500 transition-colors"
+                className="w-full text-black placeholder:text-[#BECADB] placeholder:text-[18px] placeholder:opacity-100 focus:border-blue-500 transition-colors"
               />
             </div>
 
             {/* Variable List */}
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
               {activeVariableSidePane.allowEmpty && (
                 <div
                   onClick={() => {
@@ -11457,11 +11440,8 @@ export default function DefibTab({
                     setActiveVariableSidePane(null);
                     setVariableSidePaneSearch('');
                   }}
-                  className={`p-3.5 rounded-xl cursor-pointer transition-all border ${
-                    !activeVariableSidePane.selectedValue
-                      ? 'bg-[#ecefff] border-[#2e54ff]'
-                      : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                  }`}
+                  style={{ backgroundColor: '#FFF', border: 'none' }}
+                  className="p-3.5 rounded-xl cursor-pointer transition-all bg-[#FFF]"
                 >
                   <span 
                     style={{ 
@@ -11486,7 +11466,6 @@ export default function DefibTab({
                 </div>
               ) : (
                 filteredSidePaneVariables.map((v) => {
-                  const isSelected = v.id === activeVariableSidePane.selectedValue;
                   return (
                     <div
                       key={v.id}
@@ -11495,11 +11474,8 @@ export default function DefibTab({
                         setActiveVariableSidePane(null);
                         setVariableSidePaneSearch('');
                       }}
-                      className={`p-3.5 rounded-xl cursor-pointer transition-all border flex items-center gap-3 ${
-                        isSelected 
-                          ? 'bg-[#ecefff] border-[#2e54ff]' 
-                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
-                      }`}
+                      style={{ backgroundColor: '#FFF', border: 'none' }}
+                      className="p-3.5 rounded-xl cursor-pointer transition-all flex items-center gap-3 bg-[#FFF]"
                     >
                       {v.imageUrl ? (
                         <div className="w-12 h-12 rounded-lg bg-white border border-slate-200 p-1 flex items-center justify-center shrink-0 overflow-hidden">
@@ -11523,8 +11499,8 @@ export default function DefibTab({
               )}
             </div>
 
-            {/* Floating Black "Fermer" Button at Bottom */}
-            <div className="p-4 bg-gradient-to-t from-white via-white/95 to-transparent shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            {/* Floating "Fermer" Button at Bottom */}
+            <div className="p-4 shrink-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]" style={{ backgroundColor: 'rgb(245, 247, 250)' }}>
               <button
                 type="button"
                 onClick={() => {
@@ -11533,7 +11509,7 @@ export default function DefibTab({
                 }}
                 className="w-full py-3.5 px-6 rounded-xl font-bold text-white transition-all hover:opacity-90 active:scale-[0.99] shadow-lg flex items-center justify-center font-sans"
                 style={{
-                  backgroundColor: '#0f172a',
+                  backgroundColor: 'rgb(210, 45, 11)',
                   color: '#ffffff',
                   fontSize: '18px',
                   border: 'none',
@@ -11594,8 +11570,8 @@ export default function DefibTab({
                         fontWeight: 600,
                         borderRadius: '14px',
                         padding: '12px 18px',
-                        backgroundColor: isHidden ? 'rgb(200 44 18)' : '#e7ebf0',
-                        color: isHidden ? 'rgb(255 255 255)' : '#50617A',
+                        backgroundColor: isHidden ? 'rgb(210, 45, 11)' : '#e7ebf0',
+                        color: isHidden ? '#ffffff' : '#000000',
                         border: 'none',
                         boxShadow: 'none',
                         cursor: 'pointer',
@@ -11619,7 +11595,7 @@ export default function DefibTab({
                   setIsColumnVisibilityPaneOpen(false);
                 }}
                 style={{
-                  backgroundColor: '#0f172a',
+                  backgroundColor: 'rgb(210, 45, 11)',
                   color: '#ffffff',
                   fontSize: '18px',
                   fontWeight: 'bold',

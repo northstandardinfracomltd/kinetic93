@@ -2164,7 +2164,11 @@ export default function ClientPortal({
       const pdfShowDemandeDevisDetails = effectiveCompanyInfo?.pdfShowDemandeDevisDetails === 'Oui';
 
       const totalPages = hasLastPage ? 6 : 5;
-      const docTitle = report.reportTitle || report.title || 'Rapport d’intervention GMAO';
+      const rawDocTitle = String(report.reportTitle || report.title || '').trim();
+      const docTitle =
+        !rawDocTitle || rawDocTitle === 'RAPPORT TECHNIQUE DÉFIBRILLATEUR' || /^rapport d['’]intervention gmao$/i.test(rawDocTitle)
+          ? 'RAPPORT D’INTERVENTION'
+          : rawDocTitle;
 
       const renderHeader = (title: string) => {
         const showHeaderImg = pdfHeaderImg ? `<img src="${pdfHeaderImg}" style="max-height: 55px; max-width: 100%; object-fit: contain;" alt="Header Illustration" referrerPolicy="no-referrer" />` : '';

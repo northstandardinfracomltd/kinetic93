@@ -1021,6 +1021,11 @@ export function ensureTenantMembersClient(rawMembers: any[], activeTenantId: str
 
   const vehiclePool = ['Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E'];
 
+  const cachedTechSigs =
+    getFromLocalCache<any[]>(`${effTenantId}_tech_signatures`) ||
+    getFromLocalCache<any[]>(`defib_${effTenantId}_tech_signatures`) ||
+    [];
+
   const usedLocations = new Set(list.map((m: any) => m?.locationLink).filter(Boolean));
   return list.map((m: any, idx: number) => {
     if (!m || typeof m !== 'object') return m;
@@ -1036,12 +1041,30 @@ export function ensureTenantMembersClient(rawMembers: any[], activeTenantId: str
       const domain = adminEmail.includes('@') ? adminEmail.split('@')[1] : 'civilprom.com';
       email = `${slug || `membre${idx}`}@${domain}`;
     }
+    let sig = m.signature;
+    if (Array.isArray(cachedTechSigs) && cachedTechSigs.length > 0) {
+      const matchedSig = cachedTechSigs.find(
+        (s: any) =>
+          (s?.name && m.name && String(s.name).trim().toLowerCase() === String(m.name).trim().toLowerCase()) ||
+          (s?.email && email && String(s.email).trim().toLowerCase() === String(email).trim().toLowerCase())
+      );
+      if (matchedSig && (matchedSig.rawDataUrl || matchedSig.signature)) {
+        sig = matchedSig.rawDataUrl || matchedSig.signature;
+      }
+    }
+    if (!sig && typeof window !== 'undefined' && window.localStorage && m.name) {
+      try {
+        const localSig = localStorage.getItem(`defib_${effTenantId}_tech_signature_${m.name}`);
+        if (localSig) sig = localSig;
+      } catch (_) {}
+    }
     return {
       ...m,
       email: email || '',
       pin: m.pin || '1234',
       status: m.status || 'Actif',
       lastActive: m.lastActive || 'En ligne',
+      ...(sig ? { signature: sig } : {}),
       ...(isTech && loc ? { locationLink: loc } : {}),
       envId: m.envId || effTenantId,
       tenantId: m.tenantId || effTenantId
@@ -1276,7 +1299,23 @@ export async function fetchCollectionFromFirestore<T>(
                   ? { ...m, envId: activeTenantId, tenantId: activeTenantId, _fromSpreadsheet: true }
                   : m
               );
-              const ensured = ensureTenantMembersClient(stamped, activeTenantId);
+              let ensured = ensureTenantMembersClient(stamped, activeTenantId);
+              try {
+                const sigList = await fetchCollectionFromFirestore<any[]>('tech_signatures', activeTenantId);
+                if (Array.isArray(sigList) && sigList.length > 0) {
+                  ensured = ensured.map((m: any) => {
+                    const matchedSig = sigList.find(
+                      (s: any) =>
+                        (s?.name && m?.name && String(s.name).trim().toLowerCase() === String(m.name).trim().toLowerCase()) ||
+                        (s?.email && m?.email && String(s.email).trim().toLowerCase() === String(m.email).trim().toLowerCase())
+                    );
+                    if (matchedSig && (matchedSig.rawDataUrl || matchedSig.signature)) {
+                      return { ...m, signature: matchedSig.rawDataUrl || matchedSig.signature };
+                    }
+                    return m;
+                  });
+                }
+              } catch (_) {}
               onProgress?.(ensured.length, ensured.length, `Chargement ${ensured.length}/${ensured.length}, Terminé.`);
               return ensured as unknown as T;
             }
@@ -2182,7 +2221,8 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
     collectionName === 'members' ||
     collectionName === 'environment_members' ||
     collectionName === 'api_connectors' ||
-    collectionName === 'crm_settings';
+    collectionName === 'crm_settings' ||
+    collectionName === 'tech_signatures';
 
   if (isTenantConfigCollection && finalCleanValue !== undefined && finalCleanValue !== null) {
     try {
@@ -3171,7 +3211,12 @@ export async function uploadMediaToFirebase(
         });
         if (res.ok) {
           const json = await res.json();
-          if (json?.url && typeof json.url === 'string' && json.url.startsWith('http')) {
+          if (
+            json?.url &&
+            typeof json.url === 'string' &&
+            json.url.startsWith('http') &&
+            !json.url.includes('localhost:')
+          ) {
             serverHttpsUrl = json.url.replace(/^http:\/\//i, 'https://');
           } else if (typeof window !== 'undefined') {
             const origin = window.location.origin.replace(/^http:\/\//i, 'https://');

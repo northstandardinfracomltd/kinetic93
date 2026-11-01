@@ -74,7 +74,7 @@ import { getLanguage, t } from "../utils/translate";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
 import GmaoCorrectionForm from "./GmaoCorrectionForm";
 import GmaoOtherEquipmentCorrectionForm from "./GmaoOtherEquipmentCorrectionForm";
-import { mergeReportModerationComment } from "../utils/moderationComment";
+import { mergeReportModerationComment, mergeReportPostInterventionAlerts, buildFlatAlertFields } from "../utils/moderationComment";
 import { getTenantSpreadsheetUrl } from "../types";
 import {
   triggerEmail6RapportIntervention,
@@ -95,6 +95,7 @@ import {
   playTechSound2,
   playTechSound3,
 } from "../utils/technicianAudio";
+import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from "../utils/googleDrive";
 
 
 // Helper functions for French date <-> ISO date picker compatibility
@@ -885,11 +886,19 @@ export default function PublicPortal({
   }, [propTenantId, authenticatedUser]);
 
   const techCurrentUser = useMemo(() => {
+    const rawEmail = (authenticatedUser?.email || "").trim();
+    const rawName = (authenticatedUser?.name || "").trim();
+    const matchedMember =
+      members.find(
+        (m) =>
+          (rawEmail && m.email && m.email.trim().toLowerCase() === rawEmail.toLowerCase()) ||
+          (rawName && m.name && m.name.trim().toLowerCase() === rawName.toLowerCase()),
+      ) || null;
     return {
-      email: authenticatedUser?.email || "",
-      name: authenticatedUser?.name || "Technicien",
+      email: rawEmail || matchedMember?.email || "",
+      name: matchedMember?.name || rawName || "Technicien",
     };
-  }, [authenticatedUser]);
+  }, [authenticatedUser, members]);
 
   useEffect(() => {
     if (!techTenantId) return;
@@ -911,25 +920,51 @@ export default function PublicPortal({
       const controller = new AbortController();
       const timerId = setTimeout(() => controller.abort(), 6000);
       try {
-        const resp = await fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(techTenantId)}&_=${Date.now()}`, {
-          signal: controller.signal
-        });
-        clearTimeout(timerId);
-        if (resp.ok && isMounted) {
-          const data = await resp.json();
-          const remoteList: TenantMessage[] = Array.isArray(data?.value) ? data.value : (Array.isArray(data) ? data : []);
-          if (remoteList && remoteList.length >= 0) {
+        const sheetRes = await fetch(
+          `/api/sheets/collection?tenantId=${encodeURIComponent(techTenantId)}&type=messagesInternes`,
+          { signal: controller.signal },
+        ).catch(() => null);
+        if (sheetRes && sheetRes.ok && isMounted) {
+          const sheetData = await sheetRes.json();
+          if (
+            sheetData?.fromSpreadsheet &&
+            Array.isArray(sheetData.items) &&
+            (sheetData.items.length > 0 || sheetData.hasRemoteHeaders)
+          ) {
+            const mappedList: TenantMessage[] = sheetData.items
+              .filter((m: any) => m && (m.content || m.text))
+              .map((m: any, idx: number) => {
+                const rawEmail = String(
+                  m.authorEmail || m["Nom Prénom (Username)."] || m["Nom Prénom (Username)"] || "",
+                ).trim();
+                const rawName = String(m.authorName || m.sender || "").trim();
+                return {
+                  id: m.id || `msg_${m._sheetRowNumber || idx + 2}`,
+                  authorName: rawName || rawEmail || "Membre",
+                  authorEmail: rawEmail || (rawName.includes("@") ? rawName : ""),
+                  tag: "All",
+                  content: String(m.content || m.text || "").trim(),
+                  createdAt: Number(m.createdAt) || Date.now(),
+                  dateStr: String(m.dateStr || m.time || "").trim(),
+                  tenantId: techTenantId,
+                  envId: techTenantId,
+                  _sheetRowNumber: m._sheetRowNumber,
+                } as TenantMessage & { _sheetRowNumber?: number };
+              });
+            clearTimeout(timerId);
             setTenantMessages((prev) => {
-              if (JSON.stringify(prev) !== JSON.stringify(remoteList)) {
+              if (JSON.stringify(prev) !== JSON.stringify(mappedList)) {
                 try {
-                  localStorage.setItem(`defib_${techTenantId}_tenant_messages`, JSON.stringify(remoteList));
+                  localStorage.setItem(`defib_${techTenantId}_tenant_messages`, JSON.stringify(mappedList));
                 } catch (_) {}
-                return remoteList;
+                return mappedList;
               }
               return prev;
             });
+            return;
           }
         }
+        clearTimeout(timerId);
       } catch (_) {
         clearTimeout(timerId);
       }
@@ -1316,6 +1351,17 @@ export default function PublicPortal({
   const sigCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const isSigDrawing = useRef(false);
   const [techSignature, setTechSignature] = useState<string | undefined>(undefined);
+  const [sigSaveSuccess, setSigSaveSuccess] = useState(false);
+
+  const normalizeSignatureSrc = (src: string | undefined): string | undefined => {
+    if (!src || typeof src !== "string") return undefined;
+    const trimmed = src.trim();
+    if (!trimmed) return undefined;
+    if (typeof window !== "undefined" && /^https?:\/\/localhost:\d+\//i.test(trimmed)) {
+      return trimmed.replace(/^https?:\/\/localhost:\d+/i, window.location.origin);
+    }
+    return trimmed;
+  };
 
   const startSigDrawing = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
@@ -1324,6 +1370,7 @@ export default function PublicPortal({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    setSigSaveSuccess(false);
     isSigDrawing.current = true;
     const pos = getSigEventCoords(e, canvas);
     ctx.beginPath();
@@ -1354,7 +1401,7 @@ export default function PublicPortal({
     isSigDrawing.current = false;
     const canvas = sigCanvasRef.current;
     if (canvas) {
-      const dataUrl = canvas.toDataURL();
+      const dataUrl = canvas.toDataURL("image/png");
       setTechSignature(dataUrl);
     }
   };
@@ -1367,6 +1414,7 @@ export default function PublicPortal({
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
     }
+    setSigSaveSuccess(false);
     setTechSignature(undefined);
   };
 
@@ -1692,6 +1740,25 @@ export default function PublicPortal({
       )
       .reduce((sum, tr) => sum + (Number(tr.volume ?? 1) || 0), 0);
 
+    const noLocationStockVol = Math.max(0, Number(matchedStockRecord.quantite) || 0);
+    const centralOrNoLocationTraceVol = (matchedStockRecord.traceabilities || []).reduce(
+      (sum, tr) => {
+        const emp = String(tr.emplacement || "").trim().toLowerCase();
+        if (!emp || emp === "centrale des stocks" || emp === "centrale") {
+          const vol =
+            tr.volume !== undefined &&
+            tr.volume !== null &&
+            String(tr.volume).trim() !== ""
+              ? Number(tr.volume)
+              : 1;
+          return sum + (isNaN(vol) ? 1 : Math.max(0, vol));
+        }
+        return sum;
+      },
+      0,
+    );
+    const disponibleCentraleVol = noLocationStockVol + centralOrNoLocationTraceVol;
+
     return {
       id: matchingDs?.id || matchedStockRecord.id,
       denominationPieceId: matchedStockRecord.denominationPieceId,
@@ -1702,7 +1769,7 @@ export default function PublicPortal({
         techTraces.length > 0 ? traceDispoVol : (matchingDs?.volumeDisponible ?? 0),
       volumeReserve:
         techTraces.length > 0 ? traceReserveVol : (matchingDs?.volumeReserve ?? 0),
-      volumeEntrant: matchingDs?.volumeEntrant ?? 0,
+      volumeEntrant: disponibleCentraleVol,
     } as DistributedStockLocation;
   }, [
     distributedStocks,
@@ -1798,6 +1865,7 @@ export default function PublicPortal({
   };
 
   const handleSaveTechStockChanges = async () => {
+    if (!selectedTechStock) return;
     setIsSavingTechStockChanges(true);
     try {
       await persistUpdatedStocksList(effectiveTechStocksList, true);
@@ -4027,7 +4095,11 @@ export default function PublicPortal({
     const compPhone = effectiveCompanyInfo.phone || "";
     const compWebsite = effectiveCompanyInfo.website || "";
 
-    const docTitle = report.title || report.reportTitle || "Rapport d’intervention GMAO";
+    const rawDocTitle = String(report.reportTitle || report.title || "").trim();
+    const docTitle =
+      !rawDocTitle || rawDocTitle === "RAPPORT TECHNIQUE DÉFIBRILLATEUR" || /^rapport d['’]intervention gmao$/i.test(rawDocTitle)
+        ? "RAPPORT D’INTERVENTION"
+        : rawDocTitle;
     const pdfLastPageInfoText = effectiveCompanyInfo.pdfLastPageInfoText || "";
     const hasLastPage = pdfLastPageInfoText && pdfLastPageInfoText.trim().length > 0;
     const pdfHeaderBgColor = effectiveCompanyInfo.pdfHeaderBgColor || '#7c2882';
@@ -5280,7 +5352,43 @@ export default function PublicPortal({
     () => new Date().toISOString().split("T")[0],
   );
   const [expensePhotoUrl, setExpensePhotoUrl] = useState("");
+  const [expensePhotoFile, setExpensePhotoFile] = useState<File | null>(null);
+  const [isUploadingExpenseFile, setIsUploadingExpenseFile] = useState(false);
+  const [isGoogleDriveActive, setIsGoogleDriveActive] = useState<boolean>(() => {
+    const tid = localStorage.getItem("defib_tenant_id") || "demo";
+    return (
+      localStorage.getItem(`defib_${tid}_google_drive_active`) === "true" ||
+      localStorage.getItem("defib_google_drive_active") === "true"
+    );
+  });
+  const [googleDriveToken, setGoogleDriveToken] = useState<string>(() => {
+    const tid = localStorage.getItem("defib_tenant_id") || "demo";
+    return (
+      localStorage.getItem(`defib_${tid}_google_drive_token`) ||
+      localStorage.getItem("defib_google_drive_token") ||
+      ""
+    );
+  });
   const expensePhotoInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const syncDriveStatus = () => {
+      const tid = propTenantId || localStorage.getItem("defib_tenant_id") || "demo";
+      fetchGoogleDriveStatus(tid)
+        .then((status) => {
+          setIsGoogleDriveActive(Boolean(status.active));
+          setGoogleDriveToken(status.accessToken || "");
+        })
+        .catch(() => {});
+    };
+    syncDriveStatus();
+    window.addEventListener("google-drive-status-changed", syncDriveStatus);
+    window.addEventListener("storage", syncDriveStatus);
+    return () => {
+      window.removeEventListener("google-drive-status-changed", syncDriveStatus);
+      window.removeEventListener("storage", syncDriveStatus);
+    };
+  }, [propTenantId, activeTab]);
 
   // Localisation form states for the connected technician
   const [techStartAddress, setTechStartAddress] = useState("");
@@ -5326,13 +5434,16 @@ export default function PublicPortal({
         setTechStartLat(cleanLat);
         setTechStartLng(cleanLng);
         const envId = localStorage.getItem("defib_tenant_id") || "demo";
-        const fallbackSig =
+        const fallbackSig = normalizeSignatureSrc(
+          localStorage.getItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`) ||
           liveMember.signature ||
           authenticatedUser.signature ||
-          localStorage.getItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`) ||
-          undefined;
-        setTechSignature(fallbackSig);
-        fetchCollectionFromFirestore<any[]>("tech_signatures", undefined, envId)
+          undefined
+        );
+        if (fallbackSig) {
+          setTechSignature(fallbackSig);
+        }
+        fetchCollectionFromFirestore<any[]>("tech_signatures", envId)
           .then((sigList) => {
             if (Array.isArray(sigList)) {
               const found = sigList.find(
@@ -5340,8 +5451,10 @@ export default function PublicPortal({
                   (s.name && s.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) ||
                   (s.email && authenticatedUser.email && s.email.trim().toLowerCase() === authenticatedUser.email.trim().toLowerCase())
               );
-              if (found && (found.signature || found.rawDataUrl)) {
-                setTechSignature(found.signature || found.rawDataUrl);
+              const loadedSig = normalizeSignatureSrc(found?.rawDataUrl || found?.signature);
+              if (loadedSig) {
+                setTechSignature(loadedSig);
+                localStorage.setItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`, loadedSig);
               }
             }
           })
@@ -5363,12 +5476,15 @@ export default function PublicPortal({
         const cleanLocalLng = (rawLocalLng && rawLocalLng.toLowerCase() !== 'null' && rawLocalLng.toLowerCase() !== 'undefined' && rawLocalLng.toLowerCase() !== 'nan') ? rawLocalLng : "";
         setTechStartLat(cleanLocalLat);
         setTechStartLng(cleanLocalLng);
-        const fallbackSig =
-          authenticatedUser.signature ||
+        const fallbackSig = normalizeSignatureSrc(
           localStorage.getItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`) ||
-          undefined;
-        setTechSignature(fallbackSig);
-        fetchCollectionFromFirestore<any[]>("tech_signatures", undefined, envId)
+          authenticatedUser.signature ||
+          undefined
+        );
+        if (fallbackSig) {
+          setTechSignature(fallbackSig);
+        }
+        fetchCollectionFromFirestore<any[]>("tech_signatures", envId)
           .then((sigList) => {
             if (Array.isArray(sigList)) {
               const found = sigList.find(
@@ -5376,8 +5492,10 @@ export default function PublicPortal({
                   (s.name && s.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) ||
                   (s.email && authenticatedUser.email && s.email.trim().toLowerCase() === authenticatedUser.email.trim().toLowerCase())
               );
-              if (found && (found.signature || found.rawDataUrl)) {
-                setTechSignature(found.signature || found.rawDataUrl);
+              const loadedSig = normalizeSignatureSrc(found?.rawDataUrl || found?.signature);
+              if (loadedSig) {
+                setTechSignature(loadedSig);
+                localStorage.setItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`, loadedSig);
               }
             }
           })
@@ -5423,15 +5541,19 @@ export default function PublicPortal({
       const canvas = sigCanvasRef.current;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (techSignature) {
+        const cleanSrc = normalizeSignatureSrc(techSignature);
+        if (!cleanSrc) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        } else {
           const img = new Image();
-          img.crossOrigin = "anonymous";
+          if (!cleanSrc.startsWith("data:")) {
+            img.crossOrigin = "anonymous";
+          }
           img.onload = () => {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0);
           };
-          img.src = techSignature;
+          img.src = cleanSrc;
         }
       }
     }
@@ -6076,8 +6198,19 @@ export default function PublicPortal({
       return;
     }
 
+    const activeTid = propTenantId || localStorage.getItem("defib_tenant_id") || "demo";
     let finalPhotoUrl = expensePhotoUrl || undefined;
-    if (finalPhotoUrl && finalPhotoUrl.startsWith("data:")) {
+    if (expensePhotoFile && (!finalPhotoUrl || finalPhotoUrl.startsWith("data:") || finalPhotoUrl.startsWith("blob:"))) {
+      try {
+        setIsUploadingExpenseFile(true);
+        finalPhotoUrl = await uploadFileToGoogleDrive(googleDriveToken, expensePhotoFile, activeTid);
+        setExpensePhotoUrl(finalPhotoUrl);
+      } catch (err) {
+        console.error("Error uploading expense file to Google Drive:", err);
+      } finally {
+        setIsUploadingExpenseFile(false);
+      }
+    } else if (finalPhotoUrl && finalPhotoUrl.startsWith("data:")) {
       finalPhotoUrl = await uploadMediaToFirebase(
         finalPhotoUrl,
         "photos",
@@ -6101,6 +6234,7 @@ export default function PublicPortal({
       date: expenseDate,
       photoUrl: finalPhotoUrl,
       receiptUrl: finalPhotoUrl,
+      "URL Partagé Fichier Google Drive.": finalPhotoUrl || "",
     } as any;
 
     saveExpenses([newExpense, ...expenses]);
@@ -6111,6 +6245,10 @@ export default function PublicPortal({
     setExpenseHt("");
     setExpenseTva("");
     setExpensePhotoUrl("");
+    setExpensePhotoFile(null);
+    if (expensePhotoInputRef.current) {
+      expensePhotoInputRef.current.value = "";
+    }
     setExpenseSuccessMessage("Parfait! Le ticket de frais est enregistré avec succès.");
     setTimeout(() => {
       setExpenseSuccessMessage("");
@@ -6251,28 +6389,26 @@ export default function PublicPortal({
   const handleSaveSignature = async () => {
     if (sigCanvasRef.current && authenticatedUser) {
       const rawDataUrl = sigCanvasRef.current.toDataURL("image/png");
-      const uploadedUrl = await uploadMediaToFirebase(
-        rawDataUrl,
-        "signatures",
-        `signature_tech_${authenticatedUser.id || authenticatedUser.email || authenticatedUser.name || "user"}.png`
-      );
-      const finalSigUrl = uploadedUrl || rawDataUrl;
-      setTechSignature(finalSigUrl);
-      const updatedMembers = members.map((m) => {
-        if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
-          return { ...m, signature: finalSigUrl };
-        }
-        return m;
-      });
-      onUpdateMembers(updatedMembers);
-      const updatedUser = { ...authenticatedUser, signature: finalSigUrl };
-      setAuthenticatedUser(updatedUser);
-      localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
       const envId = localStorage.getItem("defib_tenant_id") || "demo";
-      localStorage.setItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`, finalSigUrl);
-      await saveCollectionToFirestore("members", updatedMembers, envId);
+
+      // Immediately persist locally and in state so the canvas stays intact without flickering
+      setTechSignature(rawDataUrl);
+      localStorage.setItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`, rawDataUrl);
+
+      let uploadedUrl = "";
       try {
-        const existingSigs = (await fetchCollectionFromFirestore<any[]>("tech_signatures", undefined, envId)) || [];
+        uploadedUrl = await uploadMediaToFirebase(
+          rawDataUrl,
+          "signatures",
+          `signature_tech_${authenticatedUser.id || authenticatedUser.email || authenticatedUser.name || "user"}.png`
+        );
+      } catch (_) {}
+
+      const finalSigUrl = rawDataUrl;
+
+      // 1. Save to Firestore tech_signatures collection first
+      try {
+        const existingSigs = (await fetchCollectionFromFirestore<any[]>("tech_signatures", envId)) || [];
         const filteredSigs = Array.isArray(existingSigs)
           ? existingSigs.filter(
               (s) =>
@@ -6289,6 +6425,7 @@ export default function PublicPortal({
             name: authenticatedUser.name,
             email: authenticatedUser.email || "",
             signature: finalSigUrl,
+            uploadedUrl: uploadedUrl || finalSigUrl,
             rawDataUrl,
             updatedAt: new Date().toISOString(),
           },
@@ -6297,8 +6434,22 @@ export default function PublicPortal({
       } catch (e) {
         console.error("Failed to save tech_signatures to Firestore:", e);
       }
+
+      // 2. Update members & active technician session
+      const updatedMembers = members.map((m) => {
+        if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
+          return { ...m, signature: finalSigUrl };
+        }
+        return m;
+      });
+      onUpdateMembers(updatedMembers);
+      const updatedUser = { ...authenticatedUser, signature: finalSigUrl };
+      setAuthenticatedUser(updatedUser);
+      localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
+      await saveCollectionToFirestore("members", updatedMembers, envId);
+
+      setSigSaveSuccess(true);
     }
-    setActiveSettingsSection(null);
   };
 
   // Google Calendar integration helpers
@@ -6802,7 +6953,11 @@ export default function PublicPortal({
 
   return (
     <div
-      className="min-h-screen bg-slate-50 flex flex-col items-center p-0 text-slate-800 selection:bg-indigo-600/30 font-sans relative"
+      className={`${
+        authenticatedUser && activeTab === "messages"
+          ? "h-[100dvh] max-h-[100dvh] overflow-hidden"
+          : "min-h-screen"
+      } bg-slate-50 flex flex-col items-center p-0 text-slate-800 selection:bg-indigo-600/30 font-sans relative`}
       id="public-portal-envelope"
     >
       {/* PRELOADER OVERLAY WITH MANUAL SWIPE-UP TO HIDE */}
@@ -6851,13 +7006,17 @@ export default function PublicPortal({
       )}
       {/* Main Responsive Portal Container (Standalone App Layout) */}
       <div
-        className="w-full max-w-[1100px] min-h-screen bg-white relative flex flex-col md:shadow-xl transition-all duration-200"
+        className={`w-full max-w-[1100px] ${
+          authenticatedUser && activeTab === "messages"
+            ? "h-[100dvh] max-h-[100dvh] overflow-hidden"
+            : "min-h-screen"
+        } bg-white relative flex flex-col md:shadow-xl transition-all duration-200`}
         id="smartphone-shell"
       >
         {/* ----------------- IF TECHNICIAN IS LOGGED IN STATE ----------------- */}
         {authenticatedUser ? (
           <div
-            className="flex-1 flex flex-col overflow-hidden bg-white relative"
+            className="flex-1 min-h-0 flex flex-col overflow-hidden bg-white relative"
             id="authenticated-console-layout"
           >
             {/* Top Bar Progress Animation for Tab Switching */}
@@ -7113,6 +7272,13 @@ export default function PublicPortal({
                               : new Date().toLocaleString("fr-FR"),
                           validated: false,
                         };
+                        const mergedAlertsExisting = mergeReportPostInterventionAlerts(
+                          baseSub,
+                          defibrillateurs,
+                          stocks,
+                          variables,
+                          tours,
+                        );
                         submission = {
                           ...baseSub,
                           commentaire: mergeReportModerationComment(
@@ -7123,6 +7289,7 @@ export default function PublicPortal({
                             variables,
                             tours,
                           ),
+                          ...buildFlatAlertFields(mergedAlertsExisting),
                         };
                         updatedReportsList[matchingExistingIndex] = submission;
                       } else {
@@ -7151,6 +7318,13 @@ export default function PublicPortal({
                               : new Date().toLocaleString("fr-FR"),
                           validated: false,
                         };
+                        const mergedAlertsNew = mergeReportPostInterventionAlerts(
+                          baseSub,
+                          defibrillateurs,
+                          stocks,
+                          variables,
+                          tours,
+                        );
                         submission = {
                           ...baseSub,
                           commentaire: mergeReportModerationComment(
@@ -7161,6 +7335,7 @@ export default function PublicPortal({
                             variables,
                             tours,
                           ),
+                          ...buildFlatAlertFields(mergedAlertsNew),
                         };
                         updatedReportsList = [submission, ...generatedReports];
                       }
@@ -9043,28 +9218,6 @@ export default function PublicPortal({
               </div>
             )}
 
-            {/* Fixed top bar "Actualiser les données" on Messages */}
-            {activeTab === "messages" && (
-              <button
-                type="button"
-                disabled={isRefreshingWebappData}
-                onClick={handleRefreshWebappData}
-                className={`w-full text-white text-center font-semibold select-none shadow-xs font-sans shrink-0 transition-all border-0 focus:outline-none ${
-                  isRefreshingWebappData
-                    ? "animate-webapp-refresh-wave cursor-not-allowed"
-                    : "cursor-pointer hover:opacity-95 active:scale-[0.99]"
-                }`}
-                style={{
-                  background: "linear-gradient(90deg, #2e54ff, #2e54ff, #2e54ff)",
-                  color: "#ffffff",
-                  fontSize: "14px",
-                  padding: "12px 0px",
-                  cursor: isRefreshingWebappData ? "not-allowed" : "pointer",
-                }}
-              >
-                {isRefreshingWebappData ? t("Actualisation...") : t("Actualiser les données")}
-              </button>
-            )}
 
             {/* Alert banner if no ongoing pointage for connected technician session */}
             {!hidePointage && !pointages.some((p) => p.isOngoing && p.techName?.trim().toLowerCase() === (authenticatedUser?.name || "").trim().toLowerCase()) && (
@@ -9675,7 +9828,7 @@ export default function PublicPortal({
                               >
                                 {t.passages.filter((p: any) => p.status !== "Attente").map((p, pIdx) => {
                                   const isCompleted = p.status === "Effectué";
-                                  const isRejected = p.status === "Rejet mission";
+                                  const isRejected = p.status === "Rejet mission" || p.status === "Rejetée";
                                   const passageDraftKey = `${t.id}_${p.id || p.num}`;
                                   const currentRejectionReason =
                                     draftRejectionReasons[passageDraftKey] !== undefined
@@ -10175,16 +10328,17 @@ export default function PublicPortal({
                                       <div className="flex gap-3">
                                         <button
                                           type="button"
-                                          disabled={isCompleted}
+                                          disabled={isCompleted || isRejected}
                                           onClick={() => {
+                                            if (isCompleted || isRejected) return;
                                             playTechSound2();
                                             handleNavigateToAddress(p.address);
                                           }}
                                           style={{
-                                            backgroundColor: isCompleted
+                                            backgroundColor: (isCompleted || isRejected)
                                               ? "#e2e8f0"
                                               : "rgb(15, 23, 42)",
-                                            color: isCompleted
+                                            color: (isCompleted || isRejected)
                                               ? "#94a3b8"
                                               : "#fff",
                                             fontSize: "18px",
@@ -10193,13 +10347,13 @@ export default function PublicPortal({
                                             padding: "11px 20px",
                                             border: "none",
                                             boxShadow: "none",
-                                            cursor: isCompleted
+                                            cursor: (isCompleted || isRejected)
                                               ? "not-allowed"
                                               : "pointer",
                                             flex: 1,
                                           }}
                                           className={
-                                            isCompleted
+                                            (isCompleted || isRejected)
                                               ? "opacity-60 transition-all font-bold"
                                               : "hover:opacity-90 active:scale-[0.99] transition-all font-bold"
                                           }
@@ -10209,8 +10363,9 @@ export default function PublicPortal({
 
                                         <button
                                           type="button"
-                                          disabled={isFormationMission ? (isCompleted || !matchedEmargement) : isCompleted}
+                                          disabled={isFormationMission ? (isCompleted || isRejected || !matchedEmargement) : (isCompleted || isRejected)}
                                           onClick={() => {
+                                            if (isCompleted || isRejected) return;
                                             if (!isFormationMission && isReportOverlayOpen && isReportOverlayMinimized) {
                                               alert("Action impossible : un rapport d’intervention est actuellement réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant d’entamer un nouveau rapport.");
                                               return;
@@ -10282,17 +10437,17 @@ export default function PublicPortal({
                                           }}
                                           style={{
                                             backgroundColor: isFormationMission
-                                              ? (isCompleted || !matchedEmargement
+                                              ? (isCompleted || isRejected || !matchedEmargement
                                                 ? "#e2e8f0"
                                                 : "rgb(46, 84, 255)")
-                                              : (isCompleted
+                                              : (isCompleted || isRejected
                                                 ? "#e2e8f0"
                                                 : "rgb(46, 84, 255)"),
                                             color: isFormationMission
-                                              ? (isCompleted || !matchedEmargement
+                                              ? (isCompleted || isRejected || !matchedEmargement
                                                 ? "#94a3b8"
                                                 : "#fff")
-                                              : (isCompleted
+                                              : (isCompleted || isRejected
                                                 ? "#94a3b8"
                                                 : "#fff"),
                                             fontSize: "18px",
@@ -10302,18 +10457,18 @@ export default function PublicPortal({
                                             border: "none",
                                             boxShadow: "none",
                                             cursor: isFormationMission
-                                              ? (isCompleted || !matchedEmargement
+                                              ? (isCompleted || isRejected || !matchedEmargement
                                                 ? "not-allowed"
                                                 : "pointer")
-                                              : (isCompleted
+                                              : (isCompleted || isRejected
                                                 ? "not-allowed"
                                                 : "pointer"),
                                             flex: 1,
                                           }}
                                           className={
                                             (isFormationMission
-                                              ? (isCompleted || !matchedEmargement)
-                                              : isCompleted)
+                                              ? (isCompleted || isRejected || !matchedEmargement)
+                                              : (isCompleted || isRejected))
                                               ? "opacity-60 transition-all font-bold"
                                               : "hover:opacity-90 active:scale-[0.99] transition-all font-bold"
                                           }
@@ -10448,9 +10603,17 @@ export default function PublicPortal({
                                                         variables,
                                                         updated
                                                       );
+                                                      const nextAlerts = mergeReportPostInterventionAlerts(
+                                                        baseRep,
+                                                        defibrillateurs,
+                                                        stocks,
+                                                        variables,
+                                                        updated
+                                                      );
                                                       const updatedRep = {
                                                         ...baseRep,
                                                         commentaire: nextComment,
+                                                        ...buildFlatAlertFields(nextAlerts),
                                                       };
                                                       changedReportRecords.push(updatedRep);
                                                       return updatedRep;
@@ -10636,9 +10799,17 @@ export default function PublicPortal({
                                             variables,
                                             updatedTours
                                           );
+                                          const nextAlerts = mergeReportPostInterventionAlerts(
+                                            baseRep,
+                                            defibrillateurs,
+                                            stocks,
+                                            variables,
+                                            updatedTours
+                                          );
                                           const updatedRep = {
                                             ...baseRep,
                                             commentaire: nextComment,
+                                            ...buildFlatAlertFields(nextAlerts),
                                           };
                                           changedReportRecords.push(updatedRep);
                                           return updatedRep;
@@ -11210,6 +11381,8 @@ export default function PublicPortal({
                     currentUser={techCurrentUser}
                     messages={tenantMessages}
                     setMessages={setTenantMessages}
+                    companyInfo={companyInfo}
+                    members={members}
                   />
                 </div>
               )}
@@ -11299,6 +11472,12 @@ export default function PublicPortal({
                       padding: 0 !important;
                       min-height: 1.2em !important;
                       line-height: normal !important;
+                    }
+                    #tab-stocks-screen .stocks-label-style {
+                      text-transform: none !important;
+                      letter-spacing: normal !important;
+                      font-size: 18px !important;
+                      color: #000000 !important;
                     }
                   `}</style>
                   {/* Info: Emplacement (Disabled Input en premier, hors d'une div) */}
@@ -11461,7 +11640,7 @@ export default function PublicPortal({
                   {/* Button: Enregistrer */}
                   <button
                     type="button"
-                    disabled={isSavingTechStockChanges}
+                    disabled={isSavingTechStockChanges || !selectedTechStock}
                     onClick={handleSaveTechStockChanges}
                     style={{
                       backgroundColor: "rgb(46, 84, 255)",
@@ -11472,9 +11651,13 @@ export default function PublicPortal({
                       padding: "14px 20px",
                       border: "none",
                       boxShadow: "none",
-                      cursor: isSavingTechStockChanges ? "not-allowed" : "pointer",
+                      cursor:
+                        isSavingTechStockChanges || !selectedTechStock
+                          ? "not-allowed"
+                          : "pointer",
                       width: "100%",
-                      opacity: isSavingTechStockChanges ? 0.7 : 1,
+                      opacity:
+                        isSavingTechStockChanges || !selectedTechStock ? 0.5 : 1,
                     }}
                     className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 font-bold mb-4"
                   >
@@ -11498,9 +11681,9 @@ export default function PublicPortal({
                       <div
                         className="p-3.5 rounded-[13px] text-[15px] font-sans font-medium mb-2"
                         style={{
-                          backgroundColor: "rgb(246, 236, 247)",
-                          color: "rgb(99, 31, 106)",
-                          border: "1px solid #d2a3d7",
+                          backgroundColor: "#ECEFF4",
+                          color: "#000000",
+                          border: "none",
                         }}
                       >
                         Pour être sélectionnée, une pièce doit exister (être référencée) dans la centrale des stocks, et ne pas déjà être existante dans l’emplacement du technicien.
@@ -11508,7 +11691,10 @@ export default function PublicPortal({
 
                       {/* 1. Équipement de la centrale des stocks : Lookup from Spreadsheet Stocks where NO traceability item is linked to logged-in technician's location */}
                       <div className="flex flex-col gap-1">
-                        <label className="font-bold font-sans" style={{ color: "rgb(80, 97, 122)", fontSize: "16px" }}>
+                        <label
+                          className="font-bold font-sans normal-case stocks-label-style"
+                          style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                        >
                           Équipement de la centrale des stocks *
                         </label>
                         <select
@@ -11565,7 +11751,10 @@ export default function PublicPortal({
 
                       {/* 2. Emplacement (auto-selected & disabled) */}
                       <div className="flex flex-col gap-1">
-                        <label className="font-bold font-sans" style={{ color: "rgb(80, 97, 122)", fontSize: "16px" }}>
+                        <label
+                          className="font-bold font-sans normal-case stocks-label-style"
+                          style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                        >
                           Emplacement *
                         </label>
                         <input
@@ -11591,7 +11780,10 @@ export default function PublicPortal({
 
                       {/* 3. Volume total disponible */}
                       <div className="flex flex-col gap-1">
-                        <label className="font-bold font-sans" style={{ color: "rgb(80, 97, 122)", fontSize: "16px" }}>
+                        <label
+                          className="font-bold font-sans normal-case stocks-label-style"
+                          style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                        >
                           Volume total disponible *
                         </label>
                         <input
@@ -11617,8 +11809,8 @@ export default function PublicPortal({
                       </div>
 
                       {/* Section Inventaire de traçabilité (Même trame que dans le logiciel principal) */}
-                      <div className="pt-2 flex flex-col gap-4">
-                        <div className="flex justify-between items-center mb-1 select-none">
+                      <div className="pt-4 mt-2 flex flex-col gap-4">
+                        <div className="flex justify-between items-center mt-2 mb-1 select-none">
                           <span
                             className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                             style={{
@@ -11636,7 +11828,10 @@ export default function PublicPortal({
 
                         {/* Commentaire. */}
                         <div className="flex flex-col gap-1">
-                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                          <label
+                            className="font-bold font-sans normal-case stocks-label-style"
+                            style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                          >
                             Commentaire.
                           </label>
                           <input
@@ -11662,7 +11857,10 @@ export default function PublicPortal({
 
                         {/* Activer la traçabilité des pièces. */}
                         <div className="flex flex-col gap-2 mt-1">
-                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                          <span
+                            className="font-bold font-sans normal-case stocks-label-style"
+                            style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                          >
                             {t("Activer la traçabilité des pièces.")}
                           </span>
                           <div className="flex gap-4 mt-1 bg-transparent">
@@ -11720,7 +11918,7 @@ export default function PublicPortal({
 
                         {newDistribTraceabilityEnabled && (
                           <div className="flex flex-col gap-4 mt-2">
-                            <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center justify-between flex-wrap gap-2 w-full">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -11751,8 +11949,9 @@ export default function PublicPortal({
                                   cursor: "pointer",
                                   border: "none",
                                   boxShadow: "none",
+                                  width: "100%",
                                 }}
-                                className="font-sans font-bold active:scale-95 transition-all border-0 text-white"
+                                className="w-full font-sans font-bold active:scale-95 transition-all border-0 text-white text-center"
                               >
                                 Nouvelle pièce
                               </button>
@@ -11771,14 +11970,17 @@ export default function PublicPortal({
                                       key={trace.id || idx}
                                       className="flex flex-col gap-4 p-4 rounded-xl"
                                       style={{
-                                        backgroundColor: "#f5f7fa",
+                                        backgroundColor: "#ECEFF4",
                                         border: "none",
                                         boxShadow: "none",
                                       }}
                                     >
                                       {/* 1. Emplacement. (disabled & hidden, auto-set to logged technician's location) */}
                                       <div className="hidden" style={{ display: "none" }}>
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                        <label
+                                          className="font-bold font-sans normal-case stocks-label-style"
+                                          style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                        >
                                           Emplacement.
                                         </label>
                                         <select
@@ -11792,7 +11994,10 @@ export default function PublicPortal({
 
                                       {/* 2. Numéro de lot ou série. */}
                                       <div className="flex flex-col gap-1 min-w-0">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                        <label
+                                          className="font-bold font-sans normal-case stocks-label-style"
+                                          style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                        >
                                           Numéro de lot ou série.
                                         </label>
                                         <input
@@ -11825,7 +12030,10 @@ export default function PublicPortal({
 
                                       {/* 3. Date de péremption. */}
                                       <div className="flex flex-col gap-1 min-w-0">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                        <label
+                                          className="font-bold font-sans normal-case stocks-label-style"
+                                          style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                        >
                                           Date de péremption.
                                         </label>
                                         <input
@@ -11857,7 +12065,10 @@ export default function PublicPortal({
 
                                       {/* 4. Situation. */}
                                       <div className="flex flex-col gap-1 min-w-0">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                        <label
+                                          className="font-bold font-sans normal-case stocks-label-style"
+                                          style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                        >
                                           Situation.
                                         </label>
                                         <select
@@ -11902,7 +12113,10 @@ export default function PublicPortal({
 
                                       {/* 5. Infos réservation. */}
                                       <div className="flex flex-col gap-1 min-w-0">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                        <label
+                                          className="font-bold font-sans normal-case stocks-label-style"
+                                          style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                        >
                                           Infos réservation.
                                         </label>
                                         <input
@@ -11935,7 +12149,10 @@ export default function PublicPortal({
 
                                       {/* 6. Volume. */}
                                       <div className="flex flex-col gap-1 min-w-0">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                        <label
+                                          className="font-bold font-sans normal-case stocks-label-style"
+                                          style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                        >
                                           Volume.
                                         </label>
                                         <input
@@ -11970,7 +12187,10 @@ export default function PublicPortal({
 
                                       {/* 7. Commentaire. */}
                                       <div className="flex flex-col gap-1 min-w-0">
-                                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                        <label
+                                          className="font-bold font-sans normal-case stocks-label-style"
+                                          style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                        >
                                           Commentaire.
                                         </label>
                                         <input
@@ -12026,8 +12246,8 @@ export default function PublicPortal({
                                         </button>
                                       </div>
 
-                                      {/* 9. Bouton Supprimer */}
-                                      <div className="flex flex-col justify-end min-w-0">
+                                      {/* 9. Bouton Supprimer (hidden for technicians) */}
+                                      <div className="hidden" style={{ display: "none" }}>
                                         <button
                                           type="button"
                                           onClick={() => {
@@ -12071,7 +12291,7 @@ export default function PublicPortal({
                             setNewDistribCommentaire("");
                           }}
                           style={{
-                            backgroundColor: "#0f172a",
+                            backgroundColor: "rgb(210, 45, 11)",
                             color: "#ffffff",
                             fontSize: "18px",
                             borderRadius: "13px",
@@ -12085,7 +12305,7 @@ export default function PublicPortal({
                         </button>
                         <button
                           type="button"
-                          disabled={isSavingDistribStock}
+                          disabled={isSavingDistribStock || !newDistribStockId}
                           onClick={async () => {
                             if (!newDistribStockId) {
                               alert("Veuillez sélectionner un équipement de la centrale des stocks.");
@@ -12296,18 +12516,18 @@ export default function PublicPortal({
                             }
                           }}
                           style={{
-                            backgroundColor: isSavingDistribStock
-                              ? "rgb(120, 140, 240)"
-                              : "rgb(46, 84, 255)",
+                            backgroundColor: "rgb(46, 84, 255)",
                             color: "#ffffff",
                             fontSize: "18px",
                             borderRadius: "13px",
                             padding: "12px 16px",
                             border: "none",
                             boxShadow: "none",
-                            cursor: isSavingDistribStock
-                              ? "not-allowed"
-                              : "pointer",
+                            opacity: isSavingDistribStock || !newDistribStockId ? 0.5 : 1,
+                            cursor:
+                              isSavingDistribStock || !newDistribStockId
+                                ? "not-allowed"
+                                : "pointer",
                           }}
                           className="flex-1 font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
                         >
@@ -12418,7 +12638,7 @@ export default function PublicPortal({
                               color: "rgb(99, 31, 106)",
                             }}
                           >
-                            Entrant via la centrale
+                            Disponible à la centrale
                           </div>
                         </div>
 
@@ -12520,14 +12740,14 @@ export default function PublicPortal({
                       {/* Section Inventaire de traçabilité (Même trame que dans le logiciel principal) */}
                       {matchedStockRecord && (
                         <div
-                          className="p-4 rounded-[14px] flex flex-col gap-4 mt-4"
+                          className="p-4 rounded-[14px] flex flex-col gap-4 mt-6"
                           style={{
                             backgroundColor: "#f5f7fa",
                             border: "none",
                             boxShadow: "none",
                           }}
                         >
-                          <div className="flex justify-between items-center mb-1 select-none">
+                          <div className="flex justify-between items-center mt-2 mb-1 select-none">
                             <span
                               className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                               style={{
@@ -12545,7 +12765,10 @@ export default function PublicPortal({
 
                           {/* Commentaire. */}
                           <div className="flex flex-col gap-1">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
                               Commentaire.
                             </label>
                             <input
@@ -12577,7 +12800,10 @@ export default function PublicPortal({
 
                           {/* Activer la traçabilité des pièces. */}
                           <div className="flex flex-col gap-2 mt-1">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                            <span
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
                               {t("Activer la traçabilité des pièces.")}
                             </span>
                             <div className="flex gap-4 mt-1 bg-transparent">
@@ -12651,7 +12877,7 @@ export default function PublicPortal({
 
                           {matchedStockRecord.traceabilityEnabled !== false && (
                             <div className="flex flex-col gap-4 mt-2">
-                              <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center justify-between flex-wrap gap-2 w-full">
                                 <button
                                   type="button"
                                   onClick={handleAddTechTraceabilityRow}
@@ -12664,8 +12890,9 @@ export default function PublicPortal({
                                     cursor: "pointer",
                                     border: "none",
                                     boxShadow: "none",
+                                    width: "100%",
                                   }}
-                                  className="font-sans font-bold active:scale-95 transition-all border-0 text-white"
+                                  className="w-full font-sans font-bold active:scale-95 transition-all border-0 text-white text-center"
                                 >
                                   Nouvelle pièce
                                 </button>
@@ -12686,14 +12913,17 @@ export default function PublicPortal({
                                         key={trace.id || idx}
                                         className="flex flex-col gap-4 p-4 rounded-xl"
                                         style={{
-                                          backgroundColor: "#f5f7fa",
+                                          backgroundColor: "#ECEFF4",
                                           border: "none",
                                           boxShadow: "none",
                                         }}
                                       >
                                         {/* 1. Emplacement. (disabled & hidden, auto-set to logged technician's location) */}
                                         <div className="hidden" style={{ display: "none" }}>
-                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          <label
+                                            className="font-bold font-sans normal-case stocks-label-style"
+                                            style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                          >
                                             Emplacement.
                                           </label>
                                           <select
@@ -12707,7 +12937,10 @@ export default function PublicPortal({
 
                                         {/* 2. Numéro de lot ou série. */}
                                         <div className="flex flex-col gap-1 min-w-0">
-                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          <label
+                                            className="font-bold font-sans normal-case stocks-label-style"
+                                            style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                          >
                                             Numéro de lot ou série.
                                           </label>
                                           <input
@@ -12736,7 +12969,10 @@ export default function PublicPortal({
 
                                         {/* 3. Date de péremption. */}
                                         <div className="flex flex-col gap-1 min-w-0">
-                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          <label
+                                            className="font-bold font-sans normal-case stocks-label-style"
+                                            style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                          >
                                             Date de péremption.
                                           </label>
                                           <input
@@ -12764,7 +13000,10 @@ export default function PublicPortal({
 
                                         {/* 4. Situation. */}
                                         <div className="flex flex-col gap-1 min-w-0">
-                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          <label
+                                            className="font-bold font-sans normal-case stocks-label-style"
+                                            style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                          >
                                             Situation.
                                           </label>
                                           <select
@@ -12805,7 +13044,10 @@ export default function PublicPortal({
 
                                         {/* 5. Infos réservation. */}
                                         <div className="flex flex-col gap-1 min-w-0">
-                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          <label
+                                            className="font-bold font-sans normal-case stocks-label-style"
+                                            style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                          >
                                             Infos réservation.
                                           </label>
                                           <input
@@ -12834,7 +13076,10 @@ export default function PublicPortal({
 
                                         {/* 6. Volume. */}
                                         <div className="flex flex-col gap-1 min-w-0">
-                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          <label
+                                            className="font-bold font-sans normal-case stocks-label-style"
+                                            style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                          >
                                             Volume.
                                           </label>
                                           <input
@@ -12867,7 +13112,10 @@ export default function PublicPortal({
 
                                         {/* 7. Commentaire. */}
                                         <div className="flex flex-col gap-1 min-w-0">
-                                          <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
+                                          <label
+                                            className="font-bold font-sans normal-case stocks-label-style"
+                                            style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                          >
                                             Commentaire.
                                           </label>
                                           <input
@@ -12919,8 +13167,8 @@ export default function PublicPortal({
                                           </button>
                                         </div>
 
-                                        {/* 9. Bouton Supprimer */}
-                                        <div className="flex flex-col justify-end min-w-0">
+                                        {/* 9. Bouton Supprimer (hidden for technicians) */}
+                                        <div className="hidden" style={{ display: "none" }}>
                                           <button
                                             type="button"
                                             onClick={() => {
@@ -12993,7 +13241,7 @@ export default function PublicPortal({
                                setShowRapatriementForm(true);
                              }}
                             style={{
-                              backgroundColor: "rgb(239, 68, 68)",
+                              backgroundColor: "rgb(210, 45, 11)",
                               color: "#ffffff",
                               borderRadius: "13px",
                               fontSize: "18px",
@@ -13187,7 +13435,7 @@ export default function PublicPortal({
                                 onClick={() => setShowRapatriementForm(false)}
                                 className="flex-1 py-3 text-white hover:opacity-95 transition-all text-center cursor-pointer border-0"
                                 style={{
-                                  backgroundColor: "#0f172a",
+                                  backgroundColor: "rgb(210, 45, 11)",
                                   borderRadius: "13px",
                                   fontSize: "18px",
                                   fontWeight: "bold",
@@ -14482,6 +14730,10 @@ export default function PublicPortal({
                     #tab-frais-screen input::placeholder {
                       font-family: var(--font-sans), "Civilprom", "DefibeoMain", sans-serif !important;
                     }
+                    #tab-frais-screen input::placeholder {
+                      font-size: 18px !important;
+                      color: #BECADB !important;
+                    }
                   `}</style>
 
                   {/* Ticket addition Form */}
@@ -14515,11 +14767,11 @@ export default function PublicPortal({
                             fontSize: "18px",
                             padding: "14px",
                             borderRadius: "13px",
-                            border: "1px solid rgb(201, 191, 205)",
+                            border: "1px solid #DCE1EA",
                             outline: "none",
                             color: "rgb(0, 0, 0)",
                           }}
-                          className="w-full bg-white"
+                          className="w-full bg-white placeholder-[#BECADB]"
                         />
                       </div>
 
@@ -14543,11 +14795,11 @@ export default function PublicPortal({
                               fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
+                              border: "1px solid #DCE1EA",
                               outline: "none",
                               color: "rgb(0, 0, 0)",
                             }}
-                            className="w-full bg-white text-black font-bold"
+                            className="w-full bg-white text-black font-bold placeholder-[#BECADB]"
                           />
                         </div>
 
@@ -14568,11 +14820,11 @@ export default function PublicPortal({
                               fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
+                              border: "1px solid #DCE1EA",
                               outline: "none",
                               color: "rgb(0, 0, 0)",
                             }}
-                            className="w-full bg-white text-black"
+                            className="w-full bg-white text-black placeholder-[#BECADB]"
                           />
                         </div>
                       </div>
@@ -14595,11 +14847,11 @@ export default function PublicPortal({
                               fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
+                              border: "1px solid #DCE1EA",
                               outline: "none",
                               color: "rgb(0, 0, 0)",
                             }}
-                            className="w-full bg-white text-black"
+                            className="w-full bg-white text-black placeholder-[#BECADB]"
                           />
                         </div>
 
@@ -14620,11 +14872,11 @@ export default function PublicPortal({
                               fontSize: "18px",
                               padding: "14px",
                               borderRadius: "13px",
-                              border: "1px solid rgb(201, 191, 205)",
+                              border: "1px solid #DCE1EA",
                               outline: "none",
                               color: "rgb(0, 0, 0)",
                             }}
-                            className="w-full bg-white"
+                            className="w-full bg-white placeholder-[#BECADB]"
                           />
                         </div>
                       </div>
@@ -14637,58 +14889,99 @@ export default function PublicPortal({
                         >
                           Photographie ou fichier.
                         </label>
-                        <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex flex-col gap-3 w-full">
                           <button
                             type="button"
-                            onClick={() =>
-                              expensePhotoInputRef.current?.click()
-                            }
+                            disabled={!isGoogleDriveActive || isUploadingExpenseFile}
+                            onClick={() => {
+                              if (!isGoogleDriveActive || isUploadingExpenseFile) return;
+                              expensePhotoInputRef.current?.click();
+                            }}
                             style={{
                               backgroundColor: "#0f172a",
                               color: "#fff",
                               fontSize: "18px",
                               fontWeight: "bold",
                               borderRadius: "12px",
-                              padding: "9px 18px",
+                              padding: "14px 20px",
                               border: "none",
-                              boxShadow: 'none',
-                              cursor: "pointer",
+                              boxShadow: "none",
+                              width: "100%",
+                              cursor:
+                                !isGoogleDriveActive || isUploadingExpenseFile
+                                  ? "not-allowed"
+                                  : "pointer",
+                              opacity:
+                                !isGoogleDriveActive || isUploadingExpenseFile
+                                  ? 0.5
+                                  : 1,
                             }}
-                            className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold"
+                            className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold w-full"
                           >
-                            <span>Sélectionner</span>
+                            <span>
+                              {isUploadingExpenseFile
+                                ? "Envoi vers Google Drive..."
+                                : "Sélectionner"}
+                            </span>
                           </button>
                           <input
                             type="file"
-                            accept="image/*"
+                            accept="image/*,application/pdf"
                             ref={expensePhotoInputRef}
-                            onChange={(e) =>
-                              triggerPhotoRead(e, setExpensePhotoUrl)
-                            }
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setExpensePhotoFile(file);
+                              const activeTid =
+                                propTenantId ||
+                                localStorage.getItem("defib_tenant_id") ||
+                                "demo";
+                              try {
+                                setIsUploadingExpenseFile(true);
+                                const uploadedDriveUrl = await uploadFileToGoogleDrive(
+                                  googleDriveToken,
+                                  file,
+                                  activeTid
+                                );
+                                setExpensePhotoUrl(uploadedDriveUrl);
+                              } catch (err) {
+                                console.error(
+                                  "Error uploading expense file to Google Drive:",
+                                  err
+                                );
+                                triggerPhotoRead(e, setExpensePhotoUrl);
+                              } finally {
+                                setIsUploadingExpenseFile(false);
+                              }
+                            }}
                             className="hidden"
                           />
                           {expensePhotoUrl && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setExpensePhotoUrl("")}
-                                style={{
-                                  backgroundColor: "#dc2626",
-                                  color: "#fff",
-                                  fontSize: "18px",
-                                  fontWeight: "bold",
-                                  borderRadius: "12px",
-                                  padding: "9px 18px",
-                                  border: "none",
-                                  boxShadow:
-                                    "inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #077ac7, inset 0 6px 12px #ffffff1f",
-                                  cursor: "pointer",
-                                }}
-                                className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold"
-                              >
-                                Supprimer
-                              </button>
-                            </>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpensePhotoUrl("");
+                                setExpensePhotoFile(null);
+                                if (expensePhotoInputRef.current) {
+                                  expensePhotoInputRef.current.value = "";
+                                }
+                              }}
+                              style={{
+                                backgroundColor: "rgb(210, 45, 11)",
+                                color: "#fff",
+                                fontSize: "18px",
+                                fontWeight: "bold",
+                                borderRadius: "12px",
+                                padding: "14px 20px",
+                                border: "none",
+                                boxShadow: "none",
+                                cursor: "pointer",
+                                width: "100%",
+                              }}
+                              className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold w-full"
+                            >
+                              Supprimer
+                            </button>
                           )}
                         </div>
                       </div>
@@ -14696,6 +14989,7 @@ export default function PublicPortal({
 
                     <button
                       type="submit"
+                      disabled={isUploadingExpenseFile}
                       onClick={() => playTechSound2()}
                       style={{
                         backgroundColor: "rgb(46, 84, 255)",
@@ -14706,8 +15000,9 @@ export default function PublicPortal({
                         padding: "14px 20px",
                         border: "none",
                         boxShadow: "none",
-                        cursor: "pointer",
+                        cursor: isUploadingExpenseFile ? "not-allowed" : "pointer",
                         width: "100%",
+                        opacity: isUploadingExpenseFile ? 0.6 : 1,
                       }}
                       className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center font-bold"
                     >
@@ -14720,8 +15015,8 @@ export default function PublicPortal({
                           border: "none",
                           borderRadius: "13px",
                           fontSize: "18px",
-                          backgroundColor: "#fde5ff",
-                          color: "#a354aa",
+                          backgroundColor: "rgb(61, 220, 132)",
+                          color: "rgb(21, 99, 55)",
                           padding: "14px",
                           textAlign: "center",
                           fontWeight: "normal",
@@ -14743,11 +15038,6 @@ export default function PublicPortal({
                   className="space-y-6 pb-16 animate-fadeIn"
                   id="tab-veille-screen"
                 >
-                  <HelpBubble
-                    cacheKey="help_webapp_veille_improvement"
-                    text="Cette page est en cours d'amélioration. Un peu de patience : votre onglet sera bientôt encore plus intuitif et agréable à utiliser !"
-                  />
-
                   <style>{`
                     #tab-veille-screen input,
                     #tab-veille-screen textarea,
@@ -14759,6 +15049,7 @@ export default function PublicPortal({
                     #tab-veille-screen input::placeholder,
                     #tab-veille-screen textarea::placeholder {
                       font-size: 18px !important;
+                      color: #BECADB !important;
                     }
                     #tab-veille-screen input[type="date"] {
                       -webkit-appearance: none !important;
@@ -14809,19 +15100,19 @@ export default function PublicPortal({
                           fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
+                          border: "1px solid #DCE1EA",
                           outline: "none",
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black"
+                        className="w-full text-black placeholder-[#BECADB]"
                       />
                     </div>
 
                     {/* Volume */}
                     <div className="space-y-2">
                       <label style={{ fontSize: "18px", color: "#000000" }} className="block font-bold">
-                        Volume (Chiffre).
+                        Volume (Chiffres).
                       </label>
                       <input
                         type="number"
@@ -14833,12 +15124,12 @@ export default function PublicPortal({
                           fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
+                          border: "1px solid #DCE1EA",
                           outline: "none",
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black"
+                        className="w-full text-black placeholder-[#BECADB]"
                       />
                     </div>
 
@@ -14857,12 +15148,12 @@ export default function PublicPortal({
                           fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
+                          border: "1px solid #DCE1EA",
                           outline: "none",
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black"
+                        className="w-full text-black placeholder-[#BECADB]"
                       />
                     </div>
 
@@ -14881,7 +15172,7 @@ export default function PublicPortal({
                           fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
+                          border: "1px solid #DCE1EA",
                           outline: "none",
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
@@ -14893,7 +15184,7 @@ export default function PublicPortal({
                           WebkitAppearance: "none",
                           appearance: "none",
                         }}
-                        className="w-full max-w-full min-w-0 text-black box-border block"
+                        className="w-full max-w-full min-w-0 text-black box-border block placeholder-[#BECADB]"
                       />
                     </div>
 
@@ -14912,12 +15203,12 @@ export default function PublicPortal({
                           fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
+                          border: "1px solid #DCE1EA",
                           outline: "none",
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black"
+                        className="w-full text-black placeholder-[#BECADB]"
                       />
                     </div>
 
@@ -14936,12 +15227,12 @@ export default function PublicPortal({
                           fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
+                          border: "1px solid #DCE1EA",
                           outline: "none",
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black"
+                        className="w-full text-black placeholder-[#BECADB]"
                       />
                     </div>
 
@@ -14960,12 +15251,12 @@ export default function PublicPortal({
                           fontSize: "18px",
                           padding: "14px",
                           borderRadius: "13px",
-                          border: "1px solid rgb(201, 191, 205)",
+                          border: "1px solid #DCE1EA",
                           outline: "none",
                           color: "rgb(0, 0, 0)",
                           backgroundColor: "transparent",
                         }}
-                        className="w-full text-black"
+                        className="w-full text-black placeholder-[#BECADB]"
                       />
                     </div>
 
@@ -14995,8 +15286,8 @@ export default function PublicPortal({
                           border: "none",
                           borderRadius: "13px",
                           fontSize: "18px",
-                          backgroundColor: "#fde5ff",
-                          color: "#a354aa",
+                          backgroundColor: "rgb(61, 220, 132)",
+                          color: "rgb(21, 99, 55)",
                           padding: "14px",
                           textAlign: "center",
                           fontWeight: "normal",
@@ -15257,9 +15548,7 @@ export default function PublicPortal({
                           }}
                           className="font-sans block text-black no-underline"
                         >
-                          Vous devez partager avec{" "}
-                          {companyInfo?.gmailPartageLocalisation || "(Manquant)"},
-                          consultez l’aide.
+                          Vous devez partager votre localisation Google Maps avec l'email Google: {companyInfo?.gmailPartageLocalisation || "(Manquant)"}.
                         </p>
                       </div>
 
@@ -15669,6 +15958,20 @@ export default function PublicPortal({
                           </div>
                         </div>
                       </div>
+
+                      {sigSaveSuccess && (
+                        <div
+                          className="p-3.5 text-center font-bold font-sans"
+                          style={{
+                            backgroundColor: "rgb(61, 220, 132)",
+                            color: "rgb(21, 99, 55)",
+                            borderRadius: "13px",
+                            fontSize: "16px",
+                          }}
+                        >
+                          Parfait ! Votre signature a bien été enregistrée.
+                        </div>
+                      )}
 
                       <button
                         type="button"
