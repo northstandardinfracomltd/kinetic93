@@ -318,12 +318,12 @@ export default function TicketsCaisseTab({
           background-color: #f5f7fa !important;
         }
         #tickets-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-tickets-input),
-        #tickets-tab-container-harmonized select,
+        #tickets-tab-container-harmonized select:not(#tickets-caisse-more-options-dropdown),
         #tickets-tab-container-harmonized textarea {
           padding: 12px !important;
-          border: 1px solid #dedede !important;
+          border: 1px solid #DCE1EA !important;
           border-radius: 13px !important;
-          font-size: 16px !important;
+          font-size: 18px !important;
           font-weight: 100 !important;
           background: #ffffff !important;
           color: #000000 !important;
@@ -332,15 +332,30 @@ export default function TicketsCaisseTab({
           outline: none !important;
           transition: all 0s !important;
         }
-        #tickets-tab-container-harmonized select {
+        #tickets-tab-container-harmonized input:not(#search-tickets-input)::placeholder,
+        #tickets-tab-container-harmonized textarea::placeholder {
+          color: #BECADB !important;
+          font-size: 18px !important;
+          opacity: 1 !important;
+        }
+        #tickets-tab-container-harmonized select:not(#tickets-caisse-more-options-dropdown) {
           -webkit-appearance: none !important;
           -moz-appearance: none !important;
           appearance: none !important;
         }
+        #tickets-tab-container-harmonized select.is-placeholder-select {
+          color: #BECADB !important;
+        }
+        #tickets-tab-container-harmonized select option {
+          color: #000000 !important;
+          background: #ffffff !important;
+          font-size: 18px !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+        }
         #tickets-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-tickets-input),
         #tickets-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-tickets-input),
-        #tickets-tab-container-harmonized select:hover:not(:disabled),
-        #tickets-tab-container-harmonized select:focus:not(:disabled),
+        #tickets-tab-container-harmonized select:not(#tickets-caisse-more-options-dropdown):hover:not(:disabled),
+        #tickets-tab-container-harmonized select:not(#tickets-caisse-more-options-dropdown):focus:not(:disabled),
         #tickets-tab-container-harmonized textarea:hover:not(:disabled),
         #tickets-tab-container-harmonized textarea:focus:not(:disabled),
         #tickets-tab-container-harmonized #search-tickets-input:hover,
@@ -361,6 +376,8 @@ export default function TicketsCaisseTab({
         #tickets-tab-container-harmonized input:disabled {
           background-color: #f1f5f9 !important;
           color: #555555 !important;
+          border-color: #DCE1EA !important;
+          font-size: 18px !important;
           cursor: not-allowed !important;
           opacity: 0.82 !important;
         }
@@ -506,75 +523,86 @@ export default function TicketsCaisseTab({
                     </tr>
                   </thead>
                   <tbody className="text-slate-700 text-xs">
-                    {filteredExpenses.map((exp) => (
-                      <tr key={exp.id} className="group hover:bg-[#f5f7fa] transition-all cursor-pointer">
-                        
-                        {/* Employé */}
-                        <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                          <span className="font-bold text-black block" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{exp.techName}</span>
-                        </td>
+                    {filteredExpenses.map((exp) => {
+                      const driveFileUrl = (
+                        (exp as any).receiptUrl ||
+                        exp.photoUrl ||
+                        (exp as any).fileUrl ||
+                        (exp as any).url ||
+                        ''
+                      ).trim();
+                      return (
+                        <tr key={exp.id} className="group hover:bg-[#f5f7fa] transition-all cursor-pointer">
+                          
+                          {/* Employé */}
+                          <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                            <span className="font-bold text-black block" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{exp.techName || (exp as any).user}</span>
+                          </td>
 
-                        {/* Objet */}
-                        <td className="px-4 py-5 font-sans whitespace-nowrap truncate max-w-[250px]" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                          <div className="font-bold text-black truncate" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }} title={exp.title}>
-                            {exp.title}
-                          </div>
-                        </td>
+                          {/* Objet */}
+                          <td className="px-4 py-5 font-sans whitespace-nowrap truncate max-w-[250px]" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                            <div className="font-bold text-black truncate" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }} title={exp.title || (exp as any).merchant}>
+                              {exp.title || (exp as any).merchant}
+                            </div>
+                          </td>
 
-                        {/* Date */}
-                        <td className="px-4 py-5 font-mono whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                          <div className="font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{formatToDisplayDate(exp.dateStr)}</div>
-                        </td>
+                          {/* Date */}
+                          <td className="px-4 py-5 font-mono whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                            <div className="font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{formatToDisplayDate(exp.dateStr || (exp as any).date)}</div>
+                          </td>
 
-                        {/* Total HT */}
-                        <td className="px-4 py-5 font-mono text-right whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                          <div className="font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{Number(exp.amountHt || 0).toFixed(2)}€</div>
-                        </td>
+                          {/* Total HT */}
+                          <td className="px-4 py-5 font-mono text-right whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                            <div className="font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{Number(exp.amountHt ?? (exp as any).amountHT ?? 0).toFixed(2)}€</div>
+                          </td>
 
-                        {/* Total TVA */}
-                        <td className="px-4 py-5 font-mono text-right whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                          <div className="font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{Number(exp.amountTva || 0).toFixed(2)}€</div>
-                        </td>
+                          {/* Total TVA */}
+                          <td className="px-4 py-5 font-mono text-right whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                            <div className="font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{Number(exp.amountTva ?? (exp as any).tva ?? 0).toFixed(2)}€</div>
+                          </td>
 
-                        {/* Total TTC */}
-                        <td className="px-4 py-5 font-mono text-right whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                          <div className="font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{Number(exp.amountTtc || 0).toFixed(2)}€</div>
-                        </td>
+                          {/* Total TTC */}
+                          <td className="px-4 py-5 font-mono text-right whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                            <div className="font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>{Number(exp.amountTtc ?? (exp as any).amount ?? 0).toFixed(2)}€</div>
+                          </td>
 
-                        {/* Actions */}
-                        <td className="px-4 py-5 text-right whitespace-nowrap bg-transparent" onClick={(e) => e.stopPropagation()}>
-                          <div className="inline-flex gap-2 bg-transparent">
-                            {exp.photoUrl ? (
+                          {/* Actions */}
+                          <td className="px-4 py-5 text-right whitespace-nowrap bg-transparent" onClick={(e) => e.stopPropagation()}>
+                            <div className="inline-flex gap-2 bg-transparent">
                               <button
                                 type="button"
+                                disabled={!driveFileUrl}
                                 onClick={() => {
-                                  const link = document.createElement('a');
-                                  link.href = exp.photoUrl || '';
-                                  link.target = '_blank';
-                                  link.download = `Justificatif_${exp.id}_${exp.title.replace(/\s+/g, '_')}.png`;
-                                  document.body.appendChild(link);
-                                  link.click();
-                                  document.body.removeChild(link);
+                                  if (!driveFileUrl) return;
+                                  openTenantSpreadsheetUrl(driveFileUrl);
                                 }}
-                                style={rowActionButton18Style}
-                                className="cursor-pointer font-sans"
+                                style={{
+                                  ...rowActionButton18Style,
+                                  backgroundColor: 'rgb(46, 84, 255)',
+                                  opacity: driveFileUrl ? 1 : 0.45,
+                                  cursor: driveFileUrl ? 'pointer' : 'not-allowed',
+                                }}
+                                className="font-sans text-white"
                               >
-                                Justificatif
+                                Consulter
                               </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteExpense(exp.id)}
-                              style={rowActionButton18Style}
-                              className="cursor-pointer font-sans text-white text-white"
-                            >
-                              Supprimer
-                            </button>
-                          </div>
-                        </td>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteExpense(exp.id)}
+                                style={{
+                                  ...rowActionButton18Style,
+                                  backgroundColor: 'rgb(210, 45, 11)',
+                                }}
+                                className="cursor-pointer font-sans text-white"
+                              >
+                                Supprimer
+                              </button>
+                            </div>
+                          </td>
 
-                      </tr>
-                    ))}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -602,6 +630,9 @@ export default function TicketsCaisseTab({
                   ...rowActionButton18Style,
                   flex: 1,
                   width: '50%',
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  color: '#ffffff',
+                  boxShadow: 'none',
                 }}
                 className="flex-1 transition-colors cursor-pointer"
               >
@@ -616,9 +647,9 @@ export default function TicketsCaisseTab({
                   ...rowActionButton18Style,
                   flex: 1,
                   width: '50%',
-                  backgroundColor: '#2e54ff',
+                  backgroundColor: 'rgb(46, 84, 255)',
                   color: '#ffffff',
-                  boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                  boxShadow: 'none',
                 }}
                 className="flex-1 transition-all cursor-pointer"
               >
@@ -633,24 +664,26 @@ export default function TicketsCaisseTab({
           <form 
             id="tickets-caisse-form"
             onSubmit={handleSaveExpense} 
-            className="space-y-6 bg-white p-5 mx-auto"
+            className="space-y-6 p-5 mx-auto border-none"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              backgroundColor: 'rgb(245, 247, 250)',
+              border: 'none',
               borderRadius: '18px',
               width: '98%',
               maxWidth: '98%',
               margin: 'auto'
             }}
           >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 bg-white">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 bg-transparent">
               
               {/* Technicien Lookup */}
-              <div className="flex flex-col gap-1 bg-white">
+              <div className="flex flex-col gap-1 bg-transparent">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider tickets-label-style">{t("Employé.")}</label>
                 <select
                   value={techName}
                   onChange={(e) => setTechName(e.target.value)}
-                  className="font-sans focus:outline-none w-full cursor-pointer"
+                  className={`font-sans focus:outline-none w-full cursor-pointer ${!techName ? 'is-placeholder-select' : ''}`}
+                  style={{ fontSize: '18px', borderColor: '#DCE1EA' }}
                   required
                 >
                   <option value="" disabled hidden>{t("Sélectionner un employé.")}</option>
@@ -663,7 +696,7 @@ export default function TicketsCaisseTab({
               </div>
 
               {/* Title / Raison */}
-              <div className="flex flex-col gap-1 bg-white">
+              <div className="flex flex-col gap-1 bg-transparent">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider tickets-label-style">{t("Entreprise ou objet.")}</label>
                 <input
                   type="text"
@@ -672,12 +705,13 @@ export default function TicketsCaisseTab({
                   maxLength={15}
                   placeholder={t("Entrez un commentaire.")}
                   className="font-sans focus:outline-none w-full"
+                  style={{ fontSize: '18px', borderColor: '#DCE1EA' }}
                   required
                 />
               </div>
 
               {/* Date d'achat */}
-              <div className="flex flex-col gap-1 bg-white">
+              <div className="flex flex-col gap-1 bg-transparent">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider tickets-label-style">{t("Date.")}</label>
                 <input
                   type="text"
@@ -685,12 +719,13 @@ export default function TicketsCaisseTab({
                   onChange={(e) => setDateStr(e.target.value)}
                   placeholder="Ex: 2026-06-09"
                   className="font-sans focus:outline-none w-full"
+                  style={{ fontSize: '18px', borderColor: '#DCE1EA' }}
                   required
                 />
               </div>
 
               {/* Montant TTC */}
-              <div className="flex flex-col gap-1 bg-white">
+              <div className="flex flex-col gap-1 bg-transparent">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider tickets-label-style">{t("Total TTC (€).")}</label>
                 <input
                   type="number"
@@ -700,12 +735,13 @@ export default function TicketsCaisseTab({
                   onChange={(e) => handleTtcChange(e.target.value)}
                   placeholder="0.00"
                   className="font-sans focus:outline-none w-full"
+                  style={{ fontSize: '18px', borderColor: '#DCE1EA' }}
                   required
                 />
               </div>
 
               {/* Montant HT calculated */}
-              <div className="flex flex-col gap-1 bg-white">
+              <div className="flex flex-col gap-1 bg-transparent">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider tickets-label-style">Total HT (€).</label>
                 <input
                   type="number"
@@ -714,12 +750,13 @@ export default function TicketsCaisseTab({
                   value={amountHt}
                   onChange={(e) => setAmountHt(e.target.value)}
                   className="font-sans focus:outline-none w-full"
+                  style={{ fontSize: '18px', borderColor: '#DCE1EA' }}
                   placeholder="0.00"
                 />
               </div>
 
               {/* Montant TVA calculated */}
-              <div className="flex flex-col gap-1 bg-white">
+              <div className="flex flex-col gap-1 bg-transparent">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider tickets-label-style">Total TVA (€).</label>
                 <input
                   type="number"
@@ -728,12 +765,13 @@ export default function TicketsCaisseTab({
                   value={amountTva}
                   onChange={(e) => setAmountTva(e.target.value)}
                   className="font-sans focus:outline-none w-full"
+                  style={{ fontSize: '18px', borderColor: '#DCE1EA' }}
                   placeholder="0.00"
                 />
               </div>
 
               {/* Document upload zone */}
-              <div className="flex flex-col gap-1 md:col-span-2 bg-white">
+              <div className="flex flex-col gap-1 md:col-span-2 bg-transparent">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider tickets-label-style">
                   Photographie ou fichier du justificatif.
                 </label>
@@ -752,8 +790,8 @@ export default function TicketsCaisseTab({
                     setPhotoUrl(file.name);
                   }}
                   onClick={() => document.getElementById('ticket-photo-upload-input')?.click()}
-                  className="p-8 text-center space-y-4 hover:bg-[#ecefff]/20 transition-all cursor-pointer"
-                  style={{ borderRadius: '13px', border: 'none', backgroundColor: '#fdecff' }}
+                  className="p-8 text-center space-y-4 transition-all cursor-pointer"
+                  style={{ borderRadius: '13px', border: '1px solid #DCE1EA', backgroundColor: 'rgb(245, 247, 250)' }}
                 >
                   <input
                     type="file"
@@ -772,13 +810,13 @@ export default function TicketsCaisseTab({
                     }}
                   />
                   
-                  <div className="font-sans" style={{ fontSize: '16px', color: '#000000' }}>
+                  <div className="font-sans" style={{ fontSize: '18px', color: '#000000' }}>
                     {selectedPhotoFile ? (
-                      <span className="font-bold inline-block" style={{ fontSize: '16px', padding: '9px 16px', backgroundColor: '#501655', border: 'none', color: '#ffffff', borderRadius: '9999px' }}>
+                      <span className="font-bold inline-block" style={{ fontSize: '18px', padding: '9px 16px', backgroundColor: 'rgb(46, 84, 255)', border: 'none', color: '#ffffff', borderRadius: '9999px' }}>
                         Votre fichier téléchargé : {selectedPhotoFile.name} ({(selectedPhotoFile.size / (1024 * 1024)).toFixed(2)} Mo)
                       </span>
                     ) : (
-                      <span style={{ color: '#000000', fontSize: '16px' }}>
+                      <span style={{ color: '#000000', fontSize: '18px' }}>
                         Cliquez dans cette zone ou glissez directement votre fichier.
                       </span>
                     )}

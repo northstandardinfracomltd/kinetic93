@@ -7675,7 +7675,7 @@ export default function DefibTab({
                           <button
                             type="button"
                             onClick={handleAddSchedule}
-                            style={{ ...rowActionButton18Style, textTransform: 'none' }}
+                            style={{ ...rowActionButton18Style, textTransform: 'none', minWidth: '200px', borderRadius: '10px' }}
                             className="font-sans"
                           >
                             {t("Nouvelle plage")}
@@ -7689,7 +7689,8 @@ export default function DefibTab({
                             type="button"
                             onClick={() => handleRemoveSchedule(schIdx)}
                             style={{
-                              borderRadius: '13px',
+                              borderRadius: '10px',
+                              minWidth: '200px',
                               fontSize: '18px',
                               backgroundColor: 'rgb(210, 45, 11)',
                               padding: '8px 16px',

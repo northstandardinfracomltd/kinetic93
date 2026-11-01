@@ -41,7 +41,7 @@ export function normalizePresenceValue(rawVal?: string | null): string {
 
 interface UseTenantPresenceOptions {
   tenantId?: string | null;
-  tab: 'defibrillateurs' | 'clients' | 'rapports-pdf' | '';
+  tab: 'defibrillateurs' | 'clients' | 'rapports-pdf' | 'tournees-missions' | '';
   formKey?: string | null;
   enabled?: boolean;
 }
@@ -337,7 +337,8 @@ export const ConcurrentAccessBanner: React.FC<{
     <div
       className={`w-full flex items-center justify-between gap-4 px-4 py-3 font-sans ${className}`}
       style={{
-        background: 'linear-gradient(45deg, #fc8a19, #ffb12a)',
+        background: 'rgb(210, 45, 11)',
+        backgroundColor: 'rgb(210, 45, 11)',
         color: 'rgb(255, 255, 255)',
         fontSize: '18px',
         borderRadius: '13px',
@@ -365,8 +366,8 @@ export const ConcurrentAccessBanner: React.FC<{
         style={{
           fontSize: '18px',
           color: 'rgb(255, 255, 255)',
-          background: 'rgb(15, 23, 42)',
-          backgroundColor: 'rgb(15, 23, 42)',
+          background: 'rgb(157 39 14)',
+          backgroundColor: 'rgb(157, 39, 14)',
           border: 'none',
           borderRadius: '10px',
           padding: '6px 16px',

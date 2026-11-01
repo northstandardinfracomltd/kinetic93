@@ -8,50 +8,14 @@ interface LocalisationsTabProps {
 }
 
 export default function LocalisationsTab({ members }: LocalisationsTabProps) {
-  // Search States
-  const [search, setSearch] = useState('');
-  const [isSearchHovered, setIsSearchHovered] = useState(false);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-
   // Brand aesthetic styling constants
   const thStyle: React.CSSProperties = {
     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
     fontWeight: 100,
     letterSpacing: 'normal',
     textTransform: 'none',
-    color: '#000000',
+    color: 'rgb(80 97 122)',
     cursor: 'default',
-  };
-
-  const linkButtonStyle: React.CSSProperties = {
-    backgroundColor: '#0f172a',
-    color: '#fff',
-    boxShadow: 'none',
-    borderRadius: '10px',
-    fontSize: '18px',
-    padding: '11px 22px',
-    fontWeight: '100',
-    transition: 'all 0s ease-in-out',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '0.5rem',
-    cursor: 'pointer',
-    border: 'none',
-  };
-
-  const searchInputStyle: React.CSSProperties = {
-    border: '1px solid #dedede',
-    borderRadius: '13px',
-    padding: '9px 19px',
-    fontSize: '18px',
-    fontWeight: '100',
-    color: '#000000',
-    backgroundColor: '#ffffff',
-    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-    outline: (isSearchHovered || isSearchFocused) ? '2.5px solid #2e54ff' : 'none',
-    outlineOffset: (isSearchHovered || isSearchFocused) ? '2px' : '0px',
-    transition: 'all 0s',
   };
 
   // Filter technicians only
@@ -61,22 +25,12 @@ export default function LocalisationsTab({ members }: LocalisationsTabProps) {
     return m.role === 'Technicien' || m.role === 'Maintenance Terrain' || roleLower.includes('tech');
   };
 
-  const technicianMembers = members.filter(isTechnician);
-
-  // Searching logic
-  const filteredMembers = technicianMembers.filter((m) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      m.name.toLowerCase().includes(q) ||
-      m.email.toLowerCase().includes(q)
-    );
-  });
+  const filteredMembers = members.filter(isTechnician);
 
   return (
     <div className="space-y-6 animate-fadeIn" id="localisations-tab-container-harmonized">
       <style>{`
-        #localisations-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-localisations-input),
+        #localisations-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]),
         #localisations-tab-container-harmonized select,
         #localisations-tab-container-harmonized textarea {
           padding: 12px !important;
@@ -91,52 +45,13 @@ export default function LocalisationsTab({ members }: LocalisationsTabProps) {
           outline: none !important;
           transition: all 0s !important;
         }
-        #localisations-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-localisations-input),
-        #localisations-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-localisations-input),
-        #localisations-tab-container-harmonized #search-localisations-input:hover,
-        #localisations-tab-container-harmonized #search-localisations-input:focus {
-          outline: 2.5px solid #2e54ff !important;
-          outline-offset: 2px !important;
-          transition: all 0s !important;
+        #localisations-tab-container-harmonized thead th {
+          color: rgb(80 97 122) !important;
         }
-        #localisations-tab-container-harmonized input#search-localisations-input {
-          font-size: 18px !important;
-        }
-        #localisations-tab-container-harmonized input#search-localisations-input::placeholder {
-          font-size: 18px !important;
-          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-          font-weight: 100 !important;
+        #localisations-tab-container-harmonized tbody tr:hover {
+          background-color: rgb(245, 247, 250) !important;
         }
       `}</style>
-      
-      {/* Header Box aligned with other modules */}
-      <div 
-        className="bg-white space-y-4 animate-fadeIn"
-        style={{ borderRadius: '0px', maxWidth: '98%', margin: 'auto', padding: '10px 0px', border: 'none', backgroundColor: 'rgb(255, 255, 255)' }}
-      >
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-          <div />
-
-          <div className="flex flex-wrap items-center gap-3 bg-white">
-            {/* Search Bar Input */}
-            <div className="relative w-full sm:w-80 bg-white">
-              <input
-                type="text"
-                id="search-localisations-input"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Recherche."
-                className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
-                style={searchInputStyle}
-                onMouseEnter={() => setIsSearchHovered(true)}
-                onMouseLeave={() => setIsSearchHovered(false)}
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setIsSearchFocused(false)}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Main Table Content */}
       <div className="bg-white overflow-hidden mt-6 rounded-none animate-fadeIn" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
@@ -151,16 +66,14 @@ export default function LocalisationsTab({ members }: LocalisationsTabProps) {
                 referrerPolicy="no-referrer"
               />
               <p style={{ color: '#000000', fontSize: '16px', fontWeight: 100, marginBottom: '8px' }}>
-                {search ? "Aucun résultat." : "Aucun technicien enregistré"}
+                Aucun technicien enregistré
               </p>
-              {!search && (
-                <p style={{ color: '#888888', fontSize: '13px', fontWeight: 100 }}>
-                  Enregistrez d'abord des techniciens dans la section Équipe.
-                </p>
-              )}
+              <p style={{ color: '#888888', fontSize: '13px', fontWeight: 100 }}>
+                Enregistrez d'abord des techniciens dans la section Équipe.
+              </p>
             </div>
           ) : (
-            <table className="w-full text-left font-sans border-collapse text-xs" id="localisations-table" style={{ borderTop: '1px solid rgb(218, 218, 218)', borderBottom: '1px solid rgb(218, 218, 218)' }}>
+            <table className="w-full text-left font-sans border-collapse text-xs" id="localisations-table" style={{ borderTop: 'none', borderBottom: '1px solid rgb(218, 218, 218)' }}>
               <thead>
                 <tr className="bg-transparent">
                   <th className="px-5 py-3.5 w-[50%]" style={thStyle}>{t("Technicien.")}</th>
@@ -172,7 +85,7 @@ export default function LocalisationsTab({ members }: LocalisationsTabProps) {
                   const locationLink = m.gpsSharingLink || localStorage.getItem(`defib_tech_location_link_${m.name}`) || "";
 
                   return (
-                    <tr key={m.name} className="group hover:bg-[#ecefff] transition-all cursor-pointer">
+                    <tr key={m.name} className="group hover:bg-[rgb(245,247,250)] transition-all cursor-pointer">
                       
                       {/* Name only (no email, no role, no address) */}
                       <td className="px-5 py-5 font-sans" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>

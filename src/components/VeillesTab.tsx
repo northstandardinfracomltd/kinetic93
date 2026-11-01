@@ -276,8 +276,11 @@ export default function VeillesTab({ veilles, onDeleteVeille }: VeillesTabProps)
                       <button
                         type="button"
                         onClick={() => onDeleteVeille(v.id)}
-                        style={actionButton18Style}
-                        className="cursor-pointer font-sans bg-[#0f172a] rounded"
+                        style={{
+                          ...actionButton18Style,
+                          backgroundColor: 'rgb(210, 45, 11)',
+                        }}
+                        className="cursor-pointer font-sans rounded"
                       >
                         Supprimer
                       </button>

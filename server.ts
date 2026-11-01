@@ -6635,6 +6635,189 @@ async function warmupDefibrillateursStore() {
     }
   });
 
+  app.post("/api/public/submit-satisfaction", async (req, res) => {
+    try {
+      const rawTenantHint = String(req.body?.tenantHint || req.headers['x-tenant-id'] || req.headers['x-defibeo-tenant'] || '').trim();
+      const rawInterventionRef = String(req.body?.interventionReference || req.body?.review?.interventionReference || req.body?.review?.interventionRef || '').trim();
+      const reviewInput = req.body?.review || {};
+
+      // 1. Load tenants list from MEGA ADMIN DEFIBEO spreadsheet (including force refresh if needed)
+      let allTenants = await getRegisteredTenantsFromDb(false);
+      const findMatchingTenant = (hint: string, list: any[]) => {
+        if (!hint) return null;
+        const cleanHint = hint.trim().toLowerCase().replace(/^\?+/, '');
+        const digitsOnly = cleanHint.replace(/^d/i, '');
+        return list.find((t: any) => {
+          if (!t) return false;
+          const tid = String(t.id || '').trim().toLowerCase();
+          const tShort = String(t.shortEnvId || '').trim().toLowerCase();
+          const tCode = String(t.code || '').trim().toLowerCase();
+          if (tid === cleanHint || tShort === cleanHint || tCode === cleanHint) return true;
+          if (digitsOnly && /^\d+$/.test(digitsOnly)) {
+            if (
+              tid === `d${digitsOnly}` ||
+              tShort === `d${digitsOnly}` ||
+              tid.replace(/^d/i, '') === digitsOnly ||
+              tShort.replace(/^d/i, '') === digitsOnly
+            ) {
+              return true;
+            }
+          }
+          return false;
+        });
+      };
+
+      let matchedTenantObj = findMatchingTenant(rawTenantHint, allTenants);
+      if (!matchedTenantObj && rawTenantHint) {
+        allTenants = await getRegisteredTenantsFromDb(true);
+        matchedTenantObj = findMatchingTenant(rawTenantHint, allTenants);
+      }
+
+      // 2. If not resolved via ?d?? or if we also have an INT... reference, verify/locate tenant via INT... reference
+      const checkRefUpper = rawInterventionRef.toUpperCase();
+      let resolvedTenantId = matchedTenantObj ? String(matchedTenantObj.id || matchedTenantObj.shortEnvId || rawTenantHint).trim() : rawTenantHint;
+
+      if ((!resolvedTenantId || resolvedTenantId === 'demo') && checkRefUpper) {
+        const candidateTenants = Array.from(
+          new Set([
+            ...allTenants.map((t: any) => String(t.id || '').trim()).filter(Boolean),
+            ...allTenants.map((t: any) => String(t.shortEnvId || '').trim()).filter(Boolean),
+            'demo',
+          ])
+        );
+
+        for (const tid of candidateTenants) {
+          const toursList = (await fetchServerCollection('fsmTours', tid)) || [];
+          if (Array.isArray(toursList)) {
+            let foundInTours = false;
+            for (const tour of toursList) {
+              const missions = tour?.missions || [];
+              if (
+                missions.some(
+                  (m: any) =>
+                    m &&
+                    ((m.interventionReference && String(m.interventionReference).trim().toUpperCase() === checkRefUpper) ||
+                      (m.id && String(m.id).trim().toUpperCase() === checkRefUpper))
+                )
+              ) {
+                foundInTours = true;
+                break;
+              }
+            }
+            if (foundInTours) {
+              resolvedTenantId = tid;
+              matchedTenantObj = findMatchingTenant(tid, allTenants) || matchedTenantObj;
+              break;
+            }
+          }
+
+          const reportsList = (await fetchServerCollection('generatedReports', tid)) || [];
+          if (Array.isArray(reportsList)) {
+            const foundInReports = reportsList.some(
+              (r: any) =>
+                r &&
+                ((r.interventionReference && String(r.interventionReference).trim().toUpperCase() === checkRefUpper) ||
+                  (r.id && String(r.id).trim().toUpperCase() === checkRefUpper) ||
+                  (r.missionId && String(r.missionId).trim().toUpperCase() === checkRefUpper))
+            );
+            if (foundInReports) {
+              resolvedTenantId = tid;
+              matchedTenantObj = findMatchingTenant(tid, allTenants) || matchedTenantObj;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!resolvedTenantId) {
+        resolvedTenantId = 'demo';
+      }
+
+      // Normalize review object with all fields expected by SatisfactionTab and Spreadsheet Satisfaction.
+      const scores = [
+        reviewInput.qualite,
+        reviewInput.ponctualite,
+        reviewInput.politesse,
+        reviewInput.clartePdf,
+        reviewInput.explications,
+        reviewInput.sensibilisation,
+      ]
+        .map((v: any) => (v !== undefined && v !== null && v !== '' ? Number(v) : NaN))
+        .filter((n: number) => Number.isFinite(n));
+      const avg4 = scores.length > 0 ? Number((scores.reduce((a: number, b: number) => a + b, 0) / scores.length).toFixed(1)) : Number(reviewInput.noteGlobale || 4);
+
+      const finalReview = {
+        ...reviewInput,
+        id: String(reviewInput.id || `rev-${Date.now()}`),
+        clientName: String(reviewInput.clientName || '').trim(),
+        comment: String(reviewInput.comment || '').trim(),
+        interventionReference: rawInterventionRef,
+        interventionRef: rawInterventionRef,
+        intervention: rawInterventionRef,
+        defibId: rawInterventionRef,
+        qualite: reviewInput.qualite,
+        ponctualite: reviewInput.ponctualite,
+        politesse: reviewInput.politesse,
+        clartePdf: reviewInput.clartePdf,
+        explications: reviewInput.explications,
+        sensibilisation: reviewInput.sensibilisation,
+        npsScore: reviewInput.npsScore ?? reviewInput.nps ?? null,
+        nps: reviewInput.npsScore ?? reviewInput.nps ?? null,
+        noteGlobale: avg4,
+        rating: avg4,
+        dateStr: String(reviewInput.dateStr || reviewInput.date || new Date().toISOString().split('T')[0]).trim(),
+        date: String(reviewInput.date || reviewInput.dateStr || new Date().toISOString().split('T')[0]).trim(),
+      };
+
+      // 3. Resolve "Spreadsheet Satisfaction." URL from MEGA ADMIN DEFIBEO for this tenant
+      let sheetUrl = await resolveTenantSpreadsheetUrl(resolvedTenantId, 'satisfaction');
+      if (!sheetUrl && matchedTenantObj) {
+        sheetUrl = String(matchedTenantObj.spreadsheetSatisfaction || '').trim() || null;
+      }
+      if (!sheetUrl && resolvedTenantId !== 'demo') {
+        const refreshedTenants = await getRegisteredTenantsFromDb(true);
+        const refreshedMatch = findMatchingTenant(resolvedTenantId, refreshedTenants);
+        if (refreshedMatch && refreshedMatch.spreadsheetSatisfaction) {
+          sheetUrl = String(refreshedMatch.spreadsheetSatisfaction).trim();
+        }
+      }
+
+      const canonicalTenantId = matchedTenantObj ? String(matchedTenantObj.id || resolvedTenantId).trim() : resolvedTenantId;
+      const shortTenantId = matchedTenantObj && matchedTenantObj.shortEnvId ? String(matchedTenantObj.shortEnvId).trim() : canonicalTenantId;
+
+      let sheetWriteResult: any = null;
+      if (sheetUrl) {
+        sheetWriteResult = await upsertRecordsToTenantSheet(sheetUrl, canonicalTenantId, 'satisfaction', [finalReview]);
+        invalidateSheetCache(canonicalTenantId, 'satisfaction');
+        if (shortTenantId && shortTenantId !== canonicalTenantId) {
+          invalidateSheetCache(shortTenantId, 'satisfaction');
+        }
+      }
+
+      // 4. Also persist to server collection customerReviews for all aliases of this tenant
+      const tenantKeysToUpdate = Array.from(new Set([canonicalTenantId, shortTenantId, resolvedTenantId].filter(Boolean)));
+      for (const tKey of tenantKeysToUpdate) {
+        try {
+          const existingReviews = ((await fetchServerCollection('customerReviews', tKey)) as any[]) || [];
+          const filtered = Array.isArray(existingReviews) ? existingReviews.filter((r: any) => r && r.id !== finalReview.id) : [];
+          await saveServerCollection('customerReviews', [finalReview, ...filtered], tKey);
+        } catch (_) {}
+      }
+
+      return res.json({
+        status: 'ok',
+        tenantId: canonicalTenantId,
+        shortEnvId: shortTenantId,
+        sheetUrlResolved: Boolean(sheetUrl),
+        sheetWriteResult,
+        review: finalReview,
+      });
+    } catch (err: any) {
+      console.error('[API /api/public/submit-satisfaction] Error:', err);
+      return res.status(500).json({ status: 'error', error: err?.message || 'Internal error' });
+    }
+  });
+
   app.post("/api/public/lookup-mission", async (req, res) => {
     try {
       const checkRef = String(req.body?.interventionRef || '').trim().toUpperCase();
@@ -8235,7 +8418,7 @@ async function warmupDefibrillateursStore() {
   // Dedicated email dispatch proxy via Google Apps Script (handles redirections, logs, avoids browser CORS/extensions)
   app.post("/api/send-email", async (req, res) => {
     try {
-      const { to, subject, body, htmlBody, replyTo, scriptUrl, name, senderName } = req.body || {};
+      const { to, subject, body, htmlBody, replyTo, scriptUrl, name, senderName, pdfBase64, pdfFileName, pdfUrl, attachments } = req.body || {};
       if (!to || !subject) {
         return res.status(400).json({ status: "error", message: "Missing recipient (to) or subject" });
       }
@@ -8252,6 +8435,16 @@ async function warmupDefibrillateursStore() {
       };
       if (htmlBody) {
         payload.htmlBody = htmlBody;
+      }
+      if (pdfBase64) {
+        payload.pdfBase64 = pdfBase64;
+        payload.pdfFileName = pdfFileName || 'Rapport_Intervention.pdf';
+      }
+      if (pdfUrl) {
+        payload.pdfUrl = pdfUrl;
+      }
+      if (Array.isArray(attachments) && attachments.length > 0) {
+        payload.attachments = attachments;
       }
       let resolvedSenderName = (name || senderName || req.body.fromName || req.body.displayName || '').trim();
       const isSystemAuth = req.body.isSystemAuthEmail === true;

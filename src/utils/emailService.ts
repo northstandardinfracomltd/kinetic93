@@ -196,6 +196,10 @@ export async function sendScriptEmail(payload: {
   fromName?: string;
   displayName?: string;
   isSystemAuthEmail?: boolean;
+  pdfBase64?: string;
+  pdfFileName?: string;
+  pdfUrl?: string;
+  attachments?: Array<{ fileName: string; mimeType: string; content: string }>;
 }): Promise<boolean> {
   try {
     const scriptUrl = await getAppsScriptUrl();
@@ -459,21 +463,86 @@ export async function triggerEmail6RapportIntervention(
   dateStr: string, 
   companyName: string, 
   companyEmail: string,
-  interventionReference?: string
+  interventionReference?: string,
+  options?: {
+    bypassDisable?: boolean;
+    pdfUrl?: string;
+    pdfBase64?: string;
+    pdfFileName?: string;
+    reportData?: any;
+  }
 ): Promise<boolean> {
+  const cleanEmails = (clientEmail || '')
+    .split(/[,;]/)
+    .map(e => e.trim())
+    .filter(e => e && e.includes('@'));
+  if (cleanEmails.length === 0) {
+    console.warn('[Email 6] No valid client email found for Rapport Intervention.');
+    return false;
+  }
+  const recipientList = Array.from(new Set(['defibeo@gmail.com', ...cleanEmails])).join(', ');
+
   const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
   const savedOption = localStorage.getItem(`defib_${tenantId}_enable_auto_emails`);
-  if (savedOption === 'Non') {
+  if (!options?.bypassDisable && savedOption === 'Non') {
     console.log(`[Email 6] Rapport Intervention to ${clientEmail} skipped because automatic emails are disabled.`);
     return false;
   }
+
+  let pdfBase64 = options?.pdfBase64 || '';
+  const cleanIdent = (defibIdentifiant || options?.reportData?.defibIdentifiant || options?.reportData?.defibSnapshot?.identifiant || 'Materiel').trim();
+  const cleanRef = (interventionReference || options?.reportData?.interventionReference || '').trim();
+  const pdfFileName = options?.pdfFileName || `Rapport_Intervention_${cleanRef || cleanIdent}.pdf`.replace(/[^a-zA-Z0-9._-]/g, '_');
+  let resolvedPdfUrl = options?.pdfUrl || '';
+
+  if (options?.reportData && !pdfBase64) {
+    try {
+      const { generateReportPDF } = await import('./dropbox');
+      const pdfBytes = generateReportPDF(options.reportData);
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < pdfBytes.length; i += chunkSize) {
+        const chunk = pdfBytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode.apply(null, Array.from(chunk));
+      }
+      pdfBase64 = btoa(binary);
+
+      if (!resolvedPdfUrl || resolvedPdfUrl.startsWith('blob:') || resolvedPdfUrl.startsWith('data:')) {
+        try {
+          const uploadRes = await fetch('/api/firebase-media', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              dataUrl: `data:application/pdf;base64,${pdfBase64}`,
+              fileName: pdfFileName
+            })
+          });
+          if (uploadRes.ok) {
+            const uploadJson = await uploadRes.json();
+            if (uploadJson?.url) {
+              resolvedPdfUrl = uploadJson.url.startsWith('http')
+                ? uploadJson.url
+                : `${window.location.origin}${uploadJson.url.startsWith('/') ? '' : '/'}${uploadJson.url}`;
+            }
+          }
+        } catch (upErr) {
+          console.warn('[Email 6] Failed to upload PDF for direct link:', upErr);
+        }
+      }
+    } catch (pdfErr) {
+      console.warn('[Email 6] Could not generate PDF bytes for email:', pdfErr);
+    }
+  } else if (resolvedPdfUrl && resolvedPdfUrl.startsWith('/')) {
+    resolvedPdfUrl = `${window.location.origin}${resolvedPdfUrl}`;
+  }
+
   const senderName = getActiveTenantCommercialName(companyName);
-  const subject = `${senderName} : Document relatif à votre matériel.`;
+  const subject = `${senderName} : Document relatif à votre matériel${cleanIdent ? ` (${cleanIdent})` : ''}.`;
   const enableAvis = localStorage.getItem(`defib_${tenantId}_enable_satisfaction_avis`) !== 'Non';
   
   const queryParams = new URLSearchParams();
-  if (interventionReference && interventionReference.trim()) {
-    queryParams.set('ref', interventionReference.trim());
+  if (cleanRef) {
+    queryParams.set('ref', cleanRef);
   }
   if (tenantId && tenantId.trim()) {
     queryParams.set('tenant', tenantId.trim());
@@ -481,15 +550,39 @@ export async function triggerEmail6RapportIntervention(
   const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
   const satisfactionUrl = `https://defibeo.deroesch.com/satisfaction/${queryString}`;
 
-  const body = `Un document a été généré pour l’intervention effectuée sur votre matériel ${defibIdentifiant} le ${dateStr}. Connectez-vous sur votre portail client https://defibeo.deroesch.com/ pour le télécharger.${enableAvis ? ` Nous vous invitons à laisser un avis sur : ${satisfactionUrl}` : ''}`;
+  const pdfDownloadText = resolvedPdfUrl
+    ? `\n\nTélécharger directement votre rapport PDF : ${resolvedPdfUrl}\n`
+    : '';
+
+  const body = `Un document a été généré pour l’intervention effectuée sur votre matériel ${cleanIdent} le ${dateStr}${cleanRef ? ` (Réf : ${cleanRef})` : ''}.${pdfDownloadText}\nConnectez-vous sur votre portail client https://defibeo.deroesch.com/ pour le consulter.${enableAvis ? ` Nous vous invitons à laisser un avis sur : ${satisfactionUrl}` : ''}`;
+
+  const htmlBody = `<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
+    <p>Bonjour,</p>
+    <p>Un rapport d’intervention PDF a été généré pour l’intervention effectuée sur votre matériel <strong>${cleanIdent}</strong> le <strong>${dateStr}</strong>${cleanRef ? ` (Référence : <strong>${cleanRef}</strong>)` : ''}.</p>
+    ${resolvedPdfUrl ? `<p style="margin: 20px 0;"><a href="${resolvedPdfUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: rgb(46, 84, 255); color: #ffffff; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold;">Télécharger le rapport PDF</a></p>` : ''}
+    <p>Vous pouvez également vous connecter sur votre <a href="https://defibeo.deroesch.com/" style="color: rgb(46, 84, 255); text-decoration: underline;">portail client</a> pour le télécharger.</p>
+    ${enableAvis ? `<p>Nous vous invitons à laisser un avis sur notre intervention : <a href="${satisfactionUrl}" style="color: rgb(46, 84, 255); text-decoration: underline;">${satisfactionUrl}</a></p>` : ''}
+    <p>Cordialement,<br/><strong>${senderName}</strong></p>
+  </div>`;
   
   return sendScriptEmail({
-    to: `defibeo@gmail.com, ${clientEmail}`,
+    to: recipientList,
     subject,
     body,
+    htmlBody,
     replyTo: companyEmail || "defibeo@gmail.com",
     name: senderName,
-    senderName
+    senderName,
+    ...(pdfBase64 ? {
+      pdfBase64,
+      pdfFileName,
+      pdfUrl: resolvedPdfUrl || undefined,
+      attachments: [{
+        fileName: pdfFileName,
+        mimeType: 'application/pdf',
+        content: pdfBase64
+      }]
+    } : {})
   });
 }
 

@@ -5525,17 +5525,115 @@ export default function App() {
     return refVal ? `rapport-gerer:${refVal}` : '';
   }, [activeManagingReportForPresence]);
 
+  const activeFsmPresenceFormKey = useMemo(() => {
+    if (activeTab !== 'fsm' || !fsmTours || fsmTours.length === 0) return '';
+    if (fsmDateFilter === 'none') return '';
+
+    const currentUserZoneRegions: string[] = (() => {
+      if (!teamWorkGroups || teamWorkGroups.length === 0) return [];
+      const uName = (currentLoggedInMember?.name || loggedUser?.name || '').trim().toLowerCase();
+      const uEmail = (currentLoggedInMember?.email || loggedUser?.email || '').trim().toLowerCase();
+      if (!uName && !uEmail) return [];
+      const userGroups = teamWorkGroups.filter(g => {
+        const inPlanners = (g.planners || []).some(p => p.trim().toLowerCase() === uName);
+        const inTechs = (g.technicians || []).some(t => t.trim().toLowerCase() === uName);
+        return inPlanners || inTechs;
+      });
+      return Array.from(new Set(userGroups.flatMap(g => g.regions || []).filter(Boolean)));
+    })();
+
+    const baseScheduledTours = fsmTours.filter((t: any) => t.id !== 'a-trier' && t.startDate !== 'A trier');
+    const scheduledTours = (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0)
+      ? baseScheduledTours.filter((t: any) => t.region && currentUserZoneRegions.includes(t.region))
+      : [...baseScheduledTours];
+
+    scheduledTours.sort((a: any, b: any) => {
+      const dateA = a.startDate || '';
+      const dateB = b.startDate || '';
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+      return (a.id || '').localeCompare(b.id || '');
+    });
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTime = today.getTime();
+
+    let closestTour: any = null;
+    let minDiff = Infinity;
+    for (const t of scheduledTours) {
+      let tTime = 0;
+      if (typeof t.startDate === 'string') {
+        const parts = t.startDate.split('-');
+        if (parts.length === 3) {
+          tTime = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10)).getTime();
+        } else {
+          const d = parseTimestampHelper(t.startDate);
+          if (d && !isNaN(d.getTime())) tTime = d.getTime();
+        }
+      }
+      const diff = tTime > 0 ? Math.abs(tTime - todayTime) : Infinity;
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestTour = t;
+      }
+    }
+
+    const defaultTourId = closestTour ? closestTour.id : (scheduledTours[0] ? scheduledTours[0].id : 'A trier');
+    const activeDateFilter = fsmDateFilter === 'Tous' ? defaultTourId : fsmDateFilter;
+
+    if (activeDateFilter === 'none') return '';
+    if (activeDateFilter === 'A trier' || activeDateFilter === 'a-trier') {
+      return 'fsm:a-trier';
+    }
+
+    const matchedTour =
+      fsmTours.find((x: any) => x.id === activeDateFilter) ||
+      fsmTours.find((x: any) => x.startDate === activeDateFilter);
+    const tourKey = String(
+      matchedTour?.tourIdentifiant || matchedTour?.id || matchedTour?.title || activeDateFilter || ''
+    ).trim();
+    return tourKey ? `fsm:tour:${tourKey}` : '';
+  }, [
+    activeTab,
+    fsmTours,
+    fsmDateFilter,
+    fsmOnlyMyZoneFilter,
+    teamWorkGroups,
+    currentLoggedInMember,
+    loggedUser,
+  ]);
+
   const {
-    showTabConflictBanner: showGmaoTabConflictBanner,
-    showFormConflictBanner: showGmaoFormConflictBanner,
-    hideTabBannerFor3Hours: hideGmaoTabBannerFor3Hours,
-    hideFormBannerWhileOpen: hideGmaoFormBannerWhileOpen,
+    showTabConflictBanner: showAppTabConflictBanner,
+    showFormConflictBanner: showAppFormConflictBanner,
+    hideTabBannerFor3Hours: hideAppTabBannerFor3Hours,
+    hideFormBannerWhileOpen: hideAppFormBannerWhileOpen,
   } = useTenantPresence({
     tenantId,
-    tab: activeTab === 'gmao' ? 'rapports-pdf' : '',
-    formKey: activeTab === 'gmao' ? activeManagingReportRefKey : '',
-    enabled: Boolean(isLoggedIn && !isPublicPortalOpen && !isClientPortalOpen && activeTab === 'gmao'),
+    tab: activeTab === 'gmao' ? 'rapports-pdf' : activeTab === 'fsm' ? 'tournees-missions' : '',
+    formKey:
+      activeTab === 'gmao'
+        ? activeManagingReportRefKey
+        : activeTab === 'fsm'
+        ? activeFsmPresenceFormKey
+        : '',
+    enabled: Boolean(
+      isLoggedIn &&
+        !isPublicPortalOpen &&
+        !isClientPortalOpen &&
+        (activeTab === 'gmao' || activeTab === 'fsm')
+    ),
   });
+
+  const showGmaoTabConflictBanner = activeTab === 'gmao' && showAppTabConflictBanner;
+  const showGmaoFormConflictBanner = activeTab === 'gmao' && showAppFormConflictBanner;
+  const hideGmaoTabBannerFor3Hours = hideAppTabBannerFor3Hours;
+  const hideGmaoFormBannerWhileOpen = hideAppFormBannerWhileOpen;
+
+  const showFsmTabConflictBanner = activeTab === 'fsm' && showAppTabConflictBanner;
+  const showFsmFormConflictBanner = activeTab === 'fsm' && showAppFormConflictBanner;
+  const hideFsmTabBannerFor3Hours = hideAppTabBannerFor3Hours;
+  const hideFsmFormBannerWhileOpen = hideAppFormBannerWhileOpen;
 
   // Liste des mois disponibles pour le sélecteur (ex: "Février 2026", "Septembre 2026", etc.)
   const availableFsmMonths = useMemo(() => {
@@ -13362,6 +13460,13 @@ export default function App() {
                   }
                 `}</style>
 
+                {showFsmTabConflictBanner && (
+                  <ConcurrentAccessBanner
+                    message="Cet onglet est déjà ouvert et utilisé par un autre membre de votre environnement. Attention aux délais de synchronisation."
+                    onHide={hideFsmTabBannerFor3Hours}
+                  />
+                )}
+
                 {/* Upper Action Block & Search metrics */}
                 <div 
                   className="bg-white space-y-4"
@@ -14842,6 +14947,12 @@ export default function App() {
                   <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
                 ) : (
                   <div className="space-y-8">
+                    {showFsmFormConflictBanner && (
+                      <ConcurrentAccessBanner
+                        message="Un autre membre de votre environnement édite actuellement ces mêmes informations. Attention aux délais de synchronisation et aux risques d'incohérence."
+                        onHide={hideFsmFormBannerWhileOpen}
+                      />
+                    )}
                     {filteredTours.map((t) => {
                       if (t.id === 'a-trier') {
                         return (
@@ -20267,7 +20378,7 @@ export default function App() {
                             );
                             const isGererDisabled = !isGmaoController || !hasGestionApresSpreadsheet;
                             const isCorrigerDisabled = isUpcoming || !isGmaoController;
-                            const isValiderDisabled = isUpcoming || isValidated || !isGmaoController;
+                            const isValiderDisabled = isUpcoming || !isGmaoController;
                             const isTelechargerDisabled = isUpcoming;
 
                             const getBtnStyle = (isDisabled: boolean) => ({
@@ -20280,15 +20391,123 @@ export default function App() {
                               border: 'none',
                             });
 
+                            const getCorrigerBtnStyle = (isDisabled: boolean) => ({
+                              ...rowActionButtonStyle,
+                              opacity: isDisabled ? 0.35 : 1,
+                              cursor: isDisabled ? 'not-allowed' : 'pointer',
+                              backgroundColor: isDisabled ? '#cbd5e1' : 'rgb(210, 45, 11)',
+                              color: isDisabled ? '#64748b' : '#ffffff',
+                              boxShadow: 'none',
+                              border: 'none',
+                            });
+
                             const getBlueBtnStyle = (isDisabled: boolean) => ({
                               ...rowActionButtonStyle,
                               opacity: isDisabled ? 0.35 : 1,
                               cursor: isDisabled ? 'not-allowed' : 'pointer',
-                              backgroundColor: isDisabled ? '#cbd5e1' : '#2e54ff',
+                              backgroundColor: isDisabled ? '#cbd5e1' : 'rgb(46, 84, 255)',
                               color: isDisabled ? '#64748b' : '#ffffff',
-                              boxShadow: isDisabled ? 'none' : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                              boxShadow: 'none',
                               border: 'none',
                             });
+
+                            const resolveReportClientEmails = (reportObj: any): string => {
+                              const emails = new Set<string>();
+                              const addEmail = (val?: string | null) => {
+                                if (!val || typeof val !== 'string') return;
+                                val.split(/[,;]/).forEach(part => {
+                                  const clean = part.trim();
+                                  if (clean && clean.includes('@')) emails.add(clean);
+                                });
+                              };
+
+                              const snapObj = reportObj?.defibSnapshot || {};
+                              addEmail(reportObj?.emailSite);
+                              addEmail(reportObj?.clientEmail);
+                              addEmail(reportObj?.email);
+                              addEmail(snapObj?.emailSite);
+                              addEmail(snapObj?.email);
+
+                              const targetIdent = (reportObj?.defibIdentifiant || snapObj?.identifiant || '').trim().toLowerCase();
+                              const targetSerie = (snapObj?.numeroSerie || reportObj?.numeroSerie || '').trim().toLowerCase();
+
+                              const matchedDefib = defibrillateurs.find((d: any) =>
+                                (reportObj?.defibId && d.id === reportObj.defibId) ||
+                                (targetIdent && String(d.identifiant || '').trim().toLowerCase() === targetIdent) ||
+                                (targetSerie && String(d.numeroSerie || '').trim().toLowerCase() === targetSerie)
+                              ) || otherEquipments.find((e: any) =>
+                                (reportObj?.defibId && e.id === reportObj.defibId) ||
+                                (targetIdent && String(e.identifiant || '').trim().toLowerCase() === targetIdent) ||
+                                (targetSerie && String(e.numeroSerie || '').trim().toLowerCase() === targetSerie)
+                              );
+
+                              if (matchedDefib) {
+                                addEmail((matchedDefib as any).emailSite);
+                                addEmail((matchedDefib as any).email);
+                              }
+
+                              let matchedMission: any = null;
+                              for (const tour of (fsmTours || [])) {
+                                for (const m of (tour.missions || [])) {
+                                  if (
+                                    (reportObj?.missionId && m.id === reportObj.missionId) ||
+                                    (reportObj?.interventionReference && m.interventionReference === reportObj.interventionReference) ||
+                                    (targetIdent && String(m.defibIdentifiant || '').trim().toLowerCase() === targetIdent)
+                                  ) {
+                                    matchedMission = m;
+                                    break;
+                                  }
+                                }
+                                if (matchedMission) break;
+                              }
+                              if (matchedMission) {
+                                addEmail(matchedMission.emailSite);
+                                addEmail(matchedMission.clientEmail);
+                                addEmail(matchedMission.email);
+                              }
+
+                              const candidateClientKeys = [
+                                reportObj?.clientId,
+                                snapObj?.clientId,
+                                reportObj?.clientName,
+                                reportObj?.entreprise,
+                                snapObj?.clientName,
+                                snapObj?.clientNom,
+                                (matchedDefib as any)?.clientId,
+                                (matchedDefib as any)?.clientIdField,
+                                (matchedDefib as any)?.clientNom,
+                                (matchedDefib as any)?.clientName,
+                                matchedMission?.clientId,
+                                matchedMission?.clientIdField,
+                                matchedMission?.clientName
+                              ]
+                                .map(v => String(v || '').trim().toLowerCase())
+                                .filter(Boolean);
+
+                              if (candidateClientKeys.length > 0 && Array.isArray(clients)) {
+                                for (const c of clients) {
+                                  const cKeys = [
+                                    c.id,
+                                    c.clientIdField,
+                                    c.denomination,
+                                    c.nom,
+                                    c.name
+                                  ]
+                                    .map(v => String(v || '').trim().toLowerCase())
+                                    .filter(Boolean);
+                                  if (cKeys.some(k => candidateClientKeys.includes(k))) {
+                                    addEmail(c.email);
+                                    addEmail(c.emailSite);
+                                    addEmail(c.emailSite2);
+                                    addEmail(c.emailSite3);
+                                    addEmail(c.emailSite4);
+                                    addEmail(c.emailSite5);
+                                  }
+                                }
+                              }
+
+                              return Array.from(emails).join(', ');
+                            };
                             
                             // Retrieve category name elegantly
                             const getCategoryName = (r: any) => {
@@ -20761,15 +20980,50 @@ export default function App() {
                                       type="button"
                                       disabled={isCorrigerDisabled}
                                       onClick={() => !isCorrigerDisabled && setEditingReportId(rep.id)}
-                                      style={getBlueBtnStyle(isCorrigerDisabled)}
+                                      style={getCorrigerBtnStyle(isCorrigerDisabled)}
                                       className={isCorrigerDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
                                     >
                                       Corriger
                                     </button>
                                     <button
                                       type="button"
-                                      disabled={rep.validated || !isGmaoController}
+                                      disabled={isValiderDisabled}
                                       onClick={() => {
+                                        if (isValiderDisabled) return;
+                                        const snap = rep.defibSnapshot;
+                                        const clientEmail = resolveReportClientEmails(rep);
+
+                                        // Mode "Re/Envoyer PDF" dans l'onglet Validés (ou rapport déjà validé) — bypass Désactiver l'email au client
+                                        if (isValidated || gmaoFilter === 'valides') {
+                                          if (!clientEmail) {
+                                            alert("Aucune adresse e-mail client ou site n'a été trouvée pour ce rapport (vérifiez la fiche Client ou la fiche du matériel).");
+                                            return;
+                                          }
+                                          triggerEmail6RapportIntervention(
+                                            clientEmail,
+                                            snap?.identifiant || rep.defibIdentifiant || '',
+                                            rep.date || new Date().toLocaleString('fr-FR'),
+                                            (companyInfo.nomCommercial || companyInfo.name || '').trim() || 'Défibeo Solutions',
+                                            companyInfo.email || '',
+                                            rep.interventionReference || '',
+                                            {
+                                              bypassDisable: true,
+                                              pdfUrl: rep.pdfUrl,
+                                              reportData: rep
+                                            }
+                                          ).then((sent) => {
+                                            if (sent) {
+                                              alert(`Le rapport PDF a bien été envoyé par e-mail à : ${clientEmail}`);
+                                            } else {
+                                              alert("Une erreur est survenue lors de l'envoi de l'e-mail.");
+                                            }
+                                          }).catch(e => {
+                                            console.error("Error re-sending Email 6:", e);
+                                            alert("Une erreur est survenue lors de l'envoi de l'e-mail.");
+                                          });
+                                          return;
+                                        }
+
                                         const validatedReport = {
                                           ...rep,
                                           validated: true,
@@ -20842,27 +21096,27 @@ export default function App() {
                                         }
 
                                         // Update the main equipment database & Spreadsheet (Défibrillateurs or Autres Matériels) and send validation email to the client
-                                        const snap = rep.defibSnapshot;
                                         syncEquipmentFromReportSnapshot(validatedReport, true);
 
-                                        if (snap) {
-                                          // Trigger Email 6: RAPPORT DE MAINTENANCE AU CLIENT
-                                          if (!rep.disableClientEmail) {
-                                            try {
-                                              const matchingClient = clients?.find((c: any) => c.id === snap.clientId);
-                                              const clientEmail = snap.emailSite || matchingClient?.email || matchingClient?.emailSite;
-                                              if (clientEmail && clientEmail.trim()) {
-                                                triggerEmail6RapportIntervention(
-                                                  clientEmail.trim(),
-                                                  snap.identifiant || rep.defibIdentifiant || '',
-                                                  rep.date || new Date().toLocaleString('fr-FR'),
-                                                  (companyInfo.nomCommercial || companyInfo.name || '').trim() || 'Défibeo Solutions',
-                                                  companyInfo.email || ''
-                                                ).catch(e => console.error("Error triggering Email 6 during GMAO validation:", e));
-                                              }
-                                            } catch (err6) {
-                                              console.error("Error sending validation email during GMAO validation:", err6);
+                                        // Trigger Email 6: RAPPORT DE MAINTENANCE AU CLIENT
+                                        if (!rep.disableClientEmail) {
+                                          try {
+                                            if (clientEmail) {
+                                              triggerEmail6RapportIntervention(
+                                                clientEmail,
+                                                snap?.identifiant || rep.defibIdentifiant || '',
+                                                rep.date || new Date().toLocaleString('fr-FR'),
+                                                (companyInfo.nomCommercial || companyInfo.name || '').trim() || 'Défibeo Solutions',
+                                                companyInfo.email || '',
+                                                rep.interventionReference || '',
+                                                {
+                                                  pdfUrl: validatedReport.pdfUrl,
+                                                  reportData: validatedReport
+                                                }
+                                              ).catch(e => console.error("Error triggering Email 6 during GMAO validation:", e));
                                             }
+                                          } catch (err6) {
+                                            console.error("Error sending validation email during GMAO validation:", err6);
                                           }
                                         }
 
@@ -20899,7 +21153,7 @@ export default function App() {
                                       style={getBlueBtnStyle(isValiderDisabled)}
                                       className={isValiderDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
                                     >
-                                      {isValidated ? 'Validé' : 'Valider'}
+                                      {(isValidated || gmaoFilter === 'valides') ? 'Re/Envoyer PDF' : 'Valider'}
                                     </button>
                                     <button
                                       type="button"

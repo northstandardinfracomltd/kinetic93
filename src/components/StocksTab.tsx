@@ -2662,7 +2662,10 @@ export default function StocksTab({
                                   setDistribStatut('Préparation');
                                   setDistribDate(new Date().toISOString().split('T')[0]);
                                 }}
-                                style={rowActionButtonStyle}
+                                style={{
+                                  ...rowActionButtonStyle,
+                                  backgroundColor: 'rgb(46, 84, 255)',
+                                }}
                                 className="cursor-pointer font-sans"
                               >
                                 Modifier
@@ -2714,6 +2717,7 @@ export default function StocksTab({
                                     }}
                                     style={{
                                       ...rowActionButtonStyle,
+                                      backgroundColor: 'rgb(210, 45, 11)',
                                       opacity: isDeleteDisabled ? 0.35 : 1,
                                       cursor: isDeleteDisabled ? 'not-allowed' : 'pointer'
                                     }}
@@ -3613,13 +3617,14 @@ export default function StocksTab({
 
                   return (
                     <div className="flex flex-col gap-4 mt-2">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center justify-between flex-wrap gap-2 w-full">
                         <button
                           type="button"
                           id="btn-nouvelle-piece-tracabilite"
                           disabled={isMaxCharsReached}
                           onClick={handleAddNewTraceabilityRow}
                           style={{
+                            width: '100%',
                             backgroundColor: isMaxCharsReached ? '#94a3b8' : '#0f172a',
                             color: '#ffffff',
                             padding: '10px 20px',
@@ -3628,7 +3633,7 @@ export default function StocksTab({
                             cursor: isMaxCharsReached ? 'not-allowed' : 'pointer',
                             opacity: isMaxCharsReached ? 0.6 : 1,
                           }}
-                          className="font-sans font-bold active:scale-95 transition-all border-0 text-white"
+                          className="w-full font-sans font-bold active:scale-95 transition-all border-0 text-white"
                           title={isMaxCharsReached ? "Limite de 50 000 caractères atteinte pour la cellule Google Spreadsheets." : undefined}
                         >
                           Nouvelle pièce
@@ -4100,6 +4105,9 @@ export default function StocksTab({
               font-weight: 100 !important;
               font-family: "DefibeoMain", "Civilprom", sans-serif !important;
             }
+            #stocks-filter-side-pane label {
+              color: #000000 !important;
+            }
           `}</style>
           {/* Backdrop */}
           <div
@@ -4171,7 +4179,7 @@ export default function StocksTab({
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         backgroundColor: isSelected ? '#2e54ff' : '#ffffff',
                         color: isSelected ? '#ffffff' : '#50617A',
-                        border: isSelected ? '1px solid #2e54ff' : '1px solid #DCE1EA',
+                        border: 'none',
                         boxShadow: 'none',
                         transition: 'all 0.15s ease'
                       }}
@@ -4190,7 +4198,7 @@ export default function StocksTab({
                   style={{
                     fontSize: '18px',
                     fontWeight: 600,
-                    color: '#50617A',
+                    color: '#000000',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
                 >
@@ -4250,7 +4258,7 @@ export default function StocksTab({
                   style={{
                     fontSize: '18px',
                     fontWeight: 600,
-                    color: '#50617A',
+                    color: '#000000',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
                 >
@@ -4298,7 +4306,7 @@ export default function StocksTab({
                   style={{
                     fontSize: '18px',
                     fontWeight: 600,
-                    color: '#50617A',
+                    color: '#000000',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
                 >

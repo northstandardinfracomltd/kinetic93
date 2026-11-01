@@ -282,9 +282,16 @@ export default function AchatsFournisseursTab({
 
   const smallBlueButtonStyle: React.CSSProperties = {
     ...smallBlackButtonStyle,
-    backgroundColor: '#2e54ff',
+    backgroundColor: 'rgb(46, 84, 255)',
     color: '#ffffff',
-    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+    boxShadow: 'none',
+  };
+
+  const smallRedButtonStyle: React.CSSProperties = {
+    ...smallBlackButtonStyle,
+    backgroundColor: 'rgb(210, 45, 11)',
+    color: '#ffffff',
+    boxShadow: 'none',
   };
 
   const cellStyle: React.CSSProperties = {
@@ -299,12 +306,12 @@ export default function AchatsFournisseursTab({
     <div id="achats-tab-container-harmonized" className="space-y-6 animate-fadeIn">
       <style>{`
         #achats-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-achats-input),
-        #achats-tab-container-harmonized select,
+        #achats-tab-container-harmonized select:not(#achats-fournisseurs-more-options-dropdown),
         #achats-tab-container-harmonized textarea {
           padding: 12px !important;
-          border: 1px solid #dedede !important;
+          border: 1px solid #DCE1EA !important;
           border-radius: 13px !important;
-          font-size: 16px !important;
+          font-size: 18px !important;
           font-weight: 100 !important;
           background: #ffffff !important;
           color: #000000 !important;
@@ -315,8 +322,8 @@ export default function AchatsFournisseursTab({
         }
         #achats-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled):not(#search-achats-input),
         #achats-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-achats-input),
-        #achats-tab-container-harmonized select:hover:not(:disabled),
-        #achats-tab-container-harmonized select:focus:not(:disabled),
+        #achats-tab-container-harmonized select:not(#achats-fournisseurs-more-options-dropdown):hover:not(:disabled),
+        #achats-tab-container-harmonized select:not(#achats-fournisseurs-more-options-dropdown):focus:not(:disabled),
         #achats-tab-container-harmonized textarea:hover:not(:disabled),
         #achats-tab-container-harmonized textarea:focus:not(:disabled),
         #achats-tab-container-harmonized #search-achats-input:hover,
@@ -325,15 +332,19 @@ export default function AchatsFournisseursTab({
           outline-offset: 2px !important;
           transition: all 0s !important;
         }
-        #achats-tab-container-harmonized select {
+        #achats-tab-container-harmonized select:not(#achats-fournisseurs-more-options-dropdown) {
           appearance: none !important;
           -webkit-appearance: none !important;
           -moz-appearance: none !important;
           background-image: none !important;
         }
+        #achats-tab-container-harmonized select.is-placeholder-select {
+          color: #BECADB !important;
+        }
         #achats-tab-container-harmonized select option {
           color: #000000 !important;
           background: #ffffff !important;
+          font-size: 18px !important;
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
         }
         #achats-tab-container-harmonized label,
@@ -349,12 +360,15 @@ export default function AchatsFournisseursTab({
         #achats-tab-container-harmonized select:disabled {
           background-color: #f1f5f9 !important;
           color: #555555 !important;
+          border-color: #DCE1EA !important;
+          font-size: 18px !important;
           cursor: not-allowed !important;
           opacity: 0.82 !important;
         }
         #achats-tab-container-harmonized input:not(#search-achats-input)::placeholder,
         #achats-tab-container-harmonized textarea::placeholder {
-          color: #000000 !important;
+          color: #BECADB !important;
+          font-size: 18px !important;
           opacity: 1 !important;
         }
         #achats-tab-container-harmonized #search-achats-input::placeholder {
@@ -627,14 +641,14 @@ export default function AchatsFournisseursTab({
                               <button
                                 type="button"
                                 onClick={() => startEditAchat(achat)}
-                                style={smallBlackButtonStyle}
+                                style={smallBlueButtonStyle}
                               >
                                 {t("Modifier")}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteAchat(achat.id)}
-                                style={smallBlackButtonStyle}
+                                style={smallRedButtonStyle}
                               >
                                 {t("Supprimer")}
                               </button>
@@ -672,7 +686,7 @@ export default function AchatsFournisseursTab({
                 type="button"
                 onClick={() => setIsFormOpen(false)}
                 style={{
-                  ...smallBlackButtonStyle,
+                  ...smallRedButtonStyle,
                   flex: 1,
                   width: '50%',
                 }}
@@ -703,9 +717,10 @@ export default function AchatsFournisseursTab({
           <form
             id="achats-fournisseurs-form"
             onSubmit={handleSaveAchat}
-            className="space-y-6 bg-white p-6 border-none"
+            className="space-y-6 p-6 border-none"
             style={{
-              border: '1px solid rgb(218, 218, 218)',
+              backgroundColor: 'rgb(245, 247, 250)',
+              border: 'none',
               borderRadius: '18px',
               width: '98%',
               maxWidth: '98%',
@@ -721,7 +736,8 @@ export default function AchatsFournisseursTab({
                 type="text"
                 value={reference}
                 disabled
-                className="w-full focus:outline-none bg-slate-50 border border-slate-200 text-slate-500 rounded-md py-2 px-3 font-mono cursor-not-allowed text-sm"
+                className="w-full focus:outline-none bg-slate-50 border border-[#DCE1EA] text-slate-500 rounded-md py-2 px-3 font-mono cursor-not-allowed"
+                style={{ fontSize: '18px', borderColor: '#DCE1EA' }}
               />
             </div>
 
@@ -736,6 +752,7 @@ export default function AchatsFournisseursTab({
                 onChange={(e) => setOrderReference(e.target.value)}
                 placeholder={t("Entrez une référence du fournisseur.")}
                 className="w-full"
+                style={{ fontSize: '18px', borderColor: '#DCE1EA' }}
                 required
               />
             </div>
@@ -756,12 +773,17 @@ export default function AchatsFournisseursTab({
                   <select
                     value={supplierId}
                     onChange={(e) => setSupplierId(e.target.value)}
-                    className="w-full pr-10 cursor-pointer"
+                    className={`w-full pr-10 cursor-pointer ${!supplierId ? 'is-placeholder-select' : ''}`}
+                    style={{
+                      fontSize: '18px',
+                      borderColor: '#DCE1EA',
+                      color: supplierId ? '#000000' : '#BECADB',
+                    }}
                     required
                   >
-                    <option value="">{t("Sélection d'un fournisseur.")}</option>
+                    <option value="" style={{ color: '#BECADB' }}>{t("Sélection d'un fournisseur.")}</option>
                     {supplierVariables.map((s) => (
-                      <option key={s.id} value={s.id}>
+                      <option key={s.id} value={s.id} style={{ color: '#000000' }}>
                         {s.nom}
                       </option>
                     ))}
@@ -781,6 +803,7 @@ export default function AchatsFournisseursTab({
                 onChange={(e) => setComment(e.target.value)}
                 placeholder={t("Entrez un commentaire.")}
                 className="w-full"
+                style={{ fontSize: '18px', borderColor: '#DCE1EA' }}
               />
             </div>
 
@@ -791,11 +814,12 @@ export default function AchatsFournisseursTab({
               </label>
 
               <div
-                className={`border border-solid border-[#D5D5D5] transition-colors rounded-2xl p-6 text-center relative ${
+                className={`border border-solid border-[#DCE1EA] transition-colors rounded-2xl p-6 text-center relative ${
                   !googleDriveActive || isUploadingFile
                     ? 'bg-slate-100 opacity-60 cursor-not-allowed'
                     : 'hover:border-[#2e54ff]/50 cursor-pointer bg-white'
                 }`}
+                style={{ borderColor: '#DCE1EA' }}
               >
                 <input
                   type="file"
@@ -806,7 +830,13 @@ export default function AchatsFournisseursTab({
                     !googleDriveActive || isUploadingFile ? 'cursor-not-allowed' : 'cursor-pointer'
                   }`}
                 />
-                <p className="font-sans font-medium" style={{ fontSize: '18px', color: '#000000' }}>
+                <p
+                  className="font-sans font-medium"
+                  style={{
+                    fontSize: '18px',
+                    color: pdfName ? '#000000' : '#BECADB',
+                  }}
+                >
                   {isUploadingFile
                     ? t("Envoi vers Google Drive en cours...")
                     : !googleDriveActive

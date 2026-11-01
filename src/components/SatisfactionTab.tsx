@@ -1236,8 +1236,11 @@ export default function SatisfactionTab({
                           <button
                             type="button"
                             onClick={() => handleDeleteReview(rev.id)}
-                            style={rowActionButtonStyle}
-                            className="cursor-pointer font-sans bg-transparent hover:opacity-80 transition-all"
+                            style={{
+                              ...rowActionButtonStyle,
+                              backgroundColor: 'rgb(210, 45, 11)',
+                            }}
+                            className="cursor-pointer font-sans hover:opacity-80 transition-all"
                           >
                             <span>{t("Supprimer")}</span>
                           </button>
@@ -1255,12 +1258,32 @@ export default function SatisfactionTab({
       {/* Side-pane Appliquer des filtres */}
       {isFilterPaneOpen && (
         <div className="fixed inset-0 z-[9999] overflow-hidden" id="satisfaction-filters-drawer-modal">
+          <style>{`
+            #satisfaction-filters-drawer-modal input[type="date"]::placeholder,
+            #satisfaction-filters-drawer-modal input[type="date"]::-webkit-datetime-edit-day-field,
+            #satisfaction-filters-drawer-modal input[type="date"]::-webkit-datetime-edit-month-field,
+            #satisfaction-filters-drawer-modal input[type="date"]::-webkit-datetime-edit-year-field,
+            #satisfaction-filters-drawer-modal input[type="date"]::-webkit-datetime-edit-text {
+              color: #000000;
+            }
+            #satisfaction-filters-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit,
+            #satisfaction-filters-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit-fields-wrapper,
+            #satisfaction-filters-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit-day-field,
+            #satisfaction-filters-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit-month-field,
+            #satisfaction-filters-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit-year-field,
+            #satisfaction-filters-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit-text {
+              color: #BECADB !important;
+            }
+          `}</style>
           <div
             className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity cursor-pointer"
             onClick={() => setIsFilterPaneOpen(false)}
           />
           <div className="fixed inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
-            <div className="relative w-screen max-w-md bg-white shadow-2xl flex flex-col overflow-hidden h-full">
+            <div
+              className="relative w-screen max-w-md shadow-2xl flex flex-col overflow-hidden h-full"
+              style={{ backgroundColor: 'rgb(245, 247, 250)' }}
+            >
               <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-28 font-sans">
                 {/* Filtres de dates (Début : & Fin :) en premier */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1281,15 +1304,17 @@ export default function SatisfactionTab({
                     <input
                       type="date"
                       id="sat-filter-date-start"
+                      placeholder="JJ/MM/AAAA"
                       value={draftSatStartDate}
                       onChange={(e) => setDraftSatStartDate(e.target.value)}
+                      className={!draftSatStartDate ? 'is-empty-date' : ''}
                       style={{
                         width: '100%',
-                        border: '1px solid #dedede',
+                        border: '1px solid #DCE1EA',
                         borderRadius: '13px',
                         padding: '10px 14px',
                         fontSize: '16px',
-                        color: '#000000',
+                        color: draftSatStartDate ? '#000000' : '#BECADB',
                         backgroundColor: '#ffffff',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         outline: 'none',
@@ -1313,15 +1338,17 @@ export default function SatisfactionTab({
                     <input
                       type="date"
                       id="sat-filter-date-end"
+                      placeholder="JJ/MM/AAAA"
                       value={draftSatEndDate}
                       onChange={(e) => setDraftSatEndDate(e.target.value)}
+                      className={!draftSatEndDate ? 'is-empty-date' : ''}
                       style={{
                         width: '100%',
-                        border: '1px solid #dedede',
+                        border: '1px solid #DCE1EA',
                         borderRadius: '13px',
                         padding: '10px 14px',
                         fontSize: '16px',
-                        color: '#000000',
+                        color: draftSatEndDate ? '#000000' : '#BECADB',
                         backgroundColor: '#ffffff',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         outline: 'none',
@@ -1360,36 +1387,11 @@ export default function SatisfactionTab({
               >
                 <button
                   type="button"
-                  id="btn-apply-satisfaction-filters"
-                  onClick={() => {
-                    setSatStartDate(draftSatStartDate);
-                    setSatEndDate(draftSatEndDate);
-                    setIsFilterPaneOpen(false);
-                  }}
-                  style={{
-                    flex: 1,
-                    backgroundColor: '#2e54ff',
-                    color: '#ffffff',
-                    borderRadius: '13px',
-                    padding: '14px',
-                    fontSize: '18px',
-                    fontWeight: 'normal',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    boxShadow: '0 4px 14px rgba(53, 86, 236, 0.3)',
-                  }}
-                  className="hover:bg-[#2b48cc] transition-colors"
-                >
-                  Appliquer
-                </button>
-                <button
-                  type="button"
                   id="btn-close-satisfaction-filters"
                   onClick={() => setIsFilterPaneOpen(false)}
                   style={{
                     flex: 1,
-                    backgroundColor: '#0f172a',
+                    backgroundColor: 'rgb(210, 45, 11)',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',
@@ -1400,9 +1402,34 @@ export default function SatisfactionTab({
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                     boxShadow: 'none',
                   }}
-                  className="hover:bg-zinc-800 transition-colors"
+                  className="hover:opacity-90 transition-opacity"
                 >
                   Fermer
+                </button>
+                <button
+                  type="button"
+                  id="btn-apply-satisfaction-filters"
+                  onClick={() => {
+                    setSatStartDate(draftSatStartDate);
+                    setSatEndDate(draftSatEndDate);
+                    setIsFilterPaneOpen(false);
+                  }}
+                  style={{
+                    flex: 1,
+                    backgroundColor: 'rgb(46, 84, 255)',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    padding: '14px',
+                    fontSize: '18px',
+                    fontWeight: 'normal',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    boxShadow: 'none',
+                  }}
+                  className="hover:opacity-90 transition-opacity"
+                >
+                  Appliquer
                 </button>
               </div>
             </div>
@@ -1416,9 +1443,24 @@ export default function SatisfactionTab({
           className="fixed inset-0 z-[9999] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
           style={{ top: 0, left: 0, right: 0, bottom: 0, height: '100vh', width: '100vw' }}
           onClick={() => setIsPerformancePaneOpen(false)}
+          id="satisfaction-stats-drawer-modal"
         >
+          <style>{`
+            #satisfaction-stats-drawer-modal input[type="date"]::placeholder {
+              color: #BECADB !important;
+            }
+            #satisfaction-stats-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit,
+            #satisfaction-stats-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit-fields-wrapper,
+            #satisfaction-stats-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit-day-field,
+            #satisfaction-stats-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit-month-field,
+            #satisfaction-stats-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit-year-field,
+            #satisfaction-stats-drawer-modal input[type="date"].is-empty-date::-webkit-datetime-edit-text {
+              color: #BECADB !important;
+            }
+          `}</style>
           <div 
-            className="relative w-full max-w-xl bg-white flex flex-col overflow-hidden animate-slideLeft h-full shadow-2xl"
+            className="relative w-full max-w-xl flex flex-col overflow-hidden animate-slideLeft h-full shadow-2xl"
+            style={{ backgroundColor: 'rgb(245, 247, 250)' }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Scrollable content area */}
@@ -1427,16 +1469,16 @@ export default function SatisfactionTab({
               {/* BLOC 1 : Satisfaction Moyenne */}
               <div 
                 style={{
-                  border: '1px solid rgb(218, 218, 218)',
+                  border: 'none',
                   borderRadius: '18px',
                   padding: '24px',
-                  backgroundColor: '#ffffff',
+                  backgroundColor: 'rgb(233, 235, 239)',
                 }}
-                className="space-y-4 shadow-3xs"
+                className="space-y-4"
               >
                 <div className="flex items-center justify-between">
                   <h4 
-                    style={{ fontSize: '22px', fontWeight: 600, color: '#000000', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}
+                    style={{ fontSize: '22px', fontWeight: 600, color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                     className="cursor-default"
                   >
                     {t("Satisfaction Moyenne") || "Satisfaction Moyenne"}
@@ -1446,7 +1488,7 @@ export default function SatisfactionTab({
                     onClick={() => { setSatStartDate(''); setSatEndDate(''); }}
                     style={{
                       fontSize: '18px',
-                      backgroundColor: 'rgb(222 29 29)',
+                      backgroundColor: 'rgb(210, 45, 11)',
                       color: '#fff',
                       borderRadius: '13px',
                       padding: '8px 15px',
@@ -1455,7 +1497,7 @@ export default function SatisfactionTab({
                       fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                       fontWeight: 600,
                     }}
-                    className="hover:opacity-90 active:scale-95 transition-all shadow-xs"
+                    className="hover:opacity-90 active:scale-95 transition-all"
                   >
                     {t("Réinitialiser")}
                   </button>
@@ -1479,22 +1521,23 @@ export default function SatisfactionTab({
                     <input
                       type="date"
                       id="input-sat-start-date"
+                      placeholder="JJ/MM/AAAA"
                       value={satStartDate}
                       onChange={(e) => setSatStartDate(e.target.value)}
+                      className={`${!satStartDate ? 'is-empty-date ' : ''}hover:border-slate-400 focus:border-[#2e54ff] transition-colors`}
                       style={{
                         padding: '10px 14px',
-                        border: '1px solid #dedede',
+                        border: '1px solid #DCE1EA',
                         borderRadius: '13px',
                         fontSize: '16px',
                         fontWeight: 100,
                         backgroundColor: '#ffffff',
-                        color: '#000000',
+                        color: satStartDate ? '#000000' : '#BECADB',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         boxSizing: 'border-box',
                         outline: 'none',
                         width: '100%',
                       }}
-                      className="hover:border-slate-400 focus:border-[#2e54ff] transition-colors"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1513,22 +1556,23 @@ export default function SatisfactionTab({
                     <input
                       type="date"
                       id="input-sat-end-date"
+                      placeholder="JJ/MM/AAAA"
                       value={satEndDate}
                       onChange={(e) => setSatEndDate(e.target.value)}
+                      className={`${!satEndDate ? 'is-empty-date ' : ''}hover:border-slate-400 focus:border-[#2e54ff] transition-colors`}
                       style={{
                         padding: '10px 14px',
-                        border: '1px solid #dedede',
+                        border: '1px solid #DCE1EA',
                         borderRadius: '13px',
                         fontSize: '16px',
                         fontWeight: 100,
                         backgroundColor: '#ffffff',
-                        color: '#000000',
+                        color: satEndDate ? '#000000' : '#BECADB',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         boxSizing: 'border-box',
                         outline: 'none',
                         width: '100%',
                       }}
-                      className="hover:border-slate-400 focus:border-[#2e54ff] transition-colors"
                     />
                   </div>
                 </div>
@@ -1594,16 +1638,16 @@ export default function SatisfactionTab({
               {/* BLOC 2 : Score NPS */}
               <div 
                 style={{
-                  border: '1px solid rgb(218, 218, 218)',
+                  border: 'none',
                   borderRadius: '18px',
                   padding: '24px',
-                  backgroundColor: '#ffffff',
+                  backgroundColor: 'rgb(233, 235, 239)',
                 }}
-                className="space-y-4 shadow-3xs"
+                className="space-y-4"
               >
                 <div className="flex items-center justify-between">
                   <h4 
-                    style={{ fontSize: '22px', fontWeight: 600, color: '#000000', fontFamily: "'Alternative', 'DefibeoAlternative', 'Gochi', cursive, sans-serif" }}
+                    style={{ fontSize: '22px', fontWeight: 600, color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                     className="cursor-default"
                   >
                     {t("Score NPS") || "Score NPS"}
@@ -1613,7 +1657,7 @@ export default function SatisfactionTab({
                     onClick={() => { setNpsStartDate(''); setNpsEndDate(''); }}
                     style={{
                       fontSize: '18px',
-                      backgroundColor: 'rgb(222 29 29)',
+                      backgroundColor: 'rgb(210, 45, 11)',
                       color: '#fff',
                       borderRadius: '13px',
                       padding: '8px 15px',
@@ -1622,7 +1666,7 @@ export default function SatisfactionTab({
                       fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                       fontWeight: 600,
                     }}
-                    className="hover:opacity-90 active:scale-95 transition-all shadow-xs"
+                    className="hover:opacity-90 active:scale-95 transition-all"
                   >
                     {t("Réinitialiser")}
                   </button>
@@ -1646,22 +1690,23 @@ export default function SatisfactionTab({
                     <input
                       type="date"
                       id="input-nps-start-date"
+                      placeholder="JJ/MM/AAAA"
                       value={npsStartDate}
                       onChange={(e) => setNpsStartDate(e.target.value)}
+                      className={`${!npsStartDate ? 'is-empty-date ' : ''}hover:border-slate-400 focus:border-[#2e54ff] transition-colors`}
                       style={{
                         padding: '10px 14px',
-                        border: '1px solid #dedede',
+                        border: '1px solid #DCE1EA',
                         borderRadius: '13px',
                         fontSize: '16px',
                         fontWeight: 100,
                         backgroundColor: '#ffffff',
-                        color: '#000000',
+                        color: npsStartDate ? '#000000' : '#BECADB',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         boxSizing: 'border-box',
                         outline: 'none',
                         width: '100%',
                       }}
-                      className="hover:border-slate-400 focus:border-[#2e54ff] transition-colors"
                     />
                   </div>
                   <div className="space-y-1">
@@ -1680,22 +1725,23 @@ export default function SatisfactionTab({
                     <input
                       type="date"
                       id="input-nps-end-date"
+                      placeholder="JJ/MM/AAAA"
                       value={npsEndDate}
                       onChange={(e) => setNpsEndDate(e.target.value)}
+                      className={`${!npsEndDate ? 'is-empty-date ' : ''}hover:border-slate-400 focus:border-[#2e54ff] transition-colors`}
                       style={{
                         padding: '10px 14px',
-                        border: '1px solid #dedede',
+                        border: '1px solid #DCE1EA',
                         borderRadius: '13px',
                         fontSize: '16px',
                         fontWeight: 100,
                         backgroundColor: '#ffffff',
-                        color: '#000000',
+                        color: npsEndDate ? '#000000' : '#BECADB',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         boxSizing: 'border-box',
                         outline: 'none',
                         width: '100%',
                       }}
-                      className="hover:border-slate-400 focus:border-[#2e54ff] transition-colors"
                     />
                   </div>
                 </div>
@@ -1744,8 +1790,8 @@ export default function SatisfactionTab({
                 <div className="space-y-2 pt-1 font-sans">
                   {/* Promoteurs */}
                   <div 
-                    className="p-3 bg-white flex items-center justify-between"
-                    style={{ border: '1px solid #dadada', borderRadius: '14px' }}
+                    className="p-3 flex items-center justify-between"
+                    style={{ backgroundColor: '#ffffff', border: 'none', borderRadius: '14px' }}
                   >
                     <div className="space-y-0.5">
                       <div className="font-semibold text-black flex items-center gap-2" style={{ fontSize: '22px' }}>
@@ -1768,8 +1814,8 @@ export default function SatisfactionTab({
 
                   {/* Passifs */}
                   <div 
-                    className="p-3 bg-white flex items-center justify-between"
-                    style={{ border: '1px solid #dadada', borderRadius: '14px' }}
+                    className="p-3 flex items-center justify-between"
+                    style={{ backgroundColor: '#ffffff', border: 'none', borderRadius: '14px' }}
                   >
                     <div className="space-y-0.5">
                       <div className="font-semibold text-black flex items-center gap-2" style={{ fontSize: '22px' }}>
@@ -1792,8 +1838,8 @@ export default function SatisfactionTab({
 
                   {/* Détracteurs */}
                   <div 
-                    className="p-3 bg-white flex items-center justify-between"
-                    style={{ border: '1px solid #dadada', borderRadius: '14px' }}
+                    className="p-3 flex items-center justify-between"
+                    style={{ backgroundColor: '#ffffff', border: 'none', borderRadius: '14px' }}
                   >
                     <div className="space-y-0.5">
                       <div className="font-semibold text-black flex items-center gap-2" style={{ fontSize: '22px' }}>
@@ -1826,7 +1872,7 @@ export default function SatisfactionTab({
                 onClick={() => setIsPerformancePaneOpen(false)}
                 style={{
                   width: '100%',
-                  backgroundColor: '#0f172a',
+                  backgroundColor: 'rgb(210, 45, 11)',
                   color: '#ffffff',
                   fontSize: '18px',
                   fontWeight: '600',
@@ -1837,7 +1883,7 @@ export default function SatisfactionTab({
                   boxShadow: 'none',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 }}
-                className="hover:bg-neutral-800 transition-colors"
+                className="hover:opacity-90 transition-opacity"
               >
                 <span>{t("Fermer")}</span>
               </button>

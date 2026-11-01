@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
 import { findTenantByInterventionGlobally, fetchRawCollectionFromFirestore, saveCollectionToFirestore } from '../firebase';
 import { t } from '../utils/translate';
 import { getParisTimestamp } from '../utils/dateUtils';
@@ -24,22 +23,71 @@ export default function SatisfactionFormPage() {
       const searchParams = new URLSearchParams(window.location.search);
       const val = searchParams.get(paramKey);
       if (val) return val;
+      for (const [k, v] of searchParams.entries()) {
+        if (k.toLowerCase() === paramKey.toLowerCase() && v) return v;
+      }
       if (window.location.hash.includes('?')) {
         const hashParams = new URLSearchParams(window.location.hash.split('?')[1]);
         const hVal = hashParams.get(paramKey);
         if (hVal) return hVal;
+        for (const [k, v] of hashParams.entries()) {
+          if (k.toLowerCase() === paramKey.toLowerCase() && v) return v;
+        }
       }
     } catch (_) {}
     return '';
   };
 
-  const [interventionRef] = useState<string>(() => {
-    return getUrlParam('ref') || getUrlParam('intervention') || getUrlParam('interventionRef') || '';
-  });
+  // Detect ?d?? (e.g. ?d27, ?d58, ?D26) or ?tenant=... from URL
+  const detectTenantFromUrl = (): string => {
+    try {
+      const explicit = getUrlParam('tenant') || getUrlParam('env') || getUrlParam('tenantId');
+      if (explicit) return explicit.trim();
 
-  const [urlTenantId] = useState<string>(() => {
-    return getUrlParam('tenant') || getUrlParam('env') || '';
-  });
+      const rawSources = [
+        window.location.search,
+        window.location.hash.includes('?') ? '?' + window.location.hash.split('?')[1] : '',
+      ].filter(Boolean);
+
+      for (const src of rawSources) {
+        const params = new URLSearchParams(src);
+        for (const [k, v] of params.entries()) {
+          const cleanK = k.trim();
+          const cleanV = v.trim();
+          if (/^d\d+$/i.test(cleanK)) return cleanK.toLowerCase();
+          if (/^d\d+$/i.test(cleanV)) return cleanV.toLowerCase();
+        }
+        const match = src.match(/[?&](d\d+)(?:[=&]|$)/i);
+        if (match && match[1]) return match[1].toLowerCase();
+      }
+    } catch (_) {}
+    return '';
+  };
+
+  // Detect INT... intervention reference from URL if present
+  const detectInterventionRefFromUrl = (): string => {
+    try {
+      const explicit = getUrlParam('ref') || getUrlParam('intervention') || getUrlParam('interventionRef') || getUrlParam('intervention_ref');
+      if (explicit) return explicit.trim();
+
+      const rawSources = [
+        window.location.search,
+        window.location.hash.includes('?') ? '?' + window.location.hash.split('?')[1] : '',
+      ].filter(Boolean);
+
+      for (const src of rawSources) {
+        const params = new URLSearchParams(src);
+        for (const [k, v] of params.entries()) {
+          if (/^INT[-_A-Z0-9]+/i.test(k.trim())) return k.trim();
+          if (/^INT[-_A-Z0-9]+/i.test(v.trim())) return v.trim();
+        }
+      }
+    } catch (_) {}
+    return '';
+  };
+
+  const [interventionRef, setInterventionRef] = useState<string>(() => detectInterventionRefFromUrl());
+  const [urlTenantId] = useState<string>(() => detectTenantFromUrl());
 
   const [nomPrenom, setNomPrenom] = useState('');
   const [commentaire, setCommentaire] = useState('');
@@ -107,7 +155,7 @@ export default function SatisfactionFormPage() {
     setErrorMessage('');
 
     try {
-      // 1. Locate tenant owning the intervention reference
+      // 1. Locate tenant owning the intervention reference or specified via ?d??
       let tenantId = urlTenantId.trim();
       if (!tenantId && interventionRef.trim()) {
         const tenantInfo = await findTenantByInterventionGlobally(interventionRef.trim());
@@ -119,12 +167,9 @@ export default function SatisfactionFormPage() {
         tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
       }
 
-      // 2. Add the customer review to that specific tenant's customerReviews partition in firestore
-      const key = tenantId === 'demo' ? 'customerReviews' : `${tenantId}_customerReviews`;
-      const existingReviews = await fetchRawCollectionFromFirestore<any[]>(key) || [];
-
       const scores = [qualite, ponctualite, politesse, clartePdf, explications, sensibilisation].filter((v): v is number => typeof v === 'number');
-      const avgVal = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '4.0';
+      const avgNum = scores.length > 0 ? Number((scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)) : 4.0;
+      const avgVal = avgNum.toFixed(1);
 
       const newReview = {
         id: 'rev-' + Date.now(),
@@ -142,26 +187,47 @@ export default function SatisfactionFormPage() {
         sensibilisation,
         npsScore,
         nps: npsScore,
-        dateStr: new Date().toISOString().split('T')[0]
+        noteGlobale: avgNum,
+        rating: avgNum,
+        dateStr: new Date().toISOString().split('T')[0],
+        date: new Date().toISOString().split('T')[0],
       };
 
-      const updatedList = [newReview, ...existingReviews];
-
+      // 2. Submit to dedicated public backend endpoint that resolves tenant (?d?? and/or INT...)
+      // and writes directly to the tenant's "Spreadsheet Satisfaction." in MEGA ADMIN DEFIBEO
       try {
-        await saveCollectionToFirestore('customerReviews', updatedList, tenantId);
+        const res = await fetch('/api/public/submit-satisfaction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantHint: tenantId,
+            interventionReference: interventionRef.trim(),
+            review: newReview,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.tenantId) {
+            tenantId = String(data.tenantId);
+          }
+        }
       } catch (_) {}
 
-      fetch('/api/sheets/upsert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId,
-          type: 'satisfaction',
-          records: [newReview],
-        }),
-      }).catch(() => {});
+      // 3. Add the customer review to that specific tenant's customerReviews partition in firestore
+      try {
+        const key = tenantId === 'demo' ? 'customerReviews' : `${tenantId}_customerReviews`;
+        const existingReviews = await fetchRawCollectionFromFirestore<any[]>(key) || [];
+        const filteredExisting = existingReviews.filter((r: any) => r && r.id !== newReview.id);
+        const updatedList = [newReview, ...filteredExisting];
+        await saveCollectionToFirestore('customerReviews', updatedList, tenantId);
 
-      // Generate a corresponding notification for the tenant
+        const currentActiveTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+        if (currentActiveTenant === tenantId || currentActiveTenant.replace(/^d/i, '') === tenantId.replace(/^d/i, '')) {
+          localStorage.setItem(`defib_${currentActiveTenant}_customer_reviews`, JSON.stringify(updatedList));
+        }
+      } catch (_) {}
+
+      // 4. Generate a corresponding notification for the tenant
       try {
         const notifKey = tenantId === 'demo' ? 'notifications' : `${tenantId}_notifications`;
         const existingNotifications = await fetchRawCollectionFromFirestore<any[]>(notifKey) || [];
@@ -189,12 +255,6 @@ export default function SatisfactionFormPage() {
         console.warn("Failed to save corresponding system notification:", notifErr);
       }
 
-      // Update local storage if the currently loaded tenant matches the target tenant
-      const currentActiveTenant = localStorage.getItem('defib_tenant_id') || 'demo';
-      if (currentActiveTenant === tenantId) {
-        localStorage.setItem(`defib_${tenantId}_customer_reviews`, JSON.stringify(updatedList));
-      }
-
       setIsSubmitted(true);
       // Clear inputs
       setNomPrenom('');
@@ -215,17 +275,21 @@ export default function SatisfactionFormPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans relative" id="satisfaction-viewport-wrapper">
+    <div
+      className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans relative"
+      id="satisfaction-viewport-wrapper"
+      style={{ backgroundColor: 'rgb(233, 235, 239)' }}
+    >
       <style>{`
         body {
-          background: #ffffff !important;
+          background: rgb(233, 235, 239) !important;
         }
 
         #satisfaction-card input, #satisfaction-card select, #satisfaction-card textarea {
-          border: 1px solid #dedede !important;
+          border: 1px solid #DCE1EA !important;
           border-radius: 13px !important;
           padding: 14px !important;
-          font-size: 16px !important;
+          font-size: 18px !important;
           font-weight: 300 !important;
           color: #000000 !important;
           background-color: #ffffff !important;
@@ -234,20 +298,32 @@ export default function SatisfactionFormPage() {
           font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
         }
 
+        #satisfaction-card input::placeholder,
+        #satisfaction-card select::placeholder,
+        #satisfaction-card textarea::placeholder {
+          color: #BECADB !important;
+          font-size: 18px !important;
+          opacity: 1 !important;
+        }
+
         #satisfaction-card button {
           transition: 0s !important;
         }
 
         #satisfaction-card input:focus, #satisfaction-card select:focus, #satisfaction-card textarea:focus, #satisfaction-card button[type="submit"]:focus,
         #satisfaction-card input:hover, #satisfaction-card select:hover, #satisfaction-card textarea:hover, #satisfaction-card button[type="submit"]:hover {
-          outline: 2.5px solid #fa53d5 !important;
+          outline: 2.5px solid rgb(46, 84, 255) !important;
           outline-offset: 3px !important;
         }
       `}</style>
 
       <div className="sm:mx-auto w-full max-w-lg">
         {/* Outer Container */}
-        <div className="bg-white p-2 sm:p-4 relative overflow-hidden" id="satisfaction-card">
+        <div
+          className="p-2 sm:p-4 relative overflow-hidden"
+          id="satisfaction-card"
+          style={{ backgroundColor: 'rgb(233, 235, 239)' }}
+        >
           
           <form onSubmit={handleSubmit} className="space-y-6">
             
@@ -257,7 +333,7 @@ export default function SatisfactionFormPage() {
               </div>
             )}
 
-            {/* RÉFÉRENCE INTERVENTION FIELD (Disabled, auto-populated, visible) */}
+            {/* RÉFÉRENCE INTERVENTION FIELD */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="intervention_ref" className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
                 {t("Référence intervention (renseignée automatiquement).") || "Référence intervention (renseignée automatiquement)."}
@@ -265,14 +341,15 @@ export default function SatisfactionFormPage() {
               <input
                 id="intervention_ref"
                 type="text"
-                disabled
                 placeholder={t("Référence intervention")}
                 value={interventionRef}
-                className="w-full text-black disabled:bg-slate-50 disabled:text-slate-700 disabled:cursor-not-allowed"
+                onChange={(e) => setInterventionRef(e.target.value)}
+                className="w-full text-black"
                 style={{
-                  backgroundColor: '#f8fafc',
-                  color: '#1e293b',
-                  cursor: 'not-allowed',
+                  backgroundColor: '#ffffff',
+                  color: '#000000',
+                  borderColor: '#DCE1EA',
+                  fontSize: '18px',
                 }}
               />
             </div>
@@ -294,10 +371,10 @@ export default function SatisfactionFormPage() {
               <div 
                 style={{ 
                   color: '#fff', 
-                  fontSize: '16px', 
+                  fontSize: '18px', 
                   textAlign: 'center', 
                   marginTop: '55px', 
-                  background: '#7e2e86', 
+                  backgroundColor: 'rgb(210, 45, 11)', 
                   border: 'none', 
                   borderRadius: '13px', 
                   padding: '12px' 
@@ -325,9 +402,9 @@ export default function SatisfactionFormPage() {
 
                         const btnStyle: React.CSSProperties = isSelected
                           ? {
-                              backgroundColor: 'rgb(53, 86, 236)',
+                              backgroundColor: 'rgb(46, 84, 255)',
                               color: '#ffffff',
-                              boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                              boxShadow: 'none',
                               border: 'none',
                               borderRadius: '12px',
                               fontSize: '18px',
@@ -338,9 +415,10 @@ export default function SatisfactionFormPage() {
                               transition: '0s',
                             }
                           : {
-                              backgroundColor: '#f1f5f9',
-                              color: '#475569',
-                              border: '1px solid #cbd5e1',
+                              backgroundColor: '#ffffff',
+                              color: '#000000',
+                              boxShadow: 'none',
+                              border: 'none',
                               borderRadius: '12px',
                               fontSize: '18px',
                               padding: '10px 4px',
@@ -379,9 +457,9 @@ export default function SatisfactionFormPage() {
 
                   const btnStyle: React.CSSProperties = isSelected
                     ? {
-                        backgroundColor: 'rgb(53, 86, 236)',
+                        backgroundColor: 'rgb(46, 84, 255)',
                         color: '#ffffff',
-                        boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                        boxShadow: 'none',
                         border: 'none',
                         borderRadius: '12px',
                         fontSize: '18px',
@@ -392,9 +470,10 @@ export default function SatisfactionFormPage() {
                         transition: '0s',
                       }
                     : {
-                        backgroundColor: '#f1f5f9',
-                        color: '#475569',
-                        border: '1px solid #cbd5e1',
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        boxShadow: 'none',
+                        border: 'none',
                         borderRadius: '12px',
                         fontSize: '18px',
                         padding: '10px 0px',
@@ -441,11 +520,9 @@ export default function SatisfactionFormPage() {
               type="submit"
               disabled={!isFormValid || isSubmitting}
               style={{
-                backgroundColor: isFormValid && !isSubmitting ? 'rgb(53, 86, 236)' : '#cbd5e1',
-                color: isFormValid && !isSubmitting ? '#ffffff' : '#64748b',
-                boxShadow: isFormValid && !isSubmitting 
-                  ? 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
-                  : 'none',
+                backgroundColor: 'rgb(46, 84, 255)',
+                color: '#ffffff',
+                boxShadow: 'none',
                 borderRadius: '12px',
                 fontSize: '18px',
                 padding: '14px 20px',
@@ -457,6 +534,7 @@ export default function SatisfactionFormPage() {
                 justifyContent: 'center',
                 gap: '0.5rem',
                 cursor: isFormValid && !isSubmitting ? 'pointer' : 'not-allowed',
+                opacity: isFormValid && !isSubmitting ? 1 : 0.65,
                 border: 'none',
                 width: '100%',
               }}
@@ -477,4 +555,5 @@ export default function SatisfactionFormPage() {
     </div>
   );
 }
+
 

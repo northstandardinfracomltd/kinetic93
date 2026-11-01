@@ -3551,11 +3551,12 @@ export default function SettingsModal({
   const renderSectionSaveHeader = (_title: string, _sectionKey: SettingsSectionKey, requireSuperAdmin = false) => {
     const isDisabled = isSaving || isDeveloper || isReadOnly || (requireSuperAdmin && !isCurrentUserSuperAdmin);
     return (
-      <div className="flex items-center justify-end w-full mb-3 select-none bg-transparent">
+      <div className="flex items-center justify-center w-full mb-3 select-none bg-transparent">
         <button
           type="button"
           disabled={isDisabled}
           onClick={() => handleSaveAll()}
+          className="w-full"
           style={{
             backgroundColor: '#2e54ff',
             color: '#fff',
@@ -3568,6 +3569,8 @@ export default function SettingsModal({
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
+            textAlign: 'center',
+            width: '100%',
             gap: '0.5rem',
             cursor: isDisabled ? 'not-allowed' : 'pointer',
             border: 'none',
@@ -3657,6 +3660,21 @@ export default function SettingsModal({
           box-sizing: border-box !important;
           outline: none !important;
           transition: all 0s !important;
+        }
+        #settings-tab-container-harmonized input::placeholder,
+        #settings-tab-container-harmonized textarea::placeholder {
+          color: #BECADB !important;
+          opacity: 1 !important;
+        }
+        #settings-tab-container-harmonized input::-webkit-input-placeholder,
+        #settings-tab-container-harmonized textarea::-webkit-input-placeholder {
+          color: #BECADB !important;
+          opacity: 1 !important;
+        }
+        #settings-tab-container-harmonized input::-moz-placeholder,
+        #settings-tab-container-harmonized textarea::-moz-placeholder {
+          color: #BECADB !important;
+          opacity: 1 !important;
         }
         #settings-tab-container-harmonized select {
           appearance: none !important;
@@ -5466,11 +5484,12 @@ export default function SettingsModal({
         {/* SECTION 3: CONNECTIONS */}
         {activeSection === 'connecteurs' && (
           <div className="rounded-2xl p-5 space-y-4 animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-connectors">
-            <div className="flex items-center justify-end w-full mb-3 select-none bg-transparent">
+            <div className="flex items-center justify-center w-full mb-3 select-none bg-transparent">
               <button
                 type="button"
                 disabled={connectorsSaveStatus === 'saving'}
                 onClick={handleSaveConnectors}
+                className="w-full"
                 style={{
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
@@ -5483,6 +5502,8 @@ export default function SettingsModal({
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  textAlign: 'center',
+                  width: '100%',
                   gap: '0.5rem',
                   cursor: connectorsSaveStatus === 'saving' ? 'not-allowed' : 'pointer',
                   opacity: connectorsSaveStatus === 'saving' ? 0.5 : 1,
@@ -5693,11 +5714,12 @@ export default function SettingsModal({
         {/* SECTION: BASES DE DONNÉES */}
         {activeSection === 'bases_de_donnees' && (
           <div className="rounded-2xl p-5 space-y-4 text-left animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-databases">
-            <div className="flex items-center justify-end w-full mb-3 select-none bg-transparent">
+            <div className="flex items-center justify-center w-full mb-3 select-none bg-transparent">
               <button
                 type="button"
                 disabled={databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin}
                 onClick={handleSaveDatabases}
+                className="w-full"
                 style={{
                   backgroundColor: '#2e54ff',
                   color: '#ffffff',
@@ -5710,6 +5732,8 @@ export default function SettingsModal({
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  textAlign: 'center',
+                  width: '100%',
                   gap: '0.5rem',
                   cursor: databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin ? 'not-allowed' : 'pointer',
                   opacity: databasesSaveStatus === 'saving' || !isCurrentUserSuperAdmin ? 0.5 : 1,
@@ -5993,26 +6017,34 @@ export default function SettingsModal({
             </div>
 
             {/* 2. ASSISTANCE DEFIBEO */}
-            <div className="rounded-2xl p-5 space-y-4 text-left mt-4 animate-fadeIn" style={{ backgroundColor: 'rgb(245 247 250)', border: 'none' }} id="settings-section-assistance-group">
+            <div className="space-y-4 text-left mt-4 animate-fadeIn" style={{ backgroundColor: 'transparent', padding: 0, border: 'none' }} id="settings-section-assistance-group">
               <div className="grid grid-cols-1 gap-4">
                 {/* SECTION 2: SUBSCRIPTION */}
                 <div 
-                  className="rounded-2xl p-5 space-y-3 text-white flex flex-col justify-between animate-fadeIn" 
-                  style={{ backgroundColor: '#0f172a' }}
+                  className="space-y-3 text-black flex flex-col justify-between animate-fadeIn" 
+                  style={{ backgroundColor: 'transparent', padding: 0 }}
                   id="settings-section-subscription"
                 >
                   <div className="space-y-4">
                     <div className="space-y-3 flex flex-col">
-                      <span className="block text-[16px] text-white font-sans leading-relaxed" style={{ color: '#ffffff' }}>
+                      <span className="block text-[16px] text-black font-sans leading-relaxed" style={{ color: '#000000' }}>
                         {t("Votre licence et votre abonnement est géré par votre représentant et interlocuteur Defibeo, pour plus d’informations veuillez nous contacter. Les factures sont automatiquement envoyées par email. Vous trouverez ci-dessous l'identifiant de votre environnement logiciel.")}
                       </span>
-                      <div className="inline-flex items-center justify-center rounded-full bg-transparent text-white border border-white/30 px-3 py-1.5 text-sm font-semibold w-fit select-none" style={{ backgroundColor: 'transparent' }}>
+                      <div
+                        className="inline-flex items-center justify-center rounded-full px-3 py-1.5 font-semibold w-fit select-none"
+                        style={{
+                          backgroundColor: 'rgb(61, 220, 132)',
+                          color: 'rgb(19, 100, 55)',
+                          fontSize: '18px',
+                          border: 'none',
+                        }}
+                      >
                         Defibeo {envIdDisplay.toUpperCase()}
                       </div>
                       <a
                         href="mailto:contact@defibeo.com"
                         style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#2e54ff', color: '#fff', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", textDecoration: 'none' }}
-                        className="text-center cursor-pointer mt-2"
+                        className="w-full text-center cursor-pointer mt-2"
                       >
                         {t("Envoyer un message")}
                       </a>
@@ -6020,56 +6052,18 @@ export default function SettingsModal({
                   </div>
                 </div>
               </div>
-
-              {/* BANNIÈRE BOUTIQUE EN LIGNE */}
-              <div 
-                className="p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn transition-all text-left mt-4"
-                style={{
-                  border: 'none',
-                  backgroundColor: 'rgb(245 247 250)',
-                  boxShadow: 'none',
-                  width: '100%',
-                  margin: '0 auto',
-                }}
-              >
-                <p 
-                  className="font-sans leading-relaxed flex-1"
-                  style={{ 
-                    fontSize: '16px', 
-                    fontWeight: 400, 
-                    color: '#000000', 
-                    cursor: 'default' 
-                  }}
-                >
-                  {t("Imprimantes à codes-barres, tablettes, plaquettes d’intervention pour véhicules… Retrouvez tous les équipements optionnels sur la boutique en ligne Defibeo.")}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setIsShopDrawerOpen(true)}
-                  style={{
-                    backgroundColor: '#2e54ff',
-                    color: '#ffffff',
-                    boxShadow: 'none',
-                    borderRadius: '0.75rem',
-                    fontSize: '18px',
-                    padding: '11px 22px',
-                    fontWeight: '100',
-                    transition: 'all 0s ease-in-out',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem',
-                    cursor: 'pointer',
-                    border: 'none',
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0
-                  }}
-                  className="transition-all hover:opacity-95 shrink-0"
-                >
-                  {t("Ouvrir la boutique")}
-                </button>
-              </div>
+            </div>
+            <div
+              className="mt-4 select-none"
+              style={{
+                fontSize: '18px',
+                textAlign: 'left',
+                cursor: 'default',
+                color: '#000000',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+            >
+              Copyright © 2021–2026 Defibeo by Civilprom. All rights reserved. Prod: 931419.
             </div>
           </>
         )}
@@ -6120,7 +6114,8 @@ export default function SettingsModal({
                   return (
                     <div
                       key={log.id || index}
-                      className="p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/60 transition-colors flex flex-col gap-2.5 shadow-xs text-left"
+                      className="p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/60 transition-colors flex flex-col gap-2.5 text-left"
+                      style={{ boxShadow: 'none' }}
                     >
                       <p 
                         className="font-medium text-black leading-snug"
@@ -6308,7 +6303,7 @@ export default function SettingsModal({
                 onClick={onLogout}
                 style={{
                   ...rowActionButtonStyle,
-                  backgroundColor: '#b91c1c',
+                  backgroundColor: 'rgb(210, 45, 11)',
                   width: '100%',
                   fontSize: '18px',
                   padding: '13px'

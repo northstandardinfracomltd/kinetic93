@@ -27,7 +27,7 @@ function FormRadio({
       <span 
         className="rounded-full relative transition-all bg-white"
         style={{
-          border: checked ? '2.5px solid #2e54ff' : '2.5px solid #cbd5e1',
+          border: checked ? '1px solid #2e54ff' : '1px solid #cbd5e1',
           width: '20px',
           height: '20px',
           minWidth: '20px',
@@ -763,6 +763,7 @@ export default function VariableTab({
                 ...rowActionButton18Style,
                 flex: 1,
                 width: '50%',
+                backgroundColor: 'rgb(210, 45, 11)',
               }}
               className="flex-1 transition-colors cursor-pointer"
             >
@@ -777,9 +778,9 @@ export default function VariableTab({
                 ...rowActionButton18Style,
                 flex: 1,
                 width: '50%',
-                backgroundColor: '#2e54ff',
+                backgroundColor: 'rgb(46, 84, 255)',
                 color: '#ffffff',
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset'
+                boxShadow: 'none',
               }}
               className="flex-1 transition-all cursor-pointer"
             >
@@ -974,18 +975,18 @@ export default function VariableTab({
                   {/* Suggestions de miniature selon l'intitulé tapé */}
                   {category === 'Modèle Défibrillateur' && !hideSuggestions && matchingSuggestions.length > 0 && (
                     <div 
-                      style={{ backgroundColor: '#fdeeff', border: '1px solid #ecd7ef', borderRadius: '13px' }}
+                      style={{ backgroundColor: 'rgb(233, 235, 239)', border: 'none', borderRadius: '13px', color: '#000000' }}
                       className="p-4 space-y-3 animate-fadeIn mt-2.5"
                       id="thumbnail-suggestions-container"
                     >
-                      <div style={{ fontSize: '16px', color: '#4d1552' }} className="font-bold">
+                      <div style={{ fontSize: '16px', color: '#000000' }} className="font-bold">
                         Proposition de miniature pour cet intitulé ({matchingSuggestions.length}) :
                       </div>
                       <div className="space-y-2.5">
                         {matchingSuggestions.map((item, idx) => (
                           <div 
                             key={idx} 
-                            style={{ background: '#4c1451', border: 'none', borderRadius: '13px', boxShadow: 'none' }}
+                            style={{ backgroundColor: '#ffffff', border: 'none', borderRadius: '13px', boxShadow: 'none', color: '#000000' }}
                             className="flex items-center justify-between gap-3 p-3"
                           >
                             <div className="flex items-center gap-3 overflow-hidden">
@@ -1012,7 +1013,7 @@ export default function VariableTab({
                               </div>
                               <div className="min-w-0">
                                 <p 
-                                  style={{ color: '#fff', cursor: 'default', fontSize: '18px' }} 
+                                  style={{ color: '#000000', cursor: 'default', fontSize: '18px' }} 
                                   className="font-bold truncate"
                                 >
                                   {item.keyword}
@@ -1032,8 +1033,8 @@ export default function VariableTab({
                                 borderRadius: '13px',
                                 padding: '10px 20px',
                                 marginRight: '15px',
-                                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                background: '#2e54ff',
+                                boxShadow: 'none',
+                                backgroundColor: 'rgb(46, 84, 255)',
                                 color: '#fff',
                                 fontSize: '18px'
                               }}
@@ -1657,7 +1658,10 @@ export default function VariableTab({
                           <button
                             onClick={() => openEditModal(v)}
                             id={`btn-edit-variable-${v.id}`}
-                            style={rowActionButton18Style}
+                            style={{
+                              ...rowActionButton18Style,
+                              backgroundColor: 'rgb(46, 84, 255)',
+                            }}
                             className="cursor-pointer"
                           >
                             Modifier
@@ -1674,6 +1678,7 @@ export default function VariableTab({
                             id={`btn-delete-variable-${v.id}`}
                             style={{
                               ...rowActionButton18Style,
+                              backgroundColor: 'rgb(210, 45, 11)',
                               opacity: used ? 0.35 : 1,
                               cursor: used ? 'not-allowed' : 'pointer'
                             }}

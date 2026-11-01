@@ -1734,13 +1734,19 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Messages Support', field: 'messagesSupport', aliases: ['messagessupport', 'historiquesupport'], type: 'json' },
   ],
   satisfaction: [
-    { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'reference', 'idavis'] },
-    { header: 'Client', field: 'clientName', aliases: ['client', 'clientname', 'entreprise', 'nomclient', 'denomination', 'societe'] },
-    { header: 'Collaborateur', field: 'collaboratorName', aliases: ['collaborateur', 'collaboratorname', 'technicien', 'intervenant', 'membre', 'agent'] },
-    { header: 'Note', field: 'rating', aliases: ['note', 'note5', 'notesur5', 'rating', 'evaluation', 'etoiles', 'score', 'satisfaction'], type: 'number' },
-    { header: 'Commentaire', field: 'comment', aliases: ['commentaire', 'comment', 'avis', 'message', 'retour', 'observation', 'temoignage'] },
-    { header: 'Mission liée', field: 'missionRef', aliases: ['missionliee', 'missionref', 'mission', 'referencemission', 'intervention', 'referenceintervention'] },
-    { header: 'Date', field: 'date', aliases: ['date', 'dateavis', 'horodatage', 'createdat'], type: 'date' },
+    { header: 'Note globale.', field: 'noteGlobale', aliases: ['noteglobale', 'note', 'note5', 'notesur5', 'note4', 'notesur4', 'rating', 'scoreglobal', 'moyenne', 'satisfaction'] },
+    { header: 'Date.', field: 'dateStr', aliases: ['date', 'datestr', 'dateavis', 'dateevaluation', 'horodatage', 'horodateur', 'createdat'], type: 'date' },
+    { header: 'Intervention.', field: 'interventionReference', aliases: ['intervention', 'referenceintervention', 'interventionreference', 'interventionref', 'missionliee', 'missionref', 'mission', 'referencemission', 'defibid', 'reference'] },
+    { header: 'Rédacteur.', field: 'clientName', aliases: ['redacteur', 'client', 'clientname', 'nomclient', 'nometprenom', 'nomprenom', 'auteur', 'entreprise', 'denomination', 'societe'] },
+    { header: 'Qualité.', field: 'qualite', aliases: ['qualite', 'qualiteglobale', 'qualitedelaprestation', 'qualiteglobaledelaprestation', 'qualitedelaprestationrealisee'], type: 'number' },
+    { header: 'Ponctualité.', field: 'ponctualite', aliases: ['ponctualite', 'ponctualitedutechnicien'], type: 'number' },
+    { header: 'Politesse.', field: 'politesse', aliases: ['politesse', 'politesseetcourtoisie', 'politesseetcourtoisiedutechnicien', 'politesseetpresentationdutechnicien'], type: 'number' },
+    { header: 'Clarté PDF.', field: 'clartePdf', aliases: ['clartepdf', 'clartedurapportpdf', 'clartedurapportdintervention', 'clarterapport'], type: 'number' },
+    { header: 'Explications.', field: 'explications', aliases: ['explications', 'clartedesexplications', 'clartedesexplicationsdutechnicien', 'explicationsfourniessurlamaintenance'], type: 'number' },
+    { header: 'Sensibilisation.', field: 'sensibilisation', aliases: ['sensibilisation', 'sensibilisationaumateriel', 'qualitedelasensibilisationaumateriel'], type: 'number' },
+    { header: 'NPS Score /10.', field: 'npsScore', aliases: ['npsscore10', 'npsscore', 'nps', 'scorenps', 'recommandation', 'probabiliterecommandation'], type: 'number' },
+    { header: 'Évaluation.', field: 'comment', aliases: ['evaluation', 'commentaire', 'comment', 'avis', 'message', 'retour', 'observation', 'temoignage'] },
+    { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idavis'] },
   ],
   achatsFournisseurs: [
     { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idachat'] },
@@ -5890,6 +5896,45 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.planners = parseStringArray(merged.planners ?? rawByHeader['planners'] ?? rawByHeader['Planners']);
     merged.technicians = parseStringArray(merged.technicians ?? rawByHeader['technicians'] ?? rawByHeader['Technicians']);
     merged.regions = parseStringArray(merged.regions ?? rawByHeader['regions'] ?? rawByHeader['Regions']);
+  } else if (tabType === 'satisfaction') {
+    const parseScore = (v: any): number | null => {
+      if (v === undefined || v === null || v === '') return null;
+      const n = Number(String(v).replace(',', '.').replace(/[^0-9.-]/g, ''));
+      return Number.isFinite(n) ? n : null;
+    };
+    merged.qualite = parseScore(merged.qualite ?? rawByHeader['Qualité.'] ?? rawByHeader['Qualité']);
+    merged.ponctualite = parseScore(merged.ponctualite ?? rawByHeader['Ponctualité.'] ?? rawByHeader['Ponctualité']);
+    merged.politesse = parseScore(merged.politesse ?? rawByHeader['Politesse.'] ?? rawByHeader['Politesse']);
+    merged.clartePdf = parseScore(merged.clartePdf ?? rawByHeader['Clarté PDF.'] ?? rawByHeader['Clarté PDF']);
+    merged.explications = parseScore(merged.explications ?? rawByHeader['Explications.'] ?? rawByHeader['Explications']);
+    merged.sensibilisation = parseScore(merged.sensibilisation ?? rawByHeader['Sensibilisation.'] ?? rawByHeader['Sensibilisation']);
+    const npsVal = parseScore(merged.npsScore ?? merged.nps ?? rawByHeader['NPS Score /10.'] ?? rawByHeader['NPS Score /10'] ?? rawByHeader['NPS']);
+    merged.npsScore = npsVal;
+    merged.nps = npsVal;
+    const critScores = [merged.qualite, merged.ponctualite, merged.politesse, merged.clartePdf, merged.explications, merged.sensibilisation].filter((v): v is number => typeof v === 'number');
+    const computedNote = critScores.length > 0 ? Number((critScores.reduce((a, b) => a + b, 0) / critScores.length).toFixed(1)) : parseScore(merged.noteGlobale ?? merged.rating ?? rawByHeader['Note globale.'] ?? rawByHeader['Note globale'] ?? rawByHeader['Note']);
+    merged.noteGlobale = computedNote;
+    if (computedNote !== null && merged.rating === undefined) {
+      merged.rating = computedNote;
+    }
+    const intRef = String(
+      merged.interventionReference ||
+      merged.interventionRef ||
+      merged.intervention ||
+      merged.missionRef ||
+      rawByHeader['Intervention.'] ||
+      rawByHeader['Intervention'] ||
+      rawByHeader['Mission liée'] ||
+      ''
+    ).trim();
+    merged.interventionReference = intRef;
+    merged.interventionRef = intRef;
+    merged.intervention = intRef;
+    const rawDate = String(merged.dateStr || merged.date || rawByHeader['Date.'] || rawByHeader['Date'] || '').trim();
+    merged.dateStr = rawDate;
+    merged.date = rawDate;
+    merged.clientName = String(merged.clientName || rawByHeader['Rédacteur.'] || rawByHeader['Rédacteur'] || rawByHeader['Client'] || '').trim();
+    merged.comment = String(merged.comment || rawByHeader['Évaluation.'] || rawByHeader['Évaluation'] || rawByHeader['Commentaire'] || '').trim();
   }
 
   if (!merged.id) {
@@ -5921,7 +5966,44 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
 
   // Prepare an enriched record with derived flat fields (e.g. for membresEnvironnement, tournees, missionsTournees, rapportsPdf, commandes, formations, stagiaires, emargements)
   const enriched: Record<string, any> = { ...(record || {}) };
-  if (tabType === 'tournees') {
+  if (tabType === 'satisfaction') {
+    const critScores = [
+      enriched.qualite,
+      enriched.ponctualite,
+      enriched.politesse,
+      enriched.clartePdf,
+      enriched.explications,
+      enriched.sensibilisation,
+    ]
+      .map((v: any) => (v !== undefined && v !== null && v !== '' ? Number(v) : NaN))
+      .filter((n: number) => Number.isFinite(n));
+    const computedNote =
+      enriched.noteGlobale !== undefined && enriched.noteGlobale !== null && enriched.noteGlobale !== ''
+        ? enriched.noteGlobale
+        : critScores.length > 0
+        ? (critScores.reduce((a: number, b: number) => a + b, 0) / critScores.length).toFixed(1)
+        : enriched.rating ?? '';
+    enriched.noteGlobale = computedNote;
+    enriched.rating = computedNote;
+    const dateVal = String(enriched.dateStr || enriched.date || new Date().toISOString().split('T')[0]).trim();
+    enriched.dateStr = dateVal;
+    enriched.date = dateVal;
+    const intRef = String(
+      enriched.interventionReference ||
+      enriched.interventionRef ||
+      enriched.intervention ||
+      enriched.missionRef ||
+      enriched.defibId ||
+      ''
+    ).trim();
+    enriched.interventionReference = intRef;
+    enriched.interventionRef = intRef;
+    enriched.intervention = intRef;
+    enriched.missionRef = intRef;
+    enriched.npsScore = enriched.npsScore ?? enriched.nps ?? '';
+    enriched.clientName = String(enriched.clientName || '').trim();
+    enriched.comment = String(enriched.comment || '').trim();
+  } else if (tabType === 'tournees') {
     enriched.tourIdentifiant = enriched.tourIdentifiant || enriched.identifiant || enriched.tourCode || enriched.id || '';
     enriched.title = enriched.title || enriched.name || '';
     enriched.plannerName = enriched.plannerName || enriched.planificateur || '';
