@@ -1046,6 +1046,94 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
     return getTenantSpreadsheetUrl('spreadsheetTemps', companyInfo);
   }, [companyInfo, spreadsheetVersion]);
 
+  const resolvedReglagesTempsSpreadsheetUrl = React.useMemo(() => {
+    return getTenantSpreadsheetUrl('spreadsheetReglagesTemps', companyInfo);
+  }, [companyInfo, spreadsheetVersion]);
+
+  const syncTempsSettingsFromSpreadsheet = React.useCallback(
+    async (forceRefresh = false, updateDrafts = false) => {
+      try {
+        const tid = (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) || 'demo';
+        const sheetUrl = getTenantSpreadsheetUrl('spreadsheetReglagesTemps', companyInfo);
+        const res = await fetch(
+          `/api/sheets/collection?tenantId=${encodeURIComponent(tid)}&type=reglagesTemps${
+            forceRefresh ? '&refresh=1' : ''
+          }${sheetUrl ? `&spreadsheetUrl=${encodeURIComponent(sheetUrl)}` : ''}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.fromSpreadsheet && Array.isArray(data.items) && data.items.length > 0) {
+          const first = data.items[0];
+          const parsedRules: CttGlobalRules = {
+            maxDailyAmplitudeEnabled: !!first.maxDailyAmplitudeEnabled,
+            maxDailyAmplitudeHours:
+              Number(first.maxDailyAmplitudeHours) >= 1 && Number(first.maxDailyAmplitudeHours) <= 24
+                ? Number(first.maxDailyAmplitudeHours)
+                : DEFAULT_CTT_GLOBAL_RULES.maxDailyAmplitudeHours,
+            maxDailyAmplitudeErrorText: String(
+              first.maxDailyAmplitudeErrorText || DEFAULT_CTT_GLOBAL_RULES.maxDailyAmplitudeErrorText
+            ),
+            minConsecutiveRestEnabled: !!first.minConsecutiveRestEnabled,
+            minConsecutiveRestHours:
+              Number(first.minConsecutiveRestHours) >= 1 && Number(first.minConsecutiveRestHours) <= 24
+                ? Number(first.minConsecutiveRestHours)
+                : DEFAULT_CTT_GLOBAL_RULES.minConsecutiveRestHours,
+            minConsecutiveRestErrorText: String(
+              first.minConsecutiveRestErrorText || DEFAULT_CTT_GLOBAL_RULES.minConsecutiveRestErrorText
+            ),
+            minBreakRestEnabled: !!first.minBreakRestEnabled,
+            minBreakRestMinutes:
+              Number(first.minBreakRestMinutes) >= 1 && Number(first.minBreakRestMinutes) <= 60
+                ? Number(first.minBreakRestMinutes)
+                : DEFAULT_CTT_GLOBAL_RULES.minBreakRestMinutes,
+            minBreakRestErrorText: String(
+              first.minBreakRestErrorText || DEFAULT_CTT_GLOBAL_RULES.minBreakRestErrorText
+            ),
+            minBreakRestTechErrorText: String(
+              first.minBreakRestTechErrorText || DEFAULT_CTT_GLOBAL_RULES.minBreakRestTechErrorText
+            ),
+          };
+          setCttGlobalRules(parsedRules);
+          localStorage.setItem(`defib_${tid}_ctt_global_rules`, JSON.stringify(parsedRules));
+          localStorage.setItem('ctt_global_rules', JSON.stringify(parsedRules));
+
+          const rawModelSettings = Array.isArray(first.modelSettings) ? first.modelSettings : [];
+          const sanitizedSettings: CttModelSetting[] = rawModelSettings
+            .slice(0, 5)
+            .filter(Boolean)
+            .map((s: any, idx: number) => {
+              const s2 = Boolean(s.setting2) || (!s.setting2 && !s.setting3);
+              const s3 = s2 ? false : Boolean(s.setting3);
+              return {
+                id: s.id || `ctt_param_${idx + 1}`,
+                setting0: String(s.setting0 ?? '').slice(0, 30),
+                setting1: Array.isArray(s.setting1) ? s.setting1 : [],
+                setting2: s2,
+                setting3: s3,
+                setting4: (s.setting4 as CttColumnTarget) || 'Temps Trajet Matin',
+                setting5: Math.min(500, Math.max(1, Number(s.setting5) || 30)),
+              };
+            });
+          setCttSettings(sanitizedSettings);
+          localStorage.setItem(`defib_${tid}_ctt_model_settings`, JSON.stringify(sanitizedSettings));
+          localStorage.setItem('ctt_model_settings', JSON.stringify(sanitizedSettings));
+
+          if (updateDrafts) {
+            setDraftGlobalRules({ ...parsedRules });
+            setDraftSettings(JSON.parse(JSON.stringify(sanitizedSettings)));
+          }
+        }
+      } catch (err) {
+        console.error('Error syncing reglagesTemps from Google Sheets:', err);
+      }
+    },
+    [companyInfo]
+  );
+
+  useEffect(() => {
+    syncTempsSettingsFromSpreadsheet(false, false);
+  }, [syncTempsSettingsFromSpreadsheet, resolvedReglagesTempsSpreadsheetUrl]);
+
   const handleRefreshTemps = () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
@@ -1055,6 +1143,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           detail: { spreadsheetKey: 'spreadsheetTemps', idSuffix: 'temps' },
         })
       );
+      syncTempsSettingsFromSpreadsheet(true, false);
     } finally {
       setTimeout(() => setIsRefreshing(false), 600);
     }
@@ -1210,6 +1299,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
     setDraftSettings(cloned);
     setDraftGlobalRules({ ...cttGlobalRules });
     setIsSettingsPaneOpen(true);
+    syncTempsSettingsFromSpreadsheet(true, true);
   };
 
   const closeSettingsPane = () => {
@@ -1229,7 +1319,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
         return;
       }
       if (!draftGlobalRules.maxDailyAmplitudeErrorText || !draftGlobalRules.maxDailyAmplitudeErrorText.trim()) {
-        alert(t("Veuillez renseigner la texture du message d'erreur pour l'amplitude maximale journalière."));
+        alert(t("Veuillez renseigner le texte message d'erreur pour l'amplitude maximale journalière."));
         return;
       }
     }
@@ -1242,7 +1332,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
         return;
       }
       if (!draftGlobalRules.minConsecutiveRestErrorText || !draftGlobalRules.minConsecutiveRestErrorText.trim()) {
-        alert(t("Veuillez renseigner la texture du message d'erreur pour l'amplitude minimale de repos entre 2 jours consécutifs."));
+        alert(t("Veuillez renseigner le texte message d'erreur pour l'amplitude minimale de repos entre 2 jours consécutifs."));
         return;
       }
     }
@@ -1255,11 +1345,11 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
         return;
       }
       if (!draftGlobalRules.minBreakRestErrorText || !draftGlobalRules.minBreakRestErrorText.trim()) {
-        alert(t("Veuillez renseigner la texture du message d'erreur pour l'amplitude minimale de repos pendant un pointage."));
+        alert(t("Veuillez renseigner le texte message d'erreur pour l'amplitude minimale de repos pendant un pointage."));
         return;
       }
       if (!draftGlobalRules.minBreakRestTechErrorText || !draftGlobalRules.minBreakRestTechErrorText.trim()) {
-        alert(t("Veuillez renseigner la texture du message d'erreur pour le technicien."));
+        alert(t("Veuillez renseigner le texte message d'erreur pour technicien."));
         return;
       }
     }
@@ -1301,6 +1391,44 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
       window.dispatchEvent(new Event('defib_ctt_global_rules_updated'));
       saveCollectionToFirestore('ctt_global_rules', [sanitizedRules]).catch((err) => {
         console.error('Error saving ctt_global_rules to Firestore:', err);
+      });
+
+      const sheetRecord: Record<string, any> = {
+        id: 'tenant_temps_settings',
+        _sheetRowNumber: 2,
+        ...sanitizedRules,
+        modelSettings: sanitized,
+      };
+      for (let i = 1; i <= 5; i++) {
+        const p = sanitized[i - 1];
+        if (p) {
+          sheetRecord[`param${i}_titre`] = p.setting0 || '';
+          sheetRecord[`param${i}_jours`] = Array.isArray(p.setting1) ? p.setting1.join(', ') : '';
+          sheetRecord[`param${i}_retirer`] = p.setting2 ? 'Oui' : 'Non';
+          sheetRecord[`param${i}_ajouter`] = p.setting3 ? 'Oui' : 'Non';
+          sheetRecord[`param${i}_colonne`] = p.setting4 || 'Temps Trajet Matin';
+          sheetRecord[`param${i}_valeurMins`] = p.setting5;
+        } else {
+          sheetRecord[`param${i}_titre`] = '';
+          sheetRecord[`param${i}_jours`] = '';
+          sheetRecord[`param${i}_retirer`] = '';
+          sheetRecord[`param${i}_ajouter`] = '';
+          sheetRecord[`param${i}_colonne`] = '';
+          sheetRecord[`param${i}_valeurMins`] = '';
+        }
+      }
+      const sheetUrl = getTenantSpreadsheetUrl('spreadsheetReglagesTemps', companyInfo);
+      fetch('/api/sheets/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tenantId: tid,
+          type: 'reglagesTemps',
+          spreadsheetUrl: sheetUrl || undefined,
+          records: [sheetRecord],
+        }),
+      }).catch((err) => {
+        console.error('Error upserting reglagesTemps to Google Sheets:', err);
       });
     } catch (e) {
       console.error('Failed to save ctt settings to localStorage or Firestore', e);
@@ -1646,7 +1774,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
         #temps-settings-pane input:not([type="radio"]):not([type="checkbox"]),
         #temps-settings-pane select {
           padding: 10px 14px !important;
-          border: 1px solid #c9bfcd !important;
+          border: 1px solid #DCE1EA !important;
           border-radius: 13px !important;
           font-size: 18px !important;
           font-weight: 400 !important;
@@ -1657,6 +1785,11 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           outline: none !important;
           transition: all 0s !important;
           width: 100% !important;
+        }
+        #temps-settings-pane input:not([type="radio"]):not([type="checkbox"])::placeholder {
+          color: #BECADB !important;
+          font-size: 18px !important;
+          opacity: 1 !important;
         }
         #temps-settings-pane input.short-input-field {
           width: 140px !important;
@@ -1953,7 +2086,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                 borderLeft: 'none',
                 borderRadius: '0px',
                 backgroundColor: '#F5F7FA',
-                color: '#50617A',
+                color: '#000000',
                 fontSize: '18px',
               }}
             >
@@ -1974,7 +2107,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     <label
                       className="select-none font-bold"
                       style={{
-                        color: '#50617A',
+                        color: '#000000',
                         fontSize: '18px',
                         paddingRight: '15px',
                         cursor: 'default',
@@ -2004,7 +2137,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
                     >
                       {t("Valeur horaire (h).")} {draftGlobalRules.maxDailyAmplitudeEnabled && <span className="text-red-500">*</span>}
                     </label>
@@ -2036,13 +2169,13 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     />
                   </div>
 
-                  {/* Triple Champ 1.3: Texture du message d'erreur. */}
+                  {/* Triple Champ 1.3: Texte message d'erreur. */}
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
                     >
-                      {t("Texture du message d’erreur.")} {draftGlobalRules.maxDailyAmplitudeEnabled && <span className="text-red-500">*</span>}
+                      {t("Texte message d’erreur.")} {draftGlobalRules.maxDailyAmplitudeEnabled && <span className="text-red-500">*</span>}
                     </label>
                     <input
                       type="text"
@@ -2073,7 +2206,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     <label
                       className="select-none font-bold"
                       style={{
-                        color: '#50617A',
+                        color: '#000000',
                         fontSize: '18px',
                         paddingRight: '15px',
                         cursor: 'default',
@@ -2103,7 +2236,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
                     >
                       {t("Valeur horaire (h).")} {draftGlobalRules.minConsecutiveRestEnabled && <span className="text-red-500">*</span>}
                     </label>
@@ -2135,13 +2268,13 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     />
                   </div>
 
-                  {/* Triple Champ 2.3: Texture du message d'erreur. */}
+                  {/* Triple Champ 2.3: Texte message d'erreur. */}
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
                     >
-                      {t("Texture du message d’erreur.")} {draftGlobalRules.minConsecutiveRestEnabled && <span className="text-red-500">*</span>}
+                      {t("Texte message d’erreur.")} {draftGlobalRules.minConsecutiveRestEnabled && <span className="text-red-500">*</span>}
                     </label>
                     <input
                       type="text"
@@ -2172,7 +2305,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     <label
                       className="select-none font-bold"
                       style={{
-                        color: '#50617A',
+                        color: '#000000',
                         fontSize: '18px',
                         paddingRight: '15px',
                         cursor: 'default',
@@ -2202,7 +2335,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
                     >
                       {t("Valeur horaire (mins).")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
                     </label>
@@ -2234,13 +2367,13 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     />
                   </div>
 
-                  {/* Triple Champ 3.3: Texture du message d'erreur. */}
+                  {/* Triple Champ 3.3: Texte message d'erreur. */}
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
                     >
-                      {t("Texture du message d’erreur.")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
+                      {t("Texte message d’erreur.")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
                     </label>
                     <input
                       type="text"
@@ -2255,13 +2388,13 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     />
                   </div>
 
-                  {/* Triple Champ 3.4: Texture du message d'erreur pour le technicien. */}
+                  {/* Triple Champ 3.4: Texte message d'erreur pour technicien. */}
                   <div>
                     <label
                       className="block mb-1 font-sans font-bold"
-                      style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
+                      style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
                     >
-                      {t("Texture du message d’erreur pour le technicien.")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
+                      {t("Texte message d’erreur pour technicien.")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
                     </label>
                     <input
                       type="text"
@@ -2296,9 +2429,9 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                         <span
                           className="font-bold"
                           style={{
-                            fontFamily: '"Gochi", cursive, sans-serif',
-                            fontSize: '18px',
-                            color: '#50617A',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontSize: '22px',
+                            color: '#000000',
                           }}
                         >
                           {`Paramètre ${idx + 1}`}
@@ -2308,8 +2441,8 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                           onClick={() => handleDeleteParam(idx)}
                           style={{
                             borderRadius: '13px',
-                            fontSize: '16px',
-                            backgroundColor: 'rgb(185, 28, 28)',
+                            fontSize: '18px',
+                            backgroundColor: 'rgb(210, 45, 11)',
                             boxShadow: 'none',
                             color: 'rgb(255, 255, 255)',
                             padding: '6px 16px',
@@ -2345,7 +2478,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       <div>
                         <label
                           className="block mb-1 font-sans font-bold"
-                          style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
+                          style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
                         >
                           {t("Titre du paramètre.")}
                         </label>
@@ -2358,7 +2491,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                         />
                         <div
                           className="text-right mt-1 font-sans"
-                          style={{ color: '#50617A', fontSize: '18px' }}
+                          style={{ color: '#000000', fontSize: '18px' }}
                         >
                           {param.setting0.length}/30
                         </div>
@@ -2368,7 +2501,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       <div>
                         <label
                           className="block mb-1 font-sans font-bold"
-                          style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
+                          style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
                         >
                           {t("Appliquer aux jours.")}
                         </label>
@@ -2385,7 +2518,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                                   fontSize: '18px',
                                   padding: '7px 15px',
                                   borderColor: isSelected ? '#000000' : '#d7d7d7',
-                                  color: isSelected ? '#ffffff' : '#50617A',
+                                  color: isSelected ? '#ffffff' : '#000000',
                                 }}
                                 className={`font-semibold border transition-all select-none font-sans cursor-pointer ${
                                   isSelected
@@ -2406,16 +2539,16 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                         <div
                           className="flex items-center justify-between"
                           style={{
-                            padding: '20px 25px',
+                            padding: '0px',
                             borderRadius: '13px',
                             border: 'none',
-                            backgroundColor: '#e9edf1',
+                            backgroundColor: 'transparent',
                           }}
                         >
                           <span
                             className="select-none font-semibold"
                             style={{
-                              color: '#50617A',
+                              color: '#000000',
                               fontSize: '18px',
                               paddingRight: '20px',
                               cursor: 'default',
@@ -2444,16 +2577,16 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                         <div
                           className="flex items-center justify-between"
                           style={{
-                            padding: '20px 25px',
+                            padding: '0px',
                             borderRadius: '13px',
                             border: 'none',
-                            backgroundColor: '#e9edf1',
+                            backgroundColor: 'transparent',
                           }}
                         >
                           <span
                             className="select-none font-semibold"
                             style={{
-                              color: '#50617A',
+                              color: '#000000',
                               fontSize: '18px',
                               paddingRight: '20px',
                               cursor: 'default',
@@ -2483,7 +2616,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       <div>
                         <label
                           className="block mb-1 font-sans font-bold"
-                          style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
+                          style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
                         >
                           {t("Colonne attribuée.")}
                         </label>
@@ -2503,7 +2636,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       <div>
                         <label
                           className="block mb-1 font-sans font-bold"
-                          style={{ color: '#50617A', fontSize: '18px', cursor: 'default' }}
+                          style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
                         >
                           {t("Valeur (Mins).")}
                         </label>
@@ -2579,7 +2712,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   onClick={handleSaveSettings}
                   disabled={draftConflicts.length > 0}
                   style={{
-                    backgroundColor: draftConflicts.length > 0 ? '#94a3b8' : '#2e54ff',
+                    backgroundColor: draftConflicts.length > 0 ? '#94a3b8' : 'rgb(46, 84, 255)',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',
@@ -2590,7 +2723,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     cursor: draftConflicts.length > 0 ? 'not-allowed' : 'pointer',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
-                  className={draftConflicts.length > 0 ? '' : 'hover:bg-[#2b48cc] transition-colors'}
+                  className={draftConflicts.length > 0 ? '' : 'hover:opacity-90 transition-opacity'}
                 >
                   {t("Enregistrer")}
                 </button>
@@ -2599,7 +2732,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   type="button"
                   onClick={closeSettingsPane}
                   style={{
-                    backgroundColor: '#0f172a',
+                    backgroundColor: 'rgb(210, 45, 11)',
                     color: '#ffffff',
                     borderRadius: '13px',
                     padding: '14px',
@@ -2610,7 +2743,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     cursor: 'pointer',
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   }}
-                  className="hover:bg-zinc-800 transition-colors"
+                  className="hover:opacity-90 transition-opacity"
                 >
                   {t("Fermer")}
                 </button>

@@ -4993,6 +4993,7 @@ async function warmupDefibrillateursStore() {
     historiqueNotifications: 'spreadsheetStocksActivite',
     achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
     temps: 'spreadsheetTemps',
+    reglagesTemps: 'spreadsheetReglagesTemps',
     ticketsCaisse: 'spreadsheetTicketsCaisse',
     releveConcurrentiel: 'spreadsheetReleveConcurrentiel',
     formations: 'spreadsheetFormations',
@@ -6102,6 +6103,7 @@ async function warmupDefibrillateursStore() {
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '')
           .trim();
+        if (r === 'inactif' || r.includes('inactif')) return false;
         if (targetLoginRole === 'technicien') {
           return r.includes('tech') || r.includes('maintenance') || r.includes('intervenant');
         }
@@ -6109,6 +6111,31 @@ async function warmupDefibrillateursStore() {
           if (!r) return true;
           if (r.includes('tech') || r.includes('client')) return false;
           return true;
+        }
+        return false;
+      };
+
+      const isMemberInactiveInTenant = (tid: string, targetEmailLower: string): boolean => {
+        if (!tid || !targetEmailLower) return false;
+        const memKey = tid === 'demo' ? 'members' : `${tid}_members`;
+        let fbMembers = serverMemoryStore.get(memKey);
+        if (!Array.isArray(fbMembers)) {
+          const dFile = path.join(COLLECTIONS_DIR, `${memKey}.json`);
+          if (fs.existsSync(dFile)) {
+            try { fbMembers = JSON.parse(fs.readFileSync(dFile, 'utf-8')); } catch (_) {}
+          }
+        }
+        if (Array.isArray(fbMembers)) {
+          const matched = fbMembers.find(
+            (m: any) =>
+              m &&
+              (cleanCompareEmail(m.email) === targetEmailLower ||
+                String(m.name || '').trim().toLowerCase() === targetEmailLower)
+          );
+          if (matched) {
+            const r = String(matched.role || '').trim().toLowerCase();
+            if (r === 'inactif' || r.includes('inactif')) return true;
+          }
         }
         return false;
       };
@@ -6218,13 +6245,14 @@ async function warmupDefibrillateursStore() {
         if (loginRole === 'admin' || loginRole === 'technicien') {
           for (const tnt of tenants) {
             if (!tnt || !Array.isArray(tnt.masterUsers)) continue;
+            const tid = String(tnt.id || 'demo').trim();
+            if (isMemberInactiveInTenant(tid, emailLower)) continue;
             const matchedMasterUser = tnt.masterUsers.find((mu: any) => {
               if (!mu || !mu.email) return false;
               const muEmail = cleanCompareEmail(mu.email);
               return muEmail === emailLower && isRoleMatch(mu.role || mu.rawRole, loginRole);
             });
             if (matchedMasterUser) {
-              const tid = String(tnt.id || 'demo').trim();
               const resolvedEmail = String(matchedMasterUser.email || emailLower).trim().toLowerCase();
               let resolvedName = lookupFastCachedMemberName(tid, emailLower);
               if (!resolvedName) {
@@ -6352,6 +6380,10 @@ async function warmupDefibrillateursStore() {
         }
 
         // Admin or Technicien (passwordless, verified by email 2FA):
+        if (!isTenantSuperAdminEmail(tnt, emailLower) && isMemberInactiveInTenant(tid, emailLower)) {
+          continue;
+        }
+
         // 1. Check Super-Admin email from Firestore OR Master Spreadsheet (if admin role)
         if (loginRole === 'admin' && isTenantSuperAdminEmail(tnt, emailLower)) {
           firebaseMatchedMember = {
@@ -6420,25 +6452,45 @@ async function warmupDefibrillateursStore() {
             });
 
           if (sData && Array.isArray(sData.items)) {
+            sheetProfileForEmail = sData.items.find((m: any) => {
+              if (!m || typeof m !== 'object') return false;
+              const mEmail = String(m.email || '').trim().toLowerCase();
+              const mName = String(m.name || '').trim().toLowerCase();
+              return mEmail === emailLower || (loginRole === 'technicien' && mName === emailLower);
+            });
+            if (
+              sheetProfileForEmail &&
+              String(sheetProfileForEmail.role || '').trim().toLowerCase().includes('inactif')
+            ) {
+              firebaseMatchedMember = null;
+              sheetMatchedMember = null;
+              continue;
+            }
             const foundInSheet = findMemberInSheet(sData.items);
             if (foundInSheet) {
               sheetMatchedMember = foundInSheet;
             } else if (!sheetMatchedMember && !firebaseMatchedMember) {
               sData = await fetchTenantSheetCollection(membresSheetUrl, tid, 'membresEnvironnement', true).catch(() => null);
               if (sData && Array.isArray(sData.items)) {
+                sheetProfileForEmail = sData.items.find((m: any) => {
+                  if (!m || typeof m !== 'object') return false;
+                  const mEmail = String(m.email || '').trim().toLowerCase();
+                  const mName = String(m.name || '').trim().toLowerCase();
+                  return mEmail === emailLower || (loginRole === 'technicien' && mName === emailLower);
+                });
+                if (
+                  sheetProfileForEmail &&
+                  String(sheetProfileForEmail.role || '').trim().toLowerCase().includes('inactif')
+                ) {
+                  firebaseMatchedMember = null;
+                  sheetMatchedMember = null;
+                  continue;
+                }
                 const foundAfterRefresh = findMemberInSheet(sData.items);
                 if (foundAfterRefresh) {
                   sheetMatchedMember = foundAfterRefresh;
                 }
               }
-            }
-            if (sData && Array.isArray(sData.items)) {
-              sheetProfileForEmail = sData.items.find((m: any) => {
-                if (!m || typeof m !== 'object') return false;
-                const mEmail = String(m.email || '').trim().toLowerCase();
-                const mName = String(m.name || '').trim().toLowerCase();
-                return mEmail === emailLower || (loginRole === 'technicien' && mName === emailLower);
-              });
             }
           }
         }
@@ -7684,6 +7736,7 @@ async function warmupDefibrillateursStore() {
             'spreadsheetStocksActivite',
             'spreadsheetAchatsFournisseurs',
             'spreadsheetTemps',
+            'spreadsheetReglagesTemps',
             'spreadsheetTicketsCaisse',
             'spreadsheetReleveConcurrentiel',
             'spreadsheetFormations',

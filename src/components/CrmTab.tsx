@@ -386,66 +386,103 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const recentSearchesStorageKey = `defib_${activeTenant}_recent_crm_searches`;
-  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+  const readStoredRecentSearches = React.useCallback((tenantKey: string): string[] => {
+    if (typeof window === 'undefined') return [];
+    const candidateStores: Storage[] = [];
     try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenant}_recent_crm_searches`) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          return parsed
-            .filter((s) => typeof s === 'string' && s.trim().length >= 5)
-            .map((s) => s.trim())
-            .slice(0, 5);
-        }
-      }
+      if (window.localStorage) candidateStores.push(window.localStorage);
     } catch (_) {}
+    try {
+      if (window.sessionStorage) candidateStores.push(window.sessionStorage);
+    } catch (_) {}
+
+    for (const store of candidateStores) {
+      try {
+        const raw =
+          store.getItem(tenantKey) ||
+          store.getItem('defib_recent_crm_searches');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const valid = parsed
+              .map((item) => String(item || '').trim())
+              .filter((item) => item.length >= 2)
+              .slice(0, 5);
+            if (valid.length > 0) return valid;
+          }
+        }
+      } catch (_) {}
+    }
     return [];
-  });
+  }, []);
+
+  const persistRecentSearchesToCache = React.useCallback((tenantKey: string, list: string[]) => {
+    if (typeof window === 'undefined') return;
+    const serialized = JSON.stringify(list);
+    try {
+      window.sessionStorage?.setItem(tenantKey, serialized);
+      window.sessionStorage?.setItem('defib_recent_crm_searches', serialized);
+    } catch (_) {}
+    try {
+      window.localStorage?.setItem(tenantKey, serialized);
+      window.localStorage?.setItem('defib_recent_crm_searches', serialized);
+    } catch (_) {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (
+            k &&
+            !k.includes('_recent_') &&
+            (k.includes('_cache') || k.includes('_sheet_') || k.includes('_defibs') || k.includes('_clients') || k.includes('_reports'))
+          ) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach((k) => {
+          try {
+            window.localStorage.removeItem(k);
+          } catch (_) {}
+        });
+        window.localStorage?.setItem(tenantKey, serialized);
+        window.localStorage?.setItem('defib_recent_crm_searches', serialized);
+      } catch (__) {}
+    }
+  }, []);
+
+  const [recentSearches, setRecentSearches] = useState<string[]>(() =>
+    readStoredRecentSearches(`defib_${activeTenant}_recent_crm_searches`)
+  );
 
   useEffect(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(recentSearchesStorageKey) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setRecentSearches(
-            parsed
-              .filter((s) => typeof s === 'string' && s.trim().length >= 5)
-              .map((s) => s.trim())
-              .slice(0, 5)
-          );
-          return;
-        }
-      }
-    } catch (_) {}
-    setRecentSearches([]);
-  }, [recentSearchesStorageKey]);
+    setRecentSearches(readStoredRecentSearches(recentSearchesStorageKey));
+  }, [recentSearchesStorageKey, readStoredRecentSearches]);
 
   const saveRecentSearch = React.useCallback(
     (term: string) => {
-      const trimmed = (term || '').trim();
-      if (trimmed.length < 5) return;
+      const trimmed = String(term || '').trim();
+      if (trimmed.length < 2) return;
       setRecentSearches((prev) => {
-        const filtered = prev.filter(
-          (item) => item.trim().length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()
+        const currentStored = readStoredRecentSearches(recentSearchesStorageKey);
+        const mergedSource = prev.length >= currentStored.length ? prev : currentStored;
+        const filtered = mergedSource.filter(
+          (item) => item.trim().length >= 2 && item.toLowerCase() !== trimmed.toLowerCase()
         );
         const updated = [trimmed, ...filtered].slice(0, 5);
-        try {
-          localStorage.setItem(recentSearchesStorageKey, JSON.stringify(updated));
-        } catch (_) {}
+        persistRecentSearchesToCache(recentSearchesStorageKey, updated);
         return updated;
       });
     },
-    [recentSearchesStorageKey]
+    [recentSearchesStorageKey, readStoredRecentSearches, persistRecentSearchesToCache]
   );
 
-  // Save recent search only after 3 seconds without typing (if >= 5 characters)
+  // Save recent search after user pauses typing
   useEffect(() => {
-    const trimmed = (ticketSearch || '').trim();
-    if (trimmed.length < 5) return;
+    const trimmed = String(ticketSearch || '').trim();
+    if (trimmed.length < 2) return;
     const timer = setTimeout(() => {
       saveRecentSearch(trimmed);
-    }, 3000);
+    }, 1000);
     return () => clearTimeout(timer);
   }, [ticketSearch, saveRecentSearch]);
 
@@ -2682,8 +2719,18 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     searchInputRef.current?.blur();
                   }
                 }}
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setIsSearchFocused(false)}
+                onFocus={() => {
+                  setRecentSearches((prev) =>
+                    prev.length > 0 ? prev : readStoredRecentSearches(recentSearchesStorageKey)
+                  );
+                  setIsSearchFocused(true);
+                }}
+                onBlur={() => {
+                  if (ticketSearch.trim()) {
+                    saveRecentSearch(ticketSearch);
+                  }
+                  setIsSearchFocused(false);
+                }}
                 placeholder={t("Recherche rapide")}
                 style={{
                   border: '1px solid #dedede',

@@ -549,6 +549,8 @@ export interface CompanyInfo {
   spreadsheetAchatsFournisseursUrl?: string;
   spreadsheetTemps?: string;
   spreadsheetTempsUrl?: string;
+  spreadsheetReglagesTemps?: string;
+  spreadsheetReglagesTempsUrl?: string;
   spreadsheetTicketsCaisse?: string;
   spreadsheetTicketsCaisseUrl?: string;
   spreadsheetReleveConcurrentiel?: string;
@@ -602,6 +604,7 @@ export type SpreadsheetFieldKey =
   | 'spreadsheetStocksDistribues'
   | 'spreadsheetAchatsFournisseurs'
   | 'spreadsheetTemps'
+  | 'spreadsheetReglagesTemps'
   | 'spreadsheetTicketsCaisse'
   | 'spreadsheetReleveConcurrentiel'
   | 'spreadsheetFormations'
@@ -639,6 +642,7 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetStocksActivite', urlKey: 'spreadsheetStocksActiviteUrl', storageSuffix: 'spreadsheet_stocks_activite', label: 'Spreadsheet Stocks Activité.', id: 'settings-db-spreadsheet-stocks-activite' },
   { key: 'spreadsheetAchatsFournisseurs', urlKey: 'spreadsheetAchatsFournisseursUrl', storageSuffix: 'spreadsheet_achats_fournisseurs', label: 'Spreadsheet Achats fournisseurs.', id: 'settings-db-spreadsheet-achats-fournisseurs' },
   { key: 'spreadsheetTemps', urlKey: 'spreadsheetTempsUrl', storageSuffix: 'spreadsheet_temps', label: 'Spreadsheet Temps.', id: 'settings-db-spreadsheet-temps' },
+  { key: 'spreadsheetReglagesTemps', urlKey: 'spreadsheetReglagesTempsUrl', storageSuffix: 'spreadsheet_reglages_temps', label: 'Spreadsheet Réglages Temps.', id: 'settings-db-spreadsheet-reglages-temps' },
   { key: 'spreadsheetTicketsCaisse', urlKey: 'spreadsheetTicketsCaisseUrl', storageSuffix: 'spreadsheet_tickets_caisse', label: 'Spreadsheet Tickets Caisse.', id: 'settings-db-spreadsheet-tickets-caisse' },
   { key: 'spreadsheetReleveConcurrentiel', urlKey: 'spreadsheetReleveConcurrentielUrl', storageSuffix: 'spreadsheet_releve_concurrentiel', label: 'Spreadsheet Relevé Concurrentiel.', id: 'settings-db-spreadsheet-releve-concurrentiel' },
   { key: 'spreadsheetFormations', urlKey: 'spreadsheetFormationsUrl', storageSuffix: 'spreadsheet_formations', label: 'Spreadsheet Formations.', id: 'settings-db-spreadsheet-formations' },

@@ -252,66 +252,107 @@ export default function ClientTab({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const recentSearchesStorageKey = `defib_${activeTenantId}_recent_clients_searches`;
-  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+  const readStoredRecentSearches = (tenantKey: string): string[] => {
+    if (typeof window === 'undefined') return [];
+    const candidateStores: Storage[] = [];
     try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenantId}_recent_clients_searches`) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          return parsed
-            .filter((s) => typeof s === 'string' && s.trim().length >= 5)
-            .map((s) => s.trim())
-            .slice(0, 5);
-        }
-      }
+      if (window.localStorage) candidateStores.push(window.localStorage);
     } catch (_) {}
+    try {
+      if (window.sessionStorage) candidateStores.push(window.sessionStorage);
+    } catch (_) {}
+
+    for (const store of candidateStores) {
+      try {
+        const raw =
+          store.getItem(tenantKey) ||
+          store.getItem('defib_recent_clients_searches');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const valid = parsed
+              .map((item) => String(item || '').trim())
+              .filter((item) => item.length >= 2)
+              .slice(0, 5);
+            if (valid.length > 0) return valid;
+          }
+        }
+      } catch (_) {}
+    }
     return [];
-  });
+  };
+
+  const persistRecentSearchesToCache = (tenantKey: string, list: string[]) => {
+    if (typeof window === 'undefined') return;
+    const serialized = JSON.stringify(list);
+    try {
+      window.sessionStorage?.setItem(tenantKey, serialized);
+      window.sessionStorage?.setItem('defib_recent_clients_searches', serialized);
+    } catch (_) {}
+    try {
+      window.localStorage?.setItem(tenantKey, serialized);
+      window.localStorage?.setItem('defib_recent_clients_searches', serialized);
+    } catch (_) {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (
+            k &&
+            !k.includes('recent_clients_searches') &&
+            !k.includes('recent_materiels_searches') &&
+            !k.includes('recent_defib_searches') &&
+            (k.includes('_cache') || k.includes('_sheet_') || k.includes('_defibs') || k.includes('_clients'))
+          ) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach((k) => {
+          try {
+            window.localStorage.removeItem(k);
+          } catch (_) {}
+        });
+        window.localStorage?.setItem(tenantKey, serialized);
+        window.localStorage?.setItem('defib_recent_clients_searches', serialized);
+      } catch (__) {}
+    }
+  };
+
+  const [recentSearches, setRecentSearches] = useState<string[]>(() =>
+    readStoredRecentSearches(`defib_${activeTenantId}_recent_clients_searches`)
+  );
 
   useEffect(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(recentSearchesStorageKey) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setRecentSearches(
-            parsed
-              .filter((s) => typeof s === 'string' && s.trim().length >= 5)
-              .map((s) => s.trim())
-              .slice(0, 5)
-          );
-          return;
-        }
-      }
-    } catch (_) {}
-    setRecentSearches([]);
+    const stored = readStoredRecentSearches(recentSearchesStorageKey);
+    if (stored.length > 0) {
+      setRecentSearches(stored);
+    }
   }, [recentSearchesStorageKey]);
 
   const saveRecentSearch = React.useCallback(
     (term: string) => {
-      const trimmed = (term || '').trim();
-      if (trimmed.length < 5) return;
+      const trimmed = String(term || '').trim();
+      if (trimmed.length < 2) return;
       setRecentSearches((prev) => {
-        const filtered = prev.filter(
-          (item) => item.trim().length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()
-        );
-        const updated = [trimmed, ...filtered].slice(0, 5);
-        try {
-          localStorage.setItem(recentSearchesStorageKey, JSON.stringify(updated));
-        } catch (_) {}
+        const base = prev.length > 0 ? prev : readStoredRecentSearches(recentSearchesStorageKey);
+        const updated = [
+          trimmed,
+          ...base.filter((item) => item.trim().length >= 2 && item.toLowerCase() !== trimmed.toLowerCase()),
+        ].slice(0, 5);
+        persistRecentSearchesToCache(recentSearchesStorageKey, updated);
         return updated;
       });
     },
     [recentSearchesStorageKey]
   );
 
-  // Save recent search only after 3 seconds without typing (if >= 5 characters)
+  // Save recent search after user pauses typing
   useEffect(() => {
-    const trimmed = (search || '').trim();
-    if (trimmed.length < 5) return;
+    const trimmed = String(search || '').trim();
+    if (trimmed.length < 2) return;
     const timer = setTimeout(() => {
       saveRecentSearch(trimmed);
-    }, 3000);
+    }, 1000);
     return () => clearTimeout(timer);
   }, [search, saveRecentSearch]);
 
@@ -1178,6 +1219,9 @@ export default function ClientTab({
   };
 
   const openEditModal = (client: Client) => {
+    if (search.trim().length >= 2) {
+      saveRecentSearch(search);
+    }
     setEditingClient(client);
     setDenomination(client.denomination);
     setSiret(client.siret);
@@ -2746,7 +2790,12 @@ export default function ClientTab({
                 onMouseEnter={() => setIsSearchHovered(true)}
                 onMouseLeave={() => setIsSearchHovered(false)}
                 onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setIsSearchFocused(false)}
+                onBlur={() => {
+                  if (search.trim().length >= 2) {
+                    saveRecentSearch(search);
+                  }
+                  setIsSearchFocused(false);
+                }}
               />
               {isSearchFocused && (
                 <div
@@ -2911,6 +2960,9 @@ export default function ClientTab({
                     <td className="px-4 py-5 text-center whitespace-nowrap">
                       {(() => {
                         const count = getClientDefibVolume(client);
+                        const isWin =
+                          typeof navigator !== 'undefined' &&
+                          /Win/i.test(navigator.platform || navigator.userAgent || '');
                         return (
                           <span
                             className="inline-flex items-center justify-center rounded-full font-sans shrink-0"
@@ -2918,17 +2970,33 @@ export default function ClientTab({
                               background: '#3ddc84',
                               color: '#156337',
                               fontSize: '18px',
-                              padding: 0,
+                              fontWeight: 100,
+                              fontSynthesis: 'none',
+                              padding: count > 99 ? '0 6px' : 0,
                               margin: 0,
                               lineHeight: 1,
+                              letterSpacing: '0px',
+                              textIndent: '0px',
                               textAlign: 'center',
-                              width: '30px',
+                              width: count > 99 ? 'auto' : '30px',
+                              minWidth: '30px',
                               height: '30px',
                               textBoxTrim: 'trim-both' as any,
                               textBoxEdge: 'cap alphabetic' as any,
                             }}
                           >
-                            {count}
+                            <span
+                              style={{
+                                display: 'inline-block',
+                                lineHeight: 1,
+                                letterSpacing: '0px',
+                                textIndent: '0px',
+                                fontSynthesis: 'none',
+                                transform: isWin ? 'translateX(-1.5px)' : 'translateX(-1px)',
+                              }}
+                            >
+                              {count}
+                            </span>
                           </span>
                         );
                       })()}

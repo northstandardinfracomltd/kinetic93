@@ -156,6 +156,7 @@ export default function StocksTab({
 }: StocksTabProps) {
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState<boolean>(false);
   const [isFilterSidePaneOpen, setIsFilterSidePaneOpen] = useState<boolean>(false);
+  const [showStockValue, setShowStockValue] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [clickedPill, setClickedPill] = useState<string | null>(null);
   const [spreadsheetVersion, setSpreadsheetVersion] = useState<number>(0);
@@ -1149,66 +1150,104 @@ export default function StocksTab({
 
   const activeStocksTenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
   const recentSearchesStorageKey = `defib_${activeStocksTenantId}_recent_stocks_searches`;
-  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+
+  const readStoredRecentSearches = React.useCallback((tenantKey: string): string[] => {
+    if (typeof window === 'undefined') return [];
+    const candidateStores: Storage[] = [];
     try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeStocksTenantId}_recent_stocks_searches`) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          return parsed
-            .filter((s) => typeof s === 'string' && s.trim().length >= 5)
-            .map((s) => s.trim())
-            .slice(0, 5);
-        }
-      }
+      if (window.localStorage) candidateStores.push(window.localStorage);
     } catch (_) {}
+    try {
+      if (window.sessionStorage) candidateStores.push(window.sessionStorage);
+    } catch (_) {}
+
+    for (const store of candidateStores) {
+      try {
+        const raw =
+          store.getItem(tenantKey) ||
+          store.getItem('defib_recent_stocks_searches');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const valid = parsed
+              .map((item) => String(item || '').trim())
+              .filter((item) => item.length >= 2)
+              .slice(0, 5);
+            if (valid.length > 0) return valid;
+          }
+        }
+      } catch (_) {}
+    }
     return [];
-  });
+  }, []);
+
+  const persistRecentSearchesToCache = React.useCallback((tenantKey: string, list: string[]) => {
+    if (typeof window === 'undefined') return;
+    const serialized = JSON.stringify(list);
+    try {
+      window.sessionStorage?.setItem(tenantKey, serialized);
+      window.sessionStorage?.setItem('defib_recent_stocks_searches', serialized);
+    } catch (_) {}
+    try {
+      window.localStorage?.setItem(tenantKey, serialized);
+      window.localStorage?.setItem('defib_recent_stocks_searches', serialized);
+    } catch (_) {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (
+            k &&
+            !k.includes('_recent_') &&
+            (k.includes('_cache') || k.includes('_sheet_') || k.includes('_defibs') || k.includes('_clients') || k.includes('_reports'))
+          ) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach((k) => {
+          try {
+            window.localStorage.removeItem(k);
+          } catch (_) {}
+        });
+        window.localStorage?.setItem(tenantKey, serialized);
+        window.localStorage?.setItem('defib_recent_stocks_searches', serialized);
+      } catch (__) {}
+    }
+  }, []);
+
+  const [recentSearches, setRecentSearches] = useState<string[]>(() =>
+    readStoredRecentSearches(`defib_${activeStocksTenantId}_recent_stocks_searches`)
+  );
 
   useEffect(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(recentSearchesStorageKey) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setRecentSearches(
-            parsed
-              .filter((s) => typeof s === 'string' && s.trim().length >= 5)
-              .map((s) => s.trim())
-              .slice(0, 5)
-          );
-          return;
-        }
-      }
-    } catch (_) {}
-    setRecentSearches([]);
-  }, [recentSearchesStorageKey]);
+    setRecentSearches(readStoredRecentSearches(recentSearchesStorageKey));
+  }, [recentSearchesStorageKey, readStoredRecentSearches]);
 
   const saveRecentSearch = React.useCallback(
     (term: string) => {
-      const trimmed = (term || '').trim();
-      if (trimmed.length < 5) return;
+      const trimmed = String(term || '').trim();
+      if (trimmed.length < 2) return;
       setRecentSearches((prev) => {
-        const filtered = prev.filter(
-          (item) => item.trim().length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()
+        const currentStored = readStoredRecentSearches(recentSearchesStorageKey);
+        const mergedSource = prev.length >= currentStored.length ? prev : currentStored;
+        const filtered = mergedSource.filter(
+          (item) => item.trim().length >= 2 && item.toLowerCase() !== trimmed.toLowerCase()
         );
         const updated = [trimmed, ...filtered].slice(0, 5);
-        try {
-          localStorage.setItem(recentSearchesStorageKey, JSON.stringify(updated));
-        } catch (_) {}
+        persistRecentSearchesToCache(recentSearchesStorageKey, updated);
         return updated;
       });
     },
-    [recentSearchesStorageKey]
+    [recentSearchesStorageKey, readStoredRecentSearches, persistRecentSearchesToCache]
   );
 
-  // Save recent search only after 3 seconds without typing (if >= 5 characters)
+  // Save recent search after user pauses typing
   useEffect(() => {
-    const trimmed = (stockSearchQuery || '').trim();
-    if (trimmed.length < 5) return;
+    const trimmed = String(stockSearchQuery || '').trim();
+    if (trimmed.length < 2) return;
     const timer = setTimeout(() => {
       saveRecentSearch(trimmed);
-    }, 3000);
+    }, 1000);
     return () => clearTimeout(timer);
   }, [stockSearchQuery, saveRecentSearch]);
 
@@ -2201,6 +2240,8 @@ export default function StocksTab({
                         setIsFilterSidePaneOpen(true);
                       } else if (val === 'toggle-fit-view') {
                         toggleTableFitView();
+                      } else if (val === 'toggle-stock-value') {
+                        setShowStockValue((prev) => !prev);
                       } else if (val === 'download-inventory-pdf') {
                         handleDownloadInventoryPDF();
                       } else if (val === 'spreadsheet-editor') {
@@ -2218,6 +2259,9 @@ export default function StocksTab({
                     </option>
                     <option value="toggle-fit-view">
                       {isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
+                    </option>
+                    <option value="toggle-stock-value">
+                      {showStockValue ? t("Masquer la valeur des stocks") : t("Afficher la valeur des stocks")}
                     </option>
                     {stockEmplacementFilter && (
                       <option value="download-inventory-pdf">
@@ -2333,7 +2377,12 @@ export default function StocksTab({
                     onMouseEnter={() => setIsSearchHovered(true)}
                     onMouseLeave={() => setIsSearchHovered(false)}
                     onFocus={() => setIsSearchFocused(true)}
-                    onBlur={() => setIsSearchFocused(false)}
+                    onBlur={() => {
+                      if (stockSearchQuery && stockSearchQuery.trim()) {
+                        saveRecentSearch(stockSearchQuery);
+                      }
+                      setIsSearchFocused(false);
+                    }}
                   />
                   {isSearchFocused && (
                     <div
@@ -2431,33 +2480,35 @@ export default function StocksTab({
           </div>
 
           {/* Indicateur Valeur (HT) des stocks disponibles */}
-          <div 
-            id="stocks-available-value-indicator"
-            className="px-4 pt-4 flex flex-wrap items-center justify-start select-none"
-          >
+          {showStockValue && (
             <div 
-              style={{
-                borderRadius: '1000px',
-                padding: '8px 16px',
-                fontSize: '18px',
-                fontWeight: 100,
-                cursor: 'default',
-                fontFamily: 'DefibeoMain, Civilprom, sans-serif',
-                backgroundColor: 'rgb(247, 252, 192)',
-                color: 'rgb(105, 114, 5)',
-                border: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-              }}
+              id="stocks-available-value-indicator"
+              className="px-4 pt-4 flex flex-wrap items-center justify-start select-none"
             >
-              <span style={{ marginRight: '6px' }}>
-                {t("Valeur (HT) des stocks disponibles :")}
-              </span>
-              <span>
-                {totalStockValueHT}
-              </span>
+              <div 
+                style={{
+                  borderRadius: '1000px',
+                  padding: '8px 16px',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  cursor: 'default',
+                  fontFamily: 'DefibeoMain, Civilprom, sans-serif',
+                  backgroundColor: 'rgb(247, 252, 192)',
+                  color: 'rgb(105, 114, 5)',
+                  border: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                }}
+              >
+                <span style={{ marginRight: '6px' }}>
+                  {t("Valeur (HT) des stocks disponibles :")}
+                </span>
+                <span>
+                  {totalStockValueHT}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Stock Table List */}
           <div className="bg-white overflow-hidden mt-6 rounded-none" style={{ border: 'none', borderRadius: '0px', boxShadow: 'none' }}>
@@ -3833,7 +3884,7 @@ export default function StocksTab({
                                   />
                                 </div>
 
-                                {/* 8. Bouton Imprimer Code-Barres */}
+                                {/* 8. Bouton Télécharger code-barres */}
                                 <div className="flex flex-col justify-end min-w-0">
                                   <button
                                     type="button"
@@ -3855,11 +3906,11 @@ export default function StocksTab({
                                     className="w-full font-sans font-bold active:scale-95 transition-all border-0"
                                     title={
                                       !isLotSaved
-                                        ? "Veuillez enregistrer le numéro de lot ou série avant d'imprimer le code-barres"
-                                        : 'Imprimer Code-Barres'
+                                        ? "Veuillez enregistrer le numéro de lot ou série avant de télécharger le code-barres"
+                                        : 'Télécharger code-barres'
                                     }
                                   >
-                                    Imprimer Code-Barres
+                                    Télécharger code-barres
                                   </button>
                                 </div>
 
@@ -3951,15 +4002,31 @@ export default function StocksTab({
                   <div className="space-y-1 pt-1">
                     <label className="block text-[16px] font-medium text-[#000]">Commentaire</label>
                     <textarea
+                      rows={1}
+                      ref={(el) => {
+                        if (el) {
+                          el.style.height = 'auto';
+                          el.style.height = `${Math.max(el.scrollHeight, 48)}px`;
+                        }
+                      }}
                       value={alert.commentaire || ''}
+                      onInput={(e) => {
+                        const target = e.currentTarget;
+                        target.style.height = 'auto';
+                        target.style.height = `${Math.max(target.scrollHeight, 48)}px`;
+                      }}
                       onChange={(e) => {
+                        const target = e.currentTarget;
+                        target.style.height = 'auto';
+                        target.style.height = `${Math.max(target.scrollHeight, 48)}px`;
                         if (saveLogisticsNotifications) {
                           const updated = logisticsNotifications.map(n => n.id === alert.id ? { ...n, commentaire: e.target.value } : n);
                           saveLogisticsNotifications(updated);
                         }
                       }}
                       placeholder="Entrez un commentaire."
-                      className="w-full p-2.5 text-[16px] text-[#000] border border-[#dce1ea] rounded-lg bg-white resize-y min-h-[60px] focus:outline-none focus:ring-0 focus:border-[#dce1ea]"
+                      style={{ overflow: 'hidden', resize: 'none' }}
+                      className="w-full p-2.5 text-[16px] text-[#000] border border-[#dce1ea] rounded-lg bg-white overflow-hidden resize-none focus:outline-none focus:ring-0 focus:border-[#dce1ea]"
                     />
                   </div>
 

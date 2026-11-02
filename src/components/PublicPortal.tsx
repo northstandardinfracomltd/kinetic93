@@ -502,7 +502,9 @@ export default function PublicPortal({
       setInlineTechError("Veuillez saisir votre code PIN.");
       return;
     }
-    const matched = members.find((m) => m.pin === trimmedPin);
+    const matched = members.find(
+      (m) => m.pin === trimmedPin && m.role?.toLowerCase().trim() !== "inactif"
+    );
     if (matched) {
       const activeTenant = (propTenantId && propTenantId !== 'demo')
         ? propTenantId
@@ -918,18 +920,22 @@ export default function PublicPortal({
 
     const syncServerMessages = async () => {
       const controller = new AbortController();
-      const timerId = setTimeout(() => controller.abort(), 6000);
+      const timerId = setTimeout(() => controller.abort(), 15000);
       try {
         const sheetRes = await fetch(
-          `/api/sheets/collection?tenantId=${encodeURIComponent(techTenantId)}&type=messagesInternes`,
-          { signal: controller.signal },
+          `/api/sheets/collection?tenantId=${encodeURIComponent(techTenantId)}&type=messagesInternes&refresh=true&_=${Date.now()}`,
+          { signal: controller.signal, headers: { "Cache-Control": "no-cache" } },
         ).catch(() => null);
         if (sheetRes && sheetRes.ok && isMounted) {
           const sheetData = await sheetRes.json();
+          if (sheetData?.spreadsheetUrl) {
+            try {
+              localStorage.setItem(`defib_${techTenantId}_spreadsheet_messages_internes`, String(sheetData.spreadsheetUrl));
+            } catch (_) {}
+          }
           if (
             sheetData?.fromSpreadsheet &&
-            Array.isArray(sheetData.items) &&
-            (sheetData.items.length > 0 || sheetData.hasRemoteHeaders)
+            Array.isArray(sheetData.items)
           ) {
             const mappedList: TenantMessage[] = sheetData.items
               .filter((m: any) => m && (m.content || m.text))
@@ -970,12 +976,22 @@ export default function PublicPortal({
       }
     };
 
+    const handleFocus = () => {
+      if (document.visibilityState === "visible") {
+        syncServerMessages();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
     syncServerMessages();
-    const interval = setInterval(syncServerMessages, 30000);
+    const interval = setInterval(syncServerMessages, 6000);
 
     return () => {
       isMounted = false;
       window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
       clearInterval(interval);
     };
   }, [techTenantId]);
@@ -3031,12 +3047,31 @@ export default function PublicPortal({
       const tid = techTenantId || localStorage.getItem("defib_tenant_id") || "demo";
       await Promise.allSettled([
         handleRefreshCalendarFromPlanning(),
-        fetch(`/api/sync-collection?collectionName=tenantMessages&tenantId=${encodeURIComponent(tid)}&_=${Date.now()}`)
+        fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(tid)}&type=messagesInternes&refresh=true&_=${Date.now()}`)
           .then(async (resp) => {
             if (resp.ok) {
-              const data = await resp.json();
-              const remoteList: TenantMessage[] = Array.isArray(data?.value) ? data.value : (Array.isArray(data) ? data : []);
-              if (Array.isArray(remoteList)) {
+              const sheetData = await resp.json();
+              if (sheetData?.fromSpreadsheet && Array.isArray(sheetData.items)) {
+                const remoteList: TenantMessage[] = sheetData.items
+                  .filter((m: any) => m && (m.content || m.text))
+                  .map((m: any, idx: number) => {
+                    const rawEmail = String(
+                      m.authorEmail || m["Nom Prénom (Username)."] || m["Nom Prénom (Username)"] || "",
+                    ).trim();
+                    const rawName = String(m.authorName || m.sender || "").trim();
+                    return {
+                      id: m.id || `msg_${m._sheetRowNumber || idx + 2}`,
+                      authorName: rawName || rawEmail || "Membre",
+                      authorEmail: rawEmail || (rawName.includes("@") ? rawName : ""),
+                      tag: "All",
+                      content: String(m.content || m.text || "").trim(),
+                      createdAt: Number(m.createdAt) || Date.now(),
+                      dateStr: String(m.dateStr || m.time || "").trim(),
+                      tenantId: tid,
+                      envId: tid,
+                      _sheetRowNumber: m._sheetRowNumber,
+                    } as TenantMessage & { _sheetRowNumber?: number };
+                  });
                 setTenantMessages(remoteList);
                 try {
                   localStorage.setItem(`defib_${tid}_tenant_messages`, JSON.stringify(remoteList));
@@ -5820,7 +5855,9 @@ export default function PublicPortal({
   useEffect(() => {
     const pinStr = pinDigits.join("");
     if (pinStr.length === 4) {
-      const matched = members.find((m) => m.pin === pinStr);
+      const matched = members.find(
+        (m) => m.pin === pinStr && m.role?.toLowerCase().trim() !== "inactif"
+      );
       if (matched) {
         setPinError("");
         setAuthenticatedUser(matched);
@@ -11383,6 +11420,7 @@ export default function PublicPortal({
                     setMessages={setTenantMessages}
                     companyInfo={companyInfo}
                     members={members}
+                    extraBottomSpacing={isReportOverlayOpen && isReportOverlayMinimized ? 124 : 0}
                   />
                 </div>
               )}
@@ -11486,7 +11524,7 @@ export default function PublicPortal({
                     value={techLocationLink || "Aucun emplacement spécifié"}
                     disabled
                     style={{
-                      color: "rgb(80, 97, 122)",
+                      color: "#000000",
                       fontSize: "18px",
                       textAlign: "center",
                       border: "none",
@@ -11496,9 +11534,9 @@ export default function PublicPortal({
                       width: "100%",
                       boxSizing: "border-box",
                       opacity: 1,
-                      WebkitTextFillColor: "rgb(80, 97, 122)",
+                      WebkitTextFillColor: "#000000",
                     }}
-                    className="font-sans font-bold mb-2"
+                    className="font-sans font-bold mb-2 text-black"
                   />
 
                   {/* Piece / Material Select: Lookup from Spreadsheet Stocks where >= 1 traceability item is linked to logged-in technician's location */}
@@ -11510,7 +11548,7 @@ export default function PublicPortal({
                       setShowNewDistribStockForm(false);
                     }}
                     style={{
-                      color: "rgb(80, 97, 122)",
+                      color: "#000000",
                       fontSize: "18px",
                       textAlign: "center",
                       textAlignLast: "center",
@@ -11525,7 +11563,7 @@ export default function PublicPortal({
                       MozAppearance: "none",
                       outline: "none",
                     }}
-                    className="font-sans font-bold mb-2 cursor-pointer"
+                    className="font-sans font-bold mb-2 cursor-pointer text-black"
                   >
                     <option value="">Sélection d’un stock distribué.</option>
                     {techActiveStocks.map((st) => {
@@ -12221,7 +12259,7 @@ export default function PublicPortal({
                                         />
                                       </div>
 
-                                      {/* 8. Bouton Imprimer Code-Barres */}
+                                      {/* 8. Bouton Télécharger code-barres */}
                                       <div className="flex flex-col justify-end min-w-0">
                                         <button
                                           type="button"
@@ -12242,7 +12280,7 @@ export default function PublicPortal({
                                           }}
                                           className="w-full font-sans font-bold active:scale-95 transition-all border-0"
                                         >
-                                          Imprimer Code-Barres
+                                          Télécharger code-barres
                                         </button>
                                       </div>
 
@@ -12552,7 +12590,8 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(246, 236, 247)",
+                            backgroundColor: "rgb(245, 247, 250)",
+                            color: "#000000",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -12565,7 +12604,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
+                            style={{ fontSize: "22px", color: "#000000" }}
                           >
                             {selectedTechStock.volumeDisponible}
                           </div>
@@ -12573,7 +12612,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(99, 31, 106)",
+                              color: "#000000",
                             }}
                           >
                             Disponible et avec vous
@@ -12583,7 +12622,8 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(246, 236, 247)",
+                            backgroundColor: "rgb(245, 247, 250)",
+                            color: "#000000",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -12596,7 +12636,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
+                            style={{ fontSize: "22px", color: "#000000" }}
                           >
                             {selectedTechStock.volumeReserve}
                           </div>
@@ -12604,7 +12644,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(99, 31, 106)",
+                              color: "#000000",
                             }}
                           >
                             Réservé et avec vous
@@ -12614,7 +12654,8 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(246, 236, 247)",
+                            backgroundColor: "rgb(245, 247, 250)",
+                            color: "#000000",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -12627,7 +12668,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
+                            style={{ fontSize: "22px", color: "#000000" }}
                           >
                             {selectedTechStock.volumeEntrant}
                           </div>
@@ -12635,7 +12676,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(99, 31, 106)",
+                              color: "#000000",
                             }}
                           >
                             Disponible à la centrale
@@ -12646,7 +12687,8 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(246, 236, 247)",
+                            backgroundColor: "rgb(245, 247, 250)",
+                            color: "#000000",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -12659,7 +12701,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
+                            style={{ fontSize: "22px", color: "#000000" }}
                           >
                             {outgoingStats.week1.vol}
                           </div>
@@ -12667,7 +12709,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(99, 31, 106)",
+                              color: "#000000",
                             }}
                           >
                             Sortant cette semaine
@@ -12677,7 +12719,8 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(246, 236, 247)",
+                            backgroundColor: "rgb(245, 247, 250)",
+                            color: "#000000",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -12690,7 +12733,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
+                            style={{ fontSize: "22px", color: "#000000" }}
                           >
                             {outgoingStats.week2.vol}
                           </div>
@@ -12698,7 +12741,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(99, 31, 106)",
+                              color: "#000000",
                             }}
                           >
                             Sortant semaine prochaine
@@ -12708,7 +12751,8 @@ export default function PublicPortal({
                         <div
                           className="p-4 text-center"
                           style={{
-                            backgroundColor: "rgb(246, 236, 247)",
+                            backgroundColor: "rgb(245, 247, 250)",
+                            color: "#000000",
                             borderRadius: "13px",
                             border: "none",
                             boxShadow: "none",
@@ -12721,7 +12765,7 @@ export default function PublicPortal({
                         >
                           <div
                             className="font-extrabold font-sans"
-                            style={{ fontSize: "22px", color: "rgb(99, 31, 106)" }}
+                            style={{ fontSize: "22px", color: "#000000" }}
                           >
                             {outgoingStats.next30.vol}
                           </div>
@@ -12729,7 +12773,7 @@ export default function PublicPortal({
                             className="font-bold mt-1 font-sans leading-tight"
                             style={{
                               fontSize: "16px",
-                              color: "rgb(99, 31, 106)",
+                              color: "#000000",
                             }}
                           >
                             Sortant 7 à 30 jours
@@ -13142,7 +13186,7 @@ export default function PublicPortal({
                                           />
                                         </div>
 
-                                        {/* 8. Bouton Imprimer Code-Barres */}
+                                        {/* 8. Bouton Télécharger code-barres */}
                                         <div className="flex flex-col justify-end min-w-0">
                                           <button
                                             type="button"
@@ -13163,7 +13207,7 @@ export default function PublicPortal({
                                             }}
                                             className="w-full font-sans font-bold active:scale-95 transition-all border-0"
                                           >
-                                            Imprimer Code-Barres
+                                            Télécharger code-barres
                                           </button>
                                         </div>
 
@@ -16493,6 +16537,19 @@ export default function PublicPortal({
                           })}
                         </div>
                       )}
+                    </div>
+                  )}
+                  {activeSettingsSection === "videos-tutoriels" && (
+                    <div
+                      className="text-left"
+                      style={{
+                        fontSize: "18px",
+                        color: "#000000",
+                        textAlign: "left",
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                    >
+                      Copyright © 2021–2026 Defibeo by Civilprom. All rights reserved. Prod: 931419.
                     </div>
                   )}
 

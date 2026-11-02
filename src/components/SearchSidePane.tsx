@@ -223,20 +223,20 @@ export const SearchSidePane: React.FC<SearchSidePaneProps> = ({
                     <div className="min-w-0 flex-1">
                       <span
                         style={{
-                          fontSize: '17px',
+                          fontSize: '18px',
                           color: '#000000',
                           fontWeight: 600,
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         }}
                         className="block truncate"
                       >
-                        {item.label}
+                        {item.label || (item as any).title}
                       </span>
                       {item.subtitle && (
                         <span
                           style={{
-                            fontSize: '14px',
-                            color: '#64748b',
+                            fontSize: '18px',
+                            color: '#000000',
                             fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                           }}
                           className="block truncate mt-0.5"

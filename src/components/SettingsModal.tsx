@@ -2588,6 +2588,7 @@ export default function SettingsModal({
     const m = localMembers[index];
     if (!m) return false;
     const isTech = m.role === 'Technicien' || m.role === 'Maintenance Terrain' || m.role?.toLowerCase().includes('tech');
+    const isInactive = m.role === 'Inactif' || m.role?.toLowerCase().trim() === 'inactif';
     const isOwnSession = currentUser && m.email?.toLowerCase().trim() === currentUser.email?.toLowerCase().trim();
     
     const loggedInMember = currentUser ? localMembers.find(lm => lm.email?.toLowerCase().trim() === currentUser.email?.toLowerCase().trim()) : null;
@@ -2608,7 +2609,7 @@ export default function SettingsModal({
       loggedInMember.role?.toLowerCase().includes('super') || 
       loggedInMember.role?.toLowerCase().includes('propriétaire')
     ));
-    return !!(isOwnSession || isCurrentUserSuperAdmin || (isTech && isCurrentUserAdminOrSuperAdmin));
+    return !!(isOwnSession || isCurrentUserSuperAdmin || ((isTech || isInactive) && isCurrentUserAdminOrSuperAdmin));
   };
 
   const handlePinChange = (index: number, pinVal: string) => {
@@ -2636,12 +2637,13 @@ export default function SettingsModal({
     setLocalMembers(prev => {
       const updated = [...prev];
       const isTech = newRole === 'Technicien';
+      const isInactive = newRole === 'Inactif';
       updated[index] = { 
         ...updated[index], 
         role: newRole,
         pin: updated[index].pin || '1234',
-        locationLink: isTech ? updated[index].locationLink : undefined,
-        adminSubRole: !isTech ? (updated[index].adminSubRole || 'Administrateur') : undefined
+        locationLink: isTech ? updated[index].locationLink : (isInactive ? updated[index].locationLink : undefined),
+        adminSubRole: (!isTech && !isInactive) ? (updated[index].adminSubRole || 'Administrateur') : updated[index].adminSubRole
       };
       return updated;
     });
@@ -2808,30 +2810,15 @@ export default function SettingsModal({
 
   const handleRemoveMember = async (index: number) => {
     const m = localMembers[index];
+    if (!m) return;
     const isSuperAdmin = m.role === 'Super-Administrateur' || m.role === 'Propriétaire / Admin' || m.role?.toLowerCase().includes('super') || m.role?.toLowerCase().includes('propriétaire');
     if (isSuperAdmin) {
-      alert("Impossible de supprimer le Super-Administrateur principal.");
+      alert("Impossible de désactiver le Super-Administrateur principal.");
       return;
     }
-    if (m) {
-      const activeTenant = myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
-      logDeleteMember(activeTenant, m.name || m.email).catch(() => {});
-      const delKeys = [m.email, m.name, (m as any).id].filter(Boolean);
-      if (delKeys.length > 0) {
-        const sheetMemsUrl = resolveSettingsSheetUrl('spreadsheetMembresEnvironnement', 'spreadsheetMembresEnvironnementUrl', 'spreadsheet_membres_environnement', activeTenant);
-        await fetch('/api/sheets/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenantId: activeTenant,
-            type: 'membresEnvironnement',
-            spreadsheetUrl: sheetMemsUrl || undefined,
-            keys: delKeys,
-          }),
-        }).catch(() => {});
-      }
-    }
-    const updatedList = localMembers.filter((_, idx) => idx !== index);
+    const updatedList = localMembers.map((item, idx) =>
+      idx === index ? { ...item, role: 'Inactif' } : item
+    );
     setLocalMembers(updatedList);
     setMemberToDeleteIndex(null);
     await handleSaveAll(updatedList);
@@ -3216,13 +3203,11 @@ export default function SettingsModal({
           console.error('Error saving company info directly to Firestore:', err)
         )
       );
-      if (!hasLinkedMembersSpreadsheet) {
-        promises.push(
-          saveCollectionToFirestore('members', membersToSave, effectiveTenantId).catch(err =>
-            console.error('Error saving members directly to Firestore:', err)
-          )
-        );
-      }
+      promises.push(
+        saveCollectionToFirestore('members', membersToSave, effectiveTenantId).catch(err =>
+          console.error('Error saving members directly to Firestore:', err)
+        )
+      );
 
       let saveUserEmail = '';
       if (currentUser && currentUser.email) {
@@ -3430,32 +3415,6 @@ export default function SettingsModal({
 
       // 5. Membres de l'environnement (spreadsheetMembresEnvironnement)
       if (activeSection === 'membres') {
-        const currentEmailsLower = new Set(
-          membersToSave.map(m => (m.email || '').trim().toLowerCase()).filter(Boolean)
-        );
-        const removedKeys: string[] = [];
-        for (const oldM of members || []) {
-          const oldEmail = (oldM.email || '').trim().toLowerCase();
-          if (oldEmail && !currentEmailsLower.has(oldEmail)) {
-            if (oldM.email) removedKeys.push(oldM.email);
-            if (oldM.name) removedKeys.push(oldM.name);
-            if ((oldM as any).id) removedKeys.push((oldM as any).id);
-          }
-        }
-        if (removedKeys.length > 0) {
-          promises.push(
-            fetch('/api/sheets/delete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                tenantId: targetSheetTenant,
-                type: 'membresEnvironnement',
-                spreadsheetUrl: linkedMembersUrl || undefined,
-                keys: removedKeys,
-              }),
-            }).catch(() => {})
-          );
-        }
         if (membersToSave.length > 0) {
           promises.push(
             fetch('/api/sheets/upsert', {
@@ -4612,7 +4571,8 @@ export default function SettingsModal({
                 <tbody className="text-slate-700 text-xs text-black">
                   {localMembers.map((m, idx) => {
                     const isSuperAdmin = m.role === 'Super-Administrateur' || m.role === 'Propriétaire / Admin' || m.role?.toLowerCase().includes('super') || m.role?.toLowerCase().includes('propriétaire');
-                    const isTech = m.role === 'Technicien' || m.role === 'Maintenance Terrain' || m.role?.toLowerCase().includes('tech');
+                    const isInactive = m.role === 'Inactif' || m.role?.toLowerCase().trim() === 'inactif';
+                    const isTech = !isInactive && (m.role === 'Technicien' || m.role === 'Maintenance Terrain' || m.role?.toLowerCase().includes('tech'));
                     const isOwnSession = currentUser && m.email?.toLowerCase().trim() === currentUser.email?.toLowerCase().trim();
                     
                     const loggedInMember = currentUser ? localMembers.find(lm => lm.email?.toLowerCase().trim() === currentUser.email?.toLowerCase().trim()) : null;
@@ -4633,7 +4593,7 @@ export default function SettingsModal({
                       loggedInMember.role?.toLowerCase().includes('super') || 
                       loggedInMember.role?.toLowerCase().includes('propriétaire')
                     ));
-                    const canEditThisMember = isOwnSession || isCurrentUserSuperAdmin || (isTech && isCurrentUserAdminOrSuperAdmin);
+                    const canEditThisMember = isOwnSession || isCurrentUserSuperAdmin || ((isTech || isInactive) && isCurrentUserAdminOrSuperAdmin);
 
                     return (
                       <tr key={idx} className="group transition-all">
@@ -4641,7 +4601,7 @@ export default function SettingsModal({
                         {/* Column 1: Nom & Prenom with pills beneath */}
                         <td className="px-5 py-5 font-sans align-top" style={{ fontSize: '16px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                           <div className="flex flex-col gap-2 max-w-[340px] w-full">
-                            {/* Supprimer button placed right above Name field for quick access and extra space */}
+                            {/* Désactiver l'accès button placed right above Name field for quick access and extra space */}
                             {!isSuperAdmin && canEditThisMember && (
                               <button
                                 type="button"
@@ -4658,7 +4618,7 @@ export default function SettingsModal({
                                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                                 }}
                               >
-                                {t("Supprimer le membre")}
+                                {t("Désactiver l’accès")}
                               </button>
                             )}
                             <input
@@ -4706,7 +4666,27 @@ export default function SettingsModal({
                                   cursor: 'default'
                                 }}>{t("Votre session en cours")}</span>
                               )}
-                              {!isTech && !isSuperAdmin && (
+                              {isInactive && !isSuperAdmin && (
+                                <span className="member-role-pill" style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  borderRadius: '1000px',
+                                  backgroundColor: 'rgb(233 237 241)',
+                                  border: 'none',
+                                  color: '#50617a',
+                                  fontSize: '18px',
+                                  fontWeight: '600',
+                                  padding: '4px 12px',
+                                  whiteSpace: 'nowrap',
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  textTransform: 'none',
+                                  cursor: 'default'
+                                }}>
+                                  {t("Inactif")}
+                                </span>
+                              )}
+                              {!isTech && !isInactive && !isSuperAdmin && (
                                 <span className="member-role-pill" style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
@@ -4773,14 +4753,15 @@ export default function SettingsModal({
                               <div className="space-y-1 w-full">
                                 <span className="text-[16px] font-bold text-black block font-sans" style={{ fontSize: '16px', textTransform: 'none', color: '#000000' }}>{t("Rôle")}.</span>
                                 <select
-                                  value={isTech ? 'Technicien' : 'Administrateur'}
-                                  disabled={!canEditThisMember || isTech}
+                                  value={isInactive ? 'Inactif' : (isTech ? 'Technicien' : 'Administrateur')}
+                                  disabled={!canEditThisMember}
                                   onChange={(e) => handleRoleChange(idx, e.target.value)}
                                   className="w-full font-sans text-xs bg-white text-black cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                                   style={{ height: '36px', padding: '6px 10px' }}
                                 >
                                   <option value="Administrateur">{t("Administrateur")}</option>
                                   <option value="Technicien">{t("Technicien")}</option>
+                                  <option value="Inactif">{t("Inactif")}</option>
                                 </select>
                               </div>
                             )}
@@ -5945,15 +5926,6 @@ export default function SettingsModal({
                     ? t("Aucune vidéo d’aide disponible.")
                     : t("Vidéos partagées par le support.")}
                 </p>
-                {visibleTutorialVideos.length === 0 && (
-                  <a
-                    href="mailto:contact@defibeo.com"
-                    style={{ ...rowActionButtonStyle, fontSize: '18px', backgroundColor: '#0f172a', color: '#fff', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", textDecoration: 'none' }}
-                    className="mt-4 text-center cursor-pointer"
-                  >
-                    {t("Envoyer un message")}
-                  </a>
-                )}
               </div>
 
               {visibleTutorialVideos.length > 0 && (
@@ -6046,7 +6018,7 @@ export default function SettingsModal({
                         style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#2e54ff', color: '#fff', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", textDecoration: 'none' }}
                         className="w-full text-center cursor-pointer mt-2"
                       >
-                        {t("Envoyer un message")}
+                        {t("Contacter l’assistance")}
                       </a>
                     </div>
                   </div>

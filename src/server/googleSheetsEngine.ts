@@ -33,6 +33,7 @@ export type SheetTabType =
   | 'historiqueNotifications'
   | 'achatsFournisseurs'
   | 'temps'
+  | 'reglagesTemps'
   | 'ticketsCaisse'
   | 'releveConcurrentiel'
   | 'formations'
@@ -1776,6 +1777,136 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idpointage', 'reference'] },
     { header: 'Date Fin', field: 'endDate', aliases: ['datefin', 'datedefin', 'enddate'], type: 'date' },
     { header: 'En cours', field: 'isOngoing', aliases: ['encours', 'isongoing', 'statut', 'actif'], type: 'bool' },
+  ],
+  reglagesTemps: [
+    {
+      header: 'Amplitude maximale journalière.',
+      field: 'maxDailyAmplitudeEnabled',
+      aliases: ['amplitudemaximalejournaliere', 'maxdailyamplitudeenabled'],
+      type: 'bool',
+    },
+    {
+      header: 'Amplitude maximale journalière. Valeur horaire (h).',
+      field: 'maxDailyAmplitudeHours',
+      aliases: [
+        'amplitudemaximalejournalierevaleurhoraireh',
+        'amplitudemaximalejournalierevaleurhoraire',
+        'maxdailyamplitudehours',
+      ],
+      type: 'number',
+    },
+    {
+      header: 'Amplitude maximale journalière. Texte message d’erreur.',
+      field: 'maxDailyAmplitudeErrorText',
+      aliases: [
+        'amplitudemaximalejournalieretextemessagederreur',
+        'amplitudemaximalejournalieretexturedumessagederreur',
+        'amplitudemaximalejournalieretextedumessagederreur',
+        'maxdailyamplitudeerrortext',
+      ],
+    },
+    {
+      header: 'Amplitude minimale de repos entre 2 jours consécutifs.',
+      field: 'minConsecutiveRestEnabled',
+      aliases: ['amplitudeminimaledereposentre2joursconsecutifs', 'minconsecutiverestenabled'],
+      type: 'bool',
+    },
+    {
+      header: 'Amplitude minimale de repos entre 2 jours consécutifs. Valeur horaire (h).',
+      field: 'minConsecutiveRestHours',
+      aliases: [
+        'amplitudeminimaledereposentre2joursconsecutifsvaleurhoraireh',
+        'amplitudeminimaledereposentre2joursconsecutifsvaleurhoraire',
+        'minconsecutiveresthours',
+      ],
+      type: 'number',
+    },
+    {
+      header: 'Amplitude minimale de repos entre 2 jours consécutifs. Texte message d’erreur.',
+      field: 'minConsecutiveRestErrorText',
+      aliases: [
+        'amplitudeminimaledereposentre2joursconsecutifstextemessagederreur',
+        'amplitudeminimaledereposentre2joursconsecutifstexturedumessagederreur',
+        'amplitudeminimaledereposentre2joursconsecutifstextedumessagederreur',
+        'minconsecutiveresterrortext',
+      ],
+    },
+    {
+      header: 'Amplitude minimale de repos pendant un pointage en cours.',
+      field: 'minBreakRestEnabled',
+      aliases: ['amplitudeminimalederepospendantunpointageencours', 'minbreakrestenabled'],
+      type: 'bool',
+    },
+    {
+      header: 'Amplitude minimale de repos pendant un pointage en cours. Valeur horaire (h).',
+      field: 'minBreakRestMinutes',
+      aliases: [
+        'amplitudeminimalederepospendantunpointageencoursvaleurhoraireh',
+        'amplitudeminimalederepospendantunpointageencoursvaleurhorairemins',
+        'amplitudeminimalederepospendantunpointageencoursvaleurhoraire',
+        'minbreakrestminutes',
+      ],
+      type: 'number',
+    },
+    {
+      header: 'Amplitude minimale de repos pendant un pointage en cours. Texte message d’erreur.',
+      field: 'minBreakRestErrorText',
+      aliases: [
+        'amplitudeminimalederepospendantunpointageencourstextemessagederreur',
+        'amplitudeminimalederepospendantunpointageencourstexturedumessagederreur',
+        'amplitudeminimalederepospendantunpointageencourstextedumessagederreur',
+        'minbreakresterrortext',
+      ],
+    },
+    {
+      header: 'Amplitude minimale de repos pendant un pointage en cours. Texte message d’erreur pour technicien.',
+      field: 'minBreakRestTechErrorText',
+      aliases: [
+        'amplitudeminimalederepospendantunpointageencourstextemessagederreurpourtechnicien',
+        'amplitudeminimalederepospendantunpointageencourstextemessagederreurpourletechnicien',
+        'amplitudeminimalederepospendantunpointageencourstexturedumessagederreurpourletechnicien',
+        'amplitudeminimalederepospendantunpointageencourstexturedumessagederreurpourtechnicien',
+        'minbreakresttecherrortext',
+      ],
+    },
+    ...Array.from({ length: 5 }, (_, idx) => {
+      const n = idx + 1;
+      return [
+        {
+          header: `Titre du paramètre. ${n}`,
+          field: `param${n}_titre`,
+          aliases: [`titreduparametre${n}`, `parametre${n}titre`, `param${n}titre`],
+        },
+        {
+          header: `Appliquer aux jours. ${n}`,
+          field: `param${n}_jours`,
+          aliases: [`appliquerauxjours${n}`, `parametre${n}jours`, `param${n}jours`],
+        },
+        {
+          header: `Retirer du temps effectif. ${n}`,
+          field: `param${n}_retirer`,
+          aliases: [`retirerdutempseffectif${n}`, `parametre${n}retirer`, `param${n}retirer`],
+          type: 'bool',
+        },
+        {
+          header: `Ajouter au temps effectif. ${n}`,
+          field: `param${n}_ajouter`,
+          aliases: [`ajouterautempseffectif${n}`, `parametre${n}ajouter`, `param${n}ajouter`],
+          type: 'bool',
+        },
+        {
+          header: `Colonne attribuée. ${n}`,
+          field: `param${n}_colonne`,
+          aliases: [`colonneattribuee${n}`, `parametre${n}colonne`, `param${n}colonne`],
+        },
+        {
+          header: `Valeur (Mins). ${n}`,
+          field: `param${n}_valeurMins`,
+          aliases: [`valeurmins${n}`, `parametre${n}valeurmins`, `param${n}valeurmins`, `valeur${n}`],
+          type: 'number',
+        },
+      ] as GenericColumnDef[];
+    }).flat(),
   ],
   ticketsCaisse: [
     { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idticket', 'reference'] },
@@ -4569,16 +4700,25 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     }
 
     // Try to resolve member Name / Email from cached tenant members or master tenant info
-    const cachedMembers =
-      (tenantId && latestReadCache.get(`${tenantId}:membresEnvironnement`)?.items) || [];
+    let cachedMembers: any[] = [];
+    if (tenantId) {
+      const memPrefix = `${tenantId}:membresEnvironnement:`;
+      for (const [ck, cval] of sheetMemoryCache.entries()) {
+        if (ck.startsWith(memPrefix) && Array.isArray(cval?.items) && cval.items.length > 0) {
+          cachedMembers = cval.items;
+          break;
+        }
+      }
+    }
+    const masterTenants = getCachedMasterTenantsSync();
     if (resolvedEmail && (!resolvedName || resolvedName === 'Membre')) {
       const matchedMember = cachedMembers.find(
         (m: any) => m && m.email && String(m.email).trim().toLowerCase() === resolvedEmail.toLowerCase()
       );
       if (matchedMember && matchedMember.name) {
         resolvedName = String(matchedMember.name).trim();
-      } else if (tenantId && masterTenantsCache?.tenants) {
-        const tInfo = masterTenantsCache.tenants.find(
+      } else if (tenantId && Array.isArray(masterTenants) && masterTenants.length > 0) {
+        const tInfo = masterTenants.find(
           (t: any) =>
             String(t.id || '').toLowerCase() === String(tenantId).toLowerCase() ||
             String(t.identifiant || '').toLowerCase() === String(tenantId).toLowerCase()
@@ -4716,7 +4856,9 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     const rawSubRole = String(merged.adminSubRole || merged.metier || merged['Métier.'] || merged['Métier'] || '').trim();
     const normRole = rawRole.toLowerCase();
     const normSubRole = rawSubRole.toLowerCase();
-    if (normRole.includes('tech') || normRole.includes('maintenance') || normRole.includes('intervenant') || normSubRole.includes('tech') || normSubRole.includes('maintenance')) {
+    if (normRole === 'inactif' || normRole.includes('inactif')) {
+      merged.role = 'Inactif';
+    } else if (normRole.includes('tech') || normRole.includes('maintenance') || normRole.includes('intervenant') || normSubRole.includes('tech') || normSubRole.includes('maintenance')) {
       merged.role = 'Technicien';
     } else if (!rawRole) {
       merged.role = 'Administrateur';
@@ -5469,6 +5611,88 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.pdfShowDemandeDevisDetails = normalizeYesNo(merged.pdfShowDemandeDevisDetails, 'Non');
   } else if (tabType === 'reglagesCrm') {
     merged.id = merged.id || 'tenant_crm_settings';
+  } else if (tabType === 'reglagesTemps') {
+    merged.id = 'tenant_temps_settings';
+    merged._sheetRowNumber = rowIndex + 2;
+    for (const [colIdx, def] of colToDef.entries()) {
+      const rawCell = String(row[colIdx] ?? '').trim();
+      if (rawCell === '') {
+        if (def.type === 'bool') {
+          merged[def.field] = false;
+        } else if (def.type === 'number') {
+          merged[def.field] = 0;
+        } else {
+          merged[def.field] = '';
+        }
+      }
+    }
+    merged.maxDailyAmplitudeEnabled = normalizeBool(merged.maxDailyAmplitudeEnabled, false);
+    const maxDailyH = Number(merged.maxDailyAmplitudeHours);
+    merged.maxDailyAmplitudeHours = !isNaN(maxDailyH) && maxDailyH >= 1 && maxDailyH <= 24 ? maxDailyH : 10;
+    merged.maxDailyAmplitudeErrorText = String(merged.maxDailyAmplitudeErrorText ?? '').trim();
+
+    merged.minConsecutiveRestEnabled = normalizeBool(merged.minConsecutiveRestEnabled, false);
+    const minRestH = Number(merged.minConsecutiveRestHours);
+    merged.minConsecutiveRestHours = !isNaN(minRestH) && minRestH >= 1 && minRestH <= 24 ? minRestH : 11;
+    merged.minConsecutiveRestErrorText = String(merged.minConsecutiveRestErrorText ?? '').trim();
+
+    merged.minBreakRestEnabled = normalizeBool(merged.minBreakRestEnabled, false);
+    const minBreakM = Number(merged.minBreakRestMinutes);
+    merged.minBreakRestMinutes = !isNaN(minBreakM) && minBreakM >= 1 && minBreakM <= 60 ? minBreakM : 45;
+    merged.minBreakRestErrorText = String(merged.minBreakRestErrorText ?? '').trim();
+    merged.minBreakRestTechErrorText = String(merged.minBreakRestTechErrorText ?? '').trim();
+
+    const parsedModelSettings: any[] = [];
+    const validDays = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    const validColumns = ['Temps Trajet Matin', 'Temps Trajet Soir', 'Temps Repas'];
+    for (let i = 1; i <= 5; i++) {
+      const rawTitre = String(merged[`param${i}_titre`] ?? '').trim();
+      const rawJours = merged[`param${i}_jours`];
+      const rawRetirer = merged[`param${i}_retirer`];
+      const rawAjouter = merged[`param${i}_ajouter`];
+      const rawColonne = String(merged[`param${i}_colonne`] ?? '').trim();
+      const rawVal = merged[`param${i}_valeurMins`];
+
+      const hasDays =
+        Array.isArray(rawJours)
+          ? rawJours.length > 0
+          : Boolean(String(rawJours ?? '').trim());
+      const numVal = Number(rawVal);
+      const hasParam =
+        Boolean(rawTitre) ||
+        hasDays ||
+        Boolean(rawColonne) ||
+        (!isNaN(numVal) && numVal > 0);
+
+      if (!hasParam) continue;
+
+      const daysArr = (
+        Array.isArray(rawJours)
+          ? rawJours
+          : String(rawJours ?? '')
+              .split(/[,;|]/)
+              .map((s: string) => s.trim())
+              .filter(Boolean)
+      ).filter((d: string) => validDays.includes(d));
+
+      const retirarBool = normalizeBool(rawRetirer, false);
+      const ajouterBool = normalizeBool(rawAjouter, false);
+      const setting2 = retirarBool || (!retirarBool && !ajouterBool);
+      const setting3 = setting2 ? false : ajouterBool;
+      const setting4 = validColumns.includes(rawColonne) ? rawColonne : 'Temps Trajet Matin';
+      const setting5 = !isNaN(numVal) && numVal >= 1 ? Math.min(500, Math.round(numVal)) : 30;
+
+      parsedModelSettings.push({
+        id: `ctt_param_${i}`,
+        setting0: rawTitre.slice(0, 30),
+        setting1: daysArr,
+        setting2,
+        setting3,
+        setting4,
+        setting5,
+      });
+    }
+    merged.modelSettings = parsedModelSettings;
   } else if (tabType === 'communicationPortailClient') {
     merged.id = merged.id || 'tenant_portal_com';
     let msgVal: string | undefined = undefined;
@@ -6906,6 +7130,22 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched['Horodatage.'] = enriched.dateStr;
     enriched['Horodatage'] = enriched.dateStr;
   } else if (tabType === 'membresEnvironnement') {
+    if (enriched.role) {
+      enriched['Rôle.'] = enriched.role;
+      enriched['Rôle'] = enriched.role;
+      enriched['Catégorie.'] = enriched.role;
+      enriched['Catégorie'] = enriched.role;
+      enriched.categorie = enriched.role;
+      if (enriched._rawSheetRow && typeof enriched._rawSheetRow === 'object') {
+        enriched._rawSheetRow = {
+          ...enriched._rawSheetRow,
+          'Rôle.': enriched.role,
+          'Rôle': enriched.role,
+          'Catégorie.': enriched.role,
+          'Catégorie': enriched.role,
+        };
+      }
+    }
     if (Array.isArray(enriched.competences)) {
       enriched.competences = enriched.competences.join(', ');
     }
@@ -6939,6 +7179,53 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.expressionAlerte4 = String(enriched.expressionAlerte4 ?? '').trim().slice(0, 30);
     if (Array.isArray(enriched.hiddenTabs)) {
       enriched.hiddenTabs = enriched.hiddenTabs.join(', ');
+    }
+  } else if (tabType === 'reglagesTemps') {
+    if (enriched._rawSheetRow && typeof enriched._rawSheetRow === 'object') {
+      enriched._rawSheetRow = {};
+    }
+    enriched.maxDailyAmplitudeEnabled = normalizeBool(enriched.maxDailyAmplitudeEnabled, false) ? 'Oui' : 'Non';
+    enriched.maxDailyAmplitudeHours =
+      enriched.maxDailyAmplitudeHours !== undefined && enriched.maxDailyAmplitudeHours !== ''
+        ? Number(enriched.maxDailyAmplitudeHours) || 10
+        : 10;
+    enriched.maxDailyAmplitudeErrorText = String(enriched.maxDailyAmplitudeErrorText ?? '').trim();
+
+    enriched.minConsecutiveRestEnabled = normalizeBool(enriched.minConsecutiveRestEnabled, false) ? 'Oui' : 'Non';
+    enriched.minConsecutiveRestHours =
+      enriched.minConsecutiveRestHours !== undefined && enriched.minConsecutiveRestHours !== ''
+        ? Number(enriched.minConsecutiveRestHours) || 11
+        : 11;
+    enriched.minConsecutiveRestErrorText = String(enriched.minConsecutiveRestErrorText ?? '').trim();
+
+    enriched.minBreakRestEnabled = normalizeBool(enriched.minBreakRestEnabled, false) ? 'Oui' : 'Non';
+    enriched.minBreakRestMinutes =
+      enriched.minBreakRestMinutes !== undefined && enriched.minBreakRestMinutes !== ''
+        ? Number(enriched.minBreakRestMinutes) || 45
+        : 45;
+    enriched.minBreakRestErrorText = String(enriched.minBreakRestErrorText ?? '').trim();
+    enriched.minBreakRestTechErrorText = String(enriched.minBreakRestTechErrorText ?? '').trim();
+
+    const paramsList: any[] = Array.isArray(enriched.modelSettings) ? enriched.modelSettings.slice(0, 5) : [];
+    for (let i = 1; i <= 5; i++) {
+      const p = paramsList[i - 1];
+      if (p && typeof p === 'object') {
+        const s2 = Boolean(p.setting2) || (!p.setting2 && !p.setting3);
+        const s3 = s2 ? false : Boolean(p.setting3);
+        enriched[`param${i}_titre`] = String(p.setting0 ?? '').trim().slice(0, 30);
+        enriched[`param${i}_jours`] = Array.isArray(p.setting1) ? p.setting1.join(', ') : String(p.setting1 ?? '').trim();
+        enriched[`param${i}_retirer`] = s2 ? 'Oui' : 'Non';
+        enriched[`param${i}_ajouter`] = s3 ? 'Oui' : 'Non';
+        enriched[`param${i}_colonne`] = String(p.setting4 || 'Temps Trajet Matin').trim();
+        enriched[`param${i}_valeurMins`] = p.setting5 !== undefined && p.setting5 !== '' ? Number(p.setting5) || 1 : 1;
+      } else {
+        enriched[`param${i}_titre`] = '';
+        enriched[`param${i}_jours`] = '';
+        enriched[`param${i}_retirer`] = '';
+        enriched[`param${i}_ajouter`] = '';
+        enriched[`param${i}_colonne`] = '';
+        enriched[`param${i}_valeurMins`] = '';
+      }
     }
   } else if (tabType === 'variables') {
     enriched.category = enriched.category || enriched.categorie || 'Modèle Défibrillateur';
@@ -7272,7 +7559,7 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
-  if (tabType === 'reglages' || tabType === 'reglagesCrm' || tabType === 'apparenceRapportsPdf' || tabType === 'communicationPortailClient') {
+  if (tabType === 'reglages' || tabType === 'reglagesCrm' || tabType === 'reglagesTemps' || tabType === 'apparenceRapportsPdf' || tabType === 'communicationPortailClient') {
     return [item.id || `singleton_${tabType}`, 'row_2']
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
@@ -7915,7 +8202,8 @@ export async function fetchTenantSheetCollection(
       if (tabType === 'defibrillateurs') {
         cached.stats = computeSheetCollectionStats(cached.items, 'defibrillateurs');
       }
-      if (Date.now() - cached.fetchedAt > 20000 && !inFlightSheetFetches.has(cacheKey)) {
+      const staleMs = tabType === 'messagesInternes' ? 4000 : 20000;
+      if (Date.now() - cached.fetchedAt > staleMs && !inFlightSheetFetches.has(cacheKey)) {
         setImmediate(() => {
           fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true).catch(() => {});
         });
@@ -8234,6 +8522,7 @@ export async function fetchTenantSheetCollection(
       const isSettingsTab =
         tabType === 'reglages' ||
         tabType === 'reglagesCrm' ||
+        tabType === 'reglagesTemps' ||
         tabType === 'apparenceRapportsPdf' ||
         tabType === 'intituleEmplacements' ||
         tabType === 'communicationPortailClient' ||
@@ -8243,7 +8532,14 @@ export async function fetchTenantSheetCollection(
       // When rawMatrix succeeds and forceRefresh is true (or overlay is older than 12s), purge stale overlay upserts
       // so old cached upserts never overwrite values edited directly in Google Sheets.
       const recentMap = recentSheetUpserts.get(cacheKey);
-      if (rawMatrix && effectiveRows.length > 0 && (forceRefresh || isSettingsTab || !overlay.lastSyncedAt || overlay.lastSyncedAt <= Date.now() - 12000)) {
+      const isRecentMessagesOverlay =
+        tabType === 'messagesInternes' && Boolean(overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - 25000);
+      if (
+        rawMatrix &&
+        effectiveRows.length > 0 &&
+        !isRecentMessagesOverlay &&
+        (forceRefresh || isSettingsTab || !overlay.lastSyncedAt || overlay.lastSyncedAt <= Date.now() - 12000)
+      ) {
         if (overlay.upsertedById && Object.keys(overlay.upsertedById).length > 0) {
           overlay.upsertedById = {};
           saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
@@ -8255,7 +8551,9 @@ export async function fetchTenantSheetCollection(
 
       const upsertedEntries = Object.values(overlay.upsertedById || {});
       const isOverlayFreshOrOffline =
-        !rawMatrix || (!isSettingsTab && !forceRefresh && Boolean(overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - 12000));
+        !rawMatrix ||
+        isRecentMessagesOverlay ||
+        (!isSettingsTab && !forceRefresh && Boolean(overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - 12000));
       if (upsertedEntries.length > 0) {
         const remainingUpsertedById: Record<string, any> = {};
         for (const [upKey, upItem] of Object.entries(overlay.upsertedById || {})) {
@@ -8297,7 +8595,7 @@ export async function fetchTenantSheetCollection(
               };
               remainingUpsertedById[upKey] = upItem;
             }
-          } else if (!isSettingsTab && !forceRefresh) {
+          } else if ((!isSettingsTab && !forceRefresh) || isRecentMessagesOverlay) {
             const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
             if (tabType === 'clients' && isPlaceholderClientValue(cleanUp.id)) {
               const slug = String(cleanUp.denomination || '')
@@ -8318,11 +8616,15 @@ export async function fetchTenantSheetCollection(
         }
       }
 
-      // Also merge any in-memory recent upserts that occurred within the last 12 seconds (only when not force-refreshing)
+      // Also merge any in-memory recent upserts that occurred within the last 12 seconds (or 25s for messagesInternes)
+      const recentRetentionMs = tabType === 'messagesInternes' ? 25000 : 12000;
       if (recentMap && recentMap.size > 0) {
         for (const [rk, entry] of recentMap.entries()) {
           if (!entry || !entry.item) continue;
-          if (rawMatrix && (forceRefresh || isSettingsTab || fetchStartedAt > entry.updatedAtMs + 12000)) {
+          if (
+            rawMatrix &&
+            ((forceRefresh && tabType !== 'messagesInternes') || isSettingsTab || fetchStartedAt > entry.updatedAtMs + recentRetentionMs)
+          ) {
             recentMap.delete(rk);
             continue;
           }
@@ -8802,6 +9104,7 @@ async function fetchLightweightSheetContextForColdUpsert(
     const isSingletonTab =
       tabType === 'reglages' ||
       tabType === 'reglagesCrm' ||
+      tabType === 'reglagesTemps' ||
       tabType === 'apparenceRapportsPdf' ||
       tabType === 'communicationPortailClient' ||
       (tabType === 'intituleEmplacements' && records.length === 1 && !records[0]?.emplacement);
@@ -9138,6 +9441,7 @@ export async function upsertRecordsToTenantSheet(
     const isSingletonTab =
       tabType === 'reglages' ||
       tabType === 'reglagesCrm' ||
+      tabType === 'reglagesTemps' ||
       tabType === 'apparenceRapportsPdf' ||
       tabType === 'communicationPortailClient' ||
       (tabType === 'intituleEmplacements' && effectiveRecords.length === 1 && !effectiveRecords[0]?.emplacement);
@@ -9709,6 +10013,7 @@ const MASTER_SHEET_SPREADSHEET_HEADER_TO_FIELD: Record<string, string> = {
   spreadsheetactivitestocks: 'spreadsheetStocksActivite',
   spreadsheetachatsfournisseurs: 'spreadsheetAchatsFournisseurs',
   spreadsheettemps: 'spreadsheetTemps',
+  spreadsheetreglagestemps: 'spreadsheetReglagesTemps',
   spreadsheetticketscaisse: 'spreadsheetTicketsCaisse',
   spreadsheetreleveconcurrentiel: 'spreadsheetReleveConcurrentiel',
   spreadsheetformations: 'spreadsheetFormations',

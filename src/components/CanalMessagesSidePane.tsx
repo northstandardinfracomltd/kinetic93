@@ -28,6 +28,7 @@ interface CanalMessagesSidePaneProps {
   embedded?: boolean;
   companyInfo?: CompanyInfo;
   members?: Member[];
+  extraBottomSpacing?: number;
 }
 
 export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
@@ -41,8 +42,11 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   embedded = false,
   companyInfo,
   members = [],
+  extraBottomSpacing = 0,
 }) => {
-  const hasMessagesSpreadsheet = Boolean(getTenantSpreadsheetUrl('spreadsheetMessagesInternes', companyInfo));
+  const [remoteSheetDiscovered, setRemoteSheetDiscovered] = useState(false);
+  const hasMessagesSpreadsheet =
+    Boolean(getTenantSpreadsheetUrl('spreadsheetMessagesInternes', companyInfo, tenantId)) || remoteSheetDiscovered;
   const [messageInput, setMessageInput] = useState('');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: string } | null>(null);
 
@@ -218,23 +222,30 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   // Real-time sync & periodic polling from Google Sheets
   useEffect(() => {
     if (!isOpen || !tenantId) return;
-    if (!hasMessagesSpreadsheet) {
-      setMessages([]);
-      return;
-    }
 
     let isMounted = true;
 
     const fetchLatestServerMessages = async () => {
       const controller = new AbortController();
-      const timerId = setTimeout(() => controller.abort(), 6000);
+      const timerId = setTimeout(() => controller.abort(), 15000);
       try {
-        const sheetRes = await fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(tenantId)}&type=messagesInternes`, {
-          signal: controller.signal,
-        }).catch(() => null);
+        const sheetRes = await fetch(
+          `/api/sheets/collection?tenantId=${encodeURIComponent(tenantId)}&type=messagesInternes&refresh=true&_=${Date.now()}`,
+          {
+            signal: controller.signal,
+            headers: { 'Cache-Control': 'no-cache' },
+          }
+        ).catch(() => null);
         if (sheetRes && sheetRes.ok && isMounted) {
           const sheetData = await sheetRes.json();
-          if (sheetData?.fromSpreadsheet && Array.isArray(sheetData.items) && (sheetData.items.length > 0 || sheetData.hasRemoteHeaders)) {
+          if (sheetData?.spreadsheetUrl) {
+            setRemoteSheetDiscovered(true);
+            try {
+              localStorage.setItem(`defib_${tenantId}_spreadsheet_messages_internes`, String(sheetData.spreadsheetUrl));
+            } catch (_) {}
+          }
+          if (sheetData?.fromSpreadsheet && Array.isArray(sheetData.items)) {
+            setRemoteSheetDiscovered(true);
             const mappedList: TenantMessage[] = sheetData.items
               .filter((m: any) => m && (m.content || m.text))
               .map((m: any, idx: number) => {
@@ -264,6 +275,8 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               return prev;
             });
             return;
+          } else if (sheetData?.status === 'no_spreadsheet' && !getTenantSpreadsheetUrl('spreadsheetMessagesInternes', companyInfo, tenantId)) {
+            setMessages([]);
           }
         }
         clearTimeout(timerId);
@@ -282,17 +295,26 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
         } catch (_) {}
       }
     };
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        fetchLatestServerMessages();
+      }
+    };
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
 
     fetchLatestServerMessages();
-    const refreshTimer = setInterval(fetchLatestServerMessages, 30000);
+    const refreshTimer = setInterval(fetchLatestServerMessages, 5000);
 
     return () => {
       isMounted = false;
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       clearInterval(refreshTimer);
     };
-  }, [isOpen, tenantId, setMessages, hasMessagesSpreadsheet]);
+  }, [isOpen, tenantId, setMessages, companyInfo]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -578,6 +600,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           backgroundColor: 'transparent',
           borderTop: 'none',
           boxShadow: 'none',
+          ...(extraBottomSpacing > 0 ? { paddingBottom: `${extraBottomSpacing}px` } : {}),
         }}
       >
         <form

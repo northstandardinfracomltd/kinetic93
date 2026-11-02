@@ -989,127 +989,126 @@ export default function App() {
   const fsmRecentStorageKey = `defib_${activeSearchTenantId}_recent_fsm_searches`;
   const gmaoRecentStorageKey = `defib_${activeSearchTenantId}_recent_gmao_searches`;
 
-  const [fsmRecentSearches, setFsmRecentSearches] = useState<string[]>(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeSearchTenantId}_recent_fsm_searches`) : null;
-      if (raw) {
+  const readStoredRecentSearches = useCallback((key: string): string[] => {
+    if (typeof window === 'undefined') return [];
+    const parseRaw = (raw: string | null): string[] | null => {
+      if (!raw) return null;
+      try {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
           return parsed
-            .filter((s) => typeof s === 'string' && s.trim().length >= 5)
+            .filter((s) => typeof s === 'string' && s.trim().length >= 2)
             .map((s) => s.trim())
             .slice(0, 5);
         }
-      }
-    } catch (_) {}
-    return [];
-  });
+      } catch (_) {}
+      return null;
+    };
+    return (
+      parseRaw(localStorage.getItem(key)) ??
+      parseRaw(sessionStorage.getItem(key)) ??
+      []
+    );
+  }, []);
 
-  const [gmaoRecentSearches, setGmaoRecentSearches] = useState<string[]>(() => {
+  const persistRecentSearchesToCache = useCallback((key: string, list: string[]) => {
+    if (typeof window === 'undefined') return;
+    const serialized = JSON.stringify(list);
     try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeSearchTenantId}_recent_gmao_searches`) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          return parsed
-            .filter((s) => typeof s === 'string' && s.trim().length >= 5)
-            .map((s) => s.trim())
-            .slice(0, 5);
-        }
-      }
+      sessionStorage.setItem(key, serialized);
     } catch (_) {}
-    return [];
-  });
+    try {
+      localStorage.setItem(key, serialized);
+    } catch (_) {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (
+            k &&
+            !k.includes('_recent_') &&
+            (k.endsWith('_cache') || k.includes('_sheet_') || k.endsWith('_defibs') || k.endsWith('_clients') || k.endsWith('_reports'))
+          ) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach((k) => {
+          try {
+            localStorage.removeItem(k);
+          } catch (_) {}
+        });
+        localStorage.setItem(key, serialized);
+      } catch (_) {}
+    }
+  }, []);
+
+  const [fsmRecentSearches, setFsmRecentSearches] = useState<string[]>(() =>
+    readStoredRecentSearches(`defib_${activeSearchTenantId}_recent_fsm_searches`)
+  );
+
+  const [gmaoRecentSearches, setGmaoRecentSearches] = useState<string[]>(() =>
+    readStoredRecentSearches(`defib_${activeSearchTenantId}_recent_gmao_searches`)
+  );
 
   useEffect(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(fsmRecentStorageKey) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setFsmRecentSearches(
-            parsed
-              .filter((s) => typeof s === 'string' && s.trim().length >= 5)
-              .map((s) => s.trim())
-              .slice(0, 5)
-          );
-          return;
-        }
-      }
-    } catch (_) {}
-    setFsmRecentSearches([]);
-  }, [fsmRecentStorageKey]);
+    setFsmRecentSearches(readStoredRecentSearches(fsmRecentStorageKey));
+  }, [fsmRecentStorageKey, readStoredRecentSearches]);
 
   useEffect(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(gmaoRecentStorageKey) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setGmaoRecentSearches(
-            parsed
-              .filter((s) => typeof s === 'string' && s.trim().length >= 5)
-              .map((s) => s.trim())
-              .slice(0, 5)
-          );
-          return;
-        }
-      }
-    } catch (_) {}
-    setGmaoRecentSearches([]);
-  }, [gmaoRecentStorageKey]);
+    setGmaoRecentSearches(readStoredRecentSearches(gmaoRecentStorageKey));
+  }, [gmaoRecentStorageKey, readStoredRecentSearches]);
 
   const saveFsmRecentSearch = useCallback(
     (term: string) => {
       const trimmed = (term || '').trim();
-      if (trimmed.length < 5) return;
+      if (trimmed.length < 2) return;
       setFsmRecentSearches((prev) => {
-        const filtered = prev.filter(
-          (item) => item.trim().length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()
+        const currentStored = readStoredRecentSearches(fsmRecentStorageKey);
+        const mergedSource = prev.length >= currentStored.length ? prev : currentStored;
+        const filtered = mergedSource.filter(
+          (item) => item.trim().length >= 2 && item.toLowerCase() !== trimmed.toLowerCase()
         );
         const updated = [trimmed, ...filtered].slice(0, 5);
-        try {
-          localStorage.setItem(fsmRecentStorageKey, JSON.stringify(updated));
-        } catch (_) {}
+        persistRecentSearchesToCache(fsmRecentStorageKey, updated);
         return updated;
       });
     },
-    [fsmRecentStorageKey]
+    [fsmRecentStorageKey, readStoredRecentSearches, persistRecentSearchesToCache]
   );
 
   const saveGmaoRecentSearch = useCallback(
     (term: string) => {
       const trimmed = (term || '').trim();
-      if (trimmed.length < 5) return;
+      if (trimmed.length < 2) return;
       setGmaoRecentSearches((prev) => {
-        const filtered = prev.filter(
-          (item) => item.trim().length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()
+        const currentStored = readStoredRecentSearches(gmaoRecentStorageKey);
+        const mergedSource = prev.length >= currentStored.length ? prev : currentStored;
+        const filtered = mergedSource.filter(
+          (item) => item.trim().length >= 2 && item.toLowerCase() !== trimmed.toLowerCase()
         );
         const updated = [trimmed, ...filtered].slice(0, 5);
-        try {
-          localStorage.setItem(gmaoRecentStorageKey, JSON.stringify(updated));
-        } catch (_) {}
+        persistRecentSearchesToCache(gmaoRecentStorageKey, updated);
         return updated;
       });
     },
-    [gmaoRecentStorageKey]
+    [gmaoRecentStorageKey, readStoredRecentSearches, persistRecentSearchesToCache]
   );
 
   useEffect(() => {
     const trimmed = (fsmSearchQuery || '').trim();
-    if (trimmed.length < 5) return;
+    if (trimmed.length < 2) return;
     const timer = setTimeout(() => {
       saveFsmRecentSearch(trimmed);
-    }, 3000);
+    }, 1000);
     return () => clearTimeout(timer);
   }, [fsmSearchQuery, saveFsmRecentSearch]);
 
   useEffect(() => {
     const trimmed = (gmaoSearchQuery || '').trim();
-    if (trimmed.length < 5) return;
+    if (trimmed.length < 2) return;
     const timer = setTimeout(() => {
       saveGmaoRecentSearch(trimmed);
-    }, 3000);
+    }, 1000);
     return () => clearTimeout(timer);
   }, [gmaoSearchQuery, saveGmaoRecentSearch]);
   const [gmaoFilter, setGmaoFilter] = useState<'upcoming' | 'moderation' | 'validated'>('moderation');
@@ -1250,6 +1249,39 @@ export default function App() {
           localStorage.setItem('ctt_global_rules', JSON.stringify(parsedRules));
         }
       } catch (_) {}
+      try {
+        const sheetUrl = getTenantSpreadsheetUrl('spreadsheetReglagesTemps', companyInfoRef.current);
+        const res = await fetch(
+          `/api/sheets/collection?tenantId=${encodeURIComponent(tid)}&type=reglagesTemps${
+            sheetUrl ? `&spreadsheetUrl=${encodeURIComponent(sheetUrl)}` : ''
+          }`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data?.fromSpreadsheet && Array.isArray(data.items) && data.items.length > 0) {
+            const first = data.items[0];
+            const parsedRules: CttGlobalRules = {
+              maxDailyAmplitudeEnabled: !!first.maxDailyAmplitudeEnabled,
+              maxDailyAmplitudeHours: Number(first.maxDailyAmplitudeHours) >= 1 && Number(first.maxDailyAmplitudeHours) <= 24 ? Number(first.maxDailyAmplitudeHours) : DEFAULT_CTT_GLOBAL_RULES.maxDailyAmplitudeHours,
+              maxDailyAmplitudeErrorText: String(first.maxDailyAmplitudeErrorText || DEFAULT_CTT_GLOBAL_RULES.maxDailyAmplitudeErrorText),
+              minConsecutiveRestEnabled: !!first.minConsecutiveRestEnabled,
+              minConsecutiveRestHours: Number(first.minConsecutiveRestHours) >= 1 && Number(first.minConsecutiveRestHours) <= 24 ? Number(first.minConsecutiveRestHours) : DEFAULT_CTT_GLOBAL_RULES.minConsecutiveRestHours,
+              minConsecutiveRestErrorText: String(first.minConsecutiveRestErrorText || DEFAULT_CTT_GLOBAL_RULES.minConsecutiveRestErrorText),
+              minBreakRestEnabled: !!first.minBreakRestEnabled,
+              minBreakRestMinutes: Number(first.minBreakRestMinutes) >= 1 && Number(first.minBreakRestMinutes) <= 60 ? Number(first.minBreakRestMinutes) : DEFAULT_CTT_GLOBAL_RULES.minBreakRestMinutes,
+              minBreakRestErrorText: String(first.minBreakRestErrorText || DEFAULT_CTT_GLOBAL_RULES.minBreakRestErrorText),
+              minBreakRestTechErrorText: String(first.minBreakRestTechErrorText || DEFAULT_CTT_GLOBAL_RULES.minBreakRestTechErrorText),
+            };
+            setCttGlobalRules(parsedRules);
+            localStorage.setItem(`defib_${tid}_ctt_global_rules`, JSON.stringify(parsedRules));
+            localStorage.setItem('ctt_global_rules', JSON.stringify(parsedRules));
+            if (Array.isArray(first.modelSettings)) {
+              localStorage.setItem(`defib_${tid}_ctt_model_settings`, JSON.stringify(first.modelSettings));
+              localStorage.setItem('ctt_model_settings', JSON.stringify(first.modelSettings));
+            }
+          }
+        }
+      } catch (_) {}
     };
     reloadCttRules();
     window.addEventListener('storage', reloadCttRules);
@@ -1321,6 +1353,7 @@ export default function App() {
         ged: 'spreadsheetGed',
         pointages: 'spreadsheetTemps',
         temps: 'spreadsheetTemps',
+        reglagesTemps: 'spreadsheetReglagesTemps',
         achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
         releveConcurrentiel: 'spreadsheetReleveConcurrentiel',
         ticketsCaisse: 'spreadsheetTicketsCaisse',
@@ -4147,18 +4180,23 @@ export default function App() {
           case 'messagesInternes': {
             const mappedMsgs: TenantMessage[] = items
               .filter((m: any) => m && (m.content || m.text))
-              .map((m: any, idx: number) => ({
-                id: m.id || `msg_sheet_${idx + 2}`,
-                authorName: m.authorName || m.sender || 'Membre',
-                authorEmail: m.authorEmail || '',
-                tag: 'All',
-                content: m.content || m.text || '',
-                createdAt: Number(m.createdAt) || Date.now(),
-                dateStr: m.dateStr || m.time || '',
-                tenantId: activeTid,
-                envId: activeTid,
-              }));
-            setTenantMessages(mappedMsgs);
+              .map((m: any, idx: number) => {
+                const rawEmail = String(m.authorEmail || m['Nom Prénom (Username).'] || m['Nom Prénom (Username)'] || '').trim();
+                const rawName = String(m.authorName || m.sender || '').trim();
+                return {
+                  id: m.id || `msg_${m._sheetRowNumber || idx + 2}`,
+                  authorName: rawName || rawEmail || 'Membre',
+                  authorEmail: rawEmail || (rawName.includes('@') ? rawName : ''),
+                  tag: 'All',
+                  content: String(m.content || m.text || '').trim(),
+                  createdAt: Number(m.createdAt) || Date.now(),
+                  dateStr: String(m.dateStr || m.time || '').trim(),
+                  tenantId: activeTid,
+                  envId: activeTid,
+                  _sheetRowNumber: m._sheetRowNumber,
+                } as TenantMessage & { _sheetRowNumber?: number };
+              });
+            setTenantMessages((prev) => (JSON.stringify(prev) === JSON.stringify(mappedMsgs) ? prev : mappedMsgs));
             safeSetLocalStorage(`defib_${activeTid}_tenant_messages`, JSON.stringify(mappedMsgs));
             break;
           }
@@ -4507,12 +4545,18 @@ export default function App() {
     const timer = setTimeout(() => {
       runAll(false);
     }, 150);
+    const messagesPollTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refreshGenericSheetCompartmentRef.current('messagesInternes', true);
+      }
+    }, 10000);
     const handleSheetsUpdated = () => {
       runAll(true);
     };
     window.addEventListener('defib-tenant-spreadsheets-updated', handleSheetsUpdated);
     return () => {
       clearTimeout(timer);
+      clearInterval(messagesPollTimer);
       window.removeEventListener('defib-tenant-spreadsheets-updated', handleSheetsUpdated);
     };
   }, [isLoggedIn, isPublicPortalOpen, tenantId, isFirebaseLoaded, loadedTenantIdState]);
@@ -13651,7 +13695,12 @@ export default function App() {
                             }
                           }}
                           onFocus={() => setIsFsmSearchFocused(true)}
-                          onBlur={() => setIsFsmSearchFocused(false)}
+                          onBlur={() => {
+                            if (fsmSearchQuery.trim()) {
+                              saveFsmRecentSearch(fsmSearchQuery);
+                            }
+                            setIsFsmSearchFocused(false);
+                          }}
                           placeholder={translate("Recherche rapide")}
                           className="w-full text-black placeholder-[rgb(222,222,222)] placeholder:font-light outline-none placeholder:text-[18px]"
                           style={{
@@ -19324,7 +19373,7 @@ export default function App() {
               border: '1px solid #dedede',
               borderRadius: '13px',
               padding: '9px 19px',
-              fontSize: '16px',
+              fontSize: '18px',
               fontWeight: '100',
               color: '#000000',
               backgroundColor: '#ffffff',
@@ -19946,15 +19995,29 @@ export default function App() {
                     font-family: "DefibeoMain", "Civilprom", sans-serif !important;
                   }
                   #gmao-tab-container #gmao-filter-side-pane,
-                  #gmao-tab-container #gmao-manage-side-pane {
-                    background-color: #F5F7FA !important;
+                  #gmao-tab-container #gmao-manage-side-pane,
+                  #gmao-tab-container #gmao-devis-side-pane {
+                    background-color: rgb(245, 247, 250) !important;
                     border-left: none !important;
                     border-radius: 0px !important;
                   }
                   #gmao-tab-container #gmao-filter-side-pane label,
                   #gmao-tab-container #gmao-filter-side-pane .gmao-label-style {
-                    color: #50617A !important;
+                    color: #000000 !important;
                     font-size: 18px !important;
+                  }
+                  #gmao-tab-container #gmao-filter-side-pane select,
+                  #gmao-tab-container #gmao-filter-side-pane input {
+                    font-size: 18px !important;
+                  }
+                  #gmao-tab-container #gmao-devis-side-pane input[type="date"] {
+                    border: 1px solid #DCE1EA !important;
+                    border-color: #DCE1EA !important;
+                  }
+                  #gmao-tab-container #gmao-devis-side-pane input::placeholder,
+                  #gmao-tab-container #gmao-devis-side-pane input[type="date"]::placeholder {
+                    color: #BECADB !important;
+                    opacity: 1 !important;
                   }
                   #gmao-tab-container #gmao-manage-side-pane label,
                   #gmao-tab-container #gmao-manage-side-pane .gmao-label-style,
@@ -19967,12 +20030,20 @@ export default function App() {
                     color: #000000 !important;
                     font-size: 16px !important;
                   }
+                  #gmao-tab-container #gmao-manage-side-pane input,
+                  #gmao-tab-container #gmao-manage-side-pane select,
+                  #gmao-tab-container #gmao-manage-side-pane textarea,
                   #gmao-tab-container #gmao-manage-side-pane input.gmao-alert-info-input {
                     border: 1px solid #DCE1EA !important;
                     border-color: #DCE1EA !important;
+                    font-size: 18px !important;
+                    color: #000000 !important;
                   }
+                  #gmao-tab-container #gmao-manage-side-pane input::placeholder,
+                  #gmao-tab-container #gmao-manage-side-pane textarea::placeholder,
                   #gmao-tab-container #gmao-manage-side-pane input.gmao-alert-info-input::placeholder {
                     color: #BECADB !important;
+                    font-size: 18px !important;
                     opacity: 1 !important;
                   }
                   #gmao-tab-container select.padding-with-dot {
@@ -20214,7 +20285,12 @@ export default function App() {
                             }
                           }}
                           onFocus={() => setIsGmaoSearchFocused(true)}
-                          onBlur={() => setIsGmaoSearchFocused(false)}
+                          onBlur={() => {
+                            if (gmaoSearchQuery.trim()) {
+                              saveGmaoRecentSearch(gmaoSearchQuery);
+                            }
+                            setIsGmaoSearchFocused(false);
+                          }}
                           placeholder={t("Recherche rapide")}
                           className="w-full text-black placeholder-[rgb(222,222,222)] placeholder:font-light outline-none placeholder:text-[18px]"
                           style={{
@@ -21241,9 +21317,11 @@ export default function App() {
                     >
                       <div 
                         id="gmao-manage-side-pane"
-                        className="relative w-full max-w-xl flex flex-col overflow-hidden animate-slideLeft h-full"
+                        className="relative w-full max-w-2xl flex flex-col overflow-hidden animate-slideLeft h-full"
                         onClick={(e) => e.stopPropagation()}
                         style={{
+                          width: '100%',
+                          maxWidth: '660px',
                           boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
                           borderLeft: 'none',
                           borderRadius: '0px',
@@ -21302,7 +21380,8 @@ export default function App() {
                                   }
                                 }
                               }}
-                              className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 cursor-pointer"
+                              style={{ borderColor: '#DCE1EA', fontSize: '18px', color: '#000000' }}
+                              className="w-full p-2.5 text-[18px] text-[#000] border border-[#DCE1EA] rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-[#DCE1EA] cursor-pointer"
                             >
                               <option value="">-- Sélectionner un drapeau ou indicateur --</option>
                               {variables
@@ -21402,7 +21481,8 @@ export default function App() {
                                   saveFsmTours(updatedTours);
                                 }
                               }}
-                              className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 cursor-pointer font-sans"
+                              style={{ borderColor: '#DCE1EA', fontSize: '18px', color: '#000000' }}
+                              className="w-full p-2.5 text-[18px] text-[#000] border border-[#DCE1EA] rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-[#DCE1EA] cursor-pointer font-sans"
                             >
                               <option value="Effectué">Effectué</option>
                               <option value="Rejet mission">Rejet mission</option>
@@ -21463,7 +21543,8 @@ export default function App() {
                                   }
                                 }}
                                 placeholder="Entrez la raison du rejet..."
-                                className="w-full p-2.5 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-slate-300 font-sans"
+                                style={{ borderColor: '#DCE1EA', fontSize: '18px', color: '#000000' }}
+                                className="w-full p-2.5 text-[18px] text-[#000] border border-[#DCE1EA] placeholder:text-[#BECADB] rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-[#DCE1EA] font-sans"
                               />
                             </div>
                           )}
@@ -21500,7 +21581,8 @@ export default function App() {
                                   ''
                                 );
                               })()}
-                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-100 resize-y min-h-[90px] focus:outline-none cursor-not-allowed opacity-90"
+                              style={{ borderColor: '#DCE1EA', fontSize: '18px', color: '#000000' }}
+                              className="w-full p-3 text-[18px] text-[#000] border border-[#DCE1EA] placeholder:text-[#BECADB] rounded-lg bg-slate-100 resize-y min-h-[90px] focus:outline-none cursor-not-allowed opacity-90"
                             />
                           </div>
 
@@ -21534,8 +21616,8 @@ export default function App() {
                                 e.target.style.height = `${Math.max(e.target.scrollHeight, 100)}px`;
                               }}
                               placeholder="Entrez un commentaire."
-                              style={{ overflowY: 'hidden', resize: 'none' }}
-                              className="w-full p-3 text-[16px] text-[#000] border border-slate-300 rounded-lg bg-slate-50/50 min-h-[100px] focus:outline-none focus:ring-0 focus:border-slate-300 font-sans leading-relaxed"
+                              style={{ overflowY: 'hidden', resize: 'none', borderColor: '#DCE1EA', fontSize: '18px', color: '#000000' }}
+                              className="w-full p-3 text-[18px] text-[#000] border border-[#DCE1EA] placeholder:text-[#BECADB] rounded-lg bg-slate-50/50 min-h-[100px] focus:outline-none focus:ring-0 focus:border-[#DCE1EA] font-sans leading-relaxed"
                             />
                           </div>
 
@@ -21589,7 +21671,7 @@ export default function App() {
                                       style={{ fontSize: '18px', textDecoration: 'none' }}
                                       className="text-[18px] text-blue-600 hover:text-blue-800 cursor-pointer bg-transparent border-0 p-0 font-medium font-sans no-underline hover:no-underline"
                                     >
-                                      + Ajouter ({displayAlerts.length}/15)
+                                      Ajouter ({displayAlerts.length}/15)
                                     </button>
                                   )}
                                 </div>
@@ -21660,8 +21742,10 @@ export default function App() {
                                           borderColor: '#DCE1EA',
                                           borderWidth: '1px',
                                           borderStyle: 'solid',
+                                          fontSize: '18px',
+                                          color: '#000000',
                                         }}
-                                        className="gmao-alert-info-input flex-1 p-2 text-[16px] text-[#000] border border-[#DCE1EA] placeholder:text-[#BECADB] rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-[#DCE1EA] font-sans"
+                                        className="gmao-alert-info-input flex-1 p-2 text-[18px] text-[#000] border border-[#DCE1EA] placeholder:text-[#BECADB] rounded-lg bg-white focus:outline-none focus:ring-0 focus:border-[#DCE1EA] font-sans"
                                       />
 
                                       <button
@@ -21675,8 +21759,8 @@ export default function App() {
                                           fontSize: '18px',
                                           backgroundColor: 'rgb(210, 45, 11)',
                                           color: '#ffffff',
-                                          padding: '6px 14px',
-                                          borderRadius: '10px',
+                                          padding: '11px 22px',
+                                          borderRadius: '13px',
                                           border: 'none',
                                           cursor: 'pointer',
                                         }}
@@ -21742,13 +21826,14 @@ export default function App() {
                               color: '#ffffff',
                               fontSize: '18px',
                               fontWeight: '600',
-                              borderRadius: '12px',
+                              borderRadius: '13px',
+                              padding: '11px 22px',
                               height: '48px',
                               border: 'none',
                               cursor: 'pointer',
                               boxShadow: 'none'
                             }}
-                            className="flex-1 py-3 px-4 hover:opacity-90 transition-all flex items-center justify-center font-sans"
+                            className="flex-1 hover:opacity-90 transition-all flex items-center justify-center font-sans"
                           >
                             Fermer
                           </button>
@@ -22030,7 +22115,7 @@ export default function App() {
                     }}
                   >
                     {/* Scroll Area containing all fields */}
-                    <div className="flex-1 overflow-y-auto p-6 space-y-6" style={{ color: '#50617A', fontSize: '18px' }}>
+                    <div className="flex-1 overflow-y-auto p-6 space-y-6" style={{ color: '#000000', fontSize: '18px' }}>
                       {/* Filter 1: Client */}
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-start pb-1">
@@ -22043,7 +22128,7 @@ export default function App() {
                             Rechercher
                           </button>
                         </div>
-                        <label className="block text-[18px] font-semibold text-[#50617A]" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", color: '#50617A', fontSize: '18px' }}>
+                        <label className="block text-[18px] font-semibold text-[#000000]" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", color: '#000000', fontSize: '18px' }}>
                           Client.
                         </label>
                         <div className="relative">
@@ -22065,7 +22150,7 @@ export default function App() {
 
                       {/* Filter 2: Technicien */}
                       <div className="space-y-1.5">
-                        <label className="block text-[18px] font-semibold text-[#50617A]" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", color: '#50617A', fontSize: '18px' }}>
+                        <label className="block text-[18px] font-semibold text-[#000000]" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", color: '#000000', fontSize: '18px' }}>
                           Technicien.
                         </label>
                         <div className="relative">
@@ -22085,12 +22170,9 @@ export default function App() {
 
                       {/* Filter 3: Plage (date début et fin) */}
                       <div className="space-y-1.5">
-                        <label className="block text-[18px] font-semibold text-[#50617A]" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", color: '#50617A', fontSize: '18px' }}>
-                          Plage.
-                        </label>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <label className="block mb-1 font-sans" style={{ color: '#50617A', fontSize: '18px', fontWeight: 500 }}>
+                            <label className="block mb-1 font-sans" style={{ color: '#000000', fontSize: '18px', fontWeight: 500 }}>
                               Date début.
                             </label>
                             <input
@@ -22102,7 +22184,7 @@ export default function App() {
                             />
                           </div>
                           <div>
-                            <label className="block mb-1 font-sans" style={{ color: '#50617A', fontSize: '18px', fontWeight: 500 }}>
+                            <label className="block mb-1 font-sans" style={{ color: '#000000', fontSize: '18px', fontWeight: 500 }}>
                               Date fin.
                             </label>
                             <input
@@ -22118,7 +22200,7 @@ export default function App() {
 
                       {/* Filter 4: Drapeau */}
                       <div className="space-y-1.5">
-                        <label className="block text-[18px] font-semibold text-[#50617A]" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", color: '#50617A', fontSize: '18px' }}>
+                        <label className="block text-[18px] font-semibold text-[#000000]" style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", color: '#000000', fontSize: '18px' }}>
                           Drapeau.
                         </label>
                         <div className="relative">
@@ -22157,7 +22239,7 @@ export default function App() {
                           setGmaoCurrentPage(1);
                         }}
                         style={{
-                          backgroundColor: '#0f172a',
+                          backgroundColor: 'rgb(210, 45, 11)',
                           color: '#ffffff',
                           borderRadius: '13px',
                           fontSize: '18px',
@@ -22214,9 +22296,7 @@ export default function App() {
                   paneId="gmao-filter-client-search-side-pane"
                   items={sortedClients.map(c => ({
                     id: c.id,
-                    title: c.denomination || c.nom || c.name || c.id,
-                    subtitle: c.email || c.ville || c.cp || '',
-                    badge: c.ville || '',
+                    label: c.denomination || c.nom || c.name || c.id,
                   }))}
                   onSelect={(item) => {
                     setDraftGmaoFilters(prev => ({ ...prev, client: item.id }));
@@ -22228,12 +22308,16 @@ export default function App() {
                 {/* 🧭 GMAO DEVIS REQUESTS SIDE PANE / DRAWER 🧭 */}
                 {isGmaoDevisPaneOpen && (
                   <div 
-                    className="fixed inset-y-0 right-0 w-full max-w-md sm:max-w-lg md:max-w-xl bg-white shadow-2xl z-[9999] flex flex-col border-l border-slate-200 transform transition-transform animate-slideLeft" 
+                    className="fixed inset-y-0 right-0 w-full max-w-md sm:max-w-lg md:max-w-xl shadow-2xl z-[9999] flex flex-col transform transition-transform animate-slideLeft" 
                     id="gmao-devis-side-pane"
-                    style={{ height: '100%' }}
+                    style={{
+                      height: '100%',
+                      backgroundColor: 'rgb(245, 247, 250)',
+                      borderLeft: 'none',
+                    }}
                   >
                     {/* Fixed / Sticky Header in Side Pane */}
-                    <div className="p-5 bg-white space-y-3 shrink-0 shadow-2xs" style={{ borderBottom: '1px solid #dadada' }}>
+                    <div className="p-5 space-y-3 shrink-0" style={{ backgroundColor: 'transparent', borderBottom: 'none', boxShadow: 'none' }}>
                       {/* Choix de la période date / date */}
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
@@ -22245,7 +22329,7 @@ export default function App() {
                             value={gmaoDevisDateDebut}
                             onChange={(e) => setGmaoDevisDateDebut(e.target.value)}
                             style={{
-                              border: '1px solid #dedede',
+                              border: '1px solid #DCE1EA',
                               borderRadius: '10px',
                               padding: '8px 12px',
                               fontSize: '14px',
@@ -22253,7 +22337,7 @@ export default function App() {
                               backgroundColor: '#ffffff',
                               color: '#000000'
                             }}
-                            className="cursor-pointer"
+                            className="cursor-pointer placeholder:text-[#BECADB]"
                           />
                         </div>
                         <div className="space-y-1">
@@ -22265,7 +22349,7 @@ export default function App() {
                             value={gmaoDevisDateFin}
                             onChange={(e) => setGmaoDevisDateFin(e.target.value)}
                             style={{
-                              border: '1px solid #dedede',
+                              border: '1px solid #DCE1EA',
                               borderRadius: '10px',
                               padding: '8px 12px',
                               fontSize: '14px',
@@ -22273,7 +22357,7 @@ export default function App() {
                               backgroundColor: '#ffffff',
                               color: '#000000'
                             }}
-                            className="cursor-pointer"
+                            className="cursor-pointer placeholder:text-[#BECADB]"
                           />
                         </div>
                       </div>
@@ -22283,7 +22367,7 @@ export default function App() {
                         type="button"
                         onClick={handleExportDevisCSV}
                         style={{
-                          backgroundColor: '#2e54ff',
+                          backgroundColor: 'rgb(46, 84, 255)',
                           color: '#ffffff',
                           fontSize: '18px',
                           fontWeight: 'bold',
@@ -22293,7 +22377,7 @@ export default function App() {
                           border: 'none',
                           cursor: 'pointer',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                          boxShadow: 'none',
                         }}
                         className="text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
                       >
@@ -22302,7 +22386,7 @@ export default function App() {
                     </div>
 
                     {/* Scroll Area containing requests */}
-                    <div className="flex-1 overflow-y-auto p-5 pb-28 space-y-4 bg-slate-50/50">
+                    <div className="flex-1 overflow-y-auto p-5 pb-28 space-y-4" style={{ backgroundColor: 'transparent' }}>
                       {displayedDevisReports.length > 0 && (
                         displayedDevisReports.map((r) => {
                           const refIntervention = r.interventionReference || r.autreReference || r.customReference || r.identifiant || r.defibIdentifiant || r.id;
@@ -22546,7 +22630,7 @@ export default function App() {
                         type="button"
                         onClick={() => setIsGmaoDevisPaneOpen(false)}
                         style={{
-                          backgroundColor: '#0f172a',
+                          backgroundColor: 'rgb(210, 45, 11)',
                           color: '#ffffff',
                           fontSize: '18px',
                           fontWeight: 'bold',
@@ -22558,7 +22642,7 @@ export default function App() {
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                           boxShadow: 'none',
                         }}
-                        className="pointer-events-auto text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all shadow-xl"
+                        className="pointer-events-auto text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
                       >
                         Fermer
                       </button>

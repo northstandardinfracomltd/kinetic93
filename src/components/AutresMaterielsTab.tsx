@@ -448,66 +448,106 @@ export default function AutresMaterielsTab({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const recentSearchesStorageKey = `defib_${activeTenantId}_recent_materiels_searches`;
-  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+  const readStoredRecentSearches = (tenantKey: string): string[] => {
+    if (typeof window === 'undefined') return [];
+    const candidateStores: Storage[] = [];
     try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(`defib_${activeTenantId}_recent_materiels_searches`) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          return parsed
-            .filter((s) => typeof s === 'string' && s.trim().length >= 5)
-            .map((s) => s.trim())
-            .slice(0, 5);
-        }
-      }
+      if (window.localStorage) candidateStores.push(window.localStorage);
     } catch (_) {}
+    try {
+      if (window.sessionStorage) candidateStores.push(window.sessionStorage);
+    } catch (_) {}
+
+    for (const store of candidateStores) {
+      try {
+        const raw =
+          store.getItem(tenantKey) ||
+          store.getItem('defib_recent_materiels_searches');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const valid = parsed
+              .map((item) => String(item || '').trim())
+              .filter((item) => item.length >= 2)
+              .slice(0, 5);
+            if (valid.length > 0) return valid;
+          }
+        }
+      } catch (_) {}
+    }
     return [];
-  });
+  };
+
+  const persistRecentSearchesToCache = (tenantKey: string, list: string[]) => {
+    if (typeof window === 'undefined') return;
+    const serialized = JSON.stringify(list);
+    try {
+      window.sessionStorage?.setItem(tenantKey, serialized);
+      window.sessionStorage?.setItem('defib_recent_materiels_searches', serialized);
+    } catch (_) {}
+    try {
+      window.localStorage?.setItem(tenantKey, serialized);
+      window.localStorage?.setItem('defib_recent_materiels_searches', serialized);
+    } catch (_) {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (
+            k &&
+            !k.includes('recent_materiels_searches') &&
+            !k.includes('recent_defib_searches') &&
+            (k.includes('_cache') || k.includes('_sheet_') || k.includes('_defibs') || k.includes('_clients'))
+          ) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach((k) => {
+          try {
+            window.localStorage.removeItem(k);
+          } catch (_) {}
+        });
+        window.localStorage?.setItem(tenantKey, serialized);
+        window.localStorage?.setItem('defib_recent_materiels_searches', serialized);
+      } catch (__) {}
+    }
+  };
+
+  const [recentSearches, setRecentSearches] = useState<string[]>(() =>
+    readStoredRecentSearches(`defib_${activeTenantId}_recent_materiels_searches`)
+  );
 
   useEffect(() => {
-    try {
-      const raw = typeof window !== 'undefined' ? localStorage.getItem(recentSearchesStorageKey) : null;
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          setRecentSearches(
-            parsed
-              .filter((s) => typeof s === 'string' && s.trim().length >= 5)
-              .map((s) => s.trim())
-              .slice(0, 5)
-          );
-          return;
-        }
-      }
-    } catch (_) {}
-    setRecentSearches([]);
+    const stored = readStoredRecentSearches(recentSearchesStorageKey);
+    if (stored.length > 0) {
+      setRecentSearches(stored);
+    }
   }, [recentSearchesStorageKey]);
 
   const saveRecentSearch = React.useCallback(
     (term: string) => {
-      const trimmed = (term || '').trim();
-      if (trimmed.length < 5) return;
+      const trimmed = String(term || '').trim();
+      if (trimmed.length < 2) return;
       setRecentSearches((prev) => {
-        const filtered = prev.filter(
-          (item) => item.trim().length >= 5 && item.toLowerCase() !== trimmed.toLowerCase()
-        );
-        const updated = [trimmed, ...filtered].slice(0, 5);
-        try {
-          localStorage.setItem(recentSearchesStorageKey, JSON.stringify(updated));
-        } catch (_) {}
+        const base = prev.length > 0 ? prev : readStoredRecentSearches(recentSearchesStorageKey);
+        const updated = [
+          trimmed,
+          ...base.filter((item) => item.trim().length >= 2 && item.toLowerCase() !== trimmed.toLowerCase()),
+        ].slice(0, 5);
+        persistRecentSearchesToCache(recentSearchesStorageKey, updated);
         return updated;
       });
     },
     [recentSearchesStorageKey]
   );
 
-  // Save recent search only after 3 seconds without typing (if >= 5 characters)
+  // Save recent search after user pauses typing
   useEffect(() => {
-    const trimmed = (searchQuery || '').trim();
-    if (trimmed.length < 5) return;
+    const trimmed = String(searchQuery || '').trim();
+    if (trimmed.length < 2) return;
     const timer = setTimeout(() => {
       saveRecentSearch(trimmed);
-    }, 3000);
+    }, 1000);
     return () => clearTimeout(timer);
   }, [searchQuery, saveRecentSearch]);
 
@@ -1477,7 +1517,9 @@ export default function AutresMaterielsTab({
     <div className="w-full font-sans select-text pb-12" id="autres-materiels-tab-container">
       <style>{`
         #autres-materiels-tab-container tbody tr:hover,
-        #autres-materiels-tab-container tbody tr:hover > td {
+        #autres-materiels-tab-container tbody tr:hover > td,
+        #autres-materiels-tab-container tbody tr.is-row-selected,
+        #autres-materiels-tab-container tbody tr.is-row-selected > td {
           background-color: rgb(245, 247, 250) !important;
         }
       `}</style>
@@ -1633,7 +1675,12 @@ export default function AutresMaterielsTab({
                     onMouseEnter={() => setIsSearchHovered(true)}
                     onMouseLeave={() => setIsSearchHovered(false)}
                     onFocus={() => setIsSearchFocused(true)}
-                    onBlur={() => setIsSearchFocused(false)}
+                    onBlur={() => {
+                      if (searchQuery.trim()) {
+                        saveRecentSearch(searchQuery);
+                      }
+                      setIsSearchFocused(false);
+                    }}
                   />
                   {isSearchFocused && (
                     <div
@@ -2273,11 +2320,19 @@ export default function AutresMaterielsTab({
                       return (
                         <tr 
                           key={`${item.id}_${rowIdx}`} 
-                          onClick={() => handleOpenEditForm(item)}
+                          onClick={() => {
+                            if (searchQuery.trim()) {
+                              saveRecentSearch(searchQuery);
+                            }
+                            handleOpenEditForm(item);
+                          }}
                           className={`group hover:bg-[rgb(245,247,250)] transition-all cursor-pointer ${
-                            isRowChecked ? 'bg-[rgb(245,247,250)]' : ''
+                            isRowChecked ? 'bg-[rgb(245,247,250)] is-row-selected' : ''
                           }`}
-                          style={isPinned ? { boxShadow: 'inset 3px 0 0 0 #2e54ff' } : undefined}
+                          style={{
+                            ...(isPinned ? { boxShadow: 'inset 3px 0 0 0 #2e54ff' } : {}),
+                            ...(isRowChecked ? { backgroundColor: 'rgb(245, 247, 250)' } : {}),
+                          }}
                         >
                           {/* Checkbox column */}
                           <td className="px-4 py-5 text-center relative" onClick={(e) => e.stopPropagation()}>
@@ -2380,13 +2435,34 @@ export default function AutresMaterielsTab({
                           <td className="px-4 py-5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                             <div className="inline-flex gap-1.5">
                               <button
-                                onClick={() => handleOpenEditForm(item)}
+                                type="button"
+                                onClick={() => {
+                                  if (onShowGmaoReports) {
+                                    onShowGmaoReports(item.identifiant || '');
+                                  } else if (setActiveTab) {
+                                    setActiveTab('gmao');
+                                  }
+                                }}
+                                style={rowActionButton18Style}
+                                className="transition-colors cursor-pointer"
+                              >
+                                {t("Historique")}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (searchQuery.trim()) {
+                                    saveRecentSearch(searchQuery);
+                                  }
+                                  handleOpenEditForm(item);
+                                }}
                                 style={{ ...rowActionButton18Style, backgroundColor: 'rgb(46, 84, 255)' }}
                                 className="transition-colors cursor-pointer"
                               >
                                 Modifier
                               </button>
                               <button
+                                type="button"
                                 onClick={() => {
                                   handleDeleteItem(item.id);
                                 }}
@@ -3138,23 +3214,8 @@ export default function AutresMaterielsTab({
 
                   {schedules.map((sch, schIdx) => (
                     <div key={schIdx} style={{ borderRadius: '13px', border: 'none', backgroundColor: 'rgb(245, 247, 250)', padding: 0 }} className="p-0 relative space-y-3">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSchedule(schIdx)}
-                        style={{
-                          borderRadius: '10px',
-                          minWidth: '200px',
-                          fontSize: '18px',
-                          backgroundColor: 'rgb(210, 45, 11)',
-                          padding: '8px 16px',
-                        }}
-                        className="absolute top-2 right-2 font-bold text-white hover:opacity-90 active:scale-95 transition-all cursor-pointer font-sans"
-                      >
-                        Supprimer
-                      </button>
-
-                      {/* Midi closing toggle - styled as radio pink */}
-                      <div className="flex items-center gap-2 select-none">
+                      {/* Midi closing toggle & Supprimer button aligned on the exact same right edge as Nouvelle plage */}
+                      <div className="flex items-center justify-between gap-2 select-none">
                         <button
                           type="button"
                           id={`mid-close-${schIdx}`}
@@ -3174,6 +3235,22 @@ export default function AutresMaterielsTab({
                           <span className="font-semibold text-black font-sans" style={{ fontSize: '16px' }}>
                             Fermeture le midi (4 plages horaires)
                           </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSchedule(schIdx)}
+                          style={{
+                            ...rowActionButton18Style,
+                            textTransform: 'none',
+                            borderRadius: '10px',
+                            minWidth: '200px',
+                            fontSize: '18px',
+                            backgroundColor: 'rgb(210, 45, 11)',
+                          }}
+                          className="font-bold text-white hover:opacity-90 active:scale-95 transition-all cursor-pointer font-sans"
+                        >
+                          Supprimer
                         </button>
                       </div>
 

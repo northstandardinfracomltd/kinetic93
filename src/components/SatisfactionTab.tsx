@@ -726,7 +726,7 @@ export default function SatisfactionTab({
       <style>{`
         #satisfaction-tab-container-harmonized input:not([type="radio"]):not([type="checkbox"]):not(#search-satisfaction-input) {
           padding: 12px !important;
-          border: 1px solid #dedede !important;
+          border: 1px solid #DCE1EA !important;
           border-radius: 13px !important;
           font-size: 16px !important;
           font-weight: 100 !important;
@@ -818,7 +818,7 @@ export default function SatisfactionTab({
                   } else if (val === 'performance') {
                     setIsPerformancePaneOpen(true);
                   } else if (val === 'export') {
-                    if (filteredReviews.length > 0) {
+                    if (selectedReviewIds.length > 0) {
                       handleExportCSV();
                     }
                   } else if (val === 'spreadsheet') {
@@ -839,7 +839,7 @@ export default function SatisfactionTab({
                 <option value="performance">
                   {t("Statistiques de performance")}
                 </option>
-                <option value="export" disabled={filteredReviews.length === 0}>
+                <option value="export" disabled={selectedReviewIds.length === 0}>
                   {t("Exporter les évaluations")}
                 </option>
                 <option value="spreadsheet" disabled={!resolvedSpreadsheetUrl}>
@@ -1259,6 +1259,10 @@ export default function SatisfactionTab({
       {isFilterPaneOpen && (
         <div className="fixed inset-0 z-[9999] overflow-hidden" id="satisfaction-filters-drawer-modal">
           <style>{`
+            #satisfaction-filters-drawer-modal input[type="date"] {
+              border: 1px solid #DCE1EA !important;
+              border-color: #DCE1EA !important;
+            }
             #satisfaction-filters-drawer-modal input[type="date"]::placeholder,
             #satisfaction-filters-drawer-modal input[type="date"]::-webkit-datetime-edit-day-field,
             #satisfaction-filters-drawer-modal input[type="date"]::-webkit-datetime-edit-month-field,
@@ -1446,6 +1450,10 @@ export default function SatisfactionTab({
           id="satisfaction-stats-drawer-modal"
         >
           <style>{`
+            #satisfaction-stats-drawer-modal input[type="date"] {
+              border: 1px solid #DCE1EA !important;
+              border-color: #DCE1EA !important;
+            }
             #satisfaction-stats-drawer-modal input[type="date"]::placeholder {
               color: #BECADB !important;
             }
@@ -1597,26 +1605,11 @@ export default function SatisfactionTab({
                     className="pt-2 flex flex-col items-center justify-center text-center p-4 rounded-xl"
                     style={{ backgroundColor: '#ffffff', border: 'none' }}
                   >
-                    <div className="flex items-center justify-center gap-1.5">
-                      <div 
-                        style={{
-                          ...roundBadgeStyle,
-                          width: '30px',
-                          height: '30px',
-                          backgroundColor: '#2e54ff',
-                        }}
-                      >
+                    <div className="inline-flex items-center justify-center gap-[2px]">
+                      <div style={roundBadgeStyle}>
                         {perfSatisfaction.scoreValue}
                       </div>
-                      <div 
-                        style={{
-                          ...percentBadgeStyle,
-                          outline: '#8f1961 solid 3px',
-                          outlineOffset: '3px',
-                          marginLeft: '10px',
-                          backgroundColor: '#8f1961',
-                        }}
-                      >
+                      <div style={percentBadgeStyle}>
                         {perfSatisfaction.pctScore === '-' ? '-' : perfSatisfaction.pctScore}
                       </div>
                     </div>
