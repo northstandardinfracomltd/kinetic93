@@ -143,7 +143,7 @@ const translations = {
     keepLoggedIn: "Maintenir la connexion.",
     infoGreenCard: "Contacter Defibeo: cliquez ici pour afficher les coordonnées de contact de votre pays.",
     infoBlueCard: "Devenir utilisateur: téléchargez la documentation du logiciel pour en savoir plus.",
-    infoDarkCard: "Découvrez Defibeo: La solution métier dédiée à l'infogérance des défibrillateurs et équipements associés. Defibeo centralise la traçabilité des matériels et des pièces, la gestion de maintenance sur site (GMAO) ainsi que l'organisation des tournées (FSM).",
+    infoDarkCard: "Découvrir Defibeo: La solution métier dédiée à l'infogérance des défibrillateurs et équipements associés. Defibeo centralise la traçabilité des matériels et des pièces, la gestion de maintenance sur site (GMAO) ainsi que l'organisation des tournées (FSM).",
     infoGdpCard: "Le saviez-vous? Defibeo est une solution développée par Civilprom et en partenariat avec des experts du programme Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
     civilpromSolutionPill: "Une solution Civilprom",
     contactCoordsAria: "Coordonnées de contact",
@@ -155,7 +155,7 @@ const translations = {
       "(Re)Découvrez Civilprom, éditeur de logiciels personnalisés",
       "(Re)Découvrez Civilprom Arts, studio graphique & UI",
       "Abonnez-vous à Civilprom sur LinkedIn",
-      "Visitez les bureaux et entrepôt de données Civilprom de Glasgow",
+      "Visitez les bureaux et entrepôt de données Civilprom à Glasgow",
     ],
   },
   'English': {
@@ -723,10 +723,19 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [isMobileOrTablet, setIsMobileOrTablet] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    return window.matchMedia('(max-width: 1023px), (max-width: 1180px) and (orientation: portrait)').matches;
+    return (
+      window.innerWidth < 1300 ||
+      window.innerHeight < 640 ||
+      window.matchMedia('(max-width: 1299px), (max-height: 639px)').matches
+    );
   });
   const [loginRole, setLoginRole] = useState<'admin' | 'client' | 'technicien'>(() => {
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px), (max-width: 1180px) and (orientation: portrait)').matches) {
+    if (
+      typeof window !== 'undefined' &&
+      (window.innerWidth < 1300 ||
+        window.innerHeight < 640 ||
+        window.matchMedia('(max-width: 1299px), (max-height: 639px)').matches)
+    ) {
       return 'technicien';
     }
     return 'admin';
@@ -737,9 +746,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 1023px), (max-width: 1180px) and (orientation: portrait)');
+    const mq = window.matchMedia('(max-width: 1299px), (max-height: 639px)');
     const update = () => {
-      const matches = mq.matches;
+      const matches = mq.matches || window.innerWidth < 1300 || window.innerHeight < 640;
       setIsMobileOrTablet(matches);
       if (matches) {
         setLoginRole((prev) => (prev === 'admin' ? 'technicien' : prev));
@@ -1297,7 +1306,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           display: none !important;
         }
 
-        @media (max-width: 1023px), (max-width: 1180px) and (orientation: portrait) {
+        @media (max-width: 1299px), (max-height: 639px) {
           #login-viewport-wrapper {
             flex-direction: column-reverse !important;
           }
@@ -1307,7 +1316,17 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             min-height: 250px !important;
           }
           #login-left-column > img {
+            position: absolute !important;
             max-width: 45% !important;
+          }
+          #login-left-info-cards {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            width: 100% !important;
+            padding: 16px !important;
+            padding-bottom: 96px !important;
           }
           #login-right-column {
             width: 100% !important;
@@ -1336,6 +1355,22 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         }
         .login-close-btn-zoom:hover {
           animation: loginCloseZoomDezoom 520ms ease-in-out forwards;
+        }
+
+        .login-ecosystem-prefix {
+          color: rgb(39 4 91 / 40%);
+          transition: color 200ms ease;
+        }
+        .login-ecosystem-prefix:hover {
+          color: rgb(39 4 91);
+        }
+
+        .login-ecosystem-hide-btn {
+          color: rgb(246 58 8 / 40%);
+          transition: color 200ms ease;
+        }
+        .login-ecosystem-hide-btn:hover {
+          color: rgb(246 58 8);
         }
 
         #login-email-input {
@@ -1418,18 +1453,17 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             id="login-left-info-cards"
           >
             {showEcosystemPill && !isMobileOrTablet && (
-              <div className="hidden lg:flex flex-col items-start gap-2.5 mb-1" id="login-ecosystem-pill-wrapper">
+              <div className="flex flex-col items-start gap-2.5 mb-1" id="login-ecosystem-pill-wrapper">
                 <div
                   className="text-[15px] leading-snug select-none"
                   style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
                 >
-                  <span style={{ color: '#50617a' }}>{t.ecosystemHeaderPrefix} </span>
+                  <span className="login-ecosystem-prefix">{t.ecosystemHeaderPrefix} </span>
                   <button
                     type="button"
                     onClick={() => setShowEcosystemPill(false)}
-                    className="bg-transparent border-0 p-0 cursor-pointer no-underline"
+                    className="login-ecosystem-hide-btn bg-transparent border-0 p-0 cursor-pointer no-underline"
                     style={{
-                      color: '#4d6dff',
                       fontSize: '15px',
                       textDecoration: 'none',
                       fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -1520,12 +1554,27 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       value=""
                       onChange={(e) => {
                         const val = e.target.value;
+                        e.target.value = '';
                         if (val === 'tel') {
-                          window.open('tel:+33651517065', '_blank');
+                          if (isMobileOrTablet) {
+                            window.location.href = 'tel:+33651517065';
+                          } else {
+                            const win = window.open('tel:+33651517065', '_blank');
+                            if (!win) window.location.href = 'tel:+33651517065';
+                          }
                         } else if (val === 'mail') {
-                          window.open('mailto:contact@defibeo.com', '_blank');
+                          if (isMobileOrTablet) {
+                            window.location.href = 'mailto:contact@defibeo.com';
+                          } else {
+                            const win = window.open('mailto:contact@defibeo.com', '_blank');
+                            if (!win) window.location.href = 'mailto:contact@defibeo.com';
+                          }
                         } else if (val === 'whatsapp') {
-                          window.open('https://wa.me/447723501018', '_blank', 'noopener,noreferrer');
+                          const url = 'https://wa.me/447723501018';
+                          const win = window.open(url, '_blank', 'noopener,noreferrer');
+                          if (!win) {
+                            window.location.href = url;
+                          }
                         }
                       }}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
@@ -1603,7 +1652,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             {showLeftDarkCard && (
               <div
                 onClick={() => window.open('https://defibeo.com/infos2026', '_blank', 'noopener,noreferrer')}
-                className="login-info-card-zoom relative flex items-center gap-5 rounded-[22px] p-5 lg:p-6 cursor-pointer select-none"
+                className="login-info-card-zoom relative flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5 rounded-[22px] p-5 lg:p-6 cursor-pointer select-none"
                 style={{
                   backgroundColor: '#050d26',
                   minHeight: '176px',
@@ -1615,7 +1664,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   className="w-[96px] h-[134px] object-contain shrink-0 select-none pointer-events-none"
                 />
                 <div
-                  className="flex-1 pr-10"
+                  className="w-full sm:flex-1 sm:pr-10"
                   style={{
                     color: '#00e5ff',
                     fontSize: '18px',
@@ -1713,21 +1762,27 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             defibeo.com
           </span>
         </div>
+      </div>
 
-        {/* Bottom-right stacked controls */}
+      {/* Right Column (Top on Mobile & Vertical Tablet, Right on Desktop) */}
+      <div
+        className="w-full lg:w-1/2 min-h-[460px] lg:min-h-screen flex-1 flex flex-col justify-between items-center px-4 pt-16 pb-5 lg:px-5 lg:pt-12 relative"
+        style={{ backgroundColor: '#375bff' }}
+        id="login-right-column"
+      >
+        {/* Top-right Language selector pill */}
         <div
-          className="absolute bottom-6 right-6 lg:bottom-8 lg:right-8 z-20 flex flex-col items-end gap-2.5"
-          id="login-left-controls"
+          className="absolute top-4 right-4 lg:top-5 lg:right-5 z-20 flex items-center"
+          id="login-right-lang-control"
         >
-          {/* Green pill button for Language selection */}
           <div className="relative inline-flex items-center justify-center cursor-pointer select-none">
             <div
               ref={langPillVisualRef}
               onAnimationEnd={(e) => e.currentTarget.classList.remove('sidebar-nav-click-shrink-wave')}
               className="pointer-events-none relative overflow-hidden inline-flex items-center justify-center rounded-full px-5 py-2"
               style={{
-                backgroundColor: '#3ddc84',
-                color: '#156337',
+                backgroundColor: '#4f6dff',
+                color: '#ffffff',
                 fontSize: '18px',
                 borderRadius: '9999px',
                 fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -1760,14 +1815,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </select>
           </div>
         </div>
-      </div>
 
-      {/* Right Column (Bottom on Mobile & Vertical Tablet, Right on Desktop) */}
-      <div
-        className="w-full lg:w-1/2 min-h-[460px] lg:min-h-screen flex-1 flex flex-col justify-between items-center px-6 pt-12 pb-5 lg:px-10 relative"
-        style={{ backgroundColor: '#375bff' }}
-        id="login-right-column"
-      >
         <div className="flex-1 flex flex-col justify-center items-center w-full">
           <div className="w-full max-w-[380px]" id="auth-main-card">
             {isAuthCodeStep ? (
@@ -2093,7 +2141,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         <div className="w-full flex flex-col items-center gap-3.5 pt-8">
           {showRightGdpCard && (
             <div
-              className="login-info-card-zoom relative w-full flex flex-col sm:flex-row items-center gap-5 rounded-[22px] p-5 lg:px-7 lg:py-5 select-none"
+              className="login-info-card-zoom relative w-full hidden sm:flex flex-col sm:flex-row items-center gap-5 rounded-[22px] p-5 lg:px-7 lg:py-5 select-none"
               style={{
                 backgroundColor: '#ffffff',
                 minHeight: '132px',
@@ -2140,7 +2188,20 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             }}
             id="login-right-copyright"
           >
-            © 2026 Defibeo by Civilprom (Org-O9247529). All rights reserved. Civilprom UK, Glasgow, G2 7JS, 120 (prod-525b2634).
+            © 2026 Defibeo by Civilprom (Org-O9247529). All rights reserved.{' '}
+            <a
+              href="https://www.google.com/maps/place/Glasgow+G2+7JS,+Royaume-Uni/@55.861508,-4.2638329,23a,75y,9.99h,87.78t/data=!3m7!1e1!3m5!1s9scepnhvnV6jweow3ObCPQ!2e0!6shttps:%2F%2Fstreetviewpixels-pa.clients6.google.com%2Fv1%2Fthumbnail%3Fcb_client%3Dmaps_sv.tactile%26w%3D900%26h%3D600%26pitch%3D2.2176239721206628%26panoid%3D9scepnhvnV6jweow3ObCPQ%26yaw%3D9.994148180894447!7i16384!8i8192!4m6!3m5!1s0x4888469d64ac6abd:0xa74cf672bd0fbe9!8m2!3d55.8616882!4d-4.263924!16s%2Fg%2F1vj5zsnf?entry=ttu&g_ep=EgoyMDI2MTEwMS4wIKXMDSoASAFQAw%3D%3D"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="no-underline transition-opacity duration-200 hover:opacity-65 cursor-pointer"
+              style={{
+                color: '#a4b5ff',
+                textDecoration: 'none',
+              }}
+            >
+              Civilprom UK, Glasgow, G2 7JS, 120
+            </a>{' '}
+            (prod-525b2634).
           </div>
         </div>
       </div>
