@@ -147,6 +147,16 @@ const translations = {
     infoGdpCard: "Le saviez-vous? Defibeo est une solution développée par Civilprom et en partenariat avec des experts du programme Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
     civilpromSolutionPill: "Une solution Civilprom",
     contactCoordsAria: "Coordonnées de contact",
+    ecosystemHeaderPrefix: "À la découverte de l’écosystème Civilprom.",
+    ecosystemHeaderHide: "Non merci, masquer cela.",
+    ecosystemItems: [
+      "Explorez les solutions Civilprom TheLab",
+      "Participez au Civilprom Business Day 2027",
+      "(Re)Découvrez Civilprom, éditeur de logiciels personnalisés",
+      "(Re)Découvrez Civilprom Arts, studio graphique & UI",
+      "Abonnez-vous à Civilprom sur LinkedIn",
+      "Visitez les bureaux et entrepôt de données Civilprom de Glasgow",
+    ],
   },
   'English': {
     welcomeLine1: "Welcome",
@@ -244,6 +254,16 @@ const translations = {
     infoGdpCard: "Did you know? Defibeo is a solution developed by Civilprom and in partnership with experts from the Google for Startups Accelerator program (UK, Glasgow — Google Developer Program).",
     civilpromSolutionPill: "A Civilprom solution",
     contactCoordsAria: "Contact details",
+    ecosystemHeaderPrefix: "Discovering the Civilprom ecosystem.",
+    ecosystemHeaderHide: "No thanks, hide this.",
+    ecosystemItems: [
+      "Explore Civilprom TheLab solutions",
+      "Join the Civilprom Business Day 2027",
+      "(Re)Discover Civilprom, custom software publisher",
+      "(Re)Discover Civilprom Arts, graphic & UI studio",
+      "Follow Civilprom on LinkedIn",
+      "Visit the Civilprom offices and data warehouse in Glasgow",
+    ],
   },
   'Deutsch': {
     welcomeLine1: "Willkommen",
@@ -341,6 +361,16 @@ const translations = {
     infoGdpCard: "Wussten Sie schon? Defibeo ist eine von Civilprom und in Partnerschaft mit Experten des Google for Startups Accelerator-Programms (UK, Glasgow — Google Developer Program) entwickelte Lösung.",
     civilpromSolutionPill: "Eine Lösung von Civilprom",
     contactCoordsAria: "Kontaktdaten",
+    ecosystemHeaderPrefix: "Entdecken Sie das Civilprom-Ökosystem.",
+    ecosystemHeaderHide: "Nein danke, ausblenden.",
+    ecosystemItems: [
+      "Entdecken Sie die Lösungen von Civilprom TheLab",
+      "Nehmen Sie am Civilprom Business Day 2027 teil",
+      "Entdecken Sie Civilprom, Herausgeber individueller Software",
+      "Entdecken Sie Civilprom Arts, Grafik- & UI-Studio",
+      "Folgen Sie Civilprom auf LinkedIn",
+      "Besuchen Sie die Büros und das Rechenzentrum von Civilprom in Glasgow",
+    ],
   },
   'Português': {
     welcomeLine1: "Bem-vindo",
@@ -438,6 +468,16 @@ const translations = {
     infoGdpCard: "Sabia que? A Defibeo é uma solução desenvolvida pela Civilprom e em parceria com especialistas do programa Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
     civilpromSolutionPill: "Uma solução Civilprom",
     contactCoordsAria: "Dados de contacto",
+    ecosystemHeaderPrefix: "À descoberta do ecossistema Civilprom.",
+    ecosystemHeaderHide: "Não, obrigado, ocultar isto.",
+    ecosystemItems: [
+      "Explore as soluções Civilprom TheLab",
+      "Participe no Civilprom Business Day 2027",
+      "(Re)Descubra a Civilprom, editora de software personalizado",
+      "(Re)Descubra a Civilprom Arts, estúdio gráfico & UI",
+      "Siga a Civilprom no LinkedIn",
+      "Visite os escritórios e centro de dados da Civilprom em Glasgow",
+    ],
   },
   'Español': {
     welcomeLine1: "Bienvenido",
@@ -535,6 +575,16 @@ const translations = {
     infoGdpCard: "¿Sabías que? Defibeo es una solución desarrollada por Civilprom y en colaboración con expertos del programa Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
     civilpromSolutionPill: "Una solución de Civilprom",
     contactCoordsAria: "Datos de contacto",
+    ecosystemHeaderPrefix: "Descubriendo el ecosistema Civilprom.",
+    ecosystemHeaderHide: "No gracias, ocultar esto.",
+    ecosystemItems: [
+      "Explore las soluciones de Civilprom TheLab",
+      "Participe en el Civilprom Business Day 2027",
+      "(Re)Descubra Civilprom, editor de software personalizado",
+      "(Re)Descubra Civilprom Arts, estudio gráfico y UI",
+      "Suscríbase a Civilprom en LinkedIn",
+      "Visite las oficinas y el almacén de datos de Civilprom en Glasgow",
+    ],
   }
 };
 
@@ -671,10 +721,40 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   // Toggle & Subscriber Creation Form states
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
-  const [loginRole, setLoginRole] = useState<'admin' | 'client' | 'technicien'>('admin');
+  const [isMobileOrTablet, setIsMobileOrTablet] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(max-width: 1023px), (max-width: 1180px) and (orientation: portrait)').matches;
+  });
+  const [loginRole, setLoginRole] = useState<'admin' | 'client' | 'technicien'>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px), (max-width: 1180px) and (orientation: portrait)').matches) {
+      return 'technicien';
+    }
+    return 'admin';
+  });
   const [isLogoHovered, setIsLogoHovered] = useState(false);
   const rolePillVisualRef = React.useRef<HTMLDivElement | null>(null);
   const langPillVisualRef = React.useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(max-width: 1023px), (max-width: 1180px) and (orientation: portrait)');
+    const update = () => {
+      const matches = mq.matches;
+      setIsMobileOrTablet(matches);
+      if (matches) {
+        setLoginRole((prev) => (prev === 'admin' ? 'technicien' : prev));
+      } else {
+        setLoginRole((prev) => (prev === 'technicien' ? 'admin' : prev));
+      }
+    };
+    update();
+    mq.addEventListener('change', update);
+    window.addEventListener('resize', update);
+    return () => {
+      mq.removeEventListener('change', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
 
   const playPillWaveOnElement = (el: HTMLDivElement | null) => {
     if (!el) return;
@@ -1120,6 +1200,78 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const [showLeftBlueCard, setShowLeftBlueCard] = useState(true);
   const [showLeftDarkCard, setShowLeftDarkCard] = useState(true);
   const [showRightGdpCard, setShowRightGdpCard] = useState(true);
+  const [showEcosystemPill, setShowEcosystemPill] = useState(true);
+  const [ecosystemIndex, setEcosystemIndex] = useState(0);
+  const [ecosystemExpanded, setEcosystemExpanded] = useState(false);
+
+  const ecosystemLinks = [
+    {
+      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfoslab.svg',
+      url: 'https://civilprom.com/thelab',
+    },
+    {
+      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfosuser.svg',
+      url: 'https://civilprom.com/businessday2027',
+    },
+    {
+      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfosscissors.svg',
+      url: 'https://civilprom.com/fromdefibeo',
+    },
+    {
+      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfospaint.svg',
+      url: 'https://civilprom.com/arts',
+    },
+    {
+      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfosfire.svg',
+      url: 'https://www.linkedin.com/company/civilprom/',
+    },
+    {
+      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfoshouse.svg',
+      url: 'https://defibeo.com/aboutcivilprom',
+    },
+  ];
+
+  useEffect(() => {
+    if (!showEcosystemPill || isMobileOrTablet) return;
+    let initTimer: ReturnType<typeof setTimeout> | null = null;
+    let holdTimer: ReturnType<typeof setTimeout> | null = null;
+    let closeTimer: ReturnType<typeof setTimeout> | null = null;
+    let openTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const ROLL_MS = 520;
+    const DISPLAY_MS = 6000;
+
+    const runCycle = () => {
+      // Stay open for a full 6000ms (excluding appear/disappear roll duration)
+      holdTimer = setTimeout(() => {
+        // Roll left to hide text
+        setEcosystemExpanded(false);
+        closeTimer = setTimeout(() => {
+          // Switch to next item and roll right to reveal text
+          setEcosystemIndex((prev) => (prev + 1) % 6);
+          setEcosystemExpanded(true);
+          openTimer = setTimeout(() => {
+            runCycle();
+          }, ROLL_MS);
+        }, ROLL_MS);
+      }, DISPLAY_MS);
+    };
+
+    // Initial roll right appearance on mount
+    initTimer = setTimeout(() => {
+      setEcosystemExpanded(true);
+      openTimer = setTimeout(() => {
+        runCycle();
+      }, ROLL_MS);
+    }, 60);
+
+    return () => {
+      if (initTimer) clearTimeout(initTimer);
+      if (holdTimer) clearTimeout(holdTimer);
+      if (closeTimer) clearTimeout(closeTimer);
+      if (openTimer) clearTimeout(openTimer);
+    };
+  }, [showEcosystemPill, isMobileOrTablet]);
 
   const roleLabel =
     loginRole === 'admin'
@@ -1259,12 +1411,84 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           }}
         />
 
-        {/* Top 2+1 Info Notification Cards */}
-        {(showLeftGreenCard || showLeftBlueCard || showLeftDarkCard) && (
+        {/* Top Ecosystem Pill (PC only) + 2+1 Info Notification Cards */}
+        {((showEcosystemPill && !isMobileOrTablet) || showLeftGreenCard || showLeftBlueCard || showLeftDarkCard) && (
           <div
             className="relative lg:absolute lg:top-5 lg:left-5 lg:right-5 z-20 w-full lg:w-auto p-4 lg:p-0 pb-24 lg:pb-0 flex flex-col gap-4"
             id="login-left-info-cards"
           >
+            {showEcosystemPill && !isMobileOrTablet && (
+              <div className="hidden lg:flex flex-col items-start gap-2.5 mb-1" id="login-ecosystem-pill-wrapper">
+                <div
+                  className="text-[15px] leading-snug select-none"
+                  style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                >
+                  <span style={{ color: '#50617a' }}>{t.ecosystemHeaderPrefix} </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowEcosystemPill(false)}
+                    className="bg-transparent border-0 p-0 cursor-pointer no-underline"
+                    style={{
+                      color: '#4d6dff',
+                      fontSize: '15px',
+                      textDecoration: 'none',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    }}
+                  >
+                    {t.ecosystemHeaderHide}
+                  </button>
+                </div>
+
+                <a
+                  href={ecosystemLinks[ecosystemIndex].url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="login-info-card-zoom inline-flex items-center rounded-full cursor-pointer select-none no-underline overflow-hidden"
+                  style={{
+                    backgroundColor: '#27045b',
+                    color: '#ffffff',
+                    padding: '5px',
+                    minHeight: '48px',
+                  }}
+                >
+                  <div
+                    style={{
+                      maxWidth: ecosystemExpanded ? '720px' : '0px',
+                      opacity: ecosystemExpanded ? 1 : 0,
+                      paddingLeft: ecosystemExpanded ? '16px' : '0px',
+                      paddingRight: ecosystemExpanded ? '12px' : '0px',
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap',
+                      transition:
+                        'max-width 520ms cubic-bezier(0.4, 0, 0.2, 1), opacity 360ms ease, padding 520ms cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: '#ffffff',
+                        fontSize: '17px',
+                        fontWeight: 400,
+                        lineHeight: 1.2,
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      }}
+                    >
+                      {t.ecosystemItems[ecosystemIndex]}
+                    </span>
+                  </div>
+
+                  <img
+                    src={ecosystemLinks[ecosystemIndex].icon}
+                    alt=""
+                    className="w-[38px] h-[38px] rounded-full object-contain shrink-0 select-none pointer-events-none"
+                    style={{
+                      transform: ecosystemExpanded ? 'rotate(360deg)' : 'rotate(0deg)',
+                      transition: 'transform 520ms cubic-bezier(0.4, 0, 0.2, 1)',
+                    }}
+                  />
+                </a>
+              </div>
+            )}
+
             {(showLeftGreenCard || showLeftBlueCard) && (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {showLeftGreenCard && (
@@ -1495,35 +1719,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           className="absolute bottom-6 right-6 lg:bottom-8 lg:right-8 z-20 flex flex-col items-end gap-2.5"
           id="login-left-controls"
         >
-
-          {/* 2. Green pill button ("Une solution Civilprom") */}
-          <div
-            onClick={() => {
-              playPillWaveOnElement(rolePillVisualRef.current);
-              window.open('https://civilprom.com', '_blank', 'noopener,noreferrer');
-            }}
-            className="relative inline-flex items-center justify-center cursor-pointer select-none"
-          >
-            <div
-              ref={rolePillVisualRef}
-              onAnimationEnd={(e) => e.currentTarget.classList.remove('sidebar-nav-click-shrink-wave')}
-              className="pointer-events-none relative overflow-hidden inline-flex items-center justify-center rounded-full px-5 py-2"
-              style={{
-                backgroundColor: '#3ddc84',
-                color: '#156337',
-                fontSize: '18px',
-                borderRadius: '9999px',
-                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                transformOrigin: 'center center',
-              }}
-            >
-              <span className="pointer-events-none whitespace-nowrap">
-                {t.civilpromSolutionPill}
-              </span>
-            </div>
-          </div>
-
-          {/* 3. Green pill button for Language selection */}
+          {/* Green pill button for Language selection */}
           <div className="relative inline-flex items-center justify-center cursor-pointer select-none">
             <div
               ref={langPillVisualRef}
@@ -1602,8 +1798,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         minHeight: '50px',
                       }}
                     >
-                      <div style={{ minHeight: '25px' }}>{typedAuthLine1}</div>
-                      <div style={{ minHeight: '25px' }}>{typedAuthLine2}</div>
+                      <div className="animate-text-wave" style={{ minHeight: '25px' }}>{typedAuthLine1}</div>
+                      <div className="animate-text-wave" style={{ minHeight: '25px' }}>{typedAuthLine2}</div>
                     </div>
 
                     {/* 6-box input occupying 100% of the div width */}
@@ -1720,8 +1916,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     minHeight: '50px',
                   }}
                 >
-                  <div style={{ minHeight: '25px' }}>{typedLine1}</div>
-                  <div style={{ minHeight: '25px' }}>{typedLine2}</div>
+                  <div className="animate-text-wave" style={{ minHeight: '25px' }}>{typedLine1}</div>
+                  <div className="animate-text-wave" style={{ minHeight: '25px' }}>{typedLine2}</div>
                 </div>
 
                 {error && (
@@ -1738,9 +1934,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   </div>
                 )}
 
-                {/* Role toggle Admin / Technicien / Client with sliding indicator */}
+                {/* Role toggle: Admin / Client on PC, Technicien / Client on mobile & tablet */}
                 <div
-                  className="relative grid grid-cols-3 w-full overflow-hidden"
+                  className="relative grid grid-cols-2 w-full overflow-hidden"
                   style={{
                     backgroundColor: '#4d6dff',
                     borderRadius: '10px',
@@ -1756,19 +1952,17 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       top: '5px',
                       bottom: '5px',
                       left: '5px',
-                      width: 'calc((100% - 10px) / 3)',
+                      width: 'calc((100% - 10px) / 2)',
                       borderRadius: '8px',
                       backgroundColor: '#1d0245',
-                      transform:
-                        loginRole === 'admin'
-                          ? 'translateX(0%)'
-                          : loginRole === 'technicien'
-                          ? 'translateX(100%)'
-                          : 'translateX(200%)',
+                      transform: loginRole === 'client' ? 'translateX(100%)' : 'translateX(0%)',
                       transition: 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)',
                     }}
                   />
-                  {(['admin', 'technicien', 'client'] as const).map((role) => {
+                  {(isMobileOrTablet
+                    ? (['technicien', 'client'] as const)
+                    : (['admin', 'client'] as const)
+                  ).map((role) => {
                     const isSelected = loginRole === role;
                     const label =
                       role === 'admin'
