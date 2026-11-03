@@ -1778,7 +1778,7 @@ export default function ClientTab({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1">
                     <label htmlFor="input-client-signature-pin" className="block text-[11px] font-bold text-slate-500 uppercase">
                       Code PIN de signature unique.
@@ -1793,9 +1793,7 @@ export default function ClientTab({
                       className="font-mono font-bold text-indigo-600 text-center"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label htmlFor="input-client-payeur-id" className="block text-[11px] font-bold text-slate-500 uppercase">
                       {t("Payeur ID.")}
@@ -2430,7 +2428,7 @@ export default function ClientTab({
                         style={{ fontSize: '16px' }}
                         id="btn-generate-contract-ia"
                       >
-                        Générer un texte avec Defibeo Intelligence.
+                        Générer un texte.
                       </span>
                     </div>
                     <textarea

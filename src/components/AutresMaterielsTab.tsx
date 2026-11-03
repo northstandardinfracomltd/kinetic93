@@ -2990,11 +2990,11 @@ export default function AutresMaterielsTab({
                   const searchAddressValue = safeVoie || [safeVoie, safeCp, safeVille].filter(Boolean).join(' ');
 
                   return (
-                    <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+                    <div className="flex flex-col gap-2 pb-1 w-full">
                       <span className="font-medium" style={{ fontSize: '16px', color: '#000', cursor: 'default' }}>
                         À cette adresse postale, il y a {otherDefibsCount} autre(s) défibrillateur(s) et {otherMaterielsCount} autres matériels.
                       </span>
-                      <div className="flex flex-wrap items-center gap-2">
+                      <div className="grid grid-cols-2 gap-2 w-full">
                         <button
                           type="button"
                           disabled={otherDefibsCount === 0}
@@ -3015,6 +3015,7 @@ export default function AutresMaterielsTab({
                             }
                           }}
                           style={{
+                            width: '100%',
                             backgroundColor: '#0f172a',
                             color: '#ffffff',
                             borderRadius: '10px',
@@ -3025,7 +3026,7 @@ export default function AutresMaterielsTab({
                             opacity: otherDefibsCount === 0 ? 0.4 : 1,
                             cursor: otherDefibsCount === 0 ? 'not-allowed' : 'pointer',
                           }}
-                          className="transition-opacity select-none"
+                          className="w-full text-center justify-center transition-opacity select-none"
                         >
                           Voir les {otherDefibsCount} défibrillateur(s)
                         </button>
@@ -3042,6 +3043,7 @@ export default function AutresMaterielsTab({
                             setSortFilter('closest_maintenance');
                           }}
                           style={{
+                            width: '100%',
                             backgroundColor: '#0f172a',
                             color: '#ffffff',
                             borderRadius: '10px',
@@ -3052,9 +3054,9 @@ export default function AutresMaterielsTab({
                             opacity: otherMaterielsCount === 0 ? 0.4 : 1,
                             cursor: otherMaterielsCount === 0 ? 'not-allowed' : 'pointer',
                           }}
-                          className="transition-opacity select-none"
+                          className="w-full text-center justify-center transition-opacity select-none"
                         >
-                          Voir les {otherMaterielsCount} autre(s) matériel(s).
+                          Voir les {otherMaterielsCount} autre(s) matériel(s)
                         </button>
                       </div>
                     </div>

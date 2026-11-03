@@ -23,6 +23,13 @@ try {
 try {
   setLogLevel('silent');
 } catch (_) {}
+
+process.on('uncaughtException', (err) => {
+  console.warn('[Server] Caught uncaughtException (prevented crash):', err?.message || err);
+});
+process.on('unhandledRejection', (reason: any) => {
+  console.warn('[Server] Caught unhandledRejection (prevented crash):', reason?.message || reason);
+});
 import {
   SheetTabType,
   getGlobalGoogleConfig,
@@ -235,8 +242,7 @@ function loadCompactIndexSync() {
   }
 }
 
-// Warm up compact index immediately at module evaluation
-loadCompactIndexSync();
+// Defer compact index load to post-listen warmup so port 3000 binds instantaneously
 
 // In-memory cache for loaded chunk arrays to avoid repeated disk reads
 const loadedChunkCache = new Map<string | number, any[]>();
@@ -726,12 +732,27 @@ try {
     }
   };
 
-  // Load lightweight collection files synchronously and defer >2MB files until right after port 3000 is bound
+  // Load lightweight collection files synchronously and defer >250KB files until right after port 3000 is bound
   if (fs.existsSync(COLLECTIONS_DIR)) {
     const files = fs.readdirSync(COLLECTIONS_DIR);
     for (const file of files) {
       if (file.endsWith('.json')) {
         const key = file.replace(/\.json$/, '');
+        // Skip redundant alias copies on disk to save ~12MB of raw JSON (~150MB V8 heap)
+        if (
+          key.endsWith('_client_list') ||
+          key.endsWith('_clientList') ||
+          key.endsWith('_customerList') ||
+          key.endsWith('_customers')
+        ) {
+          continue;
+        }
+        if (
+          key === 'D58_clients' &&
+          fs.existsSync(path.join(COLLECTIONS_DIR, 'D27_clients.json'))
+        ) {
+          continue;
+        }
         if (
           (key === 'D58_defibrillateurs' || key === 'defibrillateurs') &&
           fs.existsSync(path.join(COLLECTIONS_DIR, 'D27_defibrillateurs.json'))
@@ -752,7 +773,7 @@ try {
         }
         try {
           const stat = fs.statSync(path.join(COLLECTIONS_DIR, file));
-          if (stat.size > 2 * 1024 * 1024) {
+          if (stat.size > 250 * 1024) {
             deferredLargeFiles.push(file);
             continue;
           }
@@ -4414,8 +4435,8 @@ async function warmupDefibrillateursStore() {
       }
     }
 
-    // 4. Only scan disk chunks if fastDefibIndex is still empty
-    if (fastDefibIndex.size === 0 && fs.existsSync(CHUNKS_DIR)) {
+    // 4. Only scan disk chunks if BOTH fastDefibIndex AND defibLocationIndex are empty
+    if (fastDefibIndex.size === 0 && defibLocationIndex.size === 0 && fs.existsSync(CHUNKS_DIR)) {
       const chunkFiles = fs.readdirSync(CHUNKS_DIR).filter(f => f.includes('defibrillateurs') && f.endsWith('.json'));
       console.log(`[Warmup] Found ${chunkFiles.length} chunk files on disk. Pre-warming index...`);
       for (const cf of chunkFiles) {
@@ -11222,9 +11243,11 @@ async function warmupDefibrillateursStore() {
     }
   });
 
-  // Vite middleware for development
+  let viteMiddleware: any = null;
+  let viteReadyPromise: Promise<void> | null = null;
+
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
+    viteReadyPromise = createViteServer({
       server: {
         middlewareMode: true,
         fs: {
@@ -11232,8 +11255,21 @@ async function warmupDefibrillateursStore() {
         },
       },
       appType: "spa",
+    }).then((vite) => {
+      viteMiddleware = vite.middlewares;
+    }).catch((err) => {
+      console.error("[Vite] Failed to initialize Vite middleware:", err);
     });
-    app.use(vite.middlewares);
+
+    app.use(async (req, res, next) => {
+      if (!viteMiddleware && viteReadyPromise) {
+        await viteReadyPromise;
+      }
+      if (viteMiddleware) {
+        return viteMiddleware(req, res, next);
+      }
+      next();
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath, {
@@ -11253,8 +11289,11 @@ async function warmupDefibrillateursStore() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
-    // Non-blocking background warmup for deferred large files & defibrillateurs dataset
+    // Non-blocking background warmup for compact index, deferred large files & defibrillateurs dataset
     setTimeout(async () => {
+      try {
+        loadCompactIndexSync();
+      } catch (_) {}
       try {
         if (typeof (globalThis as any).__loadDeferredLargeFiles === 'function') {
           await (globalThis as any).__loadDeferredLargeFiles();
@@ -11265,4 +11304,7 @@ async function warmupDefibrillateursStore() {
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error("[Server] Fatal startServer error:", err);
+});
+

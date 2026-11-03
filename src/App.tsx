@@ -1999,9 +1999,9 @@ export default function App() {
     const handleThemeEvent = () => {
       setThemeRefreshTrigger(prev => prev + 1);
     };
-    const handleFaviconEvent = (e: any) => {
+    const handleFaviconEvent = () => {
       setFaviconRefreshTrigger(prev => prev + 1);
-      if (e?.detail?.faviconUrl && typeof document !== 'undefined') {
+      if (typeof document !== 'undefined') {
         let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
         if (!link) {
           link = document.createElement('link');
@@ -2009,7 +2009,7 @@ export default function App() {
           document.getElementsByTagName('head')[0].appendChild(link);
         }
         link.type = 'image/png';
-        link.href = e.detail.faviconUrl;
+        link.href = DEFAULT_FAVICON_URL;
       }
     };
     window.addEventListener('defib-theme-changed', handleThemeEvent);
@@ -2041,10 +2041,11 @@ export default function App() {
     };
   }, [faviconRefreshTrigger]);
 
-  // Effect to update document favicon dynamically across all pages (Logiciel Principal, Web App Technicien & Portail Client)
+  // Effect to update document favicon and SEO banner dynamically across all pages (Logiciel Principal, Web App Technicien & Portail Client)
   useEffect(() => {
     if (typeof document !== 'undefined') {
       const targetUrl = DEFAULT_FAVICON_URL;
+      const seoBannerUrl = 'https://civilprom.s3.eu-north-1.amazonaws.com/consoledefibeoseobanner.png';
       let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
       if (!link) {
         link = document.createElement('link');
@@ -2057,6 +2058,15 @@ export default function App() {
       let appleLink: HTMLLinkElement | null = document.querySelector("link[rel='apple-touch-icon']");
       if (appleLink) {
         appleLink.href = targetUrl;
+      }
+
+      const ogImg: HTMLMetaElement | null = document.querySelector("meta[property='og:image']");
+      if (ogImg) {
+        ogImg.content = seoBannerUrl;
+      }
+      const twitterImg: HTMLMetaElement | null = document.querySelector("meta[name='twitter:image']");
+      if (twitterImg) {
+        twitterImg.content = seoBannerUrl;
       }
     }
   }, [currentFavicon, isPublicPortalOpen, isClientPortalOpen, isLoggedIn, activeTab]);

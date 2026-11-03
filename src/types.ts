@@ -449,16 +449,16 @@ export interface AppFaviconOption {
 }
 
 export const APP_FAVICONS: AppFaviconOption[] = [
-  { id: 'vuelta_red', name: 'Vuelta Red', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/favicondefibeoiconlogo2027.png' },
-  { id: 'serious_blue', name: 'Serious Blue', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/favicondefibeoiconlogo2027.png' },
-  { id: 'grass_green', name: 'Grass Green', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/favicondefibeoiconlogo2027.png' },
-  { id: 'zen_purple', name: 'Zen Purple', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/favicondefibeoiconlogo2027.png' },
-  { id: 'italia_pink', name: 'Giro Pink', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/favicondefibeoiconlogo2027.png' },
-  { id: 'rainbow', name: 'Rainbow', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/favicondefibeoiconlogo2027.png' }
+  { id: 'vuelta_red', name: 'Vuelta Red', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/consoledefibeofavicon.png' },
+  { id: 'serious_blue', name: 'Serious Blue', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/consoledefibeofavicon.png' },
+  { id: 'grass_green', name: 'Grass Green', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/consoledefibeofavicon.png' },
+  { id: 'zen_purple', name: 'Zen Purple', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/consoledefibeofavicon.png' },
+  { id: 'italia_pink', name: 'Giro Pink', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/consoledefibeofavicon.png' },
+  { id: 'rainbow', name: 'Rainbow', url: 'https://civilprom.s3.eu-north-1.amazonaws.com/consoledefibeofavicon.png' }
 ];
 
 export const DEFAULT_FAVICON_ID = 'serious_blue';
-export const DEFAULT_FAVICON_URL = 'https://civilprom.s3.eu-north-1.amazonaws.com/favicondefibeoiconlogo2027.png';
+export const DEFAULT_FAVICON_URL = 'https://civilprom.s3.eu-north-1.amazonaws.com/consoledefibeofavicon.png';
 
 export const formatPdfHeaderText = (text?: string): string => {
   if (!text) return '';

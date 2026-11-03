@@ -1086,6 +1086,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   };
 
+  const [showLeftGreenCard, setShowLeftGreenCard] = useState(true);
+  const [showLeftBlueCard, setShowLeftBlueCard] = useState(true);
+  const [showLeftDarkCard, setShowLeftDarkCard] = useState(true);
+  const [showRightGdpCard, setShowRightGdpCard] = useState(true);
+
   const roleLabel =
     loginRole === 'admin'
       ? t.admin
@@ -1116,8 +1121,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           }
           #login-left-column {
             width: 100% !important;
-            height: 250px !important;
-            min-height: 220px !important;
+            height: auto !important;
+            min-height: 250px !important;
           }
           #login-left-column > img {
             max-width: 45% !important;
@@ -1183,14 +1188,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       {/* Left Column (Top on Mobile & Vertical Tablet, Left on Desktop) */}
       <div
-        className="w-full lg:w-1/2 h-[220px] sm:h-[250px] lg:min-h-screen lg:h-screen relative overflow-hidden flex items-stretch shrink-0"
+        className="w-full lg:w-1/2 min-h-[250px] lg:min-h-screen lg:h-screen relative overflow-hidden flex items-stretch shrink-0"
         style={{ backgroundColor: '#e9edf1' }}
         id="login-left-column"
       >
         <img
           src="https://civilprom.s3.eu-north-1.amazonaws.com/loginpcillustration.svg"
           alt="Illustration Connexion"
-          className="h-full w-auto max-w-[45%] lg:max-w-none object-contain object-left select-none pointer-events-none"
+          className="h-full w-auto max-w-[45%] lg:max-w-none object-contain object-left select-none pointer-events-none absolute lg:static inset-y-0 left-0"
           style={{ height: '100%', alignSelf: 'flex-start' }}
         />
 
@@ -1201,6 +1206,168 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             background: 'linear-gradient(1deg, rgb(245, 247, 250), transparent)',
           }}
         />
+
+        {/* Top 2+1 Info Notification Cards */}
+        {(showLeftGreenCard || showLeftBlueCard || showLeftDarkCard) && (
+          <div
+            className="relative lg:absolute lg:top-5 lg:left-5 lg:right-5 z-20 w-full lg:w-auto p-4 lg:p-0 pb-24 lg:pb-0 flex flex-col gap-4"
+            id="login-left-info-cards"
+          >
+            {(showLeftGreenCard || showLeftBlueCard) && (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {showLeftGreenCard && (
+                  <div
+                    className="relative flex items-center gap-4 rounded-[22px] p-5 cursor-pointer select-none"
+                    style={{
+                      backgroundColor: '#3ddc84',
+                      minHeight: '176px',
+                    }}
+                  >
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeowebsite-illustrationgreen.svg"
+                      alt=""
+                      className="w-[96px] h-[126px] object-contain shrink-0 select-none pointer-events-none"
+                    />
+                    <div
+                      className="flex-1 pr-9"
+                      style={{
+                        color: '#156337',
+                        fontSize: '18px',
+                        lineHeight: '1.38',
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      }}
+                    >
+                      En savoir plus sur Defibeo : cliquez ici pour afficher les coordonnées de contact de votre pays.
+                    </div>
+                    <select
+                      aria-label="Coordonnées de contact"
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'tel') {
+                          window.open('tel:+33651517065', '_blank');
+                        } else if (val === 'mail') {
+                          window.open('mailto:contact@defibeo.com', '_blank');
+                        } else if (val === 'whatsapp') {
+                          window.open('https://wa.me/447723501018', '_blank', 'noopener,noreferrer');
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    >
+                      <option value="" disabled hidden>
+                        Coordonnées de contact
+                      </option>
+                      <option value="tel">Tel: +33 6 51 51 70 65</option>
+                      <option value="mail">Mail: contact@defibeo.com</option>
+                      <option value="whatsapp">WhatsApp: +447723 501018</option>
+                    </select>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowLeftGreenCard(false);
+                      }}
+                      className="absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
+                      aria-label="Fermer"
+                    >
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrggreen.svg"
+                        alt="Fermer"
+                        className="w-[38px] h-[38px] object-contain"
+                      />
+                    </button>
+                  </div>
+                )}
+
+                {showLeftBlueCard && (
+                  <div
+                    onClick={() => window.open('https://defibeo.com/infos2026', '_blank', 'noopener,noreferrer')}
+                    className="relative flex items-center gap-4 rounded-[22px] p-5 cursor-pointer select-none"
+                    style={{
+                      backgroundColor: '#2546f0',
+                      minHeight: '176px',
+                    }}
+                  >
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeowebsite-illustrationblue.svg"
+                      alt=""
+                      className="w-[104px] h-[126px] object-contain shrink-0 select-none pointer-events-none"
+                    />
+                    <div
+                      className="flex-1 pr-9"
+                      style={{
+                        color: '#ffffff',
+                        fontSize: '18px',
+                        lineHeight: '1.38',
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      }}
+                    >
+                      Devenir utilisateur : téléchargez la documentation du logiciel.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowLeftBlueCard(false);
+                      }}
+                      className="absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
+                      aria-label="Fermer"
+                    >
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblue.svg"
+                        alt="Fermer"
+                        className="w-[38px] h-[38px] object-contain"
+                      />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {showLeftDarkCard && (
+              <div
+                onClick={() => window.open('https://defibeo.com/infos2026', '_blank', 'noopener,noreferrer')}
+                className="relative flex items-center gap-5 rounded-[22px] p-5 lg:p-6 cursor-pointer select-none"
+                style={{
+                  backgroundColor: '#050d26',
+                  minHeight: '176px',
+                }}
+              >
+                <img
+                  src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeowebsite-illustrationdarkblue.svg"
+                  alt=""
+                  className="w-[96px] h-[134px] object-contain shrink-0 select-none pointer-events-none"
+                />
+                <div
+                  className="flex-1 pr-10"
+                  style={{
+                    color: '#00e5ff',
+                    fontSize: '18px',
+                    lineHeight: '1.42',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                  }}
+                >
+                  Découvrir Defibeo Solution métier dédiée à l'infogérance des défibrillateurs et équipements associés, Defibeo centralise la traçabilité des matériels et des pièces, la gestion de maintenance sur site (GMAO) ainsi que l'organisation des tournées (FSM).
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowLeftDarkCard(false);
+                  }}
+                  className="absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
+                  aria-label="Fermer"
+                >
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgdarkblue.svg"
+                    alt="Fermer"
+                    className="w-[38px] h-[38px] object-contain"
+                  />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Bottom-left Defibeo logo-icon with hover icon & 'Logiciel Defibeo' pill */}
         <div
@@ -1296,8 +1463,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             </select>
           </div>
 
-          {/* 2. Green pill button for User Role ("En tant que Admin" by default) */}
-          <div className="relative inline-flex items-center justify-center cursor-pointer select-none">
+          {/* 2. Green pill button ("Une solution Civilprom") */}
+          <div
+            onClick={() => {
+              playPillWaveOnElement(rolePillVisualRef.current);
+              window.open('https://civilprom.com', '_blank', 'noopener,noreferrer');
+            }}
+            className="relative inline-flex items-center justify-center cursor-pointer select-none"
+          >
             <div
               ref={rolePillVisualRef}
               onAnimationEnd={(e) => e.currentTarget.classList.remove('sidebar-nav-click-shrink-wave')}
@@ -1312,24 +1485,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               }}
             >
               <span className="pointer-events-none whitespace-nowrap">
-                {t.asRolePrefix} {roleLabel}
+                Une solution Civilprom
               </span>
             </div>
-            <select
-              aria-label={t.chooseRoleAria}
-              value={loginRole}
-              onPointerDown={() => playPillWaveOnElement(rolePillVisualRef.current)}
-              onChange={(e) => {
-                playPillWaveOnElement(rolePillVisualRef.current);
-                setLoginRole(e.target.value as 'admin' | 'technicien' | 'client');
-                setError('');
-              }}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            >
-              <option value="admin">{t.admin}</option>
-              <option value="technicien">{t.technicien}</option>
-              <option value="client">{t.client}</option>
-            </select>
           </div>
 
           {/* 3. Green pill button for Language selection */}
@@ -1377,15 +1535,162 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       {/* Right Column (Bottom on Mobile & Vertical Tablet, Right on Desktop) */}
       <div
-        className="w-full lg:w-1/2 min-h-[460px] lg:min-h-screen flex-1 flex flex-col justify-center items-center px-6 py-12 lg:px-12 relative"
+        className="w-full lg:w-1/2 min-h-[460px] lg:min-h-screen flex-1 flex flex-col justify-between items-center px-6 pt-12 pb-5 lg:px-10 relative"
         style={{ backgroundColor: '#375bff' }}
         id="login-right-column"
       >
-        <div className="w-full max-w-[380px]" id="auth-main-card">
-          {isAuthCodeStep ? (
-            /* 2FA Auth Code Step */
-            <div className="space-y-6 animate-fadeIn">
-              <form className="space-y-4" onSubmit={handleAuthCodeSubmit} id="auth-code-form">
+        <div className="flex-1 flex flex-col justify-center items-center w-full">
+          <div className="w-full max-w-[380px]" id="auth-main-card">
+            {isAuthCodeStep ? (
+              /* 2FA Auth Code Step */
+              <div className="space-y-6 animate-fadeIn">
+                <form className="space-y-4" onSubmit={handleAuthCodeSubmit} id="auth-code-form">
+                  {error && (
+                    <div
+                      className="text-[18px] text-white font-sans"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        padding: 0,
+                      }}
+                      id="auth-code-error-message"
+                    >
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <div
+                      className="text-left text-white font-sans leading-snug select-none"
+                      style={{
+                        fontSize: '18px',
+                        color: '#ffffff',
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        minHeight: '50px',
+                      }}
+                    >
+                      <div style={{ minHeight: '25px' }}>{typedAuthLine1}</div>
+                      <div style={{ minHeight: '25px' }}>{typedAuthLine2}</div>
+                    </div>
+
+                    {/* 6-box input occupying 100% of the div width */}
+                    <div className="grid grid-cols-6 gap-2 w-full pt-3" id="auth-code-inputs-container">
+                      {authCodeDigits.map((digit, index) => (
+                        <input
+                          key={index}
+                          ref={(el) => { inputRefs.current[index] = el; }}
+                          id={`auth-code-input-${index}`}
+                          type="text"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => handleDigitChange(index, e.target.value)}
+                          onKeyDown={(e) => handleDigitKeyDown(index, e)}
+                          onPaste={handlePaste}
+                          onFocus={(e) => e.target.select()}
+                          className="w-full text-center font-bold uppercase rounded-[10px] border-0 focus:outline-none transition-all"
+                          style={{
+                            height: '54px',
+                            fontSize: '22px',
+                            fontWeight: '700',
+                            textAlign: 'center',
+                            textTransform: 'uppercase',
+                            backgroundColor: '#4d6dff',
+                            color: '#ffffff',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            padding: '0px',
+                            border: 'none',
+                            outline: 'none',
+                          }}
+                          autoComplete="off"
+                          autoCapitalize="characters"
+                          spellCheck={false}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 text-center space-y-3">
+                    <button
+                      type="submit"
+                      disabled={isLoading || authCodeDigits.some((d) => !d || d.trim() === '')}
+                      style={{
+                        backgroundColor: '#1d0245',
+                        color: '#ffffff',
+                        borderRadius: '10px',
+                        fontSize: '18px',
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        padding: '14px 20px',
+                        border: 'none',
+                        outline: 'none',
+                        cursor: (isLoading || authCodeDigits.some((d) => !d || d.trim() === '')) ? 'not-allowed' : 'pointer',
+                      }}
+                      className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      id="btn-auth-code-confirm"
+                    >
+                      {t.authCodeConfirm}
+                    </button>
+
+                    <div className="flex w-full gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleBackToCredentials}
+                        style={{
+                          backgroundColor: '#4d6dff',
+                          color: '#ffffff',
+                          borderRadius: '10px',
+                          fontSize: '18px',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          padding: '13px 12px',
+                          border: 'none',
+                          outline: 'none',
+                          cursor: 'pointer',
+                        }}
+                        className="w-1/2 flex justify-center items-center text-center"
+                        id="btn-auth-code-back"
+                      >
+                        {t.changeAccount}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleResendAuthCode}
+                        disabled={isSendingCode}
+                        style={{
+                          backgroundColor: '#4d6dff',
+                          color: '#ffffff',
+                          borderRadius: '10px',
+                          fontSize: '18px',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          padding: '13px 12px',
+                          border: 'none',
+                          outline: 'none',
+                          cursor: isSendingCode ? 'not-allowed' : 'pointer',
+                        }}
+                        className="w-1/2 flex justify-center items-center text-center disabled:opacity-50 disabled:cursor-not-allowed"
+                        id="btn-auth-code-resend"
+                      >
+                        {isSendingCode ? t.sending : authCodeSentSuccess ? t.codeSentSuccess : t.resendAuthCode}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            ) : (
+              <form className="space-y-4" onSubmit={handleSubmit} id="login-form">
+                {/* Two-line title in 18px white with sequential typing effect */}
+                <div
+                  className="text-left text-white leading-snug mb-5 select-none"
+                  style={{
+                    fontSize: '18px',
+                    color: '#ffffff',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    minHeight: '50px',
+                  }}
+                >
+                  <div style={{ minHeight: '25px' }}>{typedLine1}</div>
+                  <div style={{ minHeight: '25px' }}>{typedLine2}</div>
+                </div>
+
                 {error && (
                   <div
                     className="text-[18px] text-white font-sans"
@@ -1394,66 +1699,99 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       border: 'none',
                       padding: 0,
                     }}
-                    id="auth-code-error-message"
+                    id="login-error-message"
                   >
                     {error}
                   </div>
                 )}
 
-                <div className="space-y-2">
+                {/* Role toggle Admin / Technicien / Client with sliding indicator */}
+                <div
+                  className="relative grid grid-cols-3 w-full overflow-hidden"
+                  style={{
+                    backgroundColor: '#4d6dff',
+                    borderRadius: '10px',
+                    padding: '5px',
+                  }}
+                  id="login-role-toggle"
+                >
                   <div
-                    className="text-left text-white font-sans leading-snug select-none"
+                    aria-hidden="true"
+                    className="pointer-events-none"
                     style={{
-                      fontSize: '18px',
-                      color: '#ffffff',
-                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                      minHeight: '50px',
+                      position: 'absolute',
+                      top: '5px',
+                      bottom: '5px',
+                      left: '5px',
+                      width: 'calc((100% - 10px) / 3)',
+                      borderRadius: '8px',
+                      backgroundColor: '#1d0245',
+                      transform:
+                        loginRole === 'admin'
+                          ? 'translateX(0%)'
+                          : loginRole === 'technicien'
+                          ? 'translateX(100%)'
+                          : 'translateX(200%)',
+                      transition: 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)',
                     }}
-                  >
-                    <div style={{ minHeight: '25px' }}>{typedAuthLine1}</div>
-                    <div style={{ minHeight: '25px' }}>{typedAuthLine2}</div>
-                  </div>
-
-                  {/* 6-box input occupying 100% of the div width */}
-                  <div className="grid grid-cols-6 gap-2 w-full pt-3" id="auth-code-inputs-container">
-                    {authCodeDigits.map((digit, index) => (
-                      <input
-                        key={index}
-                        ref={(el) => { inputRefs.current[index] = el; }}
-                        id={`auth-code-input-${index}`}
-                        type="text"
-                        maxLength={1}
-                        value={digit}
-                        onChange={(e) => handleDigitChange(index, e.target.value)}
-                        onKeyDown={(e) => handleDigitKeyDown(index, e)}
-                        onPaste={handlePaste}
-                        onFocus={(e) => e.target.select()}
-                        className="w-full text-center font-bold uppercase rounded-[10px] border-0 focus:outline-none transition-all"
+                  />
+                  {(['admin', 'technicien', 'client'] as const).map((role) => {
+                    const isSelected = loginRole === role;
+                    const label =
+                      role === 'admin'
+                        ? t.admin
+                        : role === 'technicien'
+                        ? t.technicien
+                        : t.client;
+                    return (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => {
+                          setLoginRole(role);
+                          setError('');
+                        }}
+                        className="relative z-10 w-full flex items-center justify-center cursor-pointer select-none"
                         style={{
-                          height: '54px',
-                          fontSize: '22px',
-                          fontWeight: '700',
-                          textAlign: 'center',
-                          textTransform: 'uppercase',
-                          backgroundColor: '#4d6dff',
-                          color: '#ffffff',
+                          height: '44px',
+                          borderRadius: '8px',
+                          backgroundColor: 'transparent',
+                          color: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.65)',
+                          fontSize: '18px',
                           fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                          padding: '0px',
                           border: 'none',
                           outline: 'none',
+                          transition: 'color 250ms ease',
                         }}
-                        autoComplete="off"
-                        autoCapitalize="characters"
-                        spellCheck={false}
-                      />
-                    ))}
-                  </div>
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <div className="pt-2 text-center space-y-3">
+                {/* Email field */}
+                <div>
+                  <input
+                    id="login-email-input"
+                    name="email"
+                    type={(loginRole === 'technicien' || loginRole === 'client') ? 'text' : 'email'}
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="block w-full text-center"
+                    placeholder={t.emailInputPlaceholder}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                </div>
+
+                {/* Submit button 'Se connecter' */}
+                <div>
                   <button
                     type="submit"
-                    disabled={isLoading || authCodeDigits.some((d) => !d || d.trim() === '')}
+                    disabled={isLoading}
                     style={{
                       backgroundColor: '#1d0245',
                       color: '#ffffff',
@@ -1463,178 +1801,120 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       padding: '14px 20px',
                       border: 'none',
                       outline: 'none',
-                      cursor: (isLoading || authCodeDigits.some((d) => !d || d.trim() === '')) ? 'not-allowed' : 'pointer',
                     }}
-                    className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    id="btn-auth-code-confirm"
+                    className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                   >
-                    {t.authCodeConfirm}
+                    {t.connectBtn}
                   </button>
-
-                  <div className="flex w-full gap-3 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleBackToCredentials}
-                      style={{
-                        backgroundColor: '#4d6dff',
-                        color: '#ffffff',
-                        borderRadius: '10px',
-                        fontSize: '18px',
-                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                        padding: '13px 12px',
-                        border: 'none',
-                        outline: 'none',
-                        cursor: 'pointer',
-                      }}
-                      className="w-1/2 flex justify-center items-center text-center"
-                      id="btn-auth-code-back"
-                    >
-                      {t.changeAccount}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleResendAuthCode}
-                      disabled={isSendingCode}
-                      style={{
-                        backgroundColor: '#4d6dff',
-                        color: '#ffffff',
-                        borderRadius: '10px',
-                        fontSize: '18px',
-                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                        padding: '13px 12px',
-                        border: 'none',
-                        outline: 'none',
-                        cursor: isSendingCode ? 'not-allowed' : 'pointer',
-                      }}
-                      className="w-1/2 flex justify-center items-center text-center disabled:opacity-50 disabled:cursor-not-allowed"
-                      id="btn-auth-code-resend"
-                    >
-                      {isSendingCode ? t.sending : authCodeSentSuccess ? t.codeSentSuccess : t.resendAuthCode}
-                    </button>
-                  </div>
                 </div>
-              </form>
-            </div>
-          ) : (
-            <form className="space-y-4" onSubmit={handleSubmit} id="login-form">
-              {/* Two-line title in 18px white with sequential typing effect */}
-              <div
-                className="text-left text-white leading-snug mb-5 select-none"
-                style={{
-                  fontSize: '18px',
-                  color: '#ffffff',
-                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                  minHeight: '50px',
-                }}
-              >
-                <div style={{ minHeight: '25px' }}>{typedLine1}</div>
-                <div style={{ minHeight: '25px' }}>{typedLine2}</div>
-              </div>
 
-              {error && (
-                <div
-                  className="text-[18px] text-white font-sans"
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    padding: 0,
-                  }}
-                  id="login-error-message"
-                >
-                  {error}
-                </div>
-              )}
-
-              {/* Email field */}
-              <div>
-                <input
-                  id="login-email-input"
-                  name="email"
-                  type={(loginRole === 'technicien' || loginRole === 'client') ? 'text' : 'email'}
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="block w-full text-center"
-                  placeholder={t.emailInputPlaceholder}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                />
-              </div>
-
-              {/* Submit button 'Se connecter' */}
-              <div>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  style={{
-                    backgroundColor: '#1d0245',
-                    color: '#ffffff',
-                    borderRadius: '10px',
-                    fontSize: '18px',
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    padding: '14px 20px',
-                    border: 'none',
-                    outline: 'none',
-                  }}
-                  className="w-full flex justify-center items-center transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  {t.connectBtn}
-                </button>
-              </div>
-
-              {/* Radio-check 'Maintenir la session' */}
-              <div className="pt-2 flex items-center">
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={keepLoggedIn}
-                  id="radio-keep-logged-in"
-                  onClick={() => setKeepLoggedIn((prev) => !prev)}
-                  className="inline-flex items-center gap-3 cursor-pointer select-none bg-transparent border-0 p-0 text-left"
-                  style={{
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    fontSize: '18px',
-                    color: '#ffffff',
-                    outline: 'none',
-                  }}
-                >
-                  <span
-                    className="rounded-full flex items-center justify-center shrink-0"
+                {/* Radio-check 'Maintenir la session' */}
+                <div className="pt-2 flex items-center">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={keepLoggedIn}
+                    id="radio-keep-logged-in"
+                    onClick={() => setKeepLoggedIn((prev) => !prev)}
+                    className="inline-flex items-center gap-3 cursor-pointer select-none bg-transparent border-0 p-0 text-left"
                     style={{
-                      width: '20px',
-                      height: '20px',
-                      minWidth: '20px',
-                      minHeight: '20px',
-                      boxSizing: 'border-box',
-                      border: '1.5px solid #ffffff',
-                      backgroundColor: 'transparent',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      fontSize: '18px',
+                      color: '#ffffff',
+                      outline: 'none',
                     }}
                   >
                     <span
-                      className="rounded-full block transition-opacity"
+                      className="rounded-full flex items-center justify-center shrink-0"
                       style={{
-                        width: '10px',
-                        height: '10px',
-                        backgroundColor: '#ffffff',
-                        opacity: keepLoggedIn ? 1 : 0,
+                        width: '20px',
+                        height: '20px',
+                        minWidth: '20px',
+                        minHeight: '20px',
+                        boxSizing: 'border-box',
+                        border: '1.5px solid #ffffff',
+                        backgroundColor: 'transparent',
                       }}
-                    />
-                  </span>
-                  <span
-                    style={{
-                      fontSize: '18px',
-                      color: '#ffffff',
-                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    }}
-                  >
-                    {t.keepSession}
-                  </span>
-                </button>
+                    >
+                      <span
+                        className="rounded-full block transition-opacity"
+                        style={{
+                          width: '10px',
+                          height: '10px',
+                          backgroundColor: '#ffffff',
+                          opacity: keepLoggedIn ? 1 : 0,
+                        }}
+                      />
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '18px',
+                        color: '#ffffff',
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      }}
+                    >
+                      {t.keepSession}
+                    </span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom Info Card & Footer Copyright in Right Column */}
+        <div className="w-full flex flex-col items-center gap-3.5 pt-8">
+          {showRightGdpCard && (
+            <div
+              className="relative w-full flex flex-col sm:flex-row items-center gap-5 rounded-[22px] p-5 lg:px-7 lg:py-5 select-none"
+              style={{
+                backgroundColor: '#ffffff',
+                minHeight: '132px',
+              }}
+              id="login-right-gdp-card"
+            >
+              <img
+                src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeowebsite-gdp.svg"
+                alt="Google Developer Program"
+                className="w-[220px] sm:w-[240px] max-h-[82px] object-contain shrink-0 select-none pointer-events-none"
+              />
+              <div
+                className="flex-1 pr-10 text-left"
+                style={{
+                  color: '#000000',
+                  fontSize: '18px',
+                  lineHeight: '1.4',
+                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                }}
+              >
+                <span className="font-bold">Le saviez-vous ?</span> Defibeo est une solution développée par Civilprom en partenariat avec des experts du programme Google for Startups Accelerator UK.
               </div>
-            </form>
+              <button
+                type="button"
+                onClick={() => setShowRightGdpCard(false)}
+                className="absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
+                aria-label="Fermer"
+              >
+                <img
+                  src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                  alt="Fermer"
+                  className="w-[38px] h-[38px] object-contain"
+                />
+              </button>
+            </div>
           )}
+
+          <div
+            className="w-full text-center select-none"
+            style={{
+              fontSize: '12px',
+              color: '#a4b5ff',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+            }}
+            id="login-right-copyright"
+          >
+            © 2026 Defibeo by Civilprom (Org-O9247529). All rights reserved. Civilprom UK, Glasgow, G2 7JS, 120 (prod-525b2634).
+          </div>
         </div>
       </div>
 
