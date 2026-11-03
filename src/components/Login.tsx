@@ -141,6 +141,12 @@ const translations = {
     changeAccount: "Annuler",
     codeSentSuccess: "Code envoyé avec succès !",
     keepLoggedIn: "Maintenir la connexion.",
+    infoGreenCard: "Contacter Defibeo: cliquez ici pour afficher les coordonnées de contact de votre pays.",
+    infoBlueCard: "Devenir utilisateur: téléchargez la documentation du logiciel pour en savoir plus.",
+    infoDarkCard: "Découvrez Defibeo: La solution métier dédiée à l'infogérance des défibrillateurs et équipements associés. Defibeo centralise la traçabilité des matériels et des pièces, la gestion de maintenance sur site (GMAO) ainsi que l'organisation des tournées (FSM).",
+    infoGdpCard: "Le saviez-vous? Defibeo est une solution développée par Civilprom et en partenariat avec des experts du programme Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
+    civilpromSolutionPill: "Une solution Civilprom",
+    contactCoordsAria: "Coordonnées de contact",
   },
   'English': {
     welcomeLine1: "Welcome",
@@ -232,6 +238,12 @@ const translations = {
     changeAccount: "Cancel",
     codeSentSuccess: "Code sent successfully!",
     keepLoggedIn: "Keep me signed in.",
+    infoGreenCard: "Contact Defibeo: click here to view the contact details for your country.",
+    infoBlueCard: "Become a user: download the software documentation to learn more.",
+    infoDarkCard: "Discover Defibeo: The business solution dedicated to the managed services of defibrillators and associated equipment. Defibeo centralizes equipment and parts traceability, on-site maintenance management (CMMS) and route planning (FSM).",
+    infoGdpCard: "Did you know? Defibeo is a solution developed by Civilprom and in partnership with experts from the Google for Startups Accelerator program (UK, Glasgow — Google Developer Program).",
+    civilpromSolutionPill: "A Civilprom solution",
+    contactCoordsAria: "Contact details",
   },
   'Deutsch': {
     welcomeLine1: "Willkommen",
@@ -323,6 +335,12 @@ const translations = {
     changeAccount: "Abbrechen",
     codeSentSuccess: "Code erfolgreich gesendet!",
     keepLoggedIn: "Angemeldet bleiben.",
+    infoGreenCard: "Defibeo kontaktieren: Klicken Sie hier, um die Kontaktdaten für Ihr Land anzuzeigen.",
+    infoBlueCard: "Nutzer werden: Laden Sie die Softwaredokumentation herunter, um mehr zu erfahren.",
+    infoDarkCard: "Entdecken Sie Defibeo: Die Fachlösung für das Management von Defibrillatoren und zugehörigen Geräten. Defibeo zentralisiert die Rückverfolgbarkeit von Geräten und Ersatzteilen, das Vor-Ort-Wartungsmanagement (CMMS) sowie die Tourenplanung (FSM).",
+    infoGdpCard: "Wussten Sie schon? Defibeo ist eine von Civilprom und in Partnerschaft mit Experten des Google for Startups Accelerator-Programms (UK, Glasgow — Google Developer Program) entwickelte Lösung.",
+    civilpromSolutionPill: "Eine Lösung von Civilprom",
+    contactCoordsAria: "Kontaktdaten",
   },
   'Português': {
     welcomeLine1: "Bem-vindo",
@@ -414,6 +432,12 @@ const translations = {
     changeAccount: "Cancelar",
     codeSentSuccess: "Código enviado com sucesso!",
     keepLoggedIn: "Manter a sessão iniciada.",
+    infoGreenCard: "Contactar a Defibeo: clique aqui para ver os dados de contacto do seu país.",
+    infoBlueCard: "Tornar-se utilizador: descarregue a documentação do software para saber mais.",
+    infoDarkCard: "Descubra a Defibeo: A solução empresarial dedicada à gestão de desfibrilhadores e equipamentos associados. A Defibeo centraliza a rastreabilidade de equipamentos e peças, a gestão de manutenção no local (GMAO) e o planeamento de rotas (FSM).",
+    infoGdpCard: "Sabia que? A Defibeo é uma solução desenvolvida pela Civilprom e em parceria com especialistas do programa Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
+    civilpromSolutionPill: "Uma solução Civilprom",
+    contactCoordsAria: "Dados de contacto",
   },
   'Español': {
     welcomeLine1: "Bienvenido",
@@ -505,6 +529,12 @@ const translations = {
     changeAccount: "Cancelar",
     codeSentSuccess: "¡Código enviado con éxito!",
     keepLoggedIn: "Mantener la sesión iniciada.",
+    infoGreenCard: "Contactar con Defibeo: haga clic aquí para ver los datos de contacto de su país.",
+    infoBlueCard: "Convertirse en usuario: descargue la documentación del software para saber más.",
+    infoDarkCard: "Descubra Defibeo: La solución profesional dedicada a la gestión integral de desfibriladores y equipos asociados. Defibeo centraliza la trazabilidad de equipos y piezas, la gestión de mantenimiento en sitio (GMAO) y la organización de rutas (FSM).",
+    infoGdpCard: "¿Sabías que? Defibeo es una solución desarrollada por Civilprom y en colaboración con expertos del programa Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
+    civilpromSolutionPill: "Una solución de Civilprom",
+    contactCoordsAria: "Datos de contacto",
   }
 };
 
@@ -1100,7 +1130,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   return (
     <div
-      className="min-h-screen w-full flex flex-col lg:flex-row font-sans relative overflow-x-hidden"
+      className="min-h-screen w-full flex flex-col-reverse lg:flex-row font-sans relative overflow-x-hidden"
       id="login-viewport-wrapper"
       style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
     >
@@ -1117,7 +1147,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
         @media (max-width: 1023px), (max-width: 1180px) and (orientation: portrait) {
           #login-viewport-wrapper {
-            flex-direction: column !important;
+            flex-direction: column-reverse !important;
           }
           #login-left-column {
             width: 100% !important;
@@ -1132,6 +1162,28 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             min-height: 460px !important;
             flex: 1 1 auto !important;
           }
+        }
+
+        .login-info-card-zoom {
+          transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+          will-change: transform;
+        }
+        .login-info-card-zoom:hover {
+          transform: scale(1.02);
+        }
+
+        @keyframes loginCloseZoomDezoom {
+          0% { transform: scale(1); }
+          35% { transform: scale(1.22); }
+          70% { transform: scale(0.9); }
+          100% { transform: scale(1.1); }
+        }
+        .login-close-btn-zoom {
+          transition: transform 220ms ease;
+          will-change: transform;
+        }
+        .login-close-btn-zoom:hover {
+          animation: loginCloseZoomDezoom 520ms ease-in-out forwards;
         }
 
         #login-email-input {
@@ -1217,7 +1269,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {showLeftGreenCard && (
                   <div
-                    className="relative flex items-center gap-4 rounded-[22px] p-5 cursor-pointer select-none"
+                    className="login-info-card-zoom relative flex items-center gap-4 rounded-[22px] p-5 cursor-pointer select-none"
                     style={{
                       backgroundColor: '#3ddc84',
                       minHeight: '176px',
@@ -1237,10 +1289,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                       }}
                     >
-                      En savoir plus sur Defibeo : cliquez ici pour afficher les coordonnées de contact de votre pays.
+                      {t.infoGreenCard}
                     </div>
                     <select
-                      aria-label="Coordonnées de contact"
+                      aria-label={t.contactCoordsAria}
                       value=""
                       onChange={(e) => {
                         const val = e.target.value;
@@ -1255,7 +1307,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                     >
                       <option value="" disabled hidden>
-                        Coordonnées de contact
+                        {t.contactCoordsAria}
                       </option>
                       <option value="tel">Tel: +33 6 51 51 70 65</option>
                       <option value="mail">Mail: contact@defibeo.com</option>
@@ -1267,12 +1319,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         e.stopPropagation();
                         setShowLeftGreenCard(false);
                       }}
-                      className="absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
-                      aria-label="Fermer"
+                      className="login-close-btn-zoom absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
+                      aria-label={t.close}
                     >
                       <img
                         src="https://civilprom.s3.eu-north-1.amazonaws.com/xrggreen.svg"
-                        alt="Fermer"
+                        alt={t.close}
                         className="w-[38px] h-[38px] object-contain"
                       />
                     </button>
@@ -1282,7 +1334,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 {showLeftBlueCard && (
                   <div
                     onClick={() => window.open('https://defibeo.com/infos2026', '_blank', 'noopener,noreferrer')}
-                    className="relative flex items-center gap-4 rounded-[22px] p-5 cursor-pointer select-none"
+                    className="login-info-card-zoom relative flex items-center gap-4 rounded-[22px] p-5 cursor-pointer select-none"
                     style={{
                       backgroundColor: '#2546f0',
                       minHeight: '176px',
@@ -1302,7 +1354,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                       }}
                     >
-                      Devenir utilisateur : téléchargez la documentation du logiciel.
+                      {t.infoBlueCard}
                     </div>
                     <button
                       type="button"
@@ -1310,12 +1362,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         e.stopPropagation();
                         setShowLeftBlueCard(false);
                       }}
-                      className="absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
-                      aria-label="Fermer"
+                      className="login-close-btn-zoom absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
+                      aria-label={t.close}
                     >
                       <img
                         src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblue.svg"
-                        alt="Fermer"
+                        alt={t.close}
                         className="w-[38px] h-[38px] object-contain"
                       />
                     </button>
@@ -1327,7 +1379,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             {showLeftDarkCard && (
               <div
                 onClick={() => window.open('https://defibeo.com/infos2026', '_blank', 'noopener,noreferrer')}
-                className="relative flex items-center gap-5 rounded-[22px] p-5 lg:p-6 cursor-pointer select-none"
+                className="login-info-card-zoom relative flex items-center gap-5 rounded-[22px] p-5 lg:p-6 cursor-pointer select-none"
                 style={{
                   backgroundColor: '#050d26',
                   minHeight: '176px',
@@ -1347,7 +1399,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                   }}
                 >
-                  Découvrir Defibeo Solution métier dédiée à l'infogérance des défibrillateurs et équipements associés, Defibeo centralise la traçabilité des matériels et des pièces, la gestion de maintenance sur site (GMAO) ainsi que l'organisation des tournées (FSM).
+                  {t.infoDarkCard}
                 </div>
                 <button
                   type="button"
@@ -1355,12 +1407,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     e.stopPropagation();
                     setShowLeftDarkCard(false);
                   }}
-                  className="absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
-                  aria-label="Fermer"
+                  className="login-close-btn-zoom absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
+                  aria-label={t.close}
                 >
                   <img
                     src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgdarkblue.svg"
-                    alt="Fermer"
+                    alt={t.close}
                     className="w-[38px] h-[38px] object-contain"
                   />
                 </button>
@@ -1369,9 +1421,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           </div>
         )}
 
-        {/* Bottom-left Defibeo logo-icon with hover icon & 'Logiciel Defibeo' pill */}
+        {/* Bottom-left Defibeo logo-icon with hover icon, 'Logiciel Defibeo' pill & non-clickable 'defibeo.com' text */}
         <div
-          className="absolute bottom-6 left-6 lg:bottom-8 lg:left-8 z-20 flex items-center"
+          className="absolute bottom-6 left-6 lg:bottom-8 lg:left-8 z-20 flex flex-col items-start gap-1.5"
           id="login-left-logo-container"
         >
           <div
@@ -1424,6 +1476,18 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </div>
             )}
           </div>
+          <span
+            className="select-none pointer-events-none"
+            style={{
+              fontSize: '12px',
+              color: '#50617a',
+              marginLeft: '-5px',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              lineHeight: '1.2',
+            }}
+          >
+            defibeo.com
+          </span>
         </div>
 
         {/* Bottom-right stacked controls */}
@@ -1431,37 +1495,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           className="absolute bottom-6 right-6 lg:bottom-8 lg:right-8 z-20 flex flex-col items-end gap-2.5"
           id="login-left-controls"
         >
-          {/* 1. 3-dots icon with system dropdown ("Quitter", "Assistance") */}
-          <div
-            className="relative inline-flex items-center justify-center cursor-pointer"
-            style={{ marginBottom: '6px' }}
-          >
-            <img
-              src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
-              alt="Menu"
-              className="w-auto object-contain select-none pointer-events-none"
-              style={{ height: '22px' }}
-            />
-            <select
-              aria-label={t.systemOptionsAria}
-              value=""
-              onChange={(e) => {
-                const action = e.target.value;
-                if (action === 'quitter') {
-                  window.location.href = 'https://defibeo.com';
-                } else if (action === 'assistance') {
-                  window.location.href = 'mailto:support@defibeo.com';
-                }
-              }}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            >
-              <option value="" disabled hidden>
-                {t.optionsLabel}
-              </option>
-              <option value="quitter">{t.quitLabel}</option>
-              <option value="assistance">{t.assistanceLabel}</option>
-            </select>
-          </div>
 
           {/* 2. Green pill button ("Une solution Civilprom") */}
           <div
@@ -1485,7 +1518,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               }}
             >
               <span className="pointer-events-none whitespace-nowrap">
-                Une solution Civilprom
+                {t.civilpromSolutionPill}
               </span>
             </div>
           </div>
@@ -1866,7 +1899,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         <div className="w-full flex flex-col items-center gap-3.5 pt-8">
           {showRightGdpCard && (
             <div
-              className="relative w-full flex flex-col sm:flex-row items-center gap-5 rounded-[22px] p-5 lg:px-7 lg:py-5 select-none"
+              className="login-info-card-zoom relative w-full flex flex-col sm:flex-row items-center gap-5 rounded-[22px] p-5 lg:px-7 lg:py-5 select-none"
               style={{
                 backgroundColor: '#ffffff',
                 minHeight: '132px',
@@ -1887,17 +1920,17 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                 }}
               >
-                <span className="font-bold">Le saviez-vous ?</span> Defibeo est une solution développée par Civilprom en partenariat avec des experts du programme Google for Startups Accelerator UK.
+                {t.infoGdpCard}
               </div>
               <button
                 type="button"
                 onClick={() => setShowRightGdpCard(false)}
-                className="absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
-                aria-label="Fermer"
+                className="login-close-btn-zoom absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
+                aria-label={t.close}
               >
                 <img
                   src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                  alt="Fermer"
+                  alt={t.close}
                   className="w-[38px] h-[38px] object-contain"
                 />
               </button>
@@ -1907,7 +1940,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           <div
             className="w-full text-center select-none"
             style={{
-              fontSize: '12px',
+              fontSize: '10px',
               color: '#a4b5ff',
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
             }}
