@@ -143,7 +143,7 @@ const translations = {
     keepLoggedIn: "Maintenir la connexion.",
     infoGreenCard: "Contacter Defibeo: cliquez ici pour afficher les coordonnées de contact de votre pays.",
     infoBlueCard: "Devenir utilisateur: téléchargez la documentation du logiciel pour en savoir plus.",
-    infoDarkCard: "Découvrir Defibeo: La solution métier dédiée à l'infogérance des défibrillateurs et équipements associés. Defibeo centralise la traçabilité des matériels et des pièces, la gestion de maintenance sur site (GMAO) ainsi que l'organisation des tournées (FSM).",
+    infoDarkCard: "Découvrir Defibeo: la solution métier dédiée à l'infogérance des défibrillateurs et équipements associés. Defibeo centralise la traçabilité des matériels et des pièces, la gestion de maintenance sur site (GMAO) ainsi que l'organisation des tournées (FSM).",
     infoGdpCard: "Le saviez-vous? Defibeo est une solution développée par Civilprom et en partenariat avec des experts du programme Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
     civilpromSolutionPill: "Une solution Civilprom",
     contactCoordsAria: "Coordonnées de contact",
@@ -1456,7 +1456,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               <div className="flex flex-col items-start gap-2.5 mb-1" id="login-ecosystem-pill-wrapper">
                 <div
                   className="text-[15px] leading-snug select-none"
-                  style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                  style={{
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    marginLeft: '4px',
+                  }}
                 >
                   <span className="login-ecosystem-prefix">{t.ecosystemHeaderPrefix} </span>
                   <button
@@ -1752,9 +1755,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           <span
             className="select-none pointer-events-none"
             style={{
-              fontSize: '12px',
-              color: '#50617a',
-              marginLeft: '-5px',
+              fontSize: '16px',
+              color: 'rgb(49 86 255)',
+              marginLeft: '2px',
+              marginTop: '3px',
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
               lineHeight: '1.2',
             }}
@@ -2188,7 +2192,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             }}
             id="login-right-copyright"
           >
-            © 2026 Defibeo by Civilprom (Org-O9247529). All rights reserved.{' '}
+            © 2026 Defibeo by Civilprom. All rights reserved.{' '}
             <a
               href="https://www.google.com/maps/place/Glasgow+G2+7JS,+Royaume-Uni/@55.861508,-4.2638329,23a,75y,9.99h,87.78t/data=!3m7!1e1!3m5!1s9scepnhvnV6jweow3ObCPQ!2e0!6shttps:%2F%2Fstreetviewpixels-pa.clients6.google.com%2Fv1%2Fthumbnail%3Fcb_client%3Dmaps_sv.tactile%26w%3D900%26h%3D600%26pitch%3D2.2176239721206628%26panoid%3D9scepnhvnV6jweow3ObCPQ%26yaw%3D9.994148180894447!7i16384!8i8192!4m6!3m5!1s0x4888469d64ac6abd:0xa74cf672bd0fbe9!8m2!3d55.8616882!4d-4.263924!16s%2Fg%2F1vj5zsnf?entry=ttu&g_ep=EgoyMDI2MTEwMS4wIKXMDSoASAFQAw%3D%3D"
               target="_blank"
