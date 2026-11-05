@@ -1756,11 +1756,10 @@ export default function PublicPortal({
       )
       .reduce((sum, tr) => sum + (Number(tr.volume ?? 1) || 0), 0);
 
-    const noLocationStockVol = Math.max(0, Number(matchedStockRecord.quantite) || 0);
-    const centralOrNoLocationTraceVol = (matchedStockRecord.traceabilities || []).reduce(
+    const centralTraceVol = (matchedStockRecord.traceabilities || []).reduce(
       (sum, tr) => {
         const emp = String(tr.emplacement || "").trim().toLowerCase();
-        if (!emp || emp === "centrale des stocks" || emp === "centrale") {
+        if (emp === "centrale des stocks") {
           const vol =
             tr.volume !== undefined &&
             tr.volume !== null &&
@@ -1773,7 +1772,10 @@ export default function PublicPortal({
       },
       0,
     );
-    const disponibleCentraleVol = noLocationStockVol + centralOrNoLocationTraceVol;
+    const disponibleCentraleVol =
+      matchedStockRecord.traceabilityEnabled !== false
+        ? centralTraceVol
+        : Math.max(0, Number(matchedStockRecord.quantite) || 0);
 
     return {
       id: matchingDs?.id || matchedStockRecord.id,
@@ -2045,101 +2047,96 @@ export default function PublicPortal({
     return getPieceOutgoingStats(selectedTechStock.denominationPieceId);
   }, [getPieceOutgoingStats, selectedTechStock]);
 
-  const handleAlertLogistique = async () => {
-    const logisticsMember = members.find(
-      (m) =>
-        m.adminSubRole === "Logistique" ||
-        m.role?.toLowerCase().includes("logistique"),
-    );
-    if (!logisticsMember) {
-      alert(
-        "Alerte impossible : aucun collaborateur Logistique n'est enregistré dans l'équipe.",
-      );
-      return;
-    }
-    if (!logisticsMember.email) {
-      alert(
-        "Alerte impossible : le collaborateur Logistique n'a pas d'adresse email renseignée.",
-      );
-      return;
-    }
+  const postTechStockActivityToSheet = async (ugsVal: string, description: string) => {
+    const effTenant =
+      techTenantId ||
+      authenticatedUser?.envId ||
+      (authenticatedUser as any)?.tenantId ||
+      (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+      "demo";
+    const nowStr = new Date().toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const newNotif: LogisticsNotification = {
+      id: "lognotif_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+      horodatage: nowStr,
+      ugs: ugsVal || "",
+      description,
+      commentaire: "",
+      statut: "",
+    };
 
-    const techName = authenticatedUser?.name || "Un technicien";
-    const pieceName = selectedStockVariable?.nom || "Dénomination inconnue";
-    const ugsCode = matchedStockRecord?.ugs || "N/A";
-
-    const subject = `Alerte approvisionnement stock - ${techName}`;
-    const body = `${techName} a besoin de stock pour le pièce/service ${pieceName} UGS ${ugsCode}.`;
+    if (onAddLogisticsNotification) {
+      onAddLogisticsNotification(description, ugsVal || "");
+    }
 
     try {
-      const senderName = getActiveTenantCommercialName(techName);
-      const sent = await sendScriptEmail({
-        to: logisticsMember.email,
-        subject,
-        body,
-        replyTo: authenticatedUser?.email || "noreply@defibeo.com",
-        name: senderName,
-        senderName
+      const actSheetUrl = getTenantSpreadsheetUrl(
+        "spreadsheetStocksActivite",
+        companyInfo,
+        effTenant,
+      );
+      await fetch("/api/sheets/upsert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId: effTenant,
+          type: "historiqueNotifications",
+          spreadsheetUrl: actSheetUrl || undefined,
+          records: [newNotif],
+        }),
       });
-      if (sent) {
-        if (onAddLogisticsNotification) {
-          const name_technician = authenticatedUser?.name || "Un technicien";
-          const pieceName = selectedStockVariable?.nom || "Pièce inconnue";
-          const ugs = matchedStockRecord?.ugs ? ` (${matchedStockRecord.ugs})` : "";
-          const ugsRef = `${pieceName}${ugs}`;
-          const emplacement_name = selectedTechStock?.locationName || techLocationLink || "Emplacement";
-          onAddLogisticsNotification(
-            `Le technicien ${name_technician} (${emplacement_name}) alerte concernant la situation du stock ${ugsRef}.`,
-            matchedStockRecord?.ugs || pieceName
-          );
-        }
-        alert(
-          `Email d'alerte envoyé avec succès à ${logisticsMember.name} (Logistique).`,
-        );
-      } else {
-        alert("Une erreur s'est produite lors de l'envoi de l'email.");
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Erreur technique lors de l'envoi de l'email.");
+    } catch (err) {
+      console.warn("Direct sheet upsert warning for spreadsheetStocksActivite:", err);
     }
   };
 
-  const handleConfirmRapatriement = () => {
+  const handleAlertLogistique = async () => {
+    if (!matchedStockRecord && !selectedTechStock) return;
+    const technician_name = authenticatedUser?.name || "Un technicien";
+    const ugsCode = matchedStockRecord?.ugs || selectedTechStock?.ugs || "";
+    const description = `Le technicien ${technician_name} suggère votre attention concernant la situation de ce stock.`;
+
+    setIsSavingInventory(true);
+    try {
+      await postTechStockActivityToSheet(ugsCode, description);
+      setStockFeedbackMsg({
+        type: "success",
+        text: "Alerte enregistrée dans Spreadsheet Stocks Activité.",
+      });
+    } catch (e: any) {
+      console.error(e);
+      setStockFeedbackMsg({
+        type: "error",
+        text: "Erreur lors de l'envoi de l'alerte : " + (e?.message || "Erreur inconnue"),
+      });
+    } finally {
+      setIsSavingInventory(false);
+    }
+  };
+
+  const handleConfirmRapatriement = async () => {
     if (!matchedStockRecord || !selectedTechStock) return;
 
-    // Create new movement
-    const newMvId = "mv_" + Date.now();
-    const newMv: StockMovement = {
-      id: newMvId,
-      type: "Rapatriement",
-      volume: Number(rapatrimentVolume) || 0,
-      date: rapatrimentDate,
-      statut: rapatrimentStatut,
-      trackingLink: rapatrimentTrackingLink,
-      emplacement: selectedTechStock.locationName,
-    };
+    const technician_name = authenticatedUser?.name || "Un technicien";
+    const ugsCode = matchedStockRecord.ugs || selectedTechStock.ugs || "";
 
-    const updatedMovements = [newMv, ...(matchedStockRecord.mouvements || [])];
-
-    const newVolDispo = Math.max(
-      0,
-      selectedTechStock.volumeDisponible - (Number(rapatrimentVolume) || 0),
+    const piecesAtTechLocation = (matchedStockRecord.traceabilities || []).filter((t) =>
+      doesTraceMatchTechLocation(t, matchedStockRecord.mouvements),
     );
 
-    // Get updated traceabilities
-    let countToUpdate = Number(rapatrimentVolume) || 0;
-    const updatedTraceabilities = (matchedStockRecord.traceabilities || []).map((t) => {
-      const isAtThisLocation = doesTraceMatchTechLocation(t, matchedStockRecord.mouvements);
+    const list_num_lot_serie = piecesAtTechLocation
+      .map((t) => String(t.lotOrSerial || "").trim())
+      .filter(Boolean)
+      .join(", ");
 
-      if (
-        isAtThisLocation &&
-        (t.situation === "Disponible" ||
-          t.situation === "Signalé manquant" ||
-          (t.situation as string) === "Signalé Manquant") &&
-        countToUpdate > 0
-      ) {
-        countToUpdate--;
+    const returnedIds = new Set(piecesAtTechLocation.map((t) => t.id));
+    const updatedTraceabilities = (matchedStockRecord.traceabilities || []).map((t) => {
+      if (returnedIds.has(t.id) || doesTraceMatchTechLocation(t, matchedStockRecord.mouvements)) {
         return {
           ...t,
           emplacement: "Centrale des stocks" as any,
@@ -2148,91 +2145,43 @@ export default function PublicPortal({
       return t;
     });
 
-    // Check if any traceabilities remain at this location
-    const hasRemainingTraceabilities = updatedTraceabilities.some((t) => {
-      const isAtThisLocation = doesTraceMatchTechLocation(t, matchedStockRecord.mouvements);
-      return (
-        isAtThisLocation &&
-        (t.situation === "Indisponible" ||
-          t.situation === "Signalé manquant" ||
-          (t.situation as string) === "Signalé Manquant" ||
-          t.situation === "Prêté" ||
-          t.situation === "Disponible")
-      );
-    });
-
-    const shouldKeep =
-      newVolDispo > 0 ||
-      (selectedTechStock.volumeReserve || 0) > 0 ||
-      (selectedTechStock.volumeEntrant || 0) > 0 ||
-      (matchedStockRecord.traceabilityEnabled ? hasRemainingTraceabilities : false);
-
-    // update distributed stock
-    if (onUpdateDistributedStocks && distributedStocks) {
-      let updatedDs: DistributedStockLocation[];
-      if (!shouldKeep) {
-        // Delete this distributed stock location
-        updatedDs = distributedStocks.filter((it) => it.id !== selectedTechStock.id);
-      } else {
-        // Keep but update volumeDisponible
-        updatedDs = distributedStocks.map((it) => {
-          if (it.id === selectedTechStock.id) {
-            return {
-              ...it,
-              volumeDisponible: newVolDispo,
-            };
-          }
-          return it;
-        });
+    setIsSavingInventory(true);
+    try {
+      if (onUpdateDistributedStocks && distributedStocks) {
+        const updatedDs = distributedStocks.filter((it) => it.id !== selectedTechStock.id);
+        onUpdateDistributedStocks(updatedDs);
       }
-      onUpdateDistributedStocks(updatedDs);
+
+      const updatedStocks = effectiveTechStocksList.map((st) => {
+        if (st.id === matchedStockRecord.id) {
+          return {
+            ...st,
+            traceabilities: updatedTraceabilities,
+            inventaire: serializeStockTraceabilities(updatedTraceabilities),
+          };
+        }
+        return st;
+      });
+
+      await persistUpdatedStocksList(updatedStocks, true);
+
+      const description = `Le technicien ${technician_name} a indiqué toutes les pièces (${list_num_lot_serie}) qui étaient présentes dans son emplacement comme retournée(s). Ces pièces sont désormais dans l’emplacement de la centrale des stocks.`;
+      await postTechStockActivityToSheet(ugsCode, description);
+
+      setShowRapatriementForm(false);
+      setStockFeedbackMsg({
+        type: "success",
+        text: "Toutes les pièces ont été retournées à la Centrale des stocks.",
+      });
+    } catch (err: any) {
+      console.error(err);
+      setStockFeedbackMsg({
+        type: "error",
+        text: "Erreur lors du retour des pièces : " + (err?.message || "Erreur inconnue"),
+      });
+    } finally {
+      setIsSavingInventory(false);
     }
-
-    // update central stocks and traceabilities
-    const updatedStocks = effectiveTechStocksList.map((st) => {
-      if (st.id === matchedStockRecord.id) {
-        return {
-          ...st,
-          mouvements: updatedMovements,
-          traceabilities: updatedTraceabilities,
-          inventaire: serializeStockTraceabilities(updatedTraceabilities),
-        };
-      }
-      return st;
-    });
-    persistUpdatedStocksList(updatedStocks, true);
-
-    if (onAddLogisticsNotification) {
-      const name_technician = authenticatedUser?.name || "Un technicien";
-      const location_name = selectedTechStock?.locationName || techLocationLink || "Emplacement";
-      const pieceName = selectedStockVariable?.nom || "Pièce inconnue";
-      const ugsStr = matchedStockRecord?.ugs ? ` (${matchedStockRecord.ugs})` : "";
-      const ugsRef = `${pieceName}${ugsStr}`;
-
-      const returnedLots = (matchedStockRecord?.traceabilities || [])
-        .filter((t) => {
-          let currentLoc = t.emplacement;
-          if (!currentLoc) {
-            const matchedMv = (matchedStockRecord?.mouvements || []).find(mv => mv.id === t.movementId);
-            if (matchedMv && matchedMv.emplacement) {
-              currentLoc = matchedMv.emplacement.includes(" : ") ? matchedMv.emplacement.split(" : ")[1] : matchedMv.emplacement;
-            }
-          }
-          return currentLoc === selectedTechStock?.locationName;
-        })
-        .map((t) => t.lotOrSerial)
-        .filter(Boolean);
-
-      const lotsList = returnedLots.length > 0 ? returnedLots.join(", ") : "aucun lot";
-
-      onAddLogisticsNotification(
-        `Le technicien ${name_technician} (${location_name}) retourne toutes ses références du stock distribué ${ugsRef}, pièce(s) : ${lotsList}.`,
-        matchedStockRecord?.ugs || pieceName
-      );
-    }
-
-    alert("Retour (Rapatriement) enregistré avec succès !");
-    setShowRapatriementForm(false);
   };
 
   const handleNavigateToAddress = (address: string) => {
@@ -11107,7 +11056,7 @@ export default function PublicPortal({
                           key={rep.id}
                           className="p-5 rounded-[14px] space-y-4"
                           style={{
-                            backgroundColor: "#f5f7fa",
+                            backgroundColor: "rgb(245, 247, 250)",
                             border: "none",
                             boxShadow: "none",
                           }}
@@ -11129,8 +11078,11 @@ export default function PublicPortal({
                             if (!thumbUrl) return null;
                             return (
                               <div
-                                className="w-16 h-16 sm:w-20 sm:h-20 rounded-[12px] bg-white border flex items-center justify-center p-1 shrink-0 mb-2"
-                                style={{ borderColor: "rgb(201, 190, 205)" }}
+                                className="w-16 h-16 sm:w-20 sm:h-20 rounded-[12px] border flex items-center justify-center p-1 shrink-0 mb-2"
+                                style={{
+                                  backgroundColor: "transparent",
+                                  borderColor: "#DCE1EA",
+                                }}
                                 title="Modèle défibrillateur"
                               >
                                 <img
@@ -11147,11 +11099,11 @@ export default function PublicPortal({
                             <span
                               style={{
                                 color: "#ffffff",
-                                backgroundColor: "#FD4EBB",
+                                backgroundColor: "#1D0245",
                                 padding: "8px 16px",
                                 borderRadius: "9999px",
                                 fontWeight: "bold",
-                                fontSize: "14px",
+                                fontSize: "18px",
                                 display: "inline-block",
                               }}
                             >
@@ -11160,30 +11112,30 @@ export default function PublicPortal({
                             {rep.validated ? (
                               <span
                                 style={{
-                                  color: "#047857",
-                                  backgroundColor: "#d1fae5",
+                                  color: "#ffffff",
+                                  backgroundColor: "rgb(210, 45, 11)",
                                   padding: "6px 14px",
                                   borderRadius: "9999px",
                                   fontWeight: "bold",
-                                  fontSize: "13px",
-                                  border: "1px solid #a7f3d0",
+                                  fontSize: "18px",
+                                  border: "none",
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "4px",
                                 }}
                               >
-                                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#10b981" }}></span>
+                                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#ffffff" }}></span>
                                 Validé par GMAO
                               </span>
                             ) : (
                               <span
                                 style={{
                                   color: "rgb(255 255 255)",
-                                  backgroundColor: "#0f172a",
+                                  backgroundColor: "rgb(210, 45, 11)",
                                   padding: "6px 14px",
                                   borderRadius: "9999px",
                                   fontWeight: "bold",
-                                  fontSize: "16px",
+                                  fontSize: "18px",
                                   border: "none",
                                   display: "inline-flex",
                                   alignItems: "center",
@@ -11236,7 +11188,7 @@ export default function PublicPortal({
                               return (
                                 <>
                                   <p style={{ color: "rgb(80, 97, 122)" }}>
-                                    <span style={{ color: "#9f9f9f" }}>Document :</span>{" "}
+                                    <span style={{ color: "#000" }}>Document :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "rgb(80, 97, 122)" }}
@@ -11245,7 +11197,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "rgb(80, 97, 122)" }}>
-                                    <span style={{ color: "#9f9f9f" }}>Identifiant :</span>{" "}
+                                    <span style={{ color: "#000" }}>Identifiant :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "rgb(80, 97, 122)" }}
@@ -11254,7 +11206,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "rgb(80, 97, 122)" }}>
-                                    <span style={{ color: "#9f9f9f" }}>Série :</span>{" "}
+                                    <span style={{ color: "#000" }}>Série :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "rgb(80, 97, 122)" }}
@@ -11263,7 +11215,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "rgb(80, 97, 122)" }}>
-                                    <span style={{ color: "#9f9f9f" }}>Site :</span>{" "}
+                                    <span style={{ color: "#000" }}>Site :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "rgb(80, 97, 122)" }}
@@ -11272,7 +11224,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "rgb(80, 97, 122)" }}>
-                                    <span style={{ color: "#9f9f9f" }}>Client :</span>{" "}
+                                    <span style={{ color: "#000" }}>Client :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "rgb(80, 97, 122)" }}
@@ -11281,7 +11233,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "rgb(80, 97, 122)" }}>
-                                    <span style={{ color: "#9f9f9f" }}>Matériel :</span>{" "}
+                                    <span style={{ color: "#000" }}>Matériel :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "rgb(80, 97, 122)" }}
@@ -11290,7 +11242,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "rgb(80, 97, 122)" }}>
-                                    <span style={{ color: "#9f9f9f" }}>Technicien :</span>{" "}
+                                    <span style={{ color: "#000" }}>Technicien :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "rgb(80, 97, 122)" }}
@@ -11299,7 +11251,7 @@ export default function PublicPortal({
                                     </span>
                                   </p>
                                   <p style={{ color: "rgb(80, 97, 122)" }}>
-                                    <span style={{ color: "#9f9f9f" }}>Localisation :</span>{" "}
+                                    <span style={{ color: "#000" }}>Localisation :</span>{" "}
                                     <span
                                       className="font-semibold"
                                       style={{ color: "rgb(80, 97, 122)" }}
@@ -11316,15 +11268,14 @@ export default function PublicPortal({
                             type="button"
                             onClick={() => handleDownloadReport(rep)}
                             style={{
-                              backgroundColor: "rgb(53, 86, 236)",
+                              backgroundColor: "rgb(46, 84, 255)",
                               color: "#fff",
                               fontSize: "18px",
                               fontWeight: "bold",
                               borderRadius: "12px",
                               padding: "12px 20px",
                               border: "none",
-                              boxShadow:
-                                "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                              boxShadow: "none",
                               cursor: "pointer",
                               width: "100%",
                             }}
@@ -11374,16 +11325,14 @@ export default function PublicPortal({
                                   setIsReportOverlayOpen(true);
                                 }}
                                 style={{
-                                  backgroundColor: isOwnReport ? "#0f172a" : "#e2e8f0",
-                                  color: isOwnReport ? "#ffffff" : "#94a3b8",
+                                  backgroundColor: "rgb(210, 45, 11)",
+                                  color: "#ffffff",
                                   fontSize: "18px",
                                   fontWeight: "bold",
                                   borderRadius: "12px",
                                   padding: "12px 20px",
                                   border: "none",
-                                  boxShadow: isOwnReport
-                                    ? "rgba(255, 255, 255, 0) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(255, 255, 255, 0) 0px 4px 4px, rgb(0, 0, 0) 0px 7px 0px -12px, rgba(255, 255, 255, 0.21) 0px 6px 12px inset"
-                                    : "none",
+                                  boxShadow: "none",
                                   cursor: isOwnReport ? "pointer" : "not-allowed",
                                   width: "100%",
                                   marginTop: "8px",
@@ -11516,6 +11465,21 @@ export default function PublicPortal({
                       letter-spacing: normal !important;
                       font-size: 18px !important;
                       color: #000000 !important;
+                    }
+                    @media (max-width: 639px) and (orientation: portrait) {
+                      #tab-stocks-screen .tech-inventaire-tracabilite-card {
+                        margin-left: -16px !important;
+                        margin-right: -16px !important;
+                        width: calc(100% + 32px) !important;
+                        max-width: calc(100% + 32px) !important;
+                        border-radius: 0px !important;
+                      }
+                      #tab-stocks-screen .tech-inventaire-tracabilite-pill {
+                        width: 100% !important;
+                        display: flex !important;
+                        justify-content: center !important;
+                        text-align: center !important;
+                      }
                     }
                   `}</style>
                   {/* Info: Emplacement (Disabled Input en premier, hors d'une div) */}
@@ -11847,10 +11811,10 @@ export default function PublicPortal({
                       </div>
 
                       {/* Section Inventaire de traçabilité (Même trame que dans le logiciel principal) */}
-                      <div className="pt-4 mt-2 flex flex-col gap-4">
-                        <div className="flex justify-between items-center mt-2 mb-1 select-none">
+                      <div className="tech-inventaire-tracabilite-card pt-4 mt-2 flex flex-col gap-4">
+                        <div className="flex justify-between items-center mt-2 mb-1 select-none w-full">
                           <span
-                            className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
+                            className="tech-inventaire-tracabilite-pill inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                             style={{
                               color: "rgb(21 99 55)",
                               backgroundColor: "rgb(61 220 132)",
@@ -12784,16 +12748,16 @@ export default function PublicPortal({
                       {/* Section Inventaire de traçabilité (Même trame que dans le logiciel principal) */}
                       {matchedStockRecord && (
                         <div
-                          className="p-4 rounded-[14px] flex flex-col gap-4 mt-6"
+                          className="tech-inventaire-tracabilite-card p-4 rounded-[14px] flex flex-col gap-4 mt-6"
                           style={{
                             backgroundColor: "#f5f7fa",
                             border: "none",
                             boxShadow: "none",
                           }}
                         >
-                          <div className="flex justify-between items-center mt-2 mb-1 select-none">
+                          <div className="flex justify-between items-center mt-2 mb-1 select-none w-full">
                             <span
-                              className="inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
+                              className="tech-inventaire-tracabilite-pill inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
                               style={{
                                 color: "rgb(21 99 55)",
                                 backgroundColor: "rgb(61 220 132)",
@@ -13267,23 +13231,7 @@ export default function PublicPortal({
 
                            <button
                              type="button"
-                             onClick={() => {
-                               const isTraceActive = matchedStockRecord?.traceabilityEnabled ?? false;
-                               const n =
-                                 isTraceActive && matchedStockRecord?.traceabilities
-                                   ? matchedStockRecord.traceabilities.filter((t) => {
-                                       if ((t.situation || "Disponible") !== "Disponible") return false;
-                                       return doesTraceMatchTechLocation(t, matchedStockRecord.mouvements);
-                                     }).length
-                                   : selectedTechStock?.volumeDisponible || 0;
-                               setRapatrimentVolume(n > 0 ? n : 0);
-                               setRapatrimentTrackingLink("");
-                               setRapatrimentDate(
-                                 new Date().toISOString().split("T")[0],
-                               );
-                               setRapatrimentStatut("Expédié");
-                               setShowRapatriementForm(true);
-                             }}
+                             onClick={handleConfirmRapatriement}
                             style={{
                               backgroundColor: "rgb(210, 45, 11)",
                               color: "#ffffff",
@@ -13301,208 +13249,6 @@ export default function PublicPortal({
                             Tout retourner
                           </button>
                         </div>
-
-                        {/* Rapatriement sub-form */}
-                        {showRapatriementForm && (
-                          <div
-                            className="p-4 rounded-[14px] space-y-4 font-sans text-black"
-                            style={{
-                              backgroundColor: "#f5f7fa",
-                              border: "none",
-                              boxShadow: "none",
-                            }}
-                          >
-                            <div className="grid grid-cols-1 gap-4 bg-transparent">
-                              <div className="flex flex-col gap-1.5 bg-transparent">
-                                <label className="text-black font-semibold bg-transparent" style={{ fontSize: "16px" }}>
-                                  Type.
-                                </label>
-                                <input
-                                  type="text"
-                                  value="Rapatriement"
-                                  disabled
-                                  className="w-full bg-white text-black font-bold text-center"
-                                  style={{
-                                    backgroundColor: "#ffffff",
-                                    color: "#000000",
-                                    WebkitTextFillColor: "#000000",
-                                    opacity: 1,
-                                    border: "none",
-                                    borderRadius: "13px",
-                                    padding: "10px 14px",
-                                    fontSize: "16px",
-                                    height: "44px",
-                                    textAlign: "center",
-                                  }}
-                                />
-                              </div>
-
-                              <div className="flex flex-col gap-1.5 bg-transparent">
-                                <label className="text-black font-semibold bg-transparent" style={{ fontSize: "16px" }}>
-                                  Volume.
-                                </label>
-                                <select
-                                  value={rapatrimentVolume}
-                                  onChange={(e) =>
-                                    setRapatrimentVolume(
-                                      Number(e.target.value) || 0,
-                                    )
-                                  }
-                                  className="w-full bg-white text-black font-medium transition-all text-center"
-                                  style={{
-                                    backgroundColor: "#ffffff",
-                                    color: "#000000",
-                                    border: "none",
-                                    borderRadius: "13px",
-                                    padding: "10px 14px",
-                                    fontSize: "16px",
-                                    height: "44px",
-                                    textAlign: "center",
-                                    textAlignLast: "center",
-                                    appearance: "none",
-                                    WebkitAppearance: "none",
-                                    MozAppearance: "none",
-                                    backgroundImage: "none",
-                                  }}
-                                >
-                                  {(() => {
-                                    const isTraceActive = matchedStockRecord?.traceabilityEnabled ?? false;
-                                    const n =
-                                      isTraceActive && matchedStockRecord?.traceabilities
-                                        ? matchedStockRecord.traceabilities.filter((t) => {
-                                            if ((t.situation || "Disponible") !== "Disponible") return false;
-                                            return doesTraceMatchTechLocation(t, matchedStockRecord.mouvements);
-                                          }).length
-                                        : selectedTechStock?.volumeDisponible || 0;
-                                    if (n <= 0) {
-                                      return <option value={0}>0</option>;
-                                    }
-                                    const opts = [];
-                                    for (let i = 1; i <= n; i++) {
-                                      opts.push(
-                                        <option key={i} value={i}>
-                                          {i}
-                                        </option>
-                                      );
-                                    }
-                                    return opts;
-                                  })()}
-                                </select>
-                              </div>
-
-                              <div className="flex flex-col gap-1.5 bg-transparent">
-                                <label className="text-black font-semibold bg-transparent" style={{ fontSize: "16px" }}>
-                                  Lien transporteur.
-                                </label>
-                                <input
-                                  type="text"
-                                  value={rapatrimentTrackingLink}
-                                  onChange={(e) =>
-                                    setRapatrimentTrackingLink(e.target.value)
-                                  }
-                                  placeholder="Coller lien de suivi"
-                                  className="w-full bg-white text-black font-semibold text-center"
-                                  style={{
-                                    backgroundColor: "#ffffff",
-                                    color: "#000000",
-                                    border: "none",
-                                    borderRadius: "13px",
-                                    padding: "10px 14px",
-                                    fontSize: "16px",
-                                    height: "44px",
-                                    textAlign: "center",
-                                  }}
-                                />
-                              </div>
-
-                              <div className="flex flex-col gap-1.5 bg-transparent">
-                                <label className="text-black font-semibold bg-transparent" style={{ fontSize: "16px" }}>
-                                  Date.
-                                </label>
-                                <input
-                                  type="date"
-                                  value={rapatrimentDate}
-                                  onChange={(e) =>
-                                    setRapatrimentDate(e.target.value)
-                                  }
-                                  className="w-full bg-white text-black font-semibold text-center"
-                                  style={{
-                                    backgroundColor: "#ffffff",
-                                    color: "#000000",
-                                    border: "none",
-                                    borderRadius: "13px",
-                                    padding: "10px 14px",
-                                    fontSize: "16px",
-                                    height: "44px",
-                                    textAlign: "center",
-                                  }}
-                                />
-                              </div>
-
-                              <div className="flex flex-col gap-1.5 bg-transparent">
-                                <label className="text-black font-semibold bg-transparent" style={{ fontSize: "16px" }}>
-                                  Statut.
-                                </label>
-                                <select
-                                  value={rapatrimentStatut}
-                                  onChange={(e) =>
-                                    setRapatrimentStatut(e.target.value as any)
-                                  }
-                                  className="w-full bg-white text-black font-medium cursor-pointer text-center"
-                                  style={{
-                                    backgroundColor: "#ffffff",
-                                    color: "#000000",
-                                    border: "none",
-                                    borderRadius: "13px",
-                                    padding: "10px 14px",
-                                    fontSize: "16px",
-                                    height: "44px",
-                                    textAlign: "center",
-                                    textAlignLast: "center",
-                                    appearance: "none",
-                                    WebkitAppearance: "none",
-                                    MozAppearance: "none",
-                                    backgroundImage: "none",
-                                  }}
-                                >
-                                  <option value="Préparation">Préparation</option>
-                                  <option value="Expédié">Expédié</option>
-                                  <option value="Terminé">Terminé</option>
-                                  <option value="Annulé">Annulé</option>
-                                </select>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-3 pt-3 bg-transparent font-sans">
-                              <button
-                                type="button"
-                                onClick={() => setShowRapatriementForm(false)}
-                                className="flex-1 py-3 text-white hover:opacity-95 transition-all text-center cursor-pointer border-0"
-                                style={{
-                                  backgroundColor: "rgb(210, 45, 11)",
-                                  borderRadius: "13px",
-                                  fontSize: "18px",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                Annuler
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleConfirmRapatriement}
-                                className="flex-1 py-3 text-white hover:opacity-90 transition-opacity cursor-pointer border-0"
-                                style={{
-                                  backgroundColor: "#fe4eba",
-                                  borderRadius: "13px",
-                                  fontSize: "18px",
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                Confirmer
-                              </button>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     </div>
                   ) : null}
@@ -14023,15 +13769,14 @@ export default function PublicPortal({
                                         }
                                       }}
                                       style={{
-                                        backgroundColor: "rgb(53, 86, 236)",
+                                        backgroundColor: "rgb(46, 84, 255)",
                                         color: "#ffffff",
                                         fontSize: "18px",
                                         fontWeight: "bold",
                                         borderRadius: "12px",
                                         padding: "14px 20px",
                                         border: "none",
-                                        boxShadow:
-                                          "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset",
+                                        boxShadow: "none",
                                         cursor: "pointer",
                                         width: "100%",
                                       }}

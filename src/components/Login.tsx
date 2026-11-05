@@ -153,9 +153,7 @@ const translations = {
       "Explorez les solutions Civilprom TheLab",
       "Participez au Civilprom Business Day 2027",
       "(Re)Découvrez Civilprom, éditeur de logiciels personnalisés",
-      "(Re)Découvrez Civilprom Arts, studio graphique & UI",
       "Abonnez-vous à Civilprom sur LinkedIn",
-      "Visitez les bureaux et entrepôt de données Civilprom à Glasgow",
     ],
   },
   'English': {
@@ -260,9 +258,7 @@ const translations = {
       "Explore Civilprom TheLab solutions",
       "Join the Civilprom Business Day 2027",
       "(Re)Discover Civilprom, custom software publisher",
-      "(Re)Discover Civilprom Arts, graphic & UI studio",
       "Follow Civilprom on LinkedIn",
-      "Visit the Civilprom offices and data warehouse in Glasgow",
     ],
   },
   'Deutsch': {
@@ -367,9 +363,7 @@ const translations = {
       "Entdecken Sie die Lösungen von Civilprom TheLab",
       "Nehmen Sie am Civilprom Business Day 2027 teil",
       "Entdecken Sie Civilprom, Herausgeber individueller Software",
-      "Entdecken Sie Civilprom Arts, Grafik- & UI-Studio",
       "Folgen Sie Civilprom auf LinkedIn",
-      "Besuchen Sie die Büros und das Rechenzentrum von Civilprom in Glasgow",
     ],
   },
   'Português': {
@@ -474,9 +468,7 @@ const translations = {
       "Explore as soluções Civilprom TheLab",
       "Participe no Civilprom Business Day 2027",
       "(Re)Descubra a Civilprom, editora de software personalizado",
-      "(Re)Descubra a Civilprom Arts, estúdio gráfico & UI",
       "Siga a Civilprom no LinkedIn",
-      "Visite os escritórios e centro de dados da Civilprom em Glasgow",
     ],
   },
   'Español': {
@@ -581,9 +573,7 @@ const translations = {
       "Explore las soluciones de Civilprom TheLab",
       "Participe en el Civilprom Business Day 2027",
       "(Re)Descubra Civilprom, editor de software personalizado",
-      "(Re)Descubra Civilprom Arts, estudio gráfico y UI",
       "Suscríbase a Civilprom en LinkedIn",
-      "Visite las oficinas y el almacén de datos de Civilprom en Glasgow",
     ],
   }
 };
@@ -1227,16 +1217,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       url: 'https://civilprom.com/fromdefibeo',
     },
     {
-      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfospaint.svg',
-      url: 'https://civilprom.com/arts',
-    },
-    {
       icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfosfire.svg',
       url: 'https://www.linkedin.com/company/civilprom/',
-    },
-    {
-      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfoshouse.svg',
-      url: 'https://defibeo.com/aboutcivilprom',
     },
   ];
 
@@ -1257,7 +1239,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         setEcosystemExpanded(false);
         closeTimer = setTimeout(() => {
           // Switch to next item and roll right to reveal text
-          setEcosystemIndex((prev) => (prev + 1) % 6);
+          setEcosystemIndex((prev) => (prev + 1) % 4);
           setEcosystemExpanded(true);
           openTimer = setTimeout(() => {
             runCycle();
@@ -1314,6 +1296,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             width: 100% !important;
             height: auto !important;
             min-height: 250px !important;
+            flex-direction: column !important;
+            align-items: center !important;
           }
           #login-left-column > img {
             position: absolute !important;
@@ -1326,7 +1310,19 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             right: auto !important;
             width: 100% !important;
             padding: 16px !important;
-            padding-bottom: 96px !important;
+            padding-bottom: 8px !important;
+          }
+          #login-left-logo-container {
+            position: relative !important;
+            bottom: auto !important;
+            left: auto !important;
+            width: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            margin-top: 24px !important;
+            margin-bottom: 32px !important;
           }
           #login-right-column {
             width: 100% !important;
@@ -1699,7 +1695,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
         {/* Bottom-left Defibeo logo-icon with hover icon, 'Logiciel Defibeo' pill & non-clickable 'defibeo.com' text */}
         <div
-          className="absolute bottom-6 left-6 lg:bottom-8 lg:left-8 z-20 flex flex-col items-start gap-1.5"
+          className="absolute bottom-6 left-6 lg:bottom-8 lg:left-8 z-20 flex flex-col items-center gap-2"
           id="login-left-logo-container"
         >
           <div
@@ -1753,11 +1749,13 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             )}
           </div>
           <span
-            className="select-none pointer-events-none"
+            className="select-none pointer-events-none inline-flex items-center justify-center"
             style={{
+              background: '#cedeff',
+              borderRadius: '31px',
+              padding: '6px 12px',
               fontSize: '16px',
               color: 'rgb(49 86 255)',
-              marginLeft: '2px',
               marginTop: '3px',
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
               lineHeight: '1.2',
