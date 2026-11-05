@@ -3,13 +3,13 @@
 // with HTML5 Audio element fallback pool for instant (<5ms) sound playback.
 
 export const LOCAL_SOUND_ASSETS = {
-  SOUND1: "/sounds/soundfxwebapp1.mp3",
+  SOUND1: "/sounds/soundfxwebapp3.mp3",
   SOUND2: "/sounds/soundfxwebapp2.mp3",
   SOUND3: "/sounds/soundfxwebapp3.mp3",
 } as const;
 
 export const REMOTE_SOUND_ASSETS = {
-  SOUND1: "https://civilprom.s3.eu-north-1.amazonaws.com/soundfxwebapp1.mp3",
+  SOUND1: "https://civilprom.s3.eu-north-1.amazonaws.com/soundfxwebapp3.mp3",
   SOUND2: "https://civilprom.s3.eu-north-1.amazonaws.com/soundfxwebapp2.mp3",
   SOUND3: "https://civilprom.s3.eu-north-1.amazonaws.com/soundfxwebapp3.mp3",
 } as const;
@@ -169,7 +169,7 @@ if (typeof window !== "undefined") {
 }
 
 /**
- * Triggers Sound1 upon technician webapp open (login or reload).
+ * Triggers Sound3 (same as report form submit) upon technician webapp preloader open (login or reload).
  * Handles browser autoplay policy restrictions gracefully by attaching
  * a one-time gesture listener if autoplay is initially blocked.
  */
@@ -180,15 +180,15 @@ export const triggerPublicPortalOpenSound = (): (() => void) => {
     if (hasPlayed) return;
     try {
       const ctx = getAudioContext();
-      if (ctx && audioBuffers.SOUND1 && ctx.state === "running") {
-        playSound("SOUND1");
+      if (ctx && audioBuffers.SOUND3 && ctx.state === "running") {
+        playSound("SOUND3");
         hasPlayed = true;
         cleanup();
         return;
       }
 
       // Try HTML5 audio if Web Audio API not yet un-suspended
-      const audio = new Audio(SOUND_ASSETS.SOUND1);
+      const audio = new Audio(SOUND_ASSETS.SOUND3);
       const promise = audio.play();
       if (promise !== undefined) {
         promise

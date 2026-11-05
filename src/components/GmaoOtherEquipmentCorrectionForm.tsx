@@ -820,7 +820,6 @@ export default function GmaoOtherEquipmentCorrectionForm({
             type="submit"
             form="other-eq-core-form"
             disabled={saving}
-            onClick={() => playTechSound3()}
             style={{
               ...rowActionButton18Style,
               backgroundColor: 'rgb(46, 84, 255)',

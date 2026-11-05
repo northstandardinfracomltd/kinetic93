@@ -7133,11 +7133,6 @@ export default function GmaoCorrectionForm({
               type="submit"
               disabled={isSaving}
               form="gmao-correction-form"
-              onClick={() => {
-                if (!isMainSoftware) {
-                  playTechSound3();
-                }
-              }}
               className="w-full text-white font-medium focus:outline-none cursor-pointer text-center"
               style={{ 
                 fontSize: '18px', 

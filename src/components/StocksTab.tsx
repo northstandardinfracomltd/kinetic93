@@ -2275,38 +2275,46 @@ export default function StocksTab({
                 </div>
 
                 {/* Activité Pill Button */}
-                <button
-                  type="button"
-                  id="btn-activity-notifications-stocks"
-                  onClick={() => {
-                    setClickedPill('activity-stocks');
-                    setTimeout(() => setClickedPill((prev) => (prev === 'activity-stocks' ? null : prev)), 480);
-                    setIsNotifDrawerOpen(true);
-                  }}
-                  className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill === 'activity-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`}
-                  style={{
-                    position: 'relative',
-                    overflow: 'hidden',
-                    borderRadius: '1000px',
-                    padding: '8px 16px',
-                    fontSize: '18px',
-                    fontWeight: 100,
-                    cursor: 'pointer',
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: 'rgb(255, 217, 239)',
-                    color: 'rgb(142, 25, 92)',
-                    border: 'none',
-                    boxShadow: 'none',
-                    transition: 'all 0.15s ease',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    whiteSpace: 'nowrap',
-                  }}
-                  title={t("Activité")}
-                >
-                  <span>{t("Activité")}</span>
-                </button>
+                {(() => {
+                  const activeCount = (logisticsNotifications || []).filter(
+                    (alert) => String(alert.statut || '').trim().toLowerCase() !== 'delete'
+                  ).length;
+                  const labelText = activeCount >= 1 ? `${activeCount} ${t("activité(s)")}` : t("Activité");
+                  return (
+                    <button
+                      type="button"
+                      id="btn-activity-notifications-stocks"
+                      onClick={() => {
+                        setClickedPill('activity-stocks');
+                        setTimeout(() => setClickedPill((prev) => (prev === 'activity-stocks' ? null : prev)), 480);
+                        setIsNotifDrawerOpen(true);
+                      }}
+                      className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill === 'activity-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                      style={{
+                        position: 'relative',
+                        overflow: 'hidden',
+                        borderRadius: '1000px',
+                        padding: '8px 16px',
+                        fontSize: '18px',
+                        fontWeight: 100,
+                        cursor: 'pointer',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        backgroundColor: 'rgb(255, 217, 239)',
+                        color: 'rgb(142, 25, 92)',
+                        border: 'none',
+                        boxShadow: 'none',
+                        transition: 'all 0.15s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={labelText}
+                    >
+                      <span>{labelText}</span>
+                    </button>
+                  );
+                })()}
 
                 {/* Actualiser les données Pill Button */}
                 <button

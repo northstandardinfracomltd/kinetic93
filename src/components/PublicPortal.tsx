@@ -845,6 +845,45 @@ export default function PublicPortal({
     }
   };
 
+  // Webapp report saved full-screen overlay state (same style/behavior as preloader)
+  const [showReportSavedOverlay, setShowReportSavedOverlay] = useState<boolean>(false);
+  const [isReportSavedSlidingUp, setIsReportSavedSlidingUp] = useState<boolean>(false);
+  const reportSavedTouchStartY = useRef<number | null>(null);
+
+  const triggerReportSavedOverlay = () => {
+    setShowReportSavedOverlay(true);
+    setIsReportSavedSlidingUp(false);
+    playTechSound3();
+  };
+
+  const dismissReportSavedOverlay = () => {
+    if (isReportSavedSlidingUp) return;
+    setIsReportSavedSlidingUp(true);
+    setTimeout(() => {
+      setShowReportSavedOverlay(false);
+      setIsReportSavedSlidingUp(false);
+    }, 600);
+  };
+
+  const handleReportSavedTouchStart = (e: React.TouchEvent) => {
+    reportSavedTouchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleReportSavedTouchMove = (e: React.TouchEvent) => {
+    if (reportSavedTouchStartY.current === null) return;
+    const currentY = e.touches[0].clientY;
+    const diffY = reportSavedTouchStartY.current - currentY;
+    if (diffY > 30) {
+      dismissReportSavedOverlay();
+    }
+  };
+
+  const handleReportSavedWheel = (e: React.WheelEvent) => {
+    if (e.deltaY > 5) {
+      dismissReportSavedOverlay();
+    }
+  };
+
   // Active tab inside Technician Webapp
   type WebappTab =
     | "interventions"
@@ -1507,6 +1546,8 @@ export default function PublicPortal({
   const [isSavingDistribStock, setIsSavingDistribStock] = useState<boolean>(false);
   const [isSavingWebappTrace, setIsSavingWebappTrace] = useState<boolean>(false);
   const [isSavingInventory, setIsSavingInventory] = useState<boolean>(false);
+  const [isAlertingStock, setIsAlertingStock] = useState<boolean>(false);
+  const [isReturningStock, setIsReturningStock] = useState<boolean>(false);
   const [isSavingTechStockChanges, setIsSavingTechStockChanges] = useState<boolean>(false);
   const [stockFeedbackMsg, setStockFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -1687,16 +1728,31 @@ export default function PublicPortal({
     );
   };
 
+  const hasPositiveTraceVolume = (tr: StockTraceability): boolean => {
+    const vol =
+      tr.volume !== undefined &&
+      tr.volume !== null &&
+      String(tr.volume).trim() !== ""
+        ? Number(tr.volume)
+        : 1;
+    return !isNaN(vol) && vol >= 1;
+  };
+
   // Lookup "Sélection d'un stock distribué." : list all stocks from Spreadsheet Stocks where >= 1 traceability item is linked to the logged-in technician's location
   const techActiveStocks = useMemo(() => {
     if (!techLocationLink) return [];
     return effectiveTechStocksList.filter(
       (st) =>
-        Array.isArray(st.traceabilities) &&
-        st.traceabilities.length > 0 &&
-        st.traceabilities.some((tr) => doesTraceMatchTechLocation(tr, st.mouvements)),
+        st.id === selectedTechDistributedStockId ||
+        (Array.isArray(st.traceabilities) &&
+          st.traceabilities.length > 0 &&
+          st.traceabilities.some(
+            (tr) =>
+              doesTraceMatchTechLocation(tr, st.mouvements) &&
+              hasPositiveTraceVolume(tr),
+          )),
     );
-  }, [effectiveTechStocksList, techLocationLink, authenticatedUser, members]);
+  }, [effectiveTechStocksList, techLocationLink, authenticatedUser, members, selectedTechDistributedStockId]);
 
   const matchedStockRecord = useMemo(() => {
     if (!selectedTechDistributedStockId) return null;
@@ -1740,8 +1796,10 @@ export default function PublicPortal({
         item.locationName.toLowerCase().trim() ===
           (techLocationLink || "").toLowerCase().trim(),
     );
-    const techTraces = (matchedStockRecord.traceabilities || []).filter((tr) =>
-      doesTraceMatchTechLocation(tr, matchedStockRecord.mouvements),
+    const techTraces = (matchedStockRecord.traceabilities || []).filter(
+      (tr) =>
+        doesTraceMatchTechLocation(tr, matchedStockRecord.mouvements) &&
+        hasPositiveTraceVolume(tr),
     );
     const traceDispoVol = techTraces
       .filter((tr) => (tr.situation || "Disponible") === "Disponible")
@@ -1759,7 +1817,7 @@ export default function PublicPortal({
     const centralTraceVol = (matchedStockRecord.traceabilities || []).reduce(
       (sum, tr) => {
         const emp = String(tr.emplacement || "").trim().toLowerCase();
-        if (emp === "centrale des stocks") {
+        if (emp === "centrale des stocks" && hasPositiveTraceVolume(tr)) {
           const vol =
             tr.volume !== undefined &&
             tr.volume !== null &&
@@ -1800,8 +1858,10 @@ export default function PublicPortal({
 
   const filteredTraceabilities = useMemo(() => {
     if (!matchedStockRecord || !matchedStockRecord.traceabilities) return [];
-    return matchedStockRecord.traceabilities.filter((t) =>
-      doesTraceMatchTechLocation(t, matchedStockRecord.mouvements),
+    return matchedStockRecord.traceabilities.filter(
+      (t) =>
+        doesTraceMatchTechLocation(t, matchedStockRecord.mouvements) &&
+        hasPositiveTraceVolume(t),
     );
   }, [matchedStockRecord, techLocationLink, authenticatedUser, members]);
 
@@ -2096,38 +2156,42 @@ export default function PublicPortal({
   };
 
   const handleAlertLogistique = async () => {
-    if (!matchedStockRecord && !selectedTechStock) return;
+    if ((!matchedStockRecord && !selectedTechStock) || isAlertingStock || isReturningStock) return;
     const technician_name = authenticatedUser?.name || "Un technicien";
     const ugsCode = matchedStockRecord?.ugs || selectedTechStock?.ugs || "";
     const description = `Le technicien ${technician_name} suggère votre attention concernant la situation de ce stock.`;
 
-    setIsSavingInventory(true);
+    setIsAlertingStock(true);
     try {
       await postTechStockActivityToSheet(ugsCode, description);
-      setStockFeedbackMsg({
-        type: "success",
-        text: "Alerte enregistrée dans Spreadsheet Stocks Activité.",
-      });
     } catch (e: any) {
       console.error(e);
-      setStockFeedbackMsg({
-        type: "error",
-        text: "Erreur lors de l'envoi de l'alerte : " + (e?.message || "Erreur inconnue"),
-      });
     } finally {
-      setIsSavingInventory(false);
+      setIsAlertingStock(false);
     }
   };
 
   const handleConfirmRapatriement = async () => {
-    if (!matchedStockRecord || !selectedTechStock) return;
+    if (!matchedStockRecord || !selectedTechStock || isReturningStock || isAlertingStock) return;
+    if (matchedStockRecord.traceabilityEnabled === false) return;
+
+    const piecesAtTechLocation = (matchedStockRecord.traceabilities || []).filter(
+      (t) =>
+        doesTraceMatchTechLocation(t, matchedStockRecord.mouvements) &&
+        hasPositiveTraceVolume(t),
+    );
+    if (piecesAtTechLocation.length === 0) return;
+
+    if (
+      !window.confirm(
+        "Toutes les pièces dans votre stock pour cette référence seront marqués comme à la centrale des stocks pour l’emplacement",
+      )
+    ) {
+      return;
+    }
 
     const technician_name = authenticatedUser?.name || "Un technicien";
     const ugsCode = matchedStockRecord.ugs || selectedTechStock.ugs || "";
-
-    const piecesAtTechLocation = (matchedStockRecord.traceabilities || []).filter((t) =>
-      doesTraceMatchTechLocation(t, matchedStockRecord.mouvements),
-    );
 
     const list_num_lot_serie = piecesAtTechLocation
       .map((t) => String(t.lotOrSerial || "").trim())
@@ -2136,7 +2200,7 @@ export default function PublicPortal({
 
     const returnedIds = new Set(piecesAtTechLocation.map((t) => t.id));
     const updatedTraceabilities = (matchedStockRecord.traceabilities || []).map((t) => {
-      if (returnedIds.has(t.id) || doesTraceMatchTechLocation(t, matchedStockRecord.mouvements)) {
+      if (returnedIds.has(t.id)) {
         return {
           ...t,
           emplacement: "Centrale des stocks" as any,
@@ -2145,7 +2209,7 @@ export default function PublicPortal({
       return t;
     });
 
-    setIsSavingInventory(true);
+    setIsReturningStock(true);
     try {
       if (onUpdateDistributedStocks && distributedStocks) {
         const updatedDs = distributedStocks.filter((it) => it.id !== selectedTechStock.id);
@@ -2169,18 +2233,10 @@ export default function PublicPortal({
       await postTechStockActivityToSheet(ugsCode, description);
 
       setShowRapatriementForm(false);
-      setStockFeedbackMsg({
-        type: "success",
-        text: "Toutes les pièces ont été retournées à la Centrale des stocks.",
-      });
     } catch (err: any) {
       console.error(err);
-      setStockFeedbackMsg({
-        type: "error",
-        text: "Erreur lors du retour des pièces : " + (err?.message || "Erreur inconnue"),
-      });
     } finally {
-      setIsSavingInventory(false);
+      setIsReturningStock(false);
     }
   };
 
@@ -5963,9 +6019,7 @@ export default function PublicPortal({
       console.error("Error triggering Email 6 workflow:", err6);
     }
 
-    alert(
-      `Le rapport "${receiptTitle}" a été enregistré avec succès et rattaché avec l'historique du défibrillateur ${selectedDefibData.identifiant}. Les données du matériel central ont été mises à jour !`,
-    );
+    triggerReportSavedOverlay();
 
     // Reset lookup state
     setSelectedDefibId("");
@@ -6990,6 +7044,59 @@ export default function PublicPortal({
           </div>
         </div>
       )}
+
+      {/* REPORT SAVED FULL-SCREEN OVERLAY (SAME AS PRELOADER) */}
+      {showReportSavedOverlay && (
+        <div
+          className={`fixed inset-0 z-[999999] flex flex-col items-center justify-between py-12 text-center font-sans transition-transform duration-700 ease-in-out cursor-pointer select-none rounded-none ${
+            isReportSavedSlidingUp ? "pointer-events-none" : "pointer-events-auto"
+          }`}
+          style={{
+            background: "rgb(46, 84, 255)",
+            borderRadius: "0px",
+            borderBottomLeftRadius: "0px",
+            borderBottomRightRadius: "0px",
+            transform: isReportSavedSlidingUp ? "translateY(-100%)" : "translateY(0%)",
+            boxShadow: isReportSavedSlidingUp ? "0 10px 25px -5px rgba(0, 0, 0, 0.3)" : "none",
+            willChange: "transform",
+            touchAction: "none",
+          }}
+          id="webapp-report-saved-overlay"
+          onClick={dismissReportSavedOverlay}
+          onTouchStart={handleReportSavedTouchStart}
+          onTouchMove={handleReportSavedTouchMove}
+          onWheel={handleReportSavedWheel}
+        >
+          {/* Top spacer */}
+          <div className="h-8" />
+
+          {/* Centered Title & Subtitle */}
+          <div className="flex flex-col items-center justify-center gap-4 px-6 max-w-xl">
+            <span
+              className="text-white font-bold text-center"
+              style={{ fontSize: "30px" }}
+            >
+              Enregistré
+            </span>
+            <p
+              className="text-white font-medium text-center leading-relaxed"
+              style={{ fontSize: "18px" }}
+            >
+              Le rapport est émis avec succès, il est disponible pour modération avant communication au client et actualisation de l’infogérance.
+            </p>
+          </div>
+
+          {/* Bottom Swipe text */}
+          <div className="flex flex-col items-center justify-center gap-2 px-4">
+            <span
+              className="font-medium tracking-normal animate-text-wave"
+              style={{ fontSize: "14px", color: "#ffffff", letterSpacing: "0px" }}
+            >
+              Glissez vers le haut pour fermer.
+            </span>
+          </div>
+        </div>
+      )}
       {/* Main Responsive Portal Container (Standalone App Layout) */}
       <div
         className={`w-full max-w-[1100px] ${
@@ -7171,14 +7278,12 @@ export default function PublicPortal({
                         saveTours(updated);
                       }
 
-                      alert(
-                        `Le rapport "${submission.title}" a été enregistré avec succès (en attente de validation sur le logiciel principal) !`,
-                      );
                       setIsReportOverlayOpen(false);
                       setIsReportOverlayMinimized(false);
                       setSelectedOtherEquipmentUnique(null);
                       setReportActiveTourId("");
                       setReportActivePassageNum(null);
+                      triggerReportSavedOverlay();
                     }}
                   />
                 ) : (
@@ -7755,9 +7860,6 @@ export default function PublicPortal({
                         saveTours(updated);
                       }
 
-                      alert(
-                        `Le rapport "${submission.title}" a été enregistré avec succès (en attente de validation sur le logiciel principal) !`,
-                      );
                       setIsReportOverlayOpen(false);
                       setIsReportOverlayMinimized(false);
                       setReportToEdit(null);
@@ -7765,6 +7867,7 @@ export default function PublicPortal({
                       setSelectedDefibData(null);
                       setReportActiveTourId("");
                       setReportActivePassageNum(null);
+                      triggerReportSavedOverlay();
                     }}
                   />
                 )}
@@ -11098,8 +11201,8 @@ export default function PublicPortal({
                           <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
                             <span
                               style={{
-                                color: "#ffffff",
-                                backgroundColor: "#1D0245",
+                                color: "#000",
+                                backgroundColor: "rgb(233, 235, 239)",
                                 padding: "8px 16px",
                                 borderRadius: "9999px",
                                 fontWeight: "bold",
@@ -11474,12 +11577,6 @@ export default function PublicPortal({
                         max-width: calc(100% + 32px) !important;
                         border-radius: 0px !important;
                       }
-                      #tab-stocks-screen .tech-inventaire-tracabilite-pill {
-                        width: 100% !important;
-                        display: flex !important;
-                        justify-content: center !important;
-                        text-align: center !important;
-                      }
                     }
                   `}</style>
                   {/* Info: Emplacement (Disabled Input en premier, hors d'une div) */}
@@ -11542,32 +11639,6 @@ export default function PublicPortal({
                       );
                     })}
                   </select>
-
-                  {stockFeedbackMsg && (
-                    <div
-                      className={`p-3.5 mb-3 rounded-xl font-sans text-[15px] font-semibold flex items-center justify-between shadow-xs transition-all ${
-                        stockFeedbackMsg.type === "success"
-                          ? "bg-emerald-50 text-emerald-800 border border-emerald-300"
-                          : "bg-red-50 text-red-800 border border-red-300"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {stockFeedbackMsg.type === "success" ? (
-                          <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-                        ) : (
-                          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
-                        )}
-                        <span>{stockFeedbackMsg.text}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setStockFeedbackMsg(null)}
-                        className="text-xs font-bold underline ml-2 cursor-pointer hover:opacity-80"
-                      >
-                        Fermer
-                      </button>
-                    </div>
-                  )}
 
                   {/* Button: Nouveau stock distribué */}
                   {!selectedTechStock && (
@@ -13206,49 +13277,66 @@ export default function PublicPortal({
                         </div>
                       )}
 
-                      {/* Section 3: Actions (Two side-by-side black styled buttons) */}
+                      {/* Section 3: Actions (Two full-width stacked buttons) */}
                       <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <button
-                            type="button"
-                            onClick={handleAlertLogistique}
-                            style={{
-                              backgroundColor: "#0f172a",
-                              color: "#ffffff",
-                              borderRadius: "13px",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                              padding: "12px 14px",
-                              border: "none",
-                              cursor: "pointer",
-                              textAlign: "center",
-                              width: "100%",
-                            }}
-                            className="font-sans hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center"
-                          >
-                            Alerter
-                          </button>
+                        {(() => {
+                          const canToutRetourner = Boolean(
+                            matchedStockRecord &&
+                              matchedStockRecord.traceabilityEnabled !== false &&
+                              filteredTraceabilities.length > 0,
+                          );
+                          const isAlerterDisabled = isAlertingStock || isReturningStock;
+                          const isRetournerDisabled =
+                            !canToutRetourner || isReturningStock || isAlertingStock;
 
-                           <button
-                             type="button"
-                             onClick={handleConfirmRapatriement}
-                            style={{
-                              backgroundColor: "rgb(210, 45, 11)",
-                              color: "#ffffff",
-                              borderRadius: "13px",
-                              fontSize: "18px",
-                              fontWeight: "bold",
-                              padding: "12px 14px",
-                              border: "none",
-                              cursor: "pointer",
-                              textAlign: "center",
-                              width: "100%",
-                            }}
-                            className="font-sans hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center"
-                          >
-                            Tout retourner
-                          </button>
-                        </div>
+                          return (
+                            <div className="flex flex-col gap-3 w-full">
+                              <button
+                                type="button"
+                                disabled={isAlerterDisabled}
+                                onClick={handleAlertLogistique}
+                                style={{
+                                  backgroundColor: "#0f172a",
+                                  color: "#ffffff",
+                                  borderRadius: "13px",
+                                  fontSize: "18px",
+                                  fontWeight: "bold",
+                                  padding: "12px 14px",
+                                  border: "none",
+                                  cursor: isAlerterDisabled ? "not-allowed" : "pointer",
+                                  opacity: isAlerterDisabled ? 0.5 : 1,
+                                  textAlign: "center",
+                                  width: "100%",
+                                }}
+                                className="w-full font-sans hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center"
+                              >
+                                Alerter
+                              </button>
+
+                              <button
+                                type="button"
+                                disabled={isRetournerDisabled}
+                                onClick={handleConfirmRapatriement}
+                                style={{
+                                  backgroundColor: "rgb(210, 45, 11)",
+                                  color: "#ffffff",
+                                  borderRadius: "13px",
+                                  fontSize: "18px",
+                                  fontWeight: "bold",
+                                  padding: "12px 14px",
+                                  border: "none",
+                                  cursor: isRetournerDisabled ? "not-allowed" : "pointer",
+                                  opacity: isRetournerDisabled ? 0.45 : 1,
+                                  textAlign: "center",
+                                  width: "100%",
+                                }}
+                                className="w-full font-sans hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center"
+                              >
+                                Tout retourner
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   ) : null}
@@ -13796,8 +13884,8 @@ export default function PublicPortal({
                     {/* Digital Clock Section */}
                     <div
                       style={{
-                        backgroundColor: "#0f172a",
-                        color: "#fff",
+                        backgroundColor: "rgb(233, 235, 239)",
+                        color: "#000",
                         borderRadius: "0px 0px 16px 16px",
                       }}
                       className="p-5 text-center space-y-2"
@@ -13805,7 +13893,7 @@ export default function PublicPortal({
                       <span
                         style={{
                           fontSize: "18px",
-                          color: "#fff",
+                          color: "#000",
                           fontFamily: "var(--font-sans), sans-serif",
                         }}
                         className="font-normal block"
@@ -13815,7 +13903,7 @@ export default function PublicPortal({
                       <div
                         style={{
                           fontSize: "18px",
-                          color: "#fff",
+                          color: "#000",
                           fontFamily: "var(--font-sans), sans-serif",
                         }}
                         className="font-bold"
