@@ -2085,6 +2085,48 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   </button>
                 </div>
 
+                {/* Legal terms & privacy notice */}
+                <div
+                  className="text-left leading-snug"
+                  style={{
+                    fontSize: '12px',
+                    color: '#A4B5FF',
+                    textAlign: 'left',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                  }}
+                >
+                  En continuant, vous acceptez les{' '}
+                  <a
+                    href="https://defibeo.com/documents/termsuse"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                    style={{ color: '#fff', fontSize: '12px' }}
+                  >
+                    Conditions générales d’utilisation
+                  </a>{' '}
+                  de Defibeo. Consultez notre{' '}
+                  <a
+                    href="https://defibeo.com/documents/privacypolicy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                    style={{ color: '#fff', fontSize: '12px' }}
+                  >
+                    Politique de confidentialité
+                  </a>{' '}
+                  et de{' '}
+                  <a
+                    href="https://defibeo.com/documents/dataprotection"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                    style={{ color: '#fff', fontSize: '12px' }}
+                  >
+                    Protection des données.
+                  </a>
+                </div>
+
                 {/* Radio-check 'Maintenir la session' */}
                 <div className="pt-2 flex items-center">
                   <button

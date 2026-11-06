@@ -324,7 +324,15 @@ export default function App() {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
-      return path.includes('/satisfaction') || hash.includes('/satisfaction') || hash.includes('#satisfaction');
+      const params = new URLSearchParams(window.location.search);
+      const pageParam = (params.get('page') || params.get('view') || '').toLowerCase();
+      return (
+        path.includes('/satisfaction') ||
+        hash.includes('/satisfaction') ||
+        hash.includes('#satisfaction') ||
+        pageParam === 'satisfaction' ||
+        params.has('satisfaction')
+      );
     }
     return false;
   });
@@ -3542,24 +3550,30 @@ export default function App() {
           };
         })
       : rep.drapeaux || [];
-    const baseAlerts =
-      Array.isArray(gai.postInterventionAlerts) && gai.postInterventionAlerts.length > 0
-        ? gai.postInterventionAlerts
-        : Array.isArray(rep.postInterventionAlerts)
-        ? rep.postInterventionAlerts
-        : [];
-    const tempRep = {
-      ...rep,
-      commentaire: gai.commentaireInterne !== undefined ? gai.commentaireInterne : (gai.commentaire ?? rep.commentaire ?? ''),
-      postInterventionAlerts: baseAlerts,
-    };
-    const alerts = mergeReportPostInterventionAlerts(tempRep, [], [], currentVars, []);
+    const sheetAlerts = Array.isArray(gai.postInterventionAlerts)
+      ? gai.postInterventionAlerts
+          .map((a: any) => ({
+            traite: Boolean(a?.traite),
+            info: String(a?.info ?? '').trim(),
+          }))
+          .filter((a: any) => a.info !== '' || a.traite)
+          .slice(0, 15)
+      : [];
+    const sheetComment = String(
+      gai._rawSheetRow?.['Commentaire interne.'] ??
+        gai._rawSheetRow?.['Commentaire interne'] ??
+        gai.commentaireInterne ??
+        gai.commentaire ??
+        ''
+    );
     const nextRep: any = {
       ...rep,
       drapeaux: resolvedFlags,
-      commentaire: tempRep.commentaire,
+      commentaire: sheetComment,
+      _hasGestionApresRecord: true,
+      _alertsManuallyEdited: true,
       disableClientEmail: gai.disableClientEmail !== undefined ? Boolean(gai.disableClientEmail) : Boolean(rep.disableClientEmail),
-      ...buildFlatAlertFields(alerts),
+      ...buildFlatAlertFields(sheetAlerts),
     };
     return nextRep;
   }, []);
@@ -3569,17 +3583,19 @@ export default function App() {
     const ref = String(rep.interventionReference || rep.reportNumber || rep.id || '').trim();
     if (!ref) return;
     const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
-    const alerts = rep._alertsManuallyEdited
+    const alerts = (rep._alertsManuallyEdited || rep._hasGestionApresRecord)
       ? (Array.isArray(rep.postInterventionAlerts) ? rep.postInterventionAlerts.slice(0, 15) : [])
       : mergeReportPostInterventionAlerts(rep, [], [], variablesRef.current || [], []);
-    const mergedComment = mergeReportModerationComment(
-      rep.commentaire,
-      rep,
-      [],
-      [],
-      variablesRef.current || [],
-      []
-    );
+    const mergedComment = (rep._commentManuallyEdited || rep._hasGestionApresRecord)
+      ? String(rep.commentaire ?? '')
+      : mergeReportModerationComment(
+          rep.commentaire,
+          rep,
+          [],
+          [],
+          variablesRef.current || [],
+          []
+        );
     const payloadRecord: any = {
       id: ref,
       interventionReference: ref,
@@ -7335,14 +7351,30 @@ export default function App() {
                       : sheetTitle && sheetTitle !== 'RAPPORT TECHNIQUE DÉFIBRILLATEUR' && !/^rapport d['’]intervention gmao$/i.test(sheetTitle)
                       ? sheetTitle
                       : 'RAPPORT D’INTERVENTION';
+                  const mergedTechSig =
+                    matchedSheetReport.techSignature ||
+                    report.techSignature ||
+                    matchedSheetReport.defibSnapshot?.techSignature ||
+                    report.defibSnapshot?.techSignature ||
+                    '';
+                  const mergedClientPin =
+                    matchedSheetReport.clientPinCode ||
+                    report.clientPinCode ||
+                    matchedSheetReport.defibSnapshot?.clientPinCode ||
+                    report.defibSnapshot?.clientPinCode ||
+                    '';
                   report = {
                     ...report,
                     ...matchedSheetReport,
+                    techSignature: mergedTechSig,
+                    clientPinCode: mergedClientPin,
                     title: resolvedTitle,
                     reportTitle: resolvedTitle,
                     defibSnapshot: {
                       ...(report.defibSnapshot || {}),
                       ...(matchedSheetReport.defibSnapshot || {}),
+                      techSignature: mergedTechSig,
+                      clientPinCode: mergedClientPin,
                     },
                   };
                 }
@@ -7833,30 +7865,99 @@ export default function App() {
 
                       <!-- Signature Technicien -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        ${report.techSignature ? `
-                          <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
-                          <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
-                            <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
-                          </div>
-                        ` : ''}
+                        ${(() => {
+                          const buildSvgSig = (label: string) => {
+                            const safe = String(label || 'Signé').replace(/[<>&"']/g, '').trim() || 'Signé';
+                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="26" font-style="italic" fill="#0f172a">${safe}</text><path d="M 10 52 Q 95 44 195 54" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                          };
+                          const tName = String(report.techName || report.technicien || snapshot.techName || '').trim();
+                          const matchedM = (members || []).find((m: any) =>
+                            tName &&
+                            ((m.name && m.name.trim().toLowerCase() === tName.toLowerCase()) ||
+                             (m.email && m.email.trim().toLowerCase() === tName.toLowerCase()))
+                          ) || (members || []).find((m: any) => m.signature && String(m.signature).startsWith('data:image'));
+                          let tSig =
+                            report.techSignature ||
+                            snapshot.techSignature ||
+                            matchedM?.signature ||
+                            '';
+                          if (!tSig && typeof window !== 'undefined') {
+                            try {
+                              for (let i = 0; i < localStorage.length; i++) {
+                                const k = localStorage.key(i) || '';
+                                if (k.includes('_tech_signature_')) {
+                                  const v = localStorage.getItem(k) || '';
+                                  if (v.startsWith('data:image')) {
+                                    tSig = v;
+                                    break;
+                                  }
+                                }
+                              }
+                            } catch (_) {}
+                          }
+                          if (!tSig && tName) {
+                            tSig = buildSvgSig(tName);
+                          }
+                          if (!tSig) return '';
+                          return `
+                            <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
+                            <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
+                              <img src="${tSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
+                            </div>
+                          `;
+                        })()}
                       </div>
 
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
-                          <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                          ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                            <div style="font-size: 11px; margin-bottom: 2px;">
-                              <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
-                              <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
-                            </div>
-                          ` : ''}
-                          ${clientFound && clientFound.clientSignatureImage ? `
-                            <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; margin-top: 4px;">
-                              <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                            </div>
-                          ` : ''}
-                        ` : ''}
+                        ${(() => {
+                          const buildSvgSig = (label: string) => {
+                            const safe = String(label || 'Client').replace(/[<>&"']/g, '').trim() || 'Client';
+                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="25" font-style="italic" fill="#0f172a">${safe}</text><path d="M 12 52 Q 100 45 190 53" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                          };
+                          const rawClientSig = String(report.clientPinCode || snapshot.clientPinCode || '').trim();
+                          const isSigImg = rawClientSig.startsWith('data:image') || rawClientSig.startsWith('http');
+                          const anyClientWithSig = (clients || []).find((c: any) => c.clientSignatureImage || c.signatureClientContratImage);
+                          let sigImgUrl =
+                            (isSigImg ? rawClientSig : '') ||
+                            (clientFound && (clientFound.clientSignatureImage || (clientFound as any).signatureClientContratImage || (clientFound as any).signatureClient)) ||
+                            report.clientSignatureImage ||
+                            report.signatureClientContratImage ||
+                            snapshot.clientSignatureImage ||
+                            snapshot.signatureClientContratImage ||
+                            (anyClientWithSig && (anyClientWithSig.clientSignatureImage || anyClientWithSig.signatureClientContratImage)) ||
+                            '';
+                          const pinCodeVal = !isSigImg ? rawClientSig : '';
+                          const fallbackSignerName =
+                            (clientFound as any)?.signeParContrat ||
+                            clientFound?.nomPrenomSite ||
+                            snapshot.nomPrenomSite ||
+                            report.nomPrenomSite ||
+                            clientFound?.denomination ||
+                            report.clientName ||
+                            report.entreprise ||
+                            '';
+                          if (!sigImgUrl && (pinCodeVal || fallbackSignerName)) {
+                            sigImgUrl = buildSvgSig(fallbackSignerName || 'Client');
+                          }
+                          if (!sigImgUrl && !pinCodeVal) return '';
+                          return `
+                            <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
+                            ${pinCodeVal ? `
+                              <div style="font-size: 11px; margin-bottom: 2px;">
+                                <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
+                                <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${pinCodeVal}</span>
+                              </div>
+                            ` : ''}
+                            ${sigImgUrl ? `
+                              <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; margin-top: 4px;">
+                                <img src="${sigImgUrl}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                              </div>
+                            ` : ''}
+                          `;
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -8489,21 +8590,83 @@ export default function App() {
 
                     <!-- Signature Technicien -->
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                      ${(report.techSignature || snapshot.techSignature) ? `
-                        <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
-                        <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
-                          <img src="${report.techSignature || snapshot.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
-                        </div>
-                      ` : ''}
+                      ${(() => {
+                        const buildSvgSig = (label: string) => {
+                          const safe = String(label || 'Signé').replace(/[<>&"']/g, '').trim() || 'Signé';
+                          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="26" font-style="italic" fill="#0f172a">${safe}</text><path d="M 10 52 Q 95 44 195 54" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                          return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                        };
+                        const tName = String(report.techName || report.technicien || snapshot.techName || '').trim();
+                        const matchedM = (members || []).find((m: any) =>
+                          tName &&
+                          ((m.name && m.name.trim().toLowerCase() === tName.toLowerCase()) ||
+                           (m.email && m.email.trim().toLowerCase() === tName.toLowerCase()))
+                        ) || (members || []).find((m: any) => m.signature && String(m.signature).startsWith('data:image'));
+                        let tSig =
+                          report.techSignature ||
+                          snapshot.techSignature ||
+                          matchedM?.signature ||
+                          '';
+                        if (!tSig && typeof window !== 'undefined') {
+                          try {
+                            for (let i = 0; i < localStorage.length; i++) {
+                              const k = localStorage.key(i) || '';
+                              if (k.includes('_tech_signature_')) {
+                                const v = localStorage.getItem(k) || '';
+                                if (v.startsWith('data:image')) {
+                                  tSig = v;
+                                  break;
+                                }
+                              }
+                            }
+                          } catch (_) {}
+                        }
+                        if (!tSig && tName) {
+                          tSig = buildSvgSig(tName);
+                        }
+                        if (!tSig) return '';
+                        return `
+                          <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
+                          <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
+                            <img src="${tSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
+                          </div>
+                        `;
+                      })()}
                     </div>
 
                     <!-- Signature Client -->
                     <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
                       ${(() => {
+                        const buildSvgSig = (label: string) => {
+                          const safe = String(label || 'Client').replace(/[<>&"']/g, '').trim() || 'Client';
+                          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="25" font-style="italic" fill="#0f172a">${safe}</text><path d="M 12 52 Q 100 45 190 53" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                          return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                        };
                         const rawClientSig = String(report.clientPinCode || snapshot.clientPinCode || '').trim();
                         const isSigImg = rawClientSig.startsWith('data:image') || rawClientSig.startsWith('http');
-                        const sigImgUrl = isSigImg ? rawClientSig : (clientFound?.clientSignatureImage || '');
+                        const anyClientWithSig = (clients || []).find((c: any) => c.clientSignatureImage || c.signatureClientContratImage);
+                        let sigImgUrl =
+                          (isSigImg ? rawClientSig : '') ||
+                          (clientFound && (clientFound.clientSignatureImage || (clientFound as any).signatureClientContratImage || (clientFound as any).signatureClient)) ||
+                          report.clientSignatureImage ||
+                          report.signatureClientContratImage ||
+                          snapshot.clientSignatureImage ||
+                          snapshot.signatureClientContratImage ||
+                          (anyClientWithSig && (anyClientWithSig.clientSignatureImage || anyClientWithSig.signatureClientContratImage)) ||
+                          '';
                         const pinCodeVal = !isSigImg ? rawClientSig : '';
+                        const fallbackSignerName =
+                          (clientFound as any)?.signeParContrat ||
+                          clientFound?.nomPrenomSite ||
+                          snapshot.nomPrenomSite ||
+                          report.nomPrenomSite ||
+                          clientFound?.denomination ||
+                          report.clientName ||
+                          report.entreprise ||
+                          '';
+                        if (!sigImgUrl && (pinCodeVal || fallbackSignerName)) {
+                          sigImgUrl = buildSvgSig(fallbackSignerName || 'Client');
+                        }
                         if (!sigImgUrl && !pinCodeVal) return '';
                         return `
                           <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
@@ -12070,7 +12233,7 @@ export default function App() {
   };
 
   // Cross-tab single instance guard (Logiciel principal ou Webapp)
-  if (isDuplicateTab && !(typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'gmao')) {
+  if (isDuplicateTab && !isSatisfactionFormPage && !isMissionValidationPage && !(typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'gmao')) {
     return (
       <div 
         className="fixed inset-0 z-[999999] flex flex-col items-center justify-center text-center font-sans p-6 select-none" 
@@ -20476,7 +20639,14 @@ export default function App() {
                             );
                             const isGererDisabled = !isGmaoController || !hasGestionApresSpreadsheet;
                             const isCorrigerDisabled = isUpcoming || !isGmaoController;
-                            const isValiderDisabled = isUpcoming || !isGmaoController;
+                            const isClientEmailDisabled =
+                              rep.disableClientEmail === true ||
+                              String(rep.disableClientEmail ?? '').trim().toLowerCase() === 'oui' ||
+                              String(rep.disableClientEmail ?? '').trim().toLowerCase() === 'true';
+                            const isValiderDisabled =
+                              isUpcoming ||
+                              !isGmaoController ||
+                              ((isValidated || gmaoFilter === 'valides') && isClientEmailDisabled);
                             const isTelechargerDisabled = isUpcoming;
 
                             const getBtnStyle = (isDisabled: boolean) => ({
@@ -21068,7 +21238,12 @@ export default function App() {
                                     <button
                                       type="button"
                                       disabled={isGererDisabled}
-                                      onClick={() => !isGererDisabled && setManagingReportId(rep.id)}
+                                      onClick={() => {
+                                        if (isGererDisabled) return;
+                                        setManagingReportId(rep.id);
+                                        refreshGenericSheetCompartment('gestionApresIntervention', true);
+                                        refreshGenericSheetCompartment('rapportsPdf', true);
+                                      }}
                                       style={getBtnStyle(isGererDisabled)}
                                       className={isGererDisabled ? 'cursor-not-allowed opacity-35' : 'cursor-pointer'}
                                     >
@@ -21240,12 +21415,6 @@ export default function App() {
                                               setDropboxError(cleanMsg);
                                             }
                                           })();
-                                        }
-
-                                        if (rep.disableClientEmail) {
-                                          alert("Le rapport d'intervention a été validé avec succès ! L'état de l'équipement a été mis à jour.");
-                                        } else {
-                                          alert("Le rapport d'intervention a été validé avec succès ! L'état de l'équipement a été mis à jour et un e-mail avec le rapport a été envoyé au client.");
                                         }
                                       }}
                                       style={getBlueBtnStyle(isValiderDisabled)}
@@ -21561,7 +21730,7 @@ export default function App() {
                             </div>
                           )}
 
-                          {/* 3. Field: Commentaire du technicien. (Disabled textarea showing technician comment from Missions des Tournées / section 11) */}
+                          {/* 3. Field: Commentaire du technicien. (Disabled textarea showing technician comment from Spreadsheet Rapports PDF -> Section 12 - Commentaire interne) */}
                           <div className="space-y-2 pt-1">
                             <label className="block text-[18px] font-medium text-[#000000]" style={{ color: '#000000', fontSize: '18px' }}>
                               Commentaire du technicien.
@@ -21570,35 +21739,37 @@ export default function App() {
                               disabled
                               rows={3}
                               value={(() => {
-                                let missionTechComment = '';
-                                for (const t of fsmTours || []) {
-                                  for (const m of t.missions || []) {
-                                    if (
-                                      (managingReport.missionId && m.id === managingReport.missionId) ||
-                                      (managingReport.interventionReference && m.interventionReference === managingReport.interventionReference)
-                                    ) {
-                                      if (m.commentaireInterne) {
-                                        missionTechComment = m.commentaireInterne;
-                                        break;
-                                      }
-                                    }
-                                  }
-                                  if (missionTechComment) break;
-                                }
-                                return (
-                                  missionTechComment ||
-                                  managingReport.defibSnapshot?.commentaireInterne ||
-                                  managingReport.internalComment ||
-                                  managingReport.commentaireInterne ||
-                                  ''
-                                );
+                                const stripModerationLines = (val: any): string => {
+                                  if (typeof val !== 'string' || !val.trim()) return '';
+                                  return val
+                                    .split(/\r?\n/)
+                                    .filter((line) => {
+                                      const t = line.trim();
+                                      if (!t) return true;
+                                      if (t.startsWith('— ')) return false;
+                                      if (t.startsWith('! ')) return false;
+                                      return true;
+                                    })
+                                    .join('\n')
+                                    .trim();
+                                };
+                                const rawFromSheet =
+                                  managingReport._rawSheetRow?.['Section 12 - Commentaire interne'] ??
+                                  managingReport._rawSheetRow?.['Section 11 - Commentaire interne.'] ??
+                                  managingReport._rawSheetRow?.['Section 11 - Commentaire interne'] ??
+                                  managingReport.internalComment ??
+                                  managingReport.commentaireInterne ??
+                                  managingReport.defibSnapshot?.commentaireInterne ??
+                                  managingReport.defibSnapshot?.internalComment ??
+                                  '';
+                                return stripModerationLines(String(rawFromSheet ?? ''));
                               })()}
                               style={{ borderColor: '#DCE1EA', fontSize: '18px', color: '#000000' }}
                               className="w-full p-3 text-[18px] text-[#000] border border-[#DCE1EA] placeholder:text-[#BECADB] rounded-lg bg-slate-100 resize-y min-h-[90px] focus:outline-none cursor-not-allowed opacity-90"
                             />
                           </div>
 
-                          {/* 4. Field: Commentaire interne */}
+                          {/* 4. Field: Commentaire interne (from Spreadsheet Gestion Après Intervention -> Commentaire interne.) */}
                           <div className="space-y-1.5 pt-1">
                             <label className="block text-[18px] font-medium text-[#000000]" style={{ color: '#000000', fontSize: '18px' }}>
                               Commentaire interne.
@@ -21610,20 +21781,41 @@ export default function App() {
                                   el.style.height = `${Math.max(el.scrollHeight, 100)}px`;
                                 }
                               }}
-                              value={
-                                managingReport.commentaire !== undefined && managingReport.commentaire !== null && managingReport.commentaire !== ''
-                                  ? mergeReportModerationComment(managingReport.commentaire, managingReport, defibrillateurs, stocks, variables, fsmTours)
-                                  : (!managingReport.isUpcoming
-                                      ? generateReportModerationComment(managingReport, defibrillateurs, stocks, variables, fsmTours)
-                                      : mergeReportModerationComment('', managingReport, defibrillateurs, stocks, variables, fsmTours))
-                              }
+                              value={(() => {
+                                const refKey = String(
+                                  managingReport.interventionReference || managingReport.reportNumber || managingReport.id || ''
+                                ).trim().toLowerCase();
+                                const gai = refKey ? gestionApresMapRef.current.get(refKey) : undefined;
+                                if (managingReport._commentManuallyEdited || managingReport._hasGestionApresRecord || gai) {
+                                  return String(
+                                    managingReport.commentaire ??
+                                      gai?.commentaireInterne ??
+                                      gai?.commentaire ??
+                                      ''
+                                  );
+                                }
+                                if (managingReport.commentaire !== undefined && managingReport.commentaire !== null && managingReport.commentaire !== '') {
+                                  return mergeReportModerationComment(managingReport.commentaire, managingReport, defibrillateurs, stocks, variables, fsmTours);
+                                }
+                                return !managingReport.isUpcoming
+                                  ? generateReportModerationComment(managingReport, defibrillateurs, stocks, variables, fsmTours)
+                                  : mergeReportModerationComment('', managingReport, defibrillateurs, stocks, variables, fsmTours);
+                              })()}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                const updatedRep = { ...managingReport, commentaire: val };
+                                const updatedRep = {
+                                  ...managingReport,
+                                  commentaire: val,
+                                  _commentManuallyEdited: true,
+                                  _hasGestionApresRecord: true,
+                                };
                                 const updatedReports = generatedReports.map(r => 
                                   r.id === managingReport.id ? updatedRep : r
                                 );
-                                saveReports(updatedReports);
+                                setGeneratedReports(updatedReports);
+                                try {
+                                  localStorage.setItem(`defib_${tenantId}_generated_reports`, JSON.stringify(updatedReports));
+                                } catch (_) {}
                                 e.target.style.height = 'auto';
                                 e.target.style.height = `${Math.max(e.target.scrollHeight, 100)}px`;
                               }}
@@ -21633,10 +21825,23 @@ export default function App() {
                             />
                           </div>
 
-                          {/* 4b. Sub-div: Alertes et potentielles erreurs. (up to 15 sub-fields) */}
+                          {/* 4b. Sub-div: Alertes et potentielles erreurs. (up to 15 sub-fields from Spreadsheet Gestion Après Intervention) */}
                           {(() => {
-                            const rawAlerts: { traite: boolean; info: string }[] = managingReport._alertsManuallyEdited
-                              ? (Array.isArray(managingReport.postInterventionAlerts) ? managingReport.postInterventionAlerts : [])
+                            const refKey = String(
+                              managingReport.interventionReference || managingReport.reportNumber || managingReport.id || ''
+                            ).trim().toLowerCase();
+                            const gai = refKey ? gestionApresMapRef.current.get(refKey) : undefined;
+                            const hasSheetOrEditedAlerts = Boolean(
+                              managingReport._alertsManuallyEdited ||
+                              managingReport._hasGestionApresRecord ||
+                              gai
+                            );
+                            const rawAlerts: { traite: boolean; info: string }[] = hasSheetOrEditedAlerts
+                              ? (Array.isArray(managingReport.postInterventionAlerts)
+                                  ? managingReport.postInterventionAlerts
+                                  : Array.isArray(gai?.postInterventionAlerts)
+                                  ? gai.postInterventionAlerts
+                                  : [])
                               : mergeReportPostInterventionAlerts(
                                   managingReport,
                                   defibrillateurs,
@@ -21644,12 +21849,7 @@ export default function App() {
                                   variables,
                                   fsmTours
                                 );
-                            const displayAlerts =
-                              rawAlerts.length > 0
-                                ? rawAlerts.slice(0, 15)
-                                : managingReport._alertsManuallyEdited
-                                ? []
-                                : [{ traite: false, info: '' }];
+                            const displayAlerts = rawAlerts.slice(0, 15);
 
                             const updateAlerts = (nextAlerts: { traite: boolean; info: string }[], syncImmediately = false) => {
                               const capped = nextAlerts.slice(0, 15);
@@ -21657,12 +21857,16 @@ export default function App() {
                               const updatedRep = {
                                 ...managingReport,
                                 _alertsManuallyEdited: true,
+                                _hasGestionApresRecord: true,
                                 ...flatFields,
                               };
                               const updatedReports = generatedReports.map(r =>
                                 r.id === managingReport.id ? updatedRep : r
                               );
-                              saveReports(updatedReports);
+                              setGeneratedReports(updatedReports);
+                              try {
+                                localStorage.setItem(`defib_${tenantId}_generated_reports`, JSON.stringify(updatedReports));
+                              } catch (_) {}
                               if (syncImmediately) {
                                 syncSingleGestionApresIntervention(updatedRep);
                               }
@@ -21853,14 +22057,33 @@ export default function App() {
                             type="button"
                             onClick={() => {
                               if (managingReport) {
-                                const finalComment =
-                                  managingReport.commentaire !== undefined && managingReport.commentaire !== null && managingReport.commentaire !== ''
-                                    ? mergeReportModerationComment(managingReport.commentaire, managingReport, defibrillateurs, stocks, variables, fsmTours)
-                                    : (!managingReport.isUpcoming
-                                        ? generateReportModerationComment(managingReport, defibrillateurs, stocks, variables, fsmTours)
-                                        : mergeReportModerationComment('', managingReport, defibrillateurs, stocks, variables, fsmTours));
-                                const finalAlerts = managingReport._alertsManuallyEdited
-                                  ? (Array.isArray(managingReport.postInterventionAlerts) ? managingReport.postInterventionAlerts : [])
+                                const refKey = String(
+                                  managingReport.interventionReference || managingReport.reportNumber || managingReport.id || ''
+                                ).trim().toLowerCase();
+                                const gai = refKey ? gestionApresMapRef.current.get(refKey) : undefined;
+                                const hasSheetOrEdited = Boolean(
+                                  managingReport._commentManuallyEdited ||
+                                  managingReport._hasGestionApresRecord ||
+                                  gai
+                                );
+                                const finalComment = hasSheetOrEdited
+                                  ? String(managingReport.commentaire ?? gai?.commentaireInterne ?? gai?.commentaire ?? '')
+                                  : (managingReport.commentaire !== undefined && managingReport.commentaire !== null && managingReport.commentaire !== ''
+                                      ? mergeReportModerationComment(managingReport.commentaire, managingReport, defibrillateurs, stocks, variables, fsmTours)
+                                      : (!managingReport.isUpcoming
+                                          ? generateReportModerationComment(managingReport, defibrillateurs, stocks, variables, fsmTours)
+                                          : mergeReportModerationComment('', managingReport, defibrillateurs, stocks, variables, fsmTours)));
+                                const hasAlertsEdited = Boolean(
+                                  managingReport._alertsManuallyEdited ||
+                                  managingReport._hasGestionApresRecord ||
+                                  gai
+                                );
+                                const finalAlerts = hasAlertsEdited
+                                  ? (Array.isArray(managingReport.postInterventionAlerts)
+                                      ? managingReport.postInterventionAlerts
+                                      : Array.isArray(gai?.postInterventionAlerts)
+                                      ? gai.postInterventionAlerts
+                                      : [])
                                   : mergeReportPostInterventionAlerts(
                                       managingReport,
                                       defibrillateurs,
@@ -21871,27 +22094,22 @@ export default function App() {
                                 const enrichedManagingRep = {
                                   ...managingReport,
                                   commentaire: finalComment,
+                                  _commentManuallyEdited: true,
+                                  _alertsManuallyEdited: true,
+                                  _hasGestionApresRecord: true,
                                   ...buildFlatAlertFields(finalAlerts),
                                 };
                                 const nextReports = generatedReports.map(r =>
                                   r.id === managingReport.id ? enrichedManagingRep : r
                                 );
                                 syncSingleGestionApresIntervention(enrichedManagingRep);
-                                if (!enrichedManagingRep.isUpcoming && enrichedManagingRep.status !== 'À venir') {
-                                  const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
-                                  fetch('/api/sheets/upsert', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      tenantId: activeTid,
-                                      type: 'rapportsPdf',
-                                      records: [enrichedManagingRep],
-                                    }),
-                                  }).catch(() => {});
+                                setGeneratedReports(nextReports);
+                                try {
+                                  localStorage.setItem(`defib_${tenantId}_generated_reports`, JSON.stringify(nextReports));
+                                } catch (_) {}
+                                if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
+                                  saveCollectionToFirestore('generatedReports', nextReports, tenantId);
                                 }
-                                saveReports(nextReports);
-                              } else {
-                                saveReports(generatedReports);
                               }
                               setManagingReportId(null);
                             }}
@@ -21960,14 +22178,23 @@ export default function App() {
                           <GmaoCorrectionForm
                             report={repToEdit}
                             companyInfo={companyInfo}
+                            members={members}
                             isWebapp={false}
                             isMainSoftware={true}
                             hideReduceAndTimer={true}
                             forceSmartphoneLayout={true}
                             onSave={(updatedReport) => {
                               const combinedRep = { ...repToEdit, ...updatedReport };
+                              const cleanTechComment = String(
+                                updatedReport.commentaireInterne ??
+                                  updatedReport.internalComment ??
+                                  updatedReport.defibSnapshot?.commentaireInterne ??
+                                  repToEdit?.internalComment ??
+                                  repToEdit?.commentaireInterne ??
+                                  ''
+                              );
                               const mergedComment = mergeReportModerationComment(
-                                updatedReport.commentaire ?? repToEdit?.commentaire,
+                                repToEdit?.commentaire,
                                 combinedRep,
                                 defibrillateurs,
                                 stocks,
@@ -21983,6 +22210,13 @@ export default function App() {
                               );
                               const mergedReport = {
                                 ...combinedRep,
+                                internalComment: cleanTechComment,
+                                commentaireInterne: cleanTechComment,
+                                _rawSheetRow: {
+                                  ...(combinedRep._rawSheetRow || {}),
+                                  'Section 12 - Commentaire interne': cleanTechComment,
+                                  'Section 11 - Commentaire interne.': cleanTechComment,
+                                },
                                 commentaire: mergedComment,
                                 ...buildFlatAlertFields(mergedAlerts),
                                 _sheetRowNumber: updatedReport._sheetRowNumber ?? (repToEdit as any)?._sheetRowNumber,

@@ -1952,10 +1952,11 @@ export default function GmaoOtherEquipmentCorrectionForm({
                 <input
                   type="text"
                   id="end-timestamp"
+                  disabled
                   value={endTimeStamp}
                   onChange={(e) => setEndTimeStamp(e.target.value)}
                   placeholder="Signez pour appliquer l’horodatage."
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                  className="w-full px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 cursor-not-allowed"
                 />
               </div>
             </div>

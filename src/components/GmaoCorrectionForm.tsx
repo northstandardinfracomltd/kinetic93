@@ -1072,7 +1072,7 @@ export default function GmaoCorrectionForm({
   }, [hideVerificationsTechniques]);
 
   const availableLoaners = useMemo(() => {
-    const list: { traceId: string; label: string }[] = [];
+    const list: { traceId: string; identifiant?: string; numeroSerie?: string; label: string }[] = [];
     (stocks || []).forEach(st => {
       const varObj = variables.find(v => v.id === st.denominationPieceId);
       if (!varObj) return;
@@ -1094,13 +1094,25 @@ export default function GmaoCorrectionForm({
           .forEach(t => {
             list.push({
               traceId: t.id,
+              identifiant: varObj.identifiant || (st as any).ugs || varObj.nom || 'Équipement',
+              numeroSerie: t.lotOrSerial || '',
               label: `${varObj.nom || 'Équipement'} - Lot: ${t.lotOrSerial} ${t.expirationDate ? `(Exp: ${t.expirationDate})` : ''}`,
             });
           });
       }
     });
+    (defibrillateurs || []).forEach(d => {
+      if (d.identifiant || d.numeroSerie) {
+        list.push({
+          traceId: d.identifiant || d.id,
+          identifiant: d.identifiant || d.id,
+          numeroSerie: d.numeroSerie || '',
+          label: `${d.identifiant || d.id}${d.numeroSerie ? ` - Série: ${d.numeroSerie}` : ''}`,
+        });
+      }
+    });
     return list;
-  }, [stocks, variables]);
+  }, [stocks, variables, defibrillateurs]);
 
   useEffect(() => {
     if (pillsContainerRef.current) {
@@ -1258,9 +1270,12 @@ export default function GmaoCorrectionForm({
   // S11 add-on
   const [fichierDonneesRecupere, setFichierDonneesRecupere] = useState<'Oui' | 'Non'>(report?.fichierDonneesRecupere || 'Non');
   
-  const [emettreFactureBrouillon, setEmettreFactureBrouillon] = useState<'Oui' | 'Non'>(report?.emettreFactureBrouillon || 'Oui');
-  const [serviceEmettreId, setServiceEmettreId] = useState<string>(report?.serviceEmettreId || '');
+  const [emettreFactureBrouillon, setEmettreFactureBrouillon] = useState<'Oui' | 'Non'>('Non');
+  const [serviceEmettreId, setServiceEmettreId] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
+  const [searchModalMode, setSearchModalMode] = useState<'equipment' | 'loaner' | null>(null);
+  const [advancedSearchQuery, setAdvancedSearchQuery] = useState<string>('');
+  const [remoteSearchItems, setRemoteSearchItems] = useState<{ selectValue: string; identifiant: string; numeroSerie: string }[]>([]);
   
   const [isLotScannerOpen, setIsLotScannerOpen] = useState(false);
   const [isSerieScannerOpen, setIsSerieScannerOpen] = useState(false);
@@ -1483,8 +1498,8 @@ export default function GmaoCorrectionForm({
       setCustomKitSecoursRemplace(report.customKitSecoursRemplace || '');
       setOrigineKitSecoursInstalle(report.origineKitSecoursInstalle || '');
       setFichierDonneesRecupere(report.fichierDonneesRecupere || 'Non');
-      setEmettreFactureBrouillon(report.emettreFactureBrouillon || 'Oui');
-      setServiceEmettreId(report.serviceEmettreId || '');
+      setEmettreFactureBrouillon('Non');
+      setServiceEmettreId('');
       setTechSignature(report.techSignature || '');
       setEndTimeStamp(report.endTimeStamp || '');
       setMesPhotosValides(report.mesPhotosValides ?? false);
@@ -1507,6 +1522,21 @@ export default function GmaoCorrectionForm({
     }, 1000);
     return () => clearInterval(interval);
   }, [isWebapp]);
+
+  useEffect(() => {
+    if (!isWebapp || isReduced) return;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverscroll = document.body.style.overscrollBehaviorY;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overscrollBehaviorY = 'none';
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overscrollBehaviorY = prevBodyOverscroll;
+    };
+  }, [isWebapp, isReduced]);
 
   const parsedStart = useMemo(() => {
     return parseDateString(interventionDate);
@@ -1644,10 +1674,51 @@ export default function GmaoCorrectionForm({
 
   useEffect(() => {
     // Pre-populate technician signature if the report has no signature and techName is set/available
-    if (!report?.techSignature && techName && !techSignature) {
-      const matchedMember = (members || []).find((m) => m.name === techName);
-      if (matchedMember && matchedMember.signature) {
-        setTechSignature(matchedMember.signature);
+    if (!report?.techSignature && !techSignature) {
+      const cleanTName = (techName || '').trim().toLowerCase();
+      const matchedMember = cleanTName
+        ? (members || []).find(
+            (m) =>
+              (m.name && m.name.trim().toLowerCase() === cleanTName) ||
+              (m.email && m.email.trim().toLowerCase() === cleanTName)
+          )
+        : undefined;
+      let resolvedSig = matchedMember?.signature || '';
+      if (!resolvedSig && typeof window !== 'undefined') {
+        try {
+          const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+          if (techName) {
+            resolvedSig = localStorage.getItem(`defib_${tid}_tech_signature_${techName}`) || '';
+          }
+          if (!resolvedSig) {
+            const activeSess = localStorage.getItem('defib_active_tech_session');
+            if (activeSess) {
+              const parsed = JSON.parse(activeSess);
+              if (parsed?.signature) resolvedSig = parsed.signature;
+            }
+          }
+          if (!resolvedSig && techName) {
+            for (let i = 0; i < localStorage.length; i++) {
+              const k = localStorage.key(i) || '';
+              if (k.includes('_tech_signature_') && k.toLowerCase().endsWith(cleanTName)) {
+                const v = localStorage.getItem(k);
+                if (v && v.startsWith('data:image')) {
+                  resolvedSig = v;
+                  break;
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+      if (!resolvedSig) {
+        const anyMemberWithSig = (members || []).find((m) => m.signature && m.signature.startsWith('data:image'));
+        if (anyMemberWithSig?.signature) {
+          resolvedSig = anyMemberWithSig.signature;
+        }
+      }
+      if (resolvedSig) {
+        setTechSignature(resolvedSig);
         if (!endTimeStamp) {
           setEndTimeStamp(new Date().toLocaleString('fr-FR'));
         }
@@ -2495,8 +2566,14 @@ export default function GmaoCorrectionForm({
       }
     }
 
+    const nowFormatted = new Date().toLocaleString('fr-FR');
+    const finalIntervDate = interventionDate || nowFormatted;
+    const finalEndTimeStamp = endTimeStamp || nowFormatted;
+    if (!interventionDate) setInterventionDate(finalIntervDate);
+    if (!endTimeStamp) setEndTimeStamp(finalEndTimeStamp);
+
     const todayStr = new Date().toISOString().split('T')[0];
-    const maintDate = interventionDate || todayStr;
+    const maintDate = finalIntervDate || todayStr;
 
     const finalSnapshot = {
       ...snapshot,
@@ -2743,7 +2820,7 @@ export default function GmaoCorrectionForm({
       reportTitle,
       techName: techName,
       technicien: techName,
-      date: interventionDate || new Date().toLocaleString('fr-FR'),
+      date: finalIntervDate,
       defibId: finalSnapshot.id || selectedDefibId,
       defibIdentifiant: finalSnapshot.identifiant.toUpperCase(),
       identifiant: finalSnapshot.identifiant.toUpperCase(),
@@ -2751,9 +2828,19 @@ export default function GmaoCorrectionForm({
       categorie: finalSnapshot.categorie || 'Défibrillateur',
       modele: resolveVarLabel(finalSnapshot.modele || finalSnapshot.modeleId),
       modeleId: finalSnapshot.modeleId || finalSnapshot.modele || '',
-      typeDefibrillateur,
-      numeroAtlasante: finalSnapshot.numeroAtlasante || '',
-      versionLogiciel: finalSnapshot.versionLogiciel || '',
+      typeDefibrillateur: normalizeTypeDefib(typeDefibrillateur) || 'Semi-Automatique (DSA)',
+      numeroAtlasante:
+        finalSnapshot.numeroAtlasante && !String(finalSnapshot.numeroAtlasante).trim().startsWith('data:image')
+          ? String(finalSnapshot.numeroAtlasante).trim()
+          : '',
+      versionLogiciel: (() => {
+        const v = String(finalSnapshot.versionLogiciel || '').trim();
+        const up = v.toUpperCase();
+        if (!v || up === 'DSA' || up === 'DEA' || up === 'SEMI-AUTOMATIQUE (DSA)' || up === 'AUTOMATIQUE (DEA)' || up === 'NON' || up === 'OUI' || v.startsWith('data:image')) {
+          return '';
+        }
+        return v;
+      })(),
       denomination: finalSnapshot.nomSite || finalSnapshot.denomination || '',
       emplacement: finalSnapshot.commentaireAdresse || finalSnapshot.emplacement || '',
       clientId: finalSnapshot.clientId || '',
@@ -2767,7 +2854,10 @@ export default function GmaoCorrectionForm({
       nomContrat: finalSnapshot.nomContrat || '',
       modeleCoffret: resolveVarLabel(finalSnapshot.modeleCoffret || finalSnapshot.modeleCoffretId),
       modeleCoffretId: finalSnapshot.modeleCoffretId || finalSnapshot.modeleCoffret || '',
-      numeroLotCoffret: finalSnapshot.numeroLotCoffret || '',
+      numeroLotCoffret: (() => {
+        const l = String(finalSnapshot.numeroLotCoffret || '').trim();
+        return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+      })(),
       commentaireCoffret: finalSnapshot.commentaireCoffret || '',
       numVoie: finalSnapshot.numVoie || '',
       ville: finalSnapshot.ville || '',
@@ -2781,29 +2871,50 @@ export default function GmaoCorrectionForm({
       finGarantie: finalSnapshot.finGarantie || '',
       modeleElectrodeA: resolveVarLabel(finalSnapshot.modeleElectrodeA || finalSnapshot.modeleElectrodeAId),
       modeleElectrodeAId: finalSnapshot.modeleElectrodeAId || finalSnapshot.modeleElectrodeA || '',
-      lotElectrodeA: finalSnapshot.lotElectrodeA || '',
+      lotElectrodeA: (() => {
+        const l = String(finalSnapshot.lotElectrodeA || '').trim();
+        return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+      })(),
       peremptionElectrodeA: finalSnapshot.peremptionElectrodeA || '',
       modeleElectrodeSecoursA: resolveVarLabel((finalSnapshot as any).modeleElectrodeSecoursA || finalSnapshot.modeleElectrodeASecoursId),
-      lotElectrodeSecoursA: finalSnapshot.lotElectrodeASecours || '',
+      lotElectrodeSecoursA: (() => {
+        const l = String(finalSnapshot.lotElectrodeASecours || '').trim();
+        return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+      })(),
       peremptionElectrodeSecoursA: finalSnapshot.peremptionSecoursElectrodeA || '',
       hasPadpakA: finalSnapshot.hasPadpakA || 'Non',
-      lotPadpakA: finalSnapshot.lotPadpakA || '',
+      lotPadpakA: (() => {
+        const l = String(finalSnapshot.lotPadpakA || '').trim();
+        return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+      })(),
       peremptionPadpakA: finalSnapshot.peremptionPadpakA || '',
       commentaireElectrodeA: finalSnapshot.commentaireElectrodeA || '',
       modeleElectrodeP: resolveVarLabel(finalSnapshot.modeleElectrodeP || finalSnapshot.modeleElectrodePId),
       modeleElectrodePId: finalSnapshot.modeleElectrodePId || finalSnapshot.modeleElectrodeP || '',
-      lotElectrodeP: finalSnapshot.lotElectrodeP || '',
+      lotElectrodeP: (() => {
+        const l = String(finalSnapshot.lotElectrodeP || '').trim();
+        return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+      })(),
       peremptionElectrodeP: finalSnapshot.peremptionElectrodeP || '',
       modeleElectrodeSecoursP: resolveVarLabel((finalSnapshot as any).modeleElectrodeSecoursP || finalSnapshot.modeleElectrodePSecoursId),
-      lotElectrodeSecoursP: finalSnapshot.lotElectrodePSecours || '',
+      lotElectrodeSecoursP: (() => {
+        const l = String(finalSnapshot.lotElectrodePSecours || '').trim();
+        return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+      })(),
       peremptionElectrodeSecoursP: finalSnapshot.peremptionSecoursElectrodeP || '',
       hasPadpakP: finalSnapshot.hasPadpakP || 'Non',
-      lotPadpakP: finalSnapshot.lotPadpakP || '',
+      lotPadpakP: (() => {
+        const l = String(finalSnapshot.lotPadpakP || '').trim();
+        return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+      })(),
       peremptionPadpakP: finalSnapshot.peremptionPadpakP || '',
       commentaireElectrodeP: finalSnapshot.commentaireElectrodeP || '',
       modeleBatterie: resolveVarLabel(finalSnapshot.modeleBatterie || finalSnapshot.modeleBatterieId),
       modeleBatterieId: finalSnapshot.modeleBatterieId || finalSnapshot.modeleBatterie || '',
-      lotBatterie: finalSnapshot.lotBatterie || '',
+      lotBatterie: (() => {
+        const l = String(finalSnapshot.lotBatterie || '').trim();
+        return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+      })(),
       fabricationBatterie: finalSnapshot.fabricationBatterie || '',
       miseEnServiceBatterie: finalSnapshot.insertionBatterie || finalSnapshot.miseEnServiceBatterie || '',
       insertionBatterie: finalSnapshot.insertionBatterie || finalSnapshot.miseEnServiceBatterie || '',
@@ -2826,7 +2937,39 @@ export default function GmaoCorrectionForm({
         : undefined,
       defibSnapshot: {
         ...finalSnapshot,
-        typeDefibrillateur,
+        typeDefibrillateur: normalizeTypeDefib(typeDefibrillateur) || 'Semi-Automatique (DSA)',
+        versionLogiciel: (() => {
+          const v = String(finalSnapshot.versionLogiciel || '').trim();
+          const up = v.toUpperCase();
+          if (!v || up === 'DSA' || up === 'DEA' || up === 'SEMI-AUTOMATIQUE (DSA)' || up === 'AUTOMATIQUE (DEA)' || up === 'NON' || up === 'OUI' || v.startsWith('data:image')) {
+            return '';
+          }
+          return v;
+        })(),
+        lotBatterie: (() => {
+          const l = String(finalSnapshot.lotBatterie || '').trim();
+          return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+        })(),
+        lotElectrodeA: (() => {
+          const l = String(finalSnapshot.lotElectrodeA || '').trim();
+          return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+        })(),
+        lotElectrodeASecours: (() => {
+          const l = String(finalSnapshot.lotElectrodeASecours || '').trim();
+          return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+        })(),
+        lotElectrodeP: (() => {
+          const l = String(finalSnapshot.lotElectrodeP || '').trim();
+          return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+        })(),
+        lotElectrodePSecours: (() => {
+          const l = String(finalSnapshot.lotElectrodePSecours || '').trim();
+          return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+        })(),
+        numeroLotCoffret: (() => {
+          const l = String(finalSnapshot.numeroLotCoffret || '').trim();
+          return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
+        })(),
         coffretRemplace,
         selectionCoffretRemplace,
         origineCoffretInstalle: coffretRemplace === 'Oui' ? origineCoffretInstalle : '',
@@ -2839,7 +2982,7 @@ export default function GmaoCorrectionForm({
       },
       commentaireInterne: snapshot.commentaireInterne || '',
       techSignature: techSignature,
-      endTimeStamp: endTimeStamp,
+      endTimeStamp: finalEndTimeStamp,
       clientPinCode: clientPinCode,
       
       // Points 0, 3, 4, 5, 8, 10
@@ -2946,9 +3089,9 @@ export default function GmaoCorrectionForm({
       preconisationRemplacement,
       recommandationPreconisationRemplacement: preconisationRemplacement ? recommandationPreconisationRemplacement : '',
 
-      // Draft invoice integration
-      emettreFactureBrouillon,
-      serviceEmettreId
+      // Draft invoice integration (always Non / hidden)
+      emettreFactureBrouillon: 'Non',
+      serviceEmettreId: ''
     };
 
     // Auto-generate moderation comment and post-intervention alerts for the "Gérer" side pane ONLY when report is no longer upcoming (Modération or Validés)
@@ -3199,7 +3342,7 @@ export default function GmaoCorrectionForm({
           }
           #gmao-correction-form input[type="radio"]:checked {
             border-color: #2e54ff !important;
-            background-color: #2e54ff !important;
+            background-color: #ffffff !important;
           }
           #gmao-correction-form input[type="radio"]:checked::after {
             content: "" !important;
@@ -3207,9 +3350,9 @@ export default function GmaoCorrectionForm({
             top: 50% !important;
             left: 50% !important;
             transform: translate(-50%, -50%) !important;
-            width: 8px !important;
-            height: 8px !important;
-            background-color: #ffffff !important;
+            width: 9px !important;
+            height: 9px !important;
+            background-color: #2e54ff !important;
             border-radius: 50% !important;
             display: block !important;
           }
@@ -3379,9 +3522,33 @@ export default function GmaoCorrectionForm({
                   />
                 )}
 
-                {/* Point 1: Nouveau matériel blue full-width button */}
+                {/* Point 1: Recherche avancée + Nouveau matériel blue full-width buttons */}
                 {!isCreatingNewMaterial && (
-                  <div className="pt-2 bg-white">
+                  <div className="pt-2 space-y-2 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdvancedSearchQuery('');
+                        setRemoteSearchItems([]);
+                        setSearchModalMode('equipment');
+                      }}
+                      style={{
+                        backgroundColor: 'rgb(46, 84, 255)',
+                        color: '#ffffff',
+                        width: '100%',
+                        padding: '8px 16px',
+                        borderRadius: '13px',
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer',
+                        boxShadow: 'none',
+                        border: 'none',
+                      }}
+                      className="hover:opacity-90 transition duration-150 ease-in-out font-sans flex items-center justify-center gap-1.5"
+                    >
+                      <span>Recherche avancée</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setIsNewEquipmentDropdownOpen(!isNewEquipmentDropdownOpen)}
@@ -3395,6 +3562,7 @@ export default function GmaoCorrectionForm({
                         fontWeight: 'bold',
                         cursor: 'pointer',
                         boxShadow: 'none',
+                        border: 'none',
                       }}
                       className="hover:opacity-90 transition duration-150 ease-in-out font-sans flex items-center justify-center gap-1.5"
                     >
@@ -3463,6 +3631,7 @@ export default function GmaoCorrectionForm({
                 </label>
                 <select
                   id="input-tech-name"
+                  disabled
                   value={techName}
                   onChange={(e) => {
                     const newTechName = e.target.value;
@@ -3477,7 +3646,7 @@ export default function GmaoCorrectionForm({
                       setTechSignature('');
                     }
                   }}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
+                  className="w-full px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-800 cursor-not-allowed"
                 >
                   <option value="">Sélection du technicien.</option>
                   {availableMembers.map((m) => (
@@ -3499,10 +3668,11 @@ export default function GmaoCorrectionForm({
                 <input
                   type="text"
                   id="input-interv-date"
+                  disabled
                   value={interventionDate}
                   onChange={(e) => setInterventionDate(e.target.value)}
                   placeholder="Ex: 02-06-2026 14:15"
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                  className="w-full px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 cursor-not-allowed"
                 />
               </div>
             </div>
@@ -3762,7 +3932,7 @@ export default function GmaoCorrectionForm({
               </div>
 
               {fournitureMaterielPret === 'Oui' && (
-                <div className="space-y-1 bg-white animate-fadeIn">
+                <div className="space-y-2 bg-white animate-fadeIn">
                   <label htmlFor="select-materiel-prete" className="block text-[11px] font-bold text-black uppercase">
                     Sélection du matériel prêté.
                   </label>
@@ -3773,11 +3943,39 @@ export default function GmaoCorrectionForm({
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
                   >
                     <option value="">Sélectionner un matériel prêté...</option>
-                    {availableLoaners.map(l => (
-                      <option key={l.traceId} value={l.traceId}>{l.label}</option>
+                    {availableLoaners.map((l, idx) => (
+                      <option key={`${l.traceId}_${idx}`} value={l.traceId}>{l.label}</option>
                     ))}
+                    {selectionMaterielPrete &&
+                      selectionMaterielPrete !== 'Autre' &&
+                      !availableLoaners.some(l => l.traceId === selectionMaterielPrete) && (
+                        <option value={selectionMaterielPrete}>{selectionMaterielPrete}</option>
+                      )}
                     <option value="Autre">Autre matériel</option>
                   </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdvancedSearchQuery('');
+                      setRemoteSearchItems([]);
+                      setSearchModalMode('loaner');
+                    }}
+                    style={{
+                      backgroundColor: 'rgb(46, 84, 255)',
+                      color: '#ffffff',
+                      width: '100%',
+                      padding: '8px 16px',
+                      borderRadius: '13px',
+                      fontSize: '18px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      boxShadow: 'none',
+                      border: 'none',
+                    }}
+                    className="hover:opacity-90 transition duration-150 ease-in-out font-sans flex items-center justify-center gap-1.5"
+                  >
+                    <span>Recherche</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -4139,7 +4337,7 @@ export default function GmaoCorrectionForm({
               </div>
             </div>
 
-            {isVisibleFactureBrouillon && (
+            {false && isVisibleFactureBrouillon && (
               <div className="pt-3 mt-2 space-y-3">
                 <div className="space-y-1">
                   <label className="block text-[11px] font-bold text-black uppercase">
@@ -6392,10 +6590,11 @@ export default function GmaoCorrectionForm({
                 <input
                   type="text"
                   id="end-timestamp"
+                  disabled
                   value={endTimeStamp}
                   onChange={(e) => setEndTimeStamp(e.target.value)}
                   placeholder="Horodatage de clôture du rapport."
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                  className="w-full px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs font-mono text-slate-800 cursor-not-allowed"
                 />
               </div>
             </div>
@@ -6830,12 +7029,31 @@ export default function GmaoCorrectionForm({
                               devisArticlesSelectionnes.includes('Autre') ? 'bg-[#ecefff]/30' : 'hover:bg-slate-50'
                             }`}
                           >
-                            <input
-                              type="radio"
-                              checked={devisArticlesSelectionnes.includes('Autre')}
-                              onChange={() => {}}
-                              className="cursor-pointer shrink-0"
-                            />
+                            <span
+                              className="rounded-full relative transition-all bg-white shrink-0"
+                              style={{
+                                border: devisArticlesSelectionnes.includes('Autre') ? '1px solid #2e54ff' : '1px solid #cbd5e1',
+                                width: '20px',
+                                height: '20px',
+                                minWidth: '20px',
+                                minHeight: '20px',
+                                backgroundColor: '#ffffff',
+                                display: 'inline-block',
+                              }}
+                            >
+                              {devisArticlesSelectionnes.includes('Autre') && (
+                                <span
+                                  className="rounded-full bg-[#2e54ff] absolute"
+                                  style={{
+                                    width: '9px',
+                                    height: '9px',
+                                    left: '50%',
+                                    top: '50%',
+                                    transform: 'translate(-50%, -50%)',
+                                  }}
+                                />
+                              )}
+                            </span>
                             <span className="text-xs font-bold text-black" style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                               Autre (saisie libre)
                             </span>
@@ -6859,12 +7077,31 @@ export default function GmaoCorrectionForm({
                                     isChecked ? 'bg-[#ecefff]/30' : 'hover:bg-slate-50'
                                   }`}
                                 >
-                                  <input
-                                    type="radio"
-                                    checked={isChecked}
-                                    onChange={() => {}}
-                                    className="cursor-pointer shrink-0"
-                                  />
+                                  <span
+                                    className="rounded-full relative transition-all bg-white shrink-0"
+                                    style={{
+                                      border: isChecked ? '1px solid #2e54ff' : '1px solid #cbd5e1',
+                                      width: '20px',
+                                      height: '20px',
+                                      minWidth: '20px',
+                                      minHeight: '20px',
+                                      backgroundColor: '#ffffff',
+                                      display: 'inline-block',
+                                    }}
+                                  >
+                                    {isChecked && (
+                                      <span
+                                        className="rounded-full bg-[#2e54ff] absolute"
+                                        style={{
+                                          width: '9px',
+                                          height: '9px',
+                                          left: '50%',
+                                          top: '50%',
+                                          transform: 'translate(-50%, -50%)',
+                                        }}
+                                      />
+                                    )}
+                                  </span>
                                   <div className="flex items-center gap-2 min-w-0 flex-1">
                                     <span 
                                       style={{
@@ -7116,8 +7353,18 @@ export default function GmaoCorrectionForm({
                   <button
                     type="button"
                     onClick={() => setSelectedErrorCode('')}
-                    style={{ fontSize: '18px', backgroundColor: '#D22D0B', boxShadow: 'none' }}
-                    className="w-full py-2.5 text-white font-bold rounded-xl transition-all cursor-pointer hover:opacity-90"
+                    style={{
+                      fontSize: '18px',
+                      border: 'none',
+                      backgroundColor: '#D22D0B',
+                      boxShadow: 'none',
+                      borderRadius: '13px',
+                      padding: '8px 12px',
+                      boxSizing: 'border-box',
+                      display: 'block',
+                      width: '100%',
+                    }}
+                    className="w-full text-white font-medium focus:outline-none cursor-pointer text-center transition-all hover:opacity-90"
                   >
                     Fermer l’aide d’erreur
                   </button>
@@ -7127,30 +7374,110 @@ export default function GmaoCorrectionForm({
           </div>
         )}
 
-        {activeSection === 11 && (
-          <div className="w-full px-3">
-            <button
-              type="submit"
-              disabled={isSaving}
-              form="gmao-correction-form"
-              className="w-full text-white font-medium focus:outline-none cursor-pointer text-center"
-              style={{ 
-                fontSize: '18px', 
-                border: 'none',
-                backgroundColor: 'rgb(46, 84, 255)',
-                boxShadow: 'none',
-                borderRadius: '13px',
-                padding: '8px 12px',
-                boxSizing: 'border-box',
-                display: 'block',
-                width: '100%',
-                opacity: isSaving ? 0.6 : 1
-              }}
-            >
-              {isSaving ? "Enregistrement..." : "Valider et enregistrer"}
-            </button>
-          </div>
-        )}
+        {(() => {
+          const currentSecIdx = SECTIONS_METADATA.findIndex(s => s.id === activeSection);
+          const prevSec = currentSecIdx > 0 ? SECTIONS_METADATA[currentSecIdx - 1] : null;
+          const nextSec = currentSecIdx >= 0 && currentSecIdx < SECTIONS_METADATA.length - 1 ? SECTIONS_METADATA[currentSecIdx + 1] : null;
+          const isLastSection = activeSection === 11 || currentSecIdx === SECTIONS_METADATA.length - 1;
+          const isFirstSection = activeSection === 0 || currentSecIdx === 0;
+
+          if (isLastSection) {
+            return (
+              <div className="w-full px-3">
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  form="gmao-correction-form"
+                  className="w-full text-white font-medium focus:outline-none cursor-pointer text-center"
+                  style={{ 
+                    fontSize: '18px', 
+                    border: 'none',
+                    backgroundColor: 'rgb(46, 84, 255)',
+                    boxShadow: 'none',
+                    borderRadius: '13px',
+                    padding: '8px 12px',
+                    boxSizing: 'border-box',
+                    display: 'block',
+                    width: '100%',
+                    opacity: isSaving ? 0.6 : 1
+                  }}
+                >
+                  {isSaving ? "Enregistrement..." : "Valider et enregistrer"}
+                </button>
+              </div>
+            );
+          }
+
+          if (isFirstSection && nextSec) {
+            return (
+              <div className="w-full px-3">
+                <button
+                  type="button"
+                  onClick={() => scrollToSection(nextSec.id)}
+                  className="w-full text-white font-medium focus:outline-none cursor-pointer text-center"
+                  style={{
+                    fontSize: '18px',
+                    border: 'none',
+                    backgroundColor: 'rgb(46, 84, 255)',
+                    boxShadow: 'none',
+                    borderRadius: '13px',
+                    padding: '8px 12px',
+                    boxSizing: 'border-box',
+                    display: 'block',
+                    width: '100%',
+                  }}
+                >
+                  Suivant
+                </button>
+              </div>
+            );
+          }
+
+          return (
+            <div className="w-full px-3 flex items-center gap-2">
+              {prevSec && (
+                <button
+                  type="button"
+                  onClick={() => scrollToSection(prevSec.id)}
+                  className="w-1/2 text-white font-medium focus:outline-none cursor-pointer text-center"
+                  style={{
+                    fontSize: '18px',
+                    border: 'none',
+                    backgroundColor: '#0f172a',
+                    boxShadow: 'none',
+                    borderRadius: '13px',
+                    padding: '8px 12px',
+                    boxSizing: 'border-box',
+                    display: 'block',
+                    width: '50%',
+                  }}
+                >
+                  Précédent
+                </button>
+              )}
+              {nextSec && (
+                <button
+                  type="button"
+                  onClick={() => scrollToSection(nextSec.id)}
+                  className="w-1/2 text-white font-medium focus:outline-none cursor-pointer text-center"
+                  style={{
+                    fontSize: '18px',
+                    border: 'none',
+                    backgroundColor: 'rgb(46, 84, 255)',
+                    boxShadow: 'none',
+                    borderRadius: '13px',
+                    padding: '8px 12px',
+                    boxSizing: 'border-box',
+                    display: 'block',
+                    width: '50%',
+                  }}
+                >
+                  Suivant
+                </button>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {isMapPickerOpen && (
@@ -7242,13 +7569,6 @@ export default function GmaoCorrectionForm({
           >
             <div className="flex items-center justify-between p-4 border-b border-slate-100">
               <h4 className="font-bold text-base text-black font-sans">{previewModalPhoto.title}</h4>
-              <button
-                type="button"
-                onClick={() => setPreviewModalPhoto(null)}
-                className="text-slate-500 hover:text-black font-bold p-1 text-lg leading-none cursor-pointer"
-              >
-                ✕
-              </button>
             </div>
             <div className="p-3 bg-neutral-900 flex items-center justify-center max-h-[70vh] overflow-hidden">
               <img 
@@ -7257,11 +7577,20 @@ export default function GmaoCorrectionForm({
                 className="max-h-[65vh] w-auto max-w-full object-contain rounded" 
               />
             </div>
-            <div className="p-3 bg-white flex justify-end">
+            <div className="p-3 bg-white flex">
               <button
                 type="button"
                 onClick={() => setPreviewModalPhoto(null)}
-                className="px-4 py-2 bg-slate-900 text-white rounded-lg font-medium text-sm hover:bg-[#0f172a] cursor-pointer"
+                style={{
+                  fontSize: '18px',
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  borderRadius: '13px',
+                  color: '#ffffff',
+                  width: '100%',
+                  border: 'none',
+                  boxShadow: 'none',
+                }}
+                className="w-full py-2.5 px-4 text-white font-medium hover:opacity-90 cursor-pointer text-center"
               >
                 Fermer
               </button>
@@ -7269,6 +7598,195 @@ export default function GmaoCorrectionForm({
           </div>
         </div>
       )}
+
+      {/* Full-Screen Advanced Search Modal for Equipment & Loaner Selection */}
+      {searchModalMode && (() => {
+        const trimmedQuery = advancedSearchQuery.trim();
+        const lowerQuery = trimmedQuery.toLowerCase();
+        let results: { selectValue: string; identifiant: string; numeroSerie: string; score: number }[] = [];
+
+        if (trimmedQuery.length >= 3) {
+          if (searchModalMode === 'equipment') {
+            for (const df of defibrillateurs || []) {
+              const ident = String(df.identifiant || df.id || '').trim();
+              const serie = String(df.numeroSerie || '').trim();
+              const idLow = ident.toLowerCase();
+              const sLow = serie.toLowerCase();
+              if (idLow.includes(lowerQuery) || sLow.includes(lowerQuery)) {
+                let score = 1;
+                if (idLow === lowerQuery || sLow === lowerQuery) score = 100;
+                else if (idLow.startsWith(lowerQuery) || sLow.startsWith(lowerQuery)) score = 50;
+                results.push({
+                  selectValue: df.id,
+                  identifiant: ident || 'Sans identifiant',
+                  numeroSerie: serie || 'Sans numéro de série',
+                  score,
+                });
+              }
+            }
+            for (const o of otherEquipments || []) {
+              const ident = String(o.identifiant || o.id || '').trim();
+              const serie = String(o.numeroSerie || o.specifiques?.serie || o.id || '').trim();
+              const idLow = ident.toLowerCase();
+              const sLow = serie.toLowerCase();
+              if (idLow.includes(lowerQuery) || sLow.includes(lowerQuery)) {
+                let score = 1;
+                if (idLow === lowerQuery || sLow === lowerQuery) score = 100;
+                else if (idLow.startsWith(lowerQuery) || sLow.startsWith(lowerQuery)) score = 50;
+                results.push({
+                  selectValue: `OTHER:${o.id}`,
+                  identifiant: ident || 'Sans identifiant',
+                  numeroSerie: serie || 'Sans numéro de série',
+                  score,
+                });
+              }
+            }
+          } else if (searchModalMode === 'loaner') {
+            for (const l of availableLoaners) {
+              const ident = String((l as any).identifiant || l.label || '').trim();
+              const serie = String((l as any).numeroSerie || '').trim();
+              const idLow = ident.toLowerCase();
+              const sLow = serie.toLowerCase();
+              const lblLow = String(l.label || '').toLowerCase();
+              if (idLow.includes(lowerQuery) || sLow.includes(lowerQuery) || lblLow.includes(lowerQuery)) {
+                let score = 1;
+                if (idLow === lowerQuery || sLow === lowerQuery) score = 100;
+                else if (idLow.startsWith(lowerQuery) || sLow.startsWith(lowerQuery)) score = 50;
+                results.push({
+                  selectValue: l.traceId,
+                  identifiant: ident || 'Sans identifiant',
+                  numeroSerie: serie || 'Sans numéro de série',
+                  score,
+                });
+              }
+            }
+          }
+
+          for (const rem of remoteSearchItems) {
+            if (!results.some(r => r.selectValue === rem.selectValue || (r.identifiant === rem.identifiant && r.numeroSerie === rem.numeroSerie))) {
+              results.push({ ...rem, score: 10 });
+            }
+          }
+
+          results.sort((a, b) => b.score - a.score);
+          results = results.slice(0, 10);
+        }
+
+        return (
+          <div
+            className="fixed inset-0 z-[160] bg-white flex flex-col p-4 overflow-y-auto animate-fadeIn font-sans"
+            style={{ top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh' }}
+          >
+            <div className="w-full max-w-2xl mx-auto flex flex-col space-y-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchModalMode(null);
+                  setAdvancedSearchQuery('');
+                  setRemoteSearchItems([]);
+                }}
+                style={{
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  color: '#ffffff',
+                  width: '100%',
+                  padding: '10px 16px',
+                  borderRadius: '13px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  border: 'none',
+                  boxShadow: 'none',
+                  cursor: 'pointer',
+                }}
+                className="w-full hover:opacity-90 transition-opacity text-center"
+              >
+                Fermer
+              </button>
+
+              <input
+                type="text"
+                autoFocus
+                value={advancedSearchQuery}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setAdvancedSearchQuery(val);
+                  const q = val.trim();
+                  if (q.length >= 3) {
+                    const activeTid = localStorage.getItem('defib_tenant_id') || 'demo';
+                    fetch(`/api/sheets/query?tenantId=${encodeURIComponent(activeTid)}&type=defibrillateurs&search=${encodeURIComponent(q)}&limit=10`)
+                      .then(r => (r.ok ? r.json() : null))
+                      .then(data => {
+                        if (data && Array.isArray(data.items)) {
+                          setRemoteSearchItems(
+                            data.items.slice(0, 10).map((it: any) => ({
+                              selectValue: searchModalMode === 'loaner' ? (it.identifiant || it.id) : (it.id || it.identifiant),
+                              identifiant: String(it.identifiant || it.id || 'Sans identifiant'),
+                              numeroSerie: String(it.numeroSerie || 'Sans numéro de série'),
+                            }))
+                          );
+                        }
+                      })
+                      .catch(() => {});
+                  } else {
+                    setRemoteSearchItems([]);
+                  }
+                }}
+                placeholder="Rechercher par identifiant ou numéro de série (3 caractères min.)..."
+                style={{
+                  padding: '12px',
+                  border: '1px solid #dedede',
+                  borderRadius: '13px',
+                  fontSize: '16px',
+                  backgroundColor: '#ffffff',
+                  color: '#000000',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                }}
+                className="w-full focus:outline-none"
+              />
+
+              {trimmedQuery.length >= 3 && (
+                <div className="space-y-2 pt-1">
+                  {results.length === 0 ? (
+                    <div className="p-4 text-center text-slate-500 text-sm">
+                      Aucun matériel correspondant trouvé.
+                    </div>
+                  ) : (
+                    results.map((item, idx) => (
+                      <button
+                        key={`${item.selectValue}_${idx}`}
+                        type="button"
+                        onClick={() => {
+                          if (searchModalMode === 'equipment') {
+                            handleDefibLookupChange(item.selectValue);
+                          } else if (searchModalMode === 'loaner') {
+                            setSelectionMaterielPrete(item.selectValue);
+                          }
+                          setSearchModalMode(null);
+                          setAdvancedSearchQuery('');
+                          setRemoteSearchItems([]);
+                        }}
+                        style={{
+                          border: '1px solid #DCE1EA',
+                          borderRadius: '13px',
+                          backgroundColor: '#F5F7FA',
+                          padding: '12px 16px',
+                          width: '100%',
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                        }}
+                        className="w-full flex items-center justify-between hover:bg-slate-200/70 transition-colors"
+                      >
+                        <span className="font-bold text-black text-[16px] font-mono">{item.identifiant}</span>
+                        <span className="text-slate-700 text-[15px] font-mono">{item.numeroSerie}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
         </>
       )}
 

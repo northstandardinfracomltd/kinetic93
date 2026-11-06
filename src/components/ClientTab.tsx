@@ -1374,6 +1374,7 @@ export default function ClientTab({
       dateSignatureContrat: dateSignatureContrat,
       signeParContrat: signeParContrat,
       signatureClientContratImage: signatureClientContratImage,
+      clientSignatureImage: signatureClientContratImage,
       autresContrats: autresContrats,
     };
 

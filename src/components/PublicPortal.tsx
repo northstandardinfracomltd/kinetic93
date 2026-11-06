@@ -3555,12 +3555,28 @@ export default function PublicPortal({
           (report.defibIdentifiant && r.defibIdentifiant === report.defibIdentifiant && r.date === report.date)
         );
         if (freshReport) {
+          const mergedTechSig =
+            freshReport.techSignature ||
+            report.techSignature ||
+            freshReport.defibSnapshot?.techSignature ||
+            report.defibSnapshot?.techSignature ||
+            '';
+          const mergedClientPin =
+            freshReport.clientPinCode ||
+            report.clientPinCode ||
+            freshReport.defibSnapshot?.clientPinCode ||
+            report.defibSnapshot?.clientPinCode ||
+            '';
           report = {
             ...report,
             ...freshReport,
+            techSignature: mergedTechSig,
+            clientPinCode: mergedClientPin,
             defibSnapshot: {
               ...(report.defibSnapshot || {}),
               ...(freshReport.defibSnapshot || {}),
+              techSignature: mergedTechSig,
+              clientPinCode: mergedClientPin,
             },
           };
         }
@@ -4056,37 +4072,102 @@ export default function PublicPortal({
 
                       <!-- Signature Technicien -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        ${report.techSignature ? `
-                          <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
-                          <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
-                            <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
-                          </div>
-                        ` : ''}
+                        ${(() => {
+                          const buildSvgSig = (label: string) => {
+                            const safe = String(label || 'Signé').replace(/[<>&"']/g, '').trim() || 'Signé';
+                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="26" font-style="italic" fill="#0f172a">${safe}</text><path d="M 10 52 Q 95 44 195 54" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                          };
+                          const tName = String(report.techName || report.technicien || authenticatedUser?.name || '').trim();
+                          const matchedM = (members || []).find((m: any) =>
+                            tName &&
+                            ((m.name && m.name.trim().toLowerCase() === tName.toLowerCase()) ||
+                             (m.email && m.email.trim().toLowerCase() === tName.toLowerCase()))
+                          ) || (members || []).find((m: any) => m.signature && String(m.signature).startsWith('data:image'));
+                          let tSig =
+                            report.techSignature ||
+                            snapshot.techSignature ||
+                            techSignature ||
+                            authenticatedUser?.signature ||
+                            matchedM?.signature ||
+                            '';
+                          if (!tSig && typeof window !== 'undefined') {
+                            try {
+                              for (let i = 0; i < localStorage.length; i++) {
+                                const k = localStorage.key(i) || '';
+                                if (k.includes('_tech_signature_')) {
+                                  const v = localStorage.getItem(k) || '';
+                                  if (v.startsWith('data:image')) {
+                                    tSig = v;
+                                    break;
+                                  }
+                                }
+                              }
+                            } catch (_) {}
+                          }
+                          if (!tSig && tName) {
+                            tSig = buildSvgSig(tName);
+                          }
+                          if (!tSig) return '';
+                          return `
+                            <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
+                            <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
+                              <img src="${tSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
+                            </div>
+                          `;
+                        })()}
                       </div>
 
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
-                          <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                          ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                            <div style="font-size: 11px; margin-bottom: 2px;">
-                              <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
-                              <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
-                            </div>
-                          ` : ''}
-                          ${clientFound && clientFound.clientSignatureImage ? `
-                            <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
-                              <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
-                            </div>
-                          ` : `
-                            ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
-                                Signé électroniquement par PIN (${report.clientPinCode})
+                        ${(() => {
+                          const buildSvgSig = (label: string) => {
+                            const safe = String(label || 'Client').replace(/[<>&"']/g, '').trim() || 'Client';
+                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="25" font-style="italic" fill="#0f172a">${safe}</text><path d="M 12 52 Q 100 45 190 53" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                          };
+                          const pinVal = String(report.clientPinCode || snapshot.clientPinCode || '').trim();
+                          const pinIsImg = pinVal.startsWith('data:image') || pinVal.startsWith('http');
+                          const anyClientWithSig = (effectiveClients || []).find((c: any) => c.clientSignatureImage || c.signatureClientContratImage);
+                          let cSig =
+                            (clientFound && (clientFound.clientSignatureImage || (clientFound as any).signatureClientContratImage || (clientFound as any).signatureClient)) ||
+                            (pinIsImg ? pinVal : '') ||
+                            report.clientSignatureImage ||
+                            report.signatureClientContratImage ||
+                            snapshot.clientSignatureImage ||
+                            snapshot.signatureClientContratImage ||
+                            (anyClientWithSig && (anyClientWithSig.clientSignatureImage || anyClientWithSig.signatureClientContratImage)) ||
+                            '';
+                          const displayPin = !pinIsImg ? pinVal : '';
+                          const fallbackSignerName =
+                            (clientFound as any)?.signeParContrat ||
+                            clientFound?.nomPrenomSite ||
+                            snapshot.nomPrenomSite ||
+                            report.nomPrenomSite ||
+                            clientFound?.denomination ||
+                            report.clientName ||
+                            report.entreprise ||
+                            '';
+                          if (!cSig && (displayPin || fallbackSignerName)) {
+                            cSig = buildSvgSig(fallbackSignerName || 'Client');
+                          }
+                          if (!cSig && !displayPin) return '';
+                          return `
+                            <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
+                            ${displayPin ? `
+                              <div style="font-size: 11px; margin-bottom: 2px;">
+                                <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
+                                <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${displayPin}</span>
                               </div>
                             ` : ''}
-                          `}
-                        ` : ''}
+                            ${cSig ? `
+                              <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
+                                <img src="${cSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                                <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">${displayPin ? `Signé électroniquement par PIN (${displayPin})` : 'Signé électroniquement (dessin)'}</div>
+                              </div>
+                            ` : ''}
+                          `;
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -4836,21 +4917,85 @@ export default function PublicPortal({
 
                       <!-- Signature Technicien -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        ${report.techSignature ? `
-                          <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
-                          <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
-                            <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
-                          </div>
-                        ` : ''}
+                        ${(() => {
+                          const buildSvgSig = (label: string) => {
+                            const safe = String(label || 'Signé').replace(/[<>&"']/g, '').trim() || 'Signé';
+                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="26" font-style="italic" fill="#0f172a">${safe}</text><path d="M 10 52 Q 95 44 195 54" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                          };
+                          const tName = String(report.techName || report.technicien || authenticatedUser?.name || '').trim();
+                          const matchedM = (members || []).find((m: any) =>
+                            tName &&
+                            ((m.name && m.name.trim().toLowerCase() === tName.toLowerCase()) ||
+                             (m.email && m.email.trim().toLowerCase() === tName.toLowerCase()))
+                          ) || (members || []).find((m: any) => m.signature && String(m.signature).startsWith('data:image'));
+                          let tSig =
+                            report.techSignature ||
+                            snapshot.techSignature ||
+                            techSignature ||
+                            authenticatedUser?.signature ||
+                            matchedM?.signature ||
+                            '';
+                          if (!tSig && typeof window !== 'undefined') {
+                            try {
+                              for (let i = 0; i < localStorage.length; i++) {
+                                const k = localStorage.key(i) || '';
+                                if (k.includes('_tech_signature_')) {
+                                  const v = localStorage.getItem(k) || '';
+                                  if (v.startsWith('data:image')) {
+                                    tSig = v;
+                                    break;
+                                  }
+                                }
+                              }
+                            } catch (_) {}
+                          }
+                          if (!tSig && tName) {
+                            tSig = buildSvgSig(tName);
+                          }
+                          if (!tSig) return '';
+                          return `
+                            <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
+                            <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
+                              <img src="${tSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
+                            </div>
+                          `;
+                        })()}
                       </div>
 
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
                         ${(() => {
-                          const pinVal = (report.clientPinCode || "").trim();
+                          const buildSvgSig = (label: string) => {
+                            const safe = String(label || 'Client').replace(/[<>&"']/g, '').trim() || 'Client';
+                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="25" font-style="italic" fill="#0f172a">${safe}</text><path d="M 12 52 Q 100 45 190 53" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                          };
+                          const pinVal = (report.clientPinCode || snapshot.clientPinCode || "").trim();
                           const pinIsImg = pinVal.startsWith("data:image") || pinVal.startsWith("http");
-                          const sigImg = (clientFound && clientFound.clientSignatureImage) || (pinIsImg ? pinVal : "");
+                          const anyClientWithSig = (effectiveClients || []).find((c: any) => c.clientSignatureImage || c.signatureClientContratImage);
+                          let sigImg =
+                            (clientFound && (clientFound.clientSignatureImage || (clientFound as any).signatureClientContratImage || (clientFound as any).signatureClient)) ||
+                            (pinIsImg ? pinVal : "") ||
+                            report.clientSignatureImage ||
+                            report.signatureClientContratImage ||
+                            snapshot.clientSignatureImage ||
+                            snapshot.signatureClientContratImage ||
+                            (anyClientWithSig && (anyClientWithSig.clientSignatureImage || anyClientWithSig.signatureClientContratImage)) ||
+                            "";
                           const displayPin = !pinIsImg ? pinVal : "";
+                          const fallbackSignerName =
+                            (clientFound as any)?.signeParContrat ||
+                            clientFound?.nomPrenomSite ||
+                            snapshot.nomPrenomSite ||
+                            report.nomPrenomSite ||
+                            clientFound?.denomination ||
+                            report.clientName ||
+                            report.entreprise ||
+                            "";
+                          if (!sigImg && (displayPin || fallbackSignerName)) {
+                            sigImg = buildSvgSig(fallbackSignerName || "Client");
+                          }
                           if (!sigImg && !displayPin) return "";
                           return `
                             <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
@@ -4863,15 +5008,9 @@ export default function PublicPortal({
                             ${sigImg ? `
                               <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
                                 <img src="${sigImg}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                                <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
+                                <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">${displayPin ? `Signé électroniquement par PIN (${displayPin})` : 'Signé électroniquement (dessin)'}</div>
                               </div>
-                            ` : `
-                              ${displayPin ? `
-                                <div style="font-size: 11px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
-                                  Signé électroniquement par PIN (${displayPin})
-                                </div>
-                              ` : ''}
-                            `}
+                            ` : ''}
                           `;
                         })()}
                       </div>
@@ -6429,11 +6568,12 @@ export default function PublicPortal({
   const handleSaveSignature = async () => {
     if (sigCanvasRef.current && authenticatedUser) {
       const rawDataUrl = sigCanvasRef.current.toDataURL("image/png");
-      const envId = localStorage.getItem("defib_tenant_id") || "demo";
+      const envId = techTenantId || authenticatedUser?.envId || (authenticatedUser as any)?.tenantId || localStorage.getItem("defib_tenant_id") || "demo";
 
       // Immediately persist locally and in state so the canvas stays intact without flickering
       setTechSignature(rawDataUrl);
       localStorage.setItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`, rawDataUrl);
+      localStorage.setItem(`defib_demo_tech_signature_${authenticatedUser.name}`, rawDataUrl);
 
       let uploadedUrl = "";
       try {
@@ -7100,7 +7240,7 @@ export default function PublicPortal({
       {/* Main Responsive Portal Container (Standalone App Layout) */}
       <div
         className={`w-full max-w-[1100px] ${
-          authenticatedUser && activeTab === "messages"
+          authenticatedUser && (activeTab === "messages" || (isReportOverlayOpen && !isReportOverlayMinimized))
             ? "h-[100dvh] max-h-[100dvh] overflow-hidden"
             : "min-h-screen"
         } bg-white relative flex flex-col md:shadow-xl transition-all duration-200`}
@@ -7160,7 +7300,17 @@ export default function PublicPortal({
                 style={
                   isReportOverlayMinimized
                     ? { maxHeight: "116px", height: "auto", borderTop: "none" }
-                    : { overflowX: "hidden", maxWidth: "100vw", width: "100%", overscrollBehaviorX: "none", touchAction: "pan-y" }
+                    : {
+                        overflowX: "hidden",
+                        overflowY: "auto",
+                        WebkitOverflowScrolling: "touch",
+                        overscrollBehavior: "contain",
+                        maxWidth: "100vw",
+                        width: "100%",
+                        height: "100dvh",
+                        maxHeight: "100dvh",
+                        touchAction: "pan-y",
+                      }
                 }
                 id="report-form-overlay"
               >
@@ -7296,6 +7446,7 @@ export default function PublicPortal({
                     variables={variables}
                     defibrillateurs={defibrillateurs}
                     otherEquipments={otherEquipments}
+                    members={members}
                     onSelectOtherEquipment={(otherEq) => {
                       setSelectedOtherEquipmentUnique(otherEq);
                     }}
@@ -7338,10 +7489,33 @@ export default function PublicPortal({
 
                       if (matchingExistingIndex !== -1) {
                         const existingRep = generatedReports[matchingExistingIndex];
+                        const cleanTechCommentExisting = String(
+                          updatedReport.commentaireInterne ??
+                            updatedReport.internalComment ??
+                            updatedReport.defibSnapshot?.commentaireInterne ??
+                            existingRep?.internalComment ??
+                            existingRep?.commentaireInterne ??
+                            ""
+                        );
+                        const resolvedTechSigExisting =
+                          updatedReport.techSignature ||
+                          techSignature ||
+                          authenticatedUser?.signature ||
+                          existingRep?.techSignature ||
+                          reportToEdit?.techSignature ||
+                          "";
                         const baseSub = {
                           ...existingRep,
                           ...(reportToEdit || {}),
                           ...updatedReport,
+                          techSignature: resolvedTechSigExisting,
+                          defibSnapshot: {
+                            ...(existingRep?.defibSnapshot || {}),
+                            ...(updatedReport.defibSnapshot || {}),
+                            techSignature: resolvedTechSigExisting,
+                          },
+                          internalComment: cleanTechCommentExisting,
+                          commentaireInterne: cleanTechCommentExisting,
                           id: existingRep.id || reportToEdit?.id || "REP-" + Date.now(),
                           interventionReference: cleanInterventionRef,
                           reportNumber: cleanInterventionRef,
@@ -7386,9 +7560,31 @@ export default function PublicPortal({
                       } else {
                         const reportId =
                           reportToEdit?.id || updatedReport.id || "REP-" + Date.now();
+                        const cleanTechCommentNew = String(
+                          updatedReport.commentaireInterne ??
+                            updatedReport.internalComment ??
+                            updatedReport.defibSnapshot?.commentaireInterne ??
+                            reportToEdit?.internalComment ??
+                            reportToEdit?.commentaireInterne ??
+                            ""
+                        );
+                        const resolvedTechSigNew =
+                          updatedReport.techSignature ||
+                          techSignature ||
+                          authenticatedUser?.signature ||
+                          reportToEdit?.techSignature ||
+                          "";
                         const baseSub = {
                           ...(reportToEdit || {}),
                           ...updatedReport,
+                          techSignature: resolvedTechSigNew,
+                          defibSnapshot: {
+                            ...(reportToEdit?.defibSnapshot || {}),
+                            ...(updatedReport.defibSnapshot || {}),
+                            techSignature: resolvedTechSigNew,
+                          },
+                          internalComment: cleanTechCommentNew,
+                          commentaireInterne: cleanTechCommentNew,
                           id: reportId,
                           interventionReference: cleanInterventionRef,
                           reportNumber: cleanInterventionRef,
@@ -7419,7 +7615,7 @@ export default function PublicPortal({
                         submission = {
                           ...baseSub,
                           commentaire: mergeReportModerationComment(
-                            updatedReport.commentaire || reportToEdit?.commentaire,
+                            reportToEdit?.commentaire,
                             baseSub,
                             defibrillateurs,
                             stocks,
@@ -11570,7 +11766,8 @@ export default function PublicPortal({
                       color: #000000 !important;
                     }
                     @media (max-width: 639px) and (orientation: portrait) {
-                      #tab-stocks-screen .tech-inventaire-tracabilite-card {
+                      #tab-stocks-screen .tech-inventaire-tracabilite-card,
+                      #tab-stocks-screen .tech-nouveau-stock-card {
                         margin-left: -16px !important;
                         margin-right: -16px !important;
                         width: calc(100% + 32px) !important;
@@ -11683,7 +11880,7 @@ export default function PublicPortal({
                       }}
                       className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 font-bold mb-2"
                     >
-                      Nouveau stock distribué
+                      Nouveau stock
                     </button>
                   )}
 
@@ -11740,7 +11937,7 @@ export default function PublicPortal({
                   {/* Form for Nouveau stock distribué */}
                   {showNewDistribStockForm && !selectedTechStock && (
                     <div
-                      className="p-5 space-y-4 my-4 animate-fadeIn"
+                      className="tech-nouveau-stock-card p-5 space-y-4 my-4 animate-fadeIn"
                       style={{
                         backgroundColor: "#f5f7fa",
                         border: "none",
@@ -11882,7 +12079,7 @@ export default function PublicPortal({
                       </div>
 
                       {/* Section Inventaire de traçabilité (Même trame que dans le logiciel principal) */}
-                      <div className="tech-inventaire-tracabilite-card pt-4 mt-2 flex flex-col gap-4">
+                      <div className="pt-4 mt-2 flex flex-col gap-4">
                         <div className="flex justify-between items-center mt-2 mb-1 select-none w-full">
                           <span
                             className="tech-inventaire-tracabilite-pill inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
@@ -12353,8 +12550,8 @@ export default function PublicPortal({
                         )}
                       </div>
 
-                      {/* Buttons: Annuler / Enregistrer (50% / 50%) */}
-                      <div className="flex items-center gap-3 pt-2 w-full">
+                      {/* Buttons: Annuler / Enregistrer (Full width stacked) */}
+                      <div className="flex flex-col gap-2 pt-2 w-full">
                         <button
                           type="button"
                           onClick={() => {
@@ -12371,8 +12568,9 @@ export default function PublicPortal({
                             padding: "12px 16px",
                             border: "none",
                             cursor: "pointer",
+                            width: "100%",
                           }}
-                          className="flex-1 font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
+                          className="w-full font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
                         >
                           Annuler
                         </button>
@@ -12596,13 +12794,14 @@ export default function PublicPortal({
                             padding: "12px 16px",
                             border: "none",
                             boxShadow: "none",
+                            width: "100%",
                             opacity: isSavingDistribStock || !newDistribStockId ? 0.5 : 1,
                             cursor:
                               isSavingDistribStock || !newDistribStockId
                                 ? "not-allowed"
                                 : "pointer",
                           }}
-                          className="flex-1 font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
+                          className="w-full font-sans font-bold transition-all hover:opacity-90 active:scale-[0.98] text-center"
                         >
                           {isSavingDistribStock ? (
                             <span className="flex items-center justify-center gap-2">

@@ -111,9 +111,18 @@ const decodeBuffer = async (key: SoundKey, arrayBuf: ArrayBuffer) => {
   }
 };
 
+// Track last play timestamp per sound key to prevent accidental double triggers
+const lastPlayedAt: Partial<Record<SoundKey, number>> = {};
+
 // Play a preloaded sound instantly
 export const playSound = (key: SoundKey) => {
   if (audioMutedInMainSoftware) return;
+  const now = Date.now();
+  if (lastPlayedAt[key] && now - lastPlayedAt[key]! < 350) {
+    return;
+  }
+  lastPlayedAt[key] = now;
+
   try {
     const ctx = getAudioContext();
     if (ctx) {
@@ -122,19 +131,21 @@ export const playSound = (key: SoundKey) => {
       }
 
       const buffer = audioBuffers[key];
-      if (buffer) {
+      if (buffer && ctx.state === "running") {
         const source = ctx.createBufferSource();
         source.buffer = buffer;
         source.connect(ctx.destination);
         source.start(0);
         return;
-      } else if (rawArrayBuffers[key]) {
+      } else if (rawArrayBuffers[key] && !audioBuffers[key]) {
         // Buffer was downloaded but not yet decoded
         decodeBuffer(key, rawArrayBuffers[key]!).then(() => {
           if (audioBuffers[key]) {
+            lastPlayedAt[key] = 0;
             playSound(key);
           }
         });
+        return;
       }
     }
 
@@ -168,52 +179,22 @@ if (typeof window !== "undefined") {
   }
 }
 
+let activeOpenSoundCleanup: (() => void) | null = null;
+let lastOpenSoundTimestamp = 0;
+
 /**
  * Triggers Sound3 (same as report form submit) upon technician webapp preloader open (login or reload).
  * Handles browser autoplay policy restrictions gracefully by attaching
  * a one-time gesture listener if autoplay is initially blocked.
  */
 export const triggerPublicPortalOpenSound = (): (() => void) => {
+  if (activeOpenSoundCleanup) {
+    activeOpenSoundCleanup();
+    activeOpenSoundCleanup = null;
+  }
+
   let hasPlayed = false;
-
-  const tryPlay = () => {
-    if (hasPlayed) return;
-    try {
-      const ctx = getAudioContext();
-      if (ctx && audioBuffers.SOUND3 && ctx.state === "running") {
-        playSound("SOUND3");
-        hasPlayed = true;
-        cleanup();
-        return;
-      }
-
-      // Try HTML5 audio if Web Audio API not yet un-suspended
-      const audio = new Audio(SOUND_ASSETS.SOUND3);
-      const promise = audio.play();
-      if (promise !== undefined) {
-        promise
-          .then(() => {
-            hasPlayed = true;
-            cleanup();
-          })
-          .catch(() => {
-            // Autoplay blocked by browser until user gesture
-          });
-      } else {
-        hasPlayed = true;
-        cleanup();
-      }
-    } catch {
-      // Audio playback error ignored
-    }
-  };
-
-  const handleUserInteraction = () => {
-    if (!hasPlayed) {
-      unlockAudioContext();
-      tryPlay();
-    }
-  };
+  let isAttempting = false;
 
   const cleanup = () => {
     if (typeof window !== "undefined") {
@@ -222,7 +203,68 @@ export const triggerPublicPortalOpenSound = (): (() => void) => {
       window.removeEventListener("touchstart", handleUserInteraction, true);
       window.removeEventListener("keydown", handleUserInteraction, true);
     }
+    if (activeOpenSoundCleanup === cleanup) {
+      activeOpenSoundCleanup = null;
+    }
   };
+
+  const tryPlay = () => {
+    if (hasPlayed || isAttempting) return;
+    const now = Date.now();
+    if (now - lastOpenSoundTimestamp < 1500) {
+      hasPlayed = true;
+      cleanup();
+      return;
+    }
+
+    try {
+      const ctx = getAudioContext();
+      if (ctx && audioBuffers.SOUND3 && ctx.state === "running") {
+        hasPlayed = true;
+        lastOpenSoundTimestamp = Date.now();
+        cleanup();
+        playSound("SOUND3");
+        return;
+      }
+
+      isAttempting = true;
+      const pool = fallbackAudios.SOUND3;
+      const audio = pool && pool.length > 0 ? pool[0] : new Audio(SOUND_ASSETS.SOUND3);
+      audio.currentTime = 0;
+      const promise = audio.play();
+      if (promise !== undefined) {
+        promise
+          .then(() => {
+            hasPlayed = true;
+            isAttempting = false;
+            lastOpenSoundTimestamp = Date.now();
+            lastPlayedAt.SOUND3 = Date.now();
+            cleanup();
+          })
+          .catch(() => {
+            // Autoplay blocked by browser until user gesture
+            isAttempting = false;
+          });
+      } else {
+        hasPlayed = true;
+        isAttempting = false;
+        lastOpenSoundTimestamp = Date.now();
+        lastPlayedAt.SOUND3 = Date.now();
+        cleanup();
+      }
+    } catch {
+      isAttempting = false;
+    }
+  };
+
+  const handleUserInteraction = () => {
+    if (!hasPlayed && !isAttempting) {
+      unlockAudioContext();
+      tryPlay();
+    }
+  };
+
+  activeOpenSoundCleanup = cleanup;
 
   if (typeof window !== "undefined") {
     window.addEventListener("pointerdown", handleUserInteraction, true);

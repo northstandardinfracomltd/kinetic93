@@ -548,19 +548,22 @@ export async function triggerEmail6RapportIntervention(
     queryParams.set('tenant', tenantId.trim());
   }
   const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-  const satisfactionUrl = `https://defibeo.deroesch.com/satisfaction/${queryString}`;
+  const origin = typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')
+    ? window.location.origin
+    : 'https://consoledefibeo.deroesch.com';
+  const satisfactionUrl = `${origin}/satisfaction${queryString}`;
 
   const pdfDownloadText = resolvedPdfUrl
     ? `\n\nTélécharger directement votre rapport PDF : ${resolvedPdfUrl}\n`
     : '';
 
-  const body = `Un document a été généré pour l’intervention effectuée sur votre matériel ${cleanIdent} le ${dateStr}${cleanRef ? ` (Réf : ${cleanRef})` : ''}.${pdfDownloadText}\nConnectez-vous sur votre portail client https://defibeo.deroesch.com/ pour le consulter.${enableAvis ? ` Nous vous invitons à laisser un avis sur : ${satisfactionUrl}` : ''}`;
+  const body = `Un document a été généré pour l’intervention effectuée sur votre matériel ${cleanIdent} le ${dateStr}${cleanRef ? ` (Réf : ${cleanRef})` : ''}.${pdfDownloadText}\nConnectez-vous sur votre portail client https://consoledefibeo.deroesch.com/ pour le consulter.${enableAvis ? ` Nous vous invitons à laisser un avis sur : ${satisfactionUrl}` : ''}`;
 
   const htmlBody = `<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
     <p>Bonjour,</p>
     <p>Un rapport d’intervention PDF a été généré pour l’intervention effectuée sur votre matériel <strong>${cleanIdent}</strong> le <strong>${dateStr}</strong>${cleanRef ? ` (Référence : <strong>${cleanRef}</strong>)` : ''}.</p>
     ${resolvedPdfUrl ? `<p style="margin: 20px 0;"><a href="${resolvedPdfUrl}" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: rgb(46, 84, 255); color: #ffffff; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold;">Télécharger le rapport PDF</a></p>` : ''}
-    <p>Vous pouvez également vous connecter sur votre <a href="https://defibeo.deroesch.com/" style="color: rgb(46, 84, 255); text-decoration: underline;">portail client</a> pour le télécharger.</p>
+    <p>Vous pouvez également vous connecter sur votre <a href="https://consoledefibeo.deroesch.com/" style="color: rgb(46, 84, 255); text-decoration: underline;">portail client</a> pour le télécharger.</p>
     ${enableAvis ? `<p>Nous vous invitons à laisser un avis sur notre intervention : <a href="${satisfactionUrl}" style="color: rgb(46, 84, 255); text-decoration: underline;">${satisfactionUrl}</a></p>` : ''}
     <p>Cordialement,<br/><strong>${senderName}</strong></p>
   </div>`;

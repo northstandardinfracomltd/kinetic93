@@ -16,9 +16,22 @@ export function generateRandomSessionSlug(): string {
 
 export function updateLoginSessionSlug(): string {
   if (typeof window === 'undefined') return '';
-  const newSlug = generateRandomSessionSlug();
+  const path = (window.location.pathname || '').toLowerCase();
   const search = window.location.search || '';
   const hash = window.location.hash || '';
+  const searchLower = search.toLowerCase();
+  const hashLower = hash.toLowerCase();
+  if (
+    path.includes('/satisfaction') ||
+    path.includes('/validation') ||
+    searchLower.includes('satisfaction') ||
+    searchLower.includes('validation') ||
+    hashLower.includes('satisfaction') ||
+    hashLower.includes('validation')
+  ) {
+    return path;
+  }
+  const newSlug = generateRandomSessionSlug();
   try {
     window.history.replaceState(null, '', `${newSlug}${search}${hash}`);
   } catch (e) {

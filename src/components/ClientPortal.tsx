@@ -1519,12 +1519,28 @@ export default function ClientPortal({
                   return itKeys.some(k => targetKeys.includes(k));
                 });
                 if (matchedSheetReport) {
+                  const mergedTechSig =
+                    matchedSheetReport.techSignature ||
+                    report.techSignature ||
+                    matchedSheetReport.defibSnapshot?.techSignature ||
+                    report.defibSnapshot?.techSignature ||
+                    '';
+                  const mergedClientPin =
+                    matchedSheetReport.clientPinCode ||
+                    report.clientPinCode ||
+                    matchedSheetReport.defibSnapshot?.clientPinCode ||
+                    report.defibSnapshot?.clientPinCode ||
+                    '';
                   report = {
                     ...report,
                     ...matchedSheetReport,
+                    techSignature: mergedTechSig,
+                    clientPinCode: mergedClientPin,
                     defibSnapshot: {
                       ...(report.defibSnapshot || {}),
                       ...(matchedSheetReport.defibSnapshot || {}),
+                      techSignature: mergedTechSig,
+                      clientPinCode: mergedClientPin,
                     },
                   };
                 }
@@ -1962,37 +1978,72 @@ export default function ClientPortal({
 
                       <!-- Signature Technicien -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        ${report.techSignature ? `
-                          <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
-                          <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
-                            <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
-                          </div>
-                        ` : ''}
+                        ${(() => {
+                          const buildSvgSig = (label: string) => {
+                            const safe = String(label || 'Signé').replace(/[<>&"']/g, '').trim() || 'Signé';
+                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="26" font-style="italic" fill="#0f172a">${safe}</text><path d="M 10 52 Q 95 44 195 54" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                          };
+                          const tName = String(report.techName || report.technicien || snapshot.techName || '').trim();
+                          let tSig = report.techSignature || snapshot.techSignature || '';
+                          if (!tSig && tName) tSig = buildSvgSig(tName);
+                          if (!tSig) return '';
+                          return `
+                            <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
+                            <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
+                              <img src="${tSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
+                            </div>
+                          `;
+                        })()}
                       </div>
 
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
-                          <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                          ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                            <div style="font-size: 11px; margin-bottom: 2px;">
-                              <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
-                              <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
-                            </div>
-                          ` : ''}
-                          ${clientFound && clientFound.clientSignatureImage ? `
-                            <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
-                              <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
-                            </div>
-                          ` : `
-                            ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
-                                Signé électroniquement par PIN (${report.clientPinCode})
+                        ${(() => {
+                          const buildSvgSig = (label: string) => {
+                            const safe = String(label || 'Client').replace(/[<>&"']/g, '').trim() || 'Client';
+                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="25" font-style="italic" fill="#0f172a">${safe}</text><path d="M 12 52 Q 100 45 190 53" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                          };
+                          const pinVal = String(report.clientPinCode || snapshot.clientPinCode || '').trim();
+                          const pinIsImg = pinVal.startsWith('data:image') || pinVal.startsWith('http');
+                          let cSig =
+                            (clientFound && (clientFound.clientSignatureImage || (clientFound as any).signatureClientContratImage || (clientFound as any).signatureClient)) ||
+                            (pinIsImg ? pinVal : '') ||
+                            report.clientSignatureImage ||
+                            report.signatureClientContratImage ||
+                            snapshot.clientSignatureImage ||
+                            snapshot.signatureClientContratImage ||
+                            '';
+                          const displayPin = !pinIsImg ? pinVal : '';
+                          const fallbackSignerName =
+                            (clientFound as any)?.signeParContrat ||
+                            clientFound?.nomPrenomSite ||
+                            snapshot.nomPrenomSite ||
+                            report.nomPrenomSite ||
+                            clientFound?.denomination ||
+                            report.clientName ||
+                            '';
+                          if (!cSig && (displayPin || fallbackSignerName)) {
+                            cSig = buildSvgSig(fallbackSignerName || 'Client');
+                          }
+                          if (!cSig && !displayPin) return '';
+                          return `
+                            <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
+                            ${displayPin ? `
+                              <div style="font-size: 11px; margin-bottom: 2px;">
+                                <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
+                                <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${displayPin}</span>
                               </div>
                             ` : ''}
-                          `}
-                        ` : ''}
+                            ${cSig ? `
+                              <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
+                                <img src="${cSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                                <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">${displayPin ? `Signé électroniquement par PIN (${displayPin})` : 'Signé électroniquement (dessin)'}</div>
+                              </div>
+                            ` : ''}
+                          `;
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -2683,37 +2734,72 @@ export default function ClientPortal({
 
                       <!-- Signature Technicien -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        ${report.techSignature ? `
-                          <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
-                          <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
-                            <img src="${report.techSignature}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
-                          </div>
-                        ` : ''}
+                        ${(() => {
+                          const buildSvgSig = (label: string) => {
+                            const safe = String(label || 'Signé').replace(/[<>&"']/g, '').trim() || 'Signé';
+                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="26" font-style="italic" fill="#0f172a">${safe}</text><path d="M 10 52 Q 95 44 195 54" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                          };
+                          const tName = String(report.techName || report.technicien || snapshot.techName || '').trim();
+                          let tSig = report.techSignature || snapshot.techSignature || '';
+                          if (!tSig && tName) tSig = buildSvgSig(tName);
+                          if (!tSig) return '';
+                          return `
+                            <div class="pdf-line" style="font-size: 16px;">Signature technicien.</div>
+                            <div style="background: transparent; display: flex; justify-content: flex-start; align-items: center; max-height: 60px; max-width: 150px;">
+                              <img src="${tSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature" />
+                            </div>
+                          `;
+                        })()}
                       </div>
 
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
-                        ${(clientFound && clientFound.clientSignatureImage) || (report.clientPinCode && report.clientPinCode.trim()) ? `
-                          <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
-                          ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                            <div style="font-size: 11px; margin-bottom: 2px; font-family: 'Civilprom', sans-serif !important;">
-                              <span class="pdf-label" style="font-size:11px; color:rgb(138, 138, 138); font-family: 'Civilprom', sans-serif !important;">Code validation :</span> 
-                              <span class="pdf-bold" style="font-size:11px; font-family: 'Civilprom', sans-serif !important; font-weight: bold !important; color:#000;">${report.clientPinCode}</span>
-                            </div>
-                          ` : ''}
-                          ${clientFound && clientFound.clientSignatureImage ? `
-                            <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
-                              <img src="${clientFound.clientSignatureImage}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                              <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">Signé électroniquement (dessin)</div>
-                            </div>
-                          ` : `
-                            ${(report.clientPinCode && report.clientPinCode.trim()) ? `
-                              <div style="font-size: 11px; color: #1e293b; font-style: italic; font-weight: bold !important; margin-top: 4px;">
-                                Signé électroniquement par PIN (${report.clientPinCode})
+                        ${(() => {
+                          const buildSvgSig = (label: string) => {
+                            const safe = String(label || 'Client').replace(/[<>&"']/g, '').trim() || 'Client';
+                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="25" font-style="italic" fill="#0f172a">${safe}</text><path d="M 12 52 Q 100 45 190 53" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+                          };
+                          const pinVal = String(report.clientPinCode || snapshot.clientPinCode || '').trim();
+                          const pinIsImg = pinVal.startsWith('data:image') || pinVal.startsWith('http');
+                          let cSig =
+                            (clientFound && (clientFound.clientSignatureImage || (clientFound as any).signatureClientContratImage || (clientFound as any).signatureClient)) ||
+                            (pinIsImg ? pinVal : '') ||
+                            report.clientSignatureImage ||
+                            report.signatureClientContratImage ||
+                            snapshot.clientSignatureImage ||
+                            snapshot.signatureClientContratImage ||
+                            '';
+                          const displayPin = !pinIsImg ? pinVal : '';
+                          const fallbackSignerName =
+                            (clientFound as any)?.signeParContrat ||
+                            clientFound?.nomPrenomSite ||
+                            snapshot.nomPrenomSite ||
+                            report.nomPrenomSite ||
+                            clientFound?.denomination ||
+                            report.clientName ||
+                            '';
+                          if (!cSig && (displayPin || fallbackSignerName)) {
+                            cSig = buildSvgSig(fallbackSignerName || 'Client');
+                          }
+                          if (!cSig && !displayPin) return '';
+                          return `
+                            <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
+                            ${displayPin ? `
+                              <div style="font-size: 11px; margin-bottom: 2px; font-family: 'Civilprom', sans-serif !important;">
+                                <span class="pdf-label" style="font-size:11px; color:rgb(138, 138, 138); font-family: 'Civilprom', sans-serif !important;">Code validation :</span> 
+                                <span class="pdf-bold" style="font-size:11px; font-family: 'Civilprom', sans-serif !important; font-weight: bold !important; color:#000;">${displayPin}</span>
                               </div>
                             ` : ''}
-                          `}
-                        ` : ''}
+                            ${cSig ? `
+                              <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
+                                <img src="${cSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
+                                <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">${displayPin ? `Signé électroniquement par PIN (${displayPin})` : 'Signé électroniquement (dessin)'}</div>
+                              </div>
+                            ` : ''}
+                          `;
+                        })()}
                       </div>
                     </div>
                   </div>

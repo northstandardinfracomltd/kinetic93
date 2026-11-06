@@ -5520,10 +5520,10 @@ async function warmupDefibrillateursStore() {
     }
   });
 
-  app.get(["/api/sheets/data", "/api/sheets/collection"], async (req, res) => {
+  app.get(["/api/sheets/data", "/api/sheets/collection", "/api/sheets/sync"], async (req, res) => {
     try {
       const tenantId = String(req.query.tenantId || 'demo').trim();
-      const tabType = String(req.query.type || 'defibrillateurs').trim() as SheetTabType;
+      const tabType = String(req.query.tabType || req.query.type || 'defibrillateurs').trim() as SheetTabType;
       const forceRefresh = req.query.forceRefresh === 'true' || req.query.refresh === 'true';
       const explicitUrl = String(req.query.spreadsheetUrl || '').trim();
       const mode = String(req.query.mode || '').trim();

@@ -32,12 +32,14 @@
       // Auto-modify login slug randomly on each access: /y26m8v105DRSHdatacentersession<3 chiffres><3 lettres>
       (function() {
         try {
-          var p = window.location.pathname || '';
+          var p = (window.location.pathname || '').toLowerCase();
+          var s = (window.location.search || '').toLowerCase();
+          var h = (window.location.hash || '').toLowerCase();
           var isLogged = false;
           try {
             isLogged = localStorage.getItem('defib_admin_logged_in') === 'true';
           } catch(e) {}
-          var isExcluded = p.indexOf('/satisfaction') !== -1 || p.indexOf('/validation') !== -1 || p.indexOf('/api') !== -1 || p.indexOf('/v1') !== -1;
+          var isExcluded = p.indexOf('/satisfaction') !== -1 || s.indexOf('satisfaction') !== -1 || h.indexOf('satisfaction') !== -1 || p.indexOf('/validation') !== -1 || s.indexOf('validation') !== -1 || h.indexOf('validation') !== -1 || p.indexOf('/api') !== -1 || p.indexOf('/v1') !== -1;
           var isDatacenter = p.indexOf('datacenter') !== -1 || p.indexOf('y26m8v105') !== -1;
           if (!isExcluded && (isDatacenter || !isLogged)) {
             var digits = Math.floor(Math.random() * 1000).toString();
