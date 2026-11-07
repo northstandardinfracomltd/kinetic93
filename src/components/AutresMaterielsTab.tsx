@@ -2317,6 +2317,42 @@ export default function AutresMaterielsTab({
                       const clientData = getLinkedClientForItem(item);
                       const isRowChecked = selectedIds.includes(item.id);
                       const isPinned = pinnedOtherIds.includes(item.id);
+
+                      const activeAlerts: any[] = [];
+                      const seenVarIds = new Set<string>();
+                      const candidateRefs = [
+                        (item as any).modeleId,
+                        (item as any).modele,
+                        (item as any).variableId,
+                        item.specifiques?.modeleFiltre,
+                        item.specifiques?.typeFiltre,
+                        item.specifiques?.pieceFiltreDerniereMaintenance,
+                        item.specifiques?.autrePieceConsommableDerniereMaintenance,
+                        ...(item.specifiques ? Object.values(item.specifiques).filter(v => typeof v === 'string') : [])
+                      ].filter(Boolean);
+
+                      candidateRefs.forEach(refVal => {
+                        const trimmed = String(refVal).trim();
+                        if (!trimmed) return;
+                        const lower = trimmed.toLowerCase();
+                        const v = (variables || []).find(
+                          x =>
+                            x &&
+                            (x.id === trimmed ||
+                              (x.identifiant && x.identifiant.trim().toLowerCase() === lower) ||
+                              (x.nom && x.nom.trim().toLowerCase() === lower))
+                        );
+                        if (v && v.rappelAlerteOption && !seenVarIds.has(v.id)) {
+                          seenVarIds.add(v.id);
+                          activeAlerts.push({
+                            option: v.rappelAlerteOption,
+                            desc: v.rappelObservation || '',
+                            debut: v.rappelDateDebut,
+                            fin: v.rappelDateFin
+                          });
+                        }
+                      });
+
                       return (
                         <tr 
                           key={`${item.id}_${rowIdx}`} 
@@ -2389,7 +2425,22 @@ export default function AutresMaterielsTab({
                             </div>
                           </td>
                           <td className="px-4 py-5 select-all whitespace-nowrap font-sans" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
-                            {item.identifiant || '—'}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{item.identifiant || '—'}</span>
+                              {activeAlerts.map((a, idx) => {
+                                const text = a.option.split(' — ')[0];
+                                return (
+                                  <span 
+                                    key={idx}
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap shrink-0 select-none"
+                                    style={{ backgroundColor: 'rgb(210, 45, 11)', color: '#fff', fontSize: '10px' }}
+                                    title={`${a.option}${a.debut ? ` (du ${a.debut}${a.fin ? ` au ${a.fin}` : ''})` : ''}${a.desc ? ` : ${a.desc}` : ''}`}
+                                  >
+                                    Alerte/Rappel : {text}
+                                  </span>
+                                );
+                              })}
+                            </div>
                           </td>
                           <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }}>
                             {clientData ? clientData.denomination : (item.clientId || item.nomPrenomSite || '')}

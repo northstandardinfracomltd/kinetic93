@@ -7,25 +7,44 @@ interface ColumnDef {
   width: number;
   align?: 'left' | 'center' | 'right';
   bold?: boolean;
+  noTruncate?: boolean;
 }
 
-// Columns definition for A4 Landscape (total = 287 mm, spanning page width 297 mm with 5 mm margins)
+// Base columns definition for A4 Landscape (total = 287 mm, spanning page width 297 mm with 5 mm margins)
 // Each header strictly ends with a dot '.' as requested by the user and styled in the table view
-const COLUMNS: ColumnDef[] = [
-  { header: 'Identifiant.', width: 25, bold: true },
-  { header: 'N° Série.', width: 22 },
-  { header: 'Modèle.', width: 25 },
-  { header: 'Client.', width: 28 },
-  { header: 'Nom du site.', width: 26 },
-  { header: 'Contrat.', width: 24 },
-  { header: 'Localisation.', width: 25 },
-  { header: 'Garantie.', width: 17, align: 'center' },
-  { header: 'Pro. visite.', width: 17, align: 'center' },
-  { header: 'Péremption A.', width: 19, align: 'center' },
-  { header: 'Péremption P.', width: 19, align: 'center' },
-  { header: 'Péremption B.', width: 19, align: 'center' },
-  { header: 'Tournée.', width: 21 },
+const BASE_COLUMNS: ColumnDef[] = [
+  { header: 'Identifiant.', width: 22, bold: true },
+  { header: 'N° Série.', width: 27, noTruncate: true },
+  { header: 'Modèle.', width: 24 },
+  { header: 'Client.', width: 26 },
+  { header: 'Nom du site.', width: 24 },
+  { header: 'Contrat.', width: 23 },
+  { header: 'Localisation.', width: 23 },
+  { header: 'Garantie.', width: 18, align: 'center' },
+  { header: 'Pro. visite.', width: 18, align: 'center' },
+  { header: 'Péremption A.', width: 21, align: 'center', noTruncate: true },
+  { header: 'Péremption P.', width: 21, align: 'center', noTruncate: true },
+  { header: 'Péremption B.', width: 21, align: 'center', noTruncate: true },
+  { header: 'Tournée.', width: 19 },
 ];
+
+const isPlaceholderClientVal = (val?: string | null): boolean => {
+  if (!val) return true;
+  const s = String(val).trim().toLowerCase();
+  return (
+    !s ||
+    s === '-' ||
+    s === '—' ||
+    s === 'n/a' ||
+    s === 'na' ||
+    s === 'null' ||
+    s === 'undefined' ||
+    s === 'aucun' ||
+    s === 'inconnu' ||
+    s === 'non renseigné' ||
+    s === 'non renseigne'
+  );
+};
 
 async function loadTenantLogoData(url?: string): Promise<{ dataUrl: string; width: number; height: number; format: 'PNG' | 'JPEG' } | null> {
   if (!url || !url.trim()) return null;
@@ -109,7 +128,7 @@ function truncateVectorText(doc: jsPDF, text: string, maxW: number): string {
 }
 
 /**
- * Draws a 100% native vector table cell with white background and crisp vector border.
+ * Draws a 100% native vector table cell with white background and crisp black vector border.
  */
 function drawVectorCell(
   doc: jsPDF,
@@ -120,21 +139,36 @@ function drawVectorCell(
   height: number,
   align: 'left' | 'center' | 'right' = 'left',
   bold = false,
+  noTruncate = false,
   paddingX = 1.2
 ) {
-  // Pure white vector background as requested (headers and value cells)
+  // Pure white vector background and pure black border as requested
   doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(203, 213, 225); // #cbd5e1 subtle slate border
-  doc.setLineWidth(0.2); // Vector stroke
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.2);
   doc.rect(x, y, width, height, 'FD');
 
   // Vector typography (100% vector, laser sharp at any zoom level)
+  const baseFontSize = 7.2;
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
-  doc.setFontSize(7.2);
-  doc.setTextColor(15, 23, 42); // #0f172a
+  doc.setFontSize(baseFontSize);
+  doc.setTextColor(0, 0, 0);
 
+  const safeText = text || '-';
   const maxW = Math.max(1, width - paddingX * 2);
-  const renderedText = truncateVectorText(doc, text, maxW);
+  let renderedText = safeText;
+
+  if (noTruncate) {
+    // Never truncate with '…'; scale font size down slightly if needed so full value fits
+    let fontSize = baseFontSize;
+    while (fontSize > 4.5 && doc.getTextWidth(renderedText) > maxW) {
+      fontSize -= 0.2;
+      doc.setFontSize(fontSize);
+    }
+  } else {
+    renderedText = truncateVectorText(doc, safeText, maxW);
+  }
+
   const textY = y + height / 2;
 
   if (align === 'center') {
@@ -161,8 +195,95 @@ export async function exportSelectedDefibsToPDF({
 }) {
   if (!selectedDefibs || selectedDefibs.length === 0) return;
 
-  const clientMap = new Map(clients.map(c => [c.id, c]));
-  const variableMap = new Map(variables.map(v => [v.id, v]));
+  // Multi-key client lookup map (matches DefibTab.tsx getLinkedClientForDefib)
+  const clientMap = new Map<string, Client>();
+  for (const c of clients || []) {
+    if (!c) continue;
+    if (c.id && !isPlaceholderClientVal(c.id)) {
+      clientMap.set(c.id, c);
+      clientMap.set(c.id.trim().toLowerCase(), c);
+    }
+    if (c.clientIdField && !isPlaceholderClientVal(c.clientIdField)) {
+      const cif = c.clientIdField.trim();
+      clientMap.set(cif, c);
+      clientMap.set(cif.toLowerCase(), c);
+    }
+    if (c.siret && !isPlaceholderClientVal(c.siret)) {
+      clientMap.set(`siret:${c.siret.trim().toLowerCase()}`, c);
+    }
+    if (c.denomination && c.denomination.trim()) {
+      const denomKey = c.denomination.trim().toLowerCase();
+      clientMap.set(denomKey, c);
+      const normDenomKey = denomKey
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/&#0*39;/g, "'")
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      if (normDenomKey) {
+        clientMap.set(normDenomKey, c);
+      }
+    }
+    if ((c as any).nomSite && String((c as any).nomSite).trim()) {
+      clientMap.set(String((c as any).nomSite).trim().toLowerCase(), c);
+    }
+  }
+
+  const getLinkedClientForDefib = (df: any): Client | undefined => {
+    if (!df) return undefined;
+    const rawId = String(df.clientId || '').trim();
+    if (rawId && !isPlaceholderClientVal(rawId)) {
+      const byId = clientMap.get(rawId) || clientMap.get(rawId.toLowerCase());
+      if (byId) return byId;
+    }
+    const rawField = String(df.clientIdField || '').trim();
+    if (rawField && !isPlaceholderClientVal(rawField)) {
+      const byField = clientMap.get(rawField) || clientMap.get(rawField.toLowerCase());
+      if (byField) return byField;
+    }
+    if (df.clientNom && String(df.clientNom).trim()) {
+      const rawNom = String(df.clientNom).trim().toLowerCase();
+      const byNom = clientMap.get(rawNom);
+      if (byNom) return byNom;
+      const normNom = rawNom
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/&#0*39;/g, "'")
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      if (normNom && clientMap.has(normNom)) return clientMap.get(normNom);
+    }
+    if (rawId && !isPlaceholderClientVal(rawId)) {
+      const bySiret = clientMap.get(`siret:${rawId.toLowerCase()}`);
+      if (bySiret) return bySiret;
+    }
+    if (rawField && !isPlaceholderClientVal(rawField)) {
+      const bySiret = clientMap.get(`siret:${rawField.toLowerCase()}`);
+      if (bySiret) return bySiret;
+    }
+    if (df.nomSite && String(df.nomSite).trim()) {
+      const rawSite = String(df.nomSite).trim().toLowerCase();
+      const bySite = clientMap.get(rawSite);
+      if (bySite) return bySite;
+      const normSite = rawSite
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/&#0*39;/g, "'")
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      if (normSite && clientMap.has(normSite)) return clientMap.get(normSite);
+    }
+    return undefined;
+  };
+
+  // Multi-key variable lookup map
+  const variableMap = new Map<string, Variable>();
+  for (const v of variables || []) {
+    if (!v) continue;
+    if (v.id) variableMap.set(v.id, v);
+    if (v.identifiant) variableMap.set(v.identifiant.trim(), v);
+    if (v.nom) variableMap.set(v.nom.trim(), v);
+  }
 
   // A4 Landscape geometry in mm
   const marginX = 5; // 5 mm margin left & right
@@ -178,12 +299,19 @@ export async function exportSelectedDefibsToPDF({
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const yyyy = now.getFullYear();
   const dateFormatted = `${dd}/${mm}/${yyyy}`;
-  const subtitleText = `Export Matériel(s) Le ${dateFormatted}`;
 
   // Build rows data
   const rowsData: string[][] = selectedDefibs.map((df) => {
-    const linkedClient = clientMap.get(df.clientId);
-    const linkedModel = variableMap.get(df.modeleId);
+    const linkedClient = getLinkedClientForDefib(df);
+    const rawModelKey = String(df.modeleId || (df as any).modele || '').trim();
+    const linkedModel = variableMap.get(rawModelKey);
+
+    // Client display value
+    const clientDisplay =
+      linkedClient?.denomination ||
+      (df.clientNom && !isPlaceholderClientVal(df.clientNom) ? df.clientNom : '') ||
+      (df.clientId && !isPlaceholderClientVal(df.clientId) && !String(df.clientId).startsWith('cli-') ? df.clientId : '') ||
+      '-';
 
     // Contrat label
     const activeContrat = linkedClient ? linkedClient.contrat : df.contrat;
@@ -199,11 +327,15 @@ export async function exportSelectedDefibsToPDF({
     }
 
     // Localisation
-    const locParts = [df.ville, df.cp].filter(Boolean);
-    const locStr = locParts.length > 0 ? locParts.join(', ') : (df.numVoie || '-');
+    const locParts = [df.ville, df.cp || (df as any).codePostal].filter(Boolean);
+    const locStr = locParts.length > 0 ? locParts.join(', ') : (df.numVoie || (df as any).numeroVoie || '-');
 
     // Dates
-    const prochaineMaint = computeProchaineMaintenance(df.derniereMaintenance);
+    const prochaineMaint =
+      (df as any).prochaineMaintenance ||
+      (df as any).prochaine_visite ||
+      (df as any).prochaine_v ||
+      computeProchaineMaintenance(df.derniereMaintenance);
     const finGarantie = formatDateToFR(df.finGarantie) || '-';
     const proVisite = formatDateToFR(prochaineMaint) || '-';
     const perempA = formatDateToFR(df.peremptionElectrodeA) || '-';
@@ -229,8 +361,8 @@ export async function exportSelectedDefibsToPDF({
     return [
       df.identifiant || '-',
       df.numeroSerie || '-',
-      linkedModel?.nom || df.modeleId || '-',
-      linkedClient?.denomination || '-',
+      linkedModel?.nom || rawModelKey || '-',
+      clientDisplay,
       df.nomSite || '-',
       contratStr,
       locStr,
@@ -281,6 +413,39 @@ export async function exportSelectedDefibsToPDF({
     format: 'a4',
   });
 
+  // Dynamically adjust N° Série. column width if any serial number is wider than the base 27 mm
+  const columns: ColumnDef[] = BASE_COLUMNS.map((c) => ({ ...c }));
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.2);
+  let maxSerieWidthMm = columns[1].width;
+  for (const row of rowsData) {
+    const serieVal = String(row[1] || '-');
+    const neededMm = doc.getTextWidth(serieVal) + 3.0; // 1.2mm padding each side + safety margin
+    if (neededMm > maxSerieWidthMm) {
+      maxSerieWidthMm = neededMm;
+    }
+  }
+  const cappedSerieWidthMm = Math.min(48, Math.ceil(maxSerieWidthMm));
+  const extraSerieMm = cappedSerieWidthMm - columns[1].width;
+  if (extraSerieMm > 0) {
+    columns[1].width = cappedSerieWidthMm;
+    // Borrow extra mm proportionally from truncatable text columns: Modèle (2), Client (3), Nom du site (4), Contrat (5), Localisation (6)
+    const donorIndices = [2, 3, 4, 5, 6];
+    let remainingToBorrow = extraSerieMm;
+    let pass = 0;
+    while (remainingToBorrow > 0 && pass < 20) {
+      for (const idx of donorIndices) {
+        if (remainingToBorrow <= 0) break;
+        if (columns[idx].width > 16) {
+          const step = Math.min(1, remainingToBorrow);
+          columns[idx].width -= step;
+          remainingToBorrow -= step;
+        }
+      }
+      pass++;
+    }
+  }
+
   // Render each page with 100% native vector graphics (no canvas flattening)
   for (let pageIdx = 0; pageIdx < pageRowChunks.length; pageIdx++) {
     if (pageIdx > 0) {
@@ -317,21 +482,21 @@ export async function exportSelectedDefibsToPDF({
       doc.setTextColor(0, 0, 0);
       doc.text(companyName, textLeft, 7, { baseline: 'middle' });
 
-      // Subtitle: Export Matériel(s) Le dd/mm/yyyy
+      // Second line: left-aligned "Export Matériel(s)" and right-aligned "Le dd/mm/yyyy"
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.2);
       doc.setTextColor(0, 0, 0);
-      doc.text(subtitleText, textLeft, 12, { baseline: 'middle' });
+      doc.text('Export Matériel(s)', textLeft, 12, { align: 'left', baseline: 'middle' });
+      doc.text(`Le ${dateFormatted}`, 297 - marginX, 12, { align: 'right', baseline: 'middle' });
 
       tableStartY = page1StartY;
     }
 
-    // 1. Draw Table Header (Pure white background + trailing dot '.' on each header)
+    // 1. Draw Table Header (Pure white background + trailing dot '.' on each header, never truncated)
     let headerX = marginX;
-    for (const col of COLUMNS) {
-      // Ensure header ends with a dot
+    for (const col of columns) {
       const headerTitle = col.header.endsWith('.') ? col.header : `${col.header}.`;
-      drawVectorCell(doc, headerTitle, headerX, tableStartY, col.width, HEADER_HEIGHT, col.align || 'left', true);
+      drawVectorCell(doc, headerTitle, headerX, tableStartY, col.width, HEADER_HEIGHT, col.align || 'left', true, true);
       headerX += col.width;
     }
 
@@ -341,18 +506,29 @@ export async function exportSelectedDefibsToPDF({
       const rowY = tableStartY + HEADER_HEIGHT + rIdx * ROW_HEIGHT;
 
       let cellX = marginX;
-      for (let cIdx = 0; cIdx < COLUMNS.length; cIdx++) {
-        const col = COLUMNS[cIdx];
+      for (let cIdx = 0; cIdx < columns.length; cIdx++) {
+        const col = columns[cIdx];
         const cellVal = String(row[cIdx] ?? '-');
-        drawVectorCell(doc, cellVal, cellX, rowY, col.width, ROW_HEIGHT, col.align || 'left', col.bold || false);
+        drawVectorCell(
+          doc,
+          cellVal,
+          cellX,
+          rowY,
+          col.width,
+          ROW_HEIGHT,
+          col.align || 'left',
+          col.bold || false,
+          col.noTruncate || false
+        );
         cellX += col.width;
       }
     }
 
-    // 3. Footer: Pagination in pure vector black font
+    // 3. Footer: Left-aligned "Logiciel Defibeo" and Right-aligned Pagination in pure vector black font
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.5);
     doc.setTextColor(0, 0, 0);
+    doc.text('Logiciel Defibeo', marginX, 205, { align: 'left', baseline: 'bottom' });
     doc.text(`Page ${pageIdx + 1} / ${totalPages}`, 297 - marginX, 205, { align: 'right', baseline: 'bottom' });
   }
 

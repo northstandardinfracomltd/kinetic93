@@ -929,9 +929,18 @@ export default function ClientTab({
     return {};
   });
 
-  const recordRecentClientChange = (clientId: string) => {
+  const recordRecentClientChange = (keys: string | Array<string | undefined | null>) => {
+    const keyList = (Array.isArray(keys) ? keys : [keys])
+      .map(k => String(k || '').trim())
+      .filter(Boolean);
+    if (keyList.length === 0) return;
     setRecentClientTimestamps((prev) => {
-      const updated = { ...prev, [clientId]: Date.now() };
+      const now = Date.now();
+      const updated = { ...prev };
+      for (const k of keyList) {
+        updated[k] = now;
+        updated[k.toLowerCase()] = now;
+      }
       try {
         sessionStorage.setItem('defib_recent_client_timestamps', JSON.stringify(updated));
       } catch (_) {}
@@ -1065,10 +1074,22 @@ export default function ClientTab({
   // Clients added or modified in the last 5 minutes
   const recentClients = useMemo(() => {
     const now = Date.now();
+    const getClientRecordedTs = (c: Client): number => {
+      const candidates = [
+        c.id,
+        c.clientIdField,
+        c.denomination ? c.denomination.trim().toLowerCase() : '',
+      ].filter(Boolean) as string[];
+      for (const k of candidates) {
+        const ts = recentClientTimestamps[k] || recentClientTimestamps[k.toLowerCase()];
+        if (ts) return ts;
+      }
+      return 0;
+    };
     const list = (clients || []).filter((c) => {
       if (!c || typeof c !== 'object') return false;
       if ((c as any).numeroSerie && !c.denomination && !c.siret) return false;
-      const recordedTs = recentClientTimestamps[c.id];
+      const recordedTs = getClientRecordedTs(c);
       if (recordedTs && now - recordedTs < FIVE_MINUTES_MS) {
         return true;
       }
@@ -1089,8 +1110,8 @@ export default function ClientTab({
 
     // Trier les plus récemment modifiés/créés en premier
     list.sort((a, b) => {
-      const tsA = recentClientTimestamps[a.id] || (a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0));
-      const tsB = recentClientTimestamps[b.id] || (b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0));
+      const tsA = getClientRecordedTs(a) || (a.updatedAt ? new Date(a.updatedAt).getTime() : (a.createdAt ? new Date(a.createdAt).getTime() : 0));
+      const tsB = getClientRecordedTs(b) || (b.updatedAt ? new Date(b.updatedAt).getTime() : (b.createdAt ? new Date(b.createdAt).getTime() : 0));
       return tsB - tsA;
     });
 
@@ -1379,6 +1400,13 @@ export default function ClientTab({
     };
 
     const nowIso = new Date().toISOString();
+    const slugDenom = String(payload.denomination || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    const canonicalCliId = payload.clientIdField || (slugDenom ? `cli_${slugDenom}` : '');
     if (editingClient) {
       onUpdateClient({
         id: editingClient.id,
@@ -1387,16 +1415,16 @@ export default function ClientTab({
         signaturePins: editingClient.signaturePins,
         updatedAt: nowIso,
       } as any);
-      recordRecentClientChange(editingClient.id);
+      recordRecentClientChange([editingClient.id, editingClient.clientIdField, payload.clientIdField, payload.denomination, canonicalCliId]);
     } else {
-      const newId = 'c_' + Date.now();
+      const newId = canonicalCliId || ('c_' + Date.now());
       onAddClient({
         id: newId,
         ...payload,
         createdAt: nowIso,
         updatedAt: nowIso,
       } as any);
-      recordRecentClientChange(newId);
+      recordRecentClientChange([newId, payload.clientIdField, payload.denomination, canonicalCliId]);
     }
 
     setSearch('');

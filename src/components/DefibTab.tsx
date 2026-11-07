@@ -834,13 +834,14 @@ export default function DefibTab({
     };
   }, [activeTenantId, clientsProp?.length, resolvedClientsSpreadsheetUrl, refreshTrigger]);
 
+  const stableClientsRef = useRef<{ tenant: string; items: Client[] }>({ tenant: '', items: [] });
+
   const clients = useMemo(() => {
     if (!resolvedClientsSpreadsheetUrl) return [];
-    const source = Array.isArray(clientsProp) && clientsProp.length > 0 ? clientsProp : fallbackSheetClients;
-    const normalized: Client[] = [];
-    for (const c of source || []) {
-      if (!c || typeof c !== 'object') continue;
-      if ((c as any).numeroSerie && !c.denomination && !c.siret) continue;
+    const combinedMap = new Map<string, Client>();
+    const addClientToList = (c: Client) => {
+      if (!c || typeof c !== 'object') return;
+      if ((c as any).numeroSerie && !c.denomination && !c.siret) return;
       const denom = String(
         c.denomination ||
           (c as any).entreprise ||
@@ -849,11 +850,30 @@ export default function DefibTab({
           (c as any).nom ||
           ''
       ).trim();
-      if (!denom) continue;
-      normalized.push(denom === c.denomination ? c : { ...c, denomination: denom });
+      if (!denom) return;
+      const normObj = denom === c.denomination ? c : { ...c, denomination: denom };
+      const key = String(normObj.id || normObj.clientIdField || denom.toLowerCase()).trim();
+      if (!key) return;
+      const existing = combinedMap.get(key);
+      if (existing) {
+        const tExisting = Date.parse((existing as any).updatedAt || (existing as any).dateDerniereModification || '') || 0;
+        const tNew = Date.parse((normObj as any).updatedAt || (normObj as any).dateDerniereModification || '') || 0;
+        combinedMap.set(key, tExisting > tNew ? { ...normObj, ...existing } : { ...existing, ...normObj });
+      } else {
+        combinedMap.set(key, normObj);
+      }
+    };
+    if (stableClientsRef.current.tenant === activeTenantId) {
+      for (const c of stableClientsRef.current.items) addClientToList(c);
     }
-    return normalized;
-  }, [clientsProp, fallbackSheetClients, resolvedClientsSpreadsheetUrl]);
+    for (const c of fallbackSheetClients || []) addClientToList(c);
+    for (const c of clientsProp || []) addClientToList(c);
+    const result = Array.from(combinedMap.values());
+    if (result.length > 0) {
+      stableClientsRef.current = { tenant: activeTenantId, items: result };
+    }
+    return result;
+  }, [clientsProp, fallbackSheetClients, resolvedClientsSpreadsheetUrl, activeTenantId]);
 
   const [isSpreadsheetEditorPopupOpen, setIsSpreadsheetEditorPopupOpen] = useState(false);
 
@@ -879,6 +899,8 @@ export default function DefibTab({
     setIsLocalRefreshing(true);
     setLocalRefreshPercent(5);
     try {
+      stableDefibsRef.current = { tenant: activeTenantId, items: [] };
+      stableClientsRef.current = { tenant: activeTenantId, items: [] };
       if (onRefreshData) {
         await onRefreshData();
       }
@@ -1275,6 +1297,12 @@ export default function DefibTab({
     const byIdent = new Map<string, number>();
     const out: Defibrillateur[] = [];
 
+    const getRecordTimestamp = (rec: any): number => {
+      if (!rec) return 0;
+      const t = Date.parse(rec.updatedAt || rec.dateDerniereModification || '');
+      return isNaN(t) ? 0 : t;
+    };
+
     for (const sourceList of [effectiveFallback, planSheetDefibs, remoteQueriedDefibs, defibrillateurs]) {
       for (const df of sourceList) {
         if (!df) continue;
@@ -1293,7 +1321,12 @@ export default function DefibTab({
           if (identKey) byIdent.set(identKey, idx);
         } else {
           const existing = out[existingIdx];
-          const merged = { ...existing, ...df, id: existing.id || df.id };
+          const existingTs = getRecordTimestamp(existing);
+          const incomingTs = getRecordTimestamp(df);
+          const merged =
+            existingTs > incomingTs
+              ? { ...df, ...existing, id: existing.id || df.id }
+              : { ...existing, ...df, id: existing.id || df.id };
           out[existingIdx] = merged;
           const mId = String(merged.id || '').trim().toLowerCase();
           const mIdent = String(merged.identifiant || '').trim().toLowerCase();
@@ -1488,6 +1521,7 @@ export default function DefibTab({
   const [clientSearchTarget, setClientSearchTarget] = useState<'form' | 'filter'>('form');
   const [cursorLoading, setCursorLoading] = useState<{ x: number; y: number } | null>(null);
   const [isSearchingSpreadsheet, setIsSearchingSpreadsheet] = useState(false);
+  const [cursorIndicatorForceHidden, setCursorIndicatorForceHidden] = useState(false);
   const [cursorSearchPos, setCursorSearchPos] = useState<{ x: number; y: number }>({
     x: typeof window !== 'undefined' ? Math.round(window.innerWidth / 2) : 300,
     y: typeof window !== 'undefined' ? 140 : 140,
@@ -1497,13 +1531,25 @@ export default function DefibTab({
     y: typeof window !== 'undefined' ? 140 : 140,
   });
 
+  // Maximum 45s visibility limit for "Chargement..." next to cursor
+  useEffect(() => {
+    if (!cursorLoading) return;
+    const maxTimer = setTimeout(() => {
+      setCursorLoading(null);
+      if (typeof document !== 'undefined') {
+        document.body.style.cursor = '';
+      }
+    }, 45000);
+    return () => clearTimeout(maxTimer);
+  }, [cursorLoading !== null]);
+
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
       lastMousePosRef.current = { x: e.clientX, y: e.clientY };
       if (cursorLoading) {
         setCursorLoading({ x: e.clientX, y: e.clientY });
       }
-      if (isSearchingSpreadsheet || (!isInitialView && isDefibLoading)) {
+      if (isSearchingSpreadsheet || isDefibLoading) {
         setCursorSearchPos({ x: e.clientX, y: e.clientY });
       }
     };
@@ -2591,9 +2637,10 @@ export default function DefibTab({
 
   const variableMap = useMemo(() => {
     const map = new Map<string, Variable>();
-    for (const v of [...variables, ...modelesDefib, ...modelesCoffret, ...modelesElectrode, ...modelesBatterie]) {
+    for (const v of [...modelesDefib, ...modelesCoffret, ...modelesElectrode, ...modelesBatterie, ...variables]) {
       if (!v) continue;
       map.set(v.id, v);
+      if (v.identifiant) map.set(v.identifiant.trim(), v);
       if (v.nom) map.set(v.nom.trim(), v);
     }
     return map;
@@ -3136,9 +3183,27 @@ export default function DefibTab({
     return !hasSearch && !hasSortFilter && !hasDeptFilter && !hasMaintFilter && !hasActiveSidePaneFilter;
   }, [search, sortFilter, selectedDepartment, maintenanceFilter, activeFilters]);
 
+  // Maximum 45s visibility limit for "Recherche en cours…" next to cursor
+  const isCursorSearchIndicatorActive = Boolean(isSearchingSpreadsheet || (!isInitialView && isDefibLoading));
+  useEffect(() => {
+    if (!isCursorSearchIndicatorActive) {
+      setCursorIndicatorForceHidden(false);
+      return;
+    }
+    const maxTimer = setTimeout(() => {
+      setIsSearchingSpreadsheet(false);
+      setCursorIndicatorForceHidden(true);
+      if (typeof document !== 'undefined') {
+        document.body.style.cursor = '';
+      }
+    }, 45000);
+    return () => clearTimeout(maxTimer);
+  }, [isCursorSearchIndicatorActive]);
+
   // Direct server-side Google Spreadsheet interrogation on Search & Filters
   useEffect(() => {
     if (effectiveRefreshing) {
+      setIsSearchingSpreadsheet(false);
       return;
     }
     if (isInitialView && maintenanceFilter === 'all') {
@@ -3148,6 +3213,7 @@ export default function DefibTab({
     }
 
     let cancelled = false;
+    setCursorIndicatorForceHidden(false);
     setIsSearchingSpreadsheet(true);
     setCursorSearchPos({ ...lastMousePosRef.current });
     const startedAt = Date.now();
@@ -3225,6 +3291,7 @@ export default function DefibTab({
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      setIsSearchingSpreadsheet(false);
     };
   }, [
     resolvedSpreadsheetUrl,
@@ -4151,7 +4218,14 @@ export default function DefibTab({
 
     try {
       const targetKey = df.identifiant || df.numeroSerie || df.id;
-      if (targetKey && resolvedSpreadsheetUrl) {
+      const dfUpdatedTs = Date.parse((df as any).updatedAt || (df as any).dateDerniereModification || '') || 0;
+      const isRecentlyEditedLocally =
+        (dfUpdatedTs > 0 && Date.now() - dfUpdatedTs < 300_000) ||
+        Boolean(df.id && recentDefibTimestamps[String(df.id).trim().toUpperCase()]) ||
+        Boolean(df.identifiant && recentDefibTimestamps[String(df.identifiant).trim().toUpperCase()]) ||
+        Boolean(df.numeroSerie && recentDefibTimestamps[String(df.numeroSerie).trim().toUpperCase()]);
+
+      if (targetKey && resolvedSpreadsheetUrl && !isRecentlyEditedLocally) {
         const activeTenant = activeTenantId || (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : '') || 'demo';
         try {
           const controller = new AbortController();
@@ -4168,7 +4242,6 @@ export default function DefibTab({
               setEditingDefib(prev => prev ? ({ ...prev, ...fresh, id: prev.id || fresh.id, _sheetRowNumber: fresh._sheetRowNumber || (prev as any)._sheetRowNumber, _rawSheetRow: fresh._rawSheetRow || (prev as any)._rawSheetRow } as any) : prev);
               if (fresh.commentaire !== undefined) setCommentaire(fresh.commentaire || '');
               if (fresh.typeDefibrillateur?.trim()) setTypeDefibrillateur(fresh.typeDefibrillateur);
-              if (fresh.commentaireInterne !== undefined) setCommentaireInterne(fresh.commentaireInterne || '');
               if (fresh.commentaireAdresse !== undefined || fresh.aideAcces !== undefined || fresh.aide_acces !== undefined) {
                 const freshAide = (fresh.commentaireAdresse || fresh.aideAcces || fresh.aide_acces || '').trim();
                 setCommentaireAdresse(freshAide);
@@ -4185,13 +4258,11 @@ export default function DefibTab({
               if (fresh.commentaireElectrodeA !== undefined) setCommentaireElectrodeA(fresh.commentaireElectrodeA || '');
               if (fresh.peremptionElectrodeA !== undefined) setPeremptionElectrodeA(toISODateOnly(fresh.peremptionElectrodeA));
               if (fresh.insertionElectrodeA !== undefined) setInsertionElectrodeA(toISODateOnly(fresh.insertionElectrodeA));
-              if (fresh.fabricationElectrodeA !== undefined) setFabricationElectrodeA(toISODateOnly(fresh.fabricationElectrodeA));
               if (fresh.livraisonElectrodeA !== undefined) setLivraisonElectrodeA(toISODateOnly(fresh.livraisonElectrodeA));
               if (fresh.lotElectrodeP !== undefined) setLotElectrodeP(fresh.lotElectrodeP || '');
               if (fresh.commentaireElectrodeP !== undefined) setCommentaireElectrodeP(fresh.commentaireElectrodeP || '');
               if (fresh.peremptionElectrodeP !== undefined) setPeremptionElectrodeP(toISODateOnly(fresh.peremptionElectrodeP));
               if (fresh.insertionElectrodeP !== undefined) setInsertionElectrodeP(toISODateOnly(fresh.insertionElectrodeP));
-              if (fresh.fabricationElectrodeP !== undefined) setFabricationElectrodeP(toISODateOnly(fresh.fabricationElectrodeP));
               if (fresh.livraisonElectrodeP !== undefined) setLivraisonElectrodeP(toISODateOnly(fresh.livraisonElectrodeP));
               if (fresh.derniereMaintenance !== undefined) setDerniereMaintenance(toISODateOnly(fresh.derniereMaintenance));
             }
@@ -4695,16 +4766,19 @@ export default function DefibTab({
     try {
       const normSelected = new Set(selectedIds.map(s => String(s || '').trim().toUpperCase()).filter(Boolean));
       const nowIso = new Date().toISOString();
-      setRemoteQueriedDefibs(prev =>
-        prev.map(df => {
-          if (!df) return df;
-          const matched =
-            (df.id && normSelected.has(String(df.id).trim().toUpperCase())) ||
-            (df.identifiant && normSelected.has(String(df.identifiant).trim().toUpperCase())) ||
-            (df.numeroSerie && normSelected.has(String(df.numeroSerie).trim().toUpperCase()));
-          return matched ? { ...df, ...updates, updatedAt: nowIso } : df;
-        })
-      );
+      const applyBulkUpdates = (df: Defibrillateur) => {
+        if (!df) return df;
+        const matched =
+          (df.id && normSelected.has(String(df.id).trim().toUpperCase())) ||
+          (df.identifiant && normSelected.has(String(df.identifiant).trim().toUpperCase())) ||
+          (df.numeroSerie && normSelected.has(String(df.numeroSerie).trim().toUpperCase()));
+        return matched ? ({ ...df, ...updates, updatedAt: nowIso, dateDerniereModification: nowIso } as Defibrillateur) : df;
+      };
+      setFallbackSheetDefibs(prev => prev.map(applyBulkUpdates));
+      setRemoteQueriedDefibs(prev => prev.map(applyBulkUpdates));
+      if (stableDefibsRef.current.items.length > 0) {
+        stableDefibsRef.current.items = stableDefibsRef.current.items.map(applyBulkUpdates);
+      }
       await Promise.race([
         onBulkEdit(selectedIds, updates),
         new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout de l’opération")), 8000))
@@ -5689,18 +5763,27 @@ export default function DefibTab({
                   const prochaineMaint = (df as any).prochaineMaintenance || (df as any).prochaine_visite || (df as any).prochaine_v || computeProchaineMaintenance(df.derniereMaintenance);
 
                   const activeAlerts: any[] = [];
+                  const seenVarIds = new Set<string>();
                   const modelIds = [
                     df.modeleId,
+                    (df as any).modele,
                     df.modeleCoffretId,
+                    (df as any).modeleCoffret,
                     df.modeleElectrodeAId,
+                    (df as any).modeleElectrodeA,
                     df.modeleElectrodeASecoursId,
                     df.modeleElectrodePId,
+                    (df as any).modeleElectrodeP,
                     df.modeleElectrodePSecoursId,
-                    df.modeleBatterieId
+                    df.modeleBatterieId,
+                    (df as any).modeleBatterie,
+                    df.modeleBatterieSecoursId
                   ].filter(Boolean);
                   modelIds.forEach(id => {
-                    const v = variableMap.get(id);
-                    if (v && v.rappelAlerteOption) {
+                    const trimmed = String(id).trim();
+                    const v = variableMap.get(trimmed);
+                    if (v && v.rappelAlerteOption && !seenVarIds.has(v.id)) {
+                      seenVarIds.add(v.id);
                       activeAlerts.push({
                         option: v.rappelAlerteOption,
                         desc: v.rappelObservation || '',
@@ -5832,19 +5915,15 @@ export default function DefibTab({
                             </div>
 
                             {activeAlerts.map((a, idx) => {
-                              const isRed = a.option.includes('Rouge');
-                              const bgColor = isRed ? '#fee2e2' : '#ffedd5';
-                              const borderColor = isRed ? '#fca5a5' : '#fed7aa';
-                              const textColor = isRed ? '#991b1b' : '#9a3412';
                               const text = a.option.split(' — ')[0];
                               return (
                                 <span 
                                   key={idx}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap animate-pulse shrink-0 border"
-                                  style={{ backgroundColor: bgColor, borderColor: borderColor, color: textColor }}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold whitespace-nowrap shrink-0"
+                                  style={{ backgroundColor: 'rgb(210, 45, 11)', color: '#fff', fontSize: '10px' }}
                                   title={`${a.option}${a.debut ? ` (du ${a.debut}${a.fin ? ` au ${a.fin}` : ''})` : ''}${a.desc ? ` : ${a.desc}` : ''}`}
                                 >
-                                  ⚠️ {text}
+                                  Alerte/Rappel : {text}
                                 </span>
                               );
                             })}
@@ -11977,7 +12056,7 @@ export default function DefibTab({
       )}
 
       {/* 🔎 Floating Cursor Search/Filter Indicator ("Recherche en cours…") 🔎 */}
-      {!cursorLoading && (isSearchingSpreadsheet || (!isInitialView && isDefibLoading)) && typeof document !== 'undefined' && createPortal(
+      {!cursorLoading && !cursorIndicatorForceHidden && (isSearchingSpreadsheet || (!isInitialView && isDefibLoading)) && typeof document !== 'undefined' && createPortal(
         <div
           style={{
             position: 'fixed',

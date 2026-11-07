@@ -665,7 +665,7 @@ export default function VariableTab({
       return;
     }
 
-    const hideRappelAlerte = category === 'Modèle Contrat' || category === 'Modèle Service' || category === 'Fournisseur' || category === 'Modèle Raison Prestation' || category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Type Filtre Purificateur' || category === 'Modèle Filtre Purificateur' || category === 'Formation' || category === 'Modèle Signalétique' || category === 'Modèle Scellé' || category === 'Modèle Autocollant' || category === 'Modèle Kit de secours' || category === 'Modèle Pièce Autre';
+    const hideRappelAlerte = category === 'Modèle Contrat' || category === 'Modèle Service' || category === 'Fournisseur' || category === 'Modèle Raison Prestation' || category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Formation' || category === 'Modèle Signalétique' || category === 'Modèle Scellé' || category === 'Modèle Autocollant';
 
     let formattedHex = couleurHex.trim();
     if ((category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Modèle Contrat') && formattedHex) {
@@ -743,7 +743,7 @@ export default function VariableTab({
   };
 
   if (isModalOpen) {
-    const hideRappelAlerte = category === 'Modèle Contrat' || category === 'Modèle Service' || category === 'Fournisseur' || category === 'Modèle Raison Prestation' || category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Type Filtre Purificateur' || category === 'Modèle Filtre Purificateur' || category === 'Formation' || category === 'Modèle Signalétique' || category === 'Modèle Scellé' || category === 'Modèle Autocollant' || category === 'Modèle Kit de secours' || category === 'Modèle Pièce Autre';
+    const hideRappelAlerte = category === 'Modèle Contrat' || category === 'Modèle Service' || category === 'Fournisseur' || category === 'Modèle Raison Prestation' || category === 'Drapeau GMAO' || category === 'Drapeau post-intervention' || category === 'Formation' || category === 'Modèle Signalétique' || category === 'Modèle Scellé' || category === 'Modèle Autocollant';
     const allowsImage = category === 'Modèle Défibrillateur' || category === 'Modèle Coffret' || category === 'Modèle Électrode' || category === 'Modèle Batterie' || category === 'Modèle Filtre Purificateur' || category === 'Modèle Signalétique' || category === 'Modèle Scellé' || category === 'Modèle Autocollant' || category === 'Modèle Kit de secours' || category === 'Modèle Pièce Autre';
 
     return (

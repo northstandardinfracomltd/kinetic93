@@ -466,7 +466,6 @@ export default function SettingsModal({
     { key: 'pdf', label: 'Apparence des rapports PDF' },
     { key: 'emplacements', label: 'Intitulés des emplacements' },
     { key: 'communication', label: 'Communication portail client' },
-    { key: 'bases_de_donnees', label: 'Bases de données' },
     { key: 'membres', label: 'Membres de l’environnement' },
     { key: 'actions_suspectes', label: 'Observateur des actions suspectes' },
   ];
@@ -3747,6 +3746,25 @@ export default function SettingsModal({
           id="settings-tab-container-harmonized"
           style={isPage ? { maxWidth: '98%', margin: '0 auto', width: '100%' } : {}}
         >
+          {!isAssistancePage && onLogout && (
+            <div className="w-full">
+              <button
+                type="button"
+                onClick={onLogout}
+                style={{
+                  ...rowActionButtonStyle,
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  width: '100%',
+                  fontSize: '18px',
+                  padding: '13px'
+                }}
+                className="transition-all text-white font-sans w-full"
+              >
+                {t("Quitter la session")}
+              </button>
+            </div>
+          )}
+
           {/* HUB ACCORDION */}
           {!isAssistancePage && (
             <div className="space-y-4 select-none pt-2 pb-4" id="settings-accordion-hub">
@@ -6154,7 +6172,7 @@ export default function SettingsModal({
           </div>
         )}
 
-        {/* BOUTONS 50%/50% ACTUALISER LES DONNÉES & OUVRIR ÉDITEUR SPREADSHEETS */}
+        {/* BOUTON PLEINE LARGEUR ACTUALISER LES DONNÉES */}
         {activeSection !== null &&
           ['reglages', 'pdf', 'emplacements', 'membres', 'communication', 'actions_suspectes'].includes(activeSection) && (() => {
             const sectionSheetKey: SpreadsheetFieldKey =
@@ -6174,7 +6192,7 @@ export default function SettingsModal({
               (localCompany as any)[`${sectionSheetKey}Url`] ||
               getTenantSpreadsheetUrl(sectionSheetKey, companyInfo);
             return (
-              <div className="pt-2 w-full grid grid-cols-2 gap-3 animate-fadeIn" style={{ order: 99 }}>
+              <div className="pt-2 w-full animate-fadeIn" style={{ order: 99 }}>
                 <button
                   type="button"
                   id={`btn-settings-refresh-${activeSection}`}
@@ -6236,56 +6254,13 @@ export default function SettingsModal({
                     border: 'none',
                     boxShadow: 'none'
                   }}
-                  className="transition-all hover:opacity-90 active:scale-[0.99] text-white flex items-center justify-center gap-2"
+                  className="w-full transition-all hover:opacity-90 active:scale-[0.99] text-white flex items-center justify-center gap-2"
                 >
                   {t("Actualiser les données")}
-                </button>
-                <button
-                  type="button"
-                  id={`btn-settings-open-spreadsheet-${activeSection}`}
-                  onClick={() => {
-                    if (resolvedUrl) openTenantSpreadsheetUrl(resolvedUrl);
-                  }}
-                  style={{
-                    ...rowActionButtonStyle,
-                    backgroundColor: '#0f172a',
-                    color: '#ffffff',
-                    width: '100%',
-                    fontSize: '18px',
-                    padding: '14px 22px',
-                    borderRadius: '13px',
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    border: 'none',
-                    boxShadow: 'none'
-                  }}
-                  className="transition-all hover:opacity-90 active:scale-[0.99] text-white flex items-center justify-center gap-2"
-                >
-                  {t("Ouvrir éditeur SpreadSheets")}
                 </button>
               </div>
             );
           })()}
-
-          {!isAssistancePage && onLogout && (
-            <div className="pt-4" style={{ order: 100 }}>
-              <button
-                type="button"
-                onClick={onLogout}
-                style={{
-                  ...rowActionButtonStyle,
-                  backgroundColor: 'rgb(210, 45, 11)',
-                  width: '100%',
-                  fontSize: '18px',
-                  padding: '13px'
-                }}
-                className="transition-all text-white font-sans"
-              >
-                {t("Quitter la session")}
-              </button>
-            </div>
-          )}
 
         </div>
 

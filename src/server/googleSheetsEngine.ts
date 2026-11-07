@@ -465,9 +465,21 @@ function normalizeDateStr(val: any): string {
   const s = String(val).trim();
   if (!s) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const dmY = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})[T\s]/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  const ymdSlash = s.match(/^(\d{4})[\/\.](\d{1,2})[\/\.](\d{1,2})$/);
+  if (ymdSlash) {
+    return `${ymdSlash[1]}-${ymdSlash[2].padStart(2, '0')}-${ymdSlash[3].padStart(2, '0')}`;
+  }
+  const dmY = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
   if (dmY) {
     return `${dmY[3]}-${dmY[2].padStart(2, '0')}-${dmY[1].padStart(2, '0')}`;
+  }
+  const dmyShort = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/);
+  if (dmyShort) {
+    const yr = parseInt(dmyShort[3], 10);
+    const fullYr = yr < 70 ? 2000 + yr : 1900 + yr;
+    return `${fullYr}-${dmyShort[2].padStart(2, '0')}-${dmyShort[1].padStart(2, '0')}`;
   }
   return s;
 }
@@ -878,6 +890,14 @@ function generateUniqueTenantEquipmentCode(shortEnvCode: string, usedUpperSet: S
   return fallback;
 }
 
+export interface SheetColumnDef {
+  header: string;
+  field: string;
+  aliases: string[];
+  type?: 'yesno' | 'bool' | 'date' | 'number' | 'json';
+  isSpecifique?: boolean;
+}
+
 export interface PrecomputedColumnMatch {
   colIdx: number;
   def: SheetColumnDef;
@@ -885,13 +905,28 @@ export interface PrecomputedColumnMatch {
 
 export function buildColumnMatches(headers: string[], canonicalDefs: SheetColumnDef[]): PrecomputedColumnMatch[] {
   const normHeaders = headers.map(normalizeHeaderKey);
+  const stripSubHeaders = headers.map(normalizeHeaderKeyStripSubSection);
   const matches: PrecomputedColumnMatch[] = [];
   const matchedColIndices = new Set<number>();
+  const matchedDefFields = new Set<string>();
   for (const def of canonicalDefs) {
     for (let i = 0; i < normHeaders.length; i++) {
       if (matchedColIndices.has(i)) continue;
       if (def.aliases.includes(normHeaders[i])) {
         matchedColIndices.add(i);
+        matchedDefFields.add(def.field);
+        matches.push({ colIdx: i, def });
+        break;
+      }
+    }
+  }
+  for (const def of canonicalDefs) {
+    if (matchedDefFields.has(def.field)) continue;
+    for (let i = 0; i < stripSubHeaders.length; i++) {
+      if (matchedColIndices.has(i)) continue;
+      if (stripSubHeaders[i] && def.aliases.includes(stripSubHeaders[i])) {
+        matchedColIndices.add(i);
+        matchedDefFields.add(def.field);
         matches.push({ colIdx: i, def });
         break;
       }
@@ -1111,6 +1146,27 @@ export function mapRowToDefib(
     obj.hasBatterieSecours = 'Oui';
   }
 
+  // Keep component situation aligned with actual expiration dates when dates are present
+  const computeSituationFromDate = (dateStr: any): 'Vert' | 'Orange' | 'Rouge' | null => {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const m = dateStr.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    const expMs = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59).getTime();
+    if (isNaN(expMs)) return null;
+    const now = new Date();
+    const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
+    const diffDays = (expMs - todayStartMs) / (1000 * 60 * 60 * 24);
+    if (diffDays < 0) return 'Rouge';
+    if (diffDays <= 30) return 'Orange';
+    return 'Vert';
+  };
+  const computedSitA = computeSituationFromDate(obj.peremptionElectrodeA);
+  if (computedSitA) obj.situationElectrodeA = computedSitA;
+  const computedSitP = computeSituationFromDate(obj.peremptionElectrodeP);
+  if (computedSitP) obj.situationElectrodeP = computedSitP;
+  const computedSitB = computeSituationFromDate(obj.peremptionBatterie);
+  if (computedSitB) obj.situationBatterie = computedSitB;
+
   // Keep convenient aliases so both table, form, and API work seamlessly without cross-overwriting distinct columns
   if (obj.commentaireAdresse) {
     obj.aideAcces = obj.commentaireAdresse;
@@ -1138,6 +1194,7 @@ export function mapRowToDefib(
 export function mapDefibToRow(headers: string[], defib: any, existingRow?: string[]): string[] {
   const effectiveHeaders = headers && headers.length > 0 ? headers : DEFIB_CANONICAL_HEADERS.map(d => d.header);
   const normHeaders = effectiveHeaders.map(normalizeHeaderKey);
+  const stripSubHeaders = effectiveHeaders.map(normalizeHeaderKeyStripSubSection);
   const outRow: string[] = effectiveHeaders.map((h, i) => {
     if (existingRow && existingRow[i] !== undefined) return existingRow[i];
     if (defib._rawSheetRow && defib._rawSheetRow[h] !== undefined) return defib._rawSheetRow[h];
@@ -1154,7 +1211,7 @@ export function mapDefibToRow(headers: string[], defib: any, existingRow?: strin
 
   for (const def of DEFIB_CANONICAL_HEADERS) {
     for (let i = 0; i < normHeaders.length; i++) {
-      if (!def.aliases.includes(normHeaders[i])) continue;
+      if (!def.aliases.includes(normHeaders[i]) && (!stripSubHeaders[i] || !def.aliases.includes(stripSubHeaders[i]))) continue;
       let val = defib[def.field];
 
       if (def.field === 'commentaireAdresse') {
@@ -1610,6 +1667,7 @@ export function mapRowToClient(
 export function mapClientToRow(headers: string[], client: any, existingRow?: string[]): string[] {
   const effectiveHeaders = headers && headers.length > 0 ? headers : CLIENTS_CANONICAL_HEADERS.map(d => d.header);
   const normHeaders = effectiveHeaders.map(normalizeHeaderKey);
+  const stripSubHeaders = effectiveHeaders.map(normalizeHeaderKeyStripSubSection);
   const outRow: string[] = effectiveHeaders.map((h, i) => {
     if (existingRow && existingRow[i] !== undefined) return existingRow[i];
     if (client._rawSheetRow && client._rawSheetRow[h] !== undefined) return client._rawSheetRow[h];
@@ -1638,7 +1696,7 @@ export function mapClientToRow(headers: string[], client: any, existingRow?: str
 
   for (const def of CLIENTS_CANONICAL_HEADERS) {
     for (let i = 0; i < normHeaders.length; i++) {
-      if (!def.aliases.includes(normHeaders[i])) continue;
+      if (!def.aliases.includes(normHeaders[i]) && (!stripSubHeaders[i] || !def.aliases.includes(stripSubHeaders[i]))) continue;
       let val = expandedClient[def.field];
       if (val !== undefined && val !== null) {
         outRow[i] = String(val);
@@ -8411,7 +8469,8 @@ export async function fetchTenantSheetCollection(
   spreadsheetUrl: string,
   tenantId: string,
   tabType: SheetTabType,
-  forceRefresh = false
+  forceRefresh = false,
+  isBackgroundRevalidate = false
 ): Promise<{
   items: any[];
   headers: string[];
@@ -8534,10 +8593,10 @@ export async function fetchTenantSheetCollection(
       if (tabType === 'defibrillateurs') {
         cached.stats = computeSheetCollectionStats(cached.items, 'defibrillateurs');
       }
-      const staleMs = tabType === 'messagesInternes' ? 4000 : 20000;
+      const staleMs = tabType === 'messagesInternes' ? 4000 : 120000;
       if (Date.now() - cached.fetchedAt > staleMs && !inFlightSheetFetches.has(cacheKey)) {
         setImmediate(() => {
-          fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true).catch(() => {});
+          fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true, true).catch(() => {});
         });
       }
       return {
@@ -8860,32 +8919,43 @@ export async function fetchTenantSheetCollection(
         tabType === 'communicationPortailClient' ||
         tabType === 'membresEnvironnement';
 
-      // Spreadsheet is the authoritative source of truth ("la donnée du spreadsheet est reine"):
-      // When rawMatrix succeeds and forceRefresh is true (or overlay is older than 12s), purge stale overlay upserts
-      // so old cached upserts never overwrite values edited directly in Google Sheets.
+      // Explicit manual refresh ("Actualiser les données" button): spreadsheet data takes 100% priority.
+      // Automatic background revalidation / normal reads: protect recent app edits for 5 minutes (300,000ms)
+      // so background polling or cached CSV exports never cause saved fields (sites, expiry dates) to jump.
+      const isExplicitManualRefresh = Boolean(forceRefresh && !isBackgroundRevalidate);
+      const recentRetentionMs = tabType === 'messagesInternes' ? 45000 : 300000;
       const recentMap = recentSheetUpserts.get(cacheKey);
-      const isRecentMessagesOverlay =
-        tabType === 'messagesInternes' && Boolean(overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - 25000);
+      const isRecentOverlay =
+        !isExplicitManualRefresh &&
+        Boolean(overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - recentRetentionMs);
       if (
         rawMatrix &&
         effectiveRows.length > 0 &&
-        !isRecentMessagesOverlay &&
-        (forceRefresh || isSettingsTab || !overlay.lastSyncedAt || overlay.lastSyncedAt <= Date.now() - 12000)
+        !isRecentOverlay &&
+        (isExplicitManualRefresh || isSettingsTab || !overlay.lastSyncedAt || overlay.lastSyncedAt <= Date.now() - recentRetentionMs)
       ) {
         if (overlay.upsertedById && Object.keys(overlay.upsertedById).length > 0) {
           overlay.upsertedById = {};
           saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
         }
         if (recentMap && recentMap.size > 0) {
-          recentMap.clear();
+          if (isExplicitManualRefresh && tabType !== 'messagesInternes') {
+            recentMap.clear();
+          } else {
+            for (const [rk, entry] of recentMap.entries()) {
+              if (!entry || fetchStartedAt > entry.updatedAtMs + recentRetentionMs) {
+                recentMap.delete(rk);
+              }
+            }
+          }
         }
       }
 
       const upsertedEntries = Object.values(overlay.upsertedById || {});
       const isOverlayFreshOrOffline =
         !rawMatrix ||
-        isRecentMessagesOverlay ||
-        (!isSettingsTab && !forceRefresh && Boolean(overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - 12000));
+        isRecentOverlay ||
+        (!isSettingsTab && !isExplicitManualRefresh && Boolean(overlay.lastSyncedAt && overlay.lastSyncedAt > Date.now() - recentRetentionMs));
       if (upsertedEntries.length > 0) {
         const remainingUpsertedById: Record<string, any> = {};
         for (const [upKey, upItem] of Object.entries(overlay.upsertedById || {})) {
@@ -8899,6 +8969,9 @@ export async function fetchTenantSheetCollection(
           ) {
             continue;
           }
+          const itemUpsertedAt = Number(upItem._upsertedAtMs || overlay.lastSyncedAt || 0);
+          const isItemStillRecent =
+            !rawMatrix || (!isExplicitManualRefresh && itemUpsertedAt > 0 && Date.now() - itemUpsertedAt <= recentRetentionMs);
           const upKeys = getRecordLookupKeys(upItem, tabType);
           if (deletedSet.size > 0 && upKeys.some(k => deletedSet.has(k))) continue;
 
@@ -8911,8 +8984,8 @@ export async function fetchTenantSheetCollection(
           });
 
           if (existingIdx >= 0) {
-            if (isOverlayFreshOrOffline || tabType === 'observateurActionsSuspectes') {
-              const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
+            if (isOverlayFreshOrOffline || isItemStillRecent || tabType === 'observateurActionsSuspectes') {
+              const { _rawSheetRow: _ignoreRaw, _upsertedAtMs: _ignoreTs, ...cleanUp } = upItem;
               if (tabType === 'clients' && isPlaceholderClientValue(cleanUp.id)) {
                 delete cleanUp.id;
               }
@@ -8927,8 +9000,8 @@ export async function fetchTenantSheetCollection(
               };
               remainingUpsertedById[upKey] = upItem;
             }
-          } else if ((!isSettingsTab && !forceRefresh) || isRecentMessagesOverlay) {
-            const { _rawSheetRow: _ignoreRaw, ...cleanUp } = upItem;
+          } else if (!isSettingsTab && (isOverlayFreshOrOffline || isItemStillRecent)) {
+            const { _rawSheetRow: _ignoreRaw, _upsertedAtMs: _ignoreTs, ...cleanUp } = upItem;
             if (tabType === 'clients' && isPlaceholderClientValue(cleanUp.id)) {
               const slug = String(cleanUp.denomination || '')
                 .normalize('NFD')
@@ -8948,14 +9021,13 @@ export async function fetchTenantSheetCollection(
         }
       }
 
-      // Also merge any in-memory recent upserts that occurred within the last 12 seconds (or 25s for messagesInternes)
-      const recentRetentionMs = tabType === 'messagesInternes' ? 25000 : 12000;
+      // Also merge any in-memory recent upserts during non-manual refreshes
       if (recentMap && recentMap.size > 0) {
         for (const [rk, entry] of recentMap.entries()) {
           if (!entry || !entry.item) continue;
           if (
             rawMatrix &&
-            ((forceRefresh && tabType !== 'messagesInternes') || isSettingsTab || fetchStartedAt > entry.updatedAtMs + recentRetentionMs)
+            ((isExplicitManualRefresh && tabType !== 'messagesInternes') || isSettingsTab || fetchStartedAt > entry.updatedAtMs + recentRetentionMs)
           ) {
             recentMap.delete(rk);
             continue;
@@ -10069,17 +10141,16 @@ export async function upsertRecordsToTenantSheet(
       }
     }
 
-    // Update overlay asynchronously in background so disk I/O never slows down the HTTP response
+    // Update overlay asynchronously in background so disk I/O never slows down the HTTP response.
+    // Always retain upserted records in overlay.upsertedById with _upsertedAtMs so that even if a subsequent
+    // refresh hits a stale Google Sheets CSV export cache (1-5 min lag), the newly saved fields are preserved.
     setImmediate(() => {
       try {
-        if (syncedToRemoteSheet) {
-          overlay.upsertedById = {};
-        } else {
-          for (const item of upsertedList) {
-            const itemKeys = getRecordLookupKeys(item, tabType);
-            const pk = itemKeys[0] || `item_${nowMs}`;
-            overlay.upsertedById[pk] = item;
-          }
+        if (!overlay.upsertedById) overlay.upsertedById = {};
+        for (const item of upsertedList) {
+          const itemKeys = getRecordLookupKeys(item, tabType);
+          const pk = itemKeys[0] || `item_${nowMs}`;
+          overlay.upsertedById[pk] = { ...item, _upsertedAtMs: nowMs };
         }
         overlay.deletedIds = Array.from(deletedSet);
         overlay.lastSyncedAt = nowMs;

@@ -957,6 +957,13 @@ export default function App() {
   const [variables, setVariables] = useState<Variable[]>([]);
   const [defibrillateurs, setDefibrillateurs] = useState<Defibrillateur[]>([]);
   const [isDefibLoading, setIsDefibLoading] = useState<boolean>(true);
+  useEffect(() => {
+    if (!isDefibLoading) return;
+    const maxLoadingTimer = setTimeout(() => {
+      setIsDefibLoading(false);
+    }, 45000);
+    return () => clearTimeout(maxLoadingTimer);
+  }, [isDefibLoading]);
   const [defibLoadingProgress, setDefibLoadingProgress] = useState<{
     current: number;
     total: number;
@@ -2558,16 +2565,104 @@ export default function App() {
     return null;
   });
 
+  const recentLocalDefibEditsRef = React.useRef<Map<string, { item: Defibrillateur; ts: number }>>(new Map());
+  const recentLocalClientEditsRef = React.useRef<Map<string, { item: Client; ts: number }>>(new Map());
+
+  const recordLocalDefibEdit = (df: Defibrillateur) => {
+    if (!df) return;
+    const now = Date.now();
+    const stamped = {
+      ...df,
+      updatedAt: df.updatedAt || new Date(now).toISOString(),
+      dateDerniereModification: (df as any).dateDerniereModification || new Date(now).toISOString(),
+    };
+    const keys = [df.id, df.identifiant, df.numeroSerie]
+      .map(k => String(k || '').trim().toLowerCase())
+      .filter(Boolean);
+    for (const k of keys) {
+      recentLocalDefibEditsRef.current.set(k, { item: stamped, ts: now });
+    }
+  };
+
+  const recordLocalClientEdit = (cl: Client, extraIds: Array<string | undefined> = []) => {
+    if (!cl) return;
+    const now = Date.now();
+    const stamped: Client = {
+      ...cl,
+      updatedAt: cl.updatedAt || new Date(now).toISOString(),
+    };
+    const keys = [cl.id, cl.clientIdField, cl.denomination, ...extraIds]
+      .map(k => String(k || '').trim().toLowerCase())
+      .filter(Boolean);
+    for (const k of keys) {
+      recentLocalClientEditsRef.current.set(k, { item: stamped, ts: now });
+    }
+  };
+
+  const applyRecentClientEdits = (list: Client[]): Client[] => {
+    if (!Array.isArray(list)) return [];
+    const now = Date.now();
+    const TTL = 5 * 60 * 1000;
+    for (const [k, entry] of recentLocalClientEditsRef.current.entries()) {
+      if (now - entry.ts > TTL) {
+        recentLocalClientEditsRef.current.delete(k);
+      }
+    }
+    if (recentLocalClientEditsRef.current.size === 0) return list;
+    return list.map(cl => {
+      if (!cl) return cl;
+      const keys = [cl.id, cl.clientIdField, cl.denomination]
+        .map(k => String(k || '').trim().toLowerCase())
+        .filter(Boolean);
+      for (const k of keys) {
+        const hit = recentLocalClientEditsRef.current.get(k);
+        if (hit && now - hit.ts <= TTL) {
+          return {
+            ...cl,
+            ...hit.item,
+            id: cl.id || hit.item.id,
+            _sheetRowNumber: (cl as any)._sheetRowNumber || (hit.item as any)._sheetRowNumber,
+          };
+        }
+      }
+      return cl;
+    });
+  };
+
   const dedupeDefibsList = (list: Defibrillateur[]): Defibrillateur[] => {
-    if (!Array.isArray(list) || list.length <= 1) return list;
+    if (!Array.isArray(list) || list.length === 0) return list;
+    const now = Date.now();
+    const TTL = 5 * 60 * 1000;
+    for (const [k, entry] of recentLocalDefibEditsRef.current.entries()) {
+      if (now - entry.ts > TTL) {
+        recentLocalDefibEditsRef.current.delete(k);
+      }
+    }
     const byId = new Map<string, number>();
     const byIdent = new Map<string, number>();
     const out: Defibrillateur[] = [];
-    for (const df of list) {
-      if (!df) continue;
-      const idKey = String(df.id || '').trim().toLowerCase();
-      const identKey = String(df.identifiant || '').trim().toLowerCase();
+    const getTs = (d: any): number => {
+      if (!d) return 0;
+      const t = Date.parse(d.updatedAt || d.dateDerniereModification || '');
+      return isNaN(t) ? 0 : t;
+    };
+    for (const rawDf of list) {
+      if (!rawDf) continue;
+      const idKey = String(rawDf.id || '').trim().toLowerCase();
+      const identKey = String(rawDf.identifiant || '').trim().toLowerCase();
       if (!idKey && !identKey) continue;
+      const localHit =
+        (identKey ? recentLocalDefibEditsRef.current.get(identKey) : undefined) ||
+        (idKey ? recentLocalDefibEditsRef.current.get(idKey) : undefined);
+      const df =
+        localHit && now - localHit.ts <= TTL
+          ? ({
+              ...rawDf,
+              ...localHit.item,
+              id: rawDf.id || localHit.item.id,
+              _sheetRowNumber: (rawDf as any)._sheetRowNumber || (localHit.item as any)._sheetRowNumber,
+            } as Defibrillateur)
+          : rawDf;
       const existingIdx =
         (idKey ? byId.get(idKey) : undefined) ??
         (identKey ? byIdent.get(identKey) : undefined);
@@ -2578,7 +2673,10 @@ export default function App() {
         if (identKey) byIdent.set(identKey, idx);
       } else {
         const existing = out[existingIdx];
-        out[existingIdx] = { ...existing, ...df, id: existing.id || df.id };
+        out[existingIdx] =
+          getTs(existing) > getTs(df)
+            ? { ...df, ...existing, id: existing.id || df.id }
+            : { ...existing, ...df, id: existing.id || df.id };
       }
     }
     return out;
@@ -2658,6 +2756,9 @@ export default function App() {
   const manualDefibRefreshRunIdRef = React.useRef<number>(0);
 
   const handleManualRefreshDefibs = async (forceRemote = true) => {
+    if (forceRemote) {
+      recentLocalDefibEditsRef.current.clear();
+    }
     const runId = ++manualDefibRefreshRunIdRef.current;
     const activeTenant = tenantId || 'demo';
     const rawUrl =
@@ -2846,21 +2947,25 @@ export default function App() {
             if (_json.stats?.clientVolumes) {
               setDefibSheetStats(prev => (prev ? { ...prev, clientVolumes: _json.stats.clientVolumes } : _json.stats));
             }
-            const validClients = firstItems.filter(
-              (cl: any) =>
-                cl &&
-                !String(cl.id || '').startsWith('sheet_cli_') &&
-                !String(cl.clientIdField || '').startsWith('sheet_cli_')
+            const validClients = applyRecentClientEdits(
+              firstItems.filter(
+                (cl: any) =>
+                  cl &&
+                  !String(cl.id || '').startsWith('sheet_cli_') &&
+                  !String(cl.clientIdField || '').startsWith('sheet_cli_')
+              )
             );
             setClients(validClients);
             idbSet(`defib_${activeTenant}_clients_v2`, validClients).catch(() => {});
           },
           (allItems) => {
-            const validClients = allItems.filter(
-              (cl: any) =>
-                cl &&
-                !String(cl.id || '').startsWith('sheet_cli_') &&
-                !String(cl.clientIdField || '').startsWith('sheet_cli_')
+            const validClients = applyRecentClientEdits(
+              allItems.filter(
+                (cl: any) =>
+                  cl &&
+                  !String(cl.id || '').startsWith('sheet_cli_') &&
+                  !String(cl.clientIdField || '').startsWith('sheet_cli_')
+              )
             );
             setClients(validClients);
             idbSet(`defib_${activeTenant}_clients_v2`, validClients).catch(() => {});
@@ -2949,6 +3054,7 @@ export default function App() {
   };
 
   const handleManualRefreshClients = async () => {
+    recentLocalClientEditsRef.current.clear();
     setIsRefreshingClients(true);
     try {
       const activeTenant = tenantId || 'demo';
@@ -3331,22 +3437,26 @@ export default function App() {
                         : { clientVolumes: json.stats.clientVolumes }
                   );
                 }
-                const filtered = firstItems.filter(
-                  (cl: any) =>
-                    cl &&
-                    !String(cl.id || '').startsWith('sheet_cli_') &&
-                    !String(cl.clientIdField || '').startsWith('sheet_cli_')
+                const filtered = applyRecentClientEdits(
+                  firstItems.filter(
+                    (cl: any) =>
+                      cl &&
+                      !String(cl.id || '').startsWith('sheet_cli_') &&
+                      !String(cl.clientIdField || '').startsWith('sheet_cli_')
+                  )
                 );
                 lastLoadedSheetUrlsRef.current.clients = json.spreadsheetUrl || urlClients || 'loaded';
                 idbSet(`defib_${activeTid}_clients_v2`, filtered).catch(() => {});
                 setClients(filtered);
               },
               (allItems, loadedCount, totalCount) => {
-                const filtered = allItems.filter(
-                  (cl: any) =>
-                    cl &&
-                    !String(cl.id || '').startsWith('sheet_cli_') &&
-                    !String(cl.clientIdField || '').startsWith('sheet_cli_')
+                const filtered = applyRecentClientEdits(
+                  allItems.filter(
+                    (cl: any) =>
+                      cl &&
+                      !String(cl.id || '').startsWith('sheet_cli_') &&
+                      !String(cl.clientIdField || '').startsWith('sheet_cli_')
+                  )
                 );
                 idbSet(`defib_${activeTid}_clients_v2`, filtered).catch(() => {});
                 setClients(filtered);
@@ -11404,6 +11514,7 @@ export default function App() {
       createdAt: nowIso,
       updatedAt: nowIso,
     };
+    recordLocalClientEdit(newClient);
     saveClients([...clients, newClient]);
     const urlClients =
       companyInfo?.spreadsheetClients ||
@@ -11423,7 +11534,14 @@ export default function App() {
       .then(json => {
         if (json && Array.isArray(json.records) && json.records.length > 0) {
           const synced = json.records[0];
-          setClients(prev => prev.map(c => (c.id === newClient.id ? { ...c, ...synced } : c)));
+          const mergedCli: Client = {
+            ...newClient,
+            ...synced,
+            createdAt: newClient.createdAt,
+            updatedAt: newClient.updatedAt,
+          };
+          recordLocalClientEdit(mergedCli, [newClient.id, synced?.id]);
+          setClients(prev => prev.map(c => (c.id === newClient.id || c.id === synced?.id ? mergedCli : c)));
         }
       })
       .catch(() => {});
@@ -11434,11 +11552,13 @@ export default function App() {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    const nowIso = new Date().toISOString();
     const withUpdated: Client = {
       ...updated,
       clientIdField: updated.clientIdField ?? '',
-      updatedAt: new Date().toISOString()
+      updatedAt: nowIso
     };
+    recordLocalClientEdit(withUpdated);
     saveClients(clients.map((c) => (c.id === updated.id ? withUpdated : c)));
     const urlClients =
       companyInfo?.spreadsheetClients ||
@@ -11458,7 +11578,13 @@ export default function App() {
       .then(json => {
         if (json && Array.isArray(json.records) && json.records.length > 0) {
           const synced = json.records[0];
-          setClients(prev => prev.map(c => (c.id === withUpdated.id ? { ...c, ...synced } : c)));
+          const mergedCli: Client = {
+            ...withUpdated,
+            ...synced,
+            updatedAt: nowIso,
+          };
+          recordLocalClientEdit(mergedCli, [withUpdated.id, synced?.id]);
+          setClients(prev => prev.map(c => (c.id === withUpdated.id || c.id === synced?.id ? mergedCli : c)));
         }
       })
       .catch(() => {});
@@ -11686,8 +11812,15 @@ export default function App() {
     }
 
     if (syncRes.syncedDefib) {
-      newDefib = syncRes.syncedDefib;
+      newDefib = {
+        ...syncRes.syncedDefib,
+        ...newDefib,
+        id: syncRes.syncedDefib.id || newDefib.id,
+        updatedAt: nowIso,
+        dateDerniereModification: nowIso,
+      };
     }
+    recordLocalDefibEdit(newDefib);
 
     const nextList = dedupeDefibsList([newDefib, ...defibrillateurs]);
     await saveDefibs(nextList);
@@ -11764,8 +11897,16 @@ export default function App() {
     }
 
     if (syncRes.syncedDefib) {
-      finalMerged = syncRes.syncedDefib;
+      finalMerged = {
+        ...syncRes.syncedDefib,
+        ...finalMerged,
+        id: syncRes.syncedDefib.id || finalMerged.id,
+        _sheetRowNumber: (syncRes.syncedDefib as any)._sheetRowNumber || (finalMerged as any)._sheetRowNumber,
+        updatedAt: nowIso,
+        dateDerniereModification: nowIso,
+      };
     }
+    recordLocalDefibEdit(finalMerged);
 
     if (existingMatch) {
       const nextList = defibrillateurs.map((df) => {
@@ -12180,7 +12321,9 @@ export default function App() {
         );
       });
       if (isMatch) {
-        const merged = { ...df, ...updates, updatedAt: new Date().toISOString() };
+        const nowIso = new Date().toISOString();
+        const merged = { ...df, ...updates, updatedAt: nowIso, dateDerniereModification: nowIso };
+        recordLocalDefibEdit(merged);
         updatedDefibs.push(merged);
         return merged;
       }

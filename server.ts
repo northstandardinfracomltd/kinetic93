@@ -2717,82 +2717,94 @@ function formatDefibrillateurOutput(d: any): any {
   const commentaireCoffret = String(d.commentaireCoffret || d.commentaire_coffret || '').trim();
 
   // Batterie
-  const rawBat = String(d.modeleBatterie || d.modele_batterie || d.modele_b || d.batterie_modele || d.modeleBatterieId || '').trim();
+  const rawBat = String(d.modeleBatterie !== undefined ? d.modeleBatterie : (d.modele_batterie || d.modele_b || d.batterie_modele || d.modeleBatterieId || '')).trim();
   const isBatIdVar = rawBat.startsWith('VAR_') || rawBat.startsWith('var_') || rawBat.startsWith('v_');
   const modeleBatterie = isBatIdVar ? (d.modeleBatterie || d.modele_batterie || d.modele_b || '') : rawBat;
   const modeleBatterieId = d.modeleBatterieId || (isBatIdVar ? rawBat : '');
-  const lotBatterie = String(d.lotBatterie || d.lot_batterie || d.lot_b || d.batterie_lot || '').trim();
-  const peremptionBatterie = String(d.peremptionBatterie || d.peremption_batterie || d.peremption_b || d.date_peremption_batterie || '').trim();
-  const insertionBatterie = String(d.insertionBatterie || d.insertion_batterie || d.insertion_b || '').trim();
-  const livraisonBatterie = String(d.livraisonBatterie || d.livraison_batterie || d.livraison_b || '').trim();
-  const fabricationBatterie = String(d.fabricationBatterie || d.fabrication_b || d.date_fabrication_batterie || '').trim();
-  const situationBatterie = String(d.situationBatterie || d.situation_b || 'Vert').trim();
+  const lotBatterie = String(d.lotBatterie !== undefined ? d.lotBatterie : (d.lot_batterie || d.lot_b || d.batterie_lot || '')).trim();
+  const peremptionBatterie = String(d.peremptionBatterie !== undefined ? d.peremptionBatterie : (d.peremption_batterie || d.peremption_b || d.date_peremption_batterie || '')).trim();
+  const insertionBatterie = String(d.insertionBatterie !== undefined ? d.insertionBatterie : (d.insertion_batterie || d.insertion_b || '')).trim();
+  const livraisonBatterie = String(d.livraisonBatterie !== undefined ? d.livraisonBatterie : (d.livraison_batterie || d.livraison_b || '')).trim();
+  const fabricationBatterie = String(d.fabricationBatterie !== undefined ? d.fabricationBatterie : (d.fabrication_b || d.date_fabrication_batterie || '')).trim();
+  const computeSitFromExp = (dateStr: string, fallback: string): string => {
+    const m = String(dateStr || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return fallback;
+    const expMs = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 23, 59, 59).getTime();
+    if (isNaN(expMs)) return fallback;
+    const now = new Date();
+    const todayStartMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
+    const diffDays = (expMs - todayStartMs) / (1000 * 60 * 60 * 24);
+    if (diffDays < 0) return 'Rouge';
+    if (diffDays <= 30) return 'Orange';
+    return 'Vert';
+  };
+  const situationBatterie = computeSitFromExp(peremptionBatterie, String(d.situationBatterie || d.situation_b || 'Vert').trim());
   const pourcentageBatterie = d.pourcentageBatterie !== undefined && d.pourcentageBatterie !== '' ? String(d.pourcentageBatterie) : (d.pourcentage_constate_b !== undefined ? String(d.pourcentage_constate_b) : (d.pourcentage_batterie !== undefined ? String(d.pourcentage_batterie) : '100'));
-  const commentaireBatterie = String(d.commentaireBatterie || d.commentaire_b || d.commentaire_batterie || '').trim();
+  const commentaireBatterie = String(d.commentaireBatterie !== undefined ? d.commentaireBatterie : (d.commentaire_b || d.commentaire_batterie || '')).trim();
 
   // Batterie secours
   const hasBatterieSecours = d.hasBatterieSecours || d.has_batterie_secours || 'Non';
-  const rawBatSec = String(d.modeleBatterieSecours || d.modele_secours_b || d.modeleBatterieSecoursId || '').trim();
+  const rawBatSec = String(d.modeleBatterieSecours !== undefined ? d.modeleBatterieSecours : (d.modele_secours_b || d.modeleBatterieSecoursId || '')).trim();
   const isBatSecVar = rawBatSec.startsWith('VAR_') || rawBatSec.startsWith('var_') || rawBatSec.startsWith('v_');
   const modeleBatterieSecours = isBatSecVar ? (d.modeleBatterieSecours || d.modele_secours_b || '') : rawBatSec;
   const modeleBatterieSecoursId = d.modeleBatterieSecoursId || (isBatSecVar ? rawBatSec : '');
-  const lotBatterieSecours = String(d.lotBatterieSecours || d.lot_secours_b || '').trim();
-  const peremptionBatterieSecours = String(d.peremptionBatterieSecours || d.peremption_secours_b || '').trim();
+  const lotBatterieSecours = String(d.lotBatterieSecours !== undefined ? d.lotBatterieSecours : (d.lot_secours_b || '')).trim();
+  const peremptionBatterieSecours = String(d.peremptionBatterieSecours !== undefined ? d.peremptionBatterieSecours : (d.peremption_secours_b || '')).trim();
 
   // Électrode Adulte (A)
-  const rawElecA = String(d.modeleElectrodeA || d.modele_electrode_a || d.modele_a || d.electrode_a_modele || d.modeleElectrodeAId || '').trim();
+  const rawElecA = String(d.modeleElectrodeA !== undefined ? d.modeleElectrodeA : (d.modele_electrode_a || d.modele_a || d.electrode_a_modele || d.modeleElectrodeAId || '')).trim();
   const isElecAVar = rawElecA.startsWith('VAR_') || rawElecA.startsWith('var_') || rawElecA.startsWith('v_');
   const modeleElectrodeA = isElecAVar ? (d.modeleElectrodeA || d.modele_electrode_a || d.modele_a || '') : rawElecA;
   const modeleElectrodeAId = d.modeleElectrodeAId || (isElecAVar ? rawElecA : '');
-  const lotElectrodeA = String(d.lotElectrodeA || d.lot_electrode_a || d.lot_a || d.electrode_a_lot || '').trim();
-  const peremptionElectrodeA = String(d.peremptionElectrodeA || d.peremption_electrode_a || d.peremption_a || d.date_peremption_a || '').trim();
-  const insertionElectrodeA = String(d.insertionElectrodeA || d.insertion_electrode_a || d.insertion_a || '').trim();
-  const livraisonElectrodeA = String(d.livraisonElectrodeA || d.livraison_electrode_a || d.livraison_a || '').trim();
-  const situationElectrodeA = String(d.situationElectrodeA || d.situation_a || 'Vert').trim();
-  const commentaireElectrodeA = String(d.commentaireElectrodeA || d.commentaire_a || d.commentaire_electrode_a || '').trim();
+  const lotElectrodeA = String(d.lotElectrodeA !== undefined ? d.lotElectrodeA : (d.lot_electrode_a || d.lot_a || d.electrode_a_lot || '')).trim();
+  const peremptionElectrodeA = String(d.peremptionElectrodeA !== undefined ? d.peremptionElectrodeA : (d.peremption_electrode_a || d.peremption_a || d.date_peremption_a || '')).trim();
+  const insertionElectrodeA = String(d.insertionElectrodeA !== undefined ? d.insertionElectrodeA : (d.insertion_electrode_a || d.insertion_a || '')).trim();
+  const livraisonElectrodeA = String(d.livraisonElectrodeA !== undefined ? d.livraisonElectrodeA : (d.livraison_electrode_a || d.livraison_a || '')).trim();
+  const situationElectrodeA = computeSitFromExp(peremptionElectrodeA, String(d.situationElectrodeA || d.situation_a || 'Vert').trim());
+  const commentaireElectrodeA = String(d.commentaireElectrodeA !== undefined ? d.commentaireElectrodeA : (d.commentaire_a || d.commentaire_electrode_a || '')).trim();
 
   // Électrode Adulte Secours
   const hasElectrodeASecours = d.hasElectrodeASecours || d.has_electrode_a_secours || 'Non';
-  const rawElecASec = String(d.modeleElectrodeASecours || d.modele_secours_a || d.modeleElectrodeASecoursId || '').trim();
+  const rawElecASec = String(d.modeleElectrodeASecours !== undefined ? d.modeleElectrodeASecours : (d.modele_secours_a || d.modeleElectrodeASecoursId || '')).trim();
   const isElecASecVar = rawElecASec.startsWith('VAR_') || rawElecASec.startsWith('var_') || rawElecASec.startsWith('v_');
   const modeleElectrodeASecours = isElecASecVar ? (d.modeleElectrodeASecours || d.modele_secours_a || '') : rawElecASec;
   const modeleElectrodeASecoursId = d.modeleElectrodeASecoursId || (isElecASecVar ? rawElecASec : '');
-  const lotElectrodeASecours = String(d.lotElectrodeASecours || d.lot_secours_a || '').trim();
-  const peremptionSecoursElectrodeA = String(d.peremptionSecoursElectrodeA || d.peremption_secours_a || '').trim();
+  const lotElectrodeASecours = String(d.lotElectrodeASecours !== undefined ? d.lotElectrodeASecours : (d.lot_secours_a || '')).trim();
+  const peremptionSecoursElectrodeA = String(d.peremptionSecoursElectrodeA !== undefined ? d.peremptionSecoursElectrodeA : (d.peremption_secours_a || '')).trim();
 
   // Padpak Adulte
   const hasPadpakA = d.hasPadpakA || d.has_padpak_a || 'Non';
-  const lotPadpakA = String(d.lotPadpakA || d.lot_padpak_a || '').trim();
-  const peremptionPadpakA = String(d.peremptionPadpakA || d.peremption_padpak_a || '').trim();
+  const lotPadpakA = String(d.lotPadpakA !== undefined ? d.lotPadpakA : (d.lot_padpak_a || '')).trim();
+  const peremptionPadpakA = String(d.peremptionPadpakA !== undefined ? d.peremptionPadpakA : (d.peremption_padpak_a || '')).trim();
 
   // Électrode Pédiatrique (P)
-  const rawElecP = String(d.modeleElectrodeP || d.modele_electrode_p || d.modele_p || d.electrode_p_modele || d.modeleElectrodePId || '').trim();
+  const rawElecP = String(d.modeleElectrodeP !== undefined ? d.modeleElectrodeP : (d.modele_electrode_p || d.modele_p || d.electrode_p_modele || d.modeleElectrodePId || '')).trim();
   const isElecPVar = rawElecP.startsWith('VAR_') || rawElecP.startsWith('var_') || rawElecP.startsWith('v_');
   const modeleElectrodeP = isElecPVar ? (d.modeleElectrodeP || d.modele_electrode_p || d.modele_p || '') : rawElecP;
   const modeleElectrodePId = d.modeleElectrodePId || (isElecPVar ? rawElecP : '');
-  const lotElectrodeP = String(d.lotElectrodeP || d.lot_electrode_p || d.lot_p || d.electrode_p_lot || '').trim();
-  const peremptionElectrodeP = String(d.peremptionElectrodeP || d.peremption_electrode_p || d.peremption_p || d.date_peremption_p || '').trim();
-  const insertionElectrodeP = String(d.insertionElectrodeP || d.insertion_electrode_p || d.insertion_p || '').trim();
-  const livraisonElectrodeP = String(d.livraisonElectrodeP || d.livraison_electrode_p || d.livraison_p || '').trim();
-  const situationElectrodeP = String(d.situationElectrodeP || d.situation_p || 'Vert').trim();
-  const commentaireElectrodeP = String(d.commentaireElectrodeP || d.commentaire_p || d.commentaire_electrode_p || '').trim();
+  const lotElectrodeP = String(d.lotElectrodeP !== undefined ? d.lotElectrodeP : (d.lot_electrode_p || d.lot_p || d.electrode_p_lot || '')).trim();
+  const peremptionElectrodeP = String(d.peremptionElectrodeP !== undefined ? d.peremptionElectrodeP : (d.peremption_electrode_p || d.peremption_p || d.date_peremption_p || '')).trim();
+  const insertionElectrodeP = String(d.insertionElectrodeP !== undefined ? d.insertionElectrodeP : (d.insertion_electrode_p || d.insertion_p || '')).trim();
+  const livraisonElectrodeP = String(d.livraisonElectrodeP !== undefined ? d.livraisonElectrodeP : (d.livraison_electrode_p || d.livraison_p || '')).trim();
+  const situationElectrodeP = computeSitFromExp(peremptionElectrodeP, String(d.situationElectrodeP || d.situation_p || 'Vert').trim());
+  const commentaireElectrodeP = String(d.commentaireElectrodeP !== undefined ? d.commentaireElectrodeP : (d.commentaire_p || d.commentaire_electrode_p || '')).trim();
 
   // Électrode Pédiatrique Secours
   const hasElectrodePSecours = d.hasElectrodePSecours || d.has_electrode_p_secours || 'Non';
-  const rawElecPSec = String(d.modeleElectrodePSecours || d.modele_secours_p || d.modeleElectrodePSecoursId || '').trim();
+  const rawElecPSec = String(d.modeleElectrodePSecours !== undefined ? d.modeleElectrodePSecours : (d.modele_secours_p || d.modeleElectrodePSecoursId || '')).trim();
   const isElecPSecVar = rawElecPSec.startsWith('VAR_') || rawElecPSec.startsWith('var_') || rawElecPSec.startsWith('v_');
   const modeleElectrodePSecours = isElecPSecVar ? (d.modeleElectrodePSecours || d.modele_secours_p || '') : rawElecPSec;
   const modeleElectrodePSecoursId = d.modeleElectrodePSecoursId || (isElecPSecVar ? rawElecPSec : '');
-  const lotElectrodePSecours = String(d.lotElectrodePSecours || d.lot_secours_p || '').trim();
-  const peremptionSecoursElectrodeP = String(d.peremptionSecoursElectrodeP || d.peremption_secours_p || '').trim();
+  const lotElectrodePSecours = String(d.lotElectrodePSecours !== undefined ? d.lotElectrodePSecours : (d.lot_secours_p || '')).trim();
+  const peremptionSecoursElectrodeP = String(d.peremptionSecoursElectrodeP !== undefined ? d.peremptionSecoursElectrodeP : (d.peremption_secours_p || '')).trim();
 
   // Padpak Pédiatrique
   const hasPadpakP = d.hasPadpakP || d.has_padpak_p || 'Non';
-  const lotPadpakP = String(d.lotPadpakP || d.lot_padpak_p || '').trim();
-  const peremptionPadpakP = String(d.peremptionPadpakP || d.peremption_padpak_p || '').trim();
+  const lotPadpakP = String(d.lotPadpakP !== undefined ? d.lotPadpakP : (d.lot_padpak_p || '')).trim();
+  const peremptionPadpakP = String(d.peremptionPadpakP !== undefined ? d.peremptionPadpakP : (d.peremption_padpak_p || '')).trim();
 
   // DAE Matériel
-  const rawDae = String(d.modele || d.modele_dae || d.model || d.modeleDAE || d.modeleId || '').trim();
+  const rawDae = String(d.modele !== undefined ? d.modele : (d.modele_dae || d.model || d.modeleDAE || d.modeleId || '')).trim();
   const isDaeVar = rawDae.startsWith('VAR_') || rawDae.startsWith('var_') || rawDae.startsWith('v_');
   const modele = isDaeVar ? (d.modele || d.modele_dae || d.model || '') : rawDae;
   const modeleId = d.modeleId || (isDaeVar ? rawDae : '');
@@ -2803,20 +2815,20 @@ function formatDefibrillateurOutput(d: any): any {
   const etatHousse = d.etatHousse || d.etat_housse || 'Conforme';
 
   // Maintenance & Dates
-  const derniereMaintenance = d.derniereMaintenance || d.derniere_maintenance || d.date_derniere_maintenance || '';
-  const prochaineMaintenance = d.prochaineMaintenance || d.prochaine_visite || d.prochaine_v || '';
-  const finGarantie = d.finGarantie || d.fin_garantie || d.expiration_garantie || '';
-  const fabrication = d.fabrication || d.date_fabrication || '';
-  const miseEnService = d.miseEnService || d.mise_en_service || '';
-  const sortieFabricant = d.sortieFabricant || d.sortie_fabricant || '';
+  const derniereMaintenance = d.derniereMaintenance !== undefined ? d.derniereMaintenance : (d.derniere_maintenance || d.date_derniere_maintenance || '');
+  const prochaineMaintenance = d.prochaineMaintenance !== undefined ? d.prochaineMaintenance : (d.prochaine_visite || d.prochaine_v || '');
+  const finGarantie = d.finGarantie !== undefined ? d.finGarantie : (d.fin_garantie || d.expiration_garantie || '');
+  const fabrication = d.fabrication !== undefined ? d.fabrication : (d.date_fabrication || '');
+  const miseEnService = d.miseEnService !== undefined ? d.miseEnService : (d.mise_en_service || '');
+  const sortieFabricant = d.sortieFabricant !== undefined ? d.sortieFabricant : (d.sortie_fabricant || '');
 
   // Trousse de secours
-  const peremptionTrousse = d.peremptionTrousse || d.peremption_trousse || d.date_peremption_trousse || '';
+  const peremptionTrousse = d.peremptionTrousse !== undefined ? d.peremptionTrousse : (d.peremption_trousse || d.date_peremption_trousse || '');
   const kitCiseauxPresents = d.kitCiseauxPresents || d.kit_ciseaux_presents || d.ciseaux_presents || 'Oui';
   const kitMasquePresent = d.kitMasquePresent || d.kit_masque_present || d.masque_present || 'Oui';
-  const kitPeremptionMasque = d.kitPeremptionMasque || d.kit_peremption_masque || d.peremption_masque || '';
+  const kitPeremptionMasque = d.kitPeremptionMasque !== undefined ? d.kitPeremptionMasque : (d.kit_peremption_masque || d.peremption_masque || '');
   const kitServiettesPresentes = d.kitServiettesPresentes || d.kit_serviettes_presentes || d.serviettes_presentes || 'Oui';
-  const kitPeremptionServiettes = d.kitPeremptionServiettes || d.kit_peremption_serviettes || d.peremption_serviettes || '';
+  const kitPeremptionServiettes = d.kitPeremptionServiettes !== undefined ? d.kitPeremptionServiettes : (d.kit_peremption_serviettes || d.peremption_serviettes || '');
   const kitGantsPresents = d.kitGantsPresents || d.kit_gants_presents || d.gants_presents || 'Oui';
   const kitRasoirPresent = d.kitRasoirPresent || d.kit_rasoir_present || d.rasoir_present || d.rasoir || 'Oui';
 

@@ -636,7 +636,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               }}
               placeholder={
                 !hasMessagesSpreadsheet
-                  ? 'Veuillez configurer le Spreadsheet Messages Internes dans les paramètres du tenant.'
+                  ? 'Fonctionnalité indisponible pour votre environnement, veuillez contacter le support.'
                   : 'Entrez votre message.'
               }
               className={`flex-1 self-center bg-transparent border-0 outline-none text-[#000000] px-1 placeholder:text-[#BECADB] resize-none overflow-y-auto text-[18px] ${

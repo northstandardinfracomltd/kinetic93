@@ -1288,6 +1288,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           display: none !important;
         }
 
+        #login-left-mobile-copyright {
+          display: none;
+        }
+
         @media (max-width: 1299px), (max-height: 639px) {
           #login-viewport-wrapper {
             flex-direction: column-reverse !important;
@@ -1328,6 +1332,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             width: 100% !important;
             min-height: 460px !important;
             flex: 1 1 auto !important;
+          }
+          #login-right-copyright {
+            display: none !important;
+          }
+          #login-left-mobile-copyright {
+            display: block !important;
           }
         }
 
@@ -1763,6 +1773,31 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           >
             defibeo.com
           </span>
+
+          <div
+            className="w-full text-center select-none px-4 mt-1 lg:hidden"
+            style={{
+              fontSize: '10px',
+              color: 'rgb(245, 247, 250)',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+            }}
+            id="login-left-mobile-copyright"
+          >
+            © 2026 Defibeo by Civilprom. All rights reserved.{' '}
+            <a
+              href="https://www.google.com/maps/place/Glasgow+G2+7JS,+Royaume-Uni/@55.861508,-4.2638329,23a,75y,9.99h,87.78t/data=!3m7!1e1!3m5!1s9scepnhvnV6jweow3ObCPQ!2e0!6shttps:%2F%2Fstreetviewpixels-pa.clients6.google.com%2Fv1%2Fthumbnail%3Fcb_client%3Dmaps_sv.tactile%26w%3D900%26h%3D600%26pitch%3D2.2176239721206628%26panoid%3D9scepnhvnV6jweow3ObCPQ%26yaw%3D9.994148180894447!7i16384!8i8192!4m6!3m5!1s0x4888469d64ac6abd:0xa74cf672bd0fbe9!8m2!3d55.8616882!4d-4.263924!16s%2Fg%2F1vj5zsnf?entry=ttu&g_ep=EgoyMDI2MTEwMS4wIKXMDSoASAFQAw%3D%3D"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="no-underline transition-opacity duration-200 hover:opacity-65 cursor-pointer"
+              style={{
+                color: 'rgb(245, 247, 250)',
+                textDecoration: 'none',
+              }}
+            >
+              Civilprom UK, Glasgow, G2 7JS, 120
+            </a>{' '}
+            (prod-525b2634).
+          </div>
         </div>
       </div>
 
@@ -2224,7 +2259,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           )}
 
           <div
-            className="w-full text-center select-none"
+            className="hidden lg:block w-full text-center select-none"
             style={{
               fontSize: '10px',
               color: '#a4b5ff',
