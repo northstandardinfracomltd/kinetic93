@@ -868,9 +868,28 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   };
 
   const generateNextReference = (): string => {
-    let envCode = (typeof window !== 'undefined' ? localStorage.getItem('defib_short_env_id') : null);
+    let envCode = '';
+    for (const t of tickets || []) {
+      const refStr = String(t?.reference || t?.id || '').trim();
+      const m = refStr.match(/^\d{1,5}-(D\d+)-\d{4}$/i);
+      if (m && m[1]) {
+        envCode = m[1].toUpperCase();
+        break;
+      }
+    }
+    if (!envCode && typeof window !== 'undefined') {
+      const savedShort = (localStorage.getItem('defib_short_env_id') || '').trim();
+      if (/^D\d+$/i.test(savedShort)) {
+        envCode = savedShort.toUpperCase();
+      }
+    }
+    if (!envCode && companyInfo?.envShortId && /^D\d+$/i.test(companyInfo.envShortId.trim())) {
+      envCode = companyInfo.envShortId.trim().toUpperCase();
+    }
     if (!envCode) {
-      if (activeTenant && activeTenant !== 'demo') {
+      if (activeTenant && activeTenant.toUpperCase() === 'D26') {
+        envCode = 'D67';
+      } else if (activeTenant && activeTenant !== 'demo') {
         envCode = activeTenant.toUpperCase().startsWith('D') ? activeTenant.toUpperCase() : `D${activeTenant.toUpperCase()}`;
       } else {
         envCode = 'D18';
@@ -880,11 +899,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     const mm = String(now.getMonth() + 1).padStart(2, '0');
     const yy = String(now.getFullYear()).slice(-2);
 
-    let maxNum = tickets.length;
+    let maxNum = 0;
     tickets.forEach((t) => {
-      const ref = t.reference || t.id;
+      const ref = String(t.reference || t.id || '').trim();
       if (ref) {
-        const match = ref.match(/^(\d{1,5})/);
+        const match = ref.match(/^(\d{1,5})(?=-)/);
         if (match) {
           const parsed = parseInt(match[1], 10);
           if (!isNaN(parsed) && parsed > maxNum) {

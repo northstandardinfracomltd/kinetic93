@@ -2599,17 +2599,18 @@ export default function PublicPortal({
                   (p.identifiant && m.defibIdentifiant && p.identifiant === m.defibIdentifiant),
               );
               if (matchedPassage) {
-                const isRejet = matchedPassage.status === "Rejet mission";
-                const reasonVal = isRejet
-                  ? (matchedPassage.rejectionReason || "")
-                  : (m.rejectionReason || m.raisonRejet || "");
+                const isRejet = matchedPassage.status === "Rejet mission" || matchedPassage.status === "Rejetée";
+                const reasonVal =
+                  matchedPassage.rejectionReason !== undefined
+                    ? String(matchedPassage.rejectionReason)
+                    : (m.rejectionReason || m.raisonRejet || "");
                 return {
                   ...m,
                   status: isRejet ? "Rejet mission" : matchedPassage.status,
                   rejectionReason: reasonVal,
                   raisonRejet: reasonVal,
                   raisonRejeteeMission: reasonVal,
-                  rejectedAt: isRejet ? (matchedPassage.rejectedAt || "") : (m.rejectedAt || ""),
+                  rejectedAt: isRejet ? (matchedPassage.rejectedAt || m.rejectedAt || "") : "",
                 };
               }
               return m;
@@ -2660,17 +2661,18 @@ export default function PublicPortal({
                       (p.identifiant && m.defibIdentifiant && p.identifiant === m.defibIdentifiant),
                   );
                   if (matchedPassage) {
-                    const isRejet = matchedPassage.status === "Rejet mission";
-                    const reasonVal = isRejet
-                      ? (matchedPassage.rejectionReason || "")
-                      : (m.rejectionReason || m.raisonRejet || "");
+                    const isRejet = matchedPassage.status === "Rejet mission" || matchedPassage.status === "Rejetée";
+                    const reasonVal =
+                      matchedPassage.rejectionReason !== undefined
+                        ? String(matchedPassage.rejectionReason)
+                        : (m.rejectionReason || m.raisonRejet || "");
                     return {
                       ...m,
                       status: isRejet ? "Rejet mission" : matchedPassage.status,
                       rejectionReason: reasonVal,
                       raisonRejet: reasonVal,
                       raisonRejeteeMission: reasonVal,
-                      rejectedAt: isRejet ? (matchedPassage.rejectedAt || "") : (m.rejectedAt || ""),
+                      rejectedAt: isRejet ? (matchedPassage.rejectedAt || m.rejectedAt || "") : "",
                     };
                   }
                   return m;
@@ -4121,14 +4123,8 @@ export default function PublicPortal({
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
                         ${(() => {
-                          const buildSvgSig = (label: string) => {
-                            const safe = String(label || 'Client').replace(/[<>&"']/g, '').trim() || 'Client';
-                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="25" font-style="italic" fill="#0f172a">${safe}</text><path d="M 12 52 Q 100 45 190 53" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
-                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-                          };
                           const pinVal = String(report.clientPinCode || snapshot.clientPinCode || '').trim();
                           const pinIsImg = pinVal.startsWith('data:image') || pinVal.startsWith('http');
-                          const anyClientWithSig = (effectiveClients || []).find((c: any) => c.clientSignatureImage || c.signatureClientContratImage);
                           let cSig =
                             (clientFound && (clientFound.clientSignatureImage || (clientFound as any).signatureClientContratImage || (clientFound as any).signatureClient)) ||
                             (pinIsImg ? pinVal : '') ||
@@ -4136,34 +4132,26 @@ export default function PublicPortal({
                             report.signatureClientContratImage ||
                             snapshot.clientSignatureImage ||
                             snapshot.signatureClientContratImage ||
-                            (anyClientWithSig && (anyClientWithSig.clientSignatureImage || anyClientWithSig.signatureClientContratImage)) ||
                             '';
-                          const displayPin = !pinIsImg ? pinVal : '';
-                          const fallbackSignerName =
-                            (clientFound as any)?.signeParContrat ||
-                            clientFound?.nomPrenomSite ||
-                            snapshot.nomPrenomSite ||
-                            report.nomPrenomSite ||
-                            clientFound?.denomination ||
-                            report.clientName ||
-                            report.entreprise ||
-                            '';
-                          if (!cSig && (displayPin || fallbackSignerName)) {
-                            cSig = buildSvgSig(fallbackSignerName || 'Client');
+                          if (
+                            cSig &&
+                            (cSig.startsWith('data:image/svg+xml') ||
+                              decodeURIComponent(cSig).toLowerCase().includes('représentant standard') ||
+                              decodeURIComponent(cSig).toLowerCase().includes('representant standard'))
+                          ) {
+                            cSig = '';
                           }
-                          if (!cSig && !displayPin) return '';
+                          const displayPin = !pinIsImg ? pinVal : '';
                           return `
                             <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
                             ${displayPin ? `
-                              <div style="font-size: 11px; margin-bottom: 2px;">
-                                <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
-                                <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${displayPin}</span>
+                              <div style="font-size: 13px; margin-bottom: 2px; color: #000000; font-family: 'DefibeoMain', 'Civilprom', sans-serif !important; font-weight: 100 !important;">
+                                <span style="font-size: 13px; color: #000000; font-family: 'DefibeoMain', 'Civilprom', sans-serif !important; font-weight: 100 !important;">Code validation: ${displayPin}</span>
                               </div>
                             ` : ''}
                             ${cSig ? `
                               <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
                                 <img src="${cSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                                <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">${displayPin ? `Signé électroniquement par PIN (${displayPin})` : 'Signé électroniquement (dessin)'}</div>
                               </div>
                             ` : ''}
                           `;
@@ -4966,14 +4954,8 @@ export default function PublicPortal({
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
                         ${(() => {
-                          const buildSvgSig = (label: string) => {
-                            const safe = String(label || 'Client').replace(/[<>&"']/g, '').trim() || 'Client';
-                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="25" font-style="italic" fill="#0f172a">${safe}</text><path d="M 12 52 Q 100 45 190 53" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
-                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-                          };
                           const pinVal = (report.clientPinCode || snapshot.clientPinCode || "").trim();
                           const pinIsImg = pinVal.startsWith("data:image") || pinVal.startsWith("http");
-                          const anyClientWithSig = (effectiveClients || []).find((c: any) => c.clientSignatureImage || c.signatureClientContratImage);
                           let sigImg =
                             (clientFound && (clientFound.clientSignatureImage || (clientFound as any).signatureClientContratImage || (clientFound as any).signatureClient)) ||
                             (pinIsImg ? pinVal : "") ||
@@ -4981,34 +4963,26 @@ export default function PublicPortal({
                             report.signatureClientContratImage ||
                             snapshot.clientSignatureImage ||
                             snapshot.signatureClientContratImage ||
-                            (anyClientWithSig && (anyClientWithSig.clientSignatureImage || anyClientWithSig.signatureClientContratImage)) ||
                             "";
-                          const displayPin = !pinIsImg ? pinVal : "";
-                          const fallbackSignerName =
-                            (clientFound as any)?.signeParContrat ||
-                            clientFound?.nomPrenomSite ||
-                            snapshot.nomPrenomSite ||
-                            report.nomPrenomSite ||
-                            clientFound?.denomination ||
-                            report.clientName ||
-                            report.entreprise ||
-                            "";
-                          if (!sigImg && (displayPin || fallbackSignerName)) {
-                            sigImg = buildSvgSig(fallbackSignerName || "Client");
+                          if (
+                            sigImg &&
+                            (sigImg.startsWith("data:image/svg+xml") ||
+                              decodeURIComponent(sigImg).toLowerCase().includes("représentant standard") ||
+                              decodeURIComponent(sigImg).toLowerCase().includes("representant standard"))
+                          ) {
+                            sigImg = "";
                           }
-                          if (!sigImg && !displayPin) return "";
+                          const displayPin = !pinIsImg ? pinVal : "";
                           return `
                             <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
                             ${displayPin ? `
-                              <div style="font-size: 11px; margin-bottom: 2px; font-family: 'Civilprom', sans-serif !important;">
-                                <span class="pdf-label" style="font-size:11px; color:rgb(138, 138, 138); font-family: 'Civilprom', sans-serif !important;">Code validation :</span> 
-                                <span class="pdf-bold" style="font-size:11px; font-family: 'Civilprom', sans-serif !important; font-weight: bold !important; color:#000;">${displayPin}</span>
+                              <div style="font-size: 13px; margin-bottom: 2px; color: #000000; font-family: 'DefibeoMain', 'Civilprom', sans-serif !important; font-weight: 100 !important;">
+                                <span style="font-size: 13px; color: #000000; font-family: 'DefibeoMain', 'Civilprom', sans-serif !important; font-weight: 100 !important;">Code validation: ${displayPin}</span>
                               </div>
                             ` : ''}
                             ${sigImg ? `
                               <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
                                 <img src="${sigImg}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                                <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">${displayPin ? `Signé électroniquement par PIN (${displayPin})` : 'Signé électroniquement (dessin)'}</div>
                               </div>
                             ` : ''}
                           `;
@@ -6962,7 +6936,7 @@ export default function PublicPortal({
         `Adresse : ${m.address}\n` +
         `Situation : ${m.status}\n` +
         (m.requiredParts && m.requiredParts.length > 0
-          ? `Pièce(s) : ${m.requiredParts.join(", ")}`
+          ? `Pièce(s) : ${m.requiredParts.map((rp: string) => String(rp || "").replace(/\s*-\s*Qté\s*:\s*\d+/gi, "")).join(", ")}`
           : "");
 
       const eventBody = {
@@ -7321,6 +7295,7 @@ export default function PublicPortal({
                     forceSmartphoneLayout={false}
                     isNew={true}
                     isWebapp={true}
+                    isFromInterventionMission={Boolean(reportActiveTourId || reportToEdit?.missionId || reportToEdit?.tourId)}
                     isMinimized={isReportOverlayMinimized}
                     onToggleMinimize={() => setIsReportOverlayMinimized((prev) => !prev)}
                     otherEquipments={otherEquipments}
@@ -7440,6 +7415,7 @@ export default function PublicPortal({
                   <GmaoCorrectionForm
                     key={reportToEdit ? `edit-${reportToEdit.id}-${reportToEdit.date || ''}` : `new-${selectedDefibId || 'new'}`}
                     isNew={reportToEdit ? (!generatedReports.some(r => r.id === reportToEdit.id)) : true}
+                    isFromInterventionMission={Boolean(reportActiveTourId || reportToEdit?.missionId || reportToEdit?.tourId)}
                     report={reportToEdit}
                     companyInfo={companyInfo}
                     clients={clients}
@@ -10523,10 +10499,11 @@ export default function PublicPortal({
                                                   const sentList: string[] = Array.isArray(p.sentToClientParts) ? p.sentToClientParts : [];
                                                   const providedList: string[] = Array.isArray(p.providedByClientParts) ? p.providedByClientParts : [];
                                                   const formattedParts = cleanParts.map((part: string) => {
+                                                    const cleanPartLabel = String(part || "").replace(/\s*-\s*Qté\s*:\s*\d+/gi, "");
                                                     const suffixes: string[] = [];
-                                                    if (sentList.includes(part)) suffixes.push("(Envoyée au client)");
-                                                    if (providedList.includes(part)) suffixes.push("(Fourniture par le client)");
-                                                    return suffixes.length > 0 ? `${part} ${suffixes.join(" ")}` : part;
+                                                    if (sentList.includes(part) || sentList.includes(cleanPartLabel)) suffixes.push("(Envoyée au client)");
+                                                    if (providedList.includes(part) || providedList.includes(cleanPartLabel)) suffixes.push("(Fourniture par le client)");
+                                                    return suffixes.length > 0 ? `${cleanPartLabel} ${suffixes.join(" ")}` : cleanPartLabel;
                                                   });
                                                   return formattedParts.join(", ");
                                                 })()}
@@ -10957,8 +10934,156 @@ export default function PublicPortal({
                                 })}
                               </div>
 
-                              {/* Terminer la tournée button in Red */}
-                              <div className="pt-2">
+                              {/* Enregistrer & Terminer la tournée buttons */}
+                              <div className="pt-2 space-y-2.5">
+                                <button
+                                  type="button"
+                                  disabled={t.status === "Terminé"}
+                                  onClick={() => {
+                                    playTechSound2();
+                                    const updatedTours = tours.map((item) => {
+                                      if (item.id === t.id) {
+                                        return {
+                                          ...item,
+                                          passages: item.passages.map((pass) => {
+                                            const draftKey = `${item.id}_${pass.id || pass.num}`;
+                                            const rawReason =
+                                              draftRejectionReasons[draftKey] !== undefined
+                                                ? draftRejectionReasons[draftKey]
+                                                : (pass.rejectionReason ?? "");
+                                            const trimmedReason = String(rawReason).trim();
+                                            const wasRejected =
+                                              pass.status === "Rejet mission" || pass.status === "Rejetée";
+                                            const nextStatus =
+                                              wasRejected && !trimmedReason ? "À faire" : pass.status;
+                                            return {
+                                              ...pass,
+                                              status: nextStatus,
+                                              rejectionReason: trimmedReason,
+                                              raisonRejet: trimmedReason,
+                                              raisonRejeteeMission: trimmedReason,
+                                              rejectedAt:
+                                                nextStatus === "Rejet mission" || nextStatus === "Rejetée"
+                                                  ? pass.rejectedAt || new Date().toLocaleDateString("fr-FR")
+                                                  : "",
+                                            };
+                                          }),
+                                        };
+                                      }
+                                      return item;
+                                    });
+                                    saveTours(updatedTours);
+
+                                    if (Array.isArray(generatedReports) && generatedReports.length > 0) {
+                                      let reportsChanged = false;
+                                      const changedReportRecords: any[] = [];
+                                      const currentUpdatedTour = updatedTours.find((ut) => ut.id === t.id);
+                                      const tourPassages = currentUpdatedTour?.passages || [];
+                                      const nextReports = generatedReports.map((rep: any) => {
+                                        const matchedPass = tourPassages.find((pass: any) => {
+                                          const passId = String(pass.id || pass.identifiant || "").trim();
+                                          const passInterv = String(
+                                            pass.interventionReference || pass.identifiant || ""
+                                          ).trim();
+                                          const passDefib = String(
+                                            (pass as any).defibIdentifiant || pass.identifiant || ""
+                                          ).trim();
+                                          const repMissionId = String(rep.missionId || "").trim();
+                                          const repInterv = String(rep.interventionReference || "").trim();
+                                          const repDefib = String(
+                                            rep.defibIdentifiant || rep.defibSnapshot?.identifiant || ""
+                                          ).trim();
+                                          return (
+                                            (passId && repMissionId && passId === repMissionId) ||
+                                            (passInterv && repInterv && passInterv === repInterv) ||
+                                            (passDefib && repDefib && passDefib === repDefib && rep.isUpcoming)
+                                          );
+                                        });
+                                        if (matchedPass) {
+                                          const cleanReason = String(matchedPass.rejectionReason || "")
+                                            .trim()
+                                            .replace(/\.$/, "");
+                                          const nextMissionStatus =
+                                            matchedPass.status || rep.missionStatus || "À faire";
+                                          if (
+                                            rep.missionStatus !== nextMissionStatus ||
+                                            (rep.rejectionReason || "") !== cleanReason
+                                          ) {
+                                            reportsChanged = true;
+                                            const baseRep = {
+                                              ...rep,
+                                              missionStatus: nextMissionStatus,
+                                              rejectionReason: cleanReason,
+                                            };
+                                            const nextComment = mergeReportModerationComment(
+                                              rep.commentaire,
+                                              baseRep,
+                                              defibrillateurs,
+                                              stocks,
+                                              variables,
+                                              updatedTours
+                                            );
+                                            const nextAlerts = mergeReportPostInterventionAlerts(
+                                              baseRep,
+                                              defibrillateurs,
+                                              stocks,
+                                              variables,
+                                              updatedTours
+                                            );
+                                            const updatedRep = {
+                                              ...baseRep,
+                                              commentaire: nextComment,
+                                              ...buildFlatAlertFields(nextAlerts),
+                                            };
+                                            changedReportRecords.push(updatedRep);
+                                            return updatedRep;
+                                          }
+                                        }
+                                        return rep;
+                                      });
+
+                                      if (reportsChanged) {
+                                        saveReports(nextReports);
+                                        const activeTid =
+                                          localStorage.getItem("defib_tenant_id") || "demo";
+                                        const gererSheetUrl = getTenantSpreadsheetUrl(
+                                          "spreadsheetGestionApresIntervention",
+                                          companyInfo
+                                        );
+                                        fetch("/api/sheets/upsert", {
+                                          method: "POST",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({
+                                            tenantId: activeTid,
+                                            type: "gestionApresIntervention",
+                                            records: changedReportRecords,
+                                            spreadsheetUrl: gererSheetUrl || undefined,
+                                          }),
+                                        }).catch(() => {});
+                                      }
+                                    }
+                                  }}
+                                  style={{
+                                    backgroundColor: "rgb(46, 84, 255)",
+                                    color: "#ffffff",
+                                    fontSize: "18px",
+                                    fontWeight: "bold",
+                                    borderRadius: "12px",
+                                    padding: "14px 20px",
+                                    border: "none",
+                                    boxShadow: "none",
+                                    cursor:
+                                      t.status === "Terminé"
+                                        ? "not-allowed"
+                                        : "pointer",
+                                    width: "100%",
+                                    opacity: t.status === "Terminé" ? 0.55 : 1,
+                                  }}
+                                  className={`${t.status === "Terminé" ? "" : "hover:opacity-90 active:scale-[0.99]"} transition-all flex items-center justify-center gap-2`}
+                                >
+                                  Enregistrer
+                                </button>
+
                                 <button
                                   type="button"
                                   disabled={t.status === "Terminé"}

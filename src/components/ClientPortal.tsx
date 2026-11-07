@@ -838,7 +838,7 @@ export default function ClientPortal({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={label}
-          className="w-full text-[18px] text-black bg-white focus:outline-none transition-all placeholder:text-gray-400 font-sans"
+          className="w-full text-[18px] text-black bg-white focus:outline-none transition-all placeholder:text-[#BECADB] font-sans"
           style={{
             border: '1px solid #cfcfcf',
             borderRadius: '11px',
@@ -1010,34 +1010,56 @@ export default function ClientPortal({
 
     if (onAddTicket) {
       const now = new Date();
-      const mm = String(now.getMonth() + 1).padStart(2, '0');
-      const yy = String(now.getFullYear()).slice(-2);
-      const envShort = (companyInfo?.envShortId || companyInfo?.name || 'DEFIB').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6) || 'DEFIB';
-      const randomSeq = String(Math.floor(100000 + Math.random() * 900000));
-      const referenceVal = `${randomSeq}-${envShort}-${mm}${yy}`;
+      const todayFormatted = now.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const clientContactName = (authenticatedClient?.nomPrenomContact || '').trim();
+      const clientPhone = (authenticatedClient?.phone || authenticatedClient?.telephoneSite || '').trim();
+      const rawCliId = (authenticatedClient?.clientIdField || authenticatedClient?.id || '').trim();
+      const cleanClientId = rawCliId.startsWith('sheet-clients-') ? '' : rawCliId;
+      const mappedCategory = contactCategorie === 'Autre' ? 'Sans Catégorie' : contactCategorie;
 
-      const ticketId = onAddTicket({
-        reference: referenceVal,
-        categorie: contactCategorie,
-        criticite: contactCriticite,
+      const createdTicketRef = onAddTicket({
+        type: 'Ticket',
+        categorie: mappedCategory,
+        crmCategory:
+          mappedCategory === 'Commercial' ||
+          mappedCategory === 'Technique' ||
+          mappedCategory === 'Réclamation' ||
+          mappedCategory === 'Sans Catégorie'
+            ? mappedCategory
+            : 'Sans Catégorie',
+        criticite: contactCriticite || 'Non renseigné',
         objet: contactObjet.trim(),
         situation: 'Nouveau',
+        dateOuverture: todayFormatted,
+        dateDerniereActualisation: todayFormatted,
         collaborateur: 'Non attribué',
         client: authenticatedClient?.denomination || '',
+        entreprise: authenticatedClient?.denomination || '',
+        payeurId: authenticatedClient?.payeurId || '',
+        clientId: cleanClientId,
         email: contactEmail.trim(),
-        phone: authenticatedClient?.phone || '',
-        description: `${contactMessage.trim()}\n\nComplément d'information :\nEmail: ${contactEmail.trim()}`,
-        message: `${contactMessage.trim()}\n\nComplément d'information :\nEmail: ${contactEmail.trim()}`,
+        situationInterlocuteur: 'Client',
+        typeStructure: 'Entreprise',
+        prenomNom: clientContactName,
+        nomPrenom: clientContactName,
+        fonction: authenticatedClient?.typeContact1 || '',
+        telephone: clientPhone,
+        phone: clientPhone,
+        description: contactMessage.trim(),
+        message: contactMessage.trim(),
+        origineLead: 'Service Client',
       });
+
+      const finalReference = createdTicketRef || '';
 
       if (onAddNotification) {
         onAddNotification(
           'Défibrillateurs',
-          `${t("Nouveau ticket")} ${referenceVal} - ${authenticatedClient?.denomination || 'Client'}`
+          `${t("Nouveau ticket")} ${finalReference} - ${authenticatedClient?.denomination || 'Client'}`
         );
       }
 
-      setContactSuccessMsg(`${t("Votre demande a bien été envoyée à l'exploitant. Référence ticket :")} ${referenceVal}`);
+      setContactSuccessMsg(`${t("Votre demande a bien été envoyée à l'exploitant. Référence ticket :")} ${finalReference}`);
       setContactObjet('');
       setContactMessage('');
     } else {
@@ -2000,11 +2022,6 @@ export default function ClientPortal({
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
                         ${(() => {
-                          const buildSvgSig = (label: string) => {
-                            const safe = String(label || 'Client').replace(/[<>&"']/g, '').trim() || 'Client';
-                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="25" font-style="italic" fill="#0f172a">${safe}</text><path d="M 12 52 Q 100 45 190 53" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
-                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-                          };
                           const pinVal = String(report.clientPinCode || snapshot.clientPinCode || '').trim();
                           const pinIsImg = pinVal.startsWith('data:image') || pinVal.startsWith('http');
                           let cSig =
@@ -2015,31 +2032,25 @@ export default function ClientPortal({
                             snapshot.clientSignatureImage ||
                             snapshot.signatureClientContratImage ||
                             '';
-                          const displayPin = !pinIsImg ? pinVal : '';
-                          const fallbackSignerName =
-                            (clientFound as any)?.signeParContrat ||
-                            clientFound?.nomPrenomSite ||
-                            snapshot.nomPrenomSite ||
-                            report.nomPrenomSite ||
-                            clientFound?.denomination ||
-                            report.clientName ||
-                            '';
-                          if (!cSig && (displayPin || fallbackSignerName)) {
-                            cSig = buildSvgSig(fallbackSignerName || 'Client');
+                          if (
+                            cSig &&
+                            (cSig.startsWith('data:image/svg+xml') ||
+                              decodeURIComponent(cSig).toLowerCase().includes('représentant standard') ||
+                              decodeURIComponent(cSig).toLowerCase().includes('representant standard'))
+                          ) {
+                            cSig = '';
                           }
-                          if (!cSig && !displayPin) return '';
+                          const displayPin = !pinIsImg ? pinVal : '';
                           return `
                             <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
                             ${displayPin ? `
-                              <div style="font-size: 11px; margin-bottom: 2px;">
-                                <span class="pdf-label" style="font-size:11px; color:#555;">Code validation:</span> 
-                                <span class="pdf-bold" style="font-size:11px; font-family: monospace !important; font-weight: bold !important; color:#000;">${displayPin}</span>
+                              <div style="font-size: 13px; margin-bottom: 2px; color: #000000; font-family: 'DefibeoMain', 'Civilprom', sans-serif !important; font-weight: 100 !important;">
+                                <span style="font-size: 13px; color: #000000; font-family: 'DefibeoMain', 'Civilprom', sans-serif !important; font-weight: 100 !important;">Code validation: ${displayPin}</span>
                               </div>
                             ` : ''}
                             ${cSig ? `
                               <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
                                 <img src="${cSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                                <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">${displayPin ? `Signé électroniquement par PIN (${displayPin})` : 'Signé électroniquement (dessin)'}</div>
                               </div>
                             ` : ''}
                           `;
@@ -2756,11 +2767,6 @@ export default function ClientPortal({
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
                         ${(() => {
-                          const buildSvgSig = (label: string) => {
-                            const safe = String(label || 'Client').replace(/[<>&"']/g, '').trim() || 'Client';
-                            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70" viewBox="0 0 220 70"><text x="10" y="42" font-family="Brush Script MT, Segoe Script, Apple Chancery, cursive, sans-serif" font-size="25" font-style="italic" fill="#0f172a">${safe}</text><path d="M 12 52 Q 100 45 190 53" stroke="#0f172a" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
-                            return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-                          };
                           const pinVal = String(report.clientPinCode || snapshot.clientPinCode || '').trim();
                           const pinIsImg = pinVal.startsWith('data:image') || pinVal.startsWith('http');
                           let cSig =
@@ -2771,31 +2777,25 @@ export default function ClientPortal({
                             snapshot.clientSignatureImage ||
                             snapshot.signatureClientContratImage ||
                             '';
-                          const displayPin = !pinIsImg ? pinVal : '';
-                          const fallbackSignerName =
-                            (clientFound as any)?.signeParContrat ||
-                            clientFound?.nomPrenomSite ||
-                            snapshot.nomPrenomSite ||
-                            report.nomPrenomSite ||
-                            clientFound?.denomination ||
-                            report.clientName ||
-                            '';
-                          if (!cSig && (displayPin || fallbackSignerName)) {
-                            cSig = buildSvgSig(fallbackSignerName || 'Client');
+                          if (
+                            cSig &&
+                            (cSig.startsWith('data:image/svg+xml') ||
+                              decodeURIComponent(cSig).toLowerCase().includes('représentant standard') ||
+                              decodeURIComponent(cSig).toLowerCase().includes('representant standard'))
+                          ) {
+                            cSig = '';
                           }
-                          if (!cSig && !displayPin) return '';
+                          const displayPin = !pinIsImg ? pinVal : '';
                           return `
                             <div class="pdf-line" style="font-size: 16px;">Signature client.</div>
                             ${displayPin ? `
-                              <div style="font-size: 11px; margin-bottom: 2px; font-family: 'Civilprom', sans-serif !important;">
-                                <span class="pdf-label" style="font-size:11px; color:rgb(138, 138, 138); font-family: 'Civilprom', sans-serif !important;">Code validation :</span> 
-                                <span class="pdf-bold" style="font-size:11px; font-family: 'Civilprom', sans-serif !important; font-weight: bold !important; color:#000;">${displayPin}</span>
+                              <div style="font-size: 13px; margin-bottom: 2px; color: #000000; font-family: 'DefibeoMain', 'Civilprom', sans-serif !important; font-weight: 100 !important;">
+                                <span style="font-size: 13px; color: #000000; font-family: 'DefibeoMain', 'Civilprom', sans-serif !important; font-weight: 100 !important;">Code validation: ${displayPin}</span>
                               </div>
                             ` : ''}
                             ${cSig ? `
                               <div style="background: transparent; display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; max-height: 80px; max-width: 150px; gap: 2px; margin-top: 4px;">
                                 <img src="${cSig}" style="max-height: 55px; max-width: 150px; object-fit: contain;" alt="Signature Client" />
-                                <div style="font-size: 10px; color: #1e293b; font-style: italic; font-weight: bold !important;">${displayPin ? `Signé électroniquement par PIN (${displayPin})` : 'Signé électroniquement (dessin)'}</div>
                               </div>
                             ` : ''}
                           `;
@@ -2880,7 +2880,7 @@ export default function ClientPortal({
           className="select-text font-sans"
           style={{ 
             fontSize: '18px', 
-            color: isMaterial ? '#772a7e' : 'black', 
+            color: isMaterial ? 'rgb(80, 97, 122)' : 'black', 
             fontWeight: isMaterial ? 'bold' : 100,
             border: isMaterial ? 'none' : '1px solid #cfcfcf',
             borderRadius: '13px',
@@ -2889,7 +2889,7 @@ export default function ClientPortal({
             minHeight: '48px',
             display: 'flex',
             alignItems: 'center',
-            backgroundColor: isMaterial ? 'rgb(253 234 255)' : '#ffffff'
+            backgroundColor: isMaterial ? 'rgb(245, 247, 250)' : '#ffffff'
           }}
         >
           {finalValue}
@@ -2915,7 +2915,7 @@ export default function ClientPortal({
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <h1 className="font-black animate-fadeIn" style={{ letterSpacing: '0px', color: '#631f6a', fontSize: '18px', cursor: 'default' }}>
+              <h1 className="font-black animate-fadeIn" style={{ letterSpacing: '0px', color: '#000000', fontSize: '18px', cursor: 'default' }}>
                 {companyInfo?.name || 'Défibeo Solutions'}
               </h1>
             )}
@@ -2923,11 +2923,11 @@ export default function ClientPortal({
 
           <button
             onClick={onLogout}
-            className="text-[18px] text-white rounded-xl select-none cursor-pointer border-0 shadow-sm outline-none transition-none brightness-100 hover:brightness-100 hover:opacity-100 hover:scale-100"
+            className="text-[18px] text-white rounded-xl select-none cursor-pointer border-0 outline-none transition-none brightness-100 hover:brightness-100 hover:opacity-100 hover:scale-100"
             style={{
-              boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
-              background: '#3556ec',
-              backgroundColor: '#3556ec',
+              boxShadow: 'none',
+              background: 'rgb(46, 84, 255)',
+              backgroundColor: 'rgb(46, 84, 255)',
               fontWeight: 100,
               padding: '9px 18px',
             }}
@@ -2941,7 +2941,7 @@ export default function ClientPortal({
           <div 
             className="w-full p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
             style={{
-              backgroundColor: 'rgb(246 235 247)',
+              backgroundColor: 'rgb(245, 247, 250)',
               border: 'none',
               borderRadius: '13px',
               boxShadow: 'none',
@@ -2950,7 +2950,7 @@ export default function ClientPortal({
             <div 
               className="font-bold font-sans leading-snug"
               style={{
-                color: '#631f6a',
+                color: '#000',
                 fontSize: '18px',
                 cursor: 'default',
               }}
@@ -2965,8 +2965,9 @@ export default function ClientPortal({
               }}
               className="text-white font-bold cursor-pointer select-none border-none outline-none shrink-0 self-end sm:self-auto transition-none"
               style={{
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                background: 'rgb(96, 28, 104)',
+                boxShadow: 'none',
+                background: 'rgb(46, 84, 255)',
+                backgroundColor: 'rgb(46, 84, 255)',
                 borderRadius: '13px',
                 fontSize: '18px',
                 padding: '9px 18px',
@@ -2982,7 +2983,7 @@ export default function ClientPortal({
           <div 
             className="w-full p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
             style={{
-              backgroundColor: 'rgb(246 235 247)',
+              backgroundColor: 'rgb(245, 247, 250)',
               border: 'none',
               borderRadius: '13px',
               boxShadow: 'none',
@@ -2991,7 +2992,7 @@ export default function ClientPortal({
             <div 
               className="font-bold font-sans leading-snug"
               style={{
-                color: '#631f6a',
+                color: '#000',
                 fontSize: '18px',
                 cursor: 'default',
               }}
@@ -3008,8 +3009,9 @@ export default function ClientPortal({
               }}
               className="text-white font-bold cursor-pointer select-none border-none outline-none shrink-0 self-end sm:self-auto transition-none"
               style={{
-                boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                background: 'rgb(96, 28, 104)',
+                boxShadow: 'none',
+                background: 'rgb(46, 84, 255)',
+                backgroundColor: 'rgb(46, 84, 255)',
                 borderRadius: '13px',
                 fontSize: '18px',
                 padding: '9px 18px',
@@ -3023,7 +3025,7 @@ export default function ClientPortal({
         {/* Navigation Tabs (Stacks vertically on mobile, horizontally on sm screens) */}
         <div 
           className="flex flex-col sm:flex-row gap-1.5 p-1.5"
-          style={{ borderRadius: '13px', background: '#f6ecf7', border: 'none', boxShadow: 'none' }}
+          style={{ borderRadius: '13px', background: 'rgb(245, 247, 250)', backgroundColor: 'rgb(245, 247, 250)', border: 'none', boxShadow: 'none' }}
         >
           <button
             onClick={() => setActivePortalTab('defibs')}
@@ -3032,8 +3034,9 @@ export default function ClientPortal({
               activePortalTab === 'defibs'
                 ? {
                     borderRadius: '13px',
-                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                    background: 'rgb(96, 28, 104)',
+                    boxShadow: 'none',
+                    background: 'rgb(46, 84, 255)',
+                    backgroundColor: 'rgb(46, 84, 255)',
                     color: '#fff',
                     padding: '9px 10px',
                     fontSize: '18px',
@@ -3041,7 +3044,7 @@ export default function ClientPortal({
                 : {
                     borderRadius: '13px',
                     background: 'transparent',
-                    color: 'rgb(99, 31, 106)',
+                    color: '#000',
                     padding: '9px 10px',
                     fontSize: '18px',
                   }
@@ -3056,8 +3059,9 @@ export default function ClientPortal({
               activePortalTab === 'autovigilance'
                 ? {
                     borderRadius: '13px',
-                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                    background: 'rgb(96, 28, 104)',
+                    boxShadow: 'none',
+                    background: 'rgb(46, 84, 255)',
+                    backgroundColor: 'rgb(46, 84, 255)',
                     color: '#fff',
                     padding: '9px 10px',
                     fontSize: '18px',
@@ -3065,7 +3069,7 @@ export default function ClientPortal({
                 : {
                     borderRadius: '13px',
                     background: 'transparent',
-                    color: 'rgb(99, 31, 106)',
+                    color: '#000',
                     padding: '9px 10px',
                     fontSize: '18px',
                   }
@@ -3081,8 +3085,9 @@ export default function ClientPortal({
                 activePortalTab === 'bills'
                   ? {
                       borderRadius: '13px',
-                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                      background: 'rgb(96, 28, 104)',
+                      boxShadow: 'none',
+                      background: 'rgb(46, 84, 255)',
+                      backgroundColor: 'rgb(46, 84, 255)',
                       color: '#fff',
                       padding: '9px 10px',
                       fontSize: '18px',
@@ -3090,7 +3095,7 @@ export default function ClientPortal({
                   : {
                       borderRadius: '13px',
                       background: 'transparent',
-                      color: 'rgb(99, 31, 106)',
+                      color: '#000',
                       padding: '9px 10px',
                       fontSize: '18px',
                     }
@@ -3106,8 +3111,9 @@ export default function ClientPortal({
               activePortalTab === 'reports'
                 ? {
                     borderRadius: '13px',
-                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                    background: 'rgb(96, 28, 104)',
+                    boxShadow: 'none',
+                    background: 'rgb(46, 84, 255)',
+                    backgroundColor: 'rgb(46, 84, 255)',
                     color: '#fff',
                     padding: '9px 10px',
                     fontSize: '18px',
@@ -3115,7 +3121,7 @@ export default function ClientPortal({
                 : {
                     borderRadius: '13px',
                     background: 'transparent',
-                    color: 'rgb(99, 31, 106)',
+                    color: '#000',
                     padding: '9px 10px',
                     fontSize: '18px',
                   }
@@ -3130,8 +3136,9 @@ export default function ClientPortal({
               activePortalTab === 'info'
                 ? {
                     borderRadius: '13px',
-                    boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(97, 28, 104) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                    background: 'rgb(96, 28, 104)',
+                    boxShadow: 'none',
+                    background: 'rgb(46, 84, 255)',
+                    backgroundColor: 'rgb(46, 84, 255)',
                     color: '#fff',
                     padding: '9px 10px',
                     fontSize: '18px',
@@ -3139,7 +3146,7 @@ export default function ClientPortal({
                 : {
                     borderRadius: '13px',
                     background: 'transparent',
-                    color: 'rgb(99, 31, 106)',
+                    color: '#000',
                     padding: '9px 10px',
                     fontSize: '18px',
                   }
@@ -3239,18 +3246,18 @@ export default function ClientPortal({
                           key={df.id}
                           className="bg-white p-5 space-y-4"
                           style={{
-                            border: '1px solid #cfcfcf',
+                            border: '1px solid #DCE1EA',
                             borderRadius: '13px',
                           }}
                         >
                           <div className="flex items-center gap-3 select-none flex-wrap">
-                            <h2 className="text-[18px] font-black text-[#7e2e86]" style={{ letterSpacing: 'normal' }}>
+                            <h2 className="text-[18px] font-black text-[#000000]" style={{ letterSpacing: 'normal', color: '#000' }}>
                               {df.identifiant}
                             </h2>
                             <span 
                               style={{ 
-                                backgroundColor: '#45114a',
-                                color: '#fff',
+                                backgroundColor: 'rgb(61, 220, 132)',
+                                color: 'rgb(19, 100, 55)',
                                 fontSize: '18px',
                                 borderRadius: '100px',
                                 padding: '10px 15px',
@@ -3263,8 +3270,8 @@ export default function ClientPortal({
                             </span>
                             <span 
                               style={{ 
-                                backgroundColor: '#45114a',
-                                color: '#fff',
+                                backgroundColor: 'rgb(61, 220, 132)',
+                                color: 'rgb(19, 100, 55)',
                                 fontSize: '18px',
                                 borderRadius: '100px',
                                 padding: '10px 15px',
@@ -3344,18 +3351,18 @@ export default function ClientPortal({
                           key={oth.id}
                           className="bg-white p-5 space-y-4"
                           style={{
-                            border: '1px solid #cfcfcf',
+                            border: '1px solid #DCE1EA',
                             borderRadius: '13px',
                           }}
                         >
                           <div className="flex items-center gap-3 select-none">
-                            <h2 className="text-[18px] font-black text-[#7e2e86]" style={{ letterSpacing: 'normal' }}>
+                            <h2 className="text-[18px] font-black text-[#000000]" style={{ letterSpacing: 'normal', color: '#000' }}>
                               {oth.identifiant}
                             </h2>
                             <span 
                               style={{ 
-                                backgroundColor: '#45114a',
-                                color: '#fff',
+                                backgroundColor: 'rgb(61, 220, 132)',
+                                color: 'rgb(19, 100, 55)',
                                 fontSize: '18px',
                                 borderRadius: '100px',
                                 padding: '10px 15px',
@@ -3545,13 +3552,12 @@ export default function ClientPortal({
                         borderRadius: '13px',
                         border: 'none',
                         cursor: 'pointer',
-                        backgroundColor: reportsFilter === 'upcoming' ? '#fe4eba' : 'transparent',
+                        backgroundColor: reportsFilter === 'upcoming' ? 'rgb(46, 84, 255)' : 'transparent',
                         color: reportsFilter === 'upcoming' ? '#ffffff' : '#000000',
+                        boxShadow: 'none',
                         transition: 'none',
                       }}
-                      className={`px-4 py-1.5 font-bold ${
-                        reportsFilter === 'upcoming' ? 'shadow-sm' : ''
-                      }`}
+                      className="px-4 py-1.5 font-bold"
                     >
                       {t("À venir")}
                     </button>
@@ -3563,13 +3569,12 @@ export default function ClientPortal({
                         borderRadius: '13px',
                         border: 'none',
                         cursor: 'pointer',
-                        backgroundColor: reportsFilter === 'validated' ? '#fe4eba' : 'transparent',
+                        backgroundColor: reportsFilter === 'validated' ? 'rgb(46, 84, 255)' : 'transparent',
                         color: reportsFilter === 'validated' ? '#ffffff' : '#000000',
+                        boxShadow: 'none',
                         transition: 'none',
                       }}
-                      className={`px-4 py-1.5 font-bold ${
-                        reportsFilter === 'validated' ? 'shadow-sm' : ''
-                      }`}
+                      className="px-4 py-1.5 font-bold"
                     >
                       {t("Validées")}
                     </button>
@@ -3678,7 +3683,7 @@ export default function ClientPortal({
                             key={rep.id}
                             className="bg-white p-6 space-y-6"
                             style={{
-                              border: '1px solid #cfcfcf',
+                              border: '1px solid #DCE1EA',
                               borderRadius: '13px',
                             }}
                           >
@@ -3692,7 +3697,8 @@ export default function ClientPortal({
                                   type="text"
                                   value={planifiedEffectueVal}
                                   disabled
-                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                                  style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                                 />
                               </div>
 
@@ -3705,7 +3711,8 @@ export default function ClientPortal({
                                   type="text"
                                   value={snap.categorie || 'Défibrillateur'}
                                   disabled
-                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                                  style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                                 />
                               </div>
 
@@ -3718,7 +3725,8 @@ export default function ClientPortal({
                                   type="text"
                                   value={rep.defibIdentifiant || snap.identifiant || ''}
                                   disabled
-                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                                  style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                                 />
                               </div>
 
@@ -3731,7 +3739,8 @@ export default function ClientPortal({
                                   type="text"
                                   value={snap.numeroSerie || snap.specifiques?.numeroSerie || ''}
                                   disabled
-                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                                  style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                                 />
                               </div>
 
@@ -3744,7 +3753,8 @@ export default function ClientPortal({
                                   type="text"
                                   value={rep.techName || ''}
                                   disabled
-                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                                  style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                                 />
                               </div>
 
@@ -3757,7 +3767,8 @@ export default function ClientPortal({
                                   type="text"
                                   value={currentSituation}
                                   disabled
-                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                                  style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                                  className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                                 />
                               </div>
                             </div>
@@ -3790,7 +3801,8 @@ export default function ClientPortal({
                                 <button
                                   type="button"
                                   onClick={() => handleDownloadReport(rep)}
-                                  className="w-full py-3 bg-[#3556ec] text-white text-[18px] rounded-xl font-sans font-bold hover:bg-[#2b48cd] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                                  style={{ backgroundColor: 'rgb(46, 84, 255)', boxShadow: 'none' }}
+                                  className="w-full py-3 text-white text-[18px] rounded-xl font-sans font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border-none"
                                 >
                                   {t("Télécharger")}
                                 </button>
@@ -3811,9 +3823,11 @@ export default function ClientPortal({
             <div className="space-y-8">
               {/* Info-div for verification items */}
               <div 
-                className="p-5 rounded-2xl border flex flex-col gap-3 font-sans text-[16px] text-black bg-slate-50/50"
+                className="p-5 rounded-2xl border flex flex-col gap-3 font-sans text-[16px] text-black bg-white"
                 style={{
-                  borderColor: 'rgb(226, 232, 240)',
+                  backgroundColor: '#FFFFFF',
+                  border: '1px solid #DCE1EA',
+                  borderColor: '#DCE1EA',
                   maxWidth: '100%',
                 }}
               >
@@ -3956,8 +3970,9 @@ export default function ClientPortal({
                           type="submit"
                           className="w-full text-white transition-all cursor-pointer outline-none border-none shrink-0 font-bold"
                           style={{
-                            boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, rgb(53, 86, 236) 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                            background: 'rgb(53, 86, 236)',
+                            boxShadow: 'none',
+                            background: 'rgb(46, 84, 255)',
+                            backgroundColor: 'rgb(46, 84, 255)',
                             borderRadius: '11px',
                             fontSize: '18px',
                             height: '48px',
@@ -4022,7 +4037,7 @@ export default function ClientPortal({
               <div
                 className="bg-white p-5 list-none"
                 style={{
-                  border: '1px solid #cfcfcf',
+                  border: '1px solid #DCE1EA',
                   borderRadius: '13px',
                 }}
               >
@@ -4036,7 +4051,8 @@ export default function ClientPortal({
                       type="text"
                       value={authenticatedClient.denomination || ''}
                       disabled
-                      className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                      style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                      className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                     />
                   </div>
 
@@ -4049,7 +4065,8 @@ export default function ClientPortal({
                       type="text"
                       value={authenticatedClient.siret || ''}
                       disabled
-                      className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                      style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                      className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                     />
                   </div>
 
@@ -4062,7 +4079,7 @@ export default function ClientPortal({
                       type="text"
                       value={portalEmail}
                       onChange={(e) => setPortalEmail(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white hover:border-[#772a7e] focus:border-[#772a7e] focus:outline-none font-sans"
+                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white placeholder:text-[#BECADB] hover:border-[#2e54ff] focus:border-[#2e54ff] focus:outline-none font-sans"
                     />
                   </div>
 
@@ -4075,7 +4092,7 @@ export default function ClientPortal({
                       type="text"
                       value={portalPhone}
                       onChange={(e) => setPortalPhone(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white hover:border-[#772a7e] focus:border-[#772a7e] focus:outline-none font-sans"
+                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white placeholder:text-[#BECADB] hover:border-[#2e54ff] focus:border-[#2e54ff] focus:outline-none font-sans"
                     />
                   </div>
 
@@ -4088,7 +4105,7 @@ export default function ClientPortal({
                       type="text"
                       value={portalAccessKey}
                       onChange={(e) => setPortalAccessKey(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white hover:border-[#772a7e] focus:border-[#772a7e] focus:outline-none font-sans"
+                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white placeholder:text-[#BECADB] hover:border-[#2e54ff] focus:border-[#2e54ff] focus:outline-none font-sans"
                     />
                   </div>
 
@@ -4101,7 +4118,8 @@ export default function ClientPortal({
                       type="text"
                       value={authenticatedClient.id || ''}
                       disabled
-                      className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                      style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                      className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -4110,7 +4128,12 @@ export default function ClientPortal({
                   <button
                     type="button"
                     onClick={handleSavePassword}
-                    className="w-full py-3 bg-[#3556ec] text-white text-[18px] rounded-xl font-sans font-bold hover:bg-[#2b48cd] transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                    style={{
+                      backgroundColor: 'rgb(46, 84, 255)',
+                      background: 'rgb(46, 84, 255)',
+                      boxShadow: 'none',
+                    }}
+                    className="w-full py-3 text-white text-[18px] rounded-xl font-sans font-bold transition-all flex items-center justify-center gap-2 cursor-pointer border-none outline-none"
                   >
                     {t("Enregistrer")}
                   </button>
@@ -4128,7 +4151,7 @@ export default function ClientPortal({
                 <div
                   className="bg-white p-5 list-none space-y-2 text-slate-800"
                   style={{
-                    border: '1px solid #cfcfcf',
+                    border: '1px solid #DCE1EA',
                     borderRadius: '13px',
                   }}
                 >
@@ -4142,7 +4165,7 @@ export default function ClientPortal({
                 <div
                   className="bg-white p-5 list-none space-y-6"
                   style={{
-                    border: '1px solid #cfcfcf',
+                    border: '1px solid #DCE1EA',
                     borderRadius: '13px',
                   }}
                 >
@@ -4162,7 +4185,8 @@ export default function ClientPortal({
                         type="text"
                         value={authenticatedClient.nomContrat || ''}
                         disabled
-                        className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                        style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                        className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                       />
                     </div>
 
@@ -4175,7 +4199,8 @@ export default function ClientPortal({
                         type="text"
                         value={authenticatedClient.referenceContrat || ''}
                         disabled
-                        className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                        style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                        className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                       />
                     </div>
 
@@ -4188,7 +4213,8 @@ export default function ClientPortal({
                         type="text"
                         value={authenticatedClient.numeroMarche || ''}
                         disabled
-                        className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                        style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                        className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                       />
                     </div>
 
@@ -4201,7 +4227,8 @@ export default function ClientPortal({
                         type="date"
                         value={authenticatedClient.debutContrat || ''}
                         disabled
-                        className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                        style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                        className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                       />
                     </div>
 
@@ -4214,7 +4241,8 @@ export default function ClientPortal({
                         type="date"
                         value={authenticatedClient.finContrat || ''}
                         disabled
-                        className="w-full border-none rounded-xl p-3 text-[18px] font-bold text-[#772a7e] bg-[#fdeaff] focus:outline-none disabled:bg-[#fdeaff] disabled:text-[#772a7e] font-sans cursor-not-allowed"
+                        style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
+                        className="w-full border-none rounded-xl p-3 text-[18px] font-bold placeholder:text-[#BECADB] focus:outline-none font-sans cursor-not-allowed"
                       />
                     </div>
 
@@ -4227,8 +4255,8 @@ export default function ClientPortal({
                         {t("Rédaction du contrat.")}
                       </label>
                       <div 
-                        className="w-full text-[#772a7e] font-bold font-sans whitespace-pre-wrap select-text border-none rounded-xl p-4 bg-[#fdeaff] cursor-not-allowed"
-                        style={{ fontSize: '18px' }}
+                        className="w-full font-bold font-sans whitespace-pre-wrap select-text border-none rounded-xl p-4 cursor-not-allowed"
+                        style={{ fontSize: '18px', backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}
                       >
                         {portalRedactionContrat}
                       </div>
@@ -4244,10 +4272,15 @@ export default function ClientPortal({
                         value={portalDateSignatureContrat}
                         onChange={(e) => setPortalDateSignatureContrat(e.target.value)}
                         disabled={!!authenticatedClient?.signatureClientContratImage}
-                        className={`w-full rounded-xl p-3 text-[18px] font-sans focus:outline-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none ${
+                        style={
                           !!authenticatedClient?.signatureClientContratImage
-                            ? "border-none font-bold text-[#772a7e] bg-[#fdeaff] disabled:bg-[#fdeaff] disabled:text-[#772a7e] cursor-not-allowed"
-                            : "border border-slate-200 text-black bg-white hover:border-[#772a7e] focus:border-[#772a7e]"
+                            ? { backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }
+                            : undefined
+                        }
+                        className={`w-full rounded-xl p-3 text-[18px] font-sans placeholder:text-[#BECADB] focus:outline-none [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none ${
+                          !!authenticatedClient?.signatureClientContratImage
+                            ? "border-none font-bold cursor-not-allowed"
+                            : "border border-slate-200 text-black bg-white hover:border-[#2e54ff] focus:border-[#2e54ff]"
                         }`}
                       />
                     </div>
@@ -4263,10 +4296,15 @@ export default function ClientPortal({
                         onChange={(e) => setPortalSigneParContrat(e.target.value)}
                         disabled={!!authenticatedClient?.signatureClientContratImage}
                         placeholder="Nom du signataire"
-                        className={`w-full rounded-xl p-3 text-[18px] font-sans focus:outline-none ${
+                        style={
                           !!authenticatedClient?.signatureClientContratImage
-                            ? "border-none font-bold text-[#772a7e] bg-[#fdeaff] disabled:bg-[#fdeaff] disabled:text-[#772a7e] cursor-not-allowed"
-                            : "border border-slate-200 text-black bg-white hover:border-[#772a7e] focus:border-[#772a7e]"
+                            ? { backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }
+                            : undefined
+                        }
+                        className={`w-full rounded-xl p-3 text-[18px] font-sans placeholder:text-[#BECADB] focus:outline-none ${
+                          !!authenticatedClient?.signatureClientContratImage
+                            ? "border-none font-bold cursor-not-allowed"
+                            : "border border-slate-200 text-black bg-white hover:border-[#2e54ff] focus:border-[#2e54ff]"
                         }`}
                       />
                     </div>
@@ -4371,10 +4409,11 @@ export default function ClientPortal({
                           onClick={handleSavePortalContract}
                           className="w-full py-3 text-white transition-all cursor-pointer outline-none border-none font-bold"
                           style={{
-                            backgroundColor: '#3556ec',
+                            backgroundColor: 'rgb(46, 84, 255)',
+                            background: 'rgb(46, 84, 255)',
                             borderRadius: '13px',
                             fontSize: '18px',
-                            boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
+                            boxShadow: 'none',
                           }}
                         >
                           {t("Signer")}
@@ -4391,13 +4430,13 @@ export default function ClientPortal({
                       </h4>
                       <div className="space-y-3">
                         {authenticatedClient.autresContrats.map((c, idx) => (
-                          <div key={c.id || idx} className="bg-[#fdeaff] p-4 rounded-xl space-y-2">
+                          <div key={c.id || idx} className="p-4 rounded-xl space-y-2" style={{ backgroundColor: 'rgb(245, 247, 250)', color: 'rgb(80, 97, 122)' }}>
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="font-bold text-[#772a7e] text-[16px]">
+                              <span className="font-bold text-[16px]" style={{ color: 'rgb(80, 97, 122)' }}>
                                 {c.intitule || `${t("Contrat")} ${idx + 1}`}
                               </span>
                               {c.reference && (
-                                <span className="text-xs font-mono bg-white/80 px-2 py-0.5 rounded text-[#772a7e] font-bold">
+                                <span className="text-xs font-mono bg-white/80 px-2 py-0.5 rounded font-bold" style={{ color: 'rgb(80, 97, 122)' }}>
                                   Ref: {c.reference}
                                 </span>
                               )}
@@ -4406,19 +4445,19 @@ export default function ClientPortal({
                               {c.numeroMarche && (
                                 <div>
                                   <span className="text-xs text-slate-500 font-bold uppercase block">{t("N° de marché")}</span>
-                                  <span className="font-semibold text-[#772a7e]">{c.numeroMarche}</span>
+                                  <span className="font-semibold" style={{ color: 'rgb(80, 97, 122)' }}>{c.numeroMarche}</span>
                                 </div>
                               )}
                               {c.debut && (
                                 <div>
                                   <span className="text-xs text-slate-500 font-bold uppercase block">{t("Début")}</span>
-                                  <span className="font-semibold text-[#772a7e]">{formatDateToFR(c.debut) || c.debut}</span>
+                                  <span className="font-semibold" style={{ color: 'rgb(80, 97, 122)' }}>{formatDateToFR(c.debut) || c.debut}</span>
                                 </div>
                               )}
                               {c.expiration && (
                                 <div>
                                   <span className="text-xs text-slate-500 font-bold uppercase block">{t("Expiration")}</span>
-                                  <span className="font-semibold text-[#772a7e]">{formatDateToFR(c.expiration) || c.expiration}</span>
+                                  <span className="font-semibold" style={{ color: 'rgb(80, 97, 122)' }}>{formatDateToFR(c.expiration) || c.expiration}</span>
                                 </div>
                               )}
                             </div>
@@ -4428,7 +4467,8 @@ export default function ClientPortal({
                                   href={c.fichierUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-xs font-bold text-[#772a7e] hover:underline inline-flex items-center gap-1"
+                                  className="text-xs font-bold hover:underline inline-flex items-center gap-1"
+                                  style={{ color: 'rgb(80, 97, 122)' }}
                                 >
                                   🔗 {t("Consulter le document source / fichier")}
                                 </a>
@@ -4447,7 +4487,7 @@ export default function ClientPortal({
               <div
                 className="bg-white p-5 list-none space-y-4"
                 style={{
-                  border: '1px solid #cfcfcf',
+                  border: '1px solid #DCE1EA',
                   borderRadius: '13px',
                 }}
               >
@@ -4465,7 +4505,7 @@ export default function ClientPortal({
                 <div className="space-y-6 pt-2">
                   {/* Edit Contact 1 */}
                   <div className="pb-2">
-                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: '#411046', color: '#ffffff' }}>
+                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)' }}>
                       Contact 1
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -4478,7 +4518,7 @@ export default function ClientPortal({
 
                   {/* Edit Contact 2 */}
                   <div className="pb-2">
-                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: '#411046', color: '#ffffff' }}>
+                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)' }}>
                       Contact 2
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -4491,7 +4531,7 @@ export default function ClientPortal({
 
                   {/* Edit Contact 3 */}
                   <div className="pb-2">
-                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: '#411046', color: '#ffffff' }}>
+                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)' }}>
                       Contact 3
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -4504,7 +4544,7 @@ export default function ClientPortal({
 
                   {/* Edit Contact 4 */}
                   <div className="pb-2">
-                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: '#411046', color: '#ffffff' }}>
+                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)' }}>
                       Contact 4
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -4517,7 +4557,7 @@ export default function ClientPortal({
 
                   {/* Edit Contact 5 */}
                   <div className="pb-2">
-                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: '#411046', color: '#ffffff' }}>
+                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)' }}>
                       Contact 5
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -4536,10 +4576,11 @@ export default function ClientPortal({
                     onClick={handleSaveContacts}
                     className="w-full py-3 text-white transition-all cursor-pointer border-none outline-none font-bold"
                     style={{
-                      backgroundColor: '#3556ec',
+                      backgroundColor: 'rgb(46, 84, 255)',
+                      background: 'rgb(46, 84, 255)',
                       borderRadius: '13px',
                       fontSize: '18px',
-                      boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
+                      boxShadow: 'none',
                     }}
                   >
                     {t("Enregistrer")}
@@ -4547,75 +4588,26 @@ export default function ClientPortal({
                 </div>
               </div>
 
-              {/* Card Signature pour le client */}
+              {/* Card Signature électronique pour le client */}
               <div
                 className="bg-white p-5 list-none space-y-4"
                 style={{
-                  border: '1px solid #cfcfcf',
+                  border: '1px solid #DCE1EA',
                   borderRadius: '13px',
                 }}
               >
                 <div>
                   <h3 className="text-[18px] font-black text-black select-none font-sans" style={{ letterSpacing: 'normal' }}>
-                    {t("Signature à distance.")}
+                    {t("Signature électronique.")}
                   </h3>
-                </div>
-
-                <div className="flex flex-col items-center justify-center py-2">
-                  <div className="border border-slate-300 rounded-xl overflow-hidden bg-white" style={{ width: '300px', height: '150px' }}>
-                    <canvas
-                      ref={clientCanvasRef}
-                      width={300}
-                      height={150}
-                      className="touch-none cursor-crosshair block bg-white"
-                      onMouseDown={startDrawingSig}
-                      onMouseMove={drawSig}
-                      onMouseUp={stopDrawingSig}
-                      onMouseLeave={stopDrawingSig}
-                      onTouchStart={startDrawingSig}
-                      onTouchMove={drawSig}
-                      onTouchEnd={stopDrawingSig}
-                    />
-                  </div>
                 </div>
 
                 {/* Single PIN display inline */}
                 <div className="text-[18px] text-black font-sans select-none pt-1">
                   {t("Votre PIN de signature à communiquer au technicien : ")}
-                  <span className="font-extrabold text-[#3556ec] ml-1 select-all">
+                  <span className="font-extrabold text-[#2e54ff] ml-1 select-all">
                     {authenticatedClient?.signaturePin || t('Non défini')}
                   </span>
-                </div>
-
-                {/* Both buttons side-by-side, full-width (50% / 50%) */}
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={clearSignatureSig}
-                    className="w-full py-3 text-white transition-all cursor-pointer border-none outline-none font-bold"
-                    style={{
-                      backgroundColor: '#0f172a',
-                      borderRadius: '13px',
-                      fontSize: '18px',
-                      boxShadow: 'none',
-                    }}
-                  >
-                    {t("Effacer")}
-                  </button>
-                  
-                  <button
-                    type="button"
-                    onClick={handleSaveSignature}
-                    className="w-full py-3 text-white transition-all cursor-pointer border-none outline-none font-bold"
-                    style={{
-                      backgroundColor: '#3556ec',
-                      borderRadius: '13px',
-                      fontSize: '18px',
-                      boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
-                    }}
-                  >
-                    {t("Enregistrer")}
-                  </button>
                 </div>
               </div>
 
@@ -4623,7 +4615,7 @@ export default function ClientPortal({
               <div
                 className="bg-white p-5 list-none space-y-4"
                 style={{
-                  border: '1px solid #cfcfcf',
+                  border: '1px solid #DCE1EA',
                   borderRadius: '13px',
                 }}
               >
@@ -4642,7 +4634,13 @@ export default function ClientPortal({
                     <select
                       value={contactCategorie}
                       onChange={(e) => setContactCategorie(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white focus:outline-none font-sans cursor-pointer"
+                      style={{
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                        backgroundImage: 'none',
+                      }}
+                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white focus:outline-none font-sans cursor-pointer appearance-none"
                     >
                       <option value="Technique">{t("Technique")}</option>
                       <option value="Commercial">{t("Commercial")}</option>
@@ -4659,7 +4657,13 @@ export default function ClientPortal({
                     <select
                       value={contactCriticite}
                       onChange={(e) => setContactCriticite(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white focus:outline-none font-sans cursor-pointer"
+                      style={{
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                        backgroundImage: 'none',
+                      }}
+                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white focus:outline-none font-sans cursor-pointer appearance-none"
                     >
                       <option value="Non renseigné">{t("Non renseigné")}</option>
                       <option value="Urgent">{t("Urgent")}</option>
@@ -4679,7 +4683,7 @@ export default function ClientPortal({
                       required
                       value={contactObjet}
                       onChange={(e) => setContactObjet(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white focus:outline-none font-sans"
+                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white placeholder:text-[#BECADB] focus:outline-none font-sans"
                       placeholder={t("Saisissez l'objet de votre demande...")}
                     />
                   </div>
@@ -4694,7 +4698,7 @@ export default function ClientPortal({
                       required
                       value={contactEmail}
                       onChange={(e) => setContactEmail(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white focus:outline-none font-sans"
+                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white placeholder:text-[#BECADB] focus:outline-none font-sans"
                       placeholder="exemple@email.com"
                     />
                   </div>
@@ -4709,7 +4713,7 @@ export default function ClientPortal({
                       rows={4}
                       value={contactMessage}
                       onChange={(e) => setContactMessage(e.target.value)}
-                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white focus:outline-none font-sans resize-y"
+                      className="w-full border border-slate-200 rounded-xl p-3 text-[18px] text-black bg-white placeholder:text-[#BECADB] focus:outline-none font-sans resize-y"
                       placeholder={t("Entrez un texte pour présenter la demande ou le signalement.")}
                     />
                   </div>
@@ -4733,10 +4737,11 @@ export default function ClientPortal({
                       type="submit"
                       className="w-full py-3 text-white transition-all cursor-pointer border-none outline-none font-bold"
                       style={{
-                        backgroundColor: '#3556ec',
+                        backgroundColor: 'rgb(46, 84, 255)',
+                        background: 'rgb(46, 84, 255)',
                         borderRadius: '13px',
                         fontSize: '18px',
-                        boxShadow: 'inset 0 1px 1px #fff3, 0 1px 2px #08080833, 0 4px 4px #08080814, 0 7px 0 -12px #3556ec, inset 0 6px 12px #ffffff1f',
+                        boxShadow: 'none',
                       }}
                     >
                       {t("Envoyer")}

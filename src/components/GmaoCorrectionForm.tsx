@@ -11,12 +11,14 @@ import 'leaflet/dist/leaflet.css';
 import { fetchCollectionFromFirestore, uploadMediaToFirebase } from '../firebase';
 import { fetchGoogleDriveStatus } from '../utils/googleDrive';
 import { generateReportModerationComment, mergeReportPostInterventionAlerts, buildFlatAlertFields } from '../utils/moderationComment';
-import { playTechSound3 } from '../utils/technicianAudio';
+import { playTechSound3, playTechNavClickSound } from '../utils/technicianAudio';
+import { triggerEmailClientSignaturePin } from '../utils/emailService';
 
 interface GmaoCorrectionFormProps {
   key?: React.Key;
   report?: any;
   isNew?: boolean;
+  isFromInterventionMission?: boolean;
   onSave: (updatedReport: any) => void;
   onCancel: () => void;
   clients: Client[];
@@ -342,6 +344,7 @@ const parseDateString = (str: string): Date | null => {
 export default function GmaoCorrectionForm({
   report,
   isNew = false,
+  isFromInterventionMission = false,
   onSave,
   onCancel,
   clients,
@@ -362,6 +365,7 @@ export default function GmaoCorrectionForm({
   onToggleMinimize
 }: GmaoCorrectionFormProps) {
   const shouldShowChronoAndReduce = isWebapp && !isMainSoftware && !hideReduceAndTimer;
+  const effectiveIsFromInterventionMission = Boolean(isFromInterventionMission || report?.missionId || report?.tourId);
   const [internalMinimized, setInternalMinimized] = useState(false);
   const isReduced = isMinimized !== undefined ? isMinimized : internalMinimized;
   const handleToggleReduce = onToggleMinimize || (() => setInternalMinimized((prev) => !prev));
@@ -832,9 +836,10 @@ export default function GmaoCorrectionForm({
       ...(report?.pourcentageBatterie ? { pourcentageBatterie: report.pourcentageBatterie } : {}),
       ...(report?.commentaireBatterie ? { commentaireBatterie: report.commentaireBatterie } : {}),
       ...(report?.conforme !== undefined ? { conforme: report.conforme } : {}),
-      ...((report?.defibSnapshot?.commentaire || report?.diagnosticCommentaire || report?.remarques)
-        ? { commentaire: report?.defibSnapshot?.commentaire || report?.diagnosticCommentaire || report?.remarques }
-        : (report?.commentaire && !report?.internalComment ? { commentaire: report.commentaire } : {})),
+      // Do NOT auto-populate Commentaire de diagnostic et de clôture from origDefib.commentaire
+      commentaire: isNew
+        ? ''
+        : (report?.diagnosticCommentaire || report?.defibSnapshot?.commentaire || ''),
       ...(report?.commentaireInterne || report?.internalComment ? { commentaireInterne: report.commentaireInterne || report.internalComment } : {}),
     };
     if (isNew && !report) {
@@ -1152,6 +1157,14 @@ export default function GmaoCorrectionForm({
   const [autreReference, setAutreReference] = useState(report?.autreReference || report?.customReference || '');
   const [isCreatingNewMaterial, setIsCreatingNewMaterial] = useState(false);
   const [isNewEquipmentDropdownOpen, setIsNewEquipmentDropdownOpen] = useState(false);
+  const [missionConfirmModal, setMissionConfirmModal] = useState<'new_material' | 'select_equipment' | null>(null);
+  const [hasConfirmedMissionEquipmentSwitch, setHasConfirmedMissionEquipmentSwitch] = useState(false);
+  const equipmentSelectRef = useRef<HTMLSelectElement | null>(null);
+  const [isSendingPinEmail, setIsSendingPinEmail] = useState(false);
+  const [pinEmailStatus, setPinEmailStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [photo1LoadFailed, setPhoto1LoadFailed] = useState(false);
+  const [photo2LoadFailed, setPhoto2LoadFailed] = useState(false);
+  const [photo3LoadFailed, setPhoto3LoadFailed] = useState(false);
   const [newMaterialType, setNewMaterialType] = useState('');
   const [isAiDetectionModalOpen, setIsAiDetectionModalOpen] = useState(false);
   const [aiDetectedModel, setAiDetectedModel] = useState<{ id: string; nom: string; marque: string } | null>(null);
@@ -1516,12 +1529,12 @@ export default function GmaoCorrectionForm({
   }, [report]);
 
   useEffect(() => {
-    if (!isWebapp) return;
+    if (!isWebapp && !shouldShowChronoAndReduce) return;
     const interval = setInterval(() => {
       setCurrentTickTime(new Date());
     }, 1000);
     return () => clearInterval(interval);
-  }, [isWebapp]);
+  }, [isWebapp, shouldShowChronoAndReduce]);
 
   useEffect(() => {
     if (!isWebapp || isReduced) return;
@@ -1547,9 +1560,7 @@ export default function GmaoCorrectionForm({
   }, [endTimeStamp]);
 
   const chronoText = useMemo(() => {
-    const start = formOpenTime;
-    const end = parsedEnd || currentTickTime;
-    let diffMs = end.getTime() - start.getTime();
+    let diffMs = currentTickTime.getTime() - formOpenTime.getTime();
     if (diffMs < 0) diffMs = 0;
     
     const totalSecs = Math.floor(diffMs / 1000);
@@ -1562,7 +1573,7 @@ export default function GmaoCorrectionForm({
       return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
     }
     return `${pad(mins)}:${pad(secs)}`;
-  }, [formOpenTime, parsedEnd, currentTickTime]);
+  }, [formOpenTime, currentTickTime]);
 
   // Auto-generate reference intervention
   useEffect(() => {
@@ -1882,7 +1893,8 @@ export default function GmaoCorrectionForm({
     if (defib) {
       setSnapshot({
         ...DEFAULT_DEFIB,
-        ...defib
+        ...defib,
+        commentaire: ''
       });
       setKitPeremption(defib.peremptionTrousse || '');
       setKitCiseauxPresents(defib.kitCiseauxPresents || 'Oui');
@@ -1922,31 +1934,105 @@ export default function GmaoCorrectionForm({
   const verifyAndApplyUploadedPhotoUrl = (
     uploadedUrl: string | undefined,
     fallbackBase64: string,
-    setter: React.Dispatch<React.SetStateAction<string>>
+    setter: React.Dispatch<React.SetStateAction<string>>,
+    setFailedFlag?: React.Dispatch<React.SetStateAction<boolean>>
   ) => {
     if (!uploadedUrl || !uploadedUrl.startsWith('http')) {
-      setter(fallbackBase64);
+      if (fallbackBase64 && fallbackBase64.startsWith('data:image/')) {
+        setter(fallbackBase64);
+        if (setFailedFlag) setFailedFlag(false);
+      } else {
+        setter(uploadedUrl || fallbackBase64 || '');
+        if (setFailedFlag) setFailedFlag(true);
+      }
       return;
     }
     const probe = new Image();
     probe.onload = () => {
-      setter(uploadedUrl);
+      if (probe.naturalWidth > 0 && probe.naturalHeight > 0) {
+        setter(uploadedUrl);
+        if (setFailedFlag) setFailedFlag(false);
+      } else if (fallbackBase64 && fallbackBase64.startsWith('data:image/')) {
+        setter(fallbackBase64);
+        if (setFailedFlag) setFailedFlag(false);
+      } else {
+        if (setFailedFlag) setFailedFlag(true);
+      }
     };
     probe.onerror = () => {
-      setter(fallbackBase64);
+      if (fallbackBase64 && fallbackBase64.startsWith('data:image/')) {
+        setter(fallbackBase64);
+        if (setFailedFlag) setFailedFlag(false);
+      } else {
+        if (setFailedFlag) setFailedFlag(true);
+      }
     };
     probe.src = uploadedUrl;
+  };
+
+  const verifySingleImageLoads = (url: string, fallbackPreview?: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const clean = String(url || '').trim();
+      if (!clean || clean === 'Non' || clean === 'Oui') {
+        resolve(false);
+        return;
+      }
+      if (!clean.startsWith('http://') && !clean.startsWith('https://') && !clean.startsWith('/') && !clean.startsWith('data:image/')) {
+        resolve(false);
+        return;
+      }
+      const img = new Image();
+      let settled = false;
+      const finish = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(ok);
+      };
+      const timer = setTimeout(() => {
+        finish(false);
+      }, 7000);
+      img.onload = () => {
+        finish(img.naturalWidth > 0 && img.naturalHeight > 0);
+      };
+      img.onerror = () => {
+        if (fallbackPreview && fallbackPreview !== clean && fallbackPreview.startsWith('data:image/')) {
+          const fallbackImg = new Image();
+          fallbackImg.onload = () => finish(fallbackImg.naturalWidth > 0 && fallbackImg.naturalHeight > 0);
+          fallbackImg.onerror = () => finish(false);
+          fallbackImg.src = fallbackPreview;
+          return;
+        }
+        finish(false);
+      };
+      img.src = clean;
+    });
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setPhoto1LoadFailed(false);
       const reader = new FileReader();
+      reader.onerror = () => {
+        setPhoto1LoadFailed(true);
+        setPhotoUrl('broken://photo1');
+      };
       reader.onloadend = () => {
         const base64Str = reader.result as string;
+        if (!base64Str || !base64Str.startsWith('data:image/')) {
+          setPhoto1LoadFailed(true);
+          setPhotoUrl(base64Str || 'broken://photo1');
+          return;
+        }
         const img = new Image();
         img.src = base64Str;
         img.onload = async () => {
+          if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+            setPhoto1LoadFailed(true);
+            setPhotoUrl('broken://photo1');
+            return;
+          }
           const canvas = document.createElement('canvas');
           const max_size = 500; // max width/height
           let width = img.width;
@@ -1970,32 +2056,29 @@ export default function GmaoCorrectionForm({
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6); // 60% quality is perfect and very small
             photoLocalPreviewRef.current = compressedBase64;
             setPhotoUrl(compressedBase64);
+            setPhoto1LoadFailed(false);
             const uploadedUrl = await uploadMediaToFirebase(
               compressedBase64,
               'photos',
               file.name || `rapport_photo_globale_${Date.now()}.jpg`
             );
-            verifyAndApplyUploadedPhotoUrl(uploadedUrl, compressedBase64, setPhotoUrl);
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, compressedBase64, setPhotoUrl, setPhoto1LoadFailed);
           } else {
             photoLocalPreviewRef.current = base64Str;
             setPhotoUrl(base64Str);
+            setPhoto1LoadFailed(false);
             const uploadedUrl = await uploadMediaToFirebase(
               base64Str,
               'photos',
               file.name || `rapport_photo_globale_${Date.now()}.jpg`
             );
-            verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoUrl);
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoUrl, setPhoto1LoadFailed);
           }
         };
-        img.onerror = async () => {
-          photoLocalPreviewRef.current = base64Str;
-          setPhotoUrl(base64Str);
-          const uploadedUrl = await uploadMediaToFirebase(
-            base64Str,
-            'photos',
-            file.name || `rapport_photo_globale_${Date.now()}.jpg`
-          );
-          verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoUrl);
+        img.onerror = () => {
+          photoLocalPreviewRef.current = '';
+          setPhoto1LoadFailed(true);
+          setPhotoUrl(base64Str || 'broken://photo1');
         };
       };
       reader.readAsDataURL(file);
@@ -2005,12 +2088,27 @@ export default function GmaoCorrectionForm({
   const handleFileChangeArriere = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setPhoto2LoadFailed(false);
       const reader = new FileReader();
+      reader.onerror = () => {
+        setPhoto2LoadFailed(true);
+        setPhotoArriereUrl('broken://photo2');
+      };
       reader.onloadend = () => {
         const base64Str = reader.result as string;
+        if (!base64Str || !base64Str.startsWith('data:image/')) {
+          setPhoto2LoadFailed(true);
+          setPhotoArriereUrl(base64Str || 'broken://photo2');
+          return;
+        }
         const img = new Image();
         img.src = base64Str;
         img.onload = async () => {
+          if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+            setPhoto2LoadFailed(true);
+            setPhotoArriereUrl('broken://photo2');
+            return;
+          }
           const canvas = document.createElement('canvas');
           const max_size = 500;
           let width = img.width;
@@ -2034,32 +2132,29 @@ export default function GmaoCorrectionForm({
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
             photoArriereLocalPreviewRef.current = compressedBase64;
             setPhotoArriereUrl(compressedBase64);
+            setPhoto2LoadFailed(false);
             const uploadedUrl = await uploadMediaToFirebase(
               compressedBase64,
               'photos',
               file.name || `rapport_photo_arriere_${Date.now()}.jpg`
             );
-            verifyAndApplyUploadedPhotoUrl(uploadedUrl, compressedBase64, setPhotoArriereUrl);
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, compressedBase64, setPhotoArriereUrl, setPhoto2LoadFailed);
           } else {
             photoArriereLocalPreviewRef.current = base64Str;
             setPhotoArriereUrl(base64Str);
+            setPhoto2LoadFailed(false);
             const uploadedUrl = await uploadMediaToFirebase(
               base64Str,
               'photos',
               file.name || `rapport_photo_arriere_${Date.now()}.jpg`
             );
-            verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoArriereUrl);
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoArriereUrl, setPhoto2LoadFailed);
           }
         };
-        img.onerror = async () => {
-          photoArriereLocalPreviewRef.current = base64Str;
-          setPhotoArriereUrl(base64Str);
-          const uploadedUrl = await uploadMediaToFirebase(
-            base64Str,
-            'photos',
-            file.name || `rapport_photo_arriere_${Date.now()}.jpg`
-          );
-          verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoArriereUrl);
+        img.onerror = () => {
+          photoArriereLocalPreviewRef.current = '';
+          setPhoto2LoadFailed(true);
+          setPhotoArriereUrl(base64Str || 'broken://photo2');
         };
       };
       reader.readAsDataURL(file);
@@ -2069,12 +2164,27 @@ export default function GmaoCorrectionForm({
   const handleFileChangeResultatTest = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setPhoto3LoadFailed(false);
       const reader = new FileReader();
+      reader.onerror = () => {
+        setPhoto3LoadFailed(true);
+        setPhotoResultatTestUrl('broken://photo3');
+      };
       reader.onloadend = () => {
         const base64Str = reader.result as string;
+        if (!base64Str || !base64Str.startsWith('data:image/')) {
+          setPhoto3LoadFailed(true);
+          setPhotoResultatTestUrl(base64Str || 'broken://photo3');
+          return;
+        }
         const img = new Image();
         img.src = base64Str;
         img.onload = async () => {
+          if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+            setPhoto3LoadFailed(true);
+            setPhotoResultatTestUrl('broken://photo3');
+            return;
+          }
           const canvas = document.createElement('canvas');
           const max_size = 500;
           let width = img.width;
@@ -2098,32 +2208,29 @@ export default function GmaoCorrectionForm({
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
             photoTestLocalPreviewRef.current = compressedBase64;
             setPhotoResultatTestUrl(compressedBase64);
+            setPhoto3LoadFailed(false);
             const uploadedUrl = await uploadMediaToFirebase(
               compressedBase64,
               'photos',
               file.name || `rapport_photo_test_${Date.now()}.jpg`
             );
-            verifyAndApplyUploadedPhotoUrl(uploadedUrl, compressedBase64, setPhotoResultatTestUrl);
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, compressedBase64, setPhotoResultatTestUrl, setPhoto3LoadFailed);
           } else {
             photoTestLocalPreviewRef.current = base64Str;
             setPhotoResultatTestUrl(base64Str);
+            setPhoto3LoadFailed(false);
             const uploadedUrl = await uploadMediaToFirebase(
               base64Str,
               'photos',
               file.name || `rapport_photo_test_${Date.now()}.jpg`
             );
-            verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoResultatTestUrl);
+            verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoResultatTestUrl, setPhoto3LoadFailed);
           }
         };
-        img.onerror = async () => {
-          photoTestLocalPreviewRef.current = base64Str;
-          setPhotoResultatTestUrl(base64Str);
-          const uploadedUrl = await uploadMediaToFirebase(
-            base64Str,
-            'photos',
-            file.name || `rapport_photo_test_${Date.now()}.jpg`
-          );
-          verifyAndApplyUploadedPhotoUrl(uploadedUrl, base64Str, setPhotoResultatTestUrl);
+        img.onerror = () => {
+          photoTestLocalPreviewRef.current = '';
+          setPhoto3LoadFailed(true);
+          setPhotoResultatTestUrl(base64Str || 'broken://photo3');
         };
       };
       reader.readAsDataURL(file);
@@ -2167,12 +2274,49 @@ export default function GmaoCorrectionForm({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorText('');
     setAlertInfoErrors([]);
 
     const errors: string[] = [];
+
+    // Hidden verification of the 1, 2 or 3 photos in Section 1 — Identification et photos
+    let anyPhotoFailedToLoad = Boolean(photo1LoadFailed || photo2LoadFailed || photo3LoadFailed);
+    if (!anyPhotoFailedToLoad) {
+      const photosToVerify: Array<{ url: string; fallback: string; setter: React.Dispatch<React.SetStateAction<string>> }> = [];
+      if (photoUrl && String(photoUrl).trim()) {
+        photosToVerify.push({ url: photoUrl, fallback: photoLocalPreviewRef.current, setter: setPhotoUrl });
+      }
+      if (photoArriereUrl && String(photoArriereUrl).trim()) {
+        photosToVerify.push({ url: photoArriereUrl, fallback: photoArriereLocalPreviewRef.current, setter: setPhotoArriereUrl });
+      }
+      if (photoResultatTestUrl && String(photoResultatTestUrl).trim()) {
+        photosToVerify.push({ url: photoResultatTestUrl, fallback: photoTestLocalPreviewRef.current, setter: setPhotoResultatTestUrl });
+      }
+      if (photosToVerify.length > 0) {
+        const results = await Promise.all(
+          photosToVerify.map(async (item) => {
+            const primaryOk = await verifySingleImageLoads(item.url);
+            if (primaryOk) return true;
+            if (item.fallback && item.fallback.startsWith('data:image/')) {
+              const fallbackOk = await verifySingleImageLoads(item.fallback);
+              if (fallbackOk) {
+                item.setter(item.fallback);
+                return true;
+              }
+            }
+            return false;
+          })
+        );
+        if (results.some((ok) => !ok)) {
+          anyPhotoFailedToLoad = true;
+        }
+      }
+    }
+    if (anyPhotoFailedToLoad) {
+      errors.push("Une ou plusieurs de vos photographies n'ont pas pu être chargées correctement. Veuillez reprendre la photo.");
+    }
 
     // Basic block validation
     if (!snapshot.identifiant.trim()) {
@@ -2555,7 +2699,9 @@ export default function GmaoCorrectionForm({
             lower.includes("doit-être renseigné") ||
             lower.includes("doit être renseigné") ||
             lower.includes("invalide") ||
-            lower.includes("requis")
+            lower.includes("requis") ||
+            lower.includes("n'ont pas pu être chargées correctement") ||
+            lower.includes("veuillez reprendre la photo")
           );
         });
         if (hasBlocking) {
@@ -3267,7 +3413,8 @@ export default function GmaoCorrectionForm({
             font-family: "DefibeoMain", "Civilprom", sans-serif !important;
             cursor: not-allowed !important;
           }
-          #gmao-correction-form select#snap-contrat:disabled {
+          #gmao-correction-form select#snap-contrat:disabled,
+          #gmao-correction-form select#input-tech-name:disabled {
             background-color: #ffffff !important;
             background: #ffffff !important;
           }
@@ -3452,32 +3599,48 @@ export default function GmaoCorrectionForm({
                     Sélectionner un équipement.
                   </label>
                   <div className="flex gap-1.5">
-                    <select
-                      value={selectedDefibId}
-                      onChange={(e) => handleDefibLookupChange(e.target.value)}
-                      disabled={isCreatingNewMaterial}
-                      className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 cursor-pointer animate-fadeIn disabled:cursor-not-allowed"
-                    >
-                      <option value="">Sélection d'un matériel.</option>
-                      {defibrillateurs.length > 0 && (
-                        <optgroup label="DÉFIBRILLATEURS (DAE)">
-                          {defibrillateurs.map((df, dfIdx) => (
-                            <option key={`${df.id}_${dfIdx}`} value={df.id}>
-                              Défibrillateur - {df.identifiant} - {df.numeroSerie || "Sans série"}
-                            </option>
-                          ))}
-                        </optgroup>
+                    <div className="relative flex-1 flex">
+                      <select
+                        ref={equipmentSelectRef}
+                        value={selectedDefibId}
+                        onChange={(e) => handleDefibLookupChange(e.target.value)}
+                        disabled={isCreatingNewMaterial}
+                        className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 cursor-pointer animate-fadeIn disabled:cursor-not-allowed"
+                      >
+                        <option value="">Sélection d'un matériel.</option>
+                        {defibrillateurs.length > 0 && (
+                          <optgroup label="DÉFIBRILLATEURS (DAE)">
+                            {defibrillateurs.map((df, dfIdx) => (
+                              <option key={`${df.id}_${dfIdx}`} value={df.id}>
+                                Défibrillateur - {df.identifiant} - {df.numeroSerie || "Sans série"}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {otherEquipments.length > 0 && (
+                          <optgroup label="AUTRES MATÉRIELS">
+                            {otherEquipments.map((o, oIdx) => (
+                              <option key={`${o.id}_${oIdx}`} value={`OTHER:${o.id}`}>
+                                {o.categorie || "Autre"} - {o.identifiant} - {o.id.substring(0, 8).toUpperCase()}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                      {effectiveIsFromInterventionMission && !hasConfirmedMissionEquipmentSwitch && !isCreatingNewMaterial && (
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          aria-label="Confirmer le choix d'un autre matériel"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setMissionConfirmModal('select_equipment');
+                          }}
+                          className="absolute inset-0 z-10 cursor-pointer"
+                        />
                       )}
-                      {otherEquipments.length > 0 && (
-                        <optgroup label="AUTRES MATÉRIELS">
-                          {otherEquipments.map((o, oIdx) => (
-                            <option key={`${o.id}_${oIdx}`} value={`OTHER:${o.id}`}>
-                              {o.categorie || "Autre"} - {o.identifiant} - {o.id.substring(0, 8).toUpperCase()}
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
+                    </div>
                     <button
                       type="button"
                       disabled={isCreatingNewMaterial}
@@ -3551,7 +3714,13 @@ export default function GmaoCorrectionForm({
 
                     <button
                       type="button"
-                      onClick={() => setIsNewEquipmentDropdownOpen(!isNewEquipmentDropdownOpen)}
+                      onClick={() => {
+                        if (effectiveIsFromInterventionMission && !isNewEquipmentDropdownOpen) {
+                          setMissionConfirmModal('new_material');
+                          return;
+                        }
+                        setIsNewEquipmentDropdownOpen(!isNewEquipmentDropdownOpen);
+                      }}
                       style={{
                         backgroundColor: 'rgb(46, 84, 255)',
                         color: '#ffffff',
@@ -3596,6 +3765,65 @@ export default function GmaoCorrectionForm({
                         </select>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {missionConfirmModal && (
+                  <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[200] p-4 animate-fadeIn">
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl border border-slate-200">
+                      <p
+                        className="text-black font-semibold leading-relaxed text-center"
+                        style={{ fontSize: '16px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                      >
+                        {missionConfirmModal === 'new_material'
+                          ? "Êtes-vous sûr ? Vous êtes sur le point de créer un nouveau matériel alors que vous effectuez une mission pour un matériel spécifique. Souhaitez-vous continuer ?"
+                          : "Êtes-vous sûr ? Vous êtes sur le point de choisir un autre matériel alors que vous effectuez une mission pour un matériel spécifique. Souhaitez-vous continuer ?"}
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setMissionConfirmModal(null)}
+                          style={{
+                            borderRadius: '13px',
+                            fontSize: '18px',
+                            backgroundColor: '#0f172a',
+                            color: '#ffffff',
+                            border: 'none',
+                          }}
+                          className="flex-1 py-2.5 px-4 font-bold cursor-pointer hover:opacity-90 transition-opacity font-sans"
+                        >
+                          Non
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const mode = missionConfirmModal;
+                            setMissionConfirmModal(null);
+                            if (mode === 'new_material') {
+                              setIsNewEquipmentDropdownOpen(true);
+                            } else if (mode === 'select_equipment') {
+                              setHasConfirmedMissionEquipmentSwitch(true);
+                              setTimeout(() => {
+                                equipmentSelectRef.current?.focus();
+                                try {
+                                  (equipmentSelectRef.current as any)?.showPicker?.();
+                                } catch {}
+                              }, 50);
+                            }
+                          }}
+                          style={{
+                            borderRadius: '13px',
+                            fontSize: '18px',
+                            backgroundColor: 'rgb(46, 84, 255)',
+                            color: '#ffffff',
+                            border: 'none',
+                          }}
+                          className="flex-1 py-2.5 px-4 font-bold cursor-pointer hover:opacity-90 transition-opacity font-sans"
+                        >
+                          Oui
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -3646,7 +3874,8 @@ export default function GmaoCorrectionForm({
                       setTechSignature('');
                     }
                   }}
-                  className="w-full px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-800 cursor-not-allowed"
+                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-not-allowed"
+                  style={{ backgroundColor: '#ffffff' }}
                 >
                   <option value="">Sélection du technicien.</option>
                   {availableMembers.map((m) => (
@@ -4040,6 +4269,7 @@ export default function GmaoCorrectionForm({
                       type="button"
                       onClick={() => {
                         photoLocalPreviewRef.current = '';
+                        setPhoto1LoadFailed(false);
                         setPhotoUrl('');
                       }}
                       style={{
@@ -4112,6 +4342,7 @@ export default function GmaoCorrectionForm({
                       type="button"
                       onClick={() => {
                         photoArriereLocalPreviewRef.current = '';
+                        setPhoto2LoadFailed(false);
                         setPhotoArriereUrl('');
                       }}
                       style={{
@@ -4184,6 +4415,7 @@ export default function GmaoCorrectionForm({
                       type="button"
                       onClick={() => {
                         photoTestLocalPreviewRef.current = '';
+                        setPhoto3LoadFailed(false);
                         setPhotoResultatTestUrl('');
                       }}
                       style={{
@@ -6565,11 +6797,11 @@ export default function GmaoCorrectionForm({
               )}
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-2">
               <label htmlFor="client-pin-code" className="block text-[11px] font-bold text-black uppercase">
                 Signature client avec PIN.
               </label>
-              <div className="flex gap-2 max-w-sm">
+              <div className="flex flex-col gap-2 max-w-sm">
                 <input
                   type="text"
                   id="client-pin-code"
@@ -6577,8 +6809,139 @@ export default function GmaoCorrectionForm({
                   value={clientPinCode}
                   onChange={(e) => setClientPinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
                   placeholder="Ex: ABC123"
-                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-mono font-bold text-slate-800 tracking-widest placeholder:tracking-normal placeholder:font-sans"
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-sans font-bold text-slate-800 tracking-normal placeholder:tracking-normal placeholder:font-sans"
                 />
+                <button
+                  type="button"
+                  disabled={isSendingPinEmail}
+                  onClick={async () => {
+                    if (isSendingPinEmail) return;
+                    setPinEmailStatus(null);
+                    setIsSendingPinEmail(true);
+                    try {
+                      const cleanClientId = String(snapshot.clientId || '').trim();
+                      let matchedClient = clients.find(
+                        (c) =>
+                          c.id === cleanClientId ||
+                          (c.clientIdField && c.clientIdField === cleanClientId) ||
+                          (c.denomination && c.denomination.trim().toLowerCase() === cleanClientId.toLowerCase())
+                      );
+                      if ((!matchedClient || (!matchedClient.signaturePin && !matchedClient.email)) && cleanClientId) {
+                        try {
+                          const activeTid = localStorage.getItem('defib_tenant_id') || 'demo';
+                          const resp = await fetch(
+                            `/api/sheets/query?tenantId=${encodeURIComponent(activeTid)}&type=clients&search=${encodeURIComponent(cleanClientId)}&limit=5`
+                          );
+                          if (resp.ok) {
+                            const data = await resp.json();
+                            if (data && Array.isArray(data.items) && data.items.length > 0) {
+                              const found =
+                                data.items.find(
+                                  (it: any) =>
+                                    it.id === cleanClientId ||
+                                    it.clientIdField === cleanClientId ||
+                                    (it.denomination && it.denomination.trim().toLowerCase() === cleanClientId.toLowerCase())
+                                ) || data.items[0];
+                              if (found) {
+                                matchedClient = { ...matchedClient, ...found };
+                              }
+                            }
+                          }
+                        } catch {}
+                      }
+
+                      let pinToSend =
+                        matchedClient?.signaturePin?.trim() ||
+                        matchedClient?.signaturePins?.find((p) => p.status !== 'validé')?.code?.trim() ||
+                        matchedClient?.signaturePins?.[0]?.code?.trim() ||
+                        matchedClient?.accessKey?.trim() ||
+                        clientPinCode.trim();
+
+                      if (!pinToSend) {
+                        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                        const digits = '0123456789';
+                        pinToSend =
+                          letters[Math.floor(Math.random() * 26)] +
+                          letters[Math.floor(Math.random() * 26)] +
+                          letters[Math.floor(Math.random() * 26)] +
+                          digits[Math.floor(Math.random() * 10)] +
+                          digits[Math.floor(Math.random() * 10)] +
+                          digits[Math.floor(Math.random() * 10)];
+                        if (matchedClient) {
+                          matchedClient.signaturePin = pinToSend;
+                        }
+                      }
+
+                      const emailCandidates = [
+                        snapshot.emailSite,
+                        matchedClient?.email,
+                        matchedClient?.emailSite,
+                      ]
+                        .map((e) => String(e || '').trim())
+                        .filter((e) => e && e.includes('@'));
+
+                      if (emailCandidates.length === 0) {
+                        setPinEmailStatus({
+                          type: 'error',
+                          message: "Aucune adresse email client n'est renseignée pour envoyer le code PIN.",
+                        });
+                        setIsSendingPinEmail(false);
+                        return;
+                      }
+
+                      const ok = await triggerEmailClientSignaturePin(
+                        emailCandidates,
+                        pinToSend,
+                        (effectiveCompanyInfo as any)?.nomCommercial || effectiveCompanyInfo?.name,
+                        effectiveCompanyInfo?.email
+                      );
+
+                      if (ok) {
+                        setPinEmailStatus({
+                          type: 'success',
+                          message: 'Le code PIN a été envoyé au client par email.',
+                        });
+                      } else {
+                        setPinEmailStatus({
+                          type: 'error',
+                          message: "Erreur lors de l'envoi de l'email au client.",
+                        });
+                      }
+                    } catch {
+                      setPinEmailStatus({
+                        type: 'error',
+                        message: "Erreur lors de l'envoi de l'email au client.",
+                      });
+                    } finally {
+                      setIsSendingPinEmail(false);
+                    }
+                  }}
+                  style={{
+                    backgroundColor: 'rgb(46, 84, 255)',
+                    color: '#ffffff',
+                    width: '100%',
+                    padding: '8px 16px',
+                    borderRadius: '13px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    cursor: isSendingPinEmail ? 'not-allowed' : 'pointer',
+                    boxShadow: 'none',
+                    border: 'none',
+                    opacity: isSendingPinEmail ? 0.7 : 1,
+                  }}
+                  className="hover:opacity-90 transition duration-150 ease-in-out font-sans flex items-center justify-center"
+                >
+                  {isSendingPinEmail ? 'Envoi en cours...' : 'Envoyer au client par email'}
+                </button>
+                {pinEmailStatus && (
+                  <div
+                    className={`text-xs font-bold font-sans ${
+                      pinEmailStatus.type === 'success' ? 'text-green-600' : 'text-red-600'
+                    }`}
+                  >
+                    {pinEmailStatus.message}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -7413,7 +7776,10 @@ export default function GmaoCorrectionForm({
               <div className="w-full px-3">
                 <button
                   type="button"
-                  onClick={() => scrollToSection(nextSec.id)}
+                  onClick={() => {
+                    playTechNavClickSound();
+                    scrollToSection(nextSec.id);
+                  }}
                   className="w-full text-white font-medium focus:outline-none cursor-pointer text-center"
                   style={{
                     fontSize: '18px',
@@ -7438,7 +7804,10 @@ export default function GmaoCorrectionForm({
               {prevSec && (
                 <button
                   type="button"
-                  onClick={() => scrollToSection(prevSec.id)}
+                  onClick={() => {
+                    playTechNavClickSound();
+                    scrollToSection(prevSec.id);
+                  }}
                   className="w-1/2 text-white font-medium focus:outline-none cursor-pointer text-center"
                   style={{
                     fontSize: '18px',
@@ -7458,7 +7827,10 @@ export default function GmaoCorrectionForm({
               {nextSec && (
                 <button
                   type="button"
-                  onClick={() => scrollToSection(nextSec.id)}
+                  onClick={() => {
+                    playTechNavClickSound();
+                    scrollToSection(nextSec.id);
+                  }}
                   className="w-1/2 text-white font-medium focus:outline-none cursor-pointer text-center"
                   style={{
                     fontSize: '18px',
@@ -7773,11 +8145,22 @@ export default function GmaoCorrectionForm({
                           width: '100%',
                           textAlign: 'left',
                           cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         }}
-                        className="w-full flex items-center justify-between hover:bg-slate-200/70 transition-colors"
+                        className="w-full flex items-center justify-between hover:bg-slate-200/70 transition-colors font-sans"
                       >
-                        <span className="font-bold text-black text-[16px] font-mono">{item.identifiant}</span>
-                        <span className="text-slate-700 text-[15px] font-mono">{item.numeroSerie}</span>
+                        <span
+                          className="font-bold text-black text-[16px] font-sans"
+                          style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                        >
+                          {item.identifiant}
+                        </span>
+                        <span
+                          className="text-slate-700 text-[15px] font-sans"
+                          style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                        >
+                          {item.numeroSerie}
+                        </span>
                       </button>
                     ))
                   )}

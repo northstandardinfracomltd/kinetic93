@@ -1825,6 +1825,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Ouverture.', field: 'dateOuverture', aliases: ['ouverture', 'dateouverture', 'datecreation', 'datedecreation', 'date', 'horodatage', 'createdat'] },
     { header: 'Actualisation.', field: 'dateDerniereActualisation', aliases: ['actualisation', 'derniereactualisation', 'datederniereactualisation', 'updatedat', 'maj'] },
     { header: 'Catégorie.', field: 'categorie', aliases: ['categorie', 'categorieduticket', 'typecrm', 'crmcategory', 'typedeticket', 'typeticket', 'compartiment', 'motif', 'raison'] },
+    { header: 'Criticité.', field: 'criticite', aliases: ['criticite', 'urgence', 'priorite', 'delai'] },
     { header: 'Type Vente.', field: 'typeVente', aliases: ['typevente', 'typedevente', 'vente'] },
     { header: 'Collaborateur.', field: 'collaborateur', aliases: ['collaborateur', 'collaborateurassigne', 'assignea', 'responsable', 'agent', 'membre', 'technicien'] },
     { header: 'Client ou Prospect.', field: 'client', aliases: ['clientouprospect', 'raisonsocialeclient', 'raisonsociale', 'cliententreprise', 'entreprise', 'client', 'denomination', 'societe', 'nomclient', 'clientlie'] },
@@ -4472,7 +4473,25 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       merged.drapeaux = [];
     }
 
-    const comm = String(merged.commentaireInterne ?? merged.commentaire ?? '').trim();
+    const rawComm = String(merged.commentaireInterne ?? merged.commentaire ?? '').trim();
+    const comm = rawComm
+      .split(/\r?\n/)
+      .filter((line) => {
+        const t = line.trim();
+        if (!t) return false;
+        if (t.startsWith('! Le technicien ')) return false;
+        if (t.startsWith('— ')) return false;
+        if (
+          t === 'Champs obligatoire incomplet.' ||
+          t === 'Potentielle(s) erreur(s) relevée(s).' ||
+          t === 'Différence(s) de donnée(s) relevée(s).'
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .join('\n')
+      .trim();
     merged.commentaireInterne = comm;
     merged.commentaire = comm;
 
@@ -4512,6 +4531,52 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     }
     merged.postInterventionAlerts = alertsList;
   } else if (tabType === 'crm') {
+    // Auto-recover shifted CRM rows where a row was written in [Type., Statut., Référence., Ouverture., Actualisation., ...] order
+    // against a sheet whose Row 1 headers started with [Référence, Date Ouverture, Dernière Actualisation, Statut, ...]
+    if (
+      /^(nouveau|en cours|termin[eé]|r[eé]solu)$/i.test(String(merged.dateOuverture || '').trim()) &&
+      /^\d{4,6}-[A-Z0-9]+-\d{4}$/i.test(String(merged.dateDerniereActualisation || '').trim())
+    ) {
+      const c0 = String(row[0] ?? '').trim();
+      const c1 = String(row[1] ?? '').trim();
+      const c2 = String(row[2] ?? '').trim();
+      const c3 = String(row[3] ?? '').trim();
+      const c4 = String(row[4] ?? '').trim();
+      const c5 = String(row[5] ?? '').trim();
+      const c6 = String(row[6] ?? '').trim();
+      const c7 = String(row[7] ?? '').trim();
+      const c8 = String(row[8] ?? '').trim();
+      const c9 = String(row[9] ?? '').trim();
+      const c10 = String(row[10] ?? '').trim();
+      const c11 = String(row[11] ?? '').trim();
+      const c12 = String(row[12] ?? '').trim();
+      const c13 = String(row[13] ?? '').trim();
+      const c14 = String(row[14] ?? '').trim();
+      const c15 = String(row[15] ?? '').trim();
+      const c16 = String(row[16] ?? '').trim();
+      const c17 = String(row[17] ?? '').trim();
+
+      merged.type = c0 || 'Ticket';
+      merged.situation = c1 || 'Nouveau';
+      merged.reference = c2;
+      merged.id = c2;
+      merged.dateOuverture = c3;
+      merged.dateDerniereActualisation = c4 || c3;
+      merged.categorie = c5 || c6 || 'Sans Catégorie';
+      merged.collaborateur = c7 || 'Non attribué';
+      merged.client = c8 || '';
+      if (c9.includes('@')) {
+        merged.email = c9;
+        merged.situationInterlocuteur = c10 || (c8 ? 'Client' : 'Prospect');
+        merged.typeStructure = c11 || 'Entreprise';
+        merged.prenomNom = c12 || '';
+        merged.fonction = c13 || '';
+        merged.telephone = c14 || '';
+        merged.objet = c15 || '';
+        merged.description = c16 || c17 || '';
+      }
+    }
+
     const resolvedRef = String(merged.reference || merged.id || `#${100000 + rowIndexZeroBased}`).trim();
     merged.id = String(merged.id || resolvedRef).trim();
     merged.reference = resolvedRef;
@@ -6939,7 +7004,28 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     } else {
       enriched.drapeaux = '';
     }
-    enriched.commentaireInterne = String(enriched.commentaire ?? enriched.commentaireInterne ?? '');
+    const rawModerationComm =
+      enriched.defibSnapshot !== undefined || enriched.internalComment !== undefined
+        ? String(enriched.commentaire ?? '')
+        : String(enriched.commentaire ?? enriched.commentaireInterne ?? '');
+    enriched.commentaireInterne = rawModerationComm
+      .split(/\r?\n/)
+      .filter((line) => {
+        const t = line.trim();
+        if (!t) return false;
+        if (t.startsWith('! Le technicien ')) return false;
+        if (t.startsWith('— ')) return false;
+        if (
+          t === 'Champs obligatoire incomplet.' ||
+          t === 'Potentielle(s) erreur(s) relevée(s).' ||
+          t === 'Différence(s) de donnée(s) relevée(s).'
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .join('\n')
+      .trim();
     const isDis =
       enriched.disableClientEmail === true ||
       String(enriched.disableClientEmail ?? '').trim().toLowerCase() === 'oui' ||
@@ -6959,18 +7045,6 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
         String(rawT ?? '').trim().toLowerCase() === '1';
       enriched[`alerteInfo${i}`] = cleanInfo;
       enriched[`alerteTraite${i}`] = isT ? 'Oui' : (cleanInfo ? 'Non' : '');
-    }
-  } else if (tabType === 'achatsFournisseurs') {
-    enriched.orderRef = enriched.orderRef || enriched.orderReference || '';
-    enriched.date = enriched.date || enriched.dateStr || '';
-    enriched.pdfFileName = enriched.pdfFileName || enriched.pdfName || '';
-    enriched.pdfDataUrl = enriched.pdfDataUrl || enriched.pdfUrl || '';
-  } else if (tabType === 'crm') {
-    if (!enriched.photoDataUrl && enriched.lienStockagePartageDevis) {
-      enriched.photoDataUrl = enriched.lienStockagePartageDevis;
-    }
-    if (!enriched.photoDataUrl && Array.isArray(enriched.fichiersDevis) && enriched.fichiersDevis.length > 0) {
-      enriched.photoDataUrl = enriched.fichiersDevis.map((f: any) => f?.url || f?.name || '').filter(Boolean).join(', ');
     }
   } else if (tabType === 'exportations') {
     enriched.transferType = enriched.transferType || 'export';
@@ -7309,14 +7383,22 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.status = enriched.status || enriched.situation || 'Nouveau';
     enriched.categorie = enriched.categorie || enriched.crmCategory || 'Sans Catégorie';
     enriched.crmCategory = enriched.crmCategory || enriched.categorie || '';
+    enriched.criticite = enriched.criticite || 'Non renseigné';
     enriched.typeVente = enriched.typeVente || '';
+    enriched.collaborateur = enriched.collaborateur || 'Non attribué';
     enriched.client = enriched.client || enriched.entreprise || enriched.customClientName || '';
     enriched.entreprise = enriched.entreprise || enriched.client || '';
     enriched.payeurId = enriched.payeurId || '';
     enriched.clientId = enriched.clientId || '';
+    enriched.email = enriched.email || '';
+    enriched.situationInterlocuteur = enriched.situationInterlocuteur || (enriched.client ? 'Client' : 'Prospect');
+    enriched.typeStructure = enriched.typeStructure || 'Entreprise';
     enriched.prenomNom = enriched.prenomNom || enriched.nomPrenom || '';
     enriched.nomPrenom = enriched.nomPrenom || enriched.prenomNom || '';
+    enriched.fonction = enriched.fonction || '';
     enriched.telephone = enriched.telephone || enriched.phone || '';
+    enriched.phone = enriched.phone || enriched.telephone || '';
+    enriched.objet = enriched.objet || '';
     enriched.description = enriched.description || enriched.message || '';
     enriched.message = enriched.message || enriched.description || '';
     enriched.totalAffaireHT = enriched.totalAffaireHT ?? enriched.montantEstime ?? '';
@@ -7328,6 +7410,12 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.dateRelance = enriched.dateRelance || enriched.dateProchaineRelance || '';
     enriched.origineLead = enriched.origineLead || enriched.sourceOpportunite || '';
     enriched.sourceOpportunite = enriched.sourceOpportunite || enriched.origineLead || '';
+    if (!enriched.photoDataUrl && enriched.lienStockagePartageDevis) {
+      enriched.photoDataUrl = enriched.lienStockagePartageDevis;
+    }
+    if (!enriched.photoDataUrl && Array.isArray(enriched.fichiersDevis) && enriched.fichiersDevis.length > 0) {
+      enriched.photoDataUrl = enriched.fichiersDevis.map((f: any) => f?.url || f?.name || '').filter(Boolean).join(', ');
+    }
     enriched.lienStockagePartageDevis = enriched.lienStockagePartageDevis || enriched.photoDataUrl || '';
     enriched.photoDataUrl = enriched.photoDataUrl || enriched.lienStockagePartageDevis || '';
 

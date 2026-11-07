@@ -6,12 +6,14 @@ export const LOCAL_SOUND_ASSETS = {
   SOUND1: "/sounds/soundfxwebapp3.mp3",
   SOUND2: "/sounds/soundfxwebapp2.mp3",
   SOUND3: "/sounds/soundfxwebapp3.mp3",
+  NAV_CLICK: "https://civilprom.s3.eu-north-1.amazonaws.com/aceeldon-click-button-578399.mp3",
 } as const;
 
 export const REMOTE_SOUND_ASSETS = {
   SOUND1: "https://civilprom.s3.eu-north-1.amazonaws.com/soundfxwebapp3.mp3",
   SOUND2: "https://civilprom.s3.eu-north-1.amazonaws.com/soundfxwebapp2.mp3",
   SOUND3: "https://civilprom.s3.eu-north-1.amazonaws.com/soundfxwebapp3.mp3",
+  NAV_CLICK: "https://civilprom.s3.eu-north-1.amazonaws.com/aceeldon-click-button-578399.mp3",
 } as const;
 
 export const SOUND_ASSETS = LOCAL_SOUND_ASSETS;
@@ -66,15 +68,17 @@ const preloadSounds = async () => {
   window.addEventListener("touchstart", unlockAudioContext, { capture: true, once: false, passive: true });
   window.addEventListener("keydown", unlockAudioContext, { capture: true, once: false });
 
-  const keys: SoundKey[] = ["SOUND1", "SOUND2", "SOUND3"];
+  const keys: SoundKey[] = ["SOUND1", "SOUND2", "SOUND3", "NAV_CLICK"];
 
   // 1. Prepare HTML5 Audio fallback pool with preload="auto"
   keys.forEach((key) => {
     try {
       const a1 = new Audio(SOUND_ASSETS[key]);
       a1.preload = "auto";
+      a1.load();
       const a2 = new Audio(SOUND_ASSETS[key]);
       a2.preload = "auto";
+      a2.load();
       fallbackAudios[key] = [a1, a2];
     } catch {}
   });
@@ -116,9 +120,10 @@ const lastPlayedAt: Partial<Record<SoundKey, number>> = {};
 
 // Play a preloaded sound instantly
 export const playSound = (key: SoundKey) => {
-  if (audioMutedInMainSoftware) return;
+  if (audioMutedInMainSoftware && key !== "NAV_CLICK") return;
   const now = Date.now();
-  if (lastPlayedAt[key] && now - lastPlayedAt[key]! < 350) {
+  const minInterval = key === "NAV_CLICK" ? 180 : 350;
+  if (lastPlayedAt[key] && now - lastPlayedAt[key]! < minInterval) {
     return;
   }
   lastPlayedAt[key] = now;
@@ -138,24 +143,24 @@ export const playSound = (key: SoundKey) => {
         source.start(0);
         return;
       } else if (rawArrayBuffers[key] && !audioBuffers[key]) {
-        // Buffer was downloaded but not yet decoded
-        decodeBuffer(key, rawArrayBuffers[key]!).then(() => {
-          if (audioBuffers[key]) {
-            lastPlayedAt[key] = 0;
-            playSound(key);
-          }
-        });
-        return;
+        // Decode in background for next play, while using preloaded HTML5 Audio immediately to avoid delay or duplicate play
+        decodeBuffer(key, rawArrayBuffers[key]!).catch(() => {});
       }
     }
 
     // Fallback: use preloaded HTML5 Audio elements
     const pool = fallbackAudios[key];
     if (pool && pool.length > 0) {
-      let available = pool.find((a) => a.paused || a.ended);
-      if (!available) {
-        available = pool[0];
-      }
+      // Pause any currently playing instance of this key to prevent overlapping duplicate play
+      pool.forEach((a) => {
+        if (!a.paused) {
+          try {
+            a.pause();
+            a.currentTime = 0;
+          } catch {}
+        }
+      });
+      const available = pool[0];
       if (available) {
         available.currentTime = 0;
         available.play().catch(() => {});
@@ -290,3 +295,11 @@ export const playTechSound2 = () => {
 export const playTechSound3 = () => {
   playSound("SOUND3");
 };
+
+/**
+ * NavClick: Click sound effect for "Précédent" / "Suivant" buttons in the report form
+ */
+export const playTechNavClickSound = () => {
+  playSound("NAV_CLICK");
+};
+

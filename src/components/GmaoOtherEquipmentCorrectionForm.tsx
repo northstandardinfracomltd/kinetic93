@@ -20,6 +20,7 @@ interface GmaoOtherEquipmentCorrectionFormProps {
   onSelectOtherEquipment?: (otherEquipment: any) => void;
   isMinimized?: boolean;
   onToggleMinimize?: () => void;
+  isFromInterventionMission?: boolean;
 }
 
 const CODE39_PATTERNS: Record<string, string> = {
@@ -250,13 +251,17 @@ export default function GmaoOtherEquipmentCorrectionForm({
   onSelectDefibrillator,
   onSelectOtherEquipment,
   isMinimized,
-  onToggleMinimize
+  onToggleMinimize,
+  isFromInterventionMission = false
 }: GmaoOtherEquipmentCorrectionFormProps) {
   const [internalMinimized, setInternalMinimized] = useState(false);
   const isReduced = isMinimized !== undefined ? isMinimized : internalMinimized;
   const handleToggleReduce = onToggleMinimize || (() => setInternalMinimized((prev) => !prev));
   const [isLookupScannerOpen, setIsLookupScannerOpen] = useState(false);
   const [errorText, setErrorText] = useState("");
+  const [hasConfirmedEquipmentSwitch, setHasConfirmedEquipmentSwitch] = useState(false);
+  const [showSwitchEquipmentConfirmModal, setShowSwitchEquipmentConfirmModal] = useState(false);
+  const otherEqSelectRef = useRef<HTMLSelectElement | null>(null);
 
   const [currentTickTime, setCurrentTickTime] = useState(() => new Date());
   const [formStartTime] = useState(() => new Date());
@@ -894,31 +899,47 @@ export default function GmaoOtherEquipmentCorrectionForm({
                   Sélectionner un équipement.
                 </label>
                 <div className="flex gap-1.5 animate-fadeIn">
-                  <select
-                    value={`OTHER:${otherEquipment?.id}`}
-                    onChange={(e) => handleEqLookupChange(e.target.value)}
-                    className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 cursor-pointer"
-                  >
-                    <option value="">Sélection d'un matériel.</option>
-                    {defibrillateurs.length > 0 && (
-                      <optgroup label="DÉFIBRILLATEURS (DAE)">
-                        {defibrillateurs.map((df, dfIdx) => (
-                          <option key={`${df.id}_${dfIdx}`} value={df.id}>
-                            Défibrillateur - {df.identifiant} - {df.numeroSerie || "Sans série"}
-                          </option>
-                        ))}
-                      </optgroup>
+                  <div className="relative flex-1 flex">
+                    <select
+                      ref={otherEqSelectRef}
+                      value={`OTHER:${otherEquipment?.id}`}
+                      onChange={(e) => handleEqLookupChange(e.target.value)}
+                      className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 cursor-pointer"
+                    >
+                      <option value="">Sélection d'un matériel.</option>
+                      {defibrillateurs.length > 0 && (
+                        <optgroup label="DÉFIBRILLATEURS (DAE)">
+                          {defibrillateurs.map((df, dfIdx) => (
+                            <option key={`${df.id}_${dfIdx}`} value={df.id}>
+                              Défibrillateur - {df.identifiant} - {df.numeroSerie || "Sans série"}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {otherEquipments.length > 0 && (
+                        <optgroup label="AUTRES MATÉRIELS">
+                          {otherEquipments.map((o, oIdx) => (
+                            <option key={`${o.id}_${oIdx}`} value={`OTHER:${o.id}`}>
+                              {o.categorie || "Autre"} - {o.identifiant} - {o.id.substring(0, 8).toUpperCase()}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                    {isFromInterventionMission && !hasConfirmedEquipmentSwitch && (
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Confirmer le changement d'équipement"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setShowSwitchEquipmentConfirmModal(true);
+                        }}
+                        className="absolute inset-0 z-10 cursor-pointer"
+                      />
                     )}
-                    {otherEquipments.length > 0 && (
-                      <optgroup label="AUTRES MATÉRIELS">
-                        {otherEquipments.map((o, oIdx) => (
-                          <option key={`${o.id}_${oIdx}`} value={`OTHER:${o.id}`}>
-                            {o.categorie || "Autre"} - {o.identifiant} - {o.id.substring(0, 8).toUpperCase()}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -931,6 +952,57 @@ export default function GmaoOtherEquipmentCorrectionForm({
                     Scan
                   </button>
                 </div>
+                {showSwitchEquipmentConfirmModal && (
+                  <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[200] p-4 animate-fadeIn">
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl border border-slate-200">
+                      <p
+                        className="text-black font-semibold leading-relaxed text-center"
+                        style={{ fontSize: '16px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                      >
+                        Êtes-vous sûr ? Vous êtes sur le point de choisir un autre matériel alors que vous effectuez une mission pour un matériel spécifique. Souhaitez-vous continuer ?
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setShowSwitchEquipmentConfirmModal(false)}
+                          style={{
+                            borderRadius: '13px',
+                            fontSize: '18px',
+                            backgroundColor: '#0f172a',
+                            color: '#ffffff',
+                            border: 'none',
+                          }}
+                          className="flex-1 py-2.5 px-4 font-bold cursor-pointer hover:opacity-90 transition-opacity font-sans"
+                        >
+                          Non
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHasConfirmedEquipmentSwitch(true);
+                            setShowSwitchEquipmentConfirmModal(false);
+                            setTimeout(() => {
+                              otherEqSelectRef.current?.focus();
+                              try {
+                                (otherEqSelectRef.current as any)?.showPicker?.();
+                              } catch {}
+                            }, 50);
+                          }}
+                          style={{
+                            borderRadius: '13px',
+                            fontSize: '18px',
+                            backgroundColor: 'rgb(46, 84, 255)',
+                            color: '#ffffff',
+                            border: 'none',
+                          }}
+                          className="flex-1 py-2.5 px-4 font-bold cursor-pointer hover:opacity-90 transition-opacity font-sans"
+                        >
+                          Oui
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {errorText && (
                   <p className="text-red-500 text-xs font-bold mt-1">{errorText}</p>
                 )}

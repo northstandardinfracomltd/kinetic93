@@ -382,7 +382,7 @@ export async function triggerEmail4Signalement(
 ): Promise<boolean> {
   const senderName = getActiveTenantCommercialName(companyName);
   const subject = `${senderName} : Vous avez reçu un message.`;
-  const body = `${companyName}, vous avez reçu un signalement ou une demande d’un client ou d’un passant concernant le défibrillateur ${defibIdentifiant}, accédez à l’onglet CRM pour en savoir plus.`;
+  const body = `${companyName}, vous avez reçu un signalement ou une demande d’un client concernant un matériel, accédez à l’onglet CRM (Sans Catégorie) pour en savoir plus.`;
   
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${companyEmail}`,
@@ -829,6 +829,43 @@ export async function triggerAuthCodeEmail(userEmail: string, authCode: string):
 }
 
 /**
+ * EMAIL 10: ENVOI DU CODE PIN DE SIGNATURE AU CLIENT DEPUIS LE FORMULAIRE RAPPORT
+ */
+export async function triggerEmailClientSignaturePin(
+  clientEmails: string | string[],
+  pinCode: string,
+  companyName?: string,
+  companyEmail?: string
+): Promise<boolean> {
+  const rawList = Array.isArray(clientEmails)
+    ? clientEmails
+    : String(clientEmails || '').split(/[,;]/);
+  const cleanEmails = rawList
+    .map((e) => e.trim())
+    .filter((e) => e && e.includes('@'));
+  if (cleanEmails.length === 0) {
+    console.warn('[Email PIN] No valid client email found.');
+    return false;
+  }
+
+  const recipientList = Array.from(new Set(['defibeo@gmail.com', ...cleanEmails])).join(', ');
+  const tenantCommercialName = getActiveTenantCommercialName(companyName);
+  const cleanPin = (pinCode || '').trim();
+
+  const subject = `${tenantCommercialName} : ${cleanPin} est votre PIN de signature à communiquer au technicien.`;
+  const body = `Bonjour, Afin de valider l’intervention de notre technicien, merci de lui transmettre le code PIN suivant : ${cleanPin}. Vous pouvez modifier votre signature à tout moment depuis votre espace client.`;
+
+  return sendScriptEmail({
+    to: recipientList,
+    subject,
+    body,
+    replyTo: companyEmail || "defibeo@gmail.com",
+    name: tenantCommercialName,
+    senderName: tenantCommercialName,
+  });
+}
+
+/**
  * GOOGLE APPS SCRIPT CODE TO DEPLOY (for reference & ease of use):
  * 
  * ```javascript
@@ -856,3 +893,4 @@ export async function triggerAuthCodeEmail(userEmail: string, authCode: string):
  * }
  * ```
  */
+
