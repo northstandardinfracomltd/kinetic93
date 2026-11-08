@@ -34,6 +34,43 @@ const normalizeName = (name?: string): string => {
     .replace(/[\u0300-\u036f]/g, '');
 };
 
+const isUnassignedTechName = (name?: any): boolean => {
+  const n = normalizeName(String(name || ''));
+  return (
+    !n ||
+    n === 'non assigne' ||
+    n === 'non renseigne' ||
+    n === 'a trier' ||
+    n === 'a-trier' ||
+    n === 'nc' ||
+    n === '-' ||
+    n === '--' ||
+    n === 'aucun'
+  );
+};
+
+const getCleanTechName = (raw?: any): string => {
+  const s = String(raw || '').trim();
+  return isUnassignedTechName(s) ? '' : s;
+};
+
+const formatSlotToAmPm = (raw: any): string => {
+  const s = String(raw ?? '').trim();
+  if (!s || s === '--:--') return '--:--';
+  if (/(am|pm)\b/i.test(s)) {
+    return s.replace(/\b(\d{1,2}):(\d{2})(am|pm)\b/gi, (_, hStr, mStr, suf) => {
+      return `${String(hStr).padStart(2, '0')}:${mStr}${String(suf).toLowerCase()}`;
+    });
+  }
+  return s.replace(/\b(\d{1,2})[:h](\d{2})\b/gi, (_, hStr, mStr) => {
+    const h24 = parseInt(hStr, 10);
+    if (isNaN(h24) || h24 < 0 || h24 > 23) return `${hStr}:${mStr}`;
+    const suffix = h24 >= 12 ? 'pm' : 'am';
+    const hh = String(h24).padStart(2, '0');
+    return `${hh}:${mStr}${suffix}`;
+  });
+};
+
 const toIsoDateStr = (rawDate?: any): string => {
   if (!rawDate || rawDate === 'A trier') return '';
   const s = String(rawDate).trim();
@@ -97,8 +134,9 @@ const parseTimeInMinutes = (raw: any): number | null => {
   const s = raw.trim().toLowerCase();
   const match = s.match(/(\d{1,2})[h:](\d{2})?/);
   if (match) {
-    const hours = parseInt(match[1], 10);
+    let hours = parseInt(match[1], 10);
     const minutes = match[2] ? parseInt(match[2], 10) : 0;
+    if (s.includes('pm') && hours < 12) hours += 12;
     if (!isNaN(hours) && hours >= 0 && hours <= 24) {
       return hours * 60 + minutes;
     }
@@ -114,6 +152,55 @@ const getTimeOffsetPercent = (rawTime: any): number => {
   const endDayMins = 18.5 * 60;  // 1110
   const clamped = Math.max(startDayMins, Math.min(endDayMins, mins));
   return (clamped - startDayMins) / (endDayMins - startDayMins); // 0 to 1
+};
+
+type DraggedPlanningItem =
+  | {
+      type: 'mission';
+      missionId: string;
+      sourceTourId: string;
+      sourceTechName: string;
+      missionObj: any;
+    }
+  | {
+      type: 'event';
+      eventId: string;
+      sourceTechName: string;
+      eventObj: SpontaneousEvent;
+    };
+
+interface DragOverTargetInfo {
+  rowKey: string;
+  tourId?: string;
+  isoDate: string;
+  techName: string;
+  techEmail?: string;
+  slot24h: string;
+  slotAmPm: string;
+  clientX: number;
+  clientY: number;
+}
+
+const computeSlotFromDragEvent = (e: React.DragEvent<HTMLElement>) => {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const relX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+  const ratio = rect.width > 0 ? relX / rect.width : 0.5;
+  const startMins = 7.5 * 60; // 07:30
+  const endMins = 18.5 * 60;  // 18:30
+  const rawMins = startMins + ratio * (endMins - startMins);
+  const snappedMins = Math.round(rawMins / 15) * 15;
+  const clampedMins = Math.max(startMins, Math.min(endMins, snappedMins));
+  const h24 = Math.floor(clampedMins / 60);
+  const mins = clampedMins % 60;
+  const hh = String(h24).padStart(2, '0');
+  const mm = String(mins).padStart(2, '0');
+  const suffix = h24 >= 12 ? 'pm' : 'am';
+  return {
+    slot24h: `${hh}:${mm}`,
+    slotAmPm: `${hh}:${mm}${suffix}`,
+    clientX: e.clientX,
+    clientY: e.clientY,
+  };
 };
 
 export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps> = ({
@@ -191,38 +278,152 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
   const [lastRefreshedText, setLastRefreshedText] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  // Drag & Drop state for missions across tournées
-  const [draggedMission, setDraggedMission] = useState<{
-    missionId: string;
-    sourceTourId: string;
-    sourceTechName: string;
-    missionObj: any;
-  } | null>(null);
-  const [dragOverTarget, setDragOverTarget] = useState<{
-    tourId: string;
-    isoDate: string;
-    techName: string;
-  } | null>(null);
+  // Unified Drag & Drop state for missions and spontaneous events across technicians, days, and slots
+  const [draggedItem, setDraggedItem] = useState<DraggedPlanningItem | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<DragOverTargetInfo | null>(null);
 
-  const handleDropMissionOnTour = useCallback(
-    (targetTourId: string, targetTechName: string, targetIsoDate: string) => {
-      if (!draggedMission) return;
-      const { missionId, sourceTourId, missionObj } = draggedMission;
-      setDraggedMission(null);
+  // Effective technicians list (excludes any "Non assigné" placeholder and includes any real technician assigned on active tours)
+  const effectiveTechniciansList = useMemo(() => {
+    const map = new Map<string, Member>();
+    (techniciansList || []).forEach((t) => {
+      if (!t || !t.name) return;
+      const clean = getCleanTechName(t.name);
+      if (!clean) return;
+      const key = normalizeName(clean);
+      if (key && !map.has(key)) {
+        map.set(key, { ...t, name: clean });
+      }
+    });
+
+    (localTours || []).forEach((tour) => {
+      if (!tour || isDraftTour(tour)) return;
+      const rawTourTech = getCleanTechName(tour.techName || tour.technicien || tour.technicienNom || tour.tech);
+      if (rawTourTech) {
+        const key = normalizeName(rawTourTech);
+        if (key && !map.has(key)) {
+          map.set(key, {
+            id: `tech-${key}`,
+            name: rawTourTech,
+            email: tour.techEmail || '',
+            role: 'Technicien',
+          } as Member);
+        }
+      } else {
+        const tourMissions = Array.isArray(tour.missions || tour.passages) ? (tour.missions || tour.passages) : [];
+        for (const m of tourMissions) {
+          const mt = getCleanTechName(m?.techName || m?.technicien || m?.assignedTech || m?.technicienNom);
+          if (mt) {
+            const key = normalizeName(mt);
+            if (key && !map.has(key)) {
+              map.set(key, {
+                id: `tech-${key}`,
+                name: mt,
+                email: '',
+                role: 'Technicien',
+              } as Member);
+            }
+            break;
+          }
+        }
+      }
+    });
+
+    return Array.from(map.values());
+  }, [techniciansList, localTours]);
+
+  const handleDropItem = useCallback(
+    (
+      targetTourId: string | undefined,
+      targetTechName: string,
+      targetTechEmail: string | undefined,
+      targetIsoDate: string,
+      slot24h: string,
+      slotAmPm: string
+    ) => {
+      if (!draggedItem) return;
+      const currentDragged = draggedItem;
+      setDraggedItem(null);
       setDragOverTarget(null);
 
-      if (!missionId || !targetTourId || !targetIsoDate) return;
-      if (
-        sourceTourId === targetTourId &&
-        (missionObj?.resolvedIsoDate === targetIsoDate || toIsoDateStr(missionObj?.estimatedDate || missionObj?.date) === targetIsoDate) &&
-        normalizeName(missionObj?.techName || draggedMission.sourceTechName) === normalizeName(targetTechName)
-      ) {
+      if (!targetIsoDate || !targetTechName) return;
+
+      if (currentDragged.type === 'event') {
+        const { eventId, eventObj } = currentDragged;
+        if (!eventId) return;
+
+        setLocalEvents((prevEvents) => {
+          const nextEvents = prevEvents.map((evt) => {
+            if (String(evt.id) !== String(eventId)) return evt;
+            return {
+              ...evt,
+              techName: targetTechName,
+              techEmail: targetTechEmail || evt.techEmail || targetTechName,
+              date: targetIsoDate,
+              creneau: slotAmPm || slot24h || evt.creneau,
+            };
+          });
+
+          try {
+            const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+            localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(nextEvents));
+            localStorage.setItem('defib_spontaneous_events', JSON.stringify(nextEvents));
+            window.dispatchEvent(new Event('defib_spontaneous_events_updated'));
+            saveCollectionToFirestore('spontaneous_events', nextEvents).catch(() => {});
+
+            const updatedEvt = nextEvents.find((e) => String(e.id) === String(eventId)) || {
+              ...eventObj,
+              techName: targetTechName,
+              techEmail: targetTechEmail || eventObj.techEmail || targetTechName,
+              date: targetIsoDate,
+              creneau: slotAmPm || slot24h || eventObj.creneau,
+            };
+            const parts = targetIsoDate.split('-');
+            const dateFr = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : targetIsoDate;
+            const sheetUrl = localStorage.getItem(`defib_${tid}_spreadsheet_autres_events`) || '';
+            const sessionTok = localStorage.getItem('defib_session_token') || '';
+            if (sheetUrl) {
+              fetch('/api/sheets/upsert', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(sessionTok ? { 'x-defibeo-session': sessionTok } : {}),
+                  'x-defibeo-tenant': tid,
+                },
+                body: JSON.stringify({
+                  tenantId: tid,
+                  type: 'autresEvents',
+                  spreadsheetUrl: sheetUrl,
+                  records: [
+                    {
+                      ...updatedEvt,
+                      techEmail: updatedEvt.techEmail || targetTechName,
+                      date: dateFr,
+                      'Email (technicien).': updatedEvt.techEmail || targetTechName,
+                      'Date.': dateFr,
+                      'Créneau.': updatedEvt.creneau,
+                      'Intitulé.': updatedEvt.intitule || '',
+                      'Commentaire.': updatedEvt.commentaire || '',
+                    },
+                  ],
+                }),
+              }).catch(() => {});
+            }
+          } catch (_) {}
+
+          if (onUpdateSpontaneousEvents) {
+            onUpdateSpontaneousEvents(nextEvents);
+          }
+          return nextEvents;
+        });
         return;
       }
 
+      // Mission drop (supports inter-tour, inter-technician, day change, and slot change)
+      const { missionId, sourceTourId, missionObj } = currentDragged;
+      if (!missionId) return;
+
       setLocalTours((prevTours) => {
         let movedMission: any = null;
-        // Find the mission in sourceTourId
         for (const t of prevTours) {
           if (String(t.id) === String(sourceTourId)) {
             const list = Array.isArray(t.missions) ? t.missions : Array.isArray(t.passages) ? t.passages : [];
@@ -238,20 +439,63 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         }
         if (!movedMission) return prevTours;
 
+        // Resolve target tour ID:
+        // 1. If dropped on a specific tour row, use that tourId
+        // 2. Otherwise find an active tour belonging to targetTechName
+        // 3. Otherwise create a new active tour for targetTechName
+        let resolvedTargetTourId = targetTourId || '';
+        const normTargetTech = normalizeName(targetTechName);
+
+        if (!resolvedTargetTourId) {
+          const existingTechTour = prevTours.find((t) => {
+            if (!t || isDraftTour(t)) return false;
+            const cleanT = getCleanTechName(t.techName || t.technicien || t.technicienNom || t.tech);
+            return normalizeName(cleanT) === normTargetTech;
+          });
+          if (existingTechTour) {
+            resolvedTargetTourId = String(existingTechTour.id);
+          }
+        }
+
         delete movedMission.resolvedIsoDate;
+        const effectiveSlot = slot24h || movedMission.estimatedSlot || movedMission.creneau || '09:00';
+
+        let workingTours = [...prevTours];
+        if (!resolvedTargetTourId) {
+          resolvedTargetTourId = `fsm-tour-${Date.now()}`;
+          const newTour = {
+            id: resolvedTargetTourId,
+            tourIdentifiant: `TOUR-${String(workingTours.length + 1).padStart(4, '0')}`,
+            title: `Tournée ${targetTechName}`,
+            name: `Tournée ${targetTechName}`,
+            techName: targetTechName,
+            technicien: targetTechName,
+            startDate: targetIsoDate,
+            date: targetIsoDate,
+            status: 'À faire',
+            vehicule: 'Aucun',
+            missions: [],
+            calculated: false,
+          };
+          workingTours.push(newTour);
+        }
+
         const updatedMission = {
           ...movedMission,
           estimatedDate: targetIsoDate,
           date: targetIsoDate,
+          estimatedSlot: effectiveSlot,
+          creneau: effectiveSlot,
+          time: effectiveSlot,
           techName: targetTechName,
           technicien: targetTechName,
-          tourIdentifiant: targetTourId,
+          tourIdentifiant: resolvedTargetTourId,
           isManualDate: true,
         };
 
-        const nextTours = prevTours.map((t) => {
+        const nextTours = workingTours.map((t) => {
           const isSource = String(t.id) === String(sourceTourId);
-          const isTarget = String(t.id) === String(targetTourId);
+          const isTarget = String(t.id) === String(resolvedTargetTourId);
           const listKey = Array.isArray(t.missions) ? 'missions' : Array.isArray(t.passages) ? 'passages' : 'missions';
           const currentList: any[] = Array.isArray(t[listKey]) ? t[listKey] : [];
 
@@ -259,7 +503,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             const nextList = currentList.map((m: any) =>
               String(m.id) === String(missionId) ? updatedMission : m
             );
-            return { ...t, [listKey]: nextList };
+            const curStart = toIsoDateStr(t.startDate);
+            const nextStart = !curStart || targetIsoDate < curStart ? targetIsoDate : t.startDate;
+            return {
+              ...t,
+              techName: getCleanTechName(t.techName) || targetTechName,
+              startDate: nextStart,
+              [listKey]: nextList,
+            };
           }
           if (isSource) {
             const nextList = currentList.filter((m: any) => String(m.id) !== String(missionId));
@@ -267,7 +518,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           }
           if (isTarget) {
             const nextList = [...currentList.filter((m: any) => String(m.id) !== String(missionId)), updatedMission];
-            return { ...t, [listKey]: nextList };
+            const curStart = toIsoDateStr(t.startDate);
+            const nextStart = !curStart || targetIsoDate < curStart ? targetIsoDate : t.startDate;
+            return {
+              ...t,
+              techName: getCleanTechName(t.techName) || targetTechName,
+              startDate: nextStart,
+              [listKey]: nextList,
+            };
           }
           return t;
         });
@@ -285,7 +543,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         return nextTours;
       });
     },
-    [draggedMission, onUpdateTours]
+    [draggedItem, onUpdateTours, onUpdateSpontaneousEvents]
   );
 
   // Sync with initial props
@@ -486,7 +744,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     if (!mission) {
       return {
         creneau: '--:--',
-        identifiant: '',
+        identifiant: 'NC',
         clientName: 'NC',
         siteName: '',
         locationStr: '',
@@ -538,11 +796,12 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     const identifiant = (() => {
       if (mission.formationId) return String(mission.formationId);
       if (mission.defibIdentifiant && mission.defibIdentifiant !== 'Formation') return String(mission.defibIdentifiant);
-      if (mission.identifiant) return String(mission.identifiant);
-      if (mission.interventionReference) return String(mission.interventionReference);
+      if (mission.identifiant && !String(mission.identifiant).startsWith('fsm-m-')) return String(mission.identifiant);
       if (defib?.identifiant) return String(defib.identifiant);
       if (other?.identifiant) return String(other.identifiant);
-      return '';
+      if (mission.defibId) return String(mission.defibId);
+      if (mission.interventionReference) return String(mission.interventionReference);
+      return 'NC';
     })();
 
     const clientName =
@@ -644,32 +903,44 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     };
   }, [clients, defibrillateurs, otherEquipments]);
 
-  // Technicians dataset grouped
+  // Technicians dataset grouped (aligned with vertical view in PlanningTab.tsx)
   const techniciansData = useMemo(() => {
     const monthStartIso = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
     const lastDayNum = new Date(currentYear, currentMonth + 1, 0).getDate();
     const monthEndIso = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(lastDayNum).padStart(2, '0')}`;
 
-    return techniciansList.map((tech) => {
+    return effectiveTechniciansList.map((tech) => {
       const normTech = normalizeName(tech.name);
+      const techEmailLower = String(tech.email || '').trim().toLowerCase();
 
       // 1. Find Tournées assigned to this tech that intersect this month
       const techTours: any[] = [];
 
       localTours.forEach((tour, tIdx) => {
         if (!tour || isDraftTour(tour)) return;
-        const normTourTech = normalizeName(tour.techName || tour.technicien || tour.technicienNom || tour.tech);
 
         const tourMissions = Array.isArray(tour.missions || tour.passages) ? (tour.missions || tour.passages) : [];
 
-        const hasMissionsAssignedToTech = tourMissions.some((m: any) => {
-          const normMissionTech = normalizeName(m.techName || m.technicien || m.assignedTech || m.technicienNom);
-          if (normMissionTech && normMissionTech === normTech) return true;
-          if (!normMissionTech && normTourTech === normTech) return true;
-          return false;
-        });
+        // Resolve the technician for this tour (ignoring "Non assigné" placeholders)
+        let cleanTourTech = getCleanTechName(tour.techName || tour.technicien || tour.technicienNom || tour.tech);
+        if (!cleanTourTech) {
+          for (const m of tourMissions) {
+            const mt = getCleanTechName(m?.techName || m?.technicien || m?.assignedTech || m?.technicienNom);
+            if (mt) {
+              cleanTourTech = mt;
+              break;
+            }
+          }
+        }
 
-        if (!hasMissionsAssignedToTech && normTourTech !== normTech) {
+        const normTourTech = normalizeName(cleanTourTech);
+        const tourEmailLower = String(tour.techEmail || '').trim().toLowerCase();
+
+        const isTourAssignedToThisTech =
+          (normTourTech && normTourTech === normTech) ||
+          (techEmailLower && tourEmailLower && techEmailLower === tourEmailLower);
+
+        if (!isTourAssignedToThisTech) {
           return;
         }
 
@@ -678,18 +949,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         let startIso = toIsoDateStr(rawStart);
         let endIso = startIso;
 
-        // Valid missions assigned to this tech in this tour
+        // Include all non-draft missions of this tour (matching vertical view behavior)
         const validMissionsForTech: any[] = [];
         tourMissions.forEach((m: any) => {
           if (!m) return;
           const mStatus = String(m.status || '').trim().toLowerCase();
           if (mStatus === 'brouillon' || mStatus === 'draft') return;
 
-          const normMissionTech = normalizeName(m.techName || m.technicien || m.assignedTech || m.technicienNom);
-          const isForThisTech = normMissionTech ? normMissionTech === normTech : normTourTech === normTech;
-          if (!isForThisTech) return;
-
-          const mIso = getMissionIsoDate(m);
+          const mIso = getMissionIsoDate(m) || startIso;
           if (mIso) {
             if (!startIso || mIso < startIso) startIso = mIso;
             if (!endIso || mIso > endIso) endIso = mIso;
@@ -715,14 +982,23 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         });
       });
 
-      // 2. Find Spontaneous events for this tech in this month
+      // 2. Find Spontaneous events for this tech in this month (matching by name or email)
       const techSpontaneous = localEvents.filter(evt => {
         if (!evt) return false;
-        const normEvtTech = normalizeName(evt.techName);
-        if (normEvtTech !== normTech) return false;
         const evtIso = toIsoDateStr(evt.date);
-        if (!evtIso) return false;
-        return evtIso >= monthStartIso && evtIso <= monthEndIso;
+        if (!evtIso || evtIso < monthStartIso || evtIso > monthEndIso) return false;
+
+        const normEvtTech = normalizeName(evt.techName);
+        if (normEvtTech && normEvtTech === normTech) return true;
+
+        const evtEmailLower = String(
+          evt.techEmail || (evt.techName?.includes('@') ? evt.techName : '') || ''
+        )
+          .trim()
+          .toLowerCase();
+        if (techEmailLower && evtEmailLower && techEmailLower === evtEmailLower) return true;
+
+        return false;
       });
 
       return {
@@ -732,7 +1008,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         spontaneousEvents: techSpontaneous
       };
     });
-  }, [techniciansList, localTours, localEvents, currentYear, currentMonth]);
+  }, [effectiveTechniciansList, localTours, localEvents, currentYear, currentMonth]);
 
   if (!isOpen) return null;
 
@@ -743,6 +1019,23 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         fontFamily: "'DefibeoMain', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
       }}
     >
+      {/* Floating slot badge next to cursor during drag & drop */}
+      {draggedItem && dragOverTarget && (
+        <div
+          className="fixed pointer-events-none z-[999999] inline-flex items-center justify-center px-3.5 py-1 rounded-full font-bold shadow-md select-none"
+          style={{
+            left: `${dragOverTarget.clientX + 14}px`,
+            top: `${dragOverTarget.clientY - 14}px`,
+            backgroundColor: 'rgb(210, 45, 11)',
+            color: '#FFFFFF',
+            fontSize: '16px',
+            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+          }}
+        >
+          {dragOverTarget.slotAmPm}
+        </div>
+      )}
+
       {/* Header Bar */}
       <div className="bg-white border-b border-neutral-200 px-4 py-3 sm:px-6 flex flex-wrap items-center justify-between gap-3 shrink-0">
         {/* Left: Month Navigation Controls */}
@@ -761,7 +1054,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             }}
             title="Mois précédent"
           >
-            Précédent
+            Mois précédent
           </button>
 
           <div
@@ -790,7 +1083,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             }}
             title="Mois suivant"
           >
-            Suivant
+            Mois suivant
           </button>
 
           <button
@@ -894,7 +1187,17 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                     colSpan={w.count}
                     className="border-r border-neutral-300 px-2 py-1.5 text-center font-bold text-neutral-700 bg-neutral-100/95 text-xs"
                   >
-                    Semaine {w.weekNum}
+                    <span
+                      className="inline-flex items-center justify-center px-4 py-1.5 rounded-full font-bold select-none"
+                      style={{
+                        backgroundColor: 'rgb(61, 220, 132)',
+                        color: 'rgb(19, 100, 55)',
+                        fontSize: '18px',
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      }}
+                    >
+                      S{w.weekNum}
+                    </span>
                   </th>
                 ))}
               </tr>
@@ -983,31 +1286,80 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                       </td>
                     </tr>
 
-                    {/* IF NO ACTIVITY THIS MONTH: Blank row */}
+                    {/* IF NO ACTIVITY THIS MONTH: Blank droppable row */}
                     {!hasActivity && (
                       <tr className="border-b border-neutral-200">
-                        {daysInMonth.map((d) => (
-                          <td
-                            key={`empty-${tech.name}-${d.isoDate}`}
-                            className={`relative border-r border-neutral-200 p-1 w-[200px] min-w-[200px] max-w-[200px] ${
-                              d.isToday ? 'bg-pink-50/30' : d.isWeekend ? 'bg-neutral-100/30' : 'bg-white'
-                            }`}
-                          >
-                            {d.isToday && (
-                              <div
-                                className="absolute top-0 bottom-0 pointer-events-none z-20 w-[2px] bg-[#ef4444]"
-                                style={{ left: `${todayCursorPercent}%` }}
-                              />
-                            )}
-                          </td>
-                        ))}
+                        {daysInMonth.map((d) => {
+                          const emptyRowKey = `empty-${tech.name}`;
+                          const isDropTarget =
+                            Boolean(draggedItem) &&
+                            dragOverTarget?.rowKey === emptyRowKey &&
+                            dragOverTarget?.isoDate === d.isoDate &&
+                            dragOverTarget?.techName === tech.name;
+
+                          return (
+                            <td
+                              key={`empty-${tech.name}-${d.isoDate}`}
+                              onDragOver={(e) => {
+                                if (!draggedItem) return;
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = 'move';
+                                const slotInfo = computeSlotFromDragEvent(e);
+                                setDragOverTarget({
+                                  rowKey: emptyRowKey,
+                                  isoDate: d.isoDate,
+                                  techName: tech.name,
+                                  techEmail: tech.email,
+                                  ...slotInfo,
+                                });
+                              }}
+                              onDragLeave={() => {
+                                if (
+                                  dragOverTarget?.rowKey === emptyRowKey &&
+                                  dragOverTarget?.isoDate === d.isoDate &&
+                                  dragOverTarget?.techName === tech.name
+                                ) {
+                                  setDragOverTarget(null);
+                                }
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const slotInfo = computeSlotFromDragEvent(e);
+                                handleDropItem(
+                                  undefined,
+                                  tech.name,
+                                  tech.email,
+                                  d.isoDate,
+                                  slotInfo.slot24h,
+                                  slotInfo.slotAmPm
+                                );
+                              }}
+                              className={`relative border-r border-neutral-200 p-1 w-[200px] min-w-[200px] max-w-[200px] min-h-[42px] transition-colors ${
+                                isDropTarget
+                                  ? 'bg-blue-100/70 ring-2 ring-inset ring-[#2e54ff]'
+                                  : d.isToday
+                                  ? 'bg-pink-50/30'
+                                  : d.isWeekend
+                                  ? 'bg-neutral-100/30'
+                                  : 'bg-white'
+                              }`}
+                            >
+                              {d.isToday && (
+                                <div
+                                  className="absolute top-0 bottom-0 pointer-events-none z-20 w-[2px] bg-[#ef4444]"
+                                  style={{ left: `${todayCursorPercent}%` }}
+                                />
+                              )}
+                            </td>
+                          );
+                        })}
                       </tr>
                     )}
 
                     {/* TOURNÉES & MISSIONS */}
                     {tours.map((tItem, tIdx) => {
-                      const startFormatted = tItem.startIso.split('-').reverse().slice(0, 2).join('/');
-                      const endFormatted = tItem.endIso.split('-').reverse().slice(0, 2).join('/');
+                      const tourRowKey = `tour-${tItem.tourId}`;
 
                       return (
                         <tr
@@ -1019,8 +1371,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                             const isWithinTour = d.isoDate >= tItem.startIso && d.isoDate <= tItem.endIso;
                             const dayMissions = tItem.missions.filter((m: any) => m.resolvedIsoDate === d.isoDate);
                             const isDropTarget =
-                              Boolean(draggedMission) &&
-                              dragOverTarget?.tourId === tItem.tourId &&
+                              Boolean(draggedItem) &&
+                              dragOverTarget?.rowKey === tourRowKey &&
                               dragOverTarget?.isoDate === d.isoDate &&
                               dragOverTarget?.techName === tech.name;
 
@@ -1028,24 +1380,22 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                               <td
                                 key={`tour-day-${tItem.tourId}-${d.isoDate}`}
                                 onDragOver={(e) => {
-                                  if (!draggedMission) return;
+                                  if (!draggedItem) return;
                                   e.preventDefault();
                                   e.dataTransfer.dropEffect = 'move';
-                                  if (
-                                    dragOverTarget?.tourId !== tItem.tourId ||
-                                    dragOverTarget?.isoDate !== d.isoDate ||
-                                    dragOverTarget?.techName !== tech.name
-                                  ) {
-                                    setDragOverTarget({
-                                      tourId: tItem.tourId,
-                                      isoDate: d.isoDate,
-                                      techName: tech.name,
-                                    });
-                                  }
+                                  const slotInfo = computeSlotFromDragEvent(e);
+                                  setDragOverTarget({
+                                    rowKey: tourRowKey,
+                                    tourId: tItem.tourId,
+                                    isoDate: d.isoDate,
+                                    techName: tech.name,
+                                    techEmail: tech.email,
+                                    ...slotInfo,
+                                  });
                                 }}
                                 onDragLeave={() => {
                                   if (
-                                    dragOverTarget?.tourId === tItem.tourId &&
+                                    dragOverTarget?.rowKey === tourRowKey &&
                                     dragOverTarget?.isoDate === d.isoDate &&
                                     dragOverTarget?.techName === tech.name
                                   ) {
@@ -1055,7 +1405,15 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                 onDrop={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  handleDropMissionOnTour(tItem.tourId, tech.name, d.isoDate);
+                                  const slotInfo = computeSlotFromDragEvent(e);
+                                  handleDropItem(
+                                    tItem.tourId,
+                                    tech.name,
+                                    tech.email,
+                                    d.isoDate,
+                                    slotInfo.slot24h,
+                                    slotInfo.slotAmPm
+                                  );
                                 }}
                                 className={`relative border-r border-neutral-200 p-1.5 align-top w-[200px] min-w-[200px] max-w-[200px] transition-colors ${
                                   isDropTarget
@@ -1077,7 +1435,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   />
                                 )}
 
-                                {/* Tournée pink barrette: ALWAYS visible if within tour, regardless of missions count */}
+                                {/* Tournée barrette: ALWAYS visible if within tour, regardless of missions count */}
                                 {isWithinTour && (
                                   <div
                                     className="h-2 w-full rounded-full bg-[#2e54ff]/80 hover:bg-[#2e54ff] transition-colors mb-1.5 cursor-default shrink-0"
@@ -1085,13 +1443,15 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   />
                                 )}
 
-                                {/* Day missions: placed under the barrette */}
+                                {/* Day missions: placed under the barrette with créneau gélule above */}
                                 {dayMissions.length > 0 && (
-                                  <div className="space-y-1.5">
+                                  <div className="space-y-2">
                                     {dayMissions.map((m: any, mIdx: number) => {
                                       const details = getMissionDetails(m);
-                                      const isBeingDragged = draggedMission?.missionId === String(m.id);
-                                      const fullMissionText = `Client : ${details.clientName}. Ville : ${details.villePostcode}. Raison(s) : ${details.reasons}. Créneau : ${details.creneau}.`;
+                                      const isBeingDragged =
+                                        draggedItem?.type === 'mission' && draggedItem.missionId === String(m.id);
+                                      const formattedSlot = formatSlotToAmPm(details.creneau);
+                                      const fullMissionText = `Client : ${details.clientName}. Ville : ${details.villePostcode}. Raison(s) : ${details.reasons}. Matériel : ${details.identifiant || 'NC'}.`;
 
                                       return (
                                         <div
@@ -1100,7 +1460,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                           draggable
                                           onDragStart={(e) => {
                                             e.stopPropagation();
-                                            setDraggedMission({
+                                            setDraggedItem({
+                                              type: 'mission',
                                               missionId: String(m.id),
                                               sourceTourId: String(tItem.tourId),
                                               sourceTechName: tech.name,
@@ -1112,23 +1473,43 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                             } catch (_) {}
                                           }}
                                           onDragEnd={() => {
-                                            setDraggedMission(null);
+                                            setDraggedItem(null);
                                             setDragOverTarget(null);
                                           }}
-                                          className="w-full select-none cursor-grab active:cursor-grabbing transition-all shadow-xs hover:brightness-95 whitespace-normal break-words"
+                                          className="space-y-1 select-none cursor-grab active:cursor-grabbing"
                                           style={{
-                                            backgroundColor: 'rgb(230, 197, 255)',
-                                            color: 'rgb(89, 22, 144)',
-                                            borderRadius: '10px',
-                                            padding: '8px 12px',
-                                            fontSize: '13px',
-                                            fontWeight: 600,
-                                            lineHeight: '1.35',
                                             opacity: isBeingDragged ? 0.45 : 1,
                                           }}
-                                          title={`${fullMissionText} — Glisser-déposer vers une tournée`}
+                                          title={`${fullMissionText} — Glisser-déposer pour changer de jour, de technicien ou de créneau`}
                                         >
-                                          {fullMissionText}
+                                          <div className="flex items-center">
+                                            <span
+                                              className="inline-flex items-center justify-center px-4 py-1.5 rounded-full font-bold"
+                                              style={{
+                                                backgroundColor: 'rgb(210, 45, 11)',
+                                                color: '#FFFFFF',
+                                                fontSize: '18px',
+                                                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                                boxShadow: 'none',
+                                              }}
+                                            >
+                                              {formattedSlot}
+                                            </span>
+                                          </div>
+                                          <div
+                                            className="w-full transition-all shadow-xs hover:brightness-95 whitespace-normal break-words"
+                                            style={{
+                                              backgroundColor: 'rgb(230, 197, 255)',
+                                              color: 'rgb(89, 22, 144)',
+                                              borderRadius: '10px',
+                                              padding: '8px 12px',
+                                              fontSize: '13px',
+                                              fontWeight: 600,
+                                              lineHeight: '1.35',
+                                            }}
+                                          >
+                                            {fullMissionText}
+                                          </div>
                                         </div>
                                       );
                                     })}
@@ -1141,17 +1522,60 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                       );
                     })}
 
-                    {/* SPONTANEOUS EVENTS ROW (Full Width, no left header) */}
+                    {/* SPONTANEOUS EVENTS ROW (Full Width, no left header, droppable & draggable) */}
                     {techEvts.length > 0 && (
                       <tr className="border-b border-neutral-200 bg-purple-50/15 hover:bg-purple-50/25 transition-colors">
                         {daysInMonth.map((d) => {
                           const matchingEvts = techEvts.filter(e => toIsoDateStr(e.date) === d.isoDate);
+                          const spontRowKey = `spont-${tech.name}`;
+                          const isDropTarget =
+                            Boolean(draggedItem) &&
+                            dragOverTarget?.rowKey === spontRowKey &&
+                            dragOverTarget?.isoDate === d.isoDate &&
+                            dragOverTarget?.techName === tech.name;
 
                           return (
                             <td
                               key={`spont-cell-${tech.name}-${d.isoDate}`}
-                              className={`relative border-r border-neutral-200 p-1.5 align-top w-[200px] min-w-[200px] max-w-[200px] ${
-                                d.isToday
+                              onDragOver={(e) => {
+                                if (!draggedItem) return;
+                                e.preventDefault();
+                                e.dataTransfer.dropEffect = 'move';
+                                const slotInfo = computeSlotFromDragEvent(e);
+                                setDragOverTarget({
+                                  rowKey: spontRowKey,
+                                  isoDate: d.isoDate,
+                                  techName: tech.name,
+                                  techEmail: tech.email,
+                                  ...slotInfo,
+                                });
+                              }}
+                              onDragLeave={() => {
+                                if (
+                                  dragOverTarget?.rowKey === spontRowKey &&
+                                  dragOverTarget?.isoDate === d.isoDate &&
+                                  dragOverTarget?.techName === tech.name
+                                ) {
+                                  setDragOverTarget(null);
+                                }
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const slotInfo = computeSlotFromDragEvent(e);
+                                handleDropItem(
+                                  undefined,
+                                  tech.name,
+                                  tech.email,
+                                  d.isoDate,
+                                  slotInfo.slot24h,
+                                  slotInfo.slotAmPm
+                                );
+                              }}
+                              className={`relative border-r border-neutral-200 p-1.5 align-top w-[200px] min-w-[200px] max-w-[200px] transition-colors ${
+                                isDropTarget
+                                  ? 'bg-blue-100/70 ring-2 ring-inset ring-[#2e54ff]'
+                                  : d.isToday
                                   ? 'bg-pink-50/50'
                                   : d.isWeekend
                                   ? 'bg-neutral-100/40'
@@ -1169,16 +1593,40 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                               {matchingEvts.length > 0 && (
                                 <div className="space-y-1.5">
                                   {matchingEvts.map((evt) => {
-                                    const line1 = [evt.creneau, 'Spontané'].filter(Boolean).join(' - ');
+                                    const formattedEvtSlot = formatSlotToAmPm(evt.creneau);
+                                    const line1 = [formattedEvtSlot !== '--:--' ? formattedEvtSlot : evt.creneau, 'Spontané']
+                                      .filter(Boolean)
+                                      .join(' - ');
                                     const line2 = evt.intitule || '';
                                     const line3 = evt.commentaire || '';
                                     const timeOffset = getTimeOffsetPercent(evt.creneau);
                                     const marginLeftPx = Math.round(timeOffset * 40);
+                                    const isEvtDragged =
+                                      draggedItem?.type === 'event' && draggedItem.eventId === String(evt.id);
 
                                     return (
                                       <div
                                         key={evt.id}
-                                        className="w-[150px] max-w-[150px] select-none cursor-default overflow-hidden transition-all shadow-xs"
+                                        data-interactive="true"
+                                        draggable
+                                        onDragStart={(e) => {
+                                          e.stopPropagation();
+                                          setDraggedItem({
+                                            type: 'event',
+                                            eventId: String(evt.id),
+                                            sourceTechName: tech.name,
+                                            eventObj: evt,
+                                          });
+                                          e.dataTransfer.effectAllowed = 'move';
+                                          try {
+                                            e.dataTransfer.setData('text/plain', String(evt.id));
+                                          } catch (_) {}
+                                        }}
+                                        onDragEnd={() => {
+                                          setDraggedItem(null);
+                                          setDragOverTarget(null);
+                                        }}
+                                        className="w-[150px] max-w-[150px] select-none cursor-grab active:cursor-grabbing overflow-hidden transition-all shadow-xs hover:brightness-95"
                                         style={{
                                           marginLeft: `${marginLeftPx}px`,
                                           backgroundColor: '#9333ea',
@@ -1186,9 +1634,10 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                           padding: '8px 12px',
                                           fontSize: '12px',
                                           color: '#fff',
-                                          lineHeight: '16px'
+                                          lineHeight: '16px',
+                                          opacity: isEvtDragged ? 0.45 : 1,
                                         }}
-                                        title={`Événement spontané : ${evt.creneau || 'Horaire libre'}`}
+                                        title={`Événement spontané : ${evt.creneau || 'Horaire libre'} — Glisser-déposer pour changer de jour, de technicien ou de créneau`}
                                       >
                                         <div
                                           className="truncate whitespace-nowrap overflow-hidden text-ellipsis block font-semibold"

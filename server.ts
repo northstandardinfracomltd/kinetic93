@@ -3907,6 +3907,9 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     spontaneousEvents: 'autresEvents',
     autresEvents: 'autresEvents',
     autres_events: 'autresEvents',
+    pointagesClient: 'pointagesClient',
+    pointagesAutoVigilance: 'pointagesClient',
+    pointages_auto_vigilance: 'pointagesClient',
   };
   const optionalSheetTabMap: Record<string, SheetTabType> = {
     variables: 'variables',
@@ -5044,6 +5047,7 @@ async function warmupDefibrillateursStore() {
     exportations: 'spreadsheetExportations',
     autresEvents: 'spreadsheetAutresEvents',
     groupesZones: 'spreadsheetGroupesZones',
+    pointagesClient: 'spreadsheetPointagesClient',
   };
 
   function getSheetTabFieldCandidates(tabType: SheetTabType): string[] {
@@ -5054,6 +5058,9 @@ async function warmupDefibrillateursStore() {
 
   // Helper to resolve tenant spreadsheet URL synchronously from memory or disk
   function getTenantSpreadsheetUrlSync(tenantId: string, tabType: SheetTabType): string {
+    if (tabType === 'pointagesClient') {
+      return 'https://docs.google.com/spreadsheets/d/1tF8Noeh19y5exfZx0QPRPsIe7UeJSB1GGfAYlBI9HVQ/edit?usp=sharing';
+    }
     const isInvalidPlaceholder = (u?: string) => !u || u.includes('1tB1e41') || u.includes('2mX5O6r9hD0i3Z9m');
     const activeTenant = (tenantId || 'demo').trim();
     const tAliases = getTenantAliasesSync(activeTenant);
@@ -5454,6 +5461,9 @@ async function warmupDefibrillateursStore() {
   }
 
   async function resolveTenantSpreadsheetUrl(tenantId: string, tabType: SheetTabType, explicitUrl?: string): Promise<string> {
+    if (tabType === 'pointagesClient') {
+      return 'https://docs.google.com/spreadsheets/d/1tF8Noeh19y5exfZx0QPRPsIe7UeJSB1GGfAYlBI9HVQ/edit?usp=sharing';
+    }
     const isInvalidPlaceholderUrl = (u?: string) => !u || u.includes('1tB1e41') || u.includes('2mX5O6r9hD0i3Z9m');
     // 1. Ensure Firestore config for this tenant is synced before checking memory/disk
     try {

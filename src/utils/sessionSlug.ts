@@ -31,9 +31,18 @@ export function updateLoginSessionSlug(): string {
   ) {
     return path;
   }
+  const hasClientAccess =
+    hashLower.includes('clientaccess') ||
+    path.endsWith('/clientaccess') ||
+    searchLower.includes('clientaccess');
   const newSlug = generateRandomSessionSlug();
   try {
-    window.history.replaceState(null, '', `${newSlug}${search}${hash}`);
+    if (hasClientAccess) {
+      const normalizedHash = hashLower.includes('clientaccess') ? hash : '#clientaccess';
+      window.history.replaceState(null, '', `${newSlug}/${search}${normalizedHash}`);
+    } else {
+      window.history.replaceState(null, '', `${newSlug}${search}${hash}`);
+    }
   } catch (e) {
     console.warn('Unable to replaceState for session slug:', e);
   }

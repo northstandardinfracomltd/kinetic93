@@ -3365,38 +3365,42 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           >
                             Gérer
                           </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleQuickSituationDevis(t.id, 'Gagné');
-                            }}
-                            style={{
-                              ...rowActionButtonStyle,
-                              backgroundColor: t.situationDevis === 'Gagné' ? '#16a34a' : '#0f172a',
-                              color: '#ffffff',
-                              border: 'none',
-                            }}
-                            className="hover:opacity-90 transition-colors"
-                          >
-                            Gagné
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleQuickSituationDevis(t.id, 'Perdu');
-                            }}
-                            style={{
-                              ...rowActionButtonStyle,
-                              backgroundColor: 'rgb(210, 45, 11)',
-                              color: '#ffffff',
-                              border: 'none',
-                            }}
-                            className="hover:opacity-90 transition-colors"
-                          >
-                            Perdu
-                          </button>
+                          {String(t.categorie || '').trim().toLowerCase() === 'commercial' && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleQuickSituationDevis(t.id, 'Gagné');
+                                }}
+                                style={{
+                                  ...rowActionButtonStyle,
+                                  backgroundColor: t.situationDevis === 'Gagné' ? '#16a34a' : '#0f172a',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                }}
+                                className="hover:opacity-90 transition-colors"
+                              >
+                                Gagné
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleQuickSituationDevis(t.id, 'Perdu');
+                                }}
+                                style={{
+                                  ...rowActionButtonStyle,
+                                  backgroundColor: 'rgb(210, 45, 11)',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                }}
+                                className="hover:opacity-90 transition-colors"
+                              >
+                                Perdu
+                              </button>
+                            </>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {

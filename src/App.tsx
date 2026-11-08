@@ -83,6 +83,7 @@ import { EmptyTablePlaceholder } from './components/EmptyTablePlaceholder';
 import TopBarProgress from './components/TopBarProgress';
 import { updateLoginSessionSlug } from './utils/sessionSlug';
 import { setAudioMutedInMainSoftware } from './utils/technicianAudio';
+import { collectLocalInterventionReferences, computeNextInterventionReference } from './utils/interventionReference';
 import {
   SuspiciousActivityLog,
   logUserLogin,
@@ -1754,13 +1755,8 @@ export default function App() {
 
     // Check for stock transition: from >= 1 to 0 or 1
     const newNotifs: LogisticsNotification[] = [];
-    const nowStr = new Date().toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    const nowDate = new Date();
+    const nowStr = `${String(nowDate.getDate()).padStart(2, '0')}/${String(nowDate.getMonth() + 1).padStart(2, '0')}/${String(nowDate.getFullYear()).slice(-2)} ${nowDate.getHours()}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
 
     updated.forEach(item => {
       const oldItem = stocks.find(s => s.id === item.id);
@@ -1871,13 +1867,8 @@ export default function App() {
 
     // Check for distributed stock transition: from >= 1 to 0 or 1
     const newNotifs: LogisticsNotification[] = [];
-    const nowStr = new Date().toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    const nowDate = new Date();
+    const nowStr = `${String(nowDate.getDate()).padStart(2, '0')}/${String(nowDate.getMonth() + 1).padStart(2, '0')}/${String(nowDate.getFullYear()).slice(-2)} ${nowDate.getHours()}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
 
     updated.forEach(item => {
       const oldItem = distributedStocks.find(ds => ds.id === item.id);
@@ -2263,13 +2254,8 @@ export default function App() {
   };
 
   const addLogisticsNotification = (description: string, ugs: string) => {
-    const nowStr = new Date().toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    const nowDate = new Date();
+    const nowStr = `${String(nowDate.getDate()).padStart(2, '0')}/${String(nowDate.getMonth() + 1).padStart(2, '0')}/${String(nowDate.getFullYear()).slice(-2)} ${nowDate.getHours()}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
     const newNotif: LogisticsNotification = {
       id: 'lognotif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
       horodatage: nowStr,
@@ -4016,7 +4002,7 @@ export default function App() {
                 name: st.name || st.title || 'Tournée',
                 startDate: st.startDate || st.date || '',
                 date: st.date || st.startDate || '',
-                techName: st.techName || 'Non assigné',
+                techName: st.techName || st.technicien || st.technicienNom || st.tech || 'Non assigné',
                 plannerName: st.plannerName || st.planificateur || '',
                 region: st.region || st.departement || '',
                 vehicule: st.vehicule || '-',
@@ -4073,11 +4059,39 @@ export default function App() {
               byTourKey.set(targetTourId, list);
             }
 
+            const isUnassignedStr = (val: any) => {
+              const s = String(val || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+              return !s || s === 'non assigne' || s === 'non renseigne' || s === 'aucun' || s === '-' || s === 'nc' || s === 'a trier';
+            };
+
             const mergedTours = baseTours.map((bt: any) => {
               const assignedFromSheet = byTourKey.get(bt.id) || [];
+              const rawMissions = assignedFromSheet.length > 0 ? assignedFromSheet : (Array.isArray(bt.missions) ? bt.missions : []);
+              if (bt.id === 'a-trier') {
+                return { ...bt, missions: rawMissions };
+              }
+              let resolvedTourTech = !isUnassignedStr(bt.techName) ? String(bt.techName).trim() : '';
+              if (!resolvedTourTech) {
+                for (const m of rawMissions) {
+                  const mt = m?.techName || m?.technicien || m?.assignedTech || m?.technicienNom;
+                  if (!isUnassignedStr(mt)) {
+                    resolvedTourTech = String(mt).trim();
+                    break;
+                  }
+                }
+              }
+              const syncedMissions = rawMissions.map((m: any) => {
+                if (!m) return m;
+                const mt = m.techName || m.technicien || m.assignedTech || m.technicienNom;
+                if (resolvedTourTech && isUnassignedStr(mt)) {
+                  return { ...m, techName: resolvedTourTech, technicien: resolvedTourTech };
+                }
+                return m;
+              });
               return {
                 ...bt,
-                missions: assignedFromSheet.length > 0 ? assignedFromSheet : (Array.isArray(bt.missions) ? bt.missions : []),
+                techName: resolvedTourTech || bt.techName || 'Non assigné',
+                missions: syncedMissions,
               };
             });
             setFsmTours(mergedTours);
@@ -5000,7 +5014,11 @@ export default function App() {
               ville,
               cp,
               clientAddress: resolvedAddress,
-              techName: m.techName || (t.id !== 'a-trier' ? t.techName : ''),
+              techName: (() => {
+                const tourTech = t.id !== 'a-trier' && t.techName && t.techName !== 'Non assigné' ? String(t.techName).trim() : '';
+                const missionTech = m.techName && m.techName !== 'Non assigné' ? String(m.techName).trim() : '';
+                return tourTech || missionTech || '';
+              })(),
               sentToClientParts: Array.isArray(m.sentToClientParts) ? m.sentToClientParts : [],
               providedByClientParts: Array.isArray(m.providedByClientParts) ? m.providedByClientParts : [],
               commentaireInterne: m.commentaireInterne ?? '',
@@ -5051,14 +5069,15 @@ export default function App() {
     // 1. Ensure all tours have a frozen tourIdentifiant and all missions have a unique interventionReference
     const { tours: toursWithIds, changed: idsChanged } = ensureFsmTourIdentifiers(fsmTours, tenantId);
     let toursUpdated = idsChanged;
+    const syncRefsSet = collectLocalInterventionReferences(tenantId, toursWithIds, generatedReports);
     const verifiedTours = toursWithIds.map((tour) => {
       let tourMissionsUpdated = false;
       const verifiedMissions = (Array.isArray(tour?.missions) ? tour.missions : []).map((m: any) => {
         const rawRef = String(m.interventionReference || '').trim();
         if (!rawRef || rawRef.startsWith('fsm-m-')) {
           tourMissionsUpdated = true;
-          const digits = String(rawRef || m.id || Date.now()).replace(/\D/g, '');
-          const ref = `INT-2026-${digits.slice(-5).padStart(5, '0')}`;
+          const ref = computeNextInterventionReference(syncRefsSet);
+          syncRefsSet.add(ref.toUpperCase());
           return { ...m, status: m.status || 'Brouillon', interventionReference: ref };
         }
         return { ...m, status: m.status || 'Brouillon' };
@@ -6325,7 +6344,7 @@ export default function App() {
     const oldStatus = existingTour?.status || 'Brouillon';
     const newStatus = fields.status || oldStatus;
 
-    if (fields.status !== undefined && (fields.status === 'À faire' || fields.status === 'En cours' || fields.status === 'Effectué')) {
+    if (fields.status !== undefined && (fields.status === 'À faire' || fields.status === 'En cours' || fields.status === 'Effectué' || fields.status === 'Terminé')) {
       if (!tourMissionsHaveDatesAndSlots(existingTour)) {
         alert("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
         return;
@@ -6394,6 +6413,9 @@ export default function App() {
 
   const addFsmMission = (tourId: string) => {
     const newMissionId = 'fsm-m-' + Date.now();
+    const nextRef = computeNextInterventionReference(
+      collectLocalInterventionReferences(tenantId, fsmTours, generatedReports)
+    );
     const newMission = {
       id: newMissionId,
       clientName: 'Nouveau Site Client',
@@ -6404,7 +6426,7 @@ export default function App() {
       status: 'Brouillon',
       priority: 'Normale',
       time: '14:00',
-      interventionReference: `INT-2026-${String(Date.now()).slice(-5)}`,
+      interventionReference: nextRef,
       autreReference: ''
     };
     const updatedTours = fsmTours.map(t => {
@@ -17366,24 +17388,10 @@ export default function App() {
                                     alert("Veuillez sélectionner un technicien pour planifier cette tournée.");
                                     return;
                                   }
-                                  if (finalStatus === 'À faire' || finalStatus === 'En cours' || finalStatus === 'Effectué') {
+                                  if (finalStatus === 'À faire' || finalStatus === 'En cours' || finalStatus === 'Effectué' || finalStatus === 'Terminé') {
                                     if (!tourMissionsHaveDatesAndSlots(t)) {
                                       alert("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
                                       return;
-                                    }
-                                  }
-                                  if (finalStatus === 'Terminé') {
-                                    const uncompletedMissions = (t.missions || []).filter(
-                                      (m: any) => m.status === 'À faire'
-                                    );
-                                    if (uncompletedMissions.length > 0) {
-                                      const hasUnfilledReasons = uncompletedMissions.some(
-                                        (m: any) => !m.reason || !m.reason.trim()
-                                      );
-                                      if (hasUnfilledReasons) {
-                                        alert("Impossible de marquer cette tournée comme terminée. Veuillez renseigner le motif de non-réalisation pour toutes les missions non effectuées (Situation : À faire).");
-                                        return;
-                                      }
                                     }
                                   }
 
@@ -17572,6 +17580,7 @@ export default function App() {
                                     <option value="À faire">À faire</option>
                                     <option value="En cours">En cours</option>
                                     <option value="Effectué">Effectué</option>
+                                    <option value="Terminé">Terminé</option>
                                   </select>
                                 </div>
                               </div>
@@ -21912,7 +21921,7 @@ export default function App() {
                       <p
                         className="leading-relaxed"
                         style={{
-                          color: '#50617A',
+                          color: '#000',
                           fontSize: '16px',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                           cursor: 'default',
@@ -21930,7 +21939,8 @@ export default function App() {
                             color: '#fff',
                             boxShadow: 'none',
                             fontSize: '18px',
-                            background: '#0f172a',
+                            background: 'rgb(210, 45, 11)',
+                            backgroundColor: 'rgb(210, 45, 11)',
                             border: 'none',
                             borderRadius: '13px',
                             fontFamily: '"DefibeoMain", "Civilprom", sans-serif',

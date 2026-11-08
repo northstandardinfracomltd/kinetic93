@@ -1477,16 +1477,65 @@ export default function DefibTab({
     }
   }, [isFormOpen]);
 
+  const isTourTermine = (t: any): boolean => {
+    const st = String(t?.status || t?.statut || t?.situation || '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    return st === 'termine' || st === 'terminee';
+  };
+
   const isAnySelectedInTour = useMemo(() => {
     if (selectedIds.length === 0) return false;
     return selectedIds.some(id => {
       const defib = mergedDefibByIdMap.get(id);
       if (!defib) return false;
       return (fsmTours || []).some(t =>
-        (t.missions || []).some((m: any) => m.defibIdentifiant === defib.identifiant)
+        (t.missions || []).some((m: any) => (m.defibIdentifiant || m.identifiant) === defib.identifiant)
       );
     });
   }, [selectedIds, mergedDefibByIdMap, fsmTours]);
+
+  const canCleanSelectedFromTours = useMemo(() => {
+    if (selectedIds.length === 0) return false;
+    return selectedIds.every(id => {
+      const defib = mergedDefibByIdMap.get(id);
+      if (!defib || !defib.identifiant) return false;
+      const targetIdent = String(defib.identifiant).trim();
+      const matchingTours = (fsmTours || []).filter(t =>
+        (t?.missions || []).some((m: any) => String(m?.defibIdentifiant || m?.identifiant || '').trim() === targetIdent)
+      );
+      return matchingTours.length > 0 && matchingTours.every(t => isTourTermine(t));
+    });
+  }, [selectedIds, mergedDefibByIdMap, fsmTours]);
+
+  const handleCleanSelectedFromTours = () => {
+    if (!onUpdateFsmTours || !canCleanSelectedFromTours) return;
+    const selectedIdents = new Set<string>();
+    for (const id of selectedIds) {
+      const defib = mergedDefibByIdMap.get(id);
+      if (defib?.identifiant) {
+        selectedIdents.add(String(defib.identifiant).trim());
+      }
+    }
+    if (selectedIdents.size === 0) return;
+
+    const updatedTours = (fsmTours || []).map(t => {
+      if (!t || !isTourTermine(t) || !Array.isArray(t.missions)) return t;
+      const filteredMissions = t.missions.filter(
+        (m: any) => !selectedIdents.has(String(m?.defibIdentifiant || m?.identifiant || '').trim())
+      );
+      if (filteredMissions.length === t.missions.length) return t;
+      return {
+        ...t,
+        missions: filteredMissions,
+      };
+    });
+
+    onUpdateFsmTours(updatedTours);
+    setSelectedIds([]);
+  };
   const [clientSearchQuery, setClientSearchQuery] = useState('');
   const [isClientSearchFocused, setIsClientSearchFocused] = useState(false);
   const [editingDefib, setEditingDefib] = useState<Defibrillateur | null>(null);
@@ -5214,7 +5263,7 @@ export default function DefibTab({
                         
                         {(() => {
                           const drafts = (fsmTours || []).filter(
-                            t => t && t.id !== 'a-trier' && (!t.status || !['À faire', 'En cours', 'Effectué'].includes(t.status))
+                            t => t && t.id !== 'a-trier' && (!t.status || !['À faire', 'En cours', 'Effectué', 'Terminé'].includes(t.status))
                           );
                           if (drafts.length === 0) {
                             return (
@@ -5324,6 +5373,26 @@ export default function DefibTab({
                       Sync. Atlasanté
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={handleCleanSelectedFromTours}
+                    disabled={!canCleanSelectedFromTours}
+                    id="btn-clean-tours-defibs"
+                    style={{
+                      ...rowActionButton18Style,
+                      opacity: !canCleanSelectedFromTours ? 0.45 : 1,
+                      cursor: !canCleanSelectedFromTours ? 'not-allowed' : 'pointer'
+                    }}
+                    title={
+                      !canCleanSelectedFromTours
+                        ? "Action impossible : chaque défibrillateur sélectionné doit être présent dans une tournée ayant impérativement le statut « Terminé »."
+                        : "Supprimer le(s) défibrillateur(s) sélectionné(s) des tournées terminées"
+                    }
+                    className={!canCleanSelectedFromTours ? 'cursor-not-allowed select-none' : 'cursor-pointer select-none'}
+                  >
+                    Nettoyer des tournées
+                  </button>
                 </div>
               </div>
             )}

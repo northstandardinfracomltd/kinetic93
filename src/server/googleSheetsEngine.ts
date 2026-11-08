@@ -50,7 +50,11 @@ export type SheetTabType =
   | 'observateurActionsSuspectes'
   | 'exportations'
   | 'autresEvents'
-  | 'groupesZones';
+  | 'groupesZones'
+  | 'pointagesClient';
+
+export const GLOBAL_CLIENT_POINTAGES_SPREADSHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1tF8Noeh19y5exfZx0QPRPsIe7UeJSB1GGfAYlBI9HVQ/edit?usp=sharing';
 
 export interface GlobalGoogleSheetsConfig {
   apiKey?: string;
@@ -3165,6 +3169,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Description.', field: 'description', aliases: ['description', 'texte', 'message', 'alerte', 'intitule', 'evenement'] },
     { header: 'Commentaire.', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'note', 'notes', 'observation'] },
     { header: 'Statut.', field: 'statut', aliases: ['statut', 'status', 'etat', 'situation'] },
+    { header: 'Horodatage.', field: 'horodatage', aliases: ['horodatage', 'date', 'dateheure', 'timestamp', 'heure'] },
   ],
   autresEvents: [
     { header: 'Email (technicien).', field: 'techEmail', aliases: ['emailtechnicien', 'email', 'technicienemail', 'mailtechnicien', 'technicien'] },
@@ -3179,6 +3184,13 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'planners', field: 'planners', aliases: ['planners', 'planificateurs', 'planificateur'] },
     { header: 'technicians', field: 'technicians', aliases: ['technicians', 'techniciens', 'technicien'] },
     { header: 'regions', field: 'regions', aliases: ['regions', 'region', 'zones', 'zone'] },
+  ],
+  pointagesClient: [
+    { header: 'Identifiant.', field: 'equipementIdentifiant', aliases: ['identifiant', 'identifiantmateriel', 'identifiantdefibrillateur', 'equipementidentifiant', 'equipementid', 'selectiondumateriel', 'materiel'] },
+    { header: 'TenantID.', field: 'tenantId', aliases: ['tenantid', 'tenant', 'envid', 'identifiantenvironnement', 'environnement'] },
+    { header: 'ClientID.', field: 'clientId', aliases: ['clientid', 'idclient', 'identifiantclient', 'client'] },
+    { header: 'Date.', field: 'date', aliases: ['date', 'datepointage', 'datedupointage'] },
+    { header: 'Commentaire.', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'situation', 'statut', 'observation'] },
   ],
 };
 GENERIC_CANONICAL_HEADERS.devisFactures = GENERIC_CANONICAL_HEADERS.commandes;
@@ -3200,6 +3212,7 @@ function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = 
       tabType === 'historiqueNotifications' ||
       tabType === 'autresEvents' ||
       tabType === 'groupesZones' ||
+      tabType === 'pointagesClient' ||
       tabType === 'variables' ||
       tabType === 'reglages'
     ) {
@@ -6368,7 +6381,9 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     ).trim();
     merged.commentaire = String(merged.commentaire ?? rawByHeader['Commentaire.'] ?? rawByHeader['Commentaire'] ?? '').trim();
     merged.statut = String(merged.statut ?? rawByHeader['Statut.'] ?? rawByHeader['Statut'] ?? '').trim();
-    merged.horodatage = String(merged.horodatage || '').trim();
+    merged.horodatage = String(
+      merged.horodatage ?? rawByHeader['Horodatage.'] ?? rawByHeader['Horodatage. '] ?? rawByHeader['Horodatage'] ?? ''
+    ).trim();
     if (!merged.id || String(merged.id).startsWith('sheet_gen_') || merged.id === merged.ugs) {
       merged.id = `lognotif_${tenantId}_row_${rowIndexZeroBased + 2}`;
     }
@@ -6443,6 +6458,72 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         .toLowerCase()
         .replace(/[^a-z0-9]/g, '');
       merged.id = slug ? `spont_${slug}` : `spont_${tenantId}_row_${rowIndexZeroBased + 2}`;
+    }
+  } else if (tabType === 'pointagesClient') {
+    const rawKeys = Object.keys(rawByHeader);
+    if (rawKeys.length > 0) {
+      const fallbackColMap = resolveGenericColumnFieldMap(rawKeys, 'pointagesClient');
+      for (const [kIdx, def] of fallbackColMap.entries()) {
+        const rk = rawKeys[kIdx];
+        const rv = rk ? rawByHeader[rk] : '';
+        if (rv !== undefined && rv !== '' && (merged[def.field] === undefined || merged[def.field] === '' || def.field === 'tenantId')) {
+          merged[def.field] = rv;
+        }
+      }
+    }
+    const rawIdent = String(
+      merged.equipementIdentifiant ??
+        merged.identifiant ??
+        rawByHeader['Identifiant.'] ??
+        rawByHeader['Identifiant'] ??
+        ''
+    ).trim();
+    const rawRowTenantId = String(
+      obj.tenantId ??
+        rawByHeader['TenantID.'] ??
+        rawByHeader['TenantID'] ??
+        rawByHeader['Tenant Id.'] ??
+        rawByHeader['Tenant Id'] ??
+        merged.tenantId ??
+        tenantId ??
+        ''
+    ).trim();
+    const rawClientId = String(
+      merged.clientId ??
+        rawByHeader['ClientID.'] ??
+        rawByHeader['ClientID'] ??
+        rawByHeader['Client Id.'] ??
+        rawByHeader['Client Id'] ??
+        ''
+    ).trim();
+    const rawDate = String(
+      merged.date ??
+        rawByHeader['Date.'] ??
+        rawByHeader['Date'] ??
+        ''
+    ).trim();
+    const rawComment = String(
+      merged.commentaire ??
+        rawByHeader['Commentaire.'] ??
+        rawByHeader['Commentaire'] ??
+        ''
+    ).trim();
+
+    merged.equipementIdentifiant = rawIdent;
+    merged.identifiant = rawIdent;
+    merged.equipementId = merged.equipementId || rawIdent;
+    merged.equipementNom = merged.equipementNom || rawIdent;
+    merged.tenantId = rawRowTenantId;
+    merged.envId = rawRowTenantId;
+    merged.clientId = rawClientId;
+    merged.date = normalizeDateStr(rawDate) || rawDate;
+    merged.commentaire = rawComment || 'En fonctionnement et accessible';
+
+    if (!merged.id || String(merged.id).startsWith('sheet_gen_')) {
+      const slug = `${rawRowTenantId}_${rawClientId}_${rawIdent}_${merged.date}`
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]/g, '');
+      merged.id = slug ? `pt_av_${slug}` : `pt_av_row_${rowIndexZeroBased + 2}`;
     }
   } else if (tabType === 'groupesZones') {
     const parseStringArray = (val: any): string[] => {
@@ -7795,6 +7876,7 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.description = String(enriched.description ?? '').trim();
     enriched.commentaire = String(enriched.commentaire ?? '').trim();
     enriched.statut = String(enriched.statut ?? '').trim();
+    enriched.horodatage = String(enriched.horodatage ?? '').trim();
   } else if (tabType === 'autresEvents') {
     let resolvedEmail = String(enriched.techEmail ?? '').trim();
     const resolvedName = String(enriched.techName ?? '').trim();
@@ -7843,6 +7925,61 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.planners = serializeArray(enriched.planners);
     enriched.technicians = serializeArray(enriched.technicians);
     enriched.regions = serializeArray(enriched.regions);
+  } else if (tabType === 'pointagesClient') {
+    const cleanIdent = String(
+      enriched.equipementIdentifiant ??
+        enriched.identifiant ??
+        enriched['Identifiant.'] ??
+        enriched['Identifiant'] ??
+        enriched.equipementId ??
+        ''
+    ).trim();
+    const cleanTenantId = String(
+      enriched.tenantId ??
+        enriched.envId ??
+        enriched['TenantID.'] ??
+        enriched['TenantID'] ??
+        ''
+    ).trim();
+    const cleanClientId = String(
+      enriched.clientId ??
+        enriched['ClientID.'] ??
+        enriched['ClientID'] ??
+        ''
+    ).trim();
+    const rawDate = String(enriched.date ?? enriched['Date.'] ?? enriched['Date'] ?? '').trim();
+    let formattedDate = rawDate;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      const [yyyy, mm, dd] = rawDate.split('-');
+      formattedDate = `${dd}/${mm}/${yyyy}`;
+    }
+    const cleanComment = String(
+      enriched.commentaire ??
+        enriched['Commentaire.'] ??
+        enriched['Commentaire'] ??
+        ''
+    ).trim();
+
+    enriched.equipementIdentifiant = cleanIdent;
+    enriched.identifiant = cleanIdent;
+    enriched['Identifiant.'] = cleanIdent;
+    enriched['Identifiant'] = cleanIdent;
+
+    enriched.tenantId = cleanTenantId;
+    enriched['TenantID.'] = cleanTenantId;
+    enriched['TenantID'] = cleanTenantId;
+
+    enriched.clientId = cleanClientId;
+    enriched['ClientID.'] = cleanClientId;
+    enriched['ClientID'] = cleanClientId;
+
+    enriched.date = formattedDate;
+    enriched['Date.'] = formattedDate;
+    enriched['Date'] = formattedDate;
+
+    enriched.commentaire = cleanComment;
+    enriched['Commentaire.'] = cleanComment;
+    enriched['Commentaire'] = cleanComment;
   } else if (tabType === 'releveConcurrentiel') {
     const cleanCommune = String(
       enriched.commune ??
@@ -7932,7 +8069,10 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
 // 4. MIRROR OVERLAY MANAGEMENT (Disk Persistence)
 // ==========================================
 function getMirrorFilePath(tenantId: string, tabType: SheetTabType, spreadsheetId: string): string {
-  const safeTenant = String(tenantId || 'demo').replace(/[^a-zA-Z0-9_-]/g, '');
+  const safeTenant =
+    tabType === 'pointagesClient'
+      ? 'global'
+      : String(tenantId || 'demo').replace(/[^a-zA-Z0-9_-]/g, '');
   const safeSheet = String(spreadsheetId || 'default').slice(0, 24).replace(/[^a-zA-Z0-9_-]/g, '');
   return path.join(getMirrorDir(), `${safeTenant}_${tabType}_${safeSheet}.json`);
 }
@@ -8087,6 +8227,14 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
   }
   if (tabType === 'groupesZones') {
     return [item.id, item.title].filter(Boolean).map(s => String(s).trim().toLowerCase());
+  }
+  if (tabType === 'pointagesClient') {
+    const tid = String(item.tenantId || item.envId || '').trim().toLowerCase();
+    const cid = String(item.clientId || '').trim().toLowerCase();
+    const ident = String(item.equipementIdentifiant || item.identifiant || item.equipementId || '').trim().toLowerCase();
+    const dt = normalizeDateStr(item.date || '').trim().toLowerCase();
+    const composite = ident && dt ? `${tid}@@${cid}@@${ident}@@${dt}` : '';
+    return [item.id, composite].filter(Boolean).map(s => String(s).trim().toLowerCase());
   }
   if (tabType === 'temps') {
     const normDate = normalizeDateStr(item.startDate || '').trim().toLowerCase();
@@ -8815,6 +8963,10 @@ export async function fetchTenantSheetCollection(
           } else if (tabType === 'temps') {
             const hasRealTempsIdentity = Boolean(mapped.startDate) && (Boolean(mapped.techName) || Boolean(mapped.techEmail));
             if (!hasRealTempsIdentity) continue;
+          } else if (tabType === 'pointagesClient') {
+            const hasRealPointageIdentity =
+              Boolean(mapped.equipementIdentifiant || mapped.identifiant) || Boolean(mapped.clientId);
+            if (!hasRealPointageIdentity) continue;
           }
 
           if (deletedSet.size > 0) {

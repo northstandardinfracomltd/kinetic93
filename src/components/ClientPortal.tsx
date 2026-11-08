@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Client, Defibrillateur, CommercialDoc, CompanyInfo, Variable, OtherEquipment, PointageAutoVigilance, formatPdfHeaderText } from '../types';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { Client, Defibrillateur, CommercialDoc, CompanyInfo, Variable, OtherEquipment, PointageAutoVigilance, GLOBAL_CLIENT_POINTAGES_SPREADSHEET_URL, formatPdfHeaderText } from '../types';
 import { formatDateToFR, computeProchaineMaintenance, formatDateToMonthYear } from '../utils';
 import { t } from '../utils/translate';
 import { uploadMediaToFirebase } from '../firebase';
@@ -928,37 +928,232 @@ export default function ClientPortal({
   });
   const [pointageComment, setPointageComment] = useState<'En fonctionnement et accessible' | 'Problème résolu' | 'Problème non résolu' | 'Problème non résolu et assistance demandée'>('En fonctionnement et accessible');
   const [pointageSuccess, setPointageSuccess] = useState(false);
+  const [sheetPointagesList, setSheetPointagesList] = useState<PointageAutoVigilance[]>([]);
 
-  const assignedEquipment = [
-    ...clientDefibs.map(d => ({
-      id: d.id,
-      identifiant: d.identifiant,
-      nom: `${variables.find(v => v.id === d.modeleId)?.nom || 'Défibrillateur'} (${d.identifiant})`,
-      type: 'defib'
-    })),
-    ...clientOthers.map(o => ({
-      id: o.id,
-      identifiant: o.identifiant,
-      nom: `${o.categorie || 'Autre matériel'} (${o.identifiant})`,
-      type: 'other'
-    }))
-  ];
+  const assignedEquipment = useMemo(
+    () => [
+      ...clientDefibs.map(d => ({
+        id: d.id,
+        identifiant: d.identifiant,
+        nom: `${variables.find(v => v.id === d.modeleId)?.nom || (d as any).modele || 'Défibrillateur'} (${d.identifiant})`,
+        type: 'defib',
+      })),
+      ...clientOthers.map(o => ({
+        id: o.id,
+        identifiant: o.identifiant,
+        nom: `${o.categorie || 'Autre matériel'} (${o.identifiant})`,
+        type: 'other',
+      })),
+    ],
+    [clientDefibs, clientOthers, variables]
+  );
 
-  const checkedEquipIdsOnSameDay = (pointagesAutoVigilance || [])
-    .filter(p => p.clientId === authenticatedClient?.id && p.date === pointageDate)
-    .map(p => p.equipementId);
+  const resolveActiveTenantForPointage = useCallback((): string => {
+    return String(
+      companyInfo?.envShortId ||
+        (companyInfo as any)?.tenantId ||
+        (companyInfo as any)?.envId ||
+        (authenticatedClient as any)?.tenantId ||
+        (authenticatedClient as any)?.envId ||
+        localStorage.getItem('defib_tenant_id') ||
+        'demo'
+    ).trim();
+  }, [companyInfo, authenticatedClient]);
 
-  const filteredAssignedEquipment = assignedEquipment.filter(eq => !checkedEquipIdsOnSameDay.includes(eq.id));
+  const resolveClientIdForPointage = useCallback((): string => {
+    if (!authenticatedClient) return '';
+    const rawField = String(authenticatedClient.clientIdField || '').trim();
+    if (
+      rawField &&
+      !rawField.toLowerCase().includes('vierge') &&
+      !rawField.startsWith('sheet_cli_') &&
+      !rawField.startsWith('sheet-clients-')
+    ) {
+      return rawField;
+    }
+    const rawId = String(authenticatedClient.id || '').trim();
+    if (rawId && !rawId.startsWith('sheet_cli_') && !rawId.startsWith('sheet-clients-')) {
+      return rawId;
+    }
+    return String(authenticatedClient.denomination || rawField || rawId || '').trim();
+  }, [authenticatedClient]);
+
+  const normalizePointageIsoDate = useCallback((rawDate?: string): string => {
+    const s = String(rawDate || '').trim();
+    if (!s) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    if (s.includes('/')) {
+      const parts = s.split('/');
+      if (parts.length === 3) {
+        if (parts[2].length === 4) {
+          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+        if (parts[0].length === 4) {
+          return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
+      }
+    }
+    return s;
+  }, []);
+
+  const fetchClientPointagesFromSheet = useCallback(
+    async (forceRefresh = false) => {
+      try {
+        const activeTid = resolveActiveTenantForPointage();
+        const sessionTok = localStorage.getItem('defib_session_token') || '';
+        const res = await fetch(
+          `/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=pointagesClient&spreadsheetUrl=${encodeURIComponent(
+            GLOBAL_CLIENT_POINTAGES_SPREADSHEET_URL
+          )}${forceRefresh ? '&forceRefresh=true' : ''}`,
+          {
+            headers: {
+              ...(sessionTok ? { 'x-defibeo-session': sessionTok } : {}),
+              'x-defibeo-tenant': activeTid,
+            },
+          }
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data?.items)) {
+          const mapped: PointageAutoVigilance[] = data.items
+            .filter((it: any) => it && (it.equipementIdentifiant || it.identifiant || it.clientId))
+            .map((it: any, idx: number) => {
+              const ident = String(it.equipementIdentifiant || it.identifiant || it.equipementId || '').trim();
+              const matchedEq = assignedEquipment.find(
+                eq =>
+                  (eq.identifiant && ident && eq.identifiant.trim().toLowerCase() === ident.toLowerCase()) ||
+                  (eq.id && ident && eq.id.trim().toLowerCase() === ident.toLowerCase())
+              );
+              const isoDate = normalizePointageIsoDate(it.date);
+              return {
+                id: String(it.id || `pt_av_sheet_${idx}_${ident}_${isoDate}`),
+                tenantId: String(it.tenantId || it.envId || '').trim(),
+                clientId: String(it.clientId || '').trim(),
+                equipementId: matchedEq?.id || String(it.equipementId || ident),
+                equipementIdentifiant: ident || matchedEq?.identifiant || '',
+                equipementNom: matchedEq?.nom || String(it.equipementNom || ident),
+                date: isoDate,
+                commentaire: String(it.commentaire || 'En fonctionnement et accessible').trim(),
+                createdAt: it.createdAt || '',
+              };
+            });
+          setSheetPointagesList(mapped);
+        }
+      } catch (_) {}
+    },
+    [resolveActiveTenantForPointage, assignedEquipment, normalizePointageIsoDate]
+  );
+
+  useEffect(() => {
+    if (authenticatedClient) {
+      fetchClientPointagesFromSheet(false);
+    }
+  }, [authenticatedClient, activePortalTab, fetchClientPointagesFromSheet]);
+
+  const clientPointagesAutoVigilance = useMemo(() => {
+    if (!authenticatedClient) return [];
+    const activeTid = resolveActiveTenantForPointage().toLowerCase();
+    const tenantCandidates = new Set(
+      [
+        activeTid,
+        activeTid.replace(/^d/i, ''),
+        `d${activeTid.replace(/^d/i, '')}`,
+        String(companyInfo?.envShortId || '').trim().toLowerCase(),
+        String((companyInfo as any)?.tenantId || '').trim().toLowerCase(),
+        String((companyInfo as any)?.envId || '').trim().toLowerCase(),
+        String(localStorage.getItem('defib_tenant_id') || '').trim().toLowerCase(),
+      ].filter(Boolean)
+    );
+    const clientCandidates = new Set(
+      [
+        authenticatedClient.id,
+        authenticatedClient.clientIdField,
+        authenticatedClient.denomination,
+        resolveClientIdForPointage(),
+      ]
+        .filter(Boolean)
+        .map(s => String(s).trim().toLowerCase())
+    );
+    const assignedIdents = new Set(
+      assignedEquipment
+        .flatMap(eq => [eq.id, eq.identifiant])
+        .filter(Boolean)
+        .map(s => String(s).trim().toLowerCase())
+    );
+
+    const combined = [...sheetPointagesList, ...(pointagesAutoVigilance || [])];
+    const dedupMap = new Map<string, PointageAutoVigilance>();
+
+    for (const pt of combined) {
+      if (!pt) continue;
+      const ptTenant = String(pt.tenantId || '').trim().toLowerCase();
+      if (ptTenant && !tenantCandidates.has(ptTenant)) {
+        continue;
+      }
+      const ptClient = String(pt.clientId || '').trim().toLowerCase();
+      const ptIdent = String(pt.equipementIdentifiant || pt.equipementId || '').trim().toLowerCase();
+      const matchesClient = ptClient ? clientCandidates.has(ptClient) : assignedIdents.has(ptIdent);
+      if (!matchesClient) continue;
+
+      const matchedEq = assignedEquipment.find(
+        eq =>
+          (eq.identifiant && ptIdent && eq.identifiant.trim().toLowerCase() === ptIdent) ||
+          (eq.id && pt.equipementId && eq.id.trim().toLowerCase() === String(pt.equipementId).trim().toLowerCase())
+      );
+      const isoDate = normalizePointageIsoDate(pt.date);
+      const resolvedIdent = matchedEq?.identifiant || pt.equipementIdentifiant || pt.equipementId || '';
+      const resolvedNom = matchedEq?.nom || pt.equipementNom || resolvedIdent;
+      const key = `${resolvedIdent.toLowerCase()}@@${isoDate}`;
+      if (!dedupMap.has(key)) {
+        dedupMap.set(key, {
+          ...pt,
+          equipementId: matchedEq?.id || pt.equipementId,
+          equipementIdentifiant: resolvedIdent,
+          equipementNom: resolvedNom,
+          date: isoDate,
+        });
+      }
+    }
+
+    return Array.from(dedupMap.values());
+  }, [
+    authenticatedClient,
+    sheetPointagesList,
+    pointagesAutoVigilance,
+    resolveActiveTenantForPointage,
+    resolveClientIdForPointage,
+    companyInfo,
+    assignedEquipment,
+    normalizePointageIsoDate,
+  ]);
+
+  const checkedEquipIdsOnSameDay = useMemo(() => {
+    const targetIso = normalizePointageIsoDate(pointageDate);
+    const set = new Set<string>();
+    clientPointagesAutoVigilance.forEach(p => {
+      if (normalizePointageIsoDate(p.date) === targetIso) {
+        if (p.equipementId) set.add(String(p.equipementId).trim());
+        if (p.equipementIdentifiant) set.add(String(p.equipementIdentifiant).trim());
+      }
+    });
+    return set;
+  }, [clientPointagesAutoVigilance, pointageDate, normalizePointageIsoDate]);
+
+  const filteredAssignedEquipment = assignedEquipment.filter(
+    eq => !checkedEquipIdsOnSameDay.has(eq.id) && !checkedEquipIdsOnSameDay.has(eq.identifiant)
+  );
 
   useEffect(() => {
     if (selectedEquipId) {
-      const alreadyChecked = (pointagesAutoVigilance || [])
-        .some(p => p.clientId === authenticatedClient?.id && p.date === pointageDate && p.equipementId === selectedEquipId);
+      const equip = assignedEquipment.find(eq => eq.id === selectedEquipId);
+      const alreadyChecked =
+        checkedEquipIdsOnSameDay.has(selectedEquipId) ||
+        (equip?.identifiant ? checkedEquipIdsOnSameDay.has(equip.identifiant) : false);
       if (alreadyChecked) {
         setSelectedEquipId('');
       }
     }
-  }, [pointageDate, pointagesAutoVigilance, selectedEquipId, authenticatedClient]);
+  }, [selectedEquipId, checkedEquipIdsOnSameDay, assignedEquipment]);
 
   const handleSavePointage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -970,24 +1165,66 @@ export default function ClientPortal({
     const equip = assignedEquipment.find(eq => eq.id === selectedEquipId);
     if (!equip) return;
 
+    const activeTid = resolveActiveTenantForPointage();
+    const resolvedClientId = resolveClientIdForPointage() || authenticatedClient.id;
+    const isoDate = normalizePointageIsoDate(pointageDate);
+    const dateParts = isoDate.split('-');
+    const formattedDateFR =
+      dateParts.length === 3 ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}` : pointageDate;
+
+    const newPt: PointageAutoVigilance = {
+      id: 'pt_av_' + Date.now(),
+      tenantId: activeTid,
+      clientId: resolvedClientId,
+      equipementId: equip.id,
+      equipementIdentifiant: equip.identifiant,
+      equipementNom: equip.nom,
+      date: isoDate,
+      commentaire: pointageComment,
+      createdAt: new Date().toISOString(),
+    };
+
+    setSheetPointagesList(prev => [newPt, ...prev]);
     if (onAddPointageAutoVigilance) {
-      const newPt: PointageAutoVigilance = {
-        id: 'pt_av_' + Date.now(),
-        clientId: authenticatedClient.id,
-        equipementId: equip.id,
-        equipementIdentifiant: equip.identifiant,
-        equipementNom: equip.nom,
-        date: pointageDate,
-        commentaire: pointageComment,
-        createdAt: new Date().toISOString()
-      };
       onAddPointageAutoVigilance(newPt);
-      setSelectedEquipId('');
-      setPointageSuccess(true);
-      setTimeout(() => {
-        setPointageSuccess(false);
-      }, 3000);
     }
+
+    const sessionTok = localStorage.getItem('defib_session_token') || '';
+    fetch('/api/sheets/upsert', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(sessionTok ? { 'x-defibeo-session': sessionTok } : {}),
+        'x-defibeo-tenant': activeTid,
+      },
+      body: JSON.stringify({
+        tenantId: activeTid,
+        type: 'pointagesClient',
+        spreadsheetUrl: GLOBAL_CLIENT_POINTAGES_SPREADSHEET_URL,
+        records: [
+          {
+            id: newPt.id,
+            equipementIdentifiant: equip.identifiant,
+            identifiant: equip.identifiant,
+            tenantId: activeTid,
+            clientId: resolvedClientId,
+            date: formattedDateFR,
+            commentaire: pointageComment,
+            'Identifiant.': equip.identifiant,
+            'TenantID.': activeTid,
+            'ClientID.': resolvedClientId,
+            'Date.': formattedDateFR,
+            'Commentaire.': pointageComment,
+          },
+        ],
+      }),
+    }).catch(() => {});
+
+    setSelectedEquipId('');
+    setPointageSuccess(true);
+    setTimeout(() => {
+      setPointageSuccess(false);
+    }, 3000);
   };
 
   const handleContactSubmit = (e: React.FormEvent) => {
@@ -1656,7 +1893,7 @@ export default function ClientPortal({
       ...(matchedDefib || {}),
       ...rawSnap,
       ...nonEmptyReportFields,
-      modeleId: rawSnap.modeleId || report.modele || matchedDefib?.modeleId || '',
+      modeleId: rawSnap.modeleId || report.modele || (matchedDefib as any)?.modeleId || '',
       modeleCoffretId: rawSnap.modeleCoffretId || report.modeleCoffret || (matchedDefib as any)?.modeleCoffretId || '',
       modeleElectrodeAId: rawSnap.modeleElectrodeAId || report.modeleElectrodeA || (matchedDefib as any)?.modeleElectrodeAId || '',
       modeleElectrodeASecoursId: rawSnap.modeleElectrodeASecoursId || report.modeleElectrodeSecoursA || (matchedDefib as any)?.modeleElectrodeASecoursId || '',
@@ -2926,8 +3163,8 @@ export default function ClientPortal({
             className="text-[18px] text-white rounded-xl select-none cursor-pointer border-0 outline-none transition-none brightness-100 hover:brightness-100 hover:opacity-100 hover:scale-100"
             style={{
               boxShadow: 'none',
-              background: 'rgb(46, 84, 255)',
-              backgroundColor: 'rgb(46, 84, 255)',
+              background: 'rgb(210, 45, 11)',
+              backgroundColor: 'rgb(210, 45, 11)',
               fontWeight: 100,
               padding: '9px 18px',
             }}
@@ -2974,50 +3211,6 @@ export default function ClientPortal({
               }}
             >
               Consulter
-            </button>
-          </div>
-        )}
-
-        {/* Info Alert 2: Signature manquante */}
-        {hasMissingSignature && (
-          <div 
-            className="w-full p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
-            style={{
-              backgroundColor: 'rgb(245, 247, 250)',
-              border: 'none',
-              borderRadius: '13px',
-              boxShadow: 'none',
-            }}
-          >
-            <div 
-              className="font-bold font-sans leading-snug"
-              style={{
-                color: '#000',
-                fontSize: '18px',
-                cursor: 'default',
-              }}
-            >
-              (Attention requise) Nous avons besoin de votre signature dans l’encart ‘Signature’ dans l’onglet de vos Informations.
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setActivePortalTab('info');
-                setTimeout(() => {
-                  document.getElementById('client-portal-signature-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 100);
-              }}
-              className="text-white font-bold cursor-pointer select-none border-none outline-none shrink-0 self-end sm:self-auto transition-none"
-              style={{
-                boxShadow: 'none',
-                background: 'rgb(46, 84, 255)',
-                backgroundColor: 'rgb(46, 84, 255)',
-                borderRadius: '13px',
-                fontSize: '18px',
-                padding: '9px 18px',
-              }}
-            >
-              Compléter
             </button>
           </div>
         )}
@@ -3988,7 +4181,7 @@ export default function ClientPortal({
 
               {/* Liste des pointages */}
               <div id="historique-pointage-container" className="mt-8">
-                {!pointagesAutoVigilance || pointagesAutoVigilance.filter(p => p.clientId === authenticatedClient?.id).length === 0 ? (
+                {clientPointagesAutoVigilance.length === 0 ? (
                   null
                 ) : (
                   <div className="overflow-x-auto">
@@ -4002,8 +4195,7 @@ export default function ClientPortal({
                         </tr>
                       </thead>
                       <tbody>
-                        {[...pointagesAutoVigilance]
-                          .filter(p => p.clientId === authenticatedClient?.id)
+                        {[...clientPointagesAutoVigilance]
                           .sort((a, b) => b.date.localeCompare(a.date))
                           .map((pt) => {
                             return (
@@ -4505,7 +4697,7 @@ export default function ClientPortal({
                 <div className="space-y-6 pt-2">
                   {/* Edit Contact 1 */}
                   <div className="pb-2">
-                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)' }}>
+                    <div className="inline-block px-3 py-1 text-[18px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)', fontSize: '18px' }}>
                       Contact 1
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -4518,7 +4710,7 @@ export default function ClientPortal({
 
                   {/* Edit Contact 2 */}
                   <div className="pb-2">
-                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)' }}>
+                    <div className="inline-block px-3 py-1 text-[18px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)', fontSize: '18px' }}>
                       Contact 2
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -4531,7 +4723,7 @@ export default function ClientPortal({
 
                   {/* Edit Contact 3 */}
                   <div className="pb-2">
-                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)' }}>
+                    <div className="inline-block px-3 py-1 text-[18px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)', fontSize: '18px' }}>
                       Contact 3
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -4544,7 +4736,7 @@ export default function ClientPortal({
 
                   {/* Edit Contact 4 */}
                   <div className="pb-2">
-                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)' }}>
+                    <div className="inline-block px-3 py-1 text-[18px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)', fontSize: '18px' }}>
                       Contact 4
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -4557,7 +4749,7 @@ export default function ClientPortal({
 
                   {/* Edit Contact 5 */}
                   <div className="pb-2">
-                    <div className="inline-block px-3 py-1 text-[14px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)' }}>
+                    <div className="inline-block px-3 py-1 text-[18px] font-bold rounded-full font-sans select-none mb-3" style={{ backgroundColor: 'rgb(61, 220, 132)', color: 'rgb(19, 100, 55)', fontSize: '18px' }}>
                       Contact 5
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">

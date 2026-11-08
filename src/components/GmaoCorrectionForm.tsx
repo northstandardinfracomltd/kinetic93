@@ -13,6 +13,11 @@ import { fetchGoogleDriveStatus } from '../utils/googleDrive';
 import { generateReportModerationComment, mergeReportPostInterventionAlerts, buildFlatAlertFields } from '../utils/moderationComment';
 import { playTechSound3, playTechNavClickSound } from '../utils/technicianAudio';
 import { triggerEmailClientSignaturePin } from '../utils/emailService';
+import {
+  collectLocalInterventionReferences,
+  computeNextInterventionReference,
+  fetchAndComputeNextInterventionReference,
+} from '../utils/interventionReference';
 
 interface GmaoCorrectionFormProps {
   key?: React.Key;
@@ -37,6 +42,9 @@ interface GmaoCorrectionFormProps {
   hideReduceAndTimer?: boolean;
   isMinimized?: boolean;
   onToggleMinimize?: () => void;
+  existingTours?: any[];
+  existingReports?: any[];
+  tenantId?: string;
 }
 
 const DEFAULT_DEFIB: Defibrillateur = {
@@ -362,7 +370,10 @@ export default function GmaoCorrectionForm({
   isMainSoftware = false,
   hideReduceAndTimer = false,
   isMinimized,
-  onToggleMinimize
+  onToggleMinimize,
+  existingTours,
+  existingReports,
+  tenantId
 }: GmaoCorrectionFormProps) {
   const shouldShowChronoAndReduce = isWebapp && !isMainSoftware && !hideReduceAndTimer;
   const effectiveIsFromInterventionMission = Boolean(isFromInterventionMission || report?.missionId || report?.tourId);
@@ -1153,11 +1164,21 @@ export default function GmaoCorrectionForm({
   };
 
   // New States for Points 0, 1, 3, 4, 5, 8, 10
-  const [interventionReference, setInterventionReference] = useState(report?.interventionReference || '');
+  const [interventionReference, setInterventionReference] = useState(() => {
+    const initialRef = String(report?.interventionReference || '').trim();
+    if (initialRef) return initialRef;
+    const activeTid =
+      tenantId ||
+      (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : '') ||
+      'demo';
+    return computeNextInterventionReference(
+      collectLocalInterventionReferences(activeTid, existingTours, existingReports)
+    );
+  });
   const [autreReference, setAutreReference] = useState(report?.autreReference || report?.customReference || '');
   const [isCreatingNewMaterial, setIsCreatingNewMaterial] = useState(false);
   const [isNewEquipmentDropdownOpen, setIsNewEquipmentDropdownOpen] = useState(false);
-  const [missionConfirmModal, setMissionConfirmModal] = useState<'new_material' | 'select_equipment' | null>(null);
+  const [missionConfirmModal, setMissionConfirmModal] = useState<'new_material' | 'select_equipment' | 'advanced_search' | null>(null);
   const [hasConfirmedMissionEquipmentSwitch, setHasConfirmedMissionEquipmentSwitch] = useState(false);
   const equipmentSelectRef = useRef<HTMLSelectElement | null>(null);
   const [isSendingPinEmail, setIsSendingPinEmail] = useState(false);
@@ -1575,34 +1596,29 @@ export default function GmaoCorrectionForm({
     return `${pad(mins)}:${pad(secs)}`;
   }, [formOpenTime, currentTickTime]);
 
-  // Auto-generate reference intervention
+  // Auto-generate sequential reference intervention with duplicate check against TOURNÉES ET MISSIONS & RAPPORTS PDF
   useEffect(() => {
-    if (snapshot.identifiant) {
-      let datePart = '';
-      if (interventionDate) {
-        const cleanDate = interventionDate.split(' ')[0].replace(/[^0-9]/g, '');
-        if (cleanDate.length === 8) {
-          datePart = cleanDate;
-        } else {
-          const d = new Date();
-          const day = String(d.getDate()).padStart(2, '0');
-          const month = String(d.getMonth() + 1).padStart(2, '0');
-          const year = d.getFullYear();
-          datePart = `${day}${month}${year}`;
-        }
-      } else {
-        const d = new Date();
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-        datePart = `${day}${month}${year}`;
-      }
-      const expectedDefault = `${snapshot.identifiant}_${datePart}`;
-      if (!interventionReference) {
-        setInterventionReference(expectedDefault);
-      }
+    const providedRef = String(report?.interventionReference || '').trim();
+    if (providedRef) {
+      setInterventionReference(providedRef);
+      return;
     }
-  }, [snapshot.identifiant, interventionDate]);
+    let cancelled = false;
+    const activeTid =
+      tenantId ||
+      (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : '') ||
+      'demo';
+    fetchAndComputeNextInterventionReference(activeTid, existingTours, existingReports).then(
+      (nextRef) => {
+        if (!cancelled && nextRef) {
+          setInterventionReference(nextRef);
+        }
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [report?.interventionReference, tenantId]);
 
   useEffect(() => {
     if (!autreReference) {
@@ -3414,7 +3430,8 @@ export default function GmaoCorrectionForm({
             cursor: not-allowed !important;
           }
           #gmao-correction-form select#snap-contrat:disabled,
-          #gmao-correction-form select#input-tech-name:disabled {
+          #gmao-correction-form select#input-tech-name:disabled,
+          #gmao-correction-form input#input-intervention-reference:disabled {
             background-color: #ffffff !important;
             background: #ffffff !important;
           }
@@ -3569,10 +3586,12 @@ export default function GmaoCorrectionForm({
               <input
                 type="text"
                 id="input-intervention-reference"
+                disabled
                 value={interventionReference}
                 onChange={(e) => setInterventionReference(e.target.value)}
-                placeholder="Ex: DNB-D18-719-10102026"
-                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 focus:ring-1 focus:ring-indigo-500"
+                placeholder="Ex: INT-2026-00001"
+                style={{ backgroundColor: '#ffffff' }}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 focus:ring-1 focus:ring-indigo-500 cursor-not-allowed"
               />
             </div>
 
@@ -3691,6 +3710,10 @@ export default function GmaoCorrectionForm({
                     <button
                       type="button"
                       onClick={() => {
+                        if (effectiveIsFromInterventionMission) {
+                          setMissionConfirmModal('advanced_search');
+                          return;
+                        }
                         setAdvancedSearchQuery('');
                         setRemoteSearchItems([]);
                         setSearchModalMode('equipment');
@@ -3769,11 +3792,22 @@ export default function GmaoCorrectionForm({
                 )}
 
                 {missionConfirmModal && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[200] p-4 animate-fadeIn">
-                    <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl border border-slate-200">
+                  <div
+                    className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-start justify-center z-[200] px-4 pt-3 pb-4 animate-fadeIn"
+                    style={{ top: 0, left: 0, right: 0, width: '100vw', height: '100dvh' }}
+                  >
+                    <div
+                      className="bg-white rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl mt-2"
+                      style={{ border: 'none' }}
+                    >
                       <p
-                        className="text-black font-semibold leading-relaxed text-center"
-                        style={{ fontSize: '16px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                        className="font-semibold leading-relaxed text-left"
+                        style={{
+                          fontSize: '16px',
+                          color: '#000000',
+                          textAlign: 'left',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        }}
                       >
                         {missionConfirmModal === 'new_material'
                           ? "Êtes-vous sûr ? Vous êtes sur le point de créer un nouveau matériel alors que vous effectuez une mission pour un matériel spécifique. Souhaitez-vous continuer ?"
@@ -3786,7 +3820,7 @@ export default function GmaoCorrectionForm({
                           style={{
                             borderRadius: '13px',
                             fontSize: '18px',
-                            backgroundColor: '#0f172a',
+                            backgroundColor: 'rgb(210, 45, 11)',
                             color: '#ffffff',
                             border: 'none',
                           }}
@@ -3801,6 +3835,10 @@ export default function GmaoCorrectionForm({
                             setMissionConfirmModal(null);
                             if (mode === 'new_material') {
                               setIsNewEquipmentDropdownOpen(true);
+                            } else if (mode === 'advanced_search') {
+                              setAdvancedSearchQuery('');
+                              setRemoteSearchItems([]);
+                              setSearchModalMode('equipment');
                             } else if (mode === 'select_equipment') {
                               setHasConfirmedMissionEquipmentSwitch(true);
                               setTimeout(() => {

@@ -6071,10 +6071,10 @@ export default function SettingsModal({
             }}
             id="settings-section-actions-suspectes"
           >
-            {/* List of up to 30 suspicious action notifications */}
+            {/* List of up to 10 suspicious action notifications */}
             {suspiciousLogs.length > 0 && (
               <div className="space-y-3">
-                {suspiciousLogs.slice(0, 30).map((log, index) => {
+                {suspiciousLogs.slice(0, 10).map((log, index) => {
                   let formattedDate = log.timestamp;
                   try {
                     formattedDate = new Date(log.timestamp).toLocaleString('fr-FR', {

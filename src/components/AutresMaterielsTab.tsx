@@ -582,15 +582,64 @@ export default function AutresMaterielsTab({
     });
   };
 
+  const isTourTermine = (t: any): boolean => {
+    const st = String(t?.status || t?.statut || t?.situation || '')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    return st === 'termine' || st === 'terminee';
+  };
+
   const isAnySelectedInTour = useMemo(() => {
     return selectedIds.some(id => {
       const item = otherEquipments.find(e => e.id === id);
       if (!item) return false;
       return (fsmTours || []).some(t =>
-        (t.missions || []).some((m: any) => m.defibIdentifiant === item.identifiant)
+        (t.missions || []).some((m: any) => (m.defibIdentifiant || m.identifiant) === item.identifiant)
       );
     });
   }, [selectedIds, otherEquipments, fsmTours]);
+
+  const canCleanSelectedFromTours = useMemo(() => {
+    if (selectedIds.length === 0) return false;
+    return selectedIds.every(id => {
+      const item = otherEquipments.find(e => e.id === id);
+      if (!item || !item.identifiant) return false;
+      const targetIdent = String(item.identifiant).trim();
+      const matchingTours = (fsmTours || []).filter(t =>
+        (t?.missions || []).some((m: any) => String(m?.defibIdentifiant || m?.identifiant || '').trim() === targetIdent)
+      );
+      return matchingTours.length > 0 && matchingTours.every(t => isTourTermine(t));
+    });
+  }, [selectedIds, otherEquipments, fsmTours]);
+
+  const handleCleanSelectedFromTours = () => {
+    if (!onUpdateFsmTours || !canCleanSelectedFromTours) return;
+    const selectedIdents = new Set<string>();
+    for (const id of selectedIds) {
+      const item = otherEquipments.find(e => e.id === id);
+      if (item?.identifiant) {
+        selectedIdents.add(String(item.identifiant).trim());
+      }
+    }
+    if (selectedIdents.size === 0) return;
+
+    const updatedTours = (fsmTours || []).map(t => {
+      if (!t || !isTourTermine(t) || !Array.isArray(t.missions)) return t;
+      const filteredMissions = t.missions.filter(
+        (m: any) => !selectedIdents.has(String(m?.defibIdentifiant || m?.identifiant || '').trim())
+      );
+      if (filteredMissions.length === t.missions.length) return t;
+      return {
+        ...t,
+        missions: filteredMissions,
+      };
+    });
+
+    onUpdateFsmTours(updatedTours);
+    setSelectedIds([]);
+  };
 
   // Form Fields State
   const [clientId, setClientId] = useState('');
@@ -2188,7 +2237,7 @@ export default function AutresMaterielsTab({
                       
                       {(() => {
                         const drafts = (fsmTours || []).filter(
-                          t => t && t.id !== 'a-trier' && (!t.status || !['À faire', 'En cours', 'Effectué'].includes(t.status))
+                          t => t && t.id !== 'a-trier' && (!t.status || !['À faire', 'En cours', 'Effectué', 'Terminé'].includes(t.status))
                         );
                         if (drafts.length === 0) {
                           return (
@@ -2223,6 +2272,26 @@ export default function AutresMaterielsTab({
                     </div>
                   )}
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleCleanSelectedFromTours}
+                  disabled={!canCleanSelectedFromTours}
+                  id="btn-clean-tours-autres-materiels"
+                  style={{
+                    ...rowActionButton18Style,
+                    opacity: !canCleanSelectedFromTours ? 0.45 : 1,
+                    cursor: !canCleanSelectedFromTours ? 'not-allowed' : 'pointer',
+                  }}
+                  title={
+                    !canCleanSelectedFromTours
+                      ? "Action impossible : chaque matériel sélectionné doit être présent dans une tournée ayant impérativement le statut « Terminé »."
+                      : "Supprimer le(s) matériel(s) sélectionné(s) des tournées terminées"
+                  }
+                  className={!canCleanSelectedFromTours ? 'cursor-not-allowed select-none' : 'cursor-pointer select-none'}
+                >
+                  Nettoyer des tournées
+                </button>
               </div>
             </div>
           )}

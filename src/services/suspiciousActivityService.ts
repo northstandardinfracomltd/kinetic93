@@ -309,14 +309,32 @@ export function deduplicateSuspiciousLogs(logs: SuspiciousActivityLog[]): Suspic
     }
   }
 
-  result.sort((a, b) => {
-    const tA = new Date(a.timestamp).getTime();
-    const tB = new Date(b.timestamp).getTime();
+  const parseLogTimeMs = (val: any): number => {
+    if (!val) return NaN;
+    const str = String(val).trim();
+    const direct = new Date(str).getTime();
+    if (!isNaN(direct)) return direct;
+    const frMatch = str.match(
+      /^(\d{2})[\/\-](\d{2})[\/\-](\d{4})(?:[\s,Tà]+(\d{2}):(\d{2})(?::(\d{2}))?)?/
+    );
+    if (frMatch) {
+      const [, dd, mm, yyyy, hh = '00', min = '00', ss = '00'] = frMatch;
+      return new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`).getTime();
+    }
+    return NaN;
+  };
+
+  result.sort((a: any, b: any) => {
+    const tA = parseLogTimeMs(a.timestamp);
+    const tB = parseLogTimeMs(b.timestamp);
     if (!isNaN(tA) && !isNaN(tB) && tA !== tB) return tB - tA;
+    const rowA = Number(a._sheetRowNumber || 0);
+    const rowB = Number(b._sheetRowNumber || 0);
+    if (rowA !== rowB) return rowB - rowA;
     return 0;
   });
 
-  return result;
+  return result.slice(0, 10);
 }
 
 export function getTenantSuspiciousLogs(tenantId: string): SuspiciousActivityLog[] {
@@ -326,7 +344,7 @@ export function getTenantSuspiciousLogs(tenantId: string): SuspiciousActivityLog
     const raw = localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return deduplicateSuspiciousLogs(parsed);
+      if (Array.isArray(parsed)) return deduplicateSuspiciousLogs(parsed).slice(0, 10);
     }
   } catch (_) {}
   return [];
@@ -563,9 +581,10 @@ export function mergeSuspiciousLogsFromSheet(tenantId: string, sheetItems: any[]
         actionType: resolvedAction,
         message: resolvedMsg,
         details: item.details,
-      };
+        ...(item._sheetRowNumber ? { _sheetRowNumber: item._sheetRowNumber } : { _sheetRowNumber: idx + 2 }),
+      } as SuspiciousActivityLog;
     });
-  const merged = deduplicateSuspiciousLogs([...existing, ...normalizedFromSheet]);
+  const merged = deduplicateSuspiciousLogs([...existing, ...normalizedFromSheet]).slice(0, 10);
   try {
     localStorage.setItem(key, JSON.stringify(merged));
   } catch (_) {}

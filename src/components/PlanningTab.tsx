@@ -220,6 +220,41 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     };
   }, [selectedYear, activeCountry]);
 
+  // Real-time clock for the horizontal red cursor bar moving vertically on today's card
+  const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const todayCursorPercent = useMemo(() => {
+    const hours = currentTime.getHours();
+    const minutes = currentTime.getMinutes();
+    const currentTotalMins = hours * 60 + minutes;
+
+    // Scale between 07:30 (450 mins) and 18:30 (1110 mins) -> 660 mins span
+    const startDayMins = 7.5 * 60; // 450
+    const endDayMins = 18.5 * 60;  // 1110
+    const rawPct = ((currentTotalMins - startDayMins) / (endDayMins - startDayMins)) * 100;
+    return Math.max(2, Math.min(98, rawPct));
+  }, [currentTime]);
+
+  const formatSlotToAmPm = (raw: any): string => {
+    const s = String(raw ?? '').trim();
+    if (!s || s === '--:--') return '--:--';
+    if (/(am|pm)\b/i.test(s)) return s;
+    return s.replace(/\b(\d{1,2})[:h](\d{2})\b/gi, (_, hStr, mStr) => {
+      const h24 = parseInt(hStr, 10);
+      if (isNaN(h24) || h24 < 0 || h24 > 23) return `${hStr}:${mStr}`;
+      const suffix = h24 >= 12 ? 'pm' : 'am';
+      const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+      return `${h12}:${mStr}${suffix}`;
+    });
+  };
+
   // Mini Form Spontaneous Event states
   const [isSpontaneousFormOpen, setIsSpontaneousFormOpen] = useState<boolean>(false);
   const [formDate, setFormDate] = useState<string>('');
@@ -1395,7 +1430,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                     <div
                       key={isoDate}
                       id={`calendar-day-${isoDate}`}
-                      className="bg-white p-4 sm:p-5 space-y-4"
+                      className="relative bg-white p-4 sm:p-5 space-y-4"
                       style={{
                         backgroundColor: "#ffffff",
                         border: "none",
@@ -1403,6 +1438,18 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         borderRadius: "14px",
                       }}
                     >
+                      {/* Horizontal red cursor bar with dot moving vertically by time across today's card */}
+                      {isToday && (
+                        <div
+                          className="absolute left-0 right-0 pointer-events-none z-20 flex items-center"
+                          style={{ top: `${todayCursorPercent}%` }}
+                          title={`Curseur temps réel : ${String(currentTime.getHours()).padStart(2, '0')}:${String(currentTime.getMinutes()).padStart(2, '0')}`}
+                        >
+                          <div className="w-2.5 h-2.5 -ml-1 rounded-full bg-[#ef4444] z-30 shadow-xs shrink-0" />
+                          <div className="w-full h-[2px] bg-[#ef4444]" />
+                        </div>
+                      )}
+
                       {/* Day Circle & Jour férié */}
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div
@@ -1545,20 +1592,47 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                         m.estimatedTime ||
                                         m.time ||
                                         '--:--';
+                                      const mCreneauFormatted = formatSlotToAmPm(mCreneau);
+
+                                      const mIdentifiant =
+                                        m.defibIdentifiant ||
+                                        m.identifiant ||
+                                        defib?.identifiant ||
+                                        other?.identifiant ||
+                                        m.defibId ||
+                                        'NC';
 
                                       return (
                                         <div
                                           key={`tour-sub-mission-${tItem.tourId}-${m.id || mSubIdx}`}
-                                          style={{
-                                            backgroundColor: "rgb(230, 197, 255)",
-                                            color: "rgb(89, 22, 144)",
-                                            borderRadius: "10px",
-                                            padding: "8px 12px",
-                                            fontSize: "15px",
-                                            fontWeight: 600,
-                                          }}
+                                          className="space-y-1.5"
                                         >
-                                          Client : {mClientName}. Ville : {mVillePostcode}. Raison(s) : {mReasons}. Créneau : {mCreneau}.
+                                          <div className="flex items-center">
+                                            <span
+                                              className="inline-flex items-center justify-center px-4 py-1.5 rounded-full font-bold"
+                                              style={{
+                                                backgroundColor: "rgb(210, 45, 11)",
+                                                color: "#FFFFFF",
+                                                fontSize: "18px",
+                                                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                                boxShadow: "none",
+                                              }}
+                                            >
+                                              {mCreneauFormatted}
+                                            </span>
+                                          </div>
+                                          <div
+                                            style={{
+                                              backgroundColor: "rgb(230, 197, 255)",
+                                              color: "rgb(89, 22, 144)",
+                                              borderRadius: "10px",
+                                              padding: "8px 12px",
+                                              fontSize: "15px",
+                                              fontWeight: 600,
+                                            }}
+                                          >
+                                            Client : {mClientName}. Ville : {mVillePostcode}. Raison(s) : {mReasons}. Matériel : {mIdentifiant}.
+                                          </div>
                                         </div>
                                       );
                                     })}

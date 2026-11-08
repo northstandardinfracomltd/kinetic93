@@ -9,6 +9,10 @@ import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { Check, X } from 'lucide-react';
 import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
 import { logDeleteStockCenter } from '../services/suspiciousActivityService';
+import {
+  openTechStockInventoryPdf,
+  buildTechInventoryItemsFromStocks,
+} from '../utils/techStockInventoryPdf';
 
 const CODE39_MAP: Record<string, string> = {
   '0': '101001101101',
@@ -3990,18 +3994,26 @@ export default function StocksTab({
                     boxShadow: 'none',
                   }}
                 >
-                  {alert.horodatage && (
+                  <div className="flex items-center justify-between gap-2 text-[18px] text-[#000] font-normal">
                     <div>
-                      <span 
-                        className="inline-block px-3 py-1 rounded-full text-white font-medium text-sm"
-                        style={{ backgroundColor: '#7C2882', color: '#ffffff' }}
-                      >
-                        {alert.horodatage}
-                      </span>
+                      UGS : <span className="font-semibold text-[#000]">{alert.ugs}</span>
                     </div>
-                  )}
-                  <div className="text-[16px] text-[#000] font-normal">
-                    UGS : <span className="font-semibold text-[#000]">{alert.ugs}</span>
+                    {alert.horodatage && (
+                      <div className="text-[18px] text-[#000] font-normal text-right shrink-0">
+                        {(() => {
+                          const raw = String(alert.horodatage).trim();
+                          const m = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})[\s,à]+0?(\d{1,2}):(\d{2})/);
+                          if (m) {
+                            return `${m[1]}/${m[2]}/${m[3].slice(-2)} ${parseInt(m[4], 10)}:${m[5]}`;
+                          }
+                          const m2 = raw.match(/^(\d{2})\/(\d{2})\/(\d{2})[\s,à]+0?(\d{1,2}):(\d{2})/);
+                          if (m2) {
+                            return `${m2[1]}/${m2[2]}/${m2[3]} ${parseInt(m2[4], 10)}:${m2[5]}`;
+                          }
+                          return raw;
+                        })()}
+                      </div>
+                    )}
                   </div>
                   <div className="text-[16px] text-[#000] font-normal leading-relaxed">
                     Description : {alert.description}
@@ -4066,30 +4078,66 @@ export default function StocksTab({
                     >
                       Terminer
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsNotifDrawerOpen(false);
-                        setShowStockForm(false);
-                        setStockSearchQuery(alert.ugs || '');
-                      }}
-                      style={{
-                        width: '50%',
-                        backgroundColor: '#2E54FF',
-                        color: '#ffffff',
-                        borderRadius: '10px',
-                        padding: '10px 0',
-                        fontSize: '18px',
-                        fontWeight: '600',
-                        border: 'none',
-                        boxShadow: 'none',
-                        cursor: 'pointer',
-                        textAlign: 'center'
-                      }}
-                      className="hover:opacity-90 transition-opacity flex-1"
-                    >
-                      Consulter
-                    </button>
+                    {(() => {
+                      const isNonApplicableUgs =
+                        String(alert.ugs || '').trim().toLowerCase() === 'non applicable';
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isNonApplicableUgs) {
+                              const desc = String(alert.description || '');
+                              const mTech = desc.match(
+                                /^Le technicien (.+?) a effectué un inventaire de son stock embarqué\./i
+                              );
+                              const techName = mTech ? mTech[1].trim() : '';
+                              const matchedMember = techName
+                                ? (members || []).find(
+                                    (m) =>
+                                      m.name &&
+                                      m.name.trim().toLowerCase() === techName.toLowerCase()
+                                  )
+                                : undefined;
+                              const targetLocation = matchedMember?.locationLink || '';
+                              const items = buildTechInventoryItemsFromStocks({
+                                stocks,
+                                variables,
+                                targetLocation,
+                                technicianName: techName,
+                                companyInfo: (companyInfo || undefined) as CompanyInfo | undefined,
+                              });
+                              openTechStockInventoryPdf({
+                                companyInfo: (companyInfo || undefined) as CompanyInfo | undefined,
+                                horodatage: alert.horodatage,
+                                items,
+                                technicianName: techName,
+                                locationLabel: targetLocation,
+                              });
+                              return;
+                            }
+                            setIsNotifDrawerOpen(false);
+                            setShowStockForm(false);
+                            setStockSearchQuery(alert.ugs || '');
+                          }}
+                          style={{
+                            width: '50%',
+                            backgroundColor: '#2E54FF',
+                            color: '#ffffff',
+                            borderRadius: '10px',
+                            padding: '10px 0',
+                            fontSize: '18px',
+                            fontWeight: '600',
+                            border: 'none',
+                            boxShadow: 'none',
+                            cursor: 'pointer',
+                            textAlign: 'center',
+                          }}
+                          className="hover:opacity-90 transition-opacity flex-1"
+                        >
+                          {isNonApplicableUgs ? 'Inventaire PDF' : 'Consulter'}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}

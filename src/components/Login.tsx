@@ -1195,13 +1195,52 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
   };
 
-  const [showLeftGreenCard, setShowLeftGreenCard] = useState(true);
-  const [showLeftBlueCard, setShowLeftBlueCard] = useState(true);
-  const [showLeftDarkCard, setShowLeftDarkCard] = useState(true);
-  const [showRightGdpCard, setShowRightGdpCard] = useState(true);
-  const [showEcosystemPill, setShowEcosystemPill] = useState(true);
+  const checkIsClientAccessUrl = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    const hash = (window.location.hash || '').toLowerCase();
+    const path = (window.location.pathname || '').toLowerCase();
+    const search = (window.location.search || '').toLowerCase();
+    const href = (window.location.href || '').toLowerCase();
+    return (
+      hash === '#clientaccess' ||
+      hash === '#/clientaccess' ||
+      hash.includes('clientaccess') ||
+      path.endsWith('/clientaccess') ||
+      search.includes('clientaccess') ||
+      href.includes('#clientaccess')
+    );
+  };
+
+  const [isClientAccessSlug, setIsClientAccessSlug] = useState<boolean>(() => checkIsClientAccessUrl());
+  const [showLeftGreenCard, setShowLeftGreenCard] = useState<boolean>(() => !checkIsClientAccessUrl());
+  const [showLeftBlueCard, setShowLeftBlueCard] = useState<boolean>(() => !checkIsClientAccessUrl());
+  const [showLeftDarkCard, setShowLeftDarkCard] = useState<boolean>(() => !checkIsClientAccessUrl());
+  const [showRightGdpCard, setShowRightGdpCard] = useState<boolean>(() => !checkIsClientAccessUrl());
+  const [showEcosystemPill, setShowEcosystemPill] = useState<boolean>(() => !checkIsClientAccessUrl());
   const [ecosystemIndex, setEcosystemIndex] = useState(0);
   const [ecosystemExpanded, setEcosystemExpanded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncClientAccessFromUrl = () => {
+      const detected = checkIsClientAccessUrl();
+      setIsClientAccessSlug(detected);
+      if (detected) {
+        setShowLeftGreenCard(false);
+        setShowLeftBlueCard(false);
+        setShowLeftDarkCard(false);
+        setShowRightGdpCard(false);
+        setShowEcosystemPill(false);
+      }
+    };
+    syncClientAccessFromUrl();
+    window.addEventListener('hashchange', syncClientAccessFromUrl);
+    window.addEventListener('popstate', syncClientAccessFromUrl);
+    return () => {
+      window.removeEventListener('hashchange', syncClientAccessFromUrl);
+      window.removeEventListener('popstate', syncClientAccessFromUrl);
+    };
+  }, []);
 
   const ecosystemLinks = [
     {
@@ -1453,7 +1492,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         />
 
         {/* Top Ecosystem Pill (PC only) + 2+1 Info Notification Cards */}
-        {((showEcosystemPill && !isMobileOrTablet) || showLeftGreenCard || showLeftBlueCard || showLeftDarkCard) && (
+        {!isClientAccessSlug && ((showEcosystemPill && !isMobileOrTablet) || showLeftGreenCard || showLeftBlueCard || showLeftDarkCard) && (
           <div
             className="relative lg:absolute lg:top-5 lg:left-5 lg:right-5 z-20 w-full lg:w-auto p-4 lg:p-0 pb-24 lg:pb-0 flex flex-col gap-4"
             id="login-left-info-cards"
@@ -1708,77 +1747,97 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           className="absolute bottom-6 left-6 lg:bottom-8 lg:left-8 z-20 flex flex-col items-center gap-2"
           id="login-left-logo-container"
         >
-          <div
-            className="sidebar-nav-item-bounce relative inline-flex items-center justify-center shrink-0 cursor-default"
-            onMouseEnter={() => setIsLogoHovered(true)}
-            onMouseLeave={() => setIsLogoHovered(false)}
-            onClick={() => setIsLogoHovered((prev) => !prev)}
-          >
-            <div className="sidebar-nav-icon-bounce relative w-[42px] h-[42px] lg:w-[56px] lg:h-[56px] shrink-0 select-none pointer-events-none">
-              <img
-                src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg"
-                alt="Logiciel Defibeo"
-                loading="eager"
-                decoding="sync"
-                className={`absolute inset-0 w-full h-full object-contain block ${
-                  isLogoHovered ? 'opacity-0' : 'opacity-100'
-                }`}
-                referrerPolicy="no-referrer"
-              />
-              <img
-                src="https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg"
-                alt="Logiciel Defibeo"
-                loading="eager"
-                decoding="sync"
-                className={`absolute inset-0 w-full h-full object-contain block ${
-                  isLogoHovered ? 'opacity-100' : 'opacity-0'
-                }`}
-                referrerPolicy="no-referrer"
-              />
-            </div>
-
-            {isLogoHovered && (
+          {!isClientAccessSlug && (
+            <>
               <div
-                className="absolute z-[9999] pointer-events-none select-none shadow-md"
+                className="sidebar-nav-item-bounce relative inline-flex items-center justify-center shrink-0 cursor-default"
+                onMouseEnter={() => setIsLogoHovered(true)}
+                onMouseLeave={() => setIsLogoHovered(false)}
+                onClick={() => setIsLogoHovered((prev) => !prev)}
+              >
+                <div className="sidebar-nav-icon-bounce relative w-[42px] h-[42px] lg:w-[56px] lg:h-[56px] shrink-0 select-none pointer-events-none">
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg"
+                    alt="Logiciel Defibeo"
+                    loading="eager"
+                    decoding="sync"
+                    className={`absolute inset-0 w-full h-full object-contain block ${
+                      isLogoHovered ? 'opacity-0' : 'opacity-100'
+                    }`}
+                    referrerPolicy="no-referrer"
+                  />
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg"
+                    alt="Logiciel Defibeo"
+                    loading="eager"
+                    decoding="sync"
+                    className={`absolute inset-0 w-full h-full object-contain block ${
+                      isLogoHovered ? 'opacity-100' : 'opacity-0'
+                    }`}
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+
+                {isLogoHovered && (
+                  <div
+                    className="absolute z-[9999] pointer-events-none select-none shadow-md"
+                    style={
+                      isMobileOrTablet
+                        ? {
+                            bottom: 'calc(100% + 10px)',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            backgroundColor: '#0f172a',
+                            color: '#ffffff',
+                            borderRadius: '9999px',
+                            padding: '6px 16px',
+                            fontSize: '16px',
+                            fontWeight: 400,
+                            fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                            whiteSpace: 'nowrap',
+                          }
+                        : {
+                            left: 'calc(100% + 12px)',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            backgroundColor: '#0f172a',
+                            color: '#ffffff',
+                            borderRadius: '9999px',
+                            padding: '6px 16px',
+                            fontSize: '16px',
+                            fontWeight: 400,
+                            fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                            whiteSpace: 'nowrap',
+                          }
+                    }
+                  >
+                    Logiciel Defibeo
+                  </div>
+                )}
+              </div>
+              <span
+                className="select-none pointer-events-none inline-flex items-center justify-center"
                 style={{
-                  left: 'calc(100% + 12px)',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  backgroundColor: '#0f172a',
-                  color: '#ffffff',
-                  borderRadius: '9999px',
-                  padding: '6px 16px',
+                  background: '#cedeff',
+                  borderRadius: '31px',
+                  padding: '6px 12px',
                   fontSize: '16px',
-                  fontWeight: 400,
-                  fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                  whiteSpace: 'nowrap',
+                  color: 'rgb(49 86 255)',
+                  marginTop: '3px',
+                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                  lineHeight: '1.2',
                 }}
               >
-                Logiciel Defibeo
-              </div>
-            )}
-          </div>
-          <span
-            className="select-none pointer-events-none inline-flex items-center justify-center"
-            style={{
-              background: '#cedeff',
-              borderRadius: '31px',
-              padding: '6px 12px',
-              fontSize: '16px',
-              color: 'rgb(49 86 255)',
-              marginTop: '3px',
-              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              lineHeight: '1.2',
-            }}
-          >
-            defibeo.com
-          </span>
+                defibeo.com
+              </span>
+            </>
+          )}
 
           <div
             className="w-full text-center select-none px-4 mt-1 lg:hidden"
             style={{
               fontSize: '10px',
-              color: 'rgb(245, 247, 250)',
+              color: '#000',
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
             }}
             id="login-left-mobile-copyright"
@@ -1790,7 +1849,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               rel="noopener noreferrer"
               className="no-underline transition-opacity duration-200 hover:opacity-65 cursor-pointer"
               style={{
-                color: 'rgb(245, 247, 250)',
+                color: '#000',
                 textDecoration: 'none',
               }}
             >
@@ -2218,7 +2277,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
         {/* Bottom Info Card & Footer Copyright in Right Column */}
         <div className="w-full flex flex-col items-center gap-3.5 pt-8">
-          {showRightGdpCard && (
+          {!isClientAccessSlug && showRightGdpCard && (
             <div
               className="login-info-card-zoom relative w-full hidden sm:flex flex-col sm:flex-row items-center gap-5 rounded-[22px] p-5 lg:px-7 lg:py-5 select-none"
               style={{

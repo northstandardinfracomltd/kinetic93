@@ -914,14 +914,18 @@ export interface OtherEquipment {
   specifiques: Record<string, any>;
 }
 
+export const GLOBAL_CLIENT_POINTAGES_SPREADSHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1tF8Noeh19y5exfZx0QPRPsIe7UeJSB1GGfAYlBI9HVQ/edit?usp=sharing';
+
 export interface PointageAutoVigilance {
   id: string;
+  tenantId?: string;
   clientId: string;
   equipementId: string;
   equipementIdentifiant: string;
   equipementNom: string;
   date: string;
-  commentaire: 'En fonctionnement et accessible' | 'Problème résolu' | 'Problème non résolu' | 'Problème non résolu et assistance demandée';
+  commentaire: 'En fonctionnement et accessible' | 'Problème résolu' | 'Problème non résolu' | 'Problème non résolu et assistance demandée' | string;
   createdAt?: string;
 }
 

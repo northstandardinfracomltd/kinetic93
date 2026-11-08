@@ -953,11 +953,22 @@ export default function GmaoOtherEquipmentCorrectionForm({
                   </button>
                 </div>
                 {showSwitchEquipmentConfirmModal && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[200] p-4 animate-fadeIn">
-                    <div className="bg-white rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl border border-slate-200">
+                  <div
+                    className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-start justify-center z-[200] px-4 pt-3 pb-4 animate-fadeIn"
+                    style={{ top: 0, left: 0, right: 0, width: '100vw', height: '100dvh' }}
+                  >
+                    <div
+                      className="bg-white rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl mt-2"
+                      style={{ border: 'none' }}
+                    >
                       <p
-                        className="text-black font-semibold leading-relaxed text-center"
-                        style={{ fontSize: '16px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                        className="font-semibold leading-relaxed text-left"
+                        style={{
+                          fontSize: '16px',
+                          color: '#000000',
+                          textAlign: 'left',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        }}
                       >
                         Êtes-vous sûr ? Vous êtes sur le point de choisir un autre matériel alors que vous effectuez une mission pour un matériel spécifique. Souhaitez-vous continuer ?
                       </p>
@@ -968,7 +979,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
                           style={{
                             borderRadius: '13px',
                             fontSize: '18px',
-                            backgroundColor: '#0f172a',
+                            backgroundColor: 'rgb(210, 45, 11)',
                             color: '#ffffff',
                             border: 'none',
                           }}

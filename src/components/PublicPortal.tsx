@@ -75,6 +75,7 @@ import { BarcodeScannerModal } from "./BarcodeScannerModal";
 import GmaoCorrectionForm from "./GmaoCorrectionForm";
 import GmaoOtherEquipmentCorrectionForm from "./GmaoOtherEquipmentCorrectionForm";
 import { mergeReportModerationComment, mergeReportPostInterventionAlerts, buildFlatAlertFields } from "../utils/moderationComment";
+import { collectLocalInterventionReferences, computeNextInterventionReference } from "../utils/interventionReference";
 import { getTenantSpreadsheetUrl } from "../types";
 import {
   triggerEmail6RapportIntervention,
@@ -96,6 +97,11 @@ import {
   playTechSound3,
 } from "../utils/technicianAudio";
 import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from "../utils/googleDrive";
+import {
+  openTechStockInventoryPdf,
+  buildTechInventoryItemsFromStocks,
+  formatHorodatageShort,
+} from "../utils/techStockInventoryPdf";
 
 
 // Helper functions for French date <-> ISO date picker compatibility
@@ -1738,7 +1744,35 @@ export default function PublicPortal({
     return !isNaN(vol) && vol >= 1;
   };
 
-  // Lookup "Sélection d'un stock distribué." : list all stocks from Spreadsheet Stocks where >= 1 traceability item is linked to the logged-in technician's location
+  const doesDistributedStockMatchTechLocation = (st: StockRecord): boolean => {
+    const targetLoc = (techLocationLink || authenticatedUser?.locationLink || "").trim().toLowerCase();
+    if (!targetLoc) return false;
+    return (distributedStocks || []).some(
+      (ds) =>
+        (ds.stockId === st.id ||
+          (st.ugs && ds.ugs && String(ds.ugs).trim() === String(st.ugs).trim()) ||
+          ds.denominationPieceId === st.denominationPieceId) &&
+        String(ds.locationName || "").trim().toLowerCase() === targetLoc &&
+        (Number(ds.volumeDisponible) || 0) > 0,
+    );
+  };
+
+  // Lookup "Sélection d'un stock distribué." : list all stocks from Spreadsheet Stocks where >= 1 traceability item is linked to the logged-in technician's location (or distributed stock without traceability)
+  const techLocationStocks = useMemo(() => {
+    if (!techLocationLink) return [];
+    return effectiveTechStocksList.filter(
+      (st) =>
+        (Array.isArray(st.traceabilities) &&
+          st.traceabilities.length > 0 &&
+          st.traceabilities.some(
+            (tr) =>
+              doesTraceMatchTechLocation(tr, st.mouvements) &&
+              hasPositiveTraceVolume(tr),
+          )) ||
+        (st.traceabilityEnabled === false && doesDistributedStockMatchTechLocation(st)),
+    );
+  }, [effectiveTechStocksList, distributedStocks, techLocationLink, authenticatedUser, members]);
+
   const techActiveStocks = useMemo(() => {
     if (!techLocationLink) return [];
     return effectiveTechStocksList.filter(
@@ -1750,9 +1784,88 @@ export default function PublicPortal({
             (tr) =>
               doesTraceMatchTechLocation(tr, st.mouvements) &&
               hasPositiveTraceVolume(tr),
-          )),
+          )) ||
+        (st.traceabilityEnabled === false && doesDistributedStockMatchTechLocation(st)),
     );
-  }, [effectiveTechStocksList, techLocationLink, authenticatedUser, members, selectedTechDistributedStockId]);
+  }, [effectiveTechStocksList, distributedStocks, techLocationLink, authenticatedUser, members, selectedTechDistributedStockId]);
+
+  const techInventoryCacheKey = useMemo(() => {
+    const effTenant =
+      techTenantId ||
+      authenticatedUser?.envId ||
+      (authenticatedUser as any)?.tenantId ||
+      (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+      "demo";
+    const locKey = (techLocationLink || authenticatedUser?.email || "default")
+      .trim()
+      .toLowerCase();
+    return `defib_tech_inventory_checked_${effTenant}_${locKey}`;
+  }, [techTenantId, authenticatedUser, techLocationLink]);
+
+  const [techStockInventoryChecked, setTechStockInventoryChecked] = useState<Record<string, boolean>>({});
+  const [showCloseInventoryModal, setShowCloseInventoryModal] = useState(false);
+  const [closeInventoryComment, setCloseInventoryComment] = useState("");
+  const [isClosingInventory, setIsClosingInventory] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(techInventoryCacheKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setTechStockInventoryChecked(parsed);
+          return;
+        }
+      }
+    } catch (_) {}
+    setTechStockInventoryChecked({});
+  }, [techInventoryCacheKey]);
+
+  const isTechStockChecked = (st?: { id?: string; ugs?: string; denominationPieceId?: string } | null): boolean => {
+    if (!st) return false;
+    return Boolean(
+      (st.id && techStockInventoryChecked[st.id]) ||
+        (st.ugs && techStockInventoryChecked[`ugs_${st.ugs}`]) ||
+        (st.denominationPieceId && techStockInventoryChecked[`denom_${st.denominationPieceId}`]),
+    );
+  };
+
+  const toggleTechStockInventoryCheck = (st?: { id?: string; ugs?: string; denominationPieceId?: string } | null) => {
+    if (!st) return;
+    const currentlyChecked = isTechStockChecked(st);
+    const nextVal = !currentlyChecked;
+    setTechStockInventoryChecked((prev) => {
+      const next = { ...prev };
+      if (st.id) {
+        if (nextVal) next[st.id] = true;
+        else delete next[st.id];
+      }
+      if (st.ugs) {
+        if (nextVal) next[`ugs_${st.ugs}`] = true;
+        else delete next[`ugs_${st.ugs}`];
+      }
+      if (st.denominationPieceId) {
+        if (nextVal) next[`denom_${st.denominationPieceId}`] = true;
+        else delete next[`denom_${st.denominationPieceId}`];
+      }
+      try {
+        localStorage.setItem(techInventoryCacheKey, JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+  };
+
+  const canCloseTechInventory = useMemo(() => {
+    if (techLocationStocks.length === 0) return false;
+    return techLocationStocks.every((st) =>
+      Boolean(
+        (st.id && techStockInventoryChecked[st.id]) ||
+          (st.ugs && techStockInventoryChecked[`ugs_${st.ugs}`]) ||
+          (st.denominationPieceId && techStockInventoryChecked[`denom_${st.denominationPieceId}`]),
+      ),
+    );
+  }, [techLocationStocks, techStockInventoryChecked]);
 
   const matchedStockRecord = useMemo(() => {
     if (!selectedTechDistributedStockId) return null;
@@ -2114,13 +2227,8 @@ export default function PublicPortal({
       (authenticatedUser as any)?.tenantId ||
       (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
       "demo";
-    const nowStr = new Date().toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const nowDate = new Date();
+    const nowStr = `${String(nowDate.getDate()).padStart(2, "0")}/${String(nowDate.getMonth() + 1).padStart(2, "0")}/${String(nowDate.getFullYear()).slice(-2)} ${nowDate.getHours()}:${String(nowDate.getMinutes()).padStart(2, "0")}`;
     const newNotif: LogisticsNotification = {
       id: "lognotif_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
       horodatage: nowStr,
@@ -2168,6 +2276,49 @@ export default function PublicPortal({
       console.error(e);
     } finally {
       setIsAlertingStock(false);
+    }
+  };
+
+  const handleDownloadTechInventoryPdf = () => {
+    const effLoc = techLocationLink || authenticatedUser?.locationLink || "";
+    const items = buildTechInventoryItemsFromStocks({
+      stocks: effectiveTechStocksList,
+      variables,
+      targetLocation: effLoc,
+      technicianName: authenticatedUser?.name || "",
+      companyInfo,
+    });
+    openTechStockInventoryPdf({
+      companyInfo,
+      horodatage: formatHorodatageShort(new Date()),
+      items,
+      technicianName: authenticatedUser?.name || "",
+      locationLabel: effLoc,
+    });
+  };
+
+  const handleConfirmCloseTechInventory = async () => {
+    if (isClosingInventory) return;
+    const technician_name = authenticatedUser?.name || "Un technicien";
+    const cleanComment = closeInventoryComment.trim();
+    const baseText = `Le technicien ${technician_name} a effectué un inventaire de son stock embarqué.`;
+    const description = cleanComment
+      ? `${baseText} Commentaire : ${cleanComment.endsWith(".") ? cleanComment : `${cleanComment}.`}`
+      : baseText;
+
+    setIsClosingInventory(true);
+    try {
+      await postTechStockActivityToSheet("Non applicable", description);
+      setTechStockInventoryChecked({});
+      try {
+        localStorage.removeItem(techInventoryCacheKey);
+      } catch (_) {}
+      setCloseInventoryComment("");
+      setShowCloseInventoryModal(false);
+    } catch (err) {
+      console.error("Error closing technician inventory:", err);
+    } finally {
+      setIsClosingInventory(false);
     }
   };
 
@@ -2627,8 +2778,9 @@ export default function PublicPortal({
           return {
             ...mt,
             status:
-              matchedMobileTour.status === "Terminé" ||
-              matchedMobileTour.status === "Effectué"
+              matchedMobileTour.status === "Terminé"
+                ? "Terminé"
+                : matchedMobileTour.status === "Effectué"
                 ? "Effectué"
                 : newStatus,
             missions: updatedMissions,
@@ -2689,8 +2841,9 @@ export default function PublicPortal({
               return {
                 ...mt,
                 status:
-                  matchedMobileTour.status === "Terminé" ||
-                  matchedMobileTour.status === "Effectué"
+                  matchedMobileTour.status === "Terminé"
+                    ? "Terminé"
+                    : matchedMobileTour.status === "Effectué"
                     ? "Effectué"
                     : newStatus,
                 missions: updatedMissions,
@@ -2729,9 +2882,18 @@ export default function PublicPortal({
       }
       return 0;
     };
-    return [...tours].sort(
-      (a, b) => parseTourDate(b.startDate) - parseTourDate(a.startDate),
-    );
+    return [...tours]
+      .filter((t) => {
+        const st = String(t?.status || "")
+          .trim()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
+        return st !== "termine" && st !== "terminee";
+      })
+      .sort(
+        (a, b) => parseTourDate(b.startDate) - parseTourDate(a.startDate),
+      );
   };
 
   // Dynamic sync of tours from main defib_fsm_tours on login, defibrillateurs change or mount
@@ -2933,6 +3095,7 @@ export default function PublicPortal({
         });
       } else {
         setTours([]);
+        setSelectedTourId("");
       }
     } catch (e) {
       console.error("Error syncing FSM tours inside useEffect:", e);
@@ -7322,10 +7485,18 @@ export default function PublicPortal({
                     }}
                     onSave={(updatedReport) => {
                       const reportId = "REP-" + Date.now();
+                      const activeTidForRef =
+                        techTenantId ||
+                        authenticatedUser?.envId ||
+                        (authenticatedUser as any)?.tenantId ||
+                        localStorage.getItem("defib_tenant_id") ||
+                        "demo";
                       const cleanInterventionRef =
                         updatedReport.interventionReference ||
                         updatedReport.reportNumber ||
-                        "INT-2026-" + String(Date.now()).slice(-5);
+                        computeNextInterventionReference(
+                          collectLocalInterventionReferences(activeTidForRef, tours, generatedReports)
+                        );
                       const submission = {
                         ...updatedReport,
                         id: reportId,
@@ -7432,6 +7603,15 @@ export default function PublicPortal({
                     isWebapp={true}
                     isMinimized={isReportOverlayMinimized}
                     onToggleMinimize={() => setIsReportOverlayMinimized((prev) => !prev)}
+                    existingTours={tours}
+                    existingReports={generatedReports}
+                    tenantId={
+                      techTenantId ||
+                      authenticatedUser?.envId ||
+                      (authenticatedUser as any)?.tenantId ||
+                      localStorage.getItem("defib_tenant_id") ||
+                      "demo"
+                    }
                     onCancel={() => {
                       setIsReportOverlayOpen(false);
                       setIsReportOverlayMinimized(false);
@@ -7442,12 +7622,20 @@ export default function PublicPortal({
                       setReportActivePassageNum(null);
                     }}
                     onSave={(updatedReport) => {
+                      const activeTidForRef =
+                        techTenantId ||
+                        authenticatedUser?.envId ||
+                        (authenticatedUser as any)?.tenantId ||
+                        localStorage.getItem("defib_tenant_id") ||
+                        "demo";
                       const cleanInterventionRef =
                         updatedReport.interventionReference ||
                         reportToEdit?.interventionReference ||
                         updatedReport.reportNumber ||
                         reportToEdit?.reportNumber ||
-                        "INT-2026-" + String(Date.now()).slice(-5);
+                        computeNextInterventionReference(
+                          collectLocalInterventionReferences(activeTidForRef, tours, generatedReports)
+                        );
 
                       const matchingExistingIndex = generatedReports.findIndex(
                         (r) =>
@@ -10480,35 +10668,47 @@ export default function PublicPortal({
                                           
                                           {/* Pièce(s) requise(s) */}
                                           {!isFormationMission && (
-                                            <p style={{ color: "rgb(80, 97, 122)" }}>
-                                              <span style={{ color: "#000000" }}>Pièce(s) requise(s) :</span>{" "}
-                                              <span
-                                                className="font-semibold"
-                                                style={{ color: "rgb(80, 97, 122)" }}
-                                              >
-                                                {(() => {
-                                                  if (!p.requiredParts || p.requiredParts.length === 0) return "";
-                                                  const cleanParts = p.requiredParts.filter(
-                                                    (part: any) =>
-                                                      part &&
-                                                      part.trim() !== "Aucune pièce" &&
-                                                      part.trim() !== "Aucune pièce requise" &&
-                                                      part.trim() !== "Aucune" &&
-                                                      part.trim() !== ""
-                                                  );
-                                                  const sentList: string[] = Array.isArray(p.sentToClientParts) ? p.sentToClientParts : [];
-                                                  const providedList: string[] = Array.isArray(p.providedByClientParts) ? p.providedByClientParts : [];
-                                                  const formattedParts = cleanParts.map((part: string) => {
-                                                    const cleanPartLabel = String(part || "").replace(/\s*-\s*Qté\s*:\s*\d+/gi, "");
-                                                    const suffixes: string[] = [];
-                                                    if (sentList.includes(part) || sentList.includes(cleanPartLabel)) suffixes.push("(Envoyée au client)");
-                                                    if (providedList.includes(part) || providedList.includes(cleanPartLabel)) suffixes.push("(Fourniture par le client)");
-                                                    return suffixes.length > 0 ? `${cleanPartLabel} ${suffixes.join(" ")}` : cleanPartLabel;
-                                                  });
-                                                  return formattedParts.join(", ");
-                                                })()}
-                                              </span>
-                                            </p>
+                                            <div style={{ color: "rgb(80, 97, 122)" }}>
+                                              <span style={{ color: "#000000" }}>Pièce(s) requise(s) :</span>
+                                              {(() => {
+                                                if (!p.requiredParts || p.requiredParts.length === 0) return null;
+                                                const rawList = Array.isArray(p.requiredParts)
+                                                  ? p.requiredParts.flatMap((part: any) =>
+                                                      typeof part === "string"
+                                                        ? part.split(/(?<=\(x\d+\))\s*,\s*|\s*\|\s*/)
+                                                        : [String(part || "")]
+                                                    )
+                                                  : [];
+                                                const cleanParts = rawList.filter(
+                                                  (part: string) =>
+                                                    part &&
+                                                    part.trim() !== "Aucune pièce" &&
+                                                    part.trim() !== "Aucune pièce requise" &&
+                                                    part.trim() !== "Aucune" &&
+                                                    part.trim() !== ""
+                                                );
+                                                if (cleanParts.length === 0) return null;
+                                                const sentList: string[] = Array.isArray(p.sentToClientParts) ? p.sentToClientParts : [];
+                                                const providedList: string[] = Array.isArray(p.providedByClientParts) ? p.providedByClientParts : [];
+                                                const formattedParts = cleanParts.map((part: string) => {
+                                                  const cleanPartLabel = String(part || "").replace(/\s*-\s*Qté\s*:\s*\d+/gi, "").trim();
+                                                  const suffixes: string[] = [];
+                                                  if (sentList.includes(part) || sentList.includes(cleanPartLabel)) suffixes.push("(Envoyée au client)");
+                                                  if (providedList.includes(part) || providedList.includes(cleanPartLabel)) suffixes.push("(Fourniture par le client)");
+                                                  return suffixes.length > 0 ? `${cleanPartLabel} ${suffixes.join(" ")}` : cleanPartLabel;
+                                                });
+                                                return (
+                                                  <div
+                                                    className="font-semibold space-y-0.5 mt-0.5"
+                                                    style={{ color: "rgb(80, 97, 122)" }}
+                                                  >
+                                                    {formattedParts.map((itemText: string, idx: number) => (
+                                                      <div key={idx}>— {itemText}</div>
+                                                    ))}
+                                                  </div>
+                                                );
+                                              })()}
+                                            </div>
                                           )}
 
                                           {/* Commentaire interne */}
@@ -11806,7 +12006,14 @@ export default function PublicPortal({
                 >
                   <PlanningTab
                     companyInfo={companyInfo}
-                    fsmTours={fsmTours && fsmTours.length > 0 ? fsmTours : tours}
+                    fsmTours={(fsmTours && fsmTours.length > 0 ? fsmTours : tours).filter((t: any) => {
+                      const st = String(t?.status || "")
+                        .trim()
+                        .normalize("NFD")
+                        .replace(/[\u0300-\u036f]/g, "")
+                        .toLowerCase();
+                      return st !== "termine" && st !== "terminee";
+                    })}
                     authenticatedUser={authenticatedUser}
                     defibrillateurs={defibrillateurs}
                     otherEquipments={otherEquipments}
@@ -11972,23 +12179,10 @@ export default function PublicPortal({
                         setSelectedTechDistributedStockId("");
                         setShowRapatriementForm(false);
                         if (nextOpen) {
-                          setNewDistribTraceabilityEnabled(true);
-                          const effLoc = techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
-                          if (pendingNewDistribTraceabilities.length === 0) {
-                            setPendingNewDistribTraceabilities([
-                              {
-                                id: "tr_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
-                                movementId: "Autre",
-                                emplacement: effLoc,
-                                lotOrSerial: "",
-                                expirationDate: "",
-                                situation: "Disponible",
-                                reservationInfo: "",
-                                volume: 1,
-                                comment: "",
-                              },
-                            ]);
-                          }
+                          setNewDistribStockId("");
+                          setNewDistribCommentaire("");
+                          setNewDistribTraceabilityEnabled(false);
+                          setPendingNewDistribTraceabilities([]);
                         }
                       }}
                       style={{
@@ -12008,6 +12202,32 @@ export default function PublicPortal({
                       Nouveau stock
                     </button>
                   )}
+
+                  {/* Button: Clôturer inventaire */}
+                  <button
+                    type="button"
+                    disabled={!canCloseTechInventory}
+                    onClick={() => {
+                      if (!canCloseTechInventory) return;
+                      setShowCloseInventoryModal(true);
+                    }}
+                    style={{
+                      backgroundColor: "#0f172a",
+                      color: "#ffffff",
+                      fontSize: "18px",
+                      fontWeight: "bold",
+                      borderRadius: "12px",
+                      padding: "14px 20px",
+                      border: "none",
+                      boxShadow: "none",
+                      cursor: !canCloseTechInventory ? "not-allowed" : "pointer",
+                      width: "100%",
+                      opacity: !canCloseTechInventory ? 0.5 : 1,
+                    }}
+                    className="flex items-center justify-center gap-2 font-bold mb-2 transition-opacity"
+                  >
+                    Clôturer inventaire
+                  </button>
 
                   {/* Button: Actualiser les données */}
                   <button
@@ -12099,6 +12319,30 @@ export default function PublicPortal({
                             setNewDistribStockId(val);
                             const sel = effectiveTechStocksList.find((s) => s.id === val);
                             setNewDistribCommentaire(sel?.commentaire || "");
+                            const isSelTraceEnabled = Boolean(sel?.traceabilityEnabled === true);
+                            if (isSelTraceEnabled) {
+                              setNewDistribTraceabilityEnabled(true);
+                              const effLoc =
+                                techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
+                              if (pendingNewDistribTraceabilities.length === 0) {
+                                setPendingNewDistribTraceabilities([
+                                  {
+                                    id: "tr_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+                                    movementId: "Autre",
+                                    emplacement: effLoc,
+                                    lotOrSerial: "",
+                                    expirationDate: "",
+                                    situation: "Disponible",
+                                    reservationInfo: "",
+                                    volume: 1,
+                                    comment: "",
+                                  },
+                                ]);
+                              }
+                            } else {
+                              setNewDistribTraceabilityEnabled(false);
+                              setPendingNewDistribTraceabilities([]);
+                            }
                           }}
                           style={{
                             color: "#000000",
@@ -12128,7 +12372,10 @@ export default function PublicPortal({
                                 st.traceabilities.some((tr) =>
                                   doesTraceMatchTechLocation(tr, st.mouvements),
                                 );
-                              return !hasLinkedTrace;
+                              const hasLinkedDistrib =
+                                st.traceabilityEnabled === false &&
+                                doesDistributedStockMatchTechLocation(st);
+                              return !hasLinkedTrace && !hasLinkedDistrib;
                             })
                             .map((st) => {
                               const vObj = findStockVariable(st.denominationPieceId);
@@ -12251,65 +12498,90 @@ export default function PublicPortal({
                         </div>
 
                         {/* Activer la traçabilité des pièces. */}
-                        <div className="flex flex-col gap-2 mt-1">
-                          <span
-                            className="font-bold font-sans normal-case stocks-label-style"
-                            style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
-                          >
-                            {t("Activer la traçabilité des pièces.")}
-                          </span>
-                          <div className="flex gap-4 mt-1 bg-transparent">
-                            <button
-                              type="button"
-                              onClick={() => setNewDistribTraceabilityEnabled(true)}
-                              className="flex items-center gap-2 font-sans font-bold cursor-pointer select-none border-0 bg-transparent text-black"
-                              style={{ fontSize: "18px" }}
-                            >
+                        {(() => {
+                          const selectedCentralStock = newDistribStockId
+                            ? effectiveTechStocksList.find((s) => s.id === newDistribStockId)
+                            : undefined;
+                          const isLockedToOuiByPiece = Boolean(
+                            selectedCentralStock?.traceabilityEnabled === true,
+                          );
+                          return (
+                            <div className="flex flex-col gap-2 mt-1">
                               <span
-                                className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${
-                                  newDistribTraceabilityEnabled === true ? "border-[#2e54ff]" : "border-slate-300"
-                                }`}
-                                style={{ borderWidth: "1px" }}
+                                className="font-bold font-sans normal-case stocks-label-style"
+                                style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
                               >
-                                {newDistribTraceabilityEnabled === true && (
-                                  <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
-                                )}
+                                {t("Activer la traçabilité des pièces.")}
                               </span>
-                              Oui
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (pendingNewDistribTraceabilities.length > 0) {
-                                  alert(
-                                    "Impossible de désactiver la traçabilité car des pièces de traçabilité existent déjà dans le tableau.",
-                                  );
-                                  return;
-                                }
-                                setNewDistribTraceabilityEnabled(false);
-                              }}
-                              disabled={pendingNewDistribTraceabilities.length > 0}
-                              className={`flex items-center gap-2 font-sans font-bold select-none border-0 bg-transparent text-black ${
-                                pendingNewDistribTraceabilities.length > 0
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : "cursor-pointer"
-                              }`}
-                              style={{ fontSize: "18px" }}
-                            >
-                              <span
-                                className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${
-                                  newDistribTraceabilityEnabled === false ? "border-[#2e54ff]" : "border-slate-300"
-                                }`}
-                                style={{ borderWidth: "1px" }}
-                              >
-                                {newDistribTraceabilityEnabled === false && (
-                                  <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
-                                )}
-                              </span>
-                              Non
-                            </button>
-                          </div>
-                        </div>
+                              <div className="flex gap-4 mt-1 bg-transparent">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setNewDistribTraceabilityEnabled(true);
+                                    const effLoc =
+                                      techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
+                                    if (pendingNewDistribTraceabilities.length === 0) {
+                                      setPendingNewDistribTraceabilities([
+                                        {
+                                          id: "tr_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+                                          movementId: "Autre",
+                                          emplacement: effLoc,
+                                          lotOrSerial: "",
+                                          expirationDate: "",
+                                          situation: "Disponible",
+                                          reservationInfo: "",
+                                          volume: 1,
+                                          comment: "",
+                                        },
+                                      ]);
+                                    }
+                                  }}
+                                  className="flex items-center gap-2 font-sans font-bold cursor-pointer select-none border-0 bg-transparent text-black"
+                                  style={{ fontSize: "18px" }}
+                                >
+                                  <span
+                                    className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${
+                                      newDistribTraceabilityEnabled === true ? "border-[#2e54ff]" : "border-slate-300"
+                                    }`}
+                                    style={{ borderWidth: "1px" }}
+                                  >
+                                    {newDistribTraceabilityEnabled === true && (
+                                      <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
+                                    )}
+                                  </span>
+                                  Oui
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (isLockedToOuiByPiece) return;
+                                    setNewDistribTraceabilityEnabled(false);
+                                    setPendingNewDistribTraceabilities([]);
+                                  }}
+                                  disabled={isLockedToOuiByPiece}
+                                  className={`flex items-center gap-2 font-sans font-bold select-none border-0 bg-transparent text-black ${
+                                    isLockedToOuiByPiece
+                                      ? "opacity-50 cursor-not-allowed"
+                                      : "cursor-pointer"
+                                  }`}
+                                  style={{ fontSize: "18px" }}
+                                >
+                                  <span
+                                    className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white ${
+                                      newDistribTraceabilityEnabled === false ? "border-[#2e54ff]" : "border-slate-300"
+                                    }`}
+                                    style={{ borderWidth: "1px" }}
+                                  >
+                                    {newDistribTraceabilityEnabled === false && (
+                                      <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
+                                    )}
+                                  </span>
+                                  Non
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         {newDistribTraceabilityEnabled && (
                           <div className="flex flex-col gap-4 mt-2">
@@ -12773,9 +13045,8 @@ export default function PublicPortal({
                                 updatedDs = [newItem, ...updatedDs];
                               }
 
-                              // Ensure at least 1 traceability item is linked to effLocation so the stock is linked to the logged-in technician
-                              const tracesToSave: StockTraceability[] =
-                                pendingNewDistribTraceabilities.length > 0
+                              const tracesToSave: StockTraceability[] = newDistribTraceabilityEnabled
+                                ? pendingNewDistribTraceabilities.length > 0
                                   ? pendingNewDistribTraceabilities.map((t) => ({
                                       ...t,
                                       emplacement: effLocation,
@@ -12798,21 +13069,23 @@ export default function PublicPortal({
                                           Number(newDistribVolumeDisponible) || 1,
                                         comment: "",
                                       },
-                                    ];
+                                    ]
+                                : [];
 
                               const updatedStocksList = effectiveTechStocksList.map((st) => {
                                 if (st.id === selectedStock.id) {
-                                  const nextTraces = [
-                                    ...(st.traceabilities || []),
-                                    ...tracesToSave,
-                                  ];
+                                  const nextTraces = newDistribTraceabilityEnabled
+                                    ? [...(st.traceabilities || []), ...tracesToSave]
+                                    : st.traceabilities || [];
                                   return {
                                     ...st,
                                     commentaire:
                                       newDistribCommentaire !== undefined
                                         ? newDistribCommentaire
                                         : st.commentaire,
-                                    traceabilityEnabled: true,
+                                    traceabilityEnabled: Boolean(
+                                      newDistribTraceabilityEnabled || st.traceabilityEnabled,
+                                    ),
                                     traceabilities: nextTraces,
                                     inventaire: serializeStockTraceabilities(nextTraces),
                                   };
@@ -13658,12 +13931,156 @@ export default function PublicPortal({
                               >
                                 Tout retourner
                               </button>
+
+                              {/* Radio-check: Inventaire effectué */}
+                              {(() => {
+                                const targetStockObj = matchedStockRecord || selectedTechStock;
+                                const isChecked = isTechStockChecked(targetStockObj);
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleTechStockInventoryCheck(targetStockObj)}
+                                    className="flex items-center gap-2.5 font-sans font-bold cursor-pointer select-none border-0 bg-transparent text-black pt-1"
+                                    style={{ fontSize: "18px", color: "#000000" }}
+                                  >
+                                    <span
+                                      className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all bg-white shrink-0 ${
+                                        isChecked ? "border-[#2e54ff]" : "border-slate-300"
+                                      }`}
+                                      style={{ borderWidth: "1px" }}
+                                    >
+                                      {isChecked && (
+                                        <span className="w-2.5 h-2.5 rounded-full bg-[#2e54ff]" />
+                                      )}
+                                    </span>
+                                    <span style={{ fontSize: "18px", color: "#000000" }}>
+                                      Inventaire effectué
+                                    </span>
+                                  </button>
+                                );
+                              })()}
                             </div>
                           );
                         })()}
                       </div>
                     </div>
                   ) : null}
+
+                  {/* Popup Modal: Clôturer inventaire */}
+                  {showCloseInventoryModal && (
+                    <div
+                      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 animate-fadeIn"
+                      onClick={() => {
+                        if (!isClosingInventory) setShowCloseInventoryModal(false);
+                      }}
+                    >
+                      <div
+                        className="w-full max-w-md rounded-2xl bg-white p-5 space-y-4 font-sans"
+                        style={{
+                          backgroundColor: "#ffffff",
+                          border: "none",
+                          boxShadow: "0 20px 45px rgba(0, 0, 0, 0.18)",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <p
+                          className="text-left font-normal leading-relaxed"
+                          style={{ color: "#000000", fontSize: "18px" }}
+                        >
+                          Souhaitez-vous notifier la centrale de l’inventaire et transmettre le résumé.
+                        </p>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label
+                            className="font-bold font-sans normal-case text-left"
+                            style={{ fontSize: "18px", color: "#000000" }}
+                          >
+                            Commentaire.
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={closeInventoryComment}
+                            onChange={(e) => setCloseInventoryComment(e.target.value)}
+                            placeholder="Entrez un commentaire..."
+                            style={{
+                              backgroundColor: "#f5f7fa",
+                              color: "#000000",
+                              fontSize: "18px",
+                              borderRadius: "13px",
+                              border: "none",
+                              padding: "10px 12px",
+                              width: "100%",
+                              boxSizing: "border-box",
+                              resize: "none",
+                              outline: "none",
+                            }}
+                            className="w-full font-sans text-black"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleDownloadTechInventoryPdf}
+                          style={{
+                            backgroundColor: "#0f172a",
+                            color: "#ffffff",
+                            fontSize: "18px",
+                            fontWeight: "bold",
+                            borderRadius: "12px",
+                            padding: "12px 16px",
+                            border: "none",
+                            cursor: "pointer",
+                            width: "100%",
+                          }}
+                          className="w-full font-sans hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center"
+                        >
+                          Télécharger PDF
+                        </button>
+
+                        <div className="flex items-center gap-3 w-full pt-1">
+                          <button
+                            type="button"
+                            disabled={isClosingInventory}
+                            onClick={() => setShowCloseInventoryModal(false)}
+                            style={{
+                              backgroundColor: "rgb(210, 45, 11)",
+                              color: "#ffffff",
+                              fontSize: "18px",
+                              fontWeight: "bold",
+                              borderRadius: "12px",
+                              padding: "12px 16px",
+                              border: "none",
+                              cursor: isClosingInventory ? "not-allowed" : "pointer",
+                              width: "50%",
+                            }}
+                            className="flex-1 font-sans hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center"
+                          >
+                            Non
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isClosingInventory}
+                            onClick={handleConfirmCloseTechInventory}
+                            style={{
+                              backgroundColor: "rgb(46, 84, 255)",
+                              color: "#ffffff",
+                              fontSize: "18px",
+                              fontWeight: "bold",
+                              borderRadius: "12px",
+                              padding: "12px 16px",
+                              border: "none",
+                              cursor: isClosingInventory ? "not-allowed" : "pointer",
+                              width: "50%",
+                              opacity: isClosingInventory ? 0.6 : 1,
+                            }}
+                            className="flex-1 font-sans hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center"
+                          >
+                            Oui
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
