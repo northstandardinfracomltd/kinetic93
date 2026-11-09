@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { OtherEquipment, Client, Variable, CompanyInfo, openTenantSpreadsheetUrl } from '../types';
 import { Plus, Search, Trash2, Edit } from 'lucide-react';
 import { generateRandomShortCode } from '../utils';
@@ -371,6 +372,226 @@ export default function AutresMaterielsTab({
   const handleOpenSpreadsheetEditor = () => {
     if (!resolvedSpreadsheetUrl) return;
     openTenantSpreadsheetUrl(resolvedSpreadsheetUrl);
+  };
+
+  const [exportMainOuiProgress, setExportMainOuiProgress] = useState<number | null>(null);
+  const [cursorExportPos, setCursorExportPos] = useState<{ x: number; y: number }>({
+    x: typeof window !== 'undefined' ? Math.round(window.innerWidth / 2) : 300,
+    y: typeof window !== 'undefined' ? 140 : 140,
+  });
+  const lastMousePosRef = useRef<{ x: number; y: number }>({
+    x: typeof window !== 'undefined' ? Math.round(window.innerWidth / 2) : 300,
+    y: typeof window !== 'undefined' ? 140 : 140,
+  });
+
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+      if (exportMainOuiProgress !== null) {
+        setCursorExportPos({ x: e.clientX, y: e.clientY });
+      }
+    };
+    window.addEventListener('mousemove', handleGlobalMouseMove, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+    };
+  }, [exportMainOuiProgress !== null]);
+
+  const handleExportAllMainOuiCsv = async () => {
+    if (exportMainOuiProgress !== null) return;
+    setCursorExportPos({ ...lastMousePosRef.current });
+    setExportMainOuiProgress(5);
+
+    const yieldToBrowser = () => new Promise<void>(resolve => setTimeout(resolve, 25));
+
+    try {
+      await yieldToBrowser();
+      setExportMainOuiProgress(15);
+
+      let sheetItems: OtherEquipment[] = [];
+      if (resolvedSpreadsheetUrl) {
+        try {
+          const res = await fetch(
+            `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=autresMateriels&forceRefresh=false&offset=0&limit=50000&spreadsheetUrl=${encodeURIComponent(resolvedSpreadsheetUrl)}`
+          );
+          setExportMainOuiProgress(40);
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json.items)) {
+              sheetItems = json.items;
+            }
+          }
+        } catch (_) {}
+      }
+
+      setExportMainOuiProgress(50);
+      await yieldToBrowser();
+
+      const combinedMap = new Map<string, any>();
+      const addIfMainOui = (item: any) => {
+        if (!item || typeof item !== 'object') return;
+        const rawMain = String(item.fsmAutorise ?? 'Oui').trim().toLowerCase();
+        const isMainOui = rawMain !== 'non' && rawMain !== 'false' && rawMain !== '0' && rawMain !== 'no';
+        if (!isMainOui) return;
+        const key = String(item.identifiant || item.id || item.numeroSerie || item.specifiques?.numSerie || '').trim().toUpperCase();
+        if (!key) return;
+        const existing = combinedMap.get(key);
+        combinedMap.set(key, existing ? { ...existing, ...item } : item);
+      };
+
+      for (const item of otherEquipments || []) addIfMainOui(item);
+      for (const item of sheetItems || []) addIfMainOui(item);
+
+      const recordsToExport = Array.from(combinedMap.values());
+
+      // Exact canonical columns from SpreadSheets mapping (AUTRES_CANONICAL_HEADERS)
+      const canonicalCols: Array<{ header: string; field: string; isSpecifique?: boolean; type?: 'yesno' | 'bool' | 'date' }> = [
+        { header: 'Identifiant', field: 'identifiant' },
+        { header: 'Catégorie', field: 'categorie' },
+        { header: 'Client lié', field: 'clientNom' },
+        { header: 'Nom et prénom sur site', field: 'nomPrenomSite' },
+        { header: 'Téléphone portable sur site', field: 'telephoneSite' },
+        { header: 'Email sur site', field: 'emailSite' },
+        { header: 'Contrat', field: 'contrat', type: 'yesno' },
+        { header: 'Nom du contrat', field: 'nomContrat' },
+        { header: 'Référence contrat', field: 'referenceContrat' },
+        { header: 'Début du contrat', field: 'debutContrat', type: 'date' },
+        { header: 'Fin du contrat', field: 'finContrat', type: 'date' },
+        { header: 'Payeur ID', field: 'payeurId' },
+        { header: 'Client ID', field: 'clientIdField' },
+        { header: 'Numéro et voie', field: 'numeroVoie' },
+        { header: 'Ville', field: 'ville' },
+        { header: 'Code postal', field: 'codePostal' },
+        { header: 'Région', field: 'region' },
+        { header: 'Pays', field: 'pays' },
+        { header: 'Latitude', field: 'latitude' },
+        { header: 'Longitude', field: 'longitude' },
+        { header: 'Section 4 — Localisation : Aide d’accès.', field: 'aideAcces' },
+        { header: 'Accès 24/7', field: 'acces247', type: 'bool' },
+        { header: 'Accès semaine', field: 'accesSemaine', type: 'bool' },
+        { header: 'Accès week-end', field: 'accesWeekend', type: 'bool' },
+        { header: 'Extérieur', field: 'exterieur', type: 'bool' },
+        { header: "Horaires d'ouverture", field: 'horaires' },
+        { header: 'Expiration garantie', field: 'expirationGarantie', type: 'date' },
+        { header: 'Date de fabrication', field: 'dateFabrication', type: 'date' },
+        { header: 'Mise en service', field: 'miseEnService', type: 'date' },
+        { header: 'Dernière maintenance', field: 'derniereMaintenance', type: 'date' },
+        { header: 'Prochaine maintenance', field: 'prochaineMaintenance', type: 'date' },
+        { header: 'Tournée', field: 'tournee' },
+        { header: 'Loué', field: 'loue', type: 'yesno' },
+        { header: 'Prêté', field: 'prete', type: 'yesno' },
+        { header: 'Stocké', field: 'stocke', type: 'yesno' },
+        { header: 'Archivé', field: 'archive', type: 'yesno' },
+        { header: 'Conforme', field: 'conforme', type: 'yesno' },
+        { header: 'Sous-traitance', field: 'sousTraitance', type: 'yesno' },
+        { header: 'Maintenance autorisée', field: 'fsmAutorise', type: 'yesno' },
+        { header: 'Rappel mensuel auto', field: 'rappelMensuelAuto', type: 'yesno' },
+        { header: 'Rappel hebdo auto', field: 'rappelHebdoAuto', type: 'yesno' },
+        { header: 'Rappel journalier auto', field: 'rappelJournalierAuto', type: 'yesno' },
+        { header: 'Numéro de série', field: 'numSerie', isSpecifique: true },
+        { header: 'Marque / Modèle', field: 'marqueModele', isSpecifique: true },
+        { header: 'Agent extincteur', field: 'agentExtincteur', isSpecifique: true },
+        { header: 'Capacité / Poids', field: 'capacite', isSpecifique: true },
+        { header: 'Pression', field: 'pression', isSpecifique: true },
+        { header: "Date d'épreuve", field: 'dateEpreuve', isSpecifique: true, type: 'date' },
+        { header: 'Date de recharge', field: 'dateRecharge', isSpecifique: true, type: 'date' },
+        { header: 'Emplacements', field: 'emplacements', isSpecifique: true },
+        { header: 'Commentaire spécifique', field: 'commentaireSpecifique', isSpecifique: true },
+      ];
+
+      const escapeCsvCell = (val: any): string => {
+        const s = val === undefined || val === null ? '' : String(val);
+        if (s.includes('"') || s.includes(',') || s.includes(';') || s.includes('\n') || s.includes('\r')) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+
+      const clientById = new Map<string, Client>();
+      for (const c of clients || []) {
+        if (c?.id) clientById.set(c.id, c);
+      }
+
+      const csvLines: string[] = [canonicalCols.map(c => escapeCsvCell(c.header)).join(',')];
+      const total = recordsToExport.length;
+      const chunkSize = Math.max(50, Math.ceil(total / 8));
+
+      for (let idx = 0; idx < total; idx++) {
+        const item = recordsToExport[idx];
+        const rowCells = canonicalCols.map(col => {
+          let val: any = col.isSpecifique ? item.specifiques?.[col.field] : item[col.field];
+          if ((val === undefined || val === null || val === '') && item._rawSheetRow && item._rawSheetRow[col.header] !== undefined) {
+            val = item._rawSheetRow[col.header];
+          }
+          if ((val === undefined || val === null || val === '') && item.specifiques && item.specifiques[col.header] !== undefined) {
+            val = item.specifiques[col.header];
+          }
+
+          if (col.field === 'identifiant' && !val && item.id) {
+            val = item.id;
+          } else if (col.field === 'clientNom' && !val && item.clientId) {
+            const matchedCli = clientById.get(item.clientId);
+            val = matchedCli?.denomination || item.clientId;
+          } else if (col.field === 'numeroVoie' && !val) {
+            val = item.numVoie;
+          } else if (col.field === 'codePostal' && !val) {
+            val = item.cp;
+          } else if (col.field === 'aideAcces' && !val) {
+            val = item.commentaireAdresse || item.emplacement;
+          } else if (col.field === 'expirationGarantie' && !val) {
+            val = item.finGarantie;
+          } else if (col.field === 'dateFabrication' && !val) {
+            val = item.fabrication;
+          } else if (col.isSpecifique && col.field === 'numSerie' && !val) {
+            val = item.numeroSerie;
+          } else if (col.isSpecifique && col.field === 'marqueModele' && !val) {
+            val = item.modele || item.modeleId;
+          } else if (col.isSpecifique && col.field === 'emplacements' && !val) {
+            val = item.emplacement || item.aideAcces;
+          } else if (col.isSpecifique && col.field === 'commentaireSpecifique' && !val) {
+            val = item.commentaire;
+          } else if (col.field === 'fsmAutorise') {
+            val = 'Oui';
+          }
+
+          if (val === undefined || val === null) return '';
+          if (col.type === 'bool') {
+            if (val === '') return '';
+            return val === true || String(val).toLowerCase() === 'oui' || String(val).toLowerCase() === 'true' ? 'Oui' : 'Non';
+          }
+          return escapeCsvCell(val);
+        });
+
+        csvLines.push(rowCells.join(','));
+
+        if (idx > 0 && idx % chunkSize === 0) {
+          const pct = Math.min(95, 50 + Math.round(((idx + 1) / Math.max(1, total)) * 45));
+          setExportMainOuiProgress(pct);
+          await yieldToBrowser();
+        }
+      }
+
+      setExportMainOuiProgress(100);
+      await yieldToBrowser();
+
+      const csvContent = '\uFEFF' + csvLines.join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.setAttribute('download', `autres_materiels_maintenance_oui_${dateStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      console.error('Export CSV Autres Matériels Main. Oui error:', err);
+    } finally {
+      setTimeout(() => {
+        setExportMainOuiProgress(null);
+      }, 350);
+    }
   };
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -2066,6 +2287,8 @@ export default function AutresMaterielsTab({
                     handleOpenSpreadsheetEditor();
                   } else if (val === 'open-map') {
                     setIsMapOpen(true);
+                  } else if (val === 'export-all-main-oui') {
+                    handleExportAllMainOuiCsv();
                   }
                 }}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
@@ -2081,6 +2304,9 @@ export default function AutresMaterielsTab({
                 </option>
                 <option value="open-map">
                   {t("Consulter la cartographie")}
+                </option>
+                <option value="export-all-main-oui">
+                  {t("Exporter Tous Main. Oui")}
                 </option>
               </select>
             </div>
@@ -4251,6 +4477,27 @@ export default function AutresMaterielsTab({
           return denom.includes(q) || sub.includes(q) || badge.includes(q) || siret.includes(q) || ville.includes(q);
         }}
       />
+
+      {/* 📥 Floating Cursor Export Progress Indicator ("Génération du fichier...n%") 📥 */}
+      {exportMainOuiProgress !== null && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            left: `${cursorExportPos.x + 14}px`,
+            top: `${cursorExportPos.y + 10}px`,
+            zIndex: 1000001,
+            pointerEvents: 'none',
+            color: '#000000',
+            fontSize: '12px',
+            fontWeight: 600,
+            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {`${t("Génération du fichier...")}${Math.max(1, Math.min(100, Math.round(exportMainOuiProgress)))}%`}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

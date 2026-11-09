@@ -1569,6 +1569,11 @@ export default function DefibTab({
   const [variableSidePaneSearch, setVariableSidePaneSearch] = useState('');
   const [clientSearchTarget, setClientSearchTarget] = useState<'form' | 'filter'>('form');
   const [cursorLoading, setCursorLoading] = useState<{ x: number; y: number } | null>(null);
+  const [exportMainOuiProgress, setExportMainOuiProgress] = useState<number | null>(null);
+  const [cursorExportPos, setCursorExportPos] = useState<{ x: number; y: number }>({
+    x: typeof window !== 'undefined' ? Math.round(window.innerWidth / 2) : 300,
+    y: typeof window !== 'undefined' ? 140 : 140,
+  });
   const [isSearchingSpreadsheet, setIsSearchingSpreadsheet] = useState(false);
   const [cursorIndicatorForceHidden, setCursorIndicatorForceHidden] = useState(false);
   const [cursorSearchPos, setCursorSearchPos] = useState<{ x: number; y: number }>({
@@ -1598,6 +1603,9 @@ export default function DefibTab({
       if (cursorLoading) {
         setCursorLoading({ x: e.clientX, y: e.clientY });
       }
+      if (exportMainOuiProgress !== null) {
+        setCursorExportPos({ x: e.clientX, y: e.clientY });
+      }
       if (isSearchingSpreadsheet || isDefibLoading) {
         setCursorSearchPos({ x: e.clientX, y: e.clientY });
       }
@@ -1606,7 +1614,291 @@ export default function DefibTab({
     return () => {
       window.removeEventListener('mousemove', handleGlobalMouseMove);
     };
-  }, [cursorLoading !== null, isSearchingSpreadsheet, isDefibLoading]);
+  }, [cursorLoading !== null, exportMainOuiProgress !== null, isSearchingSpreadsheet, isDefibLoading]);
+
+  const handleExportAllMainOuiCsv = async () => {
+    if (exportMainOuiProgress !== null) return;
+    setCursorExportPos({ ...lastMousePosRef.current });
+    setExportMainOuiProgress(5);
+
+    const yieldToBrowser = () => new Promise<void>(resolve => setTimeout(resolve, 25));
+
+    try {
+      await yieldToBrowser();
+      setExportMainOuiProgress(15);
+
+      let sheetMainOuiItems: Defibrillateur[] = [];
+      if (resolvedSpreadsheetUrl) {
+        try {
+          const res = await fetch('/api/sheets/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantId: activeTenantId,
+              spreadsheetUrl: resolvedSpreadsheetUrl,
+              type: 'defibrillateurs',
+              maintenanceFilter: 'oui',
+              limit: 50000,
+              forceRefresh: false,
+            }),
+          });
+          setExportMainOuiProgress(40);
+          if (res.ok) {
+            const json = await res.json();
+            if (Array.isArray(json.items)) {
+              sheetMainOuiItems = json.items;
+            }
+          }
+        } catch (_) {}
+      }
+
+      setExportMainOuiProgress(50);
+      await yieldToBrowser();
+
+      // Merge local mergedDefibrillateurs + sheetMainOuiItems and filter strictly Maintenance Autorisée = Oui
+      const combinedMap = new Map<string, any>();
+      const addIfMainOui = (d: any) => {
+        if (!d || typeof d !== 'object') return;
+        const rawMain = String(d.fsmAutorise ?? 'Oui').trim().toLowerCase();
+        const isMainOui = rawMain !== 'non' && rawMain !== 'false' && rawMain !== '0' && rawMain !== 'no';
+        if (!isMainOui) return;
+        const key = String(d.identifiant || d.id || d.numeroSerie || '').trim().toUpperCase();
+        if (!key) return;
+        const existing = combinedMap.get(key);
+        combinedMap.set(key, existing ? { ...existing, ...d } : d);
+      };
+
+      for (const d of mergedDefibrillateurs) addIfMainOui(d);
+      for (const d of sheetMainOuiItems) addIfMainOui(d);
+
+      const recordsToExport = Array.from(combinedMap.values());
+
+      // Exact canonical columns from SpreadSheets mapping (DEFIB_CANONICAL_HEADERS)
+      const canonicalCols: Array<{ header: string; field: string; type?: 'yesno' | 'bool' | 'date' }> = [
+        { header: 'Section 1 - Identifiant.', field: 'identifiant' },
+        { header: 'Section 1 - Série.', field: 'numeroSerie' },
+        { header: 'Section 1 - Modèle.', field: 'modeleId' },
+        { header: 'Section 1 - Numéro Atlasanté.', field: 'numeroAtlasante' },
+        { header: 'Section 1 - Version du logiciel.', field: 'versionLogiciel' },
+        { header: 'Section 1 - Type de défibrillateur.', field: 'typeDefibrillateur' },
+        { header: 'Section 1 - Commentaire Général.', field: 'commentaire' },
+        { header: 'Section 2 - Client.', field: 'clientNom' },
+        { header: 'Section 2 - Nom du site.', field: 'nomSite' },
+        { header: 'Section 2 - Téléphone portable.', field: 'telephoneSite' },
+        { header: 'Section 2 - Email.', field: 'emailSite' },
+        { header: 'Section 2 - Nom et prénom.', field: 'nomPrenomSite' },
+        { header: "Section 2 - Catégorie d'établissement.", field: 'categorieEtablissement' },
+        { header: 'Section 2 - Titre du contrat.', field: 'nomContrat' },
+        { header: 'Section 2 - Contrat en cours.', field: 'contrat', type: 'yesno' },
+        { header: 'Section 2 - Payeur ID.', field: 'payeurId' },
+        { header: 'Section 2 - Client ID.', field: 'clientIdField' },
+        { header: 'Section 2 - Référence du contrat.', field: 'referenceContrat' },
+        { header: 'Section 2 - Début du contrat.', field: 'debutContrat', type: 'date' },
+        { header: 'Section 2 - Expiration du contrat.', field: 'finContrat', type: 'date' },
+        { header: 'Section 3 - Modèle Boîtier.', field: 'modeleCoffretId' },
+        { header: 'Section 3 - Lot Boîtier.', field: 'numeroLotCoffret' },
+        { header: 'Section 3  Commentaire Boîtier.', field: 'commentaireCoffret' },
+        { header: 'Section 3 - Péremption de la trousse.', field: 'peremptionTrousse', type: 'date' },
+        { header: 'Section 3 - Ciseaux présents.', field: 'kitCiseauxPresents', type: 'yesno' },
+        { header: 'Section 3 - Masque présent.', field: 'kitMasquePresent', type: 'yesno' },
+        { header: 'Section 3 - Péremption du masque.', field: 'kitPeremptionMasque', type: 'date' },
+        { header: 'Section 3 - Serviettes présentes.', field: 'kitServiettesPresentes', type: 'yesno' },
+        { header: 'Section 3 - Péremption des serviettes.', field: 'kitPeremptionServiettes', type: 'date' },
+        { header: 'Section 3 - Paire de gants présents.', field: 'kitGantsPresents', type: 'yesno' },
+        { header: 'Section 3 - Rasoir.', field: 'kitRasoirPresent', type: 'yesno' },
+        { header: 'Section 4 - Numéro et voie.', field: 'numVoie' },
+        { header: 'Section 4 - Ville.', field: 'ville' },
+        { header: 'Section 4 - Code postal.', field: 'cp' },
+        { header: 'Section 4 - Région.', field: 'region' },
+        { header: 'Section 4 - Pays.', field: 'pays' },
+        { header: 'Section 4 - Latitude.', field: 'latitude' },
+        { header: 'Section 4 - Longitude.', field: 'longitude' },
+        { header: 'Section 4 — Localisation : Aide d’accès.', field: 'commentaireAdresse' },
+        { header: 'Section 4 - Plage 1 - Fermeture le midi', field: '_plage1_fermetureMidi', type: 'bool' },
+        { header: 'Section 4 - Plage 1 - Ouv. Matin', field: '_plage1_openMorning' },
+        { header: 'Section 4 - Plage 1 - Ferm. Midi', field: '_plage1_closeMorning' },
+        { header: 'Section 4 - Plage 1 - RéOuv. Midi', field: '_plage1_openAfternoon' },
+        { header: 'Section 4 - Plage 1 - Ferm. Soir', field: '_plage1_closeAfternoon' },
+        { header: 'Section 4 - Plage 1 - Jours de la semaine', field: '_plage1_days' },
+        { header: 'Section 4 - Plage 1 - Ouv. Général', field: '_plage1_openContinuous' },
+        { header: 'Section 4 - Plage 1 - Ferm. Général', field: '_plage1_closeContinuous' },
+        { header: 'Section 4 - Plage 2 - Fermeture le midi', field: '_plage2_fermetureMidi', type: 'bool' },
+        { header: 'Section 4 - Plage 2 - Ouv. Matin', field: '_plage2_openMorning' },
+        { header: 'Section 4 - Plage 2 - Ferm. Midi', field: '_plage2_closeMorning' },
+        { header: 'Section 4 - Plage 2 - RéOuv. Midi', field: '_plage2_openAfternoon' },
+        { header: 'Section 4 - Plage 2 - Ferm. Soir', field: '_plage2_closeAfternoon' },
+        { header: 'Section 4 - Plage 2 - Jours de la semaine', field: '_plage2_days' },
+        { header: 'Section 4 - Plage 2 - Ouv. Général', field: '_plage2_openContinuous' },
+        { header: 'Section 4 - Plage 2 - Ferm. Général', field: '_plage2_closeContinuous' },
+        { header: 'Section 5 - Expiration de garantie.', field: 'finGarantie', type: 'date' },
+        { header: 'Section 5 - Fabrication.', field: 'fabrication', type: 'date' },
+        { header: 'Section 5 - Mise en service.', field: 'miseEnService', type: 'date' },
+        { header: 'Section 5 - Dernière maintenance.', field: 'derniereMaintenance', type: 'date' },
+        { header: "Section 5 - Sortie d'usine.", field: 'sortieFabricant', type: 'date' },
+        { header: 'Section 5 - Prochaine maintenance.', field: 'prochaineMaintenance', type: 'date' },
+        { header: 'Section 6 - Modèle A', field: 'modeleElectrodeAId' },
+        { header: 'Section 6 - Lot A', field: 'lotElectrodeA' },
+        { header: 'Section 6 - Insertion A', field: 'insertionElectrodeA', type: 'date' },
+        { header: 'Section 6 - Péremption A', field: 'peremptionElectrodeA', type: 'date' },
+        { header: 'Section 6 - Livraison A', field: 'livraisonElectrodeA', type: 'date' },
+        { header: 'Section 6 - Électrode de secours A', field: 'hasElectrodeASecours', type: 'yesno' },
+        { header: "Section 6 - Modèlé d'électrode de secours A", field: 'modeleElectrodeASecoursId' },
+        { header: "Section 6 - Lot de l'électrode de secours A", field: 'lotElectrodeASecours' },
+        { header: "Section 6 - Péremption de l'électrode de secours A", field: 'peremptionSecoursElectrodeA', type: 'date' },
+        { header: 'Section 6 - Statut A', field: 'situationElectrodeA' },
+        { header: 'Section 6 - Commentaire A', field: 'commentaireElectrodeA' },
+        { header: 'Section 6 - Padpak A', field: 'hasPadpakA', type: 'yesno' },
+        { header: 'Section 7 - Modèle P', field: 'modeleElectrodePId' },
+        { header: 'Section 7 - Insertion P', field: 'insertionElectrodeP', type: 'date' },
+        { header: 'Section 7 - Livraison P', field: 'livraisonElectrodeP', type: 'date' },
+        { header: 'Section 7 - Électrode de secours P', field: 'hasElectrodePSecours', type: 'yesno' },
+        { header: "Section 7 - Modèlé d'électrode de secours P", field: 'modeleElectrodePSecoursId' },
+        { header: "Section 7 - Lot de l'électrode de secours P", field: 'lotElectrodePSecours' },
+        { header: "Section 7 - Péremption de l'électrode de secours P", field: 'peremptionSecoursElectrodeP', type: 'date' },
+        { header: 'Section 7 - Statut P', field: 'situationElectrodeP' },
+        { header: 'Section 7 - Commentaire P', field: 'commentaireElectrodeP' },
+        { header: 'Section 7 - Padpak P', field: 'hasPadpakP', type: 'yesno' },
+        { header: 'Section 7 - Péremption P', field: 'peremptionElectrodeP', type: 'date' },
+        { header: 'Section 7 - Lot P', field: 'lotElectrodeP' },
+        { header: 'Section 8 - Modèle B', field: 'modeleBatterieId' },
+        { header: 'Section 8 - Fabrication B', field: 'fabricationBatterie', type: 'date' },
+        { header: 'Section 8 - Insertion B', field: 'insertionBatterie', type: 'date' },
+        { header: 'Section 8 - Livraison B', field: 'livraisonBatterie', type: 'date' },
+        { header: 'Section 8 - Batterie de secours B', field: 'hasBatterieSecours', type: 'yesno' },
+        { header: 'Section 8 - Modèle de batterie de secours B', field: 'modeleBatterieSecoursId' },
+        { header: 'Section 8 - Lot de la batterie de secours B', field: 'lotBatterieSecours' },
+        { header: 'Section 8 - Péremption de la batterie de secours B', field: 'peremptionBatterieSecours', type: 'date' },
+        { header: 'Section 8 - Statut B', field: 'situationBatterie' },
+        { header: 'Section 8 - Pourcentage constaté B', field: 'pourcentageBatterie' },
+        { header: 'Section 8 - Commentaire B', field: 'commentaireBatterie' },
+        { header: 'Section 8 - Péremption B', field: 'peremptionBatterie', type: 'date' },
+        { header: 'Section 8 - Lot batterie B', field: 'lotBatterie' },
+        { header: 'Section 9 - Loué', field: 'loue', type: 'yesno' },
+        { header: 'Section 9 - Prêté', field: 'prete', type: 'yesno' },
+        { header: 'Section 9 - Stocké', field: 'stocke', type: 'yesno' },
+        { header: 'Section 9 - Archivé.', field: 'archive', type: 'yesno' },
+        { header: 'Section 9 - Conforme.', field: 'conforme', type: 'yesno' },
+        { header: 'Section 9 - Opéré en sous-traitance.', field: 'sousTraitance', type: 'yesno' },
+        { header: 'Section 9 - Maintenance autorisée.', field: 'fsmAutorise', type: 'yesno' },
+        { header: "Section 9 - Email mensuel d'auto-vigilance.", field: 'rappelMensuelAuto', type: 'yesno' },
+        { header: "Section 9 - Email hebdomadaire d'auto-vigilance.", field: 'rappelHebdoAuto', type: 'yesno' },
+        { header: "Section 9 - Email journalier d'auto-vigilance.", field: 'rappelJournalierAuto', type: 'yesno' },
+        { header: 'Section 9 - Utilisé par une victime. ', field: 'victimeSurvie', type: 'yesno' },
+        { header: 'Section 9 - Âge de la victime.', field: 'ageVictime' },
+      ];
+
+      const escapeCsvCell = (val: any): string => {
+        const s = val === undefined || val === null ? '' : String(val);
+        if (s.includes('"') || s.includes(',') || s.includes(';') || s.includes('\n') || s.includes('\r')) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+
+      const csvLines: string[] = [canonicalCols.map(c => escapeCsvCell(c.header)).join(',')];
+      const total = recordsToExport.length;
+      const chunkSize = Math.max(50, Math.ceil(total / 8));
+
+      for (let idx = 0; idx < total; idx++) {
+        const defib = recordsToExport[idx];
+        let parsedSchedules: any[] = [];
+        if (defib.horaires) {
+          try {
+            const parsed = typeof defib.horaires === 'string' ? JSON.parse(defib.horaires) : defib.horaires;
+            if (Array.isArray(parsed)) parsedSchedules = parsed;
+          } catch (_) {}
+        }
+
+        const rowCells = canonicalCols.map(col => {
+          let val: any = defib[col.field];
+          if ((val === undefined || val === null || val === '') && defib._rawSheetRow && defib._rawSheetRow[col.header] !== undefined) {
+            val = defib._rawSheetRow[col.header];
+          }
+
+          if (col.field === 'commentaireAdresse') {
+            val = defib.commentaireAdresse ?? defib.aideAcces ?? defib.aide_acces ?? val ?? '';
+          } else if (col.field.startsWith('_plage1_') || col.field.startsWith('_plage2_')) {
+            const sIdx = col.field.startsWith('_plage1_') ? 0 : 1;
+            const prop = col.field.replace(/^_plage[12]_/, '');
+            const sched = parsedSchedules[sIdx];
+            if (sched) {
+              if (prop === 'days') {
+                val = Array.isArray(sched.days) ? sched.days.join(', ') : String(sched.days || '');
+              } else {
+                val = sched[prop] ?? '';
+              }
+            } else {
+              val = val ?? '';
+            }
+          } else if (col.field === 'modeleId' && defib.modele && !String(defib.modele).startsWith('v_')) {
+            val = defib.modele;
+          } else if (col.field === 'modeleCoffretId' && defib.modeleCoffret && !String(defib.modeleCoffret).startsWith('v_')) {
+            val = defib.modeleCoffret;
+          } else if (col.field === 'modeleElectrodeAId' && defib.modeleElectrodeA && !String(defib.modeleElectrodeA).startsWith('v_')) {
+            val = defib.modeleElectrodeA;
+          } else if (col.field === 'modeleElectrodeASecoursId' && defib.modeleElectrodeASecours && !String(defib.modeleElectrodeASecours).startsWith('v_')) {
+            val = defib.modeleElectrodeASecours;
+          } else if (col.field === 'modeleElectrodePId' && defib.modeleElectrodeP && !String(defib.modeleElectrodeP).startsWith('v_')) {
+            val = defib.modeleElectrodeP;
+          } else if (col.field === 'modeleElectrodePSecoursId' && defib.modeleElectrodePSecours && !String(defib.modeleElectrodePSecours).startsWith('v_')) {
+            val = defib.modeleElectrodePSecours;
+          } else if (col.field === 'modeleBatterieId' && defib.modeleBatterie && !String(defib.modeleBatterie).startsWith('v_')) {
+            val = defib.modeleBatterie;
+          } else if (col.field === 'modeleBatterieSecoursId' && defib.modeleBatterieSecours && !String(defib.modeleBatterieSecours).startsWith('v_')) {
+            val = defib.modeleBatterieSecours;
+          } else if (col.field === 'clientNom') {
+            if (!val && defib.clientId) {
+              const cli = (clients || []).find(c => c.id === defib.clientId || c.clientIdField === defib.clientId);
+              if (cli?.denomination) val = cli.denomination;
+            }
+            val = val ?? '';
+          } else if (col.field === 'fsmAutorise') {
+            val = 'Oui';
+          }
+
+          if (val === undefined || val === null) return '';
+          if (col.type === 'bool') {
+            if (val === '') return '';
+            return val === true || String(val).toLowerCase() === 'oui' || String(val).toLowerCase() === 'true' ? 'Oui' : 'Non';
+          }
+          if (col.field === 'situationElectrodeA' || col.field === 'situationElectrodeP' || col.field === 'situationBatterie') {
+            const sVal = String(val).trim();
+            return escapeCsvCell(sVal === 'Vert' ? 'Conforme' : sVal === 'Orange' ? 'Attention' : sVal === 'Rouge' ? 'Alerte' : sVal);
+          }
+          return escapeCsvCell(val);
+        });
+
+        csvLines.push(rowCells.join(','));
+
+        if (idx > 0 && idx % chunkSize === 0) {
+          const pct = Math.min(95, 50 + Math.round(((idx + 1) / Math.max(1, total)) * 45));
+          setExportMainOuiProgress(pct);
+          await yieldToBrowser();
+        }
+      }
+
+      setExportMainOuiProgress(100);
+      await yieldToBrowser();
+
+      const csvContent = '\uFEFF' + csvLines.join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.href = url;
+      link.setAttribute('download', `defibrillateurs_maintenance_oui_${dateStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err) {
+      console.error('Export CSV Main. Oui error:', err);
+    } finally {
+      setTimeout(() => {
+        setExportMainOuiProgress(null);
+      }, 350);
+    }
+  };
 
   const isPlaceholderClientVal = (v?: string | null): boolean => {
     if (!v) return true;
@@ -5664,6 +5956,8 @@ export default function DefibTab({
                     setIsColumnVisibilityPaneOpen(true);
                   } else if (val === 'spreadsheet-editor') {
                     handleOpenSpreadsheetEditor();
+                  } else if (val === 'export-all-main-oui') {
+                    handleExportAllMainOuiCsv();
                   }
                 }}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
@@ -5685,6 +5979,9 @@ export default function DefibTab({
                 </option>
                 <option value="spreadsheet-editor" disabled={!resolvedSpreadsheetUrl}>
                   {t("Ouvrir l'éditeur SpreadSheets")}
+                </option>
+                <option value="export-all-main-oui">
+                  {t("Exporter Tous Main. Oui")}
                 </option>
               </select>
             </div>
@@ -12103,8 +12400,29 @@ export default function DefibTab({
         tenantContext={tenantAiContext}
       />
 
+      {/* 📥 Floating Cursor Export Progress Indicator ("Génération du fichier...n%") 📥 */}
+      {exportMainOuiProgress !== null && typeof document !== 'undefined' && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            left: `${cursorExportPos.x + 14}px`,
+            top: `${cursorExportPos.y + 10}px`,
+            zIndex: 1000001,
+            pointerEvents: 'none',
+            color: '#000000',
+            fontSize: '12px',
+            fontWeight: 600,
+            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {`${t("Génération du fichier...")}${Math.max(1, Math.min(100, Math.round(exportMainOuiProgress)))}%`}
+        </div>,
+        document.body
+      )}
+
       {/* 🖱️ Floating Cursor Loading Indicator 🖱️ */}
-      {cursorLoading && typeof document !== 'undefined' && createPortal(
+      {cursorLoading && exportMainOuiProgress === null && typeof document !== 'undefined' && createPortal(
         <div
           style={{
             position: 'fixed',
