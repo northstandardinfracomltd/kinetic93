@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { t } from '../utils/translate';
 import { CompanyInfo, Member, SupportTicket, Defibrillateur, Variable, Client, StockRecord } from '../types';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
@@ -943,6 +944,9 @@ export default function GmaoCorrectionForm({
 
   // States for map position selection
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
+  const [pendingClotureToggleConfirm, setPendingClotureToggleConfirm] = useState<
+    null | 'photos' | 'etiquette' | 'signaletique' | 'scelle' | 'sticker' | 'devis'
+  >(null);
   const [tempLat, setTempLat] = useState<number>(48.8566);
   const [tempLng, setTempLng] = useState<number>(2.3522);
   const [isUpdatingGpsCoords, setIsUpdatingGpsCoords] = useState(false);
@@ -3471,6 +3475,9 @@ export default function GmaoCorrectionForm({
             display: block !important;
             width: 100% !important;
           }
+          #gmao-correction-form div:not(#gmao-sec-0) input[type="date"] {
+            padding-right: 44px !important;
+          }
           #gmao-correction-form input[type="date"]::-webkit-date-and-time-value {
             min-height: 1.5em;
             text-align: left;
@@ -3791,14 +3798,14 @@ export default function GmaoCorrectionForm({
                   </div>
                 )}
 
-                {missionConfirmModal && (
+                {missionConfirmModal && typeof document !== 'undefined' && createPortal(
                   <div
-                    className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-start justify-center z-[200] px-4 pt-3 pb-4 animate-fadeIn"
-                    style={{ top: 0, left: 0, right: 0, width: '100vw', height: '100dvh' }}
+                    className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-start justify-center z-[99999] px-4 pb-6 animate-fadeIn overflow-y-auto"
+                    style={{ top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', paddingTop: '96px' }}
                   >
                     <div
-                      className="bg-white rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl mt-2"
-                      style={{ border: 'none' }}
+                      className="bg-white rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl"
+                      style={{ border: 'none', marginTop: '0px' }}
                     >
                       <p
                         className="font-semibold leading-relaxed text-left"
@@ -3862,7 +3869,8 @@ export default function GmaoCorrectionForm({
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </div>,
+                  document.body
                 )}
               </div>
             )}
@@ -5149,14 +5157,37 @@ export default function GmaoCorrectionForm({
                 <label htmlFor="snap-fabrication" className="block text-[11px] font-bold text-black uppercase">
                   Fabrication.
                 </label>
-                <input
-                  type="date"
-                  id="snap-fabrication"
-                  value={snapshot.fabrication || ''}
-                  onChange={(e) => handleSnapshotChange('fabrication', e.target.value)}
-                  placeholder="Entrez une date."
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
-                />
+                <div className="relative flex items-center w-full">
+                  <input
+                    type="date"
+                    id="snap-fabrication"
+                    value={snapshot.fabrication || ''}
+                    onChange={(e) => handleSnapshotChange('fabrication', e.target.value)}
+                    placeholder="Entrez une date."
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
+                  />
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                    alt="Effacer la date"
+                    onClick={(e) => {
+                      const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                      if (inp) inp.value = '';
+                      handleSnapshotChange('fabrication', '');
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      height: '28px',
+                      width: '28px',
+                      objectFit: 'contain',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      userSelect: 'none',
+                    }}
+                  />
+                </div>
               </div>
 
               {/* Toggle On/Off : Préconisation de remplacement. */}
@@ -5242,27 +5273,73 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="snap-miseEnService" className="block text-[11px] font-bold text-black uppercase">
                     Mise en service.
                   </label>
-                  <input
-                    type="date"
-                    id="snap-miseEnService"
-                    value={snapshot.miseEnService || ''}
-                    onChange={(e) => handleSnapshotChange('miseEnService', e.target.value)}
-                    placeholder="Entrez une date."
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-miseEnService"
+                      value={snapshot.miseEnService || ''}
+                      onChange={(e) => handleSnapshotChange('miseEnService', e.target.value)}
+                      placeholder="Entrez une date."
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('miseEnService', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <label htmlFor="snap-finGarantie" className="block text-[11px] font-bold text-black uppercase">
                     Fin de garantie.
                   </label>
-                  <input
-                    type="date"
-                    id="snap-finGarantie"
-                    value={snapshot.finGarantie || ''}
-                    onChange={(e) => handleSnapshotChange('finGarantie', e.target.value)}
-                    placeholder="Entrez une date."
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-finGarantie"
+                      value={snapshot.finGarantie || ''}
+                      onChange={(e) => handleSnapshotChange('finGarantie', e.target.value)}
+                      placeholder="Entrez une date."
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('finGarantie', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -5337,13 +5414,36 @@ export default function GmaoCorrectionForm({
                 <label htmlFor="snap-peremptionElectrodeA" className="block text-[11px] font-bold text-black uppercase">
                   Péremption.
                 </label>
-                <input
-                  type="date"
-                  id="snap-peremptionElectrodeA"
-                  value={snapshot.peremptionElectrodeA || ''}
-                  onChange={(e) => handleSnapshotChange('peremptionElectrodeA', e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                />
+                <div className="relative flex items-center w-full">
+                  <input
+                    type="date"
+                    id="snap-peremptionElectrodeA"
+                    value={snapshot.peremptionElectrodeA || ''}
+                    onChange={(e) => handleSnapshotChange('peremptionElectrodeA', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                    alt="Effacer la date"
+                    onClick={(e) => {
+                      const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                      if (inp) inp.value = '';
+                      handleSnapshotChange('peremptionElectrodeA', '');
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      height: '28px',
+                      width: '28px',
+                      objectFit: 'contain',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      userSelect: 'none',
+                    }}
+                  />
+                </div>
               </div>
             )}
 
@@ -5386,13 +5486,36 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="snap-peremptionSecoursElectrodeA" className="block text-[11px] font-bold text-black uppercase">
                     Péremption de l’électrode de secours.
                   </label>
-                  <input
-                    type="date"
-                    id="snap-peremptionSecoursElectrodeA"
-                    value={snapshot.peremptionSecoursElectrodeA || ''}
-                    onChange={(e) => handleSnapshotChange('peremptionSecoursElectrodeA', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-peremptionSecoursElectrodeA"
+                      value={snapshot.peremptionSecoursElectrodeA || ''}
+                      onChange={(e) => handleSnapshotChange('peremptionSecoursElectrodeA', e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('peremptionSecoursElectrodeA', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -5644,13 +5767,36 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="snap-peremptionPadpakA" className="block text-[11px] font-bold text-black uppercase">
                     {t("Péremption PadPak A.")}
                   </label>
-                  <input
-                    type="date"
-                    id="snap-peremptionPadpakA"
-                    value={snapshot.peremptionPadpakA || ''}
-                    onChange={(e) => handleSnapshotChange('peremptionPadpakA', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-peremptionPadpakA"
+                      value={snapshot.peremptionPadpakA || ''}
+                      onChange={(e) => handleSnapshotChange('peremptionPadpakA', e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('peremptionPadpakA', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -5740,13 +5886,36 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="snap-peremptionElectrodeP" className="block text-[11px] font-bold text-black uppercase">
                     Péremption.
                   </label>
-                  <input
-                    type="date"
-                    id="snap-peremptionElectrodeP"
-                    value={snapshot.peremptionElectrodeP || ''}
-                    onChange={(e) => handleSnapshotChange('peremptionElectrodeP', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-peremptionElectrodeP"
+                      value={snapshot.peremptionElectrodeP || ''}
+                      onChange={(e) => handleSnapshotChange('peremptionElectrodeP', e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('peremptionElectrodeP', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -5790,13 +5959,36 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="snap-peremptionSecoursElectrodeP" className="block text-[11px] font-bold text-black uppercase">
                     Péremption de l’électrode de secours.
                   </label>
-                  <input
-                    type="date"
-                    id="snap-peremptionSecoursElectrodeP"
-                    value={snapshot.peremptionSecoursElectrodeP || ''}
-                    onChange={(e) => handleSnapshotChange('peremptionSecoursElectrodeP', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-peremptionSecoursElectrodeP"
+                      value={snapshot.peremptionSecoursElectrodeP || ''}
+                      onChange={(e) => handleSnapshotChange('peremptionSecoursElectrodeP', e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('peremptionSecoursElectrodeP', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -6048,13 +6240,36 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="snap-peremptionPadpakP" className="block text-[11px] font-bold text-black uppercase">
                     {t("Péremption PadPak P.")}
                   </label>
-                  <input
-                    type="date"
-                    id="snap-peremptionPadpakP"
-                    value={snapshot.peremptionPadpakP || ''}
-                    onChange={(e) => handleSnapshotChange('peremptionPadpakP', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-peremptionPadpakP"
+                      value={snapshot.peremptionPadpakP || ''}
+                      onChange={(e) => handleSnapshotChange('peremptionPadpakP', e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('peremptionPadpakP', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -6163,13 +6378,36 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="snap-peremptionBatterie" className="block text-[11px] font-bold text-black uppercase">
                     Péremption.
                   </label>
-                  <input
-                    type="date"
-                    id="snap-peremptionBatterie"
-                    value={snapshot.peremptionBatterie || ''}
-                    onChange={(e) => handleSnapshotChange('peremptionBatterie', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-peremptionBatterie"
+                      value={snapshot.peremptionBatterie || ''}
+                      onChange={(e) => handleSnapshotChange('peremptionBatterie', e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('peremptionBatterie', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -6178,13 +6416,36 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="snap-fabricationBatterie" className="block text-[11px] font-bold text-black uppercase">
                     Fabrication.
                   </label>
-                  <input
-                    type="date"
-                    id="snap-fabricationBatterie"
-                    value={snapshot.fabricationBatterie || ''}
-                    onChange={(e) => handleSnapshotChange('fabricationBatterie', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-fabricationBatterie"
+                      value={snapshot.fabricationBatterie || ''}
+                      onChange={(e) => handleSnapshotChange('fabricationBatterie', e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('fabricationBatterie', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -6193,13 +6454,36 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="snap-insertionBatterie" className="block text-[11px] font-bold text-black uppercase">
                     Insertion.
                   </label>
-                  <input
-                    type="date"
-                    id="snap-insertionBatterie"
-                    value={snapshot.insertionBatterie || ''}
-                    onChange={(e) => handleSnapshotChange('insertionBatterie', e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-insertionBatterie"
+                      value={snapshot.insertionBatterie || ''}
+                      onChange={(e) => handleSnapshotChange('insertionBatterie', e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('insertionBatterie', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -6514,14 +6798,38 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="kitPeremption" className="block text-[11px] font-bold text-black uppercase">
                     Péremption de la trousse.
                   </label>
-                  <input
-                    type="date"
-                    id="kitPeremption"
-                    value={kitPeremption || ''}
-                    onChange={(e) => setKitPeremption(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono"
-                    disabled={kitTrousseSecoursPresent !== 'Oui'}
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="kitPeremption"
+                      value={kitPeremption || ''}
+                      onChange={(e) => setKitPeremption(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono"
+                      disabled={kitTrousseSecoursPresent !== 'Oui'}
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        if (kitTrousseSecoursPresent !== 'Oui') return;
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        setKitPeremption('');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -6655,14 +6963,38 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="kitPeremptionMasque" className="block text-[11px] font-bold text-black uppercase">
                     Péremption du masque.
                   </label>
-                  <input
-                    type="date"
-                    id="kitPeremptionMasque"
-                    value={kitPeremptionMasque || ''}
-                    onChange={(e) => setKitPeremptionMasque(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                    disabled={kitMasquePresent !== 'Oui'}
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="kitPeremptionMasque"
+                      value={kitPeremptionMasque || ''}
+                      onChange={(e) => setKitPeremptionMasque(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                      disabled={kitMasquePresent !== 'Oui'}
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        if (kitMasquePresent !== 'Oui') return;
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        setKitPeremptionMasque('');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
 
                 {/* 5. Serviettes présentes */}
@@ -6681,14 +7013,38 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="kitPeremptionServiettes" className="block text-[11px] font-bold text-black uppercase">
                     Péremption des serviettes.
                   </label>
-                  <input
-                    type="date"
-                    id="kitPeremptionServiettes"
-                    value={kitPeremptionServiettes || ''}
-                    onChange={(e) => setKitPeremptionServiettes(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                    disabled={kitServiettesPresentes !== 'Oui'}
-                  />
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="kitPeremptionServiettes"
+                      value={kitPeremptionServiettes || ''}
+                      onChange={(e) => setKitPeremptionServiettes(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                      disabled={kitServiettesPresentes !== 'Oui'}
+                    />
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        if (kitServiettesPresentes !== 'Oui') return;
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        setKitPeremptionServiettes('');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '28px',
+                        width: '28px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  </div>
                 </div>
 
                 {/* 6. Paires de gants présents */}
@@ -6773,7 +7129,10 @@ export default function GmaoCorrectionForm({
                 </div>
               ) : (
                 <div className="space-y-3 bg-white">
-                  <div className="border border-solid border-slate-300 rounded-lg p-4 text-center cursor-pointer hover:bg-slate-50 transition relative">
+                  <div
+                    className="p-4 text-center cursor-pointer hover:bg-slate-50 transition relative"
+                    style={{ border: '1px solid #DCE1EA', borderRadius: '13px' }}
+                  >
                     <input
                       type="file"
                       id="report-attachments-input"
@@ -6792,7 +7151,7 @@ export default function GmaoCorrectionForm({
                         <span className="text-base text-black">Glissez-déposez vos fichiers ici, ou <strong className="text-indigo-600 hover:underline">parcourez</strong></span>
                       )}
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-1">
+                    <div className="text-[10px] mt-1" style={{ color: '#000000' }}>
                       Formats acceptés : PNG, JPEG, HEIC, PDF, CSV, ZIP
                     </div>
                   </div>
@@ -6805,24 +7164,45 @@ export default function GmaoCorrectionForm({
 
                   {attachments.length > 0 && (
                     <div className="space-y-1.5">
-                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        Fichiers associés ({attachments.length}/3)
+                      <div
+                        className="text-[11px] font-bold tracking-normal font-sans"
+                        style={{ color: '#000000', textTransform: 'none' }}
+                      >
+                        Fichier(s) associé(s) : {attachments.length}/3
                       </div>
-                      <div className="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden">
+                      <div className="space-y-1.5">
                         {attachments.map((file, idx) => (
-                          <div key={idx} className="flex justify-between items-center p-2 bg-slate-50 text-xs text-slate-800">
+                          <div
+                            key={idx}
+                            className="flex justify-between items-center p-2.5 text-xs"
+                            style={{
+                              backgroundColor: 'rgb(245, 247, 250)',
+                              border: 'none',
+                              borderRadius: '13px',
+                            }}
+                          >
                             <a
                               href={file.url}
                               target="_blank"
                               rel="noreferrer"
-                              className="font-mono text-indigo-600 hover:underline truncate max-w-[200px]"
+                              className="font-sans hover:underline truncate max-w-[220px]"
+                              style={{
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                color: 'rgb(46, 84, 255)',
+                              }}
                             >
                               {file.name}
                             </a>
                             <button
                               type="button"
                               onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
-                              className="text-red-500 hover:text-red-700 text-[11px] font-bold"
+                              className="hover:opacity-80 font-bold cursor-pointer font-sans"
+                              style={{
+                                color: 'rgb(210, 45, 11)',
+                                fontSize: '13px',
+                                background: 'transparent',
+                                border: 'none',
+                              }}
                             >
                               Supprimer
                             </button>
@@ -7025,7 +7405,13 @@ export default function GmaoCorrectionForm({
                   role="switch"
                   id="toggle-photos-valides"
                   aria-checked={mesPhotosValides}
-                  onClick={() => setMesPhotosValides(!mesPhotosValides)}
+                  onClick={() => {
+                    if (mesPhotosValides) {
+                      setMesPhotosValides(false);
+                    } else {
+                      setPendingClotureToggleConfirm('photos');
+                    }
+                  }}
                   style={{
                     width: '46px',
                     height: '24px',
@@ -7082,7 +7468,13 @@ export default function GmaoCorrectionForm({
                   role="switch"
                   id="toggle-etiquette-conforme"
                   aria-checked={etiquetteObligatoireConforme}
-                  onClick={() => setEtiquetteObligatoireConforme(!etiquetteObligatoireConforme)}
+                  onClick={() => {
+                    if (etiquetteObligatoireConforme) {
+                      setEtiquetteObligatoireConforme(false);
+                    } else {
+                      setPendingClotureToggleConfirm('etiquette');
+                    }
+                  }}
                   style={{
                     width: '46px',
                     height: '24px',
@@ -7139,7 +7531,13 @@ export default function GmaoCorrectionForm({
                   role="switch"
                   id="toggle-signaletique-conforme"
                   aria-checked={signaletiqueConforme === 'Oui'}
-                  onClick={() => setSignaletiqueConforme(signaletiqueConforme === 'Oui' ? 'Non' : 'Oui')}
+                  onClick={() => {
+                    if (signaletiqueConforme === 'Oui') {
+                      setSignaletiqueConforme('Non');
+                    } else {
+                      setPendingClotureToggleConfirm('signaletique');
+                    }
+                  }}
                   style={{
                     width: '46px',
                     height: '24px',
@@ -7196,7 +7594,13 @@ export default function GmaoCorrectionForm({
                   role="switch"
                   id="toggle-scelle-conforme"
                   aria-checked={scelleConforme}
-                  onClick={() => setScelleConforme(!scelleConforme)}
+                  onClick={() => {
+                    if (scelleConforme) {
+                      setScelleConforme(false);
+                    } else {
+                      setPendingClotureToggleConfirm('scelle');
+                    }
+                  }}
                   style={{
                     width: '46px',
                     height: '24px',
@@ -7253,7 +7657,13 @@ export default function GmaoCorrectionForm({
                   role="switch"
                   id="toggle-sticker-applique"
                   aria-checked={stickerEntrepriseApplique}
-                  onClick={() => setStickerEntrepriseApplique(!stickerEntrepriseApplique)}
+                  onClick={() => {
+                    if (stickerEntrepriseApplique) {
+                      setStickerEntrepriseApplique(false);
+                    } else {
+                      setPendingClotureToggleConfirm('sticker');
+                    }
+                  }}
                   style={{
                     width: '46px',
                     height: '24px',
@@ -7310,7 +7720,13 @@ export default function GmaoCorrectionForm({
                   role="switch"
                   id="toggle-demande-devis"
                   aria-checked={demandeDevis}
-                  onClick={() => setDemandeDevis(!demandeDevis)}
+                  onClick={() => {
+                    if (demandeDevis) {
+                      setDemandeDevis(false);
+                    } else {
+                      setPendingClotureToggleConfirm('devis');
+                    }
+                  }}
                   style={{
                     width: '46px',
                     height: '24px',
@@ -7343,6 +7759,81 @@ export default function GmaoCorrectionForm({
                   />
                 </button>
               </div>
+
+              {pendingClotureToggleConfirm && typeof document !== 'undefined' && createPortal(
+                <div
+                  className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-start justify-center z-[99999] px-4 pb-6 animate-fadeIn overflow-y-auto"
+                  style={{ top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', paddingTop: '96px' }}
+                >
+                  <div
+                    className="bg-white rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl"
+                    style={{ border: 'none', marginTop: '0px' }}
+                  >
+                    <p
+                      className="font-semibold leading-relaxed text-left"
+                      style={{
+                        fontSize: '16px',
+                        color: '#000000',
+                        textAlign: 'left',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                    >
+                      {pendingClotureToggleConfirm === 'photos' &&
+                        "Vous avez téléchargé une photographie d’ensemble du défibrillateur, une photographie de l’arrière et de l’étiquette, ainsi qu’une photographie du résultat du test."}
+                      {pendingClotureToggleConfirm === 'etiquette' &&
+                        "Vous avez vérifié ou apposé l'étiquette de conformité requise."}
+                      {pendingClotureToggleConfirm === 'signaletique' &&
+                        "Vous avez constaté la conformité de la signalétique réglementaire."}
+                      {pendingClotureToggleConfirm === 'scelle' &&
+                        "Vous avez constaté que le scellé sur le coffret ou boîtier du défibrillateur est en place et intact."}
+                      {pendingClotureToggleConfirm === 'sticker' &&
+                        "Vous avez vérifié ou apposé l'autocollant de l'entreprise."}
+                      {pendingClotureToggleConfirm === 'devis' &&
+                        "Le client souhaite un devis, ou vous recommandez de lui en établir un."}
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setPendingClotureToggleConfirm(null)}
+                        style={{
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          backgroundColor: 'rgb(210, 45, 11)',
+                          color: '#ffffff',
+                          border: 'none',
+                        }}
+                        className="flex-1 py-2.5 px-4 font-bold cursor-pointer hover:opacity-90 transition-opacity font-sans"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const target = pendingClotureToggleConfirm;
+                          setPendingClotureToggleConfirm(null);
+                          if (target === 'photos') setMesPhotosValides(true);
+                          else if (target === 'etiquette') setEtiquetteObligatoireConforme(true);
+                          else if (target === 'signaletique') setSignaletiqueConforme('Oui');
+                          else if (target === 'scelle') setScelleConforme(true);
+                          else if (target === 'sticker') setStickerEntrepriseApplique(true);
+                          else if (target === 'devis') setDemandeDevis(true);
+                        }}
+                        style={{
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          backgroundColor: 'rgb(46, 84, 255)',
+                          color: '#ffffff',
+                          border: 'none',
+                        }}
+                        className="flex-1 py-2.5 px-4 font-bold cursor-pointer hover:opacity-90 transition-opacity font-sans"
+                      >
+                        Confirmer
+                      </button>
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )}
 
               {/* Conditional Demande de devis fields */}
               {demandeDevis && (
@@ -7928,7 +8419,7 @@ export default function GmaoCorrectionForm({
             </div>
 
             {/* Live coordinates display */}
-            <div className="p-4 bg-slate-50">
+            <div className="p-4 bg-white" style={{ backgroundColor: '#ffffff' }}>
               <div className="grid grid-cols-2 gap-4 text-xs">
                 <div>
                   <span className="block font-semibold text-black font-sans" style={{ fontSize: '16px' }}>Latitude du point.</span>
@@ -7942,12 +8433,12 @@ export default function GmaoCorrectionForm({
             </div>
 
             {/* Actions */}
-            <div className="p-4 flex gap-3 bg-white">
+            <div className="p-4 flex gap-3 bg-white" style={{ backgroundColor: '#ffffff' }}>
               <button
                 type="button"
                 onClick={() => setIsMapPickerOpen(false)}
-                style={{ borderRadius: '13px', fontSize: '18px' }}
-                className="flex-1 py-3 bg-[#0f172a] hover:bg-neutral-900 text-white font-bold transition-all cursor-pointer font-sans"
+                style={{ borderRadius: '13px', fontSize: '18px', backgroundColor: 'rgb(210, 45, 11)', color: '#ffffff', border: 'none' }}
+                className="flex-1 py-3 hover:opacity-90 text-white font-bold transition-all cursor-pointer font-sans"
               >
                 Annuler
               </button>
@@ -7980,11 +8471,12 @@ export default function GmaoCorrectionForm({
             <div className="flex items-center justify-between p-4 border-b border-slate-100">
               <h4 className="font-bold text-base text-black font-sans">{previewModalPhoto.title}</h4>
             </div>
-            <div className="p-3 bg-neutral-900 flex items-center justify-center max-h-[70vh] overflow-hidden">
+            <div className="p-0 bg-white w-full max-h-[65vh] overflow-hidden flex items-center justify-center">
               <img 
                 src={previewModalPhoto.url} 
                 alt={previewModalPhoto.title} 
-                className="max-h-[65vh] w-auto max-w-full object-contain rounded" 
+                style={{ width: '100%', height: '100%', maxHeight: '65vh', objectFit: 'cover', display: 'block', borderRadius: '0px' }}
+                className="w-full h-full max-h-[65vh] object-cover block rounded-none" 
               />
             </div>
             <div className="p-3 bg-white flex">

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Client, Variable, StockRecord } from '../types';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
 import { getRegionsForCountry } from '../utils/regions';
@@ -855,6 +856,16 @@ export default function GmaoOtherEquipmentCorrectionForm({
             outline: none !important;
             width: 100% !important;
           }
+          #other-eq-core-form input[type="date"]::-webkit-calendar-picker-indicator {
+            display: none !important;
+            -webkit-appearance: none !important;
+            background: none !important;
+            width: 0 !important;
+            height: 0 !important;
+          }
+          #other-eq-core-form input[type="date"]:not(:disabled) {
+            padding-right: 44px !important;
+          }
           #other-eq-core-form input:not([type="radio"]):not([type="checkbox"]):hover,
           #other-eq-core-form input:not([type="radio"]):not([type="checkbox"]):focus,
           #other-eq-core-form select:hover,
@@ -952,14 +963,14 @@ export default function GmaoOtherEquipmentCorrectionForm({
                     Scan
                   </button>
                 </div>
-                {showSwitchEquipmentConfirmModal && (
+                {showSwitchEquipmentConfirmModal && typeof document !== 'undefined' && createPortal(
                   <div
-                    className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-start justify-center z-[200] px-4 pt-3 pb-4 animate-fadeIn"
-                    style={{ top: 0, left: 0, right: 0, width: '100vw', height: '100dvh' }}
+                    className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-start justify-center z-[99999] px-4 pb-6 animate-fadeIn overflow-y-auto"
+                    style={{ top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh', paddingTop: '96px' }}
                   >
                     <div
-                      className="bg-white rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl mt-2"
-                      style={{ border: 'none' }}
+                      className="bg-white rounded-2xl w-full max-w-md p-6 space-y-5 shadow-2xl"
+                      style={{ border: 'none', marginTop: '0px' }}
                     >
                       <p
                         className="font-semibold leading-relaxed text-left"
@@ -1012,7 +1023,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </div>,
+                  document.body
                 )}
                 {errorText && (
                   <p className="text-red-500 text-xs font-bold mt-1">{errorText}</p>
@@ -1271,7 +1283,30 @@ export default function GmaoOtherEquipmentCorrectionForm({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
                 <label className="block text-[11px] font-bold text-slate-500">Date de fabrication.</label>
-                <input type="date" value={fabrication} onChange={(e) => setFabrication(e.target.value)} />
+                <div className="relative flex items-center w-full">
+                  <input type="date" value={fabrication} onChange={(e) => setFabrication(e.target.value)} />
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                    alt="Effacer la date"
+                    onClick={(e) => {
+                      const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                      if (inp) inp.value = '';
+                      setFabrication('');
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      height: '28px',
+                      width: '28px',
+                      objectFit: 'contain',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      userSelect: 'none',
+                    }}
+                  />
+                </div>
                 <div className="pt-2 space-y-2">
                   <div
                     onClick={() => setPreconisationRemplacement(!preconisationRemplacement)}
@@ -1319,26 +1354,141 @@ export default function GmaoOtherEquipmentCorrectionForm({
               </div>
               <div className="space-y-1">
                 <label className="block text-[11px] font-bold text-slate-500">Mise en service.</label>
-                <input type="date" value={miseEnService} onChange={(e) => setMiseEnService(e.target.value)} />
+                <div className="relative flex items-center w-full">
+                  <input type="date" value={miseEnService} onChange={(e) => setMiseEnService(e.target.value)} />
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                    alt="Effacer la date"
+                    onClick={(e) => {
+                      const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                      if (inp) inp.value = '';
+                      setMiseEnService('');
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      height: '28px',
+                      width: '28px',
+                      objectFit: 'contain',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      userSelect: 'none',
+                    }}
+                  />
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="block text-[11px] font-bold text-slate-500">Expiration de garantie.</label>
-                <input type="date" value={expirationGarantie} onChange={(e) => setExpirationGarantie(e.target.value)} />
+                <div className="relative flex items-center w-full">
+                  <input type="date" value={expirationGarantie} onChange={(e) => setExpirationGarantie(e.target.value)} />
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                    alt="Effacer la date"
+                    onClick={(e) => {
+                      const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                      if (inp) inp.value = '';
+                      setExpirationGarantie('');
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      height: '28px',
+                      width: '28px',
+                      objectFit: 'contain',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      userSelect: 'none',
+                    }}
+                  />
+                </div>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1">
                 <label className="block text-[11px] font-bold text-slate-500">Sortie d'usine.</label>
-                <input type="date" value={sortieUsine} onChange={(e) => setSortieUsine(e.target.value)} />
+                <div className="relative flex items-center w-full">
+                  <input type="date" value={sortieUsine} onChange={(e) => setSortieUsine(e.target.value)} />
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                    alt="Effacer la date"
+                    onClick={(e) => {
+                      const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                      if (inp) inp.value = '';
+                      setSortieUsine('');
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      height: '28px',
+                      width: '28px',
+                      objectFit: 'contain',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      userSelect: 'none',
+                    }}
+                  />
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="block text-[11px] font-bold text-slate-500">Dernière maintenance.</label>
-                <input type="date" value={derniereMaintenance} onChange={(e) => handleDerniereMaintenanceChange(e.target.value)} />
+                <div className="relative flex items-center w-full">
+                  <input type="date" value={derniereMaintenance} onChange={(e) => handleDerniereMaintenanceChange(e.target.value)} />
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                    alt="Effacer la date"
+                    onClick={(e) => {
+                      const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                      if (inp) inp.value = '';
+                      handleDerniereMaintenanceChange('');
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      height: '28px',
+                      width: '28px',
+                      objectFit: 'contain',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      userSelect: 'none',
+                    }}
+                  />
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="block text-[11px] font-bold text-slate-500">Prochaine maintenance.</label>
-                <input type="date" value={prochaineMaintenance} onChange={(e) => setProchaineMaintenance(e.target.value)} />
+                <div className="relative flex items-center w-full">
+                  <input type="date" value={prochaineMaintenance} onChange={(e) => setProchaineMaintenance(e.target.value)} />
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                    alt="Effacer la date"
+                    onClick={(e) => {
+                      const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                      if (inp) inp.value = '';
+                      setProchaineMaintenance('');
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      height: '28px',
+                      width: '28px',
+                      objectFit: 'contain',
+                      cursor: 'pointer',
+                      zIndex: 10,
+                      userSelect: 'none',
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </div>

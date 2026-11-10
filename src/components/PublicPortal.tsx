@@ -3689,32 +3689,46 @@ export default function PublicPortal({
     let effectiveVariables = Array.isArray(variables) ? [...variables] : [];
     let effectiveStocks = Array.isArray(stocks) ? [...stocks] : [];
     let effectiveDefibs = Array.isArray(defibrillateurs) ? [...defibrillateurs] : [];
-    let effectiveAutresMateriels = Array.isArray(autresMateriels) ? [...autresMateriels] : [];
+    let effectiveAutresMateriels = Array.isArray(otherEquipments) ? [...otherEquipments] : [];
 
     try {
-      const tenantId = typeof window !== 'undefined' ? (localStorage.getItem('defib_tenant_id') || 'demo') : 'demo';
+      const activeTenant =
+        techTenantId ||
+        authenticatedUser?.envId ||
+        (authenticatedUser as any)?.tenantId ||
+        (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : '') ||
+        'demo';
+
+      const fetchCollectionFast = (type: string, sheetKey?: string) => {
+        const qs = new URLSearchParams({ tenantId: activeTenant, type });
+        if (sheetKey) {
+          const sUrl = getTenantSpreadsheetUrl(sheetKey, companyInfo);
+          if (sUrl) qs.set('spreadsheetUrl', sUrl);
+        }
+        return fetch(`/api/sheets/collection?${qs.toString()}`, {
+          signal: AbortSignal.timeout(2500),
+        })
+          .then(r => (r.ok ? r.json() : null))
+          .catch(() => null);
+      };
+
       const [
         sheetsReportsRes,
         sheetsAppearanceRes,
         sheetsReglagesRes,
-        sheetsDefibsRes,
-        sheetsAutresRes,
-        sheetsClientsRes,
-        sheetsVarsRes,
-        sheetsStocksRes,
       ] = await Promise.all([
-        fetch(`/api/tenants/${tenantId}/sheets/generatedReports`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/tenants/${tenantId}/sheets/pdfAppearanceSettings`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/tenants/${tenantId}/sheets/companyInfo`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/tenants/${tenantId}/sheets/defibs`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/tenants/${tenantId}/sheets/autresMateriels`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/tenants/${tenantId}/sheets/clients`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/tenants/${tenantId}/sheets/variables`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/tenants/${tenantId}/sheets/stocks`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetchCollectionFast('rapportsPdf', 'spreadsheetRapportsPdf'),
+        fetchCollectionFast('apparenceRapportsPdf', 'spreadsheetApparenceRapportsPdf'),
+        fetchCollectionFast('reglages', 'spreadsheetReglages'),
       ]);
 
-      if (sheetsReportsRes && Array.isArray(sheetsReportsRes.items)) {
-        const freshReport = sheetsReportsRes.items.find((r: any) =>
+      const reportItems = Array.isArray(sheetsReportsRes?.items)
+        ? sheetsReportsRes.items
+        : Array.isArray(sheetsReportsRes)
+          ? sheetsReportsRes
+          : [];
+      if (reportItems.length > 0) {
+        const freshReport = reportItems.find((r: any) =>
           (report.id && String(r.id) === String(report.id)) ||
           (report.interventionReference && String(r.interventionReference) === String(report.interventionReference)) ||
           (report.defibIdentifiant && r.defibIdentifiant === report.defibIdentifiant && r.date === report.date)
@@ -3747,14 +3761,19 @@ export default function PublicPortal({
         }
       }
 
-      if (sheetsReglagesRes && Array.isArray(sheetsReglagesRes.items) && sheetsReglagesRes.items.length > 0) {
-        const reg = sheetsReglagesRes.items.find((i: any) => i.id === 'reglages_1') || sheetsReglagesRes.items[0];
+      const regItems = Array.isArray(sheetsReglagesRes?.items)
+        ? sheetsReglagesRes.items
+        : Array.isArray(sheetsReglagesRes)
+          ? sheetsReglagesRes
+          : [];
+      if (regItems.length > 0) {
+        const reg = regItems.find((i: any) => i.id === 'reglages_1') || regItems[0];
         if (reg) {
           effectiveCompanyInfo = {
             ...effectiveCompanyInfo,
             ...reg,
             name: reg.nom || reg.name || effectiveCompanyInfo.name,
-            address: reg.adresse || reg.address || effectiveCompanyInfo.address,
+            address: reg.adresse || reg.address || (effectiveCompanyInfo as any).address,
             siret: reg.siret || effectiveCompanyInfo.siret,
             email: reg.email || effectiveCompanyInfo.email,
             phone: reg.telephone || reg.phone || effectiveCompanyInfo.phone,
@@ -3765,8 +3784,13 @@ export default function PublicPortal({
         }
       }
 
-      if (sheetsAppearanceRes && Array.isArray(sheetsAppearanceRes.items) && sheetsAppearanceRes.items.length > 0) {
-        const app = sheetsAppearanceRes.items.find((i: any) => i.id === 'pdf_appearance_1') || sheetsAppearanceRes.items[0];
+      const appItems = Array.isArray(sheetsAppearanceRes?.items)
+        ? sheetsAppearanceRes.items
+        : Array.isArray(sheetsAppearanceRes)
+          ? sheetsAppearanceRes
+          : [];
+      if (appItems.length > 0) {
+        const app = appItems.find((i: any) => i.id === 'pdf_appearance_1') || appItems[0];
         if (app) {
           effectiveCompanyInfo = {
             ...effectiveCompanyInfo,
@@ -3785,22 +3809,6 @@ export default function PublicPortal({
             pdfLastPageInfoText: app.pdfLastPageInfoText !== undefined ? app.pdfLastPageInfoText : effectiveCompanyInfo.pdfLastPageInfoText,
           };
         }
-      }
-
-      if (sheetsDefibsRes && Array.isArray(sheetsDefibsRes.items) && sheetsDefibsRes.items.length > 0) {
-        effectiveDefibs = sheetsDefibsRes.items;
-      }
-      if (sheetsAutresRes && Array.isArray(sheetsAutresRes.items) && sheetsAutresRes.items.length > 0) {
-        effectiveAutresMateriels = sheetsAutresRes.items;
-      }
-      if (sheetsClientsRes && Array.isArray(sheetsClientsRes.items) && sheetsClientsRes.items.length > 0) {
-        effectiveClients = sheetsClientsRes.items;
-      }
-      if (sheetsVarsRes && Array.isArray(sheetsVarsRes.items) && sheetsVarsRes.items.length > 0) {
-        effectiveVariables = sheetsVarsRes.items;
-      }
-      if (sheetsStocksRes && Array.isArray(sheetsStocksRes.items) && sheetsStocksRes.items.length > 0) {
-        effectiveStocks = sheetsStocksRes.items;
       }
     } catch (err) {
       console.warn("Could not pull fresh Spreadsheet data before PDF generation, using cached state:", err);
@@ -4296,13 +4304,18 @@ export default function PublicPortal({
                             snapshot.clientSignatureImage ||
                             snapshot.signatureClientContratImage ||
                             '';
-                          if (
-                            cSig &&
-                            (cSig.startsWith('data:image/svg+xml') ||
-                              decodeURIComponent(cSig).toLowerCase().includes('représentant standard') ||
-                              decodeURIComponent(cSig).toLowerCase().includes('representant standard'))
-                          ) {
-                            cSig = '';
+                          if (cSig) {
+                            let decodedCSig = String(cSig);
+                            try {
+                              decodedCSig = decodeURIComponent(decodedCSig);
+                            } catch (_) {}
+                            if (
+                              String(cSig).startsWith('data:image/svg+xml') ||
+                              decodedCSig.toLowerCase().includes('représentant standard') ||
+                              decodedCSig.toLowerCase().includes('representant standard')
+                            ) {
+                              cSig = '';
+                            }
                           }
                           const displayPin = !pinIsImg ? pinVal : '';
                           return `
@@ -4345,16 +4358,21 @@ export default function PublicPortal({
               </div>
             ` : ''}
           </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 500);
+            };
+          </script>
         </body>
         </html>
       `;
+      const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
       if (printWin) {
-        printWin.document.open();
-        printWin.document.write(htmlContent);
-        printWin.document.close();
+        printWin.location.href = url;
       } else {
-        const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
         window.open(url, "_blank");
       }
       return;
@@ -4553,8 +4571,8 @@ export default function PublicPortal({
         if (directVar) return `${directVar.nom} (${directVar.marque})`;
         return stockId;
       }
-      const variableItem = findVariableByRef(stockItem.denominationPieceId || stockItem.denominationPieceNom);
-      if (!variableItem) return stockItem.denominationPieceNom || `Pièce (${stockItem.denominationPieceId})`;
+      const variableItem = findVariableByRef(stockItem.denominationPieceId || (stockItem as any).denominationPieceNom);
+      if (!variableItem) return (stockItem as any).denominationPieceNom || `Pièce (${stockItem.denominationPieceId})`;
       return `${variableItem.nom} (${variableItem.marque})`;
     };
 
@@ -4569,8 +4587,8 @@ export default function PublicPortal({
           String(s.ugs || '').trim() === sVal
       );
       if (stockItem) {
-        const variable = findVariableByRef(stockItem.denominationPieceId || stockItem.denominationPieceNom);
-        return variable ? `${variable.nom} (${variable.marque})` : (stockItem.denominationPieceNom || "Service");
+        const variable = findVariableByRef(stockItem.denominationPieceId || (stockItem as any).denominationPieceNom);
+        return variable ? `${variable.nom} (${variable.marque})` : ((stockItem as any).denominationPieceNom || "Service");
       }
       const variable = findVariableByRef(sVal);
       if (variable) {
@@ -5117,7 +5135,7 @@ export default function PublicPortal({
                       <!-- Signature Client -->
                       <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
                         ${(() => {
-                          const pinVal = (report.clientPinCode || snapshot.clientPinCode || "").trim();
+                          const pinVal = String(report.clientPinCode || snapshot.clientPinCode || "").trim();
                           const pinIsImg = pinVal.startsWith("data:image") || pinVal.startsWith("http");
                           let sigImg =
                             (clientFound && (clientFound.clientSignatureImage || (clientFound as any).signatureClientContratImage || (clientFound as any).signatureClient)) ||
@@ -5127,13 +5145,18 @@ export default function PublicPortal({
                             snapshot.clientSignatureImage ||
                             snapshot.signatureClientContratImage ||
                             "";
-                          if (
-                            sigImg &&
-                            (sigImg.startsWith("data:image/svg+xml") ||
-                              decodeURIComponent(sigImg).toLowerCase().includes("représentant standard") ||
-                              decodeURIComponent(sigImg).toLowerCase().includes("representant standard"))
-                          ) {
-                            sigImg = "";
+                          if (sigImg) {
+                            let decodedSig = String(sigImg);
+                            try {
+                              decodedSig = decodeURIComponent(decodedSig);
+                            } catch (_) {}
+                            if (
+                              String(sigImg).startsWith("data:image/svg+xml") ||
+                              decodedSig.toLowerCase().includes("représentant standard") ||
+                              decodedSig.toLowerCase().includes("representant standard")
+                            ) {
+                              sigImg = "";
+                            }
                           }
                           const displayPin = !pinIsImg ? pinVal : "";
                           return `
@@ -5190,13 +5213,11 @@ export default function PublicPortal({
       </body>
       </html>
     `;
+    const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
     if (printWin) {
-      printWin.document.open();
-      printWin.document.write(htmlContent);
-      printWin.document.close();
+      printWin.location.href = url;
     } else {
-      const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
       window.open(url, "_blank");
     }
   };
@@ -12226,7 +12247,7 @@ export default function PublicPortal({
                     }}
                     className="flex items-center justify-center gap-2 font-bold mb-2 transition-opacity"
                   >
-                    Clôturer inventaire
+                    {canCloseTechInventory ? "Clôturer inventaire (Prêt)" : "Clôturer inventaire"}
                   </button>
 
                   {/* Button: Actualiser les données */}
