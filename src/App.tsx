@@ -14699,6 +14699,7 @@ export default function App() {
                             border: '1px solid #dedede',
                             borderRadius: '13px',
                             padding: '9px 14px',
+                            paddingRight: fsmSearchQuery && fsmSearchQuery.length > 0 ? '36px' : '14px',
                             fontSize: '18px',
                             fontWeight: '100',
                             color: '#000000',
@@ -14708,6 +14709,38 @@ export default function App() {
                             transition: 'all 0s',
                           }}
                         />
+                        {fsmSearchQuery && fsmSearchQuery.length > 0 && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => setFsmSearchQuery('')}
+                            style={{
+                              position: 'absolute',
+                              right: '10px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'transparent',
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              boxShadow: 'none',
+                              padding: '4px',
+                              margin: 0,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              zIndex: 10,
+                            }}
+                            title={translate("Vider la recherche")}
+                          >
+                            <img
+                              src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
+                              alt=""
+                              style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                              referrerPolicy="no-referrer"
+                            />
+                          </button>
+                        )}
                         {isFsmSearchFocused && (
                           <div
                             id="search-fsm-recent-dropdown"
@@ -21924,6 +21957,7 @@ export default function App() {
                             border: '1px solid #dedede',
                             borderRadius: '13px',
                             padding: '9px 14px',
+                            paddingRight: gmaoSearchQuery && gmaoSearchQuery.length > 0 ? '36px' : '14px',
                             fontSize: '18px',
                             fontWeight: '100',
                             color: '#000000',
@@ -21933,6 +21967,38 @@ export default function App() {
                             transition: 'all 0s',
                           }}
                         />
+                        {gmaoSearchQuery && gmaoSearchQuery.length > 0 && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => setGmaoSearchQuery('')}
+                            style={{
+                              position: 'absolute',
+                              right: '10px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              background: 'transparent',
+                              backgroundColor: 'transparent',
+                              border: 'none',
+                              boxShadow: 'none',
+                              padding: '4px',
+                              margin: 0,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              zIndex: 10,
+                            }}
+                            title={t("Vider la recherche")}
+                          >
+                            <img
+                              src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
+                              alt=""
+                              style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                              referrerPolicy="no-referrer"
+                            />
+                          </button>
+                        )}
                         {isGmaoSearchFocused && (
                           <div
                             id="search-gmao-recent-dropdown"

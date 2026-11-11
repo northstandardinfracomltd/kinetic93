@@ -2549,7 +2549,10 @@ export default function StocksTab({
                     }}
                     placeholder={t("Recherche rapide")}
                     className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
-                    style={searchInputStyle}
+                    style={{
+                      ...searchInputStyle,
+                      paddingRight: stockSearchQuery && stockSearchQuery.length > 0 ? '36px' : searchInputStyle.paddingRight,
+                    }}
                     onMouseEnter={() => setIsSearchHovered(true)}
                     onMouseLeave={() => setIsSearchHovered(false)}
                     onFocus={() => setIsSearchFocused(true)}
@@ -2560,6 +2563,38 @@ export default function StocksTab({
                       setIsSearchFocused(false);
                     }}
                   />
+                  {stockSearchQuery && stockSearchQuery.length > 0 && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setStockSearchQuery('')}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'transparent',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: '4px',
+                        margin: 0,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                      }}
+                      title={t("Vider la recherche")}
+                    >
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
+                        alt=""
+                        style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                        referrerPolicy="no-referrer"
+                      />
+                    </button>
+                  )}
                   {isSearchFocused && (
                     <div
                       id="search-stock-recent-dropdown"

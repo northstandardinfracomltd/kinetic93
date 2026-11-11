@@ -1632,43 +1632,51 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                               {mCreneauFormatted}
                                             </span>
                                           </div>
-                                          <div
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setOpenMissionMenuKey((prev) => (prev === menuKey ? null : menuKey));
-                                            }}
-                                            className="cursor-pointer transition-all hover:brightness-95 select-none"
-                                            style={{
-                                              backgroundColor: "rgb(230, 197, 255)",
-                                              color: "rgb(89, 22, 144)",
-                                              borderRadius: "10px",
-                                              padding: "8px 12px",
-                                              fontSize: "15px",
-                                              fontWeight: 600,
-                                            }}
-                                          >
-                                            Client : {mClientName}. Ville : {mVillePostcode}. Raison(s) : {mReasons}. Matériel : {mIdentifiant}.
-                                          </div>
-
-                                          {isMenuOpen && (
+                                          <div className="relative">
                                             <div
-                                              onClick={(e) => e.stopPropagation()}
-                                              className="absolute left-0 top-full mt-1 z-[100] w-max max-w-[280px] bg-white rounded-xl shadow-lg border border-neutral-200 p-1.5 animate-fadeIn"
+                                              className="transition-all hover:brightness-95 select-none pointer-events-none"
+                                              style={{
+                                                backgroundColor: "rgb(230, 197, 255)",
+                                                color: "rgb(89, 22, 144)",
+                                                borderRadius: "10px",
+                                                padding: "8px 12px",
+                                                fontSize: "15px",
+                                                fontWeight: 600,
+                                              }}
                                             >
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setOpenMissionMenuKey(null);
-                                                  handleConsultMission(tItem.tour, m);
-                                                }}
-                                                className="w-full text-left px-3 py-2 rounded-lg text-[15px] font-bold text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer whitespace-nowrap"
-                                                style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
-                                              >
-                                                Afficher la mission dans la tournée
-                                              </button>
+                                              Client : {mClientName}. Ville : {mVillePostcode}. Raison(s) : {mReasons}. Matériel : {mIdentifiant}.
                                             </div>
-                                          )}
+                                            <select
+                                              aria-label={`Mission ${mIdentifiant}`}
+                                              value=""
+                                              onChange={(e) => {
+                                                if (e.target.value === "consult") {
+                                                  handleConsultMission(tItem.tour, m);
+                                                }
+                                              }}
+                                              style={{
+                                                position: "absolute",
+                                                inset: 0,
+                                                width: "100%",
+                                                height: "100%",
+                                                opacity: 0,
+                                                cursor: "pointer",
+                                                border: "none",
+                                                outline: "none",
+                                                padding: 0,
+                                                margin: 0,
+                                                background: "transparent",
+                                                zIndex: 20,
+                                              }}
+                                            >
+                                              <option value="" disabled>
+                                                {mIdentifiant}
+                                              </option>
+                                              <option value="consult">
+                                                Afficher la mission dans la tournée
+                                              </option>
+                                            </select>
+                                          </div>
                                         </div>
                                       );
                                     })}

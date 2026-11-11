@@ -2930,7 +2930,10 @@ export default function ClientTab({
                 }}
                 placeholder={t("Recherche rapide")}
                 className="w-full text-black placeholder:text-[rgb(222,222,222)] placeholder:font-light outline-none"
-                style={searchInputStyle}
+                style={{
+                  ...searchInputStyle,
+                  paddingRight: search && search.length > 0 ? '36px' : searchInputStyle.paddingRight,
+                }}
                 onMouseEnter={() => setIsSearchHovered(true)}
                 onMouseLeave={() => setIsSearchHovered(false)}
                 onFocus={() => setIsSearchFocused(true)}
@@ -2941,6 +2944,38 @@ export default function ClientTab({
                   setIsSearchFocused(false);
                 }}
               />
+              {search && search.length > 0 && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setSearch('')}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    boxShadow: 'none',
+                    padding: '4px',
+                    margin: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    zIndex: 10,
+                  }}
+                  title={t("Vider la recherche")}
+                >
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
+                    alt=""
+                    style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                    referrerPolicy="no-referrer"
+                  />
+                </button>
+              )}
               {isSearchFocused && (
                 <div
                   id="search-clients-recent-dropdown"

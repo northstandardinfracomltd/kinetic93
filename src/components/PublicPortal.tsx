@@ -2290,6 +2290,9 @@ export default function PublicPortal({
     setIsAlertingStock(true);
     try {
       await postTechStockActivityToSheet(ugsCode, description);
+      setTechBottomInfoMessage(
+        "Confirmé. L’administrateur des stocks a reçu votre alerte concernant ce stock.",
+      );
     } catch (e: any) {
       console.error(e);
     } finally {
@@ -2333,6 +2336,9 @@ export default function PublicPortal({
       } catch (_) {}
       setCloseInventoryComment("");
       setShowCloseInventoryModal(false);
+      setTechBottomInfoMessage(
+        "Confirmé. Votre inventaire est enregistré, l’administrateur des stocks est informé.",
+      );
     } catch (err) {
       console.error("Error closing technician inventory:", err);
     } finally {
@@ -2402,6 +2408,9 @@ export default function PublicPortal({
       await postTechStockActivityToSheet(ugsCode, description);
 
       setShowRapatriementForm(false);
+      setTechBottomInfoMessage(
+        "Confirmé. Toutes les pièces de ce produit présentes dans l'inventaire de votre emplacement sont désormais transférées au stock central.",
+      );
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -3198,8 +3207,8 @@ export default function PublicPortal({
         const originalBorder = el.style.border;
         const originalBoxShadow = el.style.boxShadow;
         el.style.transition = "all 0.4s ease";
-        el.style.border = "2.5px solid #fe4eba";
-        el.style.boxShadow = "0 0 18px rgba(254, 78, 186, 0.45)";
+        el.style.border = "2.5px solid rgb(210, 45, 11)";
+        el.style.boxShadow = "none";
         setTimeout(() => {
           el.style.transition = originalTransition;
           el.style.border = originalBorder;

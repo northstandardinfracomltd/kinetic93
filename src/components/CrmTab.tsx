@@ -2905,6 +2905,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   border: '1px solid #dedede',
                   borderRadius: '13px',
                   padding: '9px 19px',
+                  paddingRight: ticketSearch && ticketSearch.length > 0 ? '36px' : '19px',
                   fontSize: '18px',
                   fontWeight: '100',
                   color: '#000000',
@@ -2915,6 +2916,38 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   boxSizing: 'border-box',
                 }}
               />
+              {ticketSearch && ticketSearch.length > 0 && (
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setTicketSearch('')}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'transparent',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    boxShadow: 'none',
+                    padding: '4px',
+                    margin: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    zIndex: 10,
+                  }}
+                  title={t("Vider la recherche")}
+                >
+                  <img
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
+                    alt=""
+                    style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                    referrerPolicy="no-referrer"
+                  />
+                </button>
+              )}
               {isSearchFocused && (
                 <div
                   id="search-crm-recent-dropdown"

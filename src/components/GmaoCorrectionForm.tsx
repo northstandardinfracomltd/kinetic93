@@ -5050,27 +5050,29 @@ export default function GmaoCorrectionForm({
                     placeholder="Entrez une date."
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
                   />
-                  <img
-                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                    alt="Effacer la date"
-                    onClick={(e) => {
-                      const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                      if (inp) inp.value = '';
-                      handleSnapshotChange('fabrication', '');
-                    }}
-                    style={{
-                      position: 'absolute',
-                      right: '8px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      height: '34px',
-                      width: '34px',
-                      objectFit: 'contain',
-                      cursor: 'pointer',
-                      zIndex: 10,
-                      userSelect: 'none',
-                    }}
-                  />
+                  {snapshot.fabrication && (
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('fabrication', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '34px',
+                        width: '34px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  )}
                 </div>
               </div>
 
@@ -5166,27 +5168,29 @@ export default function GmaoCorrectionForm({
                       placeholder="Entrez une date."
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        handleSnapshotChange('miseEnService', '');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {snapshot.miseEnService && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          handleSnapshotChange('miseEnService', '');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
                 <div className="space-y-1">
@@ -5202,27 +5206,29 @@ export default function GmaoCorrectionForm({
                       placeholder="Entrez une date."
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        handleSnapshotChange('finGarantie', '');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {snapshot.finGarantie && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          handleSnapshotChange('finGarantie', '');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -5306,27 +5312,29 @@ export default function GmaoCorrectionForm({
                     onChange={(e) => handleSnapshotChange('peremptionElectrodeA', e.target.value)}
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                   />
-                  <img
-                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                    alt="Effacer la date"
-                    onClick={(e) => {
-                      const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                      if (inp) inp.value = '';
-                      handleSnapshotChange('peremptionElectrodeA', '');
-                    }}
-                    style={{
-                      position: 'absolute',
-                      right: '8px',
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      height: '34px',
-                      width: '34px',
-                      objectFit: 'contain',
-                      cursor: 'pointer',
-                      zIndex: 10,
-                      userSelect: 'none',
-                    }}
-                  />
+                  {snapshot.peremptionElectrodeA && (
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                      alt="Effacer la date"
+                      onClick={(e) => {
+                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (inp) inp.value = '';
+                        handleSnapshotChange('peremptionElectrodeA', '');
+                      }}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        height: '34px',
+                        width: '34px',
+                        objectFit: 'contain',
+                        cursor: 'pointer',
+                        zIndex: 10,
+                        userSelect: 'none',
+                      }}
+                    />
+                  )}
                 </div>
               </div>
             )}
@@ -5378,27 +5386,29 @@ export default function GmaoCorrectionForm({
                       onChange={(e) => handleSnapshotChange('peremptionSecoursElectrodeA', e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        handleSnapshotChange('peremptionSecoursElectrodeA', '');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {snapshot.peremptionSecoursElectrodeA && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          handleSnapshotChange('peremptionSecoursElectrodeA', '');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -5659,27 +5669,29 @@ export default function GmaoCorrectionForm({
                       onChange={(e) => handleSnapshotChange('peremptionPadpakA', e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        handleSnapshotChange('peremptionPadpakA', '');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {snapshot.peremptionPadpakA && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          handleSnapshotChange('peremptionPadpakA', '');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -5778,27 +5790,29 @@ export default function GmaoCorrectionForm({
                       onChange={(e) => handleSnapshotChange('peremptionElectrodeP', e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        handleSnapshotChange('peremptionElectrodeP', '');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {snapshot.peremptionElectrodeP && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          handleSnapshotChange('peremptionElectrodeP', '');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -5851,27 +5865,29 @@ export default function GmaoCorrectionForm({
                       onChange={(e) => handleSnapshotChange('peremptionSecoursElectrodeP', e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        handleSnapshotChange('peremptionSecoursElectrodeP', '');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {snapshot.peremptionSecoursElectrodeP && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          handleSnapshotChange('peremptionSecoursElectrodeP', '');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -6132,27 +6148,29 @@ export default function GmaoCorrectionForm({
                       onChange={(e) => handleSnapshotChange('peremptionPadpakP', e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        handleSnapshotChange('peremptionPadpakP', '');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {snapshot.peremptionPadpakP && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          handleSnapshotChange('peremptionPadpakP', '');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -6270,27 +6288,29 @@ export default function GmaoCorrectionForm({
                       onChange={(e) => handleSnapshotChange('peremptionBatterie', e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        handleSnapshotChange('peremptionBatterie', '');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {snapshot.peremptionBatterie && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          handleSnapshotChange('peremptionBatterie', '');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -6308,27 +6328,29 @@ export default function GmaoCorrectionForm({
                       onChange={(e) => handleSnapshotChange('fabricationBatterie', e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        handleSnapshotChange('fabricationBatterie', '');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {snapshot.fabricationBatterie && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          handleSnapshotChange('fabricationBatterie', '');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -6346,27 +6368,29 @@ export default function GmaoCorrectionForm({
                       onChange={(e) => handleSnapshotChange('insertionBatterie', e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        handleSnapshotChange('insertionBatterie', '');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {snapshot.insertionBatterie && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          handleSnapshotChange('insertionBatterie', '');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               )}
@@ -6691,28 +6715,30 @@ export default function GmaoCorrectionForm({
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono"
                       disabled={kitTrousseSecoursPresent !== 'Oui'}
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        if (kitTrousseSecoursPresent !== 'Oui') return;
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        setKitPeremption('');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {kitPeremption && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          if (kitTrousseSecoursPresent !== 'Oui') return;
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          setKitPeremption('');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -6856,28 +6882,30 @@ export default function GmaoCorrectionForm({
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                       disabled={kitMasquePresent !== 'Oui'}
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        if (kitMasquePresent !== 'Oui') return;
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        setKitPeremptionMasque('');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {kitPeremptionMasque && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          if (kitMasquePresent !== 'Oui') return;
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          setKitPeremptionMasque('');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -6906,28 +6934,30 @@ export default function GmaoCorrectionForm({
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                       disabled={kitServiettesPresentes !== 'Oui'}
                     />
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                      alt="Effacer la date"
-                      onClick={(e) => {
-                        if (kitServiettesPresentes !== 'Oui') return;
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                        if (inp) inp.value = '';
-                        setKitPeremptionServiettes('');
-                      }}
-                      style={{
-                        position: 'absolute',
-                        right: '8px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        height: '34px',
-                        width: '34px',
-                        objectFit: 'contain',
-                        cursor: 'pointer',
-                        zIndex: 10,
-                        userSelect: 'none',
-                      }}
-                    />
+                    {kitPeremptionServiettes && (
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                        alt="Effacer la date"
+                        onClick={(e) => {
+                          if (kitServiettesPresentes !== 'Oui') return;
+                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (inp) inp.value = '';
+                          setKitPeremptionServiettes('');
+                        }}
+                        style={{
+                          position: 'absolute',
+                          right: '8px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          height: '34px',
+                          width: '34px',
+                          objectFit: 'contain',
+                          cursor: 'pointer',
+                          zIndex: 10,
+                          userSelect: 'none',
+                        }}
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -7675,6 +7705,60 @@ export default function GmaoCorrectionForm({
                       {pendingClotureToggleConfirm === 'devis' &&
                         "Le client souhaite un devis, ou vous recommandez de lui en établir un."}
                     </p>
+                    {pendingClotureToggleConfirm === 'photos' && (
+                      <div className="grid grid-cols-3 gap-3 w-full">
+                        {[
+                          {
+                            url: photoUrl,
+                            fallbackRef: photoLocalPreviewRef,
+                            setter: setPhotoUrl,
+                            title: "Photographie globale du défibrillateur",
+                          },
+                          {
+                            url: photoArriereUrl,
+                            fallbackRef: photoArriereLocalPreviewRef,
+                            setter: setPhotoArriereUrl,
+                            title: "Photographie arrière / étiquette",
+                          },
+                          {
+                            url: photoResultatTestUrl,
+                            fallbackRef: photoTestLocalPreviewRef,
+                            setter: setPhotoResultatTestUrl,
+                            title: "Résultat du test",
+                          },
+                        ].map((item, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => {
+                              if (item.url) {
+                                setPreviewModalPhoto({ url: item.url, title: item.title });
+                              }
+                            }}
+                            className={`aspect-square w-full rounded-xl border border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden relative group ${
+                              item.url ? 'cursor-pointer hover:border-slate-400' : ''
+                            }`}
+                            title={item.url ? `${item.title} (Cliquer pour agrandir)` : item.title}
+                          >
+                            {item.url ? (
+                              <img
+                                src={item.url}
+                                alt={item.title}
+                                className="w-full h-full object-cover"
+                                onError={() => {
+                                  if (item.fallbackRef.current && item.url !== item.fallbackRef.current) {
+                                    item.setter(item.fallbackRef.current);
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <span className="text-[11px] text-slate-400 font-sans text-center px-1">
+                                Aucune photo
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
@@ -8343,9 +8427,9 @@ export default function GmaoCorrectionForm({
         </div>
       )}
       {/* Photo Preview Modal for Miniatures */}
-      {previewModalPhoto && (
+      {previewModalPhoto && typeof document !== 'undefined' && createPortal(
         <div 
-          className="fixed inset-0 bg-black/80 z-[120] flex flex-col items-center justify-center p-4 animate-fadeIn"
+          className="fixed inset-0 bg-black/80 z-[100001] flex flex-col items-center justify-center p-4 animate-fadeIn"
           onClick={() => setPreviewModalPhoto(null)}
         >
           <div 
@@ -8382,7 +8466,8 @@ export default function GmaoCorrectionForm({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Full-Screen Advanced Search Modal for Equipment & Loaner Selection */}
