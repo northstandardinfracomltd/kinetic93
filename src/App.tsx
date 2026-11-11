@@ -1364,6 +1364,120 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, [selectedFsmHelpFaqIndex, FSM_HELP_FAQ_ITEMS]);
 
+  const [isGmaoHelpFaqOpen, setIsGmaoHelpFaqOpen] = useState<boolean>(false);
+  const [selectedGmaoHelpFaqIndex, setSelectedGmaoHelpFaqIndex] = useState<number | null>(null);
+  const [gmaoHelpIntroTyped, setGmaoHelpIntroTyped] = useState<string>('');
+  const [gmaoHelpAnswerTyped, setGmaoHelpAnswerTyped] = useState<string>('');
+  const [gmaoHelpAnswerDone, setGmaoHelpAnswerDone] = useState<boolean>(false);
+  const [gmaoHelpResetTick, setGmaoHelpResetTick] = useState<number>(0);
+  const gmaoHelpChatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const GMAO_HELP_FAQ_ITEMS = useMemo(() => [
+    {
+      q: "À quoi sert l’onglet « Rapports PDF » ?",
+      a: "Il regroupe l’ensemble des rapports générés, qu’ils soient issus de missions planifiées lors de tournées ou rédigés spontanément. Tous les rapports sont créés depuis l’application web technicien. Dès qu’un compte-rendu est enregistré, un document au format PDF est généré.",
+    },
+    {
+      q: "Quels rapports figurent dans l’onglet « À venir » ?",
+      a: "Cet onglet rassemble les rapports prévisionnels liés aux missions planifiées. Les lister à l’avance permet d’en assurer le suivi et l’organisation via le volet accessible avec le bouton Gérer.",
+    },
+    {
+      q: "Quels rapports figurent dans l’onglet « Modération » ?",
+      a: "Il s’agit des rapports transmis par les techniciens en attente de vérification. Vous pouvez les approuver directement via le bouton Valider ou apporter des ajustements grâce au bouton Corriger.",
+    },
+    {
+      q: "Quels rapports figurent dans l’onglet « Validés » ?",
+      a: "Cet onglet contient tous les rapports approuvés lors de l'étape de modération. La validation d'un rapport entraîne automatiquement la mise à jour des données de l'équipement concerné.",
+    },
+    {
+      q: "À quoi sert l’option « Inclure les autres matériels » ?",
+      a: "Cette option permet d’afficher les rapports de l’ensemble des équipements (défibrillateurs et autres parcs de matériel). Si vous la désactivez, seuls les rapports relatifs aux défibrillateurs s'affichent.",
+    },
+    {
+      q: "À quoi correspond le pictogramme en début de ligne ?",
+      a: "Il reflète les marqueurs (drapeaux) attribués au rapport dans le volet latéral accessible via le bouton Gérer.",
+    },
+    {
+      q: "À quoi sert le bouton « Gérer » ?",
+      a: "Il ouvre un volet latéral regroupant les paramètres de traçabilité et de suivi opérationnel, de la planification du rapport jusqu’à sa validation finale.",
+    },
+    {
+      q: "Comment modifier un rapport émis ?",
+      a: "Dans la colonne des actions, cliquez sur le bouton Corriger. Vous accéderez au formulaire identique à celui utilisé par le technicien afin d’appliquer vos modifications.",
+    },
+    {
+      q: "Comment valider un rapport en attente de modération ?",
+      a: "Dans la colonne des actions, cliquez sur le bouton Valider pour approuver le document et mettre à jour les données du matériel associé.",
+    },
+    {
+      q: "Comment adapter l’affichage à la taille de mon écran ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Minimiser et ajuster l’affichage.",
+    },
+    {
+      q: "À quoi sert la synchronisation avec Google Sheets ?",
+      a: "Dans une logique de redondance et de PRA (Plan de Reprise d’Activité), vos données enregistrées sur le serveur sont synchronisées sur une feuille de calcul dédiée. Cela vous permet également d’intégrer facilement des outils d’automatisation tiers (Zapier, n8n) ou d’interagir via l’API Google.",
+    },
+    {
+      q: "Comment appliquer des filtres ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Appliquer des filtres.",
+    },
+    {
+      q: "Comment consulter les demandes de devis transmises par le technicien ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Demandes de devis.",
+    },
+    {
+      q: "Comment supprimer un rapport ?",
+      a: "Faites un clic droit sur la ligne du rapport concerné, puis cliquez sur Supprimer. Attention : cette action est irréversible.",
+    },
+  ], []);
+
+  useEffect(() => {
+    if (!isGmaoHelpFaqOpen) {
+      setSelectedGmaoHelpFaqIndex(null);
+      setGmaoHelpIntroTyped('');
+      setGmaoHelpAnswerTyped('');
+      setGmaoHelpAnswerDone(false);
+      return;
+    }
+    const introText = "Ressources d’aide populaires :";
+    let idx = 0;
+    setGmaoHelpIntroTyped('');
+    const interval = window.setInterval(() => {
+      idx += 1;
+      setGmaoHelpIntroTyped(introText.slice(0, idx));
+      if (idx >= introText.length) {
+        window.clearInterval(interval);
+      }
+    }, 18);
+    return () => window.clearInterval(interval);
+  }, [isGmaoHelpFaqOpen, gmaoHelpResetTick]);
+
+  useEffect(() => {
+    if (selectedGmaoHelpFaqIndex === null || !GMAO_HELP_FAQ_ITEMS[selectedGmaoHelpFaqIndex]) {
+      setGmaoHelpAnswerTyped('');
+      setGmaoHelpAnswerDone(false);
+      return;
+    }
+    const fullAnswer = GMAO_HELP_FAQ_ITEMS[selectedGmaoHelpFaqIndex].a;
+    let idx = 0;
+    setGmaoHelpAnswerTyped('');
+    setGmaoHelpAnswerDone(false);
+    const interval = window.setInterval(() => {
+      idx += 2;
+      if (idx >= fullAnswer.length) {
+        setGmaoHelpAnswerTyped(fullAnswer);
+        setGmaoHelpAnswerDone(true);
+        window.clearInterval(interval);
+      } else {
+        setGmaoHelpAnswerTyped(fullAnswer.slice(0, idx));
+      }
+      if (gmaoHelpChatScrollRef.current) {
+        gmaoHelpChatScrollRef.current.scrollTop = gmaoHelpChatScrollRef.current.scrollHeight;
+      }
+    }, 14);
+    return () => window.clearInterval(interval);
+  }, [selectedGmaoHelpFaqIndex, GMAO_HELP_FAQ_ITEMS]);
+
   const [fsmTourDrafts, setFsmTourDrafts] = useState<Record<string, any>>({});
   const [dirtyFsmTourIds, setDirtyFsmTourIds] = useState<Record<string, boolean>>({});
   const triggerFsmTourSaveShakeAndScroll = (tourId?: string) => {
@@ -21743,6 +21857,32 @@ export default function App() {
                         {isRefreshingRapportsPdf ? t("Actualisation...") : t("Actualiser les données")}
                       </button>
 
+                      {/* Button Aide */}
+                      <button
+                        type="button"
+                        id="btn-gmao-help-formation"
+                        onClick={() => setIsGmaoHelpFaqOpen(true)}
+                        style={{
+                          backgroundColor: '#0f172a',
+                          color: '#ffffff',
+                          boxShadow: 'none',
+                          borderRadius: '13px',
+                          fontSize: '14px',
+                          padding: '4px 11px 5px 11px',
+                          fontWeight: '100',
+                          transition: 'all 0s ease-in-out',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.5rem',
+                          cursor: 'pointer',
+                          border: 'none',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        }}
+                      >
+                        Aide
+                      </button>
+
                       {/* Field recherche (Search input) */}
                       <div className="relative w-full sm:w-48">
                         <input
@@ -23871,6 +24011,275 @@ export default function App() {
                   );
                 })()}
 
+                {/* 📚 AIDE & FORMATION CHAT AGENT SIDE PANE (RAPPORTS PDF) 📚 */}
+                {isGmaoHelpFaqOpen && typeof document !== 'undefined' && createPortal(
+                  <div
+                    id="gmao-help-faq-side-pane-backdrop"
+                    className="fixed inset-0 z-[99990] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+                    style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      width: '100vw',
+                      height: '100vh',
+                      minHeight: '100dvh',
+                      maxHeight: '100dvh',
+                      zIndex: 99990,
+                    }}
+                    onClick={() => setIsGmaoHelpFaqOpen(false)}
+                  >
+                    <div
+                      id="gmao-help-faq-side-pane"
+                      className="relative w-full sm:w-[480px] shadow-2xl flex flex-col shrink-0 transform transition-transform duration-200 ease-in-out"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        height: '100vh',
+                        minHeight: '100dvh',
+                        maxHeight: '100dvh',
+                        backgroundColor: '#F5F7FA',
+                        borderLeft: 'none',
+                        borderRadius: '0px',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                    >
+                      <div
+                        ref={gmaoHelpChatScrollRef}
+                        className="flex-1 overflow-y-auto p-6 space-y-4 pb-28"
+                      >
+                        {selectedGmaoHelpFaqIndex === null && (
+                          <>
+                            <div className="flex flex-col items-start animate-fadeIn">
+                              <div
+                                className="transition-all relative select-text w-full"
+                                style={{
+                                  backgroundColor: 'transparent',
+                                  fontSize: '18px',
+                                  border: 'none',
+                                  boxShadow: 'none',
+                                  padding: 0,
+                                  color: '#000000',
+                                  cursor: 'default',
+                                }}
+                              >
+                                <p
+                                  className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                                  style={{
+                                    fontSize: '18px',
+                                    color: '#000000',
+                                    cursor: 'default',
+                                  }}
+                                >
+                                  {gmaoHelpIntroTyped}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="w-full animate-fadeIn">
+                              <select
+                                id="gmao-help-faq-select"
+                                value=""
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '') {
+                                    setSelectedGmaoHelpFaqIndex(null);
+                                  } else {
+                                    setSelectedGmaoHelpFaqIndex(Number(val));
+                                  }
+                                }}
+                                style={{
+                                  width: '100%',
+                                  backgroundColor: '#ffffff',
+                                  color: '#000000',
+                                  border: '1px solid #DCE1EA',
+                                  borderRadius: '13px',
+                                  padding: '9px 14px',
+                                  fontSize: '18px',
+                                  fontWeight: 100,
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  outline: 'none',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <option value="">Sélection d’un sujet.</option>
+                                {GMAO_HELP_FAQ_ITEMS.map((item, idx) => (
+                                  <option key={idx} value={String(idx)}>
+                                    {item.q}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </>
+                        )}
+
+                        {selectedGmaoHelpFaqIndex !== null && GMAO_HELP_FAQ_ITEMS[selectedGmaoHelpFaqIndex] && (
+                          <>
+                            <div className="flex flex-col items-start animate-fadeIn">
+                              <div
+                                className="transition-all relative select-text w-full"
+                                style={{
+                                  padding: '15px 20px',
+                                  background: 'rgb(233, 235, 239)',
+                                  fontSize: '18px',
+                                  fontWeight: 'bold',
+                                  color: '#000000',
+                                  cursor: 'default',
+                                  borderRadius: '13px',
+                                  border: 'none',
+                                  boxShadow: 'none',
+                                }}
+                              >
+                                <p
+                                  className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                                  style={{
+                                    fontSize: '18px',
+                                    fontWeight: 'bold',
+                                    color: '#000000',
+                                    cursor: 'default',
+                                  }}
+                                >
+                                  {GMAO_HELP_FAQ_ITEMS[selectedGmaoHelpFaqIndex].q}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-start animate-fadeIn">
+                              <div
+                                className="transition-all relative select-text w-full"
+                                style={{
+                                  backgroundColor: 'transparent',
+                                  fontSize: '18px',
+                                  border: 'none',
+                                  boxShadow: 'none',
+                                  padding: 0,
+                                  color: '#000000',
+                                  cursor: 'default',
+                                }}
+                              >
+                                <p
+                                  className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                                  style={{
+                                    fontSize: '18px',
+                                    color: '#000000',
+                                    cursor: 'default',
+                                  }}
+                                >
+                                  {gmaoHelpAnswerTyped}
+                                </p>
+                              </div>
+                            </div>
+
+                            {gmaoHelpAnswerDone && (
+                              <div className="flex flex-col items-start space-y-3 w-full animate-fadeIn">
+                                <div
+                                  className="transition-all relative select-text w-full"
+                                  style={{
+                                    backgroundColor: 'transparent',
+                                    fontSize: '18px',
+                                    border: 'none',
+                                    boxShadow: 'none',
+                                    padding: 0,
+                                    color: '#000000',
+                                    cursor: 'default',
+                                  }}
+                                >
+                                  <p
+                                    className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                                    style={{
+                                      fontSize: '18px',
+                                      color: '#000000',
+                                      cursor: 'default',
+                                    }}
+                                  >
+                                    Vous avez encore besoin d’aide ?
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsGmaoHelpFaqOpen(false);
+                                    setActiveTab('assistance');
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    backgroundColor: '#2e54ff',
+                                    color: '#ffffff',
+                                    borderRadius: '13px',
+                                    fontSize: '18px',
+                                    fontWeight: 'bold',
+                                    padding: '11px 22px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    boxShadow: 'none',
+                                  }}
+                                  className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                                >
+                                  Contacter l’assistance
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedGmaoHelpFaqIndex(null);
+                                    setGmaoHelpAnswerTyped('');
+                                    setGmaoHelpAnswerDone(false);
+                                    setGmaoHelpResetTick((prev) => prev + 1);
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    backgroundColor: 'rgb(210, 45, 11)',
+                                    color: '#ffffff',
+                                    borderRadius: '13px',
+                                    fontSize: '18px',
+                                    fontWeight: 'bold',
+                                    padding: '11px 22px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    boxShadow: 'none',
+                                  }}
+                                  className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                                >
+                                  Recommencer
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      <div
+                        className="absolute bottom-0 left-0 right-0 p-6 flex gap-4 z-20 pointer-events-none"
+                        style={{ backgroundColor: 'transparent', background: 'transparent' }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setIsGmaoHelpFaqOpen(false)}
+                          style={{
+                            backgroundColor: 'rgb(210, 45, 11)',
+                            color: '#ffffff',
+                            borderRadius: '13px',
+                            fontSize: '18px',
+                            fontWeight: 'bold',
+                            padding: '11px 22px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            boxShadow: 'none',
+                          }}
+                          className="flex-1 text-center cursor-pointer animate-none pointer-events-auto"
+                        >
+                          Fermer
+                        </button>
+                      </div>
+                    </div>
+                  </div>,
+                  document.body
+                )}
+
                 {/* 🧭 GMAO FILTER SIDE PANE / DRAWER 🧭 */}
                 {isGmaoFilterPaneOpen && (
                   <div 
@@ -24457,6 +24866,7 @@ export default function App() {
               }}
               onRefreshData={handleManualRefreshCrm}
               isRefreshing={isRefreshingCrm}
+              setActiveTab={setActiveTab}
               t={t}
             />
           )}

@@ -154,6 +154,7 @@ interface CrmTabProps {
   onSaveTickets: (updated: SupportTicket[]) => void;
   onRefreshData?: () => Promise<void> | void;
   isRefreshing?: boolean;
+  setActiveTab?: (tab: string) => void;
   t: (key: string) => string;
 }
 
@@ -166,8 +167,131 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   onSaveTickets,
   onRefreshData,
   isRefreshing,
+  setActiveTab,
   t
 }) => {
+  const [isHelpFaqOpen, setIsHelpFaqOpen] = useState(false);
+  const [selectedHelpFaqIndex, setSelectedHelpFaqIndex] = useState<number | null>(null);
+  const [helpIntroTyped, setHelpIntroTyped] = useState('');
+  const [helpAnswerTyped, setHelpAnswerTyped] = useState('');
+  const [helpAnswerDone, setHelpAnswerDone] = useState(false);
+  const [helpResetTick, setHelpResetTick] = useState(0);
+  const helpChatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const HELP_FAQ_ITEMS = useMemo(() => [
+    {
+      q: "À quoi sert l’onglet CRM ?",
+      a: "Il s’agit du centre de gestion de la relation client, divisé en deux volets principaux : le suivi commercial et le support technique.",
+    },
+    {
+      q: "Comment créer un nouveau ticket ?",
+      a: "Cliquez sur le bouton Nouveau situé en haut à droite de la page.",
+    },
+    {
+      q: "Quels sont les canaux de création de tickets ?",
+      a: "En plus de la création manuelle via le bouton Nouveau, vous pouvez intégrer un formulaire de contact sur une page web externe ou recevoir directement les requêtes soumises par vos clients depuis leur portail dédié.",
+    },
+    {
+      q: "Quelles sont les différences entre les types de tickets ?",
+      a: "Les tickets sont répartis selon deux axes principaux : la catégorie Commercial, dédiée au suivi avant-vente, et les catégories Réclamation et Technique, orientées vers l’assistance et le service après-vente. À noter qu’une demande technique peut évoluer en opportunité commerciale si l’intervention nécessite l’émission d’un devis.",
+    },
+    {
+      q: "Comment supprimer un ticket ?",
+      a: "Dans la colonne des actions située au bout de la ligne concernée, cliquez sur le bouton Supprimer.",
+    },
+    {
+      q: "Comment consulter les statistiques de performance ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Statistiques de performance.",
+    },
+    {
+      q: "Comment modifier le modèle d’e-mail de relance ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Modifier les réglages.",
+    },
+    {
+      q: "Comment modifier le modèle d’e-mail de réponse du support ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Modifier les réglages.",
+    },
+    {
+      q: "Comment récupérer le code pour intégrer le formulaire de contact sur un site web ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez Modifier les réglages. Faites défiler la fenêtre vers le bas pour accéder à la section contenant le code d'intégration (iframe / script).",
+    },
+    {
+      q: "Comment appliquer des filtres sur la vue ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Appliquer des filtres.",
+    },
+    {
+      q: "Comment adapter la largeur des colonnes à la taille de l'écran ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Minimiser et ajuster l’affichage.",
+    },
+    {
+      q: "Comment choisir les colonnes à afficher ou à masquer ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Gérer la visibilité des colonnes.",
+    },
+    {
+      q: "À quoi sert l’accès à la feuille de calcul (Google Sheets) ?",
+      a: "Dans une logique de redondance et de PRA (Plan de Reprise d’Activité), les données sauvegardées sur le serveur sont synchronisées en continu sur une feuille de calcul dédiée. Ce format facilite également l’interconnexion avec des outils d’automatisation tiers (Zapier, n8n) ou des intégrations personnalisées via l’API Google.",
+    },
+    {
+      q: "Comment exporter une sélection de tickets ?",
+      a: "Cochez les cases à gauche des tickets souhaités. Dans la barre d’outils supérieure qui apparaît, cliquez sur Export CSV.",
+    },
+    {
+      q: "Comment envoyer un e-mail de relance groupé ?",
+      a: "Cochez les cases des tickets concernés par la relance. Dans la barre d’outils supérieure qui apparaît, cliquez sur Email Relance.",
+    },
+    {
+      q: "À quoi sert le bouton d’actualisation des données ?",
+      a: "Il permet de rafraîchir l’affichage en temps réel afin de faire apparaître immédiatement les nouvelles demandes entrantes ou les tickets créés par d'autres utilisateurs connectés.",
+    },
+  ], []);
+
+  useEffect(() => {
+    if (!isHelpFaqOpen) {
+      setSelectedHelpFaqIndex(null);
+      setHelpIntroTyped('');
+      setHelpAnswerTyped('');
+      setHelpAnswerDone(false);
+      return;
+    }
+    const introText = "Ressources d’aide populaires :";
+    let idx = 0;
+    setHelpIntroTyped('');
+    const interval = window.setInterval(() => {
+      idx += 1;
+      setHelpIntroTyped(introText.slice(0, idx));
+      if (idx >= introText.length) {
+        window.clearInterval(interval);
+      }
+    }, 18);
+    return () => window.clearInterval(interval);
+  }, [isHelpFaqOpen, helpResetTick]);
+
+  useEffect(() => {
+    if (selectedHelpFaqIndex === null || !HELP_FAQ_ITEMS[selectedHelpFaqIndex]) {
+      setHelpAnswerTyped('');
+      setHelpAnswerDone(false);
+      return;
+    }
+    const fullAnswer = HELP_FAQ_ITEMS[selectedHelpFaqIndex].a;
+    let idx = 0;
+    setHelpAnswerTyped('');
+    setHelpAnswerDone(false);
+    const interval = window.setInterval(() => {
+      idx += 2;
+      if (idx >= fullAnswer.length) {
+        setHelpAnswerTyped(fullAnswer);
+        setHelpAnswerDone(true);
+        window.clearInterval(interval);
+      } else {
+        setHelpAnswerTyped(fullAnswer.slice(0, idx));
+      }
+      if (helpChatScrollRef.current) {
+        helpChatScrollRef.current.scrollTop = helpChatScrollRef.current.scrollHeight;
+      }
+    }, 14);
+    return () => window.clearInterval(interval);
+  }, [selectedHelpFaqIndex, HELP_FAQ_ITEMS]);
+
   const [ticketSearch, setTicketSearch] = useState('');
   const [ticketCategoryFilter, setTicketCategoryFilter] = useState<'Commercial' | 'Réclamation' | 'Technique' | 'Sans Catégorie'>('Commercial');
   const [ticketStatusFilter, setTicketStatusFilter] = useState<'Tous' | 'Nouveau' | 'En cours' | 'Terminé'>('Tous');
@@ -2708,6 +2832,32 @@ export const CrmTab: React.FC<CrmTabProps> = ({
               title={t("Actualiser les données")}
             >
               <span>{effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
+            </button>
+
+            {/* Button Aide */}
+            <button
+              type="button"
+              id="btn-crm-help-formation"
+              onClick={() => setIsHelpFaqOpen(true)}
+              style={{
+                backgroundColor: '#0f172a',
+                color: '#ffffff',
+                boxShadow: 'none',
+                borderRadius: '13px',
+                fontSize: '14px',
+                padding: '4px 11px 5px 11px',
+                fontWeight: '100',
+                transition: 'all 0s ease-in-out',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                cursor: 'pointer',
+                border: 'none',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+            >
+              Aide
             </button>
 
             {/* Search Input */}
@@ -5960,6 +6110,275 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           return l.includes(q) || s.includes(q) || b.includes(q) || email.includes(q) || siret.includes(q) || ville.includes(q);
         }}
       />
+
+      {/* 📚 AIDE & FORMATION CHAT AGENT SIDE PANE (CRM) 📚 */}
+      {isHelpFaqOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          id="crm-help-faq-side-pane-backdrop"
+          className="fixed inset-0 z-[99990] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            minHeight: '100dvh',
+            maxHeight: '100dvh',
+            zIndex: 99990,
+          }}
+          onClick={() => setIsHelpFaqOpen(false)}
+        >
+          <div
+            id="crm-help-faq-side-pane"
+            className="relative w-full sm:w-[480px] shadow-2xl flex flex-col shrink-0 transform transition-transform duration-200 ease-in-out"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              backgroundColor: '#F5F7FA',
+              borderLeft: 'none',
+              borderRadius: '0px',
+              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            }}
+          >
+            <div
+              ref={helpChatScrollRef}
+              className="flex-1 overflow-y-auto p-6 space-y-4 pb-28"
+            >
+              {selectedHelpFaqIndex === null && (
+                <>
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        backgroundColor: 'transparent',
+                        fontSize: '18px',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {helpIntroTyped}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="w-full animate-fadeIn">
+                    <select
+                      id="crm-help-faq-select"
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setSelectedHelpFaqIndex(null);
+                        } else {
+                          setSelectedHelpFaqIndex(Number(val));
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        border: '1px solid #DCE1EA',
+                        borderRadius: '13px',
+                        padding: '9px 14px',
+                        fontSize: '18px',
+                        fontWeight: 100,
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        outline: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="">Sélection d’un sujet.</option>
+                      {HELP_FAQ_ITEMS.map((item, idx) => (
+                        <option key={idx} value={String(idx)}>
+                          {item.q}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {selectedHelpFaqIndex !== null && HELP_FAQ_ITEMS[selectedHelpFaqIndex] && (
+                <>
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        padding: '15px 20px',
+                        background: 'rgb(233, 235, 239)',
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        color: '#000000',
+                        cursor: 'default',
+                        borderRadius: '13px',
+                        border: 'none',
+                        boxShadow: 'none',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {HELP_FAQ_ITEMS[selectedHelpFaqIndex].q}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        backgroundColor: 'transparent',
+                        fontSize: '18px',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {helpAnswerTyped}
+                      </p>
+                    </div>
+                  </div>
+
+                  {helpAnswerDone && (
+                    <div className="flex flex-col items-start space-y-3 w-full animate-fadeIn">
+                      <div
+                        className="transition-all relative select-text w-full"
+                        style={{
+                          backgroundColor: 'transparent',
+                          fontSize: '18px',
+                          border: 'none',
+                          boxShadow: 'none',
+                          padding: 0,
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        <p
+                          className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                          style={{
+                            fontSize: '18px',
+                            color: '#000000',
+                            cursor: 'default',
+                          }}
+                        >
+                          Vous avez encore besoin d’aide ?
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsHelpFaqOpen(false);
+                          if (setActiveTab) setActiveTab('assistance');
+                        }}
+                        style={{
+                          width: '100%',
+                          backgroundColor: '#2e54ff',
+                          color: '#ffffff',
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'none',
+                        }}
+                        className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                      >
+                        Contacter l’assistance
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedHelpFaqIndex(null);
+                          setHelpAnswerTyped('');
+                          setHelpAnswerDone(false);
+                          setHelpResetTick((prev) => prev + 1);
+                        }}
+                        style={{
+                          width: '100%',
+                          backgroundColor: 'rgb(210, 45, 11)',
+                          color: '#ffffff',
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'none',
+                        }}
+                        className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                      >
+                        Recommencer
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div
+              className="absolute bottom-0 left-0 right-0 p-6 flex gap-4 z-20 pointer-events-none"
+              style={{ backgroundColor: 'transparent', background: 'transparent' }}
+            >
+              <button
+                type="button"
+                onClick={() => setIsHelpFaqOpen(false)}
+                style={{
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  color: '#ffffff',
+                  borderRadius: '13px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  padding: '11px 22px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                }}
+                className="flex-1 text-center cursor-pointer animate-none pointer-events-auto"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

@@ -167,6 +167,144 @@ export default function StocksTab({
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [slidingNavTab, setSlidingNavTab] = useState<'stocks' | 'stocks-distribues'>('stocks');
 
+  const [isHelpFaqOpen, setIsHelpFaqOpen] = useState(false);
+  const [selectedHelpFaqIndex, setSelectedHelpFaqIndex] = useState<number | null>(null);
+  const [helpIntroTyped, setHelpIntroTyped] = useState('');
+  const [helpAnswerTyped, setHelpAnswerTyped] = useState('');
+  const [helpAnswerDone, setHelpAnswerDone] = useState(false);
+  const [helpResetTick, setHelpResetTick] = useState(0);
+  const helpChatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const HELP_FAQ_ITEMS = useMemo(() => [
+    {
+      q: "Comment créer un nouvel article en stock ?",
+      a: "Cliquez sur le bouton Nouveau situé en haut à droite de l'écran.",
+    },
+    {
+      q: "Comment créer un modèle de produit ou de service ?",
+      a: "Un modèle de produit ou de service se configure en tant que variable dans Defibeo. Pour créer, modifier ou supprimer un modèle, rendez-vous dans l’onglet Variables.",
+    },
+    {
+      q: "Comment modifier une fiche de stock ?",
+      a: "Cliquez directement sur la ligne de l'article concerné, ou cliquez sur le bouton Modifier situé dans la colonne des actions.",
+    },
+    {
+      q: "Comment supprimer un article du stock ?",
+      a: "Dans la colonne des actions, cliquez sur le bouton Supprimer. Ce bouton est automatiquement désactivé tant que la quantité en stock pour cet article n'est pas égale à zéro.",
+    },
+    {
+      q: "Comment rechercher un article ?",
+      a: "Saisissez au moins deux caractères dans la barre de recherche située en haut à droite. Pour des critères plus précis, ouvrez le menu contextuel (les 3 points verticaux) puis sélectionnez Appliquer des filtres.",
+    },
+    {
+      q: "À quoi sert le bouton d’actualisation des données ?",
+      a: "Il permet de rafraîchir l’affichage en temps réel afin de synchroniser les modifications effectuées simultanément par vos collaborateurs sur d'autres postes ou par les techniciens depuis leur application web.",
+    },
+    {
+      q: "À quoi sert le flux d’activité accessible via le bouton « Activité » ?",
+      a: "Il rassemble l'historique des notifications opérationnelles, notamment les actions réalisées par les techniciens depuis l'onglet Stocks de leur application (signalements d'anomalies, retours de matériel, inventaires terminés, etc.).",
+    },
+    {
+      q: "Comment appliquer des filtres sur la vue ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Appliquer des filtres.",
+    },
+    {
+      q: "Comment adapter la largeur des colonnes à la taille de l'écran ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Minimiser et ajuster l’affichage.",
+    },
+    {
+      q: "Comment connaître la valeur totale du stock ?",
+      a: "Dans l’en-tête, cliquez sur le menu contextuel (les 3 points verticaux), puis sélectionnez : Afficher la valeur des stocks.",
+    },
+    {
+      q: "À quoi sert l’accès à la feuille de calcul (Google Sheets) ?",
+      a: "Dans une logique de redondance et de PRA (Plan de Reprise d’Activité), les données sauvegardées sur le serveur sont synchronisées en continu sur une feuille de calcul dédiée. Ce format facilite également l’interconnexion avec des outils d’automatisation tiers (Zapier, n8n) ou des intégrations personnalisées via l’API Google.",
+    },
+    {
+      q: "Qu'est-ce que l’UGS ?",
+      a: "L'UGS (Unité de Gestion des Stocks / SKU) correspond à votre code article interne ou à un code EAN/code-barres, selon l'organisation de votre référentiel logistique.",
+    },
+    {
+      q: "À quoi correspond la quantité disponible ?",
+      a: "C'est la quantité physique totale actuellement en stock pour ce produit, tous emplacements et véhicules confondus.",
+    },
+    {
+      q: "À quoi correspond la quantité réservée ?",
+      a: "Il s'agit des volumes prévus pour des sorties imminentes, calculés automatiquement d'après les pièces requises pour les missions planifiées.",
+    },
+    {
+      q: "À quoi correspond le nombre de colis par unité ?",
+      a: "Ce champ indique le conditionnement du produit lorsqu'une seule unité livrable se compose de plusieurs cartons distincts non groupés.",
+    },
+    {
+      q: "Comment renseigner les tarifs d'achat par fournisseur ?",
+      a: "Vous pouvez définir un coût d'achat par défaut (tous fournisseurs confondus) ou renseigner, dans la section Fournisseurs, un tarif spécifique associé à chaque fournisseur référencé.",
+    },
+    {
+      q: "Comment fonctionne la compatibilité / prévoyance ?",
+      a: "Dans la section Prévoyance, vous associez le matériel aux équipements avec lesquels il est compatible. Par exemple, pour une électrode spécifique, vous pouvez indiquer les modèles de défibrillateurs correspondants afin d'éviter les erreurs d'attribution en mission.",
+    },
+    {
+      q: "Qu'est-ce que l’inventaire de traçabilité ?",
+      a: "Cette option permet un suivi individualisé par numéro de série et date de péremption pour chaque pièce le nécessitant (ex. : consommables médicaux). Elle peut également s'appliquer aux consommables simples sans péremption (ex. : panneaux de signalétique) afin d'attribuer un lot à l'emplacement véhicule d'un technicien et de suivre son niveau de dotation.",
+    },
+    {
+      q: "À quoi sert le code-barres généré pour chaque pièce ?",
+      a: "Pour les articles suivis en traçabilité unitaire, un code-barres est généré pour l'étiquetage. Le technicien peut ainsi scanner la pièce au moment de sa sortie de stock ou de son installation, éliminant les erreurs de saisie manuelle.",
+    },
+    {
+      q: "Comment remonte un inventaire réalisé par un technicien ?",
+      a: "Dès qu'un technicien valide son inventaire depuis son interface, une notification apparaît dans le flux d'activité et un compte-rendu PDF est automatiquement mis à disposition. Les statuts et quantités sont alors instantanément actualisés dans les inventaires de traçabilité.",
+    },
+  ], []);
+
+  useEffect(() => {
+    if (!isHelpFaqOpen) {
+      setSelectedHelpFaqIndex(null);
+      setHelpIntroTyped('');
+      setHelpAnswerTyped('');
+      setHelpAnswerDone(false);
+      return;
+    }
+    const introText = "Ressources d’aide populaires :";
+    let idx = 0;
+    setHelpIntroTyped('');
+    const interval = window.setInterval(() => {
+      idx += 1;
+      setHelpIntroTyped(introText.slice(0, idx));
+      if (idx >= introText.length) {
+        window.clearInterval(interval);
+      }
+    }, 18);
+    return () => window.clearInterval(interval);
+  }, [isHelpFaqOpen, helpResetTick]);
+
+  useEffect(() => {
+    if (selectedHelpFaqIndex === null || !HELP_FAQ_ITEMS[selectedHelpFaqIndex]) {
+      setHelpAnswerTyped('');
+      setHelpAnswerDone(false);
+      return;
+    }
+    const fullAnswer = HELP_FAQ_ITEMS[selectedHelpFaqIndex].a;
+    let idx = 0;
+    setHelpAnswerTyped('');
+    setHelpAnswerDone(false);
+    const interval = window.setInterval(() => {
+      idx += 2;
+      if (idx >= fullAnswer.length) {
+        setHelpAnswerTyped(fullAnswer);
+        setHelpAnswerDone(true);
+        window.clearInterval(interval);
+      } else {
+        setHelpAnswerTyped(fullAnswer.slice(0, idx));
+      }
+      if (helpChatScrollRef.current) {
+        helpChatScrollRef.current.scrollTop = helpChatScrollRef.current.scrollHeight;
+      }
+    }, 14);
+    return () => window.clearInterval(interval);
+  }, [selectedHelpFaqIndex, HELP_FAQ_ITEMS]);
+
   useEffect(() => {
     const handleSpreadsheetUpdated = () => setSpreadsheetVersion((v) => v + 1);
     window.addEventListener('defib-tenant-spreadsheets-updated', handleSpreadsheetUpdated);
@@ -2355,6 +2493,32 @@ export default function StocksTab({
                   <span>{isRefreshing ? t("Actualisation...") : t("Actualiser les données")}</span>
                 </button>
 
+                {/* Button Aide */}
+                <button
+                  type="button"
+                  id="btn-stocks-help-formation"
+                  onClick={() => setIsHelpFaqOpen(true)}
+                  style={{
+                    backgroundColor: '#0f172a',
+                    color: '#ffffff',
+                    boxShadow: 'none',
+                    borderRadius: '13px',
+                    fontSize: '14px',
+                    padding: '4px 11px 5px 11px',
+                    fontWeight: '100',
+                    transition: 'all 0s ease-in-out',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    cursor: 'pointer',
+                    border: 'none',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
+                  Aide
+                </button>
+
                 {/* Field recherche (Search input) */}
                 <div className="relative w-full sm:w-56 bg-white">
                   <input
@@ -4477,6 +4641,275 @@ export default function StocksTab({
                 className="w-full text-center cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
               >
                 {t("Fermer")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 📚 AIDE & FORMATION CHAT AGENT SIDE PANE (STOCKS) 📚 */}
+      {isHelpFaqOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          id="stocks-help-faq-side-pane-backdrop"
+          className="fixed inset-0 z-[99990] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            minHeight: '100dvh',
+            maxHeight: '100dvh',
+            zIndex: 99990,
+          }}
+          onClick={() => setIsHelpFaqOpen(false)}
+        >
+          <div
+            id="stocks-help-faq-side-pane"
+            className="relative w-full sm:w-[480px] shadow-2xl flex flex-col shrink-0 transform transition-transform duration-200 ease-in-out"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              backgroundColor: '#F5F7FA',
+              borderLeft: 'none',
+              borderRadius: '0px',
+              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            }}
+          >
+            <div
+              ref={helpChatScrollRef}
+              className="flex-1 overflow-y-auto p-6 space-y-4 pb-28"
+            >
+              {selectedHelpFaqIndex === null && (
+                <>
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        backgroundColor: 'transparent',
+                        fontSize: '18px',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {helpIntroTyped}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="w-full animate-fadeIn">
+                    <select
+                      id="stocks-help-faq-select"
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setSelectedHelpFaqIndex(null);
+                        } else {
+                          setSelectedHelpFaqIndex(Number(val));
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        border: '1px solid #DCE1EA',
+                        borderRadius: '13px',
+                        padding: '9px 14px',
+                        fontSize: '18px',
+                        fontWeight: 100,
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        outline: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="">Sélection d’un sujet.</option>
+                      {HELP_FAQ_ITEMS.map((item, idx) => (
+                        <option key={idx} value={String(idx)}>
+                          {item.q}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {selectedHelpFaqIndex !== null && HELP_FAQ_ITEMS[selectedHelpFaqIndex] && (
+                <>
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        padding: '15px 20px',
+                        background: 'rgb(233, 235, 239)',
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        color: '#000000',
+                        cursor: 'default',
+                        borderRadius: '13px',
+                        border: 'none',
+                        boxShadow: 'none',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {HELP_FAQ_ITEMS[selectedHelpFaqIndex].q}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        backgroundColor: 'transparent',
+                        fontSize: '18px',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {helpAnswerTyped}
+                      </p>
+                    </div>
+                  </div>
+
+                  {helpAnswerDone && (
+                    <div className="flex flex-col items-start space-y-3 w-full animate-fadeIn">
+                      <div
+                        className="transition-all relative select-text w-full"
+                        style={{
+                          backgroundColor: 'transparent',
+                          fontSize: '18px',
+                          border: 'none',
+                          boxShadow: 'none',
+                          padding: 0,
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        <p
+                          className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                          style={{
+                            fontSize: '18px',
+                            color: '#000000',
+                            cursor: 'default',
+                          }}
+                        >
+                          Vous avez encore besoin d’aide ?
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsHelpFaqOpen(false);
+                          if (setActiveTab) setActiveTab('assistance');
+                        }}
+                        style={{
+                          width: '100%',
+                          backgroundColor: '#2e54ff',
+                          color: '#ffffff',
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'none',
+                        }}
+                        className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                      >
+                        Contacter l’assistance
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedHelpFaqIndex(null);
+                          setHelpAnswerTyped('');
+                          setHelpAnswerDone(false);
+                          setHelpResetTick((prev) => prev + 1);
+                        }}
+                        style={{
+                          width: '100%',
+                          backgroundColor: 'rgb(210, 45, 11)',
+                          color: '#ffffff',
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'none',
+                        }}
+                        className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                      >
+                        Recommencer
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div
+              className="absolute bottom-0 left-0 right-0 p-6 flex gap-4 z-20 pointer-events-none"
+              style={{ backgroundColor: 'transparent', background: 'transparent' }}
+            >
+              <button
+                type="button"
+                onClick={() => setIsHelpFaqOpen(false)}
+                style={{
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  color: '#ffffff',
+                  borderRadius: '13px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  padding: '11px 22px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                }}
+                className="flex-1 text-center cursor-pointer animate-none pointer-events-auto"
+              >
+                Fermer
               </button>
             </div>
           </div>
