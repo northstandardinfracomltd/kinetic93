@@ -12,7 +12,7 @@ import 'leaflet/dist/leaflet.css';
 import { fetchCollectionFromFirestore, uploadMediaToFirebase } from '../firebase';
 import { fetchGoogleDriveStatus, uploadFileToGoogleDrive, getCachedGoogleDriveActiveSync, resolveEffectiveTenantId } from '../utils/googleDrive';
 import { generateReportModerationComment, mergeReportPostInterventionAlerts, buildFlatAlertFields } from '../utils/moderationComment';
-import { playTechTapSound, playTechRefusalSound, playTechSuccessSound } from '../utils/technicianAudio';
+import { playTechTapSound, playTechRefusalSound, playTechSuccessSound, unlockAudioContext } from '../utils/technicianAudio';
 import { triggerEmailClientSignaturePin } from '../utils/emailService';
 import {
   collectLocalInterventionReferences,
@@ -2161,6 +2161,7 @@ export default function GmaoCorrectionForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    unlockAudioContext();
     setErrorText('');
     setAlertInfoErrors([]);
 

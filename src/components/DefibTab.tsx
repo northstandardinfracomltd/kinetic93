@@ -1950,6 +1950,9 @@ export default function DefibTab({
         { header: "Section 9 - Email journalier d'auto-vigilance.", field: 'rappelJournalierAuto', type: 'yesno' },
         { header: 'Section 9 - Utilisé par une victime. ', field: 'victimeSurvie', type: 'yesno' },
         { header: 'Section 9 - Âge de la victime.', field: 'ageVictime' },
+        { header: 'Section 2 - Téléphone portable ou fixe. (Secondaire)', field: 'telephoneSiteSecondaire' },
+        { header: 'Section 2 - Email. (Secondaire)', field: 'emailSiteSecondaire' },
+        { header: 'Section 2 - Nom et prénom. (Secondaire)', field: 'nomPrenomSiteSecondaire' },
       ];
 
       const escapeCsvCell = (val: any): string => {
@@ -2544,6 +2547,9 @@ export default function DefibTab({
   const [nomPrenomSite, setNomPrenomSite] = useState('');
   const [telephoneSite, setTelephoneSite] = useState('');
   const [emailSite, setEmailSite] = useState('');
+  const [nomPrenomSiteSecondaire, setNomPrenomSiteSecondaire] = useState('');
+  const [telephoneSiteSecondaire, setTelephoneSiteSecondaire] = useState('');
+  const [emailSiteSecondaire, setEmailSiteSecondaire] = useState('');
   const [contrat, setContrat] = useState<'Oui' | 'Non'>('Non');
   const [nomContrat, setNomContrat] = useState('');
   const [referenceContrat, setReferenceContrat] = useState('');
@@ -3305,6 +3311,9 @@ export default function DefibTab({
       setNomPrenomSite('');
       setTelephoneSite('');
       setEmailSite('');
+      setNomPrenomSiteSecondaire('');
+      setTelephoneSiteSecondaire('');
+      setEmailSiteSecondaire('');
       setContrat('Non');
       setNomContrat('');
       setReferenceContrat('');
@@ -4583,6 +4592,9 @@ export default function DefibTab({
     setNomPrenomSite(df.nomPrenomSite || anyDf.nom_prenom || anyDf.contact || anyDf.nom_prenom_site || anyDf.contact_site || resolvedLinkedClient?.nomPrenomSite || (resolvedLinkedClient as any)?.responsable || (resolvedLinkedClient as any)?.contact || '');
     setTelephoneSite(df.telephoneSite || anyDf.telephone_portable || anyDf.telephone_site || anyDf.phone || anyDf.telephone || anyDf.tel || resolvedLinkedClient?.telephoneSite || (resolvedLinkedClient as any)?.telephone || (resolvedLinkedClient as any)?.phone || '');
     setEmailSite(df.emailSite || anyDf.email || anyDf.email_site || resolvedLinkedClient?.emailSite || (resolvedLinkedClient as any)?.email || '');
+    setNomPrenomSiteSecondaire(df.nomPrenomSiteSecondaire || anyDf.nom_prenom_secondaire || anyDf['Section 2 - Nom et prénom. (Secondaire)'] || '');
+    setTelephoneSiteSecondaire(df.telephoneSiteSecondaire || anyDf.telephone_secondaire || anyDf['Section 2 - Téléphone portable ou fixe. (Secondaire)'] || '');
+    setEmailSiteSecondaire(df.emailSiteSecondaire || anyDf.email_secondaire || anyDf['Section 2 - Email. (Secondaire)'] || '');
     setContrat(df.contrat || resolvedLinkedClient?.contrat || 'Non');
     setNomContrat(df.nomContrat || anyDf.nom_contrat || resolvedLinkedClient?.nomContrat || '');
     setReferenceContrat(df.referenceContrat || anyDf.reference_contrat || resolvedLinkedClient?.referenceContrat || '');
@@ -4748,6 +4760,9 @@ export default function DefibTab({
               setEditingDefib(prev => prev ? ({ ...prev, ...fresh, id: prev.id || fresh.id, _sheetRowNumber: fresh._sheetRowNumber || (prev as any)._sheetRowNumber, _rawSheetRow: fresh._rawSheetRow || (prev as any)._rawSheetRow } as any) : prev);
               if (fresh.commentaire !== undefined) setCommentaire(fresh.commentaire || '');
               if (fresh.typeDefibrillateur?.trim()) setTypeDefibrillateur(fresh.typeDefibrillateur);
+              if (fresh.nomPrenomSiteSecondaire !== undefined) setNomPrenomSiteSecondaire(fresh.nomPrenomSiteSecondaire || '');
+              if (fresh.telephoneSiteSecondaire !== undefined) setTelephoneSiteSecondaire(fresh.telephoneSiteSecondaire || '');
+              if (fresh.emailSiteSecondaire !== undefined) setEmailSiteSecondaire(fresh.emailSiteSecondaire || '');
               if (fresh.commentaireAdresse !== undefined || fresh.aideAcces !== undefined || fresh.aide_acces !== undefined) {
                 const freshAide = (fresh.commentaireAdresse || fresh.aideAcces || fresh.aide_acces || '').trim();
                 setCommentaireAdresse(freshAide);
@@ -4880,6 +4895,9 @@ export default function DefibTab({
       nomPrenomSite: nomPrenomSite.trim(),
       telephoneSite: telephoneSite.trim(),
       emailSite: emailSite.trim(),
+      nomPrenomSiteSecondaire: nomPrenomSiteSecondaire.trim(),
+      telephoneSiteSecondaire: telephoneSiteSecondaire.trim(),
+      emailSiteSecondaire: emailSiteSecondaire.trim(),
       contrat,
       nomContrat: nomContrat.trim(),
       referenceContrat: referenceContrat.trim(),
@@ -5141,6 +5159,18 @@ export default function DefibTab({
         }
         case 'emailSite': {
           updates.emailSite = value.trim();
+          break;
+        }
+        case 'nomPrenomSiteSecondaire': {
+          updates.nomPrenomSiteSecondaire = value.trim();
+          break;
+        }
+        case 'telephoneSiteSecondaire': {
+          updates.telephoneSiteSecondaire = value.trim();
+          break;
+        }
+        case 'emailSiteSecondaire': {
+          updates.emailSiteSecondaire = value.trim();
           break;
         }
         case 'prochaineMaintenance': {
@@ -7538,6 +7568,51 @@ export default function DefibTab({
                           id="form-site-mail"
                           value={emailSite}
                           onChange={(e) => setEmailSite(e.target.value)}
+                          placeholder="Email du contact."
+                          className="w-full px-3 py-1.5 border border-slate-200 hover:border-slate-300 focus:border-slate-400 rounded-lg text-xs bg-white text-slate-800 font-semibold transition-colors truncate"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Contacts secondaires du site fields */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <label htmlFor="form-site-nom-secondaire" className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                          Nom et prénom. (Secondaire)
+                        </label>
+                        <input
+                          type="text"
+                          id="form-site-nom-secondaire"
+                          value={nomPrenomSiteSecondaire}
+                          onChange={(e) => setNomPrenomSiteSecondaire(e.target.value)}
+                          placeholder="Nom et prénom du contact."
+                          className="w-full px-3 py-1.5 border border-slate-200 hover:border-slate-300 focus:border-slate-400 rounded-lg text-xs bg-white text-slate-800 font-semibold transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label htmlFor="form-site-tel-secondaire" className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                          Téléphone portable ou fixe. (Secondaire)
+                        </label>
+                        <input
+                          type="text"
+                          id="form-site-tel-secondaire"
+                          value={telephoneSiteSecondaire}
+                          onChange={(e) => setTelephoneSiteSecondaire(e.target.value)}
+                          placeholder="Téléphone du contact."
+                          className="w-full px-3 py-1.5 border border-slate-200 hover:border-slate-300 focus:border-slate-400 rounded-lg text-xs bg-white text-slate-800 font-mono font-semibold transition-colors"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label htmlFor="form-site-mail-secondaire" className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                          Email. (Secondaire)
+                        </label>
+                        <input
+                          type="text"
+                          id="form-site-mail-secondaire"
+                          value={emailSiteSecondaire}
+                          onChange={(e) => setEmailSiteSecondaire(e.target.value)}
                           placeholder="Email du contact."
                           className="w-full px-3 py-1.5 border border-slate-200 hover:border-slate-300 focus:border-slate-400 rounded-lg text-xs bg-white text-slate-800 font-semibold transition-colors truncate"
                         />
@@ -10424,6 +10499,9 @@ export default function DefibTab({
                   { value: "nomPrenomSite", label: "Nom et prénom. (Section client)" },
                   { value: "telephoneSite", label: "Téléphone portable. (Section client)" },
                   { value: "emailSite", label: "Email. (Section client)" },
+                  { value: "nomPrenomSiteSecondaire", label: "Nom et prénom. (Secondaire)" },
+                  { value: "telephoneSiteSecondaire", label: "Téléphone portable ou fixe. (Secondaire)" },
+                  { value: "emailSiteSecondaire", label: "Email. (Secondaire)" },
                   { value: "prochaineMaintenance", label: "Prochaine maintenance. (Date)" },
                   { value: "fsmAutorise", label: "Maintenance autorisée. (Catégories)" },
                   { value: "commentaireAdresse", label: "Aide d’accès. (Localisation)" },
@@ -10594,6 +10672,78 @@ export default function DefibTab({
                         <input
                           type="email"
                           id={`bulk-input-email-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez adresse email."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "18px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #DCE1EA",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "nomPrenomSiteSecondaire" && (
+                      <div>
+                        <input
+                          type="text"
+                          id={`bulk-input-nomprenom-secondaire-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez nom et prénom."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "18px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #DCE1EA",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "telephoneSiteSecondaire" && (
+                      <div>
+                        <input
+                          type="tel"
+                          id={`bulk-input-telephone-secondaire-${index}`}
+                          value={item.value}
+                          onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
+                          placeholder="Entrez numéro de téléphone."
+                          style={{
+                            width: "100%",
+                            padding: "10px 14px",
+                            fontSize: "18px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontWeight: 100,
+                            backgroundColor: "#ffffff",
+                            color: "#000000",
+                            border: "1px solid #DCE1EA",
+                            borderRadius: "10px",
+                            outline: "none"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {item.field === "emailSiteSecondaire" && (
+                      <div>
+                        <input
+                          type="email"
+                          id={`bulk-input-email-secondaire-${index}`}
                           value={item.value}
                           onChange={(e) => handleUpdateBulkFieldValue(index, e.target.value)}
                           placeholder="Entrez adresse email."

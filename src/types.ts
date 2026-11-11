@@ -168,6 +168,9 @@ export interface Defibrillateur {
   nomPrenomSite: string;
   telephoneSite: string;
   emailSite: string;
+  nomPrenomSiteSecondaire?: string;
+  telephoneSiteSecondaire?: string;
+  emailSiteSecondaire?: string;
   contrat: 'Oui' | 'Non';
   nomContrat: string;
   referenceContrat: string;

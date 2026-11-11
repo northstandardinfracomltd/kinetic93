@@ -421,6 +421,14 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   };
 
   const [expandedMissions, setExpandedMissions] = useState<Record<string, boolean>>({});
+  const [openMissionMenuKey, setOpenMissionMenuKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openMissionMenuKey) return;
+    const handleClickOutside = () => setOpenMissionMenuKey(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [openMissionMenuKey]);
 
   const toggleMissionExpanded = (key: string) => {
     setExpandedMissions(prev => ({
@@ -1602,10 +1610,13 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                         m.defibId ||
                                         'NC';
 
+                                      const menuKey = `vert-${tItem.tourId}-${m.id || mSubIdx}-${isoDate}`;
+                                      const isMenuOpen = openMissionMenuKey === menuKey;
+
                                       return (
                                         <div
                                           key={`tour-sub-mission-${tItem.tourId}-${m.id || mSubIdx}`}
-                                          className="space-y-1.5"
+                                          className="relative space-y-1.5"
                                         >
                                           <div className="flex items-center">
                                             <span
@@ -1622,6 +1633,11 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                             </span>
                                           </div>
                                           <div
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setOpenMissionMenuKey((prev) => (prev === menuKey ? null : menuKey));
+                                            }}
+                                            className="cursor-pointer transition-all hover:brightness-95 select-none"
                                             style={{
                                               backgroundColor: "rgb(230, 197, 255)",
                                               color: "rgb(89, 22, 144)",
@@ -1633,6 +1649,26 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                           >
                                             Client : {mClientName}. Ville : {mVillePostcode}. Raison(s) : {mReasons}. Matériel : {mIdentifiant}.
                                           </div>
+
+                                          {isMenuOpen && (
+                                            <div
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="absolute left-0 top-full mt-1 z-[100] w-max max-w-[280px] bg-white rounded-xl shadow-lg border border-neutral-200 p-1.5 animate-fadeIn"
+                                            >
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setOpenMissionMenuKey(null);
+                                                  handleConsultMission(tItem.tour, m);
+                                                }}
+                                                className="w-full text-left px-3 py-2 rounded-lg text-[15px] font-bold text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer whitespace-nowrap"
+                                                style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                                              >
+                                                Afficher la mission dans la tournée
+                                              </button>
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     })}
@@ -1818,6 +1854,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           initialYear={selectedYear}
           onUpdateSpontaneousEvents={(updated) => setSpontaneousEvents(updated)}
           onUpdateTours={onUpdateTours}
+          onConsultMission={handleConsultMission}
         />
       )}
     </div>

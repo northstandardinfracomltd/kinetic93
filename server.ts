@@ -739,14 +739,25 @@ try {
     for (const file of files) {
       if (file.endsWith('.json')) {
         const key = file.replace(/\.json$/, '');
-        // Skip redundant alias copies on disk to save ~12MB of raw JSON (~150MB V8 heap)
+        // Skip redundant alias copies on disk to save memory & startup CPU
         if (
+          key.startsWith('defib_') ||
           key.endsWith('_client_list') ||
           key.endsWith('_clientList') ||
           key.endsWith('_customerList') ||
-          key.endsWith('_customers')
+          key.endsWith('_customers') ||
+          key.endsWith('_generated_reports') ||
+          key.endsWith('_reports') ||
+          key.endsWith('_variableList') ||
+          key.endsWith('_vars')
         ) {
           continue;
+        }
+        if (key.startsWith('D67_')) {
+          const d26Equiv = key.replace(/^D67_/, 'D26_') + '.json';
+          if (fs.existsSync(path.join(COLLECTIONS_DIR, d26Equiv))) {
+            continue;
+          }
         }
         if (
           key === 'D58_clients' &&
@@ -774,7 +785,7 @@ try {
         }
         try {
           const stat = fs.statSync(path.join(COLLECTIONS_DIR, file));
-          if (stat.size > 250 * 1024) {
+          if (stat.size > 200 * 1024) {
             deferredLargeFiles.push(file);
             continue;
           }
@@ -785,7 +796,7 @@ try {
   }
   (globalThis as any).__loadDeferredLargeFiles = async () => {
     for (const file of deferredLargeFiles) {
-      await new Promise(r => setImmediate(r));
+      await new Promise(r => setTimeout(r, 25));
       loadSingleCollectionFile(file);
     }
   };
@@ -2851,6 +2862,9 @@ function formatDefibrillateurOutput(d: any): any {
   const nomPrenomSite = d.nomPrenomSite !== undefined ? d.nomPrenomSite : (d.nom_prenom || '');
   const telephoneSite = d.telephoneSite !== undefined ? d.telephoneSite : (d.telephone_portable || d.telephone_site || d.phone || '');
   const emailSite = d.emailSite !== undefined ? d.emailSite : (d.email || d.email_site || '');
+  const nomPrenomSiteSecondaire = d.nomPrenomSiteSecondaire !== undefined ? d.nomPrenomSiteSecondaire : (d.nom_prenom_secondaire || d['Section 2 - Nom et prénom. (Secondaire)'] || '');
+  const telephoneSiteSecondaire = d.telephoneSiteSecondaire !== undefined ? d.telephoneSiteSecondaire : (d.telephone_secondaire || d['Section 2 - Téléphone portable ou fixe. (Secondaire)'] || '');
+  const emailSiteSecondaire = d.emailSiteSecondaire !== undefined ? d.emailSiteSecondaire : (d.email_secondaire || d['Section 2 - Email. (Secondaire)'] || '');
   const categorieEtablissement = d.categorieEtablissement !== undefined ? d.categorieEtablissement : (d.categorie_etablissement || '');
   const horaires = d.horaires !== undefined ? d.horaires : '';
 
@@ -3032,6 +3046,9 @@ function formatDefibrillateurOutput(d: any): any {
     nomPrenomSite,
     telephoneSite,
     emailSite,
+    nomPrenomSiteSecondaire,
+    telephoneSiteSecondaire,
+    emailSiteSecondaire,
     categorieEtablissement,
     horaires,
 
@@ -11423,33 +11440,21 @@ async function warmupDefibrillateursStore() {
     }
   });
 
-  let viteMiddleware: any = null;
-  let viteReadyPromise: Promise<void> | null = null;
-
   if (process.env.NODE_ENV !== "production") {
-    viteReadyPromise = createViteServer({
-      server: {
-        middlewareMode: true,
-        fs: {
-          deny: ['**/data/**', '**/.data/**', '**/server.ts', '**/src/server/**', '**/.env*', '**/*.key', '**/firestore.rules'],
+    try {
+      const vite = await createViteServer({
+        server: {
+          middlewareMode: true,
+          fs: {
+            deny: ['**/data/**', '**/.data/**', '**/server.ts', '**/src/server/**', '**/.env*', '**/*.key', '**/firestore.rules'],
+          },
         },
-      },
-      appType: "spa",
-    }).then((vite) => {
-      viteMiddleware = vite.middlewares;
-    }).catch((err) => {
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+    } catch (err) {
       console.error("[Vite] Failed to initialize Vite middleware:", err);
-    });
-
-    app.use(async (req, res, next) => {
-      if (!viteMiddleware && viteReadyPromise) {
-        await viteReadyPromise;
-      }
-      if (viteMiddleware) {
-        return viteMiddleware(req, res, next);
-      }
-      next();
-    });
+    }
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath, {
@@ -11469,7 +11474,7 @@ async function warmupDefibrillateursStore() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
-    // Non-blocking background warmup for compact index, deferred large files & defibrillateurs dataset
+    // Defer heavy index & collection warmup until after initial pre-warming completes
     setTimeout(async () => {
       try {
         loadCompactIndexSync();
@@ -11480,7 +11485,7 @@ async function warmupDefibrillateursStore() {
         }
       } catch (_) {}
       warmupDefibrillateursStore().catch(e => console.warn("[Warmup] Background init error:", e));
-    }, 50);
+    }, 4500);
   });
 }
 

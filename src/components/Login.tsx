@@ -135,6 +135,7 @@ const translations = {
     forgotPassword: "Mot de passe oublié",
     authCodeTitle: "Double Authentification",
     authCodeDesc: "Code de 6 caractères envoyé par email",
+    authCodeSpamHint: "Email non reçu : vérifiez vos spams",
     authCodeConfirm: "Confirmer",
     authCodeInvalid: "Code d'authentification incorrect. Veuillez vérifier le code reçu.",
     resendAuthCode: "Réenvoyer",
@@ -147,13 +148,11 @@ const translations = {
     infoGdpCard: "Le saviez-vous? Defibeo est une solution développée par Civilprom et en partenariat avec des experts du programme Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
     civilpromSolutionPill: "Une solution Civilprom",
     contactCoordsAria: "Coordonnées de contact",
-    ecosystemHeaderPrefix: "À la découverte de l’écosystème Civilprom.",
+    ecosystemHeaderPrefix: "L’actualité de Defibeo.",
     ecosystemHeaderHide: "Non merci, masquer cela.",
     ecosystemItems: [
-      "Explorez les solutions Civilprom TheLab",
-      "Participez au Civilprom Business Day 2027",
-      "(Re)Découvrez Civilprom, éditeur de logiciels personnalisés",
-      "Abonnez-vous à Civilprom sur LinkedIn",
+      "Defibeo Lab : votre feedback pour 2027",
+      "Abonnez-vous à Defibeo sur LinkedIn",
     ],
   },
   'English': {
@@ -240,6 +239,7 @@ const translations = {
     forgotPassword: "Forgot password",
     authCodeTitle: "Two-Factor Authentication",
     authCodeDesc: "6-character code sent by email",
+    authCodeSpamHint: "Email not received: check your spam folder",
     authCodeConfirm: "Confirm",
     authCodeInvalid: "Incorrect authentication code. Please check the code received.",
     resendAuthCode: "Resend",
@@ -252,13 +252,11 @@ const translations = {
     infoGdpCard: "Did you know? Defibeo is a solution developed by Civilprom and in partnership with experts from the Google for Startups Accelerator program (UK, Glasgow — Google Developer Program).",
     civilpromSolutionPill: "A Civilprom solution",
     contactCoordsAria: "Contact details",
-    ecosystemHeaderPrefix: "Discovering the Civilprom ecosystem.",
+    ecosystemHeaderPrefix: "L’actualité de Defibeo.",
     ecosystemHeaderHide: "No thanks, hide this.",
     ecosystemItems: [
-      "Explore Civilprom TheLab solutions",
-      "Join the Civilprom Business Day 2027",
-      "(Re)Discover Civilprom, custom software publisher",
-      "Follow Civilprom on LinkedIn",
+      "Defibeo Lab : votre feedback pour 2027",
+      "Abonnez-vous à Defibeo sur LinkedIn",
     ],
   },
   'Deutsch': {
@@ -345,6 +343,7 @@ const translations = {
     forgotPassword: "Passwort vergessen",
     authCodeTitle: "Zwei-Faktor-Authentifizierung",
     authCodeDesc: "6-stelliger Code per E-Mail gesendet",
+    authCodeSpamHint: "E-Mail nicht erhalten: Überprüfen Sie Ihren Spam-Ordner",
     authCodeConfirm: "Bestätigen",
     authCodeInvalid: "Ungültiger Authentifizierungscode. Bitte prüfen Sie den Code.",
     resendAuthCode: "Erneut senden",
@@ -357,13 +356,11 @@ const translations = {
     infoGdpCard: "Wussten Sie schon? Defibeo ist eine von Civilprom und in Partnerschaft mit Experten des Google for Startups Accelerator-Programms (UK, Glasgow — Google Developer Program) entwickelte Lösung.",
     civilpromSolutionPill: "Eine Lösung von Civilprom",
     contactCoordsAria: "Kontaktdaten",
-    ecosystemHeaderPrefix: "Entdecken Sie das Civilprom-Ökosystem.",
+    ecosystemHeaderPrefix: "L’actualité de Defibeo.",
     ecosystemHeaderHide: "Nein danke, ausblenden.",
     ecosystemItems: [
-      "Entdecken Sie die Lösungen von Civilprom TheLab",
-      "Nehmen Sie am Civilprom Business Day 2027 teil",
-      "Entdecken Sie Civilprom, Herausgeber individueller Software",
-      "Folgen Sie Civilprom auf LinkedIn",
+      "Defibeo Lab : votre feedback pour 2027",
+      "Abonnez-vous à Defibeo sur LinkedIn",
     ],
   },
   'Português': {
@@ -450,6 +447,7 @@ const translations = {
     forgotPassword: "Esqueceu a senha",
     authCodeTitle: "Autenticação de Dois Fatores",
     authCodeDesc: "Código de 6 caracteres enviado por e-mail",
+    authCodeSpamHint: "E-mail não recebido: verifique o seu spam",
     authCodeConfirm: "Confirmar",
     authCodeInvalid: "Código de autenticação incorreto. Verifique o código recebido.",
     resendAuthCode: "Reenviar",
@@ -462,13 +460,11 @@ const translations = {
     infoGdpCard: "Sabia que? A Defibeo é uma solução desenvolvida pela Civilprom e em parceria com especialistas do programa Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
     civilpromSolutionPill: "Uma solução Civilprom",
     contactCoordsAria: "Dados de contacto",
-    ecosystemHeaderPrefix: "À descoberta do ecossistema Civilprom.",
+    ecosystemHeaderPrefix: "L’actualité de Defibeo.",
     ecosystemHeaderHide: "Não, obrigado, ocultar isto.",
     ecosystemItems: [
-      "Explore as soluções Civilprom TheLab",
-      "Participe no Civilprom Business Day 2027",
-      "(Re)Descubra a Civilprom, editora de software personalizado",
-      "Siga a Civilprom no LinkedIn",
+      "Defibeo Lab : votre feedback pour 2027",
+      "Abonnez-vous à Defibeo sur LinkedIn",
     ],
   },
   'Español': {
@@ -555,6 +551,7 @@ const translations = {
     forgotPassword: "Contraseña olvidada",
     authCodeTitle: "Doble Autenticación",
     authCodeDesc: "Código de 6 caracteres enviado por correo electrónico",
+    authCodeSpamHint: "Correo no recibido: revise su carpeta de spam",
     authCodeConfirm: "Confirmar",
     authCodeInvalid: "Código de autenticación incorrecto. Verifique el código recibido.",
     resendAuthCode: "Reenviar",
@@ -567,13 +564,11 @@ const translations = {
     infoGdpCard: "¿Sabías que? Defibeo es una solución desarrollada por Civilprom y en colaboración con expertos del programa Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
     civilpromSolutionPill: "Una solución de Civilprom",
     contactCoordsAria: "Datos de contacto",
-    ecosystemHeaderPrefix: "Descubriendo el ecosistema Civilprom.",
+    ecosystemHeaderPrefix: "L’actualité de Defibeo.",
     ecosystemHeaderHide: "No gracias, ocultar esto.",
     ecosystemItems: [
-      "Explore las soluciones de Civilprom TheLab",
-      "Participe en el Civilprom Business Day 2027",
-      "(Re)Descubra Civilprom, editor de software personalizado",
-      "Suscríbase a Civilprom en LinkedIn",
+      "Defibeo Lab : votre feedback pour 2027",
+      "Abonnez-vous à Defibeo sur LinkedIn",
     ],
   }
 };
@@ -1245,15 +1240,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const ecosystemLinks = [
     {
       icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfoslab.svg',
-      url: 'https://civilprom.com/thelab',
-    },
-    {
-      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfosuser.svg',
-      url: 'https://civilprom.com/businessday2027',
-    },
-    {
-      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfosscissors.svg',
-      url: 'https://civilprom.com/fromdefibeo',
+      url: 'https://forms.gle/vociimrmY5xf7kG4A',
     },
     {
       icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfosfire.svg',
@@ -1278,7 +1265,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         setEcosystemExpanded(false);
         closeTimer = setTimeout(() => {
           // Switch to next item and roll right to reveal text
-          setEcosystemIndex((prev) => (prev + 1) % 4);
+          setEcosystemIndex((prev) => (prev + 1) % 2);
           setEcosystemExpanded(true);
           openTimer = setTimeout(() => {
             runCycle();
@@ -1522,7 +1509,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 </div>
 
                 <a
-                  href={ecosystemLinks[ecosystemIndex].url}
+                  href={ecosystemLinks[ecosystemIndex % ecosystemLinks.length].url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="login-info-card-zoom inline-flex items-center rounded-full cursor-pointer select-none no-underline overflow-hidden"
@@ -1554,12 +1541,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                       }}
                     >
-                      {t.ecosystemItems[ecosystemIndex]}
+                      {t.ecosystemItems[ecosystemIndex % t.ecosystemItems.length]}
                     </span>
                   </div>
 
                   <img
-                    src={ecosystemLinks[ecosystemIndex].icon}
+                    src={ecosystemLinks[ecosystemIndex % ecosystemLinks.length].icon}
                     alt=""
                     className="w-[38px] h-[38px] rounded-full object-contain shrink-0 select-none pointer-events-none"
                     style={{
@@ -1815,21 +1802,34 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   </div>
                 )}
               </div>
-              <span
-                className="select-none pointer-events-none inline-flex items-center justify-center"
-                style={{
-                  background: '#cedeff',
-                  borderRadius: '31px',
-                  padding: '6px 12px',
-                  fontSize: '16px',
-                  color: 'rgb(49 86 255)',
-                  marginTop: '3px',
-                  fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                  lineHeight: '1.2',
-                }}
-              >
-                defibeo.com
-              </span>
+              <div className="flex flex-col items-center gap-1">
+                <span
+                  className="select-none pointer-events-none inline-flex items-center justify-center"
+                  style={{
+                    background: 'rgb(246 58 8)',
+                    borderRadius: '31px',
+                    padding: '6px 12px',
+                    fontSize: '16px',
+                    color: 'rgb(255 255 255)',
+                    marginTop: '3px',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    lineHeight: '1.2',
+                  }}
+                >
+                  defibeo.com
+                </span>
+                <span
+                  className="select-none pointer-events-none text-center"
+                  style={{
+                    fontSize: '12px',
+                    color: '#000000',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    lineHeight: '1.2',
+                  }}
+                >
+                  by Civilprom
+                </span>
+              </div>
             </>
           )}
 
@@ -1842,7 +1842,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             }}
             id="login-left-mobile-copyright"
           >
-            © 2026 Defibeo by Civilprom. All rights reserved.{' '}
+            © 2026 Defibeo. All rights reserved.{' '}
             <a
               href="https://www.google.com/maps/place/Glasgow+G2+7JS,+Royaume-Uni/@55.861508,-4.2638329,23a,75y,9.99h,87.78t/data=!3m7!1e1!3m5!1s9scepnhvnV6jweow3ObCPQ!2e0!6shttps:%2F%2Fstreetviewpixels-pa.clients6.google.com%2Fv1%2Fthumbnail%3Fcb_client%3Dmaps_sv.tactile%26w%3D900%26h%3D600%26pitch%3D2.2176239721206628%26panoid%3D9scepnhvnV6jweow3ObCPQ%26yaw%3D9.994148180894447!7i16384!8i8192!4m6!3m5!1s0x4888469d64ac6abd:0xa74cf672bd0fbe9!8m2!3d55.8616882!4d-4.263924!16s%2Fg%2F1vj5zsnf?entry=ttu&g_ep=EgoyMDI2MTEwMS4wIKXMDSoASAFQAw%3D%3D"
               target="_blank"
@@ -1853,7 +1853,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 textDecoration: 'none',
               }}
             >
-              Civilprom UK, Glasgow, G2 7JS, 120
+              Glasgow, G2 7JS, 120
             </a>{' '}
             (prod-525b2634).
           </div>
@@ -1944,6 +1944,16 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     >
                       <div className="animate-text-wave" style={{ minHeight: '25px' }}>{typedAuthLine1}</div>
                       <div className="animate-text-wave" style={{ minHeight: '25px' }}>{typedAuthLine2}</div>
+                      <div
+                        className="mt-1"
+                        style={{
+                          fontSize: '14px',
+                          color: '#ffffff',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        }}
+                      >
+                        {t.authCodeSpamHint || 'Email non reçu : vérifiez vos spams'}
+                      </div>
                     </div>
 
                     {/* 6-box input occupying 100% of the div width */}
@@ -2326,7 +2336,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             }}
             id="login-right-copyright"
           >
-            © 2026 Defibeo by Civilprom. All rights reserved.{' '}
+            © 2026 Defibeo. All rights reserved.{' '}
             <a
               href="https://www.google.com/maps/place/Glasgow+G2+7JS,+Royaume-Uni/@55.861508,-4.2638329,23a,75y,9.99h,87.78t/data=!3m7!1e1!3m5!1s9scepnhvnV6jweow3ObCPQ!2e0!6shttps:%2F%2Fstreetviewpixels-pa.clients6.google.com%2Fv1%2Fthumbnail%3Fcb_client%3Dmaps_sv.tactile%26w%3D900%26h%3D600%26pitch%3D2.2176239721206628%26panoid%3D9scepnhvnV6jweow3ObCPQ%26yaw%3D9.994148180894447!7i16384!8i8192!4m6!3m5!1s0x4888469d64ac6abd:0xa74cf672bd0fbe9!8m2!3d55.8616882!4d-4.263924!16s%2Fg%2F1vj5zsnf?entry=ttu&g_ep=EgoyMDI2MTEwMS4wIKXMDSoASAFQAw%3D%3D"
               target="_blank"
@@ -2337,7 +2347,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 textDecoration: 'none',
               }}
             >
-              Civilprom UK, Glasgow, G2 7JS, 120
+              Glasgow, G2 7JS, 120
             </a>{' '}
             (prod-525b2634).
           </div>

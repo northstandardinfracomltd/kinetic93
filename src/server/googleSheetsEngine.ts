@@ -638,6 +638,9 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
   { header: "Section 9 - Email journalier d'auto-vigilance.", field: 'rappelJournalierAuto', aliases: ['emailjournalierdautovigilance', 'rappeljournalierauto', 'rappeljournalier', 'categoriesemailjournalierdautovigilance'], type: 'yesno' },
   { header: 'Section 9 - Utilisé par une victime. ', field: 'victimeSurvie', aliases: ['utiliseparunevictime', 'victimeavecsurvie', 'victimesurvie', 'categoriesvictimeavecsurvie', 'categoriesutiliseparunevictime'], type: 'yesno' },
   { header: 'Section 9 - Âge de la victime.', field: 'ageVictime', aliases: ['agedelavictime', 'agevictime', 'age', 'categoriesagevictime', 'categoriesagedelavictime'] },
+  { header: 'Section 2 - Téléphone portable ou fixe. (Secondaire)', field: 'telephoneSiteSecondaire', aliases: ['telephoneportableoufixesecondaire', 'section2telephoneportableoufixesecondaire', 'telephonesitesecondaire', 'telephonesecondaire', 'telephoneportablesecondaire', 'telephonefixesecondaire', 'telsecondaire'] },
+  { header: 'Section 2 - Email. (Secondaire)', field: 'emailSiteSecondaire', aliases: ['emailsecondaire', 'section2emailsecondaire', 'emailsitesecondaire', 'mailsecondaire', 'courrielsecondaire'] },
+  { header: 'Section 2 - Nom et prénom. (Secondaire)', field: 'nomPrenomSiteSecondaire', aliases: ['nometprenomsecondaire', 'section2nometprenomsecondaire', 'nomprenomsitesecondaire', 'nomprenomsecondaire', 'contactsecondaire'] },
 ];
 
 // ==========================================
@@ -1785,6 +1788,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Technicien', field: 'techName', aliases: ['technicien', 'techname', 'technicienassigne', 'collaborateur', 'intervenant'] },
     { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'notes', 'observation', 'remarques', 'refusalcomment', 'motifrefus', 'clientrefusalcomment'] },
     { header: 'Identifiant formation', field: 'formationId', aliases: ['identifiantformation', 'formationid', 'idformation'] },
+    { header: 'Statut Facturation.', field: 'statutFacturation', aliases: ['statutfacturation', 'statutdefacturation', 'facturation', 'etatfacturation', 'situationfacturation'] },
   ],
   gestionApresIntervention: [
     { header: 'Référence Intervention.', field: 'interventionReference', aliases: ['referenceintervention', 'referencedelintervention', 'refintervention', 'reference', 'id'] },
@@ -3898,6 +3902,15 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     ).trim();
     merged.rejectionReason = resolvedRejectionReason;
     merged.raisonRejet = resolvedRejectionReason;
+    const resolvedStatutFacturation = String(
+      merged.statutFacturation ??
+        merged['Statut Facturation.'] ??
+        merged['Statut Facturation'] ??
+        merged['Statut facturation.'] ??
+        merged['Statut facturation'] ??
+        'Aucune information'
+    ).trim() || 'Aucune information';
+    merged.statutFacturation = resolvedStatutFacturation;
     if (!merged.clientAddress && (merged.cp || merged.ville)) {
       merged.clientAddress = [merged.cp, merged.ville].filter(Boolean).join(' ');
     }
@@ -6710,6 +6723,13 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched['Raison rejet.'] ??
       enriched['Raison rejet'] ??
       '';
+    enriched.statutFacturation =
+      enriched.statutFacturation ??
+      enriched['Statut Facturation.'] ??
+      enriched['Statut Facturation'] ??
+      enriched['Statut facturation.'] ??
+      enriched['Statut facturation'] ??
+      'Aucune information';
   } else if (tabType === 'rapportsPdf') {
     const snap = enriched.defibSnapshot && typeof enriched.defibSnapshot === 'object' ? enriched.defibSnapshot : {};
     for (const [sk, sv] of Object.entries(snap)) {
@@ -8748,7 +8768,8 @@ export async function fetchTenantSheetCollection(
     if (
       !Array.isArray(snap.headers) ||
       snap.headers.length === 121 ||
-      snap.headers[0] === 'Section 1 - Identifiant'
+      snap.headers[0] === 'Section 1 - Identifiant' ||
+      !snap.headers.some(h => normalizeHeaderKey(h).includes('secondaire'))
     ) {
       return true;
     }
@@ -8756,7 +8777,11 @@ export async function fetchTenantSheetCollection(
   };
   const isStaleMissionsSnap = (snap: CachedSheetResult | null | undefined): boolean => {
     if (!snap || tabType !== 'missionsTournees' || !Array.isArray(snap.items)) return false;
-    if (!Array.isArray(snap.headers) || snap.headers.length === 0) {
+    if (
+      !Array.isArray(snap.headers) ||
+      snap.headers.length === 0 ||
+      !snap.headers.some(h => normalizeHeaderKey(h).includes('statutfacturation'))
+    ) {
       return true;
     }
     return snap.items.some((it: any) => {
@@ -10003,13 +10028,15 @@ export async function upsertRecordsToTenantSheet(
         tabType === 'missionsTournees' &&
         (!headers.some(h => normalizeHeaderKey(h).includes('fournituresparleclient') || normalizeHeaderKey(h).includes('fournitureparleclient')) ||
           !headers.some(h => normalizeHeaderKey(h).includes('commentairevisibleparletechnicien')) ||
-          !headers.some(h => normalizeHeaderKey(h).includes('raisonrejet')));
+          !headers.some(h => normalizeHeaderKey(h).includes('raisonrejet')) ||
+          !headers.some(h => normalizeHeaderKey(h).includes('statutfacturation')));
       const variablesMissingNewHeaders =
         tabType === 'variables' &&
         !headers.some(h => normalizeHeaderKey(h).includes('typedusagedelelectrode'));
       const defibMissingNewHeaders =
         tabType === 'defibrillateurs' &&
-        !headers.some(h => normalizeHeaderKey(h).includes('typededefibrillateur') || normalizeHeaderKey(h).includes('typedefibrillateur'));
+        (!headers.some(h => normalizeHeaderKey(h).includes('typededefibrillateur') || normalizeHeaderKey(h).includes('typedefibrillateur')) ||
+          !headers.some(h => normalizeHeaderKey(h).includes('secondaire')));
       const reglagesMissingNewHeaders =
         tabType === 'reglages' &&
         !headers.some(h => normalizeHeaderKey(h).includes('expressiondalerte1') || normalizeHeaderKey(h).includes('expressionalerte1'));

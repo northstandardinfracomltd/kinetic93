@@ -97,6 +97,7 @@ import {
   playTechSound2,
   playTechSound3,
   playTechTapSound,
+  setAudioMutedInMainSoftware,
 } from "../utils/technicianAudio";
 import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from "../utils/googleDrive";
 import {
@@ -592,6 +593,7 @@ export default function PublicPortal({
     window.addEventListener("defib-favicon-changed", handleFaviconChange);
 
     // Preload all audio files into memory cache & play open sound on webapp open
+    setAudioMutedInMainSoftware(false);
     preloadSounds();
     const cleanupSound = triggerPublicPortalOpenSound();
 
@@ -1200,6 +1202,7 @@ export default function PublicPortal({
   };
 
   const [pauseRepasError, setPauseRepasError] = useState<string | null>(null);
+  const [techBottomInfoMessage, setTechBottomInfoMessage] = useState<string | null>(null);
 
   // Set of unrolled mission IDs for the read-more/accordion in Interventions tab
   const [unrolledMissions, setUnrolledMissions] = useState<Set<string>>(new Set());
@@ -1254,18 +1257,29 @@ export default function PublicPortal({
         const elapsedMinutes = startTime > 0 ? (now - startTime) / (60 * 1000) : 0;
         if (elapsedMinutes < minRequiredMinutes) {
           const remainingMins = Math.ceil(minRequiredMinutes - elapsedMinutes);
-          const baseMsg = rules.minBreakRestTechErrorText?.trim() || "Votre pause repas minimale n'est pas encore atteinte. Vous ne pouvez pas reprendre immédiatement.";
-          setPauseRepasError(`${baseMsg} (Temps restant : ${remainingMins} min)`);
+          setPauseRepasError(null);
+          setTechBottomInfoMessage(
+            `Impossible. Votre pause repas minimale n’est pas encore atteinte. Vous ne pouvez pas reprendre immédiatement. (Temps restant : ${remainingMins} mins).`
+          );
           return;
         }
       }
     }
 
+    const wasPaused = pauseEnabled;
     setPauseRepasError(null);
     setPauseEnabled(enabled);
     setPauseReason(effectiveReason);
 
     const now = Date.now();
+    const nowDate = new Date(now);
+    const hhmm = `${String(nowDate.getHours()).padStart(2, "0")}:${String(nowDate.getMinutes()).padStart(2, "0")}`;
+    if (enabled && !wasPaused) {
+      setTechBottomInfoMessage(`Confirmé. Vous avez mis en pause votre tournée à ${hhmm}.`);
+    } else if (!enabled && wasPaused) {
+      setTechBottomInfoMessage("Confirmé. La suspension de votre tournée est terminée.");
+    }
+
     try {
       localStorage.setItem("defib_pause_enabled", enabled ? "true" : "false");
       if (enabled) {
@@ -3129,7 +3143,14 @@ export default function PublicPortal({
 
   const handleConsultMissionFromPlanning = (tourObj: any, missionObj: any) => {
     if (!tourObj) return;
-    const targetTourId = tourObj.id || tourObj.title || "";
+    const sorted = getSortedTours();
+    const matchedTour = sorted.find(
+      (t: any) =>
+        (tourObj.id && t.id === tourObj.id) ||
+        (tourObj.tourIdentifiant && (t.tourIdentifiant === tourObj.tourIdentifiant || t.id === tourObj.tourIdentifiant)) ||
+        (tourObj.title && t.title === tourObj.title)
+    );
+    const targetTourId = matchedTour ? matchedTour.id : (tourObj.id || tourObj.title || "");
     // 1. Ouvrir la page INTERVENTIONS
     setActiveTab("interventions");
 
@@ -5678,10 +5699,10 @@ export default function PublicPortal({
     setVeilleContactEmail("");
     setVeilleContactTel("");
     
-    setVeilleSuccessMessage("Parfait! Le relevé concurrentiel est enregistré avec succès.");
-    setTimeout(() => {
-      setVeilleSuccessMessage("");
-    }, 5000);
+    setVeilleSuccessMessage("");
+    setTechBottomInfoMessage(
+      "Confirmé. Vous avez envoyé avec succès les informations concernant le relevé concurrentiel."
+    );
   };
 
   // New expense form state
@@ -6393,8 +6414,12 @@ export default function PublicPortal({
         isOngoing: false,
       };
 
+      const currentEndHHMM =
+        String(now.getHours()).padStart(2, "0") +
+        ":" +
+        String(now.getMinutes()).padStart(2, "0");
       savePointages(updated);
-      alert("Pointage arrêté avec succès.");
+      setTechBottomInfoMessage(`Confirmé. Le pointage vient de se terminer à ${currentEndHHMM}.`);
     } else {
       // Starting new Pointage
       const currentTechName = resolvedTech.name || "Technicien connecté";
@@ -6408,7 +6433,7 @@ export default function PublicPortal({
       });
 
       if (alreadyHasPointageToday) {
-        alert(t("Un seul pointage par jour est autorisé."));
+        setTechBottomInfoMessage("Impossible. Une seul pointage est autorisé par jour.");
         return;
       }
 
@@ -6435,7 +6460,7 @@ export default function PublicPortal({
       };
 
       savePointages([newLog, ...pointages]);
-      alert("Pointage démarré avec succès.");
+      setTechBottomInfoMessage(`Confirmé. Le pointage vient de démarrer à ${currentHHMM}.`);
     }
   };
 
@@ -6528,7 +6553,22 @@ export default function PublicPortal({
   };
 
   const handleDeletePointage = (id: string) => {
+    const targetPointage = pointages.find((p) => p.id === id);
+    let formattedDate = "";
+    if (targetPointage?.startDate) {
+      const raw = String(targetPointage.startDate).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        const [yyyy, mm, dd] = raw.split("-");
+        formattedDate = `${dd}/${mm}/${yyyy}`;
+      } else {
+        formattedDate = raw;
+      }
+    } else {
+      const now = new Date();
+      formattedDate = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+    }
     savePointages(pointages.filter((p) => p.id !== id));
+    setTechBottomInfoMessage(`Confirmé. Le pointage du ${formattedDate} est supprimé.`);
   };
 
   // Submit EXPENSE Receipt (Tab 4)
@@ -6590,10 +6630,10 @@ export default function PublicPortal({
     if (expensePhotoInputRef.current) {
       expensePhotoInputRef.current.value = "";
     }
-    setExpenseSuccessMessage("Parfait! Le ticket de frais est enregistré avec succès.");
-    setTimeout(() => {
-      setExpenseSuccessMessage("");
-    }, 5000);
+    setExpenseSuccessMessage("");
+    setTechBottomInfoMessage(
+      "Confirmé. Vous avez envoyé avec succès les informations concernant le frais."
+    );
   };
 
   const handleDeleteExpense = (id: string) => {
@@ -6721,8 +6761,8 @@ export default function PublicPortal({
       gpsSharingLink,
     );
 
-    alert(
-      `Vos préférences géographiques ont été enregistrées avec succès et le lien de live tracking a été envoyé vers le pupitre principal d'administration !`,
+    setTechBottomInfoMessage(
+      "Confirmé. Vos préférences et informations ont été enregistrées."
     );
     setActiveSettingsSection(null);
   };
@@ -6790,7 +6830,10 @@ export default function PublicPortal({
       localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
       await saveCollectionToFirestore("members", updatedMembers, envId);
 
-      setSigSaveSuccess(true);
+      setSigSaveSuccess(false);
+      setTechBottomInfoMessage(
+        "Confirmé. Votre signature est enregistrée et visible sur les rapports émis par votre profil technicien."
+      );
     }
   };
 
@@ -10209,19 +10252,6 @@ export default function PublicPortal({
                             borderRadius: "14px",
                           }}
                         >
-                          {pauseRepasError && (
-                            <div
-                              className="p-3 rounded-xl font-semibold animate-fadeIn"
-                              style={{
-                                background: "#d22d0b",
-                                border: "none",
-                                color: "#fff",
-                                fontSize: "16px",
-                              }}
-                            >
-                              {pauseRepasError}
-                            </div>
-                          )}
                           <div className="flex items-center justify-between">
                             <span
                               className="text-[18px] font-bold font-sans"
@@ -11368,12 +11398,15 @@ export default function PublicPortal({
                                             !pass.rejectionReason.trim(),
                                         );
                                       if (hasUnfilledReasons) {
-                                        // Update error message
-                                        setTourErrorMap((prev) => ({
-                                          ...prev,
-                                          [t.id]:
-                                            "Informations requises sur les missions non effectuées.",
-                                        }));
+                                        // Show sticky-bottom info message instead of inline error
+                                        setTourErrorMap((prev) => {
+                                          const copy = { ...prev };
+                                          delete copy[t.id];
+                                          return copy;
+                                        });
+                                        setTechBottomInfoMessage(
+                                          "Impossible. Informations requises sur les missions non effectuées."
+                                        );
                                         return;
                                       }
                                     }
@@ -11502,8 +11535,8 @@ export default function PublicPortal({
 
                                     setSelectedTourId("");
 
-                                    alert(
-                                      "La tournée a bien été marquée comme terminée !",
+                                    setTechBottomInfoMessage(
+                                      "Confirmé. La tournée a bien été marquée comme terminée."
                                     );
                                   }}
                                   style={{
@@ -11526,21 +11559,6 @@ export default function PublicPortal({
                                 >
                                   Terminer la tournée
                                 </button>
-
-                                {/* Conditional error message */}
-                                {tourErrorMap[t.id] && (
-                                  <div
-                                    className="mt-2.5 p-3.5 rounded-lg text-center font-bold animate-fadeIn"
-                                    style={{
-                                      fontSize: "18px",
-                                      border: "none",
-                                      color: "rgb(49, 85, 255)",
-                                      backgroundColor: "rgb(238, 241, 255)",
-                                    }}
-                                  >
-                                    {tourErrorMap[t.id]}
-                                  </div>
-                                )}
                               </div>
                             </div>
                           ))}
@@ -12271,6 +12289,9 @@ export default function PublicPortal({
                           setNewDistribCommentaire("");
                           setNewDistribTraceabilityEnabled(false);
                           setPendingNewDistribTraceabilities([]);
+                          setTechBottomInfoMessage(
+                            "Rappel: pour être sélectionnée, une pièce doit exister (être référencée) dans les stocks de l’administrateur, et ne pas déjà être existante dans votre emplacement technicien."
+                          );
                         }
                       }}
                       style={{
@@ -12381,17 +12402,6 @@ export default function PublicPortal({
                         boxSizing: "border-box",
                       }}
                     >
-                      {/* Info Message */}
-                      <div
-                        className="p-3.5 rounded-[13px] text-[15px] font-sans font-medium mb-2"
-                        style={{
-                          backgroundColor: "#ECEFF4",
-                          color: "#000000",
-                          border: "none",
-                        }}
-                      >
-                        Pour être sélectionnée, une pièce doit exister (être référencée) dans la centrale des stocks, et ne pas déjà être existante dans l’emplacement du technicien.
-                      </div>
 
                       {/* 1. Équipement de la centrale des stocks : Lookup from Spreadsheet Stocks where NO traceability item is linked to logged-in technician's location */}
                       <div className="flex flex-col gap-1">
@@ -15727,26 +15737,6 @@ export default function PublicPortal({
                     >
                       <span>Enregistrer</span>
                     </button>
-
-                    {expenseSuccessMessage && (
-                      <div
-                        style={{
-                          border: "none",
-                          borderRadius: "13px",
-                          fontSize: "18px",
-                          backgroundColor: "rgb(61, 220, 132)",
-                          color: "rgb(21, 99, 55)",
-                          padding: "14px",
-                          textAlign: "center",
-                          fontWeight: "normal",
-                          marginTop: "12px",
-                          fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
-                        }}
-                        className="animate-fadeIn"
-                      >
-                        {expenseSuccessMessage}
-                      </div>
-                    )}
                   </form>
                 </div>
               )}
@@ -15998,26 +15988,6 @@ export default function PublicPortal({
                     >
                       <span>Enregistrer</span>
                     </button>
-
-                    {veilleSuccessMessage && (
-                      <div
-                        style={{
-                          border: "none",
-                          borderRadius: "13px",
-                          fontSize: "18px",
-                          backgroundColor: "rgb(61, 220, 132)",
-                          color: "rgb(21, 99, 55)",
-                          padding: "14px",
-                          textAlign: "center",
-                          fontWeight: "normal",
-                          marginTop: "12px",
-                          fontFamily: 'var(--font-sans), "Civilprom", "DefibeoMain", sans-serif',
-                        }}
-                        className="animate-fadeIn"
-                      >
-                        {veilleSuccessMessage}
-                      </div>
-                    )}
                   </form>
                 </div>
               )}
@@ -16127,6 +16097,7 @@ export default function PublicPortal({
                                     );
                                   }
                                 } catch (e) {}
+                                setTechBottomInfoMessage("Confirmé. Vos préférences ont été enregistrées.");
                               }}
                               className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
                               style={{
@@ -16189,6 +16160,7 @@ export default function PublicPortal({
                       <button
                         type="button"
                         onClick={() => {
+                          setTechBottomInfoMessage("Confirmé. Vos préférences ont été enregistrées.");
                           setActiveSettingsSection(null);
                         }}
                         style={{
@@ -16234,6 +16206,15 @@ export default function PublicPortal({
                                     ? "Non partagé"
                                     : "Partagé";
                                 setGpsSharingLink(newVal);
+                                if (authenticatedUser?.name) {
+                                  localStorage.setItem(
+                                    `defib_tech_location_link_${authenticatedUser.name}`,
+                                    newVal
+                                  );
+                                }
+                                if (newVal === "Partagé") {
+                                  setTechBottomInfoMessage("Confirmé. Vos informations ont été enregistrées.");
+                                }
                               }}
                               className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
                               style={{
@@ -16274,6 +16255,13 @@ export default function PublicPortal({
                       <button
                         type="button"
                         onClick={() => {
+                          if (authenticatedUser?.name) {
+                            localStorage.setItem(
+                              `defib_tech_location_link_${authenticatedUser.name}`,
+                              gpsSharingLink
+                            );
+                          }
+                          setTechBottomInfoMessage("Confirmé. Vos informations ont été enregistrées.");
                           setActiveSettingsSection(null);
                         }}
                         style={{
@@ -16677,20 +16665,6 @@ export default function PublicPortal({
                           </div>
                         </div>
                       </div>
-
-                      {sigSaveSuccess && (
-                        <div
-                          className="p-3.5 text-center font-bold font-sans"
-                          style={{
-                            backgroundColor: "rgb(61, 220, 132)",
-                            color: "rgb(21, 99, 55)",
-                            borderRadius: "13px",
-                            fontSize: "16px",
-                          }}
-                        >
-                          Parfait ! Votre signature a bien été enregistrée.
-                        </div>
-                      )}
 
                       <button
                         type="button"
@@ -17257,6 +17231,51 @@ export default function PublicPortal({
                 </div>
               )}
             </div>
+
+            {/* Sticky-Bottom Info Div for Technician Webapp */}
+            {techBottomInfoMessage && (
+              <div
+                id="tech-sticky-bottom-info-div"
+                className="fixed bottom-0 left-0 right-0 z-[9999] max-w-[1100px] mx-auto w-full animate-fadeIn"
+                style={{
+                  backgroundColor: "#2e54fd",
+                  padding: "18px 20px 22px 20px",
+                }}
+              >
+                <div className="w-full flex flex-col gap-3.5">
+                  <button
+                    type="button"
+                    onClick={() => setTechBottomInfoMessage(null)}
+                    style={{
+                      backgroundColor: "#0000b9",
+                      color: "#fff",
+                      fontSize: "18px",
+                      borderRadius: "14px",
+                      padding: "12px 20px",
+                      border: "none",
+                      width: "100%",
+                      cursor: "pointer",
+                      fontFamily: 'var(--font-sans), "DefibeoMain", "Civilprom", sans-serif',
+                    }}
+                    className="w-full text-center font-medium transition-opacity hover:opacity-95 active:scale-[0.99]"
+                  >
+                    Fermer
+                  </button>
+                  <div
+                    style={{
+                      color: "#fff",
+                      fontSize: "18px",
+                      textAlign: "left",
+                      lineHeight: 1.45,
+                      fontFamily: 'var(--font-sans), "DefibeoMain", "Civilprom", sans-serif',
+                    }}
+                    className="w-full text-left font-normal"
+                  >
+                    {techBottomInfoMessage}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           /* ----------------- IF TECHNICIAN IS NOT LOGGED IN STATE (PUBLIC VIEWPORTS) ----------------- */

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Client, ClientContract, Defibrillateur, Variable, CompanyInfo, openTenantSpreadsheetUrl } from '../types';
 import { Plus, Search, Trash2, Edit2, X, Briefcase, Mail, Phone, FileText, Calendar, ShieldCheck, Download, ChevronDown, RefreshCw, FileSpreadsheet } from 'lucide-react';
 import { checkIfEmailExistsAnywhere } from '../firebase';
@@ -837,6 +838,104 @@ export default function ClientTab({
   
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  const [isHelpFaqOpen, setIsHelpFaqOpen] = useState(false);
+  const [selectedHelpFaqIndex, setSelectedHelpFaqIndex] = useState<number | null>(null);
+  const [helpIntroTyped, setHelpIntroTyped] = useState('');
+  const [helpAnswerTyped, setHelpAnswerTyped] = useState('');
+  const [helpAnswerDone, setHelpAnswerDone] = useState(false);
+  const [helpResetTick, setHelpResetTick] = useState(0);
+  const helpChatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const HELP_FAQ_ITEMS = useMemo(() => [
+    {
+      q: "À quoi sert l’onglet Clients ?",
+      a: "Il permet d’enregistrer et de gérer les informations de profil de chaque client. Vous pouvez ensuite associer chaque client à un ou plusieurs matériels.",
+    },
+    {
+      q: "Comment rechercher un client ?",
+      a: "Utilisez la barre de recherche rapide située en haut à droite en saisissant au moins deux caractères du nom du client recherché.",
+    },
+    {
+      q: "Que signifie le volume dans la première colonne de l’affichage ?",
+      a: "Il indique le nombre total de matériels (tous types confondus) associés à ce profil client.",
+    },
+    {
+      q: "Comment modifier un client ?",
+      a: "Cliquez directement sur la ligne du client ou sur le bouton « Modifier » dans la colonne « Actions ».",
+    },
+    {
+      q: "Comment supprimer un client ?",
+      a: "Cliquez sur le bouton « Supprimer » dans la colonne « Actions ».",
+    },
+    {
+      q: "Pourquoi est-il impossible de supprimer un client ?",
+      a: "Si le bouton de suppression est grisé ou désactivé, c’est qu’au moins un matériel est encore rattaché à ce client. Pour pouvoir le supprimer, vous devez d'abord dissocier le client du ou des matériels concernés, ou supprimer ces matériels.",
+    },
+    {
+      q: "Comment ajouter plusieurs contacts à une fiche client ?",
+      a: "Renseignez les 4 champs du premier contact pour faire apparaître automatiquement une ligne supplémentaire. Vous pouvez enregistrer jusqu’à 5 contacts par client.",
+    },
+    {
+      q: "Comment rédiger un contrat ?",
+      a: "Ouvrez la fiche client et accédez à la section « Contrat ». Renseignez les champs requis (catégorie, référence, valeur, date de début, date de fin, etc.). Une fois rédigé, vous avez deux options : Télécharger le contrat au format PDF pour le faire signer hors de Defibeo. OU Le mettre à disposition sur le portail client, où le client pourra apposer sa signature électronique pour activer le contrat.",
+    },
+    {
+      q: "Comment ajouter un contrat rédigé hors de Defibeo ?",
+      a: "Ouvrez la fiche client et rendez-vous dans la section « Contrat ». Cliquez sur le bouton « Ajouter un contrat » puis renseignez les informations demandées (intitulé, référence, etc.) pour l’enregistrer.",
+    },
+    {
+      q: "Comment consulter les matériels (ou défibrillateurs) d’un client ?",
+      a: "Ouvrez la fiche du client : en haut du formulaire, un bouton « Matériel(s) » vous permet d’accéder à l’ensemble des équipements qui lui sont associés.",
+    },
+  ], []);
+
+  useEffect(() => {
+    if (!isHelpFaqOpen) {
+      setSelectedHelpFaqIndex(null);
+      setHelpIntroTyped('');
+      setHelpAnswerTyped('');
+      setHelpAnswerDone(false);
+      return;
+    }
+    const introText = "Ressources d’aide populaires :";
+    let idx = 0;
+    setHelpIntroTyped('');
+    const interval = window.setInterval(() => {
+      idx += 1;
+      setHelpIntroTyped(introText.slice(0, idx));
+      if (idx >= introText.length) {
+        window.clearInterval(interval);
+      }
+    }, 18);
+    return () => window.clearInterval(interval);
+  }, [isHelpFaqOpen, helpResetTick]);
+
+  useEffect(() => {
+    if (selectedHelpFaqIndex === null || !HELP_FAQ_ITEMS[selectedHelpFaqIndex]) {
+      setHelpAnswerTyped('');
+      setHelpAnswerDone(false);
+      return;
+    }
+    const fullAnswer = HELP_FAQ_ITEMS[selectedHelpFaqIndex].a;
+    let idx = 0;
+    setHelpAnswerTyped('');
+    setHelpAnswerDone(false);
+    const interval = window.setInterval(() => {
+      idx += 2;
+      if (idx >= fullAnswer.length) {
+        setHelpAnswerTyped(fullAnswer);
+        setHelpAnswerDone(true);
+        window.clearInterval(interval);
+      } else {
+        setHelpAnswerTyped(fullAnswer.slice(0, idx));
+      }
+      if (helpChatScrollRef.current) {
+        helpChatScrollRef.current.scrollTop = helpChatScrollRef.current.scrollHeight;
+      }
+    }, 14);
+    return () => window.clearInterval(interval);
+  }, [selectedHelpFaqIndex, HELP_FAQ_ITEMS]);
 
   const searchInputStyle: React.CSSProperties = {
     border: '1px solid #dedede',
@@ -2777,6 +2876,24 @@ export default function ClientTab({
               {effectiveRefreshing ? t("Actualisation...") : t("Actualiser les données")}
             </button>
 
+            {/* Button Aide */}
+            <button
+              type="button"
+              id="btn-client-help-formation"
+              onClick={() => setIsHelpFaqOpen(true)}
+              style={{
+                ...customButtonStyle,
+                backgroundColor: '#0f172a',
+                color: '#ffffff',
+                borderRadius: '13px',
+                fontSize: '14px',
+                padding: '4px 11px 5px 11px',
+                boxShadow: 'none',
+              }}
+            >
+              Aide
+            </button>
+
             {/* Field recherche (Search input) with size reduced */}
             <div className="relative w-full sm:w-64">
               <style>{`
@@ -3131,6 +3248,281 @@ export default function ClientTab({
             Client(s) récent(s) affiché(s) : {recentClients.length}.
           </div>
         </div>
+      )}
+
+      {/* 📚 AIDE & FORMATION CHAT AGENT SIDE PANE 📚 */}
+      {isHelpFaqOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          id="client-help-faq-side-pane-backdrop"
+          className="fixed inset-0 z-[99990] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            minHeight: '100dvh',
+            maxHeight: '100dvh',
+            zIndex: 99990,
+          }}
+          onClick={() => setIsHelpFaqOpen(false)}
+        >
+          <div
+            id="client-help-faq-side-pane"
+            className="relative w-full sm:w-[480px] shadow-2xl flex flex-col shrink-0 transform transition-transform duration-200 ease-in-out"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              backgroundColor: '#F5F7FA',
+              borderLeft: 'none',
+              borderRadius: '0px',
+              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            }}
+          >
+            <div
+              ref={helpChatScrollRef}
+              className="flex-1 overflow-y-auto p-6 space-y-4 pb-28"
+            >
+              {/* Incoming typing text: Ressources d’aide populaires : (hidden once a question is selected) */}
+              {selectedHelpFaqIndex === null && (
+                <>
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        backgroundColor: 'transparent',
+                        fontSize: '18px',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {helpIntroTyped}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* System dropdown below */}
+                  <div className="w-full animate-fadeIn">
+                    <select
+                      id="client-help-faq-select"
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setSelectedHelpFaqIndex(null);
+                        } else {
+                          setSelectedHelpFaqIndex(Number(val));
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        border: '1px solid #DCE1EA',
+                        borderRadius: '13px',
+                        padding: '9px 14px',
+                        fontSize: '18px',
+                        fontWeight: 100,
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        outline: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="">Sélection d’un sujet.</option>
+                      {HELP_FAQ_ITEMS.map((item, idx) => (
+                        <option key={idx} value={String(idx)}>
+                          {item.q}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {/* First response: Selected Question */}
+              {selectedHelpFaqIndex !== null && HELP_FAQ_ITEMS[selectedHelpFaqIndex] && (
+                <>
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        padding: '15px 20px',
+                        background: 'rgb(233, 235, 239)',
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        color: '#000000',
+                        cursor: 'default',
+                        borderRadius: '13px',
+                        border: 'none',
+                        boxShadow: 'none',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {HELP_FAQ_ITEMS[selectedHelpFaqIndex].q}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Second response right after: Answer */}
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        backgroundColor: 'transparent',
+                        fontSize: '18px',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {helpAnswerTyped}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* After the answer is displayed: "Vous avez encore besoin d’aide ?" + full-width "Contacter l’assistance" + full-width "Recommencer" */}
+                  {helpAnswerDone && (
+                    <div className="flex flex-col items-start space-y-3 w-full animate-fadeIn">
+                      <div
+                        className="transition-all relative select-text w-full"
+                        style={{
+                          backgroundColor: 'transparent',
+                          fontSize: '18px',
+                          border: 'none',
+                          boxShadow: 'none',
+                          padding: 0,
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        <p
+                          className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                          style={{
+                            fontSize: '18px',
+                            color: '#000000',
+                            cursor: 'default',
+                          }}
+                        >
+                          Vous avez encore besoin d’aide ?
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsHelpFaqOpen(false);
+                          if (setActiveTab) setActiveTab('assistance');
+                        }}
+                        style={{
+                          width: '100%',
+                          backgroundColor: '#2e54ff',
+                          color: '#ffffff',
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'none',
+                        }}
+                        className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                      >
+                        Contacter l’assistance
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedHelpFaqIndex(null);
+                          setHelpAnswerTyped('');
+                          setHelpAnswerDone(false);
+                          setHelpResetTick((prev) => prev + 1);
+                        }}
+                        style={{
+                          width: '100%',
+                          backgroundColor: 'rgb(210, 45, 11)',
+                          color: '#ffffff',
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'none',
+                        }}
+                        className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                      >
+                        Recommencer
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Floating Bottom Button (Only Fermer) */}
+            <div
+              className="absolute bottom-0 left-0 right-0 p-6 flex gap-4 z-20 pointer-events-none"
+              style={{ backgroundColor: 'transparent', background: 'transparent' }}
+            >
+              <button
+                type="button"
+                onClick={() => setIsHelpFaqOpen(false)}
+                style={{
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  color: '#ffffff',
+                  borderRadius: '13px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  padding: '11px 22px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                }}
+                className="flex-1 text-center cursor-pointer animate-none pointer-events-auto"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

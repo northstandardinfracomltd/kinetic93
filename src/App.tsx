@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { getRegionsForCountry } from './utils/regions';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore, setTenantId as setFirebaseTenantId, getRegisteredTenants, purgeAllLocalEnvironmentCaches, getCollectionNameAliases, mergeCollectionItems, db, getCollectionKey, getTenantAliases, filterCollectionForTenant, KNOWN_TENANTS_REGISTRY, isFirestoreQuotaExhausted, recordFirestoreQuotaExhaustion, fetchRemoteDeletedDefibKeys, findTenantInList, ensureTenantMembersClient, ensureTenantCustomLocationNames } from './firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -1209,6 +1210,160 @@ export default function App() {
   const [fsmTechFilter, setFsmTechFilter] = useState<string>('Tous');
   const [fsmPlannerFilter, setFsmPlannerFilter] = useState<string>('Tous');
   const [fsmPlanningSidePaneOpen, setFsmPlanningSidePaneOpen] = useState<boolean>(false);
+  const [isFsmHelpFaqOpen, setIsFsmHelpFaqOpen] = useState<boolean>(false);
+  const [selectedFsmHelpFaqIndex, setSelectedFsmHelpFaqIndex] = useState<number | null>(null);
+  const [fsmHelpIntroTyped, setFsmHelpIntroTyped] = useState<string>('');
+  const [fsmHelpAnswerTyped, setFsmHelpAnswerTyped] = useState<string>('');
+  const [fsmHelpAnswerDone, setFsmHelpAnswerDone] = useState<boolean>(false);
+  const [fsmHelpResetTick, setFsmHelpResetTick] = useState<number>(0);
+  const fsmHelpChatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const FSM_HELP_FAQ_ITEMS = useMemo(() => [
+    {
+      q: "À quoi correspond l’onglet « À trier / Ordres ADV » ?",
+      a: "Lorsque vous sélectionnez des matériels pour une mission depuis l’onglet d’exploitation, si vous n’êtes pas encore certain de la tournée de destination, vous pouvez les placer dans cet onglet. Il fait office de zone d’attente avant leur affectation définitive. Remarque : certaines entreprises utilisant Defibeo peuvent également générer des ordres automatiquement depuis un logiciel tiers.",
+    },
+    {
+      q: "Comment créer une tournée ?",
+      a: "Cliquez sur le bouton « Nouvelle tournée » situé en haut à droite.",
+    },
+    {
+      q: "Comment créer une mission ?",
+      a: "Depuis l’onglet d’exploitation, sélectionnez le matériel pour lequel vous souhaitez planifier une mission, cliquez sur « Tournée », puis choisissez la tournée souhaitée ou placez-le dans « À trier ». Une mission étant toujours rattachée à un matériel, celui-ci doit être préalablement enregistré (au minimum avec son numéro de série). Remarque : certaines entreprises peuvent aussi générer des missions automatiquement via l’intégration d’un logiciel tiers.",
+    },
+    {
+      q: "Comment créer des techniciens et les associer à des emplacements ?",
+      a: "Accédez aux paramètres, puis à la section « Membres de l’environnement », et ajoutez un utilisateur avec le rôle « Technicien » (il aura ainsi accès à la webapp). Pour lui attribuer un emplacement, renseignez simplement le champ « Emplacement attribué ».",
+    },
+    {
+      q: "Quel est le processus standard pour transmettre une mission (et donc une tournée) à un technicien ?",
+      a: "Créez la tournée et ajoutez-y au moins une mission. Définissez ensuite le statut de la tournée sur « À faire ». Pour qu’une mission soit visible et réalisable par le technicien, son statut individuel doit être « Accepté Client » ou « À faire ».",
+    },
+    {
+      q: "Comment aviser individuellement un client par e-mail ?",
+      a: "Ouvrez la mission concernée et cliquez sur le bouton « Avisage e-mail au client » situé en bas. Ce bouton est disponible lorsque le statut de la mission est « Brouillon », « Attente Client » ou « Refusé Client ».",
+    },
+    {
+      q: "Comment aviser les clients en masse par e-mail ?",
+      a: "Cliquez sur le bouton d’avisage situé en haut à droite de la tournée. Ce bouton devient actif dès lors que toutes les missions éligibles comportent une date et un créneau horaire renseignés.",
+    },
+    {
+      q: "Si une mission n’apparaît pas dans sa tournée, le technicien peut-il tout de même intervenir ?",
+      a: "Oui. Depuis la webapp, le technicien dispose d’un bouton « Rapport spontané ». En cas d’imprévu sur le terrain, il peut ainsi générer et enregistrer une intervention dans les mêmes conditions habituelles.",
+    },
+    {
+      q: "Est-il obligatoire de renseigner tous les champs d’une mission ?",
+      a: "Non. Par exemple, il n’est pas obligatoire d’indiquer toutes les pièces requises dès la création : le formulaire reste flexible pour permettre au technicien de compléter ces informations sur le terrain.",
+    },
+    {
+      q: "Comment se déroule le processus de validation par le client ?",
+      a: "Une fois la date et le créneau renseignés, lancez l’avisage. Votre client reçoit un e-mail récapitulatif contenant un lien vers un formulaire en ligne lui permettant d’accepter ou de refuser l’intervention : S’il valide, le statut de la mission passe à « Accepté Client ». S’il refuse, il peut laisser un commentaire (par exemple pour proposer une autre date ou un autre créneau) ; le statut passe alors à « Refusé Client ».",
+    },
+    {
+      q: "Quelle est la logique de calcul de l’ordre de passage ?",
+      a: "L’optimisation s’appuie sur l’API Google Maps. Elle prend notamment en compte : L’adresse de départ du technicien et ses horaires de travail ; La localisation des matériels liés aux missions ; Les contraintes de date et d’heure forcées manuellement ; La préférence de trajet du technicien (commencer par le point le plus proche ou le plus éloigné).",
+    },
+    {
+      q: "Faut-il supprimer une tournée une fois terminée ?",
+      a: "C’est recommandé, car un même matériel ne peut pas figurer dans deux tournées simultanément. Cependant, certains utilisateurs préfèrent conserver des tournées récurrentes (ex. : Trimestre 1 Bretagne 2026) et les réutiliser chaque année en y ajoutant ou retirant des visites. Vous êtes libre d’adapter cette gestion selon vos processus internes.",
+    },
+    {
+      q: "Comment afficher les statistiques des tournées et des missions ?",
+      a: "Cliquez sur l’icône des trois points verticaux (⋮) en haut de page, puis sélectionnez « Afficher les statistiques ».",
+    },
+    {
+      q: "Comment consulter les compétences d’un technicien attribué ?",
+      a: "Cliquez sur l’icône des trois points verticaux (⋮) en haut de page, puis choisissez « Afficher infos compétences techniciens ».",
+    },
+    {
+      q: "Le technicien reçoit-il une notification lorsqu’une tournée lui est attribuée ?",
+      a: "Oui, un e-mail automatique lui est adressé et la tournée devient immédiatement consultable sur sa webapp.",
+    },
+    {
+      q: "Le technicien dispose-t-il d’un planning sur la webapp ?",
+      a: "Oui, une vue planning verticale est disponible. Il s’agit du même affichage que celui accessible via le bouton « Plannings ».",
+    },
+    {
+      q: "Le technicien peut-il refuser une mission, et que se passe-t-il le cas échéant ?",
+      a: "Oui. Sur chaque fiche mission, le technicien dispose d’un champ pour refuser l’intervention en indiquant le motif. Côté administration, le statut de la mission bascule automatiquement sur « Rejet Mission ».",
+    },
+    {
+      q: "Que signifie le pictogramme point d’exclamation à côté du numéro de passage ?",
+      a: "Il indique le statut actuel de la mission à l’aide d’un code couleur. En vue réduite, il permet de repérer en un coup d’œil les interventions nécessitant une action prioritaire.",
+    },
+    {
+      q: "Que représente le badge rouge avec un point d’interrogation sur chaque mission ?",
+      a: "Il s’agit de l’indicateur de passage temporaire. Dès que l’itinéraire est optimisé et calculé, le point d’interrogation est automatiquement remplacé par le numéro d’ordre de passage définitif.",
+    },
+    {
+      q: "À quoi sert la synchronisation des données avec un tableur (ex. Google Sheets) ?",
+      a: "Elle répond principalement à un besoin de redondance et de PRA (Plan de Reprise d’Activité) : vos données de production sont sécurisées et répliquées en continu sur une feuille de calcul externe. Cela permet aussi d’interconnecter facilement Defibeo à des outils d’automatisation (no-code ou low-code) comme Zapier, Make, n8n ou via des scripts API sur mesure.",
+    },
+    {
+      q: "Comment appliquer des filtres d’affichage ?",
+      a: "Cliquez sur l’icône des trois points verticaux (⋮) en haut de page, puis sélectionnez « Appliquer des filtres ».",
+    },
+    {
+      q: "Comment créer des groupes et des zones ?",
+      a: "Cliquez sur l’icône des trois points verticaux (⋮) en haut de page, puis sélectionnez « Gérer les groupes et zones ».",
+    },
+    {
+      q: "Comment visualiser le formulaire envoyé au client ?",
+      a: "Cliquez sur l’icône des trois points verticaux (⋮) en haut de page, puis sélectionnez « Consulter le modèle du formulaire d’avisage » pour prévisualiser ce que recevront vos clients.",
+    },
+    {
+      q: "À quoi sert le bouton d’actualisation des données ?",
+      a: "Il permet de rafraîchir instantanément l’affichage avec les données les plus récentes du serveur, ce qui est particulièrement utile en cas de travail collaboratif simultané sur plusieurs postes.",
+    },
+  ], []);
+
+  useEffect(() => {
+    if (!isFsmHelpFaqOpen) {
+      setSelectedFsmHelpFaqIndex(null);
+      setFsmHelpIntroTyped('');
+      setFsmHelpAnswerTyped('');
+      setFsmHelpAnswerDone(false);
+      return;
+    }
+    const introText = "Ressources d’aide populaires :";
+    let idx = 0;
+    setFsmHelpIntroTyped('');
+    const interval = window.setInterval(() => {
+      idx += 1;
+      setFsmHelpIntroTyped(introText.slice(0, idx));
+      if (idx >= introText.length) {
+        window.clearInterval(interval);
+      }
+    }, 18);
+    return () => window.clearInterval(interval);
+  }, [isFsmHelpFaqOpen, fsmHelpResetTick]);
+
+  useEffect(() => {
+    if (selectedFsmHelpFaqIndex === null || !FSM_HELP_FAQ_ITEMS[selectedFsmHelpFaqIndex]) {
+      setFsmHelpAnswerTyped('');
+      setFsmHelpAnswerDone(false);
+      return;
+    }
+    const fullAnswer = FSM_HELP_FAQ_ITEMS[selectedFsmHelpFaqIndex].a;
+    let idx = 0;
+    setFsmHelpAnswerTyped('');
+    setFsmHelpAnswerDone(false);
+    const interval = window.setInterval(() => {
+      idx += 2;
+      if (idx >= fullAnswer.length) {
+        setFsmHelpAnswerTyped(fullAnswer);
+        setFsmHelpAnswerDone(true);
+        window.clearInterval(interval);
+      } else {
+        setFsmHelpAnswerTyped(fullAnswer.slice(0, idx));
+      }
+      if (fsmHelpChatScrollRef.current) {
+        fsmHelpChatScrollRef.current.scrollTop = fsmHelpChatScrollRef.current.scrollHeight;
+      }
+    }, 14);
+    return () => window.clearInterval(interval);
+  }, [selectedFsmHelpFaqIndex, FSM_HELP_FAQ_ITEMS]);
+
   const [fsmTourDrafts, setFsmTourDrafts] = useState<Record<string, any>>({});
   const [dirtyFsmTourIds, setDirtyFsmTourIds] = useState<Record<string, boolean>>({});
   const triggerFsmTourSaveShakeAndScroll = (tourId?: string) => {
@@ -4130,6 +4285,7 @@ export default function App() {
                 interventionReference: cleanRef,
                 defibIdentifiant: cleanDefibId || sm.defibIdentifiant || '',
                 rejectionReason: sm.rejectionReason ?? sm.raisonRejet ?? '',
+                statutFacturation: sm.statutFacturation || 'Aucune information',
               });
               byTourKey.set(targetTourId, list);
             }
@@ -5074,13 +5230,38 @@ export default function App() {
             const resolvedSiteName =
               m.siteName ||
               (matchedDefib ? matchedDefib.nomSite || '' : other ? other.nomPrenomSite || '' : '');
+            const numVoie =
+              (matchedDefib
+                ? matchedDefib.numVoie || (matchedDefib as any).numeroVoie || (matchedDefib as any).numero_et_voie || (matchedDefib as any).adresse || ''
+                : other
+                ? other.numeroVoie || (other as any).numVoie || (other as any).adresse || ''
+                : '') || '';
             const ville = m.ville || (matchedDefib ? matchedDefib.ville : other ? other.ville : '') || '';
             const cp =
               m.cp ||
               (matchedDefib ? matchedDefib.codePostal || matchedDefib.cp || '' : other ? other.codePostal || other.cp || '' : '') ||
               '';
             const resolvedAddress =
-              m.clientAddress || m.location || (ville && cp ? `${ville}, ${cp}` : ville || cp || '');
+              [numVoie, ville, cp].map(s => String(s || '').trim()).filter(Boolean).join(', ') ||
+              m.clientAddress ||
+              m.location ||
+              '';
+            const resolvedTelephone =
+              (matchedDefib
+                ? matchedDefib.telephoneSite || (matchedDefib as any).telephone_portable || (matchedDefib as any).telephone || ''
+                : other
+                ? other.telephoneSite || (other as any).telephone || ''
+                : '') ||
+              m.telephone ||
+              '';
+            const resolvedEmail =
+              (matchedDefib
+                ? matchedDefib.emailSite || (matchedDefib as any).email || ''
+                : other
+                ? other.emailSite || (other as any).email || ''
+                : '') ||
+              m.email ||
+              '';
             const rawRef = String(m.interventionReference || '').trim();
             const cleanRef =
               rawRef && !rawRef.startsWith('fsm-m-')
@@ -5098,6 +5279,9 @@ export default function App() {
               ville,
               cp,
               clientAddress: resolvedAddress,
+              telephone: resolvedTelephone,
+              email: resolvedEmail,
+              statutFacturation: m.statutFacturation || 'Aucune information',
               techName: (() => {
                 const tourTech = t.id !== 'a-trier' && t.techName && t.techName !== 'Non assigné' ? String(t.techName).trim() : '';
                 const missionTech = m.techName && m.techName !== 'Non assigné' ? String(m.techName).trim() : '';
@@ -6209,6 +6393,16 @@ export default function App() {
     }
   };
 
+  const showFsmSystemInfoMessage = (msg: string) => {
+    setFsmSystemInfoMessage(msg);
+    if (fsmSystemInfoTimeoutRef.current) {
+      clearTimeout(fsmSystemInfoTimeoutRef.current);
+    }
+    fsmSystemInfoTimeoutRef.current = setTimeout(() => {
+      setFsmSystemInfoMessage(null);
+    }, 8000);
+  };
+
   const addFsmTour = () => {
     const hasFsmSpreadsheet = Boolean(
       getTenantSpreadsheetUrl('spreadsheetTournees', companyInfo) ||
@@ -6238,13 +6432,7 @@ export default function App() {
     };
     saveFsmTours([newTour, ...fsmTours]);
     setFsmDateFilter(newId);
-    setFsmSystemInfoMessage("La tournée est créée, elle est accessible via la sélection de la tournée.");
-    if (fsmSystemInfoTimeoutRef.current) {
-      clearTimeout(fsmSystemInfoTimeoutRef.current);
-    }
-    fsmSystemInfoTimeoutRef.current = setTimeout(() => {
-      setFsmSystemInfoMessage(null);
-    }, 8000);
+    showFsmSystemInfoMessage("La tournée est créée, elle est accessible via la sélection de la tournée.");
   };
 
   const deleteFsmTour = (tourId: string) => {
@@ -6252,7 +6440,7 @@ export default function App() {
     if (!tour) return;
     const currentStatus = tour.status || 'Brouillon';
     if (currentStatus === 'À faire' || currentStatus === 'En cours') {
-      alert("Impossible de supprimer une tournée dont le statut est À faire ou En cours.");
+      showFsmSystemInfoMessage("Impossible de supprimer une tournée dont le statut est À faire ou En cours.");
       return;
     }
 
@@ -6423,6 +6611,60 @@ export default function App() {
     return missions.every((m: any) => isMissionEstimatedDateFilled(m) && isMissionEstimatedSlotFilled(m));
   };
 
+  const isTourStartDateValidForEstimatedFields = (startDateStr?: string): boolean => {
+    const raw = String(startDateStr || '').trim();
+    if (!raw || raw === 'a-trier' || raw.toLowerCase() === 'a trier') return false;
+    let normalized = raw;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+      const [d, m, y] = raw.split('/');
+      normalized = `${y}-${m}-${d}`;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return false;
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return normalized >= todayStr;
+  };
+
+  const normalizeFsmSlotValue = (raw: any): string => {
+    const s = String(raw ?? '').trim();
+    if (!s || s === '--:--' || s.toLowerCase() === '-- non défini --' || s.toLowerCase() === 'non renseigné') return '';
+    const validSlots = [
+      '8:00am', '8:30am', '9:00am', '9:30am',
+      '10:00am', '10:30am', '11:00am', '11:30am',
+      '12:00pm', '12:30pm', '13:00pm', '13:30pm',
+      '14:00pm', '14:30pm', '15:00pm', '15:30pm',
+      '16:00pm', '16:30pm', '17:00pm', '17:30pm',
+      '18:00pm', '18:30pm', '19:00pm',
+    ];
+    if (validSlots.includes(s)) return s;
+    const match = s.match(/(\d{1,2})[:h](\d{2})\s*(am|pm)?/i);
+    if (match) {
+      let h = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10);
+      const suf = (match[3] || '').toLowerCase();
+      if (suf === 'pm' && h < 12) h += 12;
+      const totalMins = h * 60 + (isNaN(m) ? 0 : m);
+      const clampedMins = Math.max(8 * 60, Math.min(19 * 60, Math.round(totalMins / 30) * 30));
+      const finalH = Math.floor(clampedMins / 60);
+      const finalM = clampedMins % 60;
+      const finalSuffix = finalH >= 12 ? 'pm' : 'am';
+      return `${finalH}:${String(finalM).padStart(2, '0')}${finalSuffix}`;
+    }
+    return s;
+  };
+
+  const triggerShakeTourStartDate = (tourId: string) => {
+    const el = document.getElementById(`fsm-tour-start-date-${tourId}`);
+    if (el) {
+      el.classList.remove('shake-element');
+      void el.offsetWidth;
+      el.classList.add('shake-element');
+      setTimeout(() => {
+        el.classList.remove('shake-element');
+      }, 500);
+    }
+  };
+
   const updateFsmTour = (tourId: string, fields: any) => {
     const existingTour = fsmTours.find(t => t.id === tourId);
     const oldStatus = existingTour?.status || 'Brouillon';
@@ -6430,7 +6672,7 @@ export default function App() {
 
     if (fields.status !== undefined && (fields.status === 'À faire' || fields.status === 'En cours' || fields.status === 'Effectué' || fields.status === 'Terminé')) {
       if (!tourMissionsHaveDatesAndSlots(existingTour)) {
-        alert("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
+        showFsmSystemInfoMessage("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
         return;
       }
     }
@@ -6511,7 +6753,8 @@ export default function App() {
       priority: 'Normale',
       time: '14:00',
       interventionReference: nextRef,
-      autreReference: ''
+      autreReference: '',
+      statutFacturation: 'Aucune information'
     };
     const updatedTours = fsmTours.map(t => {
       if (t.id === tourId) {
@@ -6768,7 +7011,7 @@ export default function App() {
   const handleSaveTeamWorkGroup = () => {
     const trimmedTitle = groupTitle.trim().slice(0, 20);
     if (!trimmedTitle) {
-      alert("Veuillez saisir un titre pour le groupe (max 20 caractères).");
+      showFsmSystemInfoMessage("Veuillez saisir un titre pour le groupe (max 20 caractères).");
       return;
     }
 
@@ -7142,7 +7385,7 @@ export default function App() {
       const mission = (tour?.missions || []).find((m: any) => m.id === missionId);
       const target = { ...mission, ...fields };
       if (!isMissionEstimatedDateFilled(target) || !isMissionEstimatedSlotFilled(target)) {
-        alert("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
+        showFsmSystemInfoMessage("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
         return;
       }
     }
@@ -7295,7 +7538,7 @@ export default function App() {
     }
 
     setAvisageConfirmTour(null);
-    alert("L'email d'avisage a été envoyé avec succès !");
+    showFsmSystemInfoMessage("L'email d'avisage a été envoyé avec succès !");
   };
 
   const handleSoumettreAuClient = async (m: any, tour: any) => {
@@ -7364,7 +7607,7 @@ export default function App() {
     const uniqueEmails = Array.from(new Set(recipientEmails.filter(Boolean)));
 
     if (uniqueEmails.length === 0) {
-      alert("Aucune adresse email valide trouvée pour ce client ou cette mission.");
+      showFsmSystemInfoMessage("Aucune adresse email valide trouvée pour ce client ou cette mission.");
       return;
     }
 
@@ -7425,13 +7668,13 @@ export default function App() {
           status: 'Attente Client',
           interventionReference: interventionRef
         });
-        alert("La proposition a été soumise au client par email avec succès.");
+        showFsmSystemInfoMessage("La proposition a été soumise au client par email avec succès.");
       } else {
-        alert("Une erreur est survenue lors de l'envoi de l'email.");
+        showFsmSystemInfoMessage("Une erreur est survenue lors de l'envoi de l'email.");
       }
     } catch (err) {
       console.error("Erreur lors de la soumission au client:", err);
-      alert("Une erreur est survenue lors de l'envoi de l'email.");
+      showFsmSystemInfoMessage("Une erreur est survenue lors de l'envoi de l'email.");
     }
   };
 
@@ -14275,6 +14518,32 @@ export default function App() {
                         {translate("Plannings")}
                       </button>
 
+                      {/* Button Aide */}
+                      <button
+                        type="button"
+                        id="btn-fsm-help-formation"
+                        onClick={() => setIsFsmHelpFaqOpen(true)}
+                        style={{
+                          backgroundColor: '#0f172a',
+                          color: '#ffffff',
+                          boxShadow: 'none',
+                          borderRadius: '13px',
+                          fontSize: '14px',
+                          padding: '4px 11px 5px 11px',
+                          fontWeight: '100',
+                          transition: 'all 0s ease-in-out',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.5rem',
+                          cursor: 'pointer',
+                          border: 'none',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        }}
+                      >
+                        Aide
+                      </button>
+
                       {/* Field recherche (Search input) */}
                       <div className="relative w-full sm:w-64">
                         <input
@@ -14473,9 +14742,38 @@ export default function App() {
                           initialTech=""
                           enableExtendedView={true}
                           onUpdateTours={(updatedTours) => saveFsmTours(updatedTours)}
-                          onConsultMission={(tour) => {
+                          onConsultMission={(tour, mission) => {
                             setFsmPlanningSidePaneOpen(false);
                             setActiveTab('fsm');
+                            const matchedTour = fsmTours.find(
+                              (t: any) =>
+                                (tour?.id && t.id === tour.id) ||
+                                (tour?.tourIdentifiant && t.tourIdentifiant === tour.tourIdentifiant) ||
+                                (tour?.title && t.title === tour.title)
+                            );
+                            const targetTourId = matchedTour ? matchedTour.id : (tour?.id || '');
+                            if (targetTourId) {
+                              setFsmDateFilter(targetTourId);
+                              setFsmLastSelectedTourId(targetTourId);
+                            }
+                            if (mission?.id && targetTourId) {
+                              setFsmExpandedMissions((prev) => ({
+                                ...prev,
+                                [`${targetTourId}-${mission.id}`]: true,
+                              }));
+                            }
+                            const tryScrollToMission = (attemptsLeft: number) => {
+                              const el = mission?.id
+                                ? document.getElementById(`fsm-mission-card-${mission.id}`) ||
+                                  (document.querySelector(`[data-fsm-mission-id="${mission.id}"]`) as HTMLElement)
+                                : null;
+                              if (el) {
+                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                              } else if (attemptsLeft > 0) {
+                                setTimeout(() => tryScrollToMission(attemptsLeft - 1), 150);
+                              }
+                            };
+                            setTimeout(() => tryScrollToMission(8), 120);
                           }}
                         />
                       </div>
@@ -14507,6 +14805,275 @@ export default function App() {
                       </button>
                     </div>
                   </div>
+                )}
+
+                {/* 📚 AIDE & FORMATION CHAT AGENT SIDE PANE (TOURNÉES ET MISSIONS) 📚 */}
+                {isFsmHelpFaqOpen && typeof document !== 'undefined' && createPortal(
+                  <div
+                    id="fsm-help-faq-side-pane-backdrop"
+                    className="fixed inset-0 z-[99990] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+                    style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      width: '100vw',
+                      height: '100vh',
+                      minHeight: '100dvh',
+                      maxHeight: '100dvh',
+                      zIndex: 99990,
+                    }}
+                    onClick={() => setIsFsmHelpFaqOpen(false)}
+                  >
+                    <div
+                      id="fsm-help-faq-side-pane"
+                      className="relative w-full sm:w-[480px] shadow-2xl flex flex-col shrink-0 transform transition-transform duration-200 ease-in-out"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        height: '100vh',
+                        minHeight: '100dvh',
+                        maxHeight: '100dvh',
+                        backgroundColor: '#F5F7FA',
+                        borderLeft: 'none',
+                        borderRadius: '0px',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                    >
+                      <div
+                        ref={fsmHelpChatScrollRef}
+                        className="flex-1 overflow-y-auto p-6 space-y-4 pb-28"
+                      >
+                        {selectedFsmHelpFaqIndex === null && (
+                          <>
+                            <div className="flex flex-col items-start animate-fadeIn">
+                              <div
+                                className="transition-all relative select-text w-full"
+                                style={{
+                                  backgroundColor: 'transparent',
+                                  fontSize: '18px',
+                                  border: 'none',
+                                  boxShadow: 'none',
+                                  padding: 0,
+                                  color: '#000000',
+                                  cursor: 'default',
+                                }}
+                              >
+                                <p
+                                  className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                                  style={{
+                                    fontSize: '18px',
+                                    color: '#000000',
+                                    cursor: 'default',
+                                  }}
+                                >
+                                  {fsmHelpIntroTyped}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="w-full animate-fadeIn">
+                              <select
+                                id="fsm-help-faq-select"
+                                value=""
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '') {
+                                    setSelectedFsmHelpFaqIndex(null);
+                                  } else {
+                                    setSelectedFsmHelpFaqIndex(Number(val));
+                                  }
+                                }}
+                                style={{
+                                  width: '100%',
+                                  backgroundColor: '#ffffff',
+                                  color: '#000000',
+                                  border: '1px solid #DCE1EA',
+                                  borderRadius: '13px',
+                                  padding: '9px 14px',
+                                  fontSize: '18px',
+                                  fontWeight: 100,
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  outline: 'none',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <option value="">Sélection d’un sujet.</option>
+                                {FSM_HELP_FAQ_ITEMS.map((item, idx) => (
+                                  <option key={idx} value={String(idx)}>
+                                    {item.q}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </>
+                        )}
+
+                        {selectedFsmHelpFaqIndex !== null && FSM_HELP_FAQ_ITEMS[selectedFsmHelpFaqIndex] && (
+                          <>
+                            <div className="flex flex-col items-start animate-fadeIn">
+                              <div
+                                className="transition-all relative select-text w-full"
+                                style={{
+                                  padding: '15px 20px',
+                                  background: 'rgb(233, 235, 239)',
+                                  fontSize: '18px',
+                                  fontWeight: 'bold',
+                                  color: '#000000',
+                                  cursor: 'default',
+                                  borderRadius: '13px',
+                                  border: 'none',
+                                  boxShadow: 'none',
+                                }}
+                              >
+                                <p
+                                  className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                                  style={{
+                                    fontSize: '18px',
+                                    fontWeight: 'bold',
+                                    color: '#000000',
+                                    cursor: 'default',
+                                  }}
+                                >
+                                  {FSM_HELP_FAQ_ITEMS[selectedFsmHelpFaqIndex].q}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-start animate-fadeIn">
+                              <div
+                                className="transition-all relative select-text w-full"
+                                style={{
+                                  backgroundColor: 'transparent',
+                                  fontSize: '18px',
+                                  border: 'none',
+                                  boxShadow: 'none',
+                                  padding: 0,
+                                  color: '#000000',
+                                  cursor: 'default',
+                                }}
+                              >
+                                <p
+                                  className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                                  style={{
+                                    fontSize: '18px',
+                                    color: '#000000',
+                                    cursor: 'default',
+                                  }}
+                                >
+                                  {fsmHelpAnswerTyped}
+                                </p>
+                              </div>
+                            </div>
+
+                            {fsmHelpAnswerDone && (
+                              <div className="flex flex-col items-start space-y-3 w-full animate-fadeIn">
+                                <div
+                                  className="transition-all relative select-text w-full"
+                                  style={{
+                                    backgroundColor: 'transparent',
+                                    fontSize: '18px',
+                                    border: 'none',
+                                    boxShadow: 'none',
+                                    padding: 0,
+                                    color: '#000000',
+                                    cursor: 'default',
+                                  }}
+                                >
+                                  <p
+                                    className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                                    style={{
+                                      fontSize: '18px',
+                                      color: '#000000',
+                                      cursor: 'default',
+                                    }}
+                                  >
+                                    Vous avez encore besoin d’aide ?
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setIsFsmHelpFaqOpen(false);
+                                    setActiveTab('assistance');
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    backgroundColor: '#2e54ff',
+                                    color: '#ffffff',
+                                    borderRadius: '13px',
+                                    fontSize: '18px',
+                                    fontWeight: 'bold',
+                                    padding: '11px 22px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    boxShadow: 'none',
+                                  }}
+                                  className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                                >
+                                  Contacter l’assistance
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedFsmHelpFaqIndex(null);
+                                    setFsmHelpAnswerTyped('');
+                                    setFsmHelpAnswerDone(false);
+                                    setFsmHelpResetTick((prev) => prev + 1);
+                                  }}
+                                  style={{
+                                    width: '100%',
+                                    backgroundColor: 'rgb(210, 45, 11)',
+                                    color: '#ffffff',
+                                    borderRadius: '13px',
+                                    fontSize: '18px',
+                                    fontWeight: 'bold',
+                                    padding: '11px 22px',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    boxShadow: 'none',
+                                  }}
+                                  className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                                >
+                                  Recommencer
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      <div
+                        className="absolute bottom-0 left-0 right-0 p-6 flex gap-4 z-20 pointer-events-none"
+                        style={{ backgroundColor: 'transparent', background: 'transparent' }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setIsFsmHelpFaqOpen(false)}
+                          style={{
+                            backgroundColor: 'rgb(210, 45, 11)',
+                            color: '#ffffff',
+                            borderRadius: '13px',
+                            fontSize: '18px',
+                            fontWeight: 'bold',
+                            padding: '11px 22px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            boxShadow: 'none',
+                          }}
+                          className="flex-1 text-center cursor-pointer animate-none pointer-events-auto"
+                        >
+                          Fermer
+                        </button>
+                      </div>
+                    </div>
+                  </div>,
+                  document.body
                 )}
 
                 {/* Side-pane popup pour les Filtres (sans divider, sans icône croix) */}
@@ -15675,7 +16242,7 @@ export default function App() {
                                         // Save fsmTours
                                         saveFsmTours([...fsmTours]);
                                         setTimeout(() => {
-                                          alert("Les missions à trier ont été enregistrées avec succès !");
+                                          showFsmSystemInfoMessage("Les missions à trier ont été enregistrées avec succès !");
                                         }, 480);
 
                                         // Re-enable after 3 seconds
@@ -16114,190 +16681,277 @@ export default function App() {
                                           };
                                           const estimatedDateValue = m.estimatedDate || '';
 
+                                          const isEstimatedFieldsLocked = true;
+                                          const lockedEstimatedTooltip = "Une date de période indicative de début dans la tournée est requise pour débloquer ces champs.";
+
                                           return (
                                             <div className="space-y-3 bg-transparent w-full">
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 bg-transparent">
-                                            <div className="space-y-0.5 bg-transparent">
-                                              <label className="block mb-1 fsm-label-style">Client.</label>
-                                              <input
-                                                type="text"
-                                                value={(() => {
-                                                  if (isFormationMission) {
-                                                    const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
-                                                    const clientObj = clients?.find(c => c.id === (fmt?.clientId || m.clientId));
-                                                    return clientObj ? clientObj.denomination : (m.clientName || "");
-                                                  }
-                                                  const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
-                                                  const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
-                                                  const clientObj = clients?.find(c => c.id === (matchedDefib?.clientId || other?.clientId));
-                                                  return clientObj ? clientObj.denomination : (m.clientName || "");
-                                                })()}
-                                                disabled={true}
-                                                className="w-full font-sans cursor-not-allowed"
-                                                placeholder="Nom du Client"
-                                              />
-                                            </div>
-
-                                            {!isFormationMission && (
-                                              <div className="space-y-0.5 bg-transparent">
-                                                <label className="block mb-1 fsm-label-style">Site.</label>
-                                                <input
-                                                  type="text"
-                                                  value={(() => {
-                                                    const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
-                                                    const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
-                                                    const val = matchedDefib 
-                                                      ? (matchedDefib.nomSite || "") 
-                                                      : (other ? (other.nomPrenomSite || "") : "");
-                                                    return val === "Représentant Standard" || val === "Représentant standard" ? "" : val;
-                                                  })()}
-                                                  disabled={true}
-                                                  className="w-full font-sans cursor-not-allowed"
-                                                  placeholder="Nom du Site"
-                                                />
-                                              </div>
-                                            )}
-
-                                            {!isFormationMission && (
-                                              <div className="space-y-0.5 bg-transparent">
-                                                <label className="block mb-1 fsm-label-style">Identifiant.</label>
-                                                <input
-                                                  type="text"
-                                                  value={m.defibIdentifiant || ""}
-                                                  disabled={true}
-                                                  className="w-full font-mono cursor-not-allowed"
-                                                  placeholder="ID Matériel"
-                                                />
-                                              </div>
-                                            )}
-
-                                            <div className="space-y-0.5 bg-transparent">
-                                              <label className="block mb-1 fsm-label-style">Localisation.</label>
-                                              <input
-                                                type="text"
-                                                value={(() => {
-                                                  if (isFormationMission) {
-                                                    if (m.location) return m.location;
-                                                    const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
-                                                    if (fmt) {
-                                                      return [fmt.adresse, fmt.codePostal, fmt.ville].filter(Boolean).join(', ');
-                                                    }
-                                                    return m.address || '';
-                                                  }
-                                                  const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
-                                                  const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
-                                                  const ville = matchedDefib ? matchedDefib.ville : (other ? other.ville : '');
-                                                  const cp = matchedDefib ? (matchedDefib.codePostal || matchedDefib.cp || '') : (other ? (other.codePostal || other.cp || '') : '');
-                                                  return (ville && cp) ? `${ville}, ${cp}` : (ville || cp || '');
-                                                })()}
-                                                disabled={true}
-                                                className="w-full font-sans cursor-not-allowed"
-                                                placeholder="Ville, CP"
-                                              />
-                                            </div>
-
-                                            {/* Référence intervention. */}
-                                            <div className="space-y-0.5 bg-transparent">
-                                              <label className="block mb-1 fsm-label-style">Référence intervention.</label>
-                                              <input
-                                                type="text"
-                                                value={(() => {
-                                                  if (m.interventionReference) return m.interventionReference;
-                                                  const matchedReport = generatedReports.find((r: any) => 
-                                                    (r.missionId && r.missionId === m.id) || 
-                                                    (r.defibIdentifiant && r.defibIdentifiant === m.defibIdentifiant)
-                                                  );
-                                                  return matchedReport?.interventionReference || "";
-                                                })()}
-                                                disabled={true}
-                                                className="w-full font-sans cursor-not-allowed"
-                                                placeholder="Non renseignée"
-                                              />
-                                            </div>
-
-                                            {/* Bon de commande. */}
-                                            <div className="space-y-0.5 bg-transparent">
-                                              <label className="block mb-1 fsm-label-style">Bon de commande.</label>
-                                              <select
-                                                value={m.bonCommandeId || ''}
-                                                onChange={(e) => {
-                                                  const nextBcId = e.target.value;
-                                                  if (nextBcId && nextBcId !== 'custom') {
-                                                    const foundDoc = commercialDocs.find(doc => doc.id === nextBcId);
-                                                    const articleParts = foundDoc?.articles
-                                                      ? foundDoc.articles.map(art => art.designation).filter(Boolean)
-                                                      : [];
-                                                    const uniqueParts = Array.from(new Set([...(m.requiredParts || []), ...articleParts]));
-                                                    if (uniqueParts.length > (m.requiredParts || []).length) {
-                                                      changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId });
-                                                    } else {
-                                                      updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId });
-                                                    }
-                                                  } else if (nextBcId === 'custom') {
-                                                    updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId });
-                                                  } else {
-                                                    changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], [], { bonCommandeId: '' });
-                                                  }
-                                                }}
-                                                className="w-full font-sans focus:outline-none cursor-pointer text-slate-800"
-                                                style={{
-                                                  border: '1px solid #dedede',
-                                                  borderRadius: '13px',
-                                                  padding: '12px',
-                                                  fontSize: '16px',
-                                                  fontWeight: '100',
-                                                  color: '#000000',
-                                                  backgroundColor: '#ffffff'
-                                                }}
-                                              >
-                                                <option value="">-- Aucun --</option>
-                                                <option value="custom">Autre (Texte libre)</option>
-                                                {(() => {
-                                                  const matchedClient = (() => {
-                                                    if (m.clientId) {
-                                                      const found = clients.find(c => c.id === m.clientId);
-                                                      if (found) return found;
-                                                    }
-                                                    const matchedDefib = defibrillateurs.find(df => df.identifiant === m.defibIdentifiant);
-                                                    if (matchedDefib) {
-                                                      const found = clients.find(c => c.id === matchedDefib.clientId);
-                                                      if (found) return found;
-                                                    }
-                                                    if (m.clientName) {
-                                                      const mName = m.clientName.toLowerCase();
-                                                      const found = clients.find(c => {
-                                                        if (!c.denomination) return false;
-                                                        const cDenom = c.denomination.toLowerCase();
-                                                        return mName.includes(cDenom) || cDenom.includes(mName);
-                                                      });
-                                                      if (found) return found;
-                                                    }
-                                                    return null;
-                                                  })();
-
-                                                  const clientBcs = matchedClient
-                                                    ? commercialDocs.filter(doc => 
-                                                        doc.hasBonCommande && 
-                                                        (doc.clientId === matchedClient.id || 
-                                                         (doc.clientDenomination && matchedClient.denomination && 
-                                                          doc.clientDenomination.toLowerCase() === matchedClient.denomination.toLowerCase()))
-                                                      )
-                                                    : [];
-
-                                                  return clientBcs.map(bcDoc => (
-                                                    <option key={bcDoc.id} value={bcDoc.id}>
-                                                      {bcDoc.bonCommandeEntete || bcDoc.bonCommandeReference || bcDoc.ref}
-                                                    </option>
-                                                  ));
-                                                })()}
-                                              </select>
-                                              {m.bonCommandeId === 'custom' && (
-                                                <div className="mt-2 space-y-0.5 bg-transparent">
+                                              {/* Ligne 1 (4 cols en grid égales) : Client. / Site. / Téléphone principal. / Email principal. */}
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 w-full bg-transparent">
+                                                <div className="space-y-0.5 bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style">Client.</label>
                                                   <input
                                                     type="text"
-                                                    value={m.customBonCommande || ''}
-                                                    onChange={(e) => updateFsmMission(t.id, m.id, { customBonCommande: e.target.value })}
-                                                    placeholder={translate("Saisir le bon de commande...")}
+                                                    value={(() => {
+                                                      if (isFormationMission) {
+                                                        const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                        const clientObj = clients?.find(c => c.id === (fmt?.clientId || m.clientId));
+                                                        return clientObj ? clientObj.denomination : (m.clientName || "");
+                                                      }
+                                                      const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                      const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                      const clientObj = clients?.find(c => c.id === (matchedDefib?.clientId || other?.clientId));
+                                                      return clientObj ? clientObj.denomination : (m.clientName || "");
+                                                    })()}
+                                                    disabled={true}
+                                                    className="w-full font-sans cursor-not-allowed"
+                                                    placeholder="Nom du Client"
+                                                  />
+                                                </div>
+
+                                                <div className="space-y-0.5 bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style">Site.</label>
+                                                  <input
+                                                    type="text"
+                                                    value={(() => {
+                                                      if (isFormationMission) return m.siteName || "";
+                                                      const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                      const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                      const val = matchedDefib 
+                                                        ? (matchedDefib.nomSite || "") 
+                                                        : (other ? (other.nomPrenomSite || "") : "");
+                                                      return val === "Représentant Standard" || val === "Représentant standard" ? "" : val;
+                                                    })()}
+                                                    disabled={true}
+                                                    className="w-full font-sans cursor-not-allowed"
+                                                    placeholder="Nom du Site"
+                                                  />
+                                                </div>
+
+                                                <div className="space-y-0.5 bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style">Téléphone principal.</label>
+                                                  <input
+                                                    type="text"
+                                                    value={(() => {
+                                                      if (isFormationMission) {
+                                                        const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                        const clientObj = clients?.find(c => c.id === (fmt?.clientId || m.clientId));
+                                                        return clientObj?.telephoneSite || (clientObj as any)?.telephone || m.telephone || "";
+                                                      }
+                                                      const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                      const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                      if (matchedDefib) {
+                                                        return matchedDefib.telephoneSite || (matchedDefib as any).telephone_portable || (matchedDefib as any).telephone || "";
+                                                      }
+                                                      if (other) {
+                                                        return other.telephoneSite || (other as any).telephone || "";
+                                                      }
+                                                      return m.telephone || "";
+                                                    })()}
+                                                    disabled={true}
+                                                    className="w-full font-sans cursor-not-allowed"
+                                                    placeholder="Téléphone principal"
+                                                  />
+                                                </div>
+
+                                                <div className="space-y-0.5 bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style">Email principal.</label>
+                                                  <input
+                                                    type="text"
+                                                    value={(() => {
+                                                      if (isFormationMission) {
+                                                        const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                        const clientObj = clients?.find(c => c.id === (fmt?.clientId || m.clientId));
+                                                        return clientObj?.emailSite || clientObj?.email || m.email || "";
+                                                      }
+                                                      const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                      const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                      if (matchedDefib) {
+                                                        return matchedDefib.emailSite || (matchedDefib as any).email || "";
+                                                      }
+                                                      if (other) {
+                                                        return other.emailSite || (other as any).email || "";
+                                                      }
+                                                      return m.email || "";
+                                                    })()}
+                                                    disabled={true}
+                                                    className="w-full font-sans cursor-not-allowed"
+                                                    placeholder="Email principal"
+                                                  />
+                                                </div>
+                                              </div>
+
+                                              {/* Ligne 2 (25% 75%) : Identifiant. / Localisation. */}
+                                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full bg-transparent">
+                                                <div className="md:col-span-1 space-y-0.5 bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style">Identifiant.</label>
+                                                  <input
+                                                    type="text"
+                                                    value={m.defibIdentifiant || ""}
+                                                    disabled={true}
+                                                    className="w-full font-mono cursor-not-allowed"
+                                                    placeholder="ID Matériel"
+                                                  />
+                                                </div>
+
+                                                <div className="md:col-span-3 space-y-0.5 bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style">Localisation.</label>
+                                                  <input
+                                                    type="text"
+                                                    value={(() => {
+                                                      if (isFormationMission) {
+                                                        if (m.location) return m.location;
+                                                        const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                        if (fmt) {
+                                                          return [fmt.adresse, fmt.ville, fmt.codePostal].filter(Boolean).join(', ');
+                                                        }
+                                                        return m.address || '';
+                                                      }
+                                                      const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                      const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                      const numVoie = matchedDefib
+                                                        ? (matchedDefib.numVoie || (matchedDefib as any).numeroVoie || (matchedDefib as any).numero_et_voie || (matchedDefib as any).adresse || '')
+                                                        : (other ? (other.numeroVoie || (other as any).numVoie || (other as any).adresse || '') : '');
+                                                      const ville = matchedDefib ? (matchedDefib.ville || '') : (other ? (other.ville || '') : '');
+                                                      const cp = matchedDefib ? ((matchedDefib as any).codePostal || matchedDefib.cp || '') : (other ? (other.codePostal || (other as any).cp || '') : '');
+                                                      return [numVoie, ville, cp].map(s => String(s || '').trim()).filter(Boolean).join(', ');
+                                                    })()}
+                                                    disabled={true}
+                                                    className="w-full font-sans cursor-not-allowed"
+                                                    placeholder="Numéro et voie, Ville, CP"
+                                                  />
+                                                </div>
+                                              </div>
+
+                                              {/* Ligne 3 (4 cols en grid égales) : Référence intervention. / Bon de commande. / Autre référence. / Statut facturation. */}
+                                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 w-full bg-transparent">
+                                                {/* Référence intervention. */}
+                                                <div className="space-y-0.5 bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style">Référence intervention.</label>
+                                                  <input
+                                                    type="text"
+                                                    value={(() => {
+                                                      if (m.interventionReference) return m.interventionReference;
+                                                      const matchedReport = generatedReports.find((r: any) => 
+                                                        (r.missionId && r.missionId === m.id) || 
+                                                        (r.defibIdentifiant && r.defibIdentifiant === m.defibIdentifiant)
+                                                      );
+                                                      return matchedReport?.interventionReference || "";
+                                                    })()}
+                                                    disabled={true}
+                                                    className="w-full font-sans cursor-not-allowed"
+                                                    placeholder="Non renseignée"
+                                                  />
+                                                </div>
+
+                                                {/* Bon de commande. */}
+                                                <div className="space-y-0.5 bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style">Bon de commande.</label>
+                                                  <select
+                                                    value={m.bonCommandeId || ''}
+                                                    onChange={(e) => {
+                                                      const nextBcId = e.target.value;
+                                                      if (nextBcId && nextBcId !== 'custom') {
+                                                        const foundDoc = commercialDocs.find(doc => doc.id === nextBcId);
+                                                        const articleParts = foundDoc?.articles
+                                                          ? foundDoc.articles.map(art => art.designation).filter(Boolean)
+                                                          : [];
+                                                        const uniqueParts = Array.from(new Set([...(m.requiredParts || []), ...articleParts]));
+                                                        if (uniqueParts.length > (m.requiredParts || []).length) {
+                                                          changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId });
+                                                        } else {
+                                                          updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId });
+                                                        }
+                                                      } else if (nextBcId === 'custom') {
+                                                        updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId });
+                                                      } else {
+                                                        changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], [], { bonCommandeId: '' });
+                                                      }
+                                                    }}
+                                                    className="w-full font-sans focus:outline-none cursor-pointer text-slate-800"
+                                                    style={{
+                                                      border: '1px solid #dedede',
+                                                      borderRadius: '13px',
+                                                      padding: '12px',
+                                                      fontSize: '16px',
+                                                      fontWeight: '100',
+                                                      color: '#000000',
+                                                      backgroundColor: '#ffffff'
+                                                    }}
+                                                  >
+                                                    <option value="">-- Aucun --</option>
+                                                    <option value="custom">Autre (Texte libre)</option>
+                                                    {(() => {
+                                                      const matchedClient = (() => {
+                                                        if (m.clientId) {
+                                                          const found = clients.find(c => c.id === m.clientId);
+                                                          if (found) return found;
+                                                        }
+                                                        const matchedDefib = defibrillateurs.find(df => df.identifiant === m.defibIdentifiant);
+                                                        if (matchedDefib) {
+                                                          const found = clients.find(c => c.id === matchedDefib.clientId);
+                                                          if (found) return found;
+                                                        }
+                                                        if (m.clientName) {
+                                                          const mName = m.clientName.toLowerCase();
+                                                          const found = clients.find(c => {
+                                                            if (!c.denomination) return false;
+                                                            const cDenom = c.denomination.toLowerCase();
+                                                            return mName.includes(cDenom) || cDenom.includes(mName);
+                                                          });
+                                                          if (found) return found;
+                                                        }
+                                                        return null;
+                                                      })();
+
+                                                      const clientBcs = matchedClient
+                                                        ? commercialDocs.filter(doc => 
+                                                            doc.hasBonCommande && 
+                                                            (doc.clientId === matchedClient.id || 
+                                                             (doc.clientDenomination && matchedClient.denomination && 
+                                                              doc.clientDenomination.toLowerCase() === matchedClient.denomination.toLowerCase()))
+                                                          )
+                                                        : [];
+
+                                                      return clientBcs.map(bcDoc => (
+                                                        <option key={bcDoc.id} value={bcDoc.id}>
+                                                          {bcDoc.bonCommandeEntete || bcDoc.bonCommandeReference || bcDoc.ref}
+                                                        </option>
+                                                      ));
+                                                    })()}
+                                                  </select>
+                                                  {m.bonCommandeId === 'custom' && (
+                                                    <div className="mt-2 space-y-0.5 bg-transparent">
+                                                      <input
+                                                        type="text"
+                                                        value={m.customBonCommande || ''}
+                                                        onChange={(e) => updateFsmMission(t.id, m.id, { customBonCommande: e.target.value })}
+                                                        placeholder={translate("Saisir le bon de commande...")}
+                                                        className="w-full font-sans focus:outline-none"
+                                                        style={{
+                                                          border: '1px solid #dedede',
+                                                          borderRadius: '13px',
+                                                          padding: '12px',
+                                                          fontSize: '16px',
+                                                          fontWeight: '100',
+                                                          color: '#000000',
+                                                          backgroundColor: '#ffffff'
+                                                        }}
+                                                      />
+                                                    </div>
+                                                  )}
+                                                </div>
+
+                                                {/* Autre référence. */}
+                                                <div className="space-y-0.5 bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style">
+                                                    {translate("Autre référence.")}
+                                                  </label>
+                                                  <input
+                                                    type="text"
+                                                    value={m.autreReference || ''}
+                                                    onChange={(e) => updateFsmMission(t.id, m.id, { autreReference: e.target.value })}
+                                                    placeholder={translate("Saisir autre référence...")}
                                                     className="w-full font-sans focus:outline-none"
                                                     style={{
                                                       border: '1px solid #dedede',
@@ -16310,278 +16964,308 @@ export default function App() {
                                                     }}
                                                   />
                                                 </div>
-                                              )}
-                                            </div>
 
-                                            {/* Date estimée. */}
-                                            <div className="space-y-0.5 bg-transparent">
-                                              <div className="flex items-center justify-between mb-1">
-                                                <label className="block fsm-label-style mb-0">Date estimée.</label>
-                                                <button
-                                                  type="button"
-                                                  onClick={toggleForced}
-                                                  className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
-                                                  title="Forcer la date et le créneau"
-                                                >
-                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
-                                                    Forcer
-                                                  </span>
-                                                  <div
+                                                {/* Statut facturation. */}
+                                                <div className="space-y-0.5 bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style">Statut facturation.</label>
+                                                  <select
+                                                    value={m.statutFacturation || 'Aucune information'}
+                                                    onChange={(e) => updateFsmMission(t.id, m.id, { statutFacturation: e.target.value })}
+                                                    className="w-full font-sans focus:outline-none cursor-pointer text-slate-800"
                                                     style={{
-                                                      width: '34px',
-                                                      height: '18px',
-                                                      borderRadius: '9999px',
-                                                      backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
-                                                      position: 'relative',
-                                                      transition: 'background-color 0.2s ease',
-                                                      padding: '2px'
+                                                      border: '1px solid #dedede',
+                                                      borderRadius: '13px',
+                                                      padding: '12px',
+                                                      fontSize: '16px',
+                                                      fontWeight: '100',
+                                                      color: '#000000',
+                                                      backgroundColor: '#ffffff'
                                                     }}
                                                   >
-                                                    <div
+                                                    <option value="Aucune information">Aucune information</option>
+                                                    <option value="Devis">Devis</option>
+                                                    <option value="Devis Validé">Devis Validé</option>
+                                                    <option value="Devis Refusé">Devis Refusé</option>
+                                                    <option value="Devis Sans Réponse">Devis Sans Réponse</option>
+                                                    <option value="Facture Envoyée">Facture Envoyée</option>
+                                                    <option value="Facturée Payée">Facturée Payée</option>
+                                                    <option value="Facture à Émettre">Facture à Émettre</option>
+                                                    <option value="Facture Acompte Payé">Facture Acompte Payé</option>
+                                                    <option value="Visite Prévue Accord Annuel">Visite Prévue Accord Annuel</option>
+                                                    <option value="Matériel & Visite Prévue Contrat Annuel">Matériel & Visite Prévue Contrat Annuel</option>
+                                                  </select>
+                                                </div>
+                                              </div>
+
+                                              {/* Ligne 4 (25% 25% 50%) : Date estimée. / Créneau estimé. / Raison/Prestation. */}
+                                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full items-start bg-transparent">
+                                                {/* Date estimée. */}
+                                                <div className="md:col-span-1 space-y-0.5 bg-transparent">
+                                                  <div className="flex items-center justify-between mb-1">
+                                                    <label className="block fsm-label-style mb-0">Date estimée.</label>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        if (isEstimatedFieldsLocked) return;
+                                                        toggleForced();
+                                                      }}
+                                                      className={`inline-flex items-center gap-1.5 ${isEstimatedFieldsLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} focus:outline-none select-none`}
+                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Forcer la date et le créneau"}
+                                                    >
+                                                      <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
+                                                        Forcer
+                                                      </span>
+                                                      <div
+                                                        style={{
+                                                          width: '34px',
+                                                          height: '18px',
+                                                          borderRadius: '9999px',
+                                                          backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
+                                                          position: 'relative',
+                                                          transition: 'background-color 0.2s ease',
+                                                          padding: '2px'
+                                                        }}
+                                                      >
+                                                        <div
+                                                          style={{
+                                                            width: '14px',
+                                                            height: '14px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: '#ffffff',
+                                                            position: 'absolute',
+                                                            top: '2px',
+                                                            left: isMissionForced ? '18px' : '2px',
+                                                            transition: 'left 0.2s ease',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                                                          }}
+                                                        />
+                                                      </div>
+                                                    </button>
+                                                  </div>
+                                                  <div
+                                                    className="w-full"
+                                                    title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : undefined}
+                                                    style={{ cursor: isEstimatedFieldsLocked ? 'not-allowed' : 'pointer' }}
+                                                  >
+                                                    <input
+                                                      type="date"
+                                                      disabled={isEstimatedFieldsLocked}
+                                                      value={estimatedDateValue}
+                                                      onChange={(e) => updateFsmMission(t.id, m.id, { estimatedDate: e.target.value })}
+                                                      className={`w-full font-sans ${isEstimatedFieldsLocked ? 'cursor-not-allowed' : 'cursor-pointer'} focus:outline-none`}
                                                       style={{
-                                                        width: '14px',
-                                                        height: '14px',
-                                                        borderRadius: '50%',
-                                                        backgroundColor: '#ffffff',
-                                                        position: 'absolute',
-                                                        top: '2px',
-                                                        left: isMissionForced ? '18px' : '2px',
-                                                        transition: 'left 0.2s ease',
-                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                                                        border: '1px solid #dedede',
+                                                        borderRadius: '13px',
+                                                        padding: '12px',
+                                                        fontSize: '16px',
+                                                        fontWeight: '100',
+                                                        color: '#000000',
+                                                        backgroundColor: isEstimatedFieldsLocked ? '#f9fafb' : '#ffffff',
+                                                        opacity: isEstimatedFieldsLocked ? 0.65 : 1,
+                                                        pointerEvents: isEstimatedFieldsLocked ? 'none' : 'auto'
                                                       }}
                                                     />
                                                   </div>
-                                                </button>
-                                              </div>
-                                              <input
-                                                type="date"
-                                                value={estimatedDateValue}
-                                                onChange={(e) => updateFsmMission(t.id, m.id, { estimatedDate: e.target.value })}
-                                                className="w-full font-sans cursor-pointer focus:outline-none"
-                                                style={{
-                                                  border: '1px solid #dedede',
-                                                  borderRadius: '13px',
-                                                  padding: '12px',
-                                                  fontSize: '16px',
-                                                  fontWeight: '100',
-                                                  color: '#000000',
-                                                  backgroundColor: '#ffffff'
-                                                }}
-                                              />
-                                            </div>
+                                                </div>
 
-                                            {/* Créneau estimé. */}
-                                            <div className="space-y-0.5 bg-transparent">
-                                              <div className="flex items-center justify-between mb-1">
-                                                <label className="block fsm-label-style mb-0">Créneau estimé.</label>
-                                                <button
-                                                  type="button"
-                                                  onClick={toggleForced}
-                                                  className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
-                                                  title="Forcer la date et le créneau"
-                                                >
-                                                  <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
-                                                    Forcer
-                                                  </span>
-                                                  <div
-                                                    style={{
-                                                      width: '34px',
-                                                      height: '18px',
-                                                      borderRadius: '9999px',
-                                                      backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
-                                                      position: 'relative',
-                                                      transition: 'background-color 0.2s ease',
-                                                      padding: '2px'
-                                                    }}
-                                                  >
-                                                    <div
-                                                      style={{
-                                                        width: '14px',
-                                                        height: '14px',
-                                                        borderRadius: '50%',
-                                                        backgroundColor: '#ffffff',
-                                                        position: 'absolute',
-                                                        top: '2px',
-                                                        left: isMissionForced ? '18px' : '2px',
-                                                        transition: 'left 0.2s ease',
-                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                                                {/* Créneau estimé. */}
+                                                <div className="md:col-span-1 space-y-0.5 bg-transparent">
+                                                  <div className="flex items-center justify-between mb-1">
+                                                    <label className="block fsm-label-style mb-0">Créneau estimé.</label>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => {
+                                                        if (isEstimatedFieldsLocked) return;
+                                                        toggleForced();
                                                       }}
-                                                    />
+                                                      className={`inline-flex items-center gap-1.5 ${isEstimatedFieldsLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} focus:outline-none select-none`}
+                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Forcer la date et le créneau"}
+                                                    >
+                                                      <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
+                                                        Forcer
+                                                      </span>
+                                                      <div
+                                                        style={{
+                                                          width: '34px',
+                                                          height: '18px',
+                                                          borderRadius: '9999px',
+                                                          backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
+                                                          position: 'relative',
+                                                          transition: 'background-color 0.2s ease',
+                                                          padding: '2px'
+                                                        }}
+                                                      >
+                                                        <div
+                                                          style={{
+                                                            width: '14px',
+                                                            height: '14px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: '#ffffff',
+                                                            position: 'absolute',
+                                                            top: '2px',
+                                                            left: isMissionForced ? '18px' : '2px',
+                                                            transition: 'left 0.2s ease',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                                                          }}
+                                                        />
+                                                      </div>
+                                                    </button>
                                                   </div>
-                                                </button>
-                                              </div>
-                                              <select
-                                                value={m.estimatedSlot || ''}
-                                                onChange={(e) => updateFsmMission(t.id, m.id, { estimatedSlot: e.target.value })}
-                                                className="w-full font-sans focus:outline-none cursor-pointer"
-                                                style={{
-                                                  border: '1px solid #dedede',
-                                                  borderRadius: '13px',
-                                                  padding: '12px',
-                                                  fontSize: '16px',
-                                                  fontWeight: '100',
-                                                  color: '#000000',
-                                                  backgroundColor: '#ffffff'
-                                                }}
-                                              >
-                                                <option value="">-- Non défini --</option>
-                                                <option value="8:00am">8:00am</option>
-                                                <option value="8:30am">8:30am</option>
-                                                <option value="9:00am">9:00am</option>
-                                                <option value="9:30am">9:30am</option>
-                                                <option value="10:00am">10:00am</option>
-                                                <option value="10:30am">10:30am</option>
-                                                <option value="11:00am">11:00am</option>
-                                                <option value="11:30am">11:30am</option>
-                                                <option value="12:00pm">12:00pm</option>
-                                                <option value="12:30pm">12:30pm</option>
-                                                <option value="13:00pm">13:00pm</option>
-                                                <option value="13:30pm">13:30pm</option>
-                                                <option value="14:00pm">14:00pm</option>
-                                                <option value="14:30pm">14:30pm</option>
-                                                <option value="15:00pm">15:00pm</option>
-                                                <option value="15:30pm">15:30pm</option>
-                                                <option value="16:00pm">16:00pm</option>
-                                                <option value="16:30pm">16:30pm</option>
-                                                <option value="17:00pm">17:00pm</option>
-                                              </select>
-                                            </div>
-                                          </div>
+                                                  <div
+                                                    className="w-full"
+                                                    title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : undefined}
+                                                    style={{ cursor: isEstimatedFieldsLocked ? 'not-allowed' : 'pointer' }}
+                                                  >
+                                                    <select
+                                                      disabled={isEstimatedFieldsLocked}
+                                                      value={normalizeFsmSlotValue(m.estimatedSlot)}
+                                                      onChange={(e) => updateFsmMission(t.id, m.id, { estimatedSlot: e.target.value })}
+                                                      className={`w-full font-sans focus:outline-none ${isEstimatedFieldsLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                      style={{
+                                                        border: '1px solid #dedede',
+                                                        borderRadius: '13px',
+                                                        padding: '12px',
+                                                        fontSize: '16px',
+                                                        fontWeight: '100',
+                                                        color: '#000000',
+                                                        backgroundColor: isEstimatedFieldsLocked ? '#f9fafb' : '#ffffff',
+                                                        opacity: isEstimatedFieldsLocked ? 0.65 : 1,
+                                                        pointerEvents: isEstimatedFieldsLocked ? 'none' : 'auto'
+                                                      }}
+                                                    >
+                                                      <option value="">-- Non défini --</option>
+                                                      <option value="8:00am">8:00am</option>
+                                                      <option value="8:30am">8:30am</option>
+                                                      <option value="9:00am">9:00am</option>
+                                                      <option value="9:30am">9:30am</option>
+                                                      <option value="10:00am">10:00am</option>
+                                                      <option value="10:30am">10:30am</option>
+                                                      <option value="11:00am">11:00am</option>
+                                                      <option value="11:30am">11:30am</option>
+                                                      <option value="12:00pm">12:00pm</option>
+                                                      <option value="12:30pm">12:30pm</option>
+                                                      <option value="13:00pm">13:00pm</option>
+                                                      <option value="13:30pm">13:30pm</option>
+                                                      <option value="14:00pm">14:00pm</option>
+                                                      <option value="14:30pm">14:30pm</option>
+                                                      <option value="15:00pm">15:00pm</option>
+                                                      <option value="15:30pm">15:30pm</option>
+                                                      <option value="16:00pm">16:00pm</option>
+                                                      <option value="16:30pm">16:30pm</option>
+                                                      <option value="17:00pm">17:00pm</option>
+                                                    </select>
+                                                  </div>
+                                                </div>
 
-                                          {/* Autre référence & Raison/Prestation */}
-                                          <div className="pt-2 grid grid-cols-1 lg:grid-cols-4 gap-3 w-full items-start bg-transparent">
-                                            {/* Autre référence. */}
-                                            <div className="lg:col-span-1 space-y-1.5 font-sans w-full bg-transparent">
-                                              <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
-                                                {translate("Autre référence.")}
-                                              </label>
-                                              <input
-                                                type="text"
-                                                value={m.autreReference || ''}
-                                                onChange={(e) => updateFsmMission(t.id, m.id, { autreReference: e.target.value })}
-                                                placeholder={translate("Saisir autre référence...")}
-                                                className="w-full font-sans focus:outline-none"
-                                                style={{
-                                                  border: '1px solid #dedede',
-                                                  borderRadius: '13px',
-                                                  padding: '12px',
-                                                  fontSize: '16px',
-                                                  fontWeight: '100',
-                                                  color: '#000000',
-                                                  backgroundColor: '#ffffff'
-                                                }}
-                                              />
-                                            </div>
-
-                                            {/* Raison/Prestation. */}
-                                            <div className="lg:col-span-3 space-y-1.5 relative font-sans w-full bg-transparent">
-                                              <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
-                                                {translate("Raison/Prestation.")}
-                                              </label>
-                                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full items-center bg-transparent">
-                                                {/* Dropdown Select on the left */}
-                                                <div className="md:col-span-1 w-full bg-transparent">
-                                                <select
-                                                  value=""
-                                                  onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    if (val) {
-                                                      const current: string[] = Array.isArray(m.reasons)
-                                                        ? m.reasons
-                                                        : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
-                                                      if (!current.includes(val)) {
-                                                        const nextReasons = [...current, val];
-                                                        let totalDuree = 0;
-                                                        for (const r of nextReasons) {
-                                                          const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
-                                                          if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
-                                                        }
-                                                        updateFsmMission(t.id, m.id, {
-                                                          reasons: nextReasons,
-                                                          reason: nextReasons.join(", "),
-                                                          dureePrestation: totalDuree > 0 ? totalDuree : undefined
-                                                        });
-                                                      }
-                                                      e.target.value = "";
-                                                    }
-                                                  }}
-                                                  style={{
-                                                    border: "1px solid #dedede",
-                                                    borderRadius: "13px",
-                                                    padding: "12px",
-                                                    fontSize: "16px",
-                                                    fontWeight: "100",
-                                                    color: "#000000",
-                                                    backgroundColor: "#ffffff"
-                                                  }}
-                                                  className="w-full font-sans focus:outline-none cursor-pointer"
-                                                >
-                                                  <option value="">-- Sélectionner une raison / prestation --</option>
-                                                  {variables
-                                                    .filter((v: any) => isRaisonPrestationVariable(v))
-                                                    .map((v: any) => {
-                                                      const current: string[] = Array.isArray(m.reasons)
-                                                        ? m.reasons
-                                                        : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
-                                                      const isSelected = current.includes(v.nom);
-                                                      return (
-                                                        <option key={v.id} value={v.nom} disabled={isSelected}>
-                                                          {v.nom}{v.dureePrestation ? ` (${v.dureePrestation} min)` : ''} {isSelected ? "(Déjà ajoutée)" : ""}
-                                                        </option>
-                                                      );
-                                                    })}
-                                                </select>
-                                              </div>
-
-                                              {/* Selected Reasons Capsules listed on the right */}
-                                              <div className="md:col-span-2 w-full bg-transparent">
-                                                {(() => {
-                                                  const currentReasons: string[] = Array.isArray(m.reasons)
-                                                    ? m.reasons
-                                                    : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
-
-                                                  return (
-                                                    <div className="flex flex-wrap gap-1.5 min-h-[42px] items-center bg-transparent">
-                                                      {currentReasons.length > 0 ? (
-                                                        currentReasons.map((reasonStr: string) => {
-                                                          const matchVar = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === reasonStr);
-                                                          return (
-                                                            <span
-                                                              key={reasonStr}
-                                                              onClick={() => {
-                                                                const nextReasons = currentReasons.filter(r => r !== reasonStr);
-                                                                let totalDuree = 0;
-                                                                for (const r of nextReasons) {
-                                                                  const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
-                                                                  if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
-                                                                }
-                                                                updateFsmMission(t.id, m.id, {
-                                                                  reasons: nextReasons,
-                                                                  reason: nextReasons.join(", "),
-                                                                  dureePrestation: totalDuree > 0 ? totalDuree : undefined
-                                                                });
-                                                              }}
-                                                              style={{
-                                                                fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                                                                border: "none",
-                                                                boxShadow: "none",
-                                                                fontSize: "16px",
-                                                              }}
-                                                              className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[16px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none"
-                                                              title="Cliquez pour supprimer"
-                                                            >
-                                                              {reasonStr}{matchVar?.dureePrestation ? ` (${matchVar.dureePrestation} min)` : ''}
-                                                            </span>
-                                                          );
-                                                        })
-                                                      ) : null}
+                                                {/* Raison/Prestation. */}
+                                                <div className="md:col-span-2 space-y-0.5 relative font-sans w-full bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
+                                                    {translate("Raison/Prestation.")}
+                                                  </label>
+                                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full items-center bg-transparent">
+                                                    {/* Dropdown Select on the left */}
+                                                    <div className="w-full bg-transparent">
+                                                      <select
+                                                        value=""
+                                                        onChange={(e) => {
+                                                          const val = e.target.value;
+                                                          if (val) {
+                                                            const current: string[] = Array.isArray(m.reasons)
+                                                              ? m.reasons
+                                                              : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
+                                                            if (!current.includes(val)) {
+                                                              const nextReasons = [...current, val];
+                                                              let totalDuree = 0;
+                                                              for (const r of nextReasons) {
+                                                                const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
+                                                                if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
+                                                              }
+                                                              updateFsmMission(t.id, m.id, {
+                                                                reasons: nextReasons,
+                                                                reason: nextReasons.join(", "),
+                                                                dureePrestation: totalDuree > 0 ? totalDuree : undefined
+                                                              });
+                                                            }
+                                                            e.target.value = "";
+                                                          }
+                                                        }}
+                                                        style={{
+                                                          border: "1px solid #dedede",
+                                                          borderRadius: "13px",
+                                                          padding: "12px",
+                                                          fontSize: "16px",
+                                                          fontWeight: "100",
+                                                          color: "#000000",
+                                                          backgroundColor: "#ffffff"
+                                                        }}
+                                                        className="w-full font-sans focus:outline-none cursor-pointer"
+                                                      >
+                                                        <option value="">-- Sélectionner une raison / prestation --</option>
+                                                        {variables
+                                                          .filter((v: any) => isRaisonPrestationVariable(v))
+                                                          .map((v: any) => {
+                                                            const current: string[] = Array.isArray(m.reasons)
+                                                              ? m.reasons
+                                                              : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
+                                                            const isSelected = current.includes(v.nom);
+                                                            return (
+                                                              <option key={v.id} value={v.nom} disabled={isSelected}>
+                                                                {v.nom}{v.dureePrestation ? ` (${v.dureePrestation} min)` : ''} {isSelected ? "(Déjà ajoutée)" : ""}
+                                                              </option>
+                                                            );
+                                                          })}
+                                                      </select>
                                                     </div>
-                                                  );
-                                                })()}
+
+                                                    {/* Selected Reasons Capsules listed on the right */}
+                                                    <div className="w-full bg-transparent">
+                                                      {(() => {
+                                                        const currentReasons: string[] = Array.isArray(m.reasons)
+                                                          ? m.reasons
+                                                          : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
+
+                                                        return (
+                                                          <div className="flex flex-wrap gap-1.5 min-h-[42px] items-center bg-transparent">
+                                                            {currentReasons.length > 0 ? (
+                                                              currentReasons.map((reasonStr: string) => {
+                                                                const matchVar = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === reasonStr);
+                                                                return (
+                                                                  <span
+                                                                    key={reasonStr}
+                                                                    onClick={() => {
+                                                                      const nextReasons = currentReasons.filter(r => r !== reasonStr);
+                                                                      let totalDuree = 0;
+                                                                      for (const r of nextReasons) {
+                                                                        const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
+                                                                        if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
+                                                                      }
+                                                                      updateFsmMission(t.id, m.id, {
+                                                                        reasons: nextReasons,
+                                                                        reason: nextReasons.join(", "),
+                                                                        dureePrestation: totalDuree > 0 ? totalDuree : undefined
+                                                                      });
+                                                                    }}
+                                                                    style={{
+                                                                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                                                                      border: "none",
+                                                                      boxShadow: "none",
+                                                                      fontSize: "16px",
+                                                                    }}
+                                                                    className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[16px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none"
+                                                                    title="Cliquez pour supprimer"
+                                                                  >
+                                                                    {reasonStr}{matchVar?.dureePrestation ? ` (${matchVar.dureePrestation} min)` : ''}
+                                                                  </span>
+                                                                );
+                                                              })
+                                                            ) : null}
+                                                          </div>
+                                                        );
+                                                      })()}
+                                                    </div>
+                                                  </div>
+                                                </div>
                                               </div>
-                                            </div>
-                                          </div>
-                                          </div>
 
                                           {/* Info block displaying Commentaires of selected Bon de commande */}
                                           {(() => {
@@ -17148,13 +17832,13 @@ export default function App() {
                                                     const selectEl = document.getElementById(`transfer-select-${m.id}`) as HTMLSelectElement;
                                                     const targetId = selectEl?.value;
                                                     if (!targetId) {
-                                                      alert("Veuillez sélectionner une tournée en Brouillon.");
+                                                      showFsmSystemInfoMessage("Veuillez sélectionner une tournée en Brouillon.");
                                                       return;
                                                     }
                                                     
                                                     const targetTour = fsmTours.find(tour => tour.id === targetId);
                                                     if (targetTour && !isDraftTour(targetTour)) {
-                                                      alert("Erreur : vous ne pouvez transférer des missions qu'à une tournée en situation Brouillon.");
+                                                      showFsmSystemInfoMessage("Erreur : vous ne pouvez transférer des missions qu'à une tournée en situation Brouillon.");
                                                       return;
                                                     }
                                                     
@@ -17175,7 +17859,7 @@ export default function App() {
                                                       return tour;
                                                     });
                                                     saveFsmTours(updated);
-                                                    alert("Mission transférée avec succès !");
+                                                    showFsmSystemInfoMessage("Mission transférée avec succès !");
                                                   }}
                                                   style={{
                                                     backgroundColor: '#0f172a',
@@ -17411,7 +18095,7 @@ export default function App() {
                                   const finalPlannerName = draftVal.plannerName !== undefined ? draftVal.plannerName : (t.plannerName || '');
 
                                   if (!finalTech || finalTech.trim() === '') {
-                                    alert("Veuillez sélectionner un technicien avec une adresse de départ renseignée pour pouvoir calculer l'itinéraire.");
+                                    showFsmSystemInfoMessage("Veuillez sélectionner un technicien avec une adresse de départ renseignée pour pouvoir calculer l'itinéraire.");
                                     return;
                                   }
 
@@ -17420,7 +18104,7 @@ export default function App() {
                                   const hasStringAddress = matchingMember && matchingMember.startAddress && matchingMember.startAddress.trim() !== '';
                                   if (!matchingMember || (!hasStructuredAddress && !hasStringAddress)) {
                                     console.warn("Calculer clicked but technician not found or missing starting coordinates:", { finalTech, matchingMember, members });
-                                    alert("Le technicien sélectionné doit avoir une adresse de départ renseignée (avec latitude et longitude renseignées) pour pouvoir calculer l'itinéraire.");
+                                    showFsmSystemInfoMessage("Le technicien sélectionné doit avoir une adresse de départ renseignée (avec latitude et longitude renseignées) pour pouvoir calculer l'itinéraire.");
                                     return;
                                   }
 
@@ -17450,7 +18134,7 @@ export default function App() {
                                     delete copy[t.id];
                                     return copy;
                                   });
-                                  alert("L'itinéraire et les horaires ont été calculés et optimisés avec succès !");
+                                  showFsmSystemInfoMessage("L'itinéraire et les horaires ont été calculés et optimisés avec succès !");
                                 }}
                                 style={{
                                   ...rowActionButtonStyle,
@@ -17476,7 +18160,7 @@ export default function App() {
 
                               {/* Avisage button */}
                               {(() => {
-                                const isAvisageEnabled = (t.missions || []).some((m: any) => {
+                                const isAvisageEnabled = tourMissionsHaveDatesAndSlots(t) && (t.missions || []).some((m: any) => {
                                   const sit = m.status || 'Brouillon';
                                   return sit === 'Accepté Client' || sit === 'À faire' || sit === 'Attente';
                                 });
@@ -17533,16 +18217,16 @@ export default function App() {
                                   const finalStatus = draftVal.status !== undefined ? draftVal.status : (t.status || 'Brouillon');
 
                                   if (!finalTitle.trim()) {
-                                    alert("Le titre de la tournée est requis.");
+                                    showFsmSystemInfoMessage("Le titre de la tournée est requis.");
                                     return;
                                   }
                                   if (finalStatus !== 'Brouillon' && (!finalTech || finalTech.trim() === '')) {
-                                    alert("Veuillez sélectionner un technicien pour planifier cette tournée.");
+                                    showFsmSystemInfoMessage("Veuillez sélectionner un technicien pour planifier cette tournée.");
                                     return;
                                   }
                                   if (finalStatus === 'À faire' || finalStatus === 'En cours' || finalStatus === 'Effectué' || finalStatus === 'Terminé') {
                                     if (!tourMissionsHaveDatesAndSlots(t)) {
-                                      alert("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
+                                      showFsmSystemInfoMessage("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
                                       return;
                                     }
                                   }
@@ -17570,13 +18254,7 @@ export default function App() {
                                     return copy;
                                   });
 
-                                  setFsmSystemInfoMessage("Informations enregistrées avec succès.");
-                                  if (fsmSystemInfoTimeoutRef.current) {
-                                    clearTimeout(fsmSystemInfoTimeoutRef.current);
-                                  }
-                                  fsmSystemInfoTimeoutRef.current = setTimeout(() => {
-                                    setFsmSystemInfoMessage(null);
-                                  }, 8000);
+                                  showFsmSystemInfoMessage("Informations enregistrées avec succès.");
 
                                   // Re-enable after 3 seconds
                                   setTimeout(() => {
@@ -17700,7 +18378,7 @@ export default function App() {
                                       const nextStatus = e.target.value;
                                       if (nextStatus === 'À faire' || nextStatus === 'En cours' || nextStatus === 'Effectué') {
                                         if (!tourMissionsHaveDatesAndSlots(t)) {
-                                          alert("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
+                                          showFsmSystemInfoMessage("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
                                           return;
                                         }
                                       }
@@ -17866,6 +18544,7 @@ export default function App() {
                               <div className="w-full">
                                 <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Date période.</label>
                                 <input
+                                  id={`fsm-tour-start-date-${t.id}`}
                                   type="date"
                                   value={tourStartDate}
                                   onChange={(e) => {
@@ -18306,7 +18985,13 @@ export default function App() {
                                   const isExpanded = !!fsmExpandedMissions[missionKey];
 
                                   return (
-                                    <div key={m.id} className="rounded-xl p-4 shadow-3xs transition-shadow space-y-4 font-sans" style={{ border: 'none', backgroundColor: 'rgb(233 235 239)' }}>
+                                    <div
+                                      key={m.id}
+                                      id={`fsm-mission-card-${m.id}`}
+                                      data-fsm-mission-id={m.id}
+                                      className="rounded-xl p-4 shadow-3xs transition-shadow space-y-4 font-sans"
+                                      style={{ border: 'none', backgroundColor: 'rgb(233 235 239)' }}
+                                    >
                                         {/* Ligne 1: Numéro de passage & Gélules & Bouton Dérouler / Réduire */}
                                         <div className="flex flex-wrap items-center justify-between gap-2 bg-transparent pb-0.5">
                                           <div className="flex flex-wrap items-center gap-2 bg-transparent flex-1">
@@ -18573,197 +19258,283 @@ export default function App() {
                                         const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
                                         return (
                                         <div className="space-y-4 pt-2">
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 w-full bg-transparent">
-                                        {/* Client. (toujours disabled) */}
-                                        <div className="space-y-0.5 bg-transparent">
-                                          <label className="block mb-1 fsm-label-style">Client.</label>
-                                          <input
-                                            type="text"
-                                            value={(() => {
-                                              if (isFormationMission) {
-                                                const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
-                                                const clientObj = clients?.find(c => c.id === (fmt?.clientId || m.clientId));
-                                                return clientObj ? clientObj.denomination : (m.clientName || "");
-                                              }
-                                              const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
-                                              const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
-                                              const clientObj = clients?.find(c => c.id === (matchedDefib?.clientId || other?.clientId));
-                                              return clientObj ? clientObj.denomination : (m.clientName || "");
-                                            })()}
-                                            disabled={true}
-                                            className="w-full font-sans cursor-not-allowed"
-                                            placeholder="Nom du Client"
-                                          />
-                                        </div>
-
-                                        {/* Site. (toujours disabled) - EXCLUDE FOR FORMATION */}
-                                        {!isFormationMission && (
-                                          <div className="space-y-0.5 bg-transparent">
-                                            <label className="block mb-1 fsm-label-style">Site.</label>
-                                            <input
-                                              type="text"
-                                              value={(() => {
-                                                const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
-                                                const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
-                                                const val = matchedDefib 
-                                                  ? (matchedDefib.nomSite || "") 
-                                                  : (other ? (other.nomPrenomSite || "") : "");
-                                                return val === "Représentant Standard" || val === "Représentant standard" ? "" : val;
-                                              })()}
-                                              disabled={true}
-                                              className="w-full font-sans cursor-not-allowed"
-                                              placeholder="Nom du Site"
-                                            />
-                                          </div>
-                                        )}
-
-                                        {/* Identifiant. (toujours disabled) - EXCLUDE FOR FORMATION */}
-                                        {!isFormationMission && (
-                                          <div className="space-y-0.5 bg-transparent">
-                                            <label className="block mb-1 fsm-label-style">Identifiant.</label>
-                                            <input
-                                              type="text"
-                                              value={m.defibIdentifiant || ""}
-                                              disabled={true}
-                                              className="w-full font-mono cursor-not-allowed"
-                                              placeholder="ID Défib"
-                                            />
-                                          </div>
-                                        )}
-
-                                        {/* Localisation. */}
-                                        <div className="space-y-0.5 bg-transparent">
-                                          <label className="block mb-1 fsm-label-style">Localisation.</label>
-                                          <input
-                                            type="text"
-                                            value={(() => {
-                                              if (isFormationMission) {
-                                                if (m.location) return m.location;
-                                                const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
-                                                if (fmt) {
-                                                  return [fmt.adresse, fmt.codePostal, fmt.ville].filter(Boolean).join(', ');
-                                                }
-                                                return m.address || '';
-                                              }
-                                              const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
-                                              const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
-                                              const ville = matchedDefib ? matchedDefib.ville : (other ? other.ville : '');
-                                              const cp = matchedDefib ? (matchedDefib.codePostal || matchedDefib.cp || '') : (other ? (other.codePostal || other.cp || '') : '');
-                                              return (ville && cp) ? `${ville}, ${cp}` : (ville || cp || '');
-                                            })()}
-                                            disabled={true}
-                                            className="w-full font-sans cursor-not-allowed"
-                                            placeholder="Ville, CP"
-                                          />
-                                        </div>
-
-                                        {/* Référence intervention. */}
-                                        <div className="space-y-0.5 bg-transparent">
-                                          <label className="block mb-1 fsm-label-style">Référence intervention.</label>
-                                          <input
-                                            type="text"
-                                            value={(() => {
-                                              if (m.interventionReference) return m.interventionReference;
-                                              const matchedReport = generatedReports.find((r: any) => 
-                                                (r.missionId && r.missionId === m.id) || 
-                                                (r.defibIdentifiant && r.defibIdentifiant === m.defibIdentifiant)
-                                              );
-                                              return matchedReport?.interventionReference || "";
-                                            })()}
-                                            disabled={true}
-                                            className="w-full font-sans cursor-not-allowed"
-                                            placeholder="Non renseignée"
-                                          />
-                                        </div>
-
-                                        {/* Bon de commande. */}
-                                        <div className="space-y-0.5 bg-transparent">
-                                          <label className="block mb-1 fsm-label-style">Bon de commande.</label>
-                                          <select
-                                            value={m.bonCommandeId || ''}
-                                            onChange={(e) => {
-                                              const nextBcId = e.target.value;
-                                              if (nextBcId === 'custom') {
-                                                updateFsmMission(t.id, m.id, { bonCommandeId: 'custom' });
-                                              } else if (nextBcId) {
-                                                const selectedBcDoc = commercialDocs.find(doc => doc.id === nextBcId);
-                                                if (selectedBcDoc) {
-                                                  const nonServiceParts = selectedBcDoc.items
-                                                    ? selectedBcDoc.items
-                                                        .filter(item => {
-                                                          const vObj = variables.find(v => v.id === item.variableId || v.nom === item.nomPiece);
-                                                          return !(vObj && vObj.category === 'Modèle Service');
-                                                        })
-                                                        .map(item => item.nomPiece)
-                                                    : [];
-                                                  const uniqueParts = Array.from(new Set(nonServiceParts)) as string[];
-                                                  changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId });
-                                                } else {
-                                                  updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId });
-                                                }
-                                              } else {
-                                                changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], [], { bonCommandeId: '' });
-                                              }
-                                            }}
-                                            className="w-full font-sans focus:outline-none cursor-pointer text-slate-800"
-                                            style={{
-                                              border: '1px solid #dedede',
-                                              borderRadius: '13px',
-                                              padding: '12px',
-                                              fontSize: '16px',
-                                              fontWeight: '100',
-                                              color: '#000000',
-                                              backgroundColor: '#ffffff'
-                                            }}
-                                          >
-                                            <option value="">-- Aucun --</option>
-                                            <option value="custom">Autre (Texte libre)</option>
-                                            {(() => {
-                                              const matchedClient = (() => {
-                                                if (m.clientId) {
-                                                  const found = clients.find(c => c.id === m.clientId);
-                                                  if (found) return found;
-                                                }
-                                                const matchedDefib = defibrillateurs.find(df => df.identifiant === m.defibIdentifiant);
-                                                if (matchedDefib) {
-                                                  const found = clients.find(c => c.id === matchedDefib.clientId);
-                                                  if (found) return found;
-                                                }
-                                                if (m.clientName) {
-                                                  const mName = m.clientName.toLowerCase();
-                                                  const found = clients.find(c => {
-                                                    if (!c.denomination) return false;
-                                                    const cDenom = c.denomination.toLowerCase();
-                                                    return mName.includes(cDenom) || cDenom.includes(mName);
-                                                  });
-                                                  if (found) return found;
-                                                }
-                                                return null;
-                                              })();
-
-                                              const clientBcs = matchedClient
-                                                ? commercialDocs.filter(doc => 
-                                                    doc.hasBonCommande && 
-                                                    (doc.clientId === matchedClient.id || 
-                                                     (doc.clientDenomination && matchedClient.denomination && 
-                                                      doc.clientDenomination.toLowerCase() === matchedClient.denomination.toLowerCase()))
-                                                  )
-                                                : [];
-
-                                              return clientBcs.map(bcDoc => (
-                                                <option key={bcDoc.id} value={bcDoc.id}>
-                                                  {bcDoc.bonCommandeEntete || bcDoc.bonCommandeReference || bcDoc.ref}
-                                                </option>
-                                              ));
-                                            })()}
-                                          </select>
-                                          {m.bonCommandeId === 'custom' && (
-                                            <div className="mt-2 space-y-0.5 bg-transparent">
+                                          {/* Ligne 1 (4 cols en grid égales) : Client. / Site. / Téléphone principal. / Email principal. */}
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 w-full bg-transparent">
+                                            {/* Client. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Client.</label>
                                               <input
                                                 type="text"
-                                                value={m.customBonCommande || ''}
-                                                onChange={(e) => updateFsmMission(t.id, m.id, { customBonCommande: e.target.value })}
-                                                placeholder={translate("Saisir le bon de commande...")}
+                                                value={(() => {
+                                                  if (isFormationMission) {
+                                                    const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                    const clientObj = clients?.find(c => c.id === (fmt?.clientId || m.clientId));
+                                                    return clientObj ? clientObj.denomination : (m.clientName || "");
+                                                  }
+                                                  const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                  const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                  const clientObj = clients?.find(c => c.id === (matchedDefib?.clientId || other?.clientId));
+                                                  return clientObj ? clientObj.denomination : (m.clientName || "");
+                                                })()}
+                                                disabled={true}
+                                                className="w-full font-sans cursor-not-allowed"
+                                                placeholder="Nom du Client"
+                                              />
+                                            </div>
+
+                                            {/* Site. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Site.</label>
+                                              <input
+                                                type="text"
+                                                value={(() => {
+                                                  if (isFormationMission) return m.siteName || "";
+                                                  const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                  const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                  const val = matchedDefib 
+                                                    ? (matchedDefib.nomSite || "") 
+                                                    : (other ? (other.nomPrenomSite || "") : "");
+                                                  return val === "Représentant Standard" || val === "Représentant standard" ? "" : val;
+                                                })()}
+                                                disabled={true}
+                                                className="w-full font-sans cursor-not-allowed"
+                                                placeholder="Nom du Site"
+                                              />
+                                            </div>
+
+                                            {/* Téléphone principal. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Téléphone principal.</label>
+                                              <input
+                                                type="text"
+                                                value={(() => {
+                                                  if (isFormationMission) {
+                                                    const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                    const clientObj = clients?.find(c => c.id === (fmt?.clientId || m.clientId));
+                                                    return clientObj?.telephoneSite || (clientObj as any)?.telephone || m.telephone || "";
+                                                  }
+                                                  const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                  const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                  if (matchedDefib) {
+                                                    return matchedDefib.telephoneSite || (matchedDefib as any).telephone_portable || (matchedDefib as any).telephone || "";
+                                                  }
+                                                  if (other) {
+                                                    return other.telephoneSite || (other as any).telephone || "";
+                                                  }
+                                                  return m.telephone || "";
+                                                })()}
+                                                disabled={true}
+                                                className="w-full font-sans cursor-not-allowed"
+                                                placeholder="Téléphone principal"
+                                              />
+                                            </div>
+
+                                            {/* Email principal. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Email principal.</label>
+                                              <input
+                                                type="text"
+                                                value={(() => {
+                                                  if (isFormationMission) {
+                                                    const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                    const clientObj = clients?.find(c => c.id === (fmt?.clientId || m.clientId));
+                                                    return clientObj?.emailSite || clientObj?.email || m.email || "";
+                                                  }
+                                                  const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                  const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                  if (matchedDefib) {
+                                                    return matchedDefib.emailSite || (matchedDefib as any).email || "";
+                                                  }
+                                                  if (other) {
+                                                    return other.emailSite || (other as any).email || "";
+                                                  }
+                                                  return m.email || "";
+                                                })()}
+                                                disabled={true}
+                                                className="w-full font-sans cursor-not-allowed"
+                                                placeholder="Email principal"
+                                              />
+                                            </div>
+                                          </div>
+
+                                          {/* Ligne 2 (25% 75%) : Identifiant. / Localisation. */}
+                                          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full bg-transparent">
+                                            {/* Identifiant. */}
+                                            <div className="md:col-span-1 space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Identifiant.</label>
+                                              <input
+                                                type="text"
+                                                value={m.defibIdentifiant || ""}
+                                                disabled={true}
+                                                className="w-full font-mono cursor-not-allowed"
+                                                placeholder="ID Défib"
+                                              />
+                                            </div>
+
+                                            {/* Localisation. */}
+                                            <div className="md:col-span-3 space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Localisation.</label>
+                                              <input
+                                                type="text"
+                                                value={(() => {
+                                                  if (isFormationMission) {
+                                                    if (m.location) return m.location;
+                                                    const fmt = formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant);
+                                                    if (fmt) {
+                                                      return [fmt.adresse, fmt.ville, fmt.codePostal].filter(Boolean).join(', ');
+                                                    }
+                                                    return m.address || '';
+                                                  }
+                                                  const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
+                                                  const other = !matchedDefib ? otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant) : null;
+                                                  const numVoie = matchedDefib
+                                                    ? (matchedDefib.numVoie || (matchedDefib as any).numeroVoie || (matchedDefib as any).numero_et_voie || (matchedDefib as any).adresse || '')
+                                                    : (other ? (other.numeroVoie || (other as any).numVoie || (other as any).adresse || '') : '');
+                                                  const ville = matchedDefib ? (matchedDefib.ville || '') : (other ? (other.ville || '') : '');
+                                                  const cp = matchedDefib ? ((matchedDefib as any).codePostal || matchedDefib.cp || '') : (other ? (other.codePostal || (other as any).cp || '') : '');
+                                                  return [numVoie, ville, cp].map(s => String(s || '').trim()).filter(Boolean).join(', ');
+                                                })()}
+                                                disabled={true}
+                                                className="w-full font-sans cursor-not-allowed"
+                                                placeholder="Numéro et voie, Ville, CP"
+                                              />
+                                            </div>
+                                          </div>
+
+                                          {/* Ligne 3 (4 cols en grid égales) : Référence intervention. / Bon de commande. / Autre référence. / Statut facturation. */}
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 w-full bg-transparent">
+                                            {/* Référence intervention. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Référence intervention.</label>
+                                              <input
+                                                type="text"
+                                                value={(() => {
+                                                  if (m.interventionReference) return m.interventionReference;
+                                                  const matchedReport = generatedReports.find((r: any) => 
+                                                    (r.missionId && r.missionId === m.id) || 
+                                                    (r.defibIdentifiant && r.defibIdentifiant === m.defibIdentifiant)
+                                                  );
+                                                  return matchedReport?.interventionReference || "";
+                                                })()}
+                                                disabled={true}
+                                                className="w-full font-sans cursor-not-allowed"
+                                                placeholder="Non renseignée"
+                                              />
+                                            </div>
+
+                                            {/* Bon de commande. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Bon de commande.</label>
+                                              <select
+                                                value={m.bonCommandeId || ''}
+                                                onChange={(e) => {
+                                                  const nextBcId = e.target.value;
+                                                  if (nextBcId === 'custom') {
+                                                    updateFsmMission(t.id, m.id, { bonCommandeId: 'custom' });
+                                                  } else if (nextBcId) {
+                                                    const selectedBcDoc = commercialDocs.find(doc => doc.id === nextBcId);
+                                                    if (selectedBcDoc) {
+                                                      const nonServiceParts = selectedBcDoc.items
+                                                        ? selectedBcDoc.items
+                                                            .filter(item => {
+                                                              const vObj = variables.find(v => v.id === item.variableId || v.nom === item.nomPiece);
+                                                              return !(vObj && vObj.category === 'Modèle Service');
+                                                            })
+                                                            .map(item => item.nomPiece)
+                                                        : [];
+                                                      const uniqueParts = Array.from(new Set(nonServiceParts)) as string[];
+                                                      changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId });
+                                                    } else {
+                                                      updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId });
+                                                    }
+                                                  } else {
+                                                    changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], [], { bonCommandeId: '' });
+                                                  }
+                                                }}
+                                                className="w-full font-sans focus:outline-none cursor-pointer text-slate-800"
+                                                style={{
+                                                  border: '1px solid #dedede',
+                                                  borderRadius: '13px',
+                                                  padding: '12px',
+                                                  fontSize: '16px',
+                                                  fontWeight: '100',
+                                                  color: '#000000',
+                                                  backgroundColor: '#ffffff'
+                                                }}
+                                              >
+                                                <option value="">-- Aucun --</option>
+                                                <option value="custom">Autre (Texte libre)</option>
+                                                {(() => {
+                                                  const matchedClient = (() => {
+                                                    if (m.clientId) {
+                                                      const found = clients.find(c => c.id === m.clientId);
+                                                      if (found) return found;
+                                                    }
+                                                    const matchedDefib = defibrillateurs.find(df => df.identifiant === m.defibIdentifiant);
+                                                    if (matchedDefib) {
+                                                      const found = clients.find(c => c.id === matchedDefib.clientId);
+                                                      if (found) return found;
+                                                    }
+                                                    if (m.clientName) {
+                                                      const mName = m.clientName.toLowerCase();
+                                                      const found = clients.find(c => {
+                                                        if (!c.denomination) return false;
+                                                        const cDenom = c.denomination.toLowerCase();
+                                                        return mName.includes(cDenom) || cDenom.includes(mName);
+                                                      });
+                                                      if (found) return found;
+                                                    }
+                                                    return null;
+                                                  })();
+
+                                                  const clientBcs = matchedClient
+                                                    ? commercialDocs.filter(doc => 
+                                                        doc.hasBonCommande && 
+                                                        (doc.clientId === matchedClient.id || 
+                                                         (doc.clientDenomination && matchedClient.denomination && 
+                                                          doc.clientDenomination.toLowerCase() === matchedClient.denomination.toLowerCase()))
+                                                      )
+                                                    : [];
+
+                                                  return clientBcs.map(bcDoc => (
+                                                    <option key={bcDoc.id} value={bcDoc.id}>
+                                                      {bcDoc.bonCommandeEntete || bcDoc.bonCommandeReference || bcDoc.ref}
+                                                    </option>
+                                                  ));
+                                                })()}
+                                              </select>
+                                              {m.bonCommandeId === 'custom' && (
+                                                <div className="mt-2 space-y-0.5 bg-transparent">
+                                                  <input
+                                                    type="text"
+                                                    value={m.customBonCommande || ''}
+                                                    onChange={(e) => updateFsmMission(t.id, m.id, { customBonCommande: e.target.value })}
+                                                    placeholder={translate("Saisir le bon de commande...")}
+                                                    className="w-full font-sans focus:outline-none"
+                                                    style={{
+                                                      border: '1px solid #dedede',
+                                                      borderRadius: '13px',
+                                                      padding: '12px',
+                                                      fontSize: '16px',
+                                                      fontWeight: '100',
+                                                      color: '#000000',
+                                                      backgroundColor: '#ffffff'
+                                                    }}
+                                                  />
+                                                </div>
+                                              )}
+                                            </div>
+
+                                            {/* Autre référence. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">
+                                                {translate("Autre référence.")}
+                                              </label>
+                                              <input
+                                                type="text"
+                                                value={m.autreReference || ''}
+                                                onChange={(e) => updateFsmMission(t.id, m.id, { autreReference: e.target.value })}
+                                                placeholder={translate("Saisir autre référence...")}
                                                 className="w-full font-sans focus:outline-none"
                                                 style={{
                                                   border: '1px solid #dedede',
@@ -18776,313 +19547,344 @@ export default function App() {
                                                 }}
                                               />
                                             </div>
-                                          )}
-                                        </div>
 
-                                        {/* Date estimée. & Créneau estimé. */}
-                                        {(() => {
-                                          const isMissionForced = !!(m.isForced || (m.isManualDate && m.isManualSlot));
-                                          const toggleForced = () => {
-                                            const nextVal = !isMissionForced;
-                                            updateFsmMission(t.id, m.id, {
-                                              isForced: nextVal,
-                                              isManualDate: nextVal,
-                                              isManualSlot: nextVal
-                                            });
-                                          };
-
-                                          return (
-                                            <>
-                                              {/* Date estimée. */}
-                                              <div className="space-y-0.5 bg-transparent">
-                                                <div className="flex items-center justify-between mb-1">
-                                                  <label className="block fsm-label-style mb-0">Date estimée.</label>
-                                                  <button
-                                                    type="button"
-                                                    onClick={toggleForced}
-                                                    className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
-                                                    title="Forcer la date et le créneau"
-                                                  >
-                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
-                                                      Forcer
-                                                    </span>
-                                                    <div
-                                                      style={{
-                                                        width: '34px',
-                                                        height: '18px',
-                                                        borderRadius: '9999px',
-                                                        backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
-                                                        position: 'relative',
-                                                        transition: 'background-color 0.2s ease',
-                                                        padding: '2px'
-                                                      }}
-                                                    >
-                                                      <div
-                                                        style={{
-                                                          width: '14px',
-                                                          height: '14px',
-                                                          borderRadius: '50%',
-                                                          backgroundColor: '#ffffff',
-                                                          position: 'absolute',
-                                                          top: '2px',
-                                                          left: isMissionForced ? '18px' : '2px',
-                                                          transition: 'left 0.2s ease',
-                                                          boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
-                                                        }}
-                                                      />
-                                                    </div>
-                                                  </button>
-                                                </div>
-                                                <input
-                                                  type="date"
-                                                  value={estimatedDateValue}
-                                                  onChange={(e) => updateFsmMission(t.id, m.id, { estimatedDate: e.target.value })}
-                                                  className="w-full font-sans cursor-pointer focus:outline-none"
-                                                  style={{
-                                                    border: '1px solid #dedede',
-                                                    borderRadius: '13px',
-                                                    padding: '12px',
-                                                    fontSize: '16px',
-                                                    fontWeight: '100',
-                                                    color: '#000000',
-                                                    backgroundColor: '#ffffff'
-                                                  }}
-                                                />
-                                              </div>
-
-                                              {/* Créneau estimé. */}
-                                              <div className="space-y-0.5 bg-transparent">
-                                                <div className="flex items-center justify-between mb-1">
-                                                  <label className="block fsm-label-style mb-0">Créneau estimé.</label>
-                                                  <button
-                                                    type="button"
-                                                    onClick={toggleForced}
-                                                    className="inline-flex items-center gap-1.5 cursor-pointer focus:outline-none select-none"
-                                                    title="Forcer la date et le créneau"
-                                                  >
-                                                    <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
-                                                      Forcer
-                                                    </span>
-                                                    <div
-                                                      style={{
-                                                        width: '34px',
-                                                        height: '18px',
-                                                        borderRadius: '9999px',
-                                                        backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
-                                                        position: 'relative',
-                                                        transition: 'background-color 0.2s ease',
-                                                        padding: '2px'
-                                                      }}
-                                                    >
-                                                      <div
-                                                        style={{
-                                                          width: '14px',
-                                                          height: '14px',
-                                                          borderRadius: '50%',
-                                                          backgroundColor: '#ffffff',
-                                                          position: 'absolute',
-                                                          top: '2px',
-                                                          left: isMissionForced ? '18px' : '2px',
-                                                          transition: 'left 0.2s ease',
-                                                          boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
-                                                        }}
-                                                      />
-                                                    </div>
-                                                  </button>
-                                                </div>
-                                                <select
-                                                  value={m.estimatedSlot || ''}
-                                                  onChange={(e) => updateFsmMission(t.id, m.id, { estimatedSlot: e.target.value })}
-                                                  className="w-full font-sans focus:outline-none cursor-pointer"
-                                                  style={{
-                                                    border: '1px solid #dedede',
-                                                    borderRadius: '13px',
-                                                    padding: '12px',
-                                                    fontSize: '16px',
-                                                    fontWeight: '100',
-                                                    color: '#000000',
-                                                    backgroundColor: '#ffffff'
-                                                  }}
-                                                >
-                                            <option value="">-- Non défini --</option>
-                                            <option value="8:00am">8:00am</option>
-                                            <option value="8:30am">8:30am</option>
-                                            <option value="9:00am">9:00am</option>
-                                            <option value="9:30am">9:30am</option>
-                                            <option value="10:00am">10:00am</option>
-                                            <option value="10:30am">10:30am</option>
-                                            <option value="11:00am">11:00am</option>
-                                            <option value="11:30am">11:30am</option>
-                                            <option value="12:00pm">12:00pm</option>
-                                            <option value="12:30pm">12:30pm</option>
-                                            <option value="13:00pm">13:00pm</option>
-                                            <option value="13:30pm">13:30pm</option>
-                                            <option value="14:00pm">14:00pm</option>
-                                            <option value="14:30pm">14:30pm</option>
-                                            <option value="15:00pm">15:00pm</option>
-                                            <option value="15:30pm">15:30pm</option>
-                                            <option value="16:00pm">16:00pm</option>
-                                            <option value="16:30pm">16:30pm</option>
-                                            <option value="17:00pm">17:00pm</option>
-                                            <option value="17:30pm">17:30pm</option>
-                                            <option value="18:00pm">18:00pm</option>
-                                            <option value="18:30pm">18:30pm</option>
-                                            <option value="19:00pm">19:00pm</option>
-                                          </select>
-                                        </div>
-                                      </>
-                                    );
-                                  })()}
-
-                                        
-                                      </div>
-
-                                      {/* Autre référence & Raison/Prestation */}
-                                      <div className="pt-2 grid grid-cols-1 lg:grid-cols-4 gap-3 w-full items-start bg-transparent">
-                                        {/* Autre référence. */}
-                                        <div className="lg:col-span-1 space-y-1.5 font-sans w-full bg-transparent">
-                                          <label className="block mb-1 fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
-                                            {translate("Autre référence.")}
-                                          </label>
-                                          <input
-                                            type="text"
-                                            value={m.autreReference || ''}
-                                            onChange={(e) => updateFsmMission(t.id, m.id, { autreReference: e.target.value })}
-                                            placeholder={translate("Saisir autre référence...")}
-                                            className="w-full font-sans focus:outline-none"
-                                            style={{
-                                              border: '1px solid #dedede',
-                                              borderRadius: '13px',
-                                              padding: '12px',
-                                              fontSize: '16px',
-                                              fontWeight: '100',
-                                              color: '#000000',
-                                              backgroundColor: '#ffffff'
-                                            }}
-                                          />
-                                        </div>
-
-                                        {/* Raison/Prestation. */}
-                                        <div className="lg:col-span-3 space-y-1.5 relative font-sans w-full bg-transparent">
-                                          <div className="flex items-center justify-between mb-1">
-                                            <label className="fsm-label-style" style={{ fontSize: "15px", color: "#000000", fontWeight: 600 }}>
-                                              {translate("Raison/Prestation.")}
-                                            </label>
-                                            <button
-                                              type="button"
-                                              onClick={() => setActiveMissionReasonSidePane({ tourId: t.id, missionId: m.id })}
-                                              className="text-[14px] sm:text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
-                                              style={{ textDecoration: 'none' }}
-                                            >
-                                              Rechercher
-                                            </button>
-                                          </div>
-                                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full items-center bg-transparent">
-                                            {/* Dropdown Select on the left */}
-                                            <div className="md:col-span-1 w-full bg-transparent">
-                                            <select
-                                              value=""
-                                              onChange={(e) => {
-                                                const val = e.target.value;
-                                                if (val) {
-                                                  const current: string[] = Array.isArray(m.reasons)
-                                                    ? m.reasons
-                                                    : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
-                                                  if (!current.includes(val)) {
-                                                    const nextReasons = [...current, val];
-                                                    let totalDuree = 0;
-                                                        for (const r of nextReasons) {
-                                                          const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
-                                                          if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
-                                                        }
-                                                        updateFsmMission(t.id, m.id, {
-                                                          reasons: nextReasons,
-                                                          reason: nextReasons.join(", "),
-                                                          dureePrestation: totalDuree > 0 ? totalDuree : undefined
-                                                        });
-                                                  }
-                                                  e.target.value = "";
-                                                }
-                                              }}
-                                              style={{
-                                                border: "1px solid #dedede",
-                                                borderRadius: "13px",
-                                                padding: "12px",
-                                                fontSize: "16px",
-                                                fontWeight: "100",
-                                                color: "#000000",
-                                                backgroundColor: "#ffffff"
-                                              }}
-                                              className="w-full font-sans focus:outline-none cursor-pointer"
-                                            >
-                                              <option value="">-- Sélectionner une raison / prestation --</option>
-                                              {variables
-                                                .filter((v: any) => isRaisonPrestationVariable(v))
-                                                .map((v: any) => {
-                                                  const current: string[] = Array.isArray(m.reasons)
-                                                    ? m.reasons
-                                                    : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
-                                                  const isSelected = current.includes(v.nom);
-                                                  return (
-                                                    <option key={v.id} value={v.nom} disabled={isSelected}>
-                                                      {v.nom}{v.dureePrestation ? ` (${v.dureePrestation} min)` : ''} {isSelected ? "(Déjà ajoutée)" : ""}
-                                                    </option>
-                                                  );
-                                                })}
-                                            </select>
-                                          </div>
-
-                                            {/* Selected Reasons Capsules listed on the right */}
-                                            <div className="md:col-span-2 w-full bg-transparent">
-                                            {(() => {
-                                              const currentReasons: string[] = Array.isArray(m.reasons)
-                                                ? m.reasons
-                                                : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
-
-                                              return (
-                                                <div className="flex flex-wrap gap-1.5 min-h-[42px] items-center bg-transparent">
-                                                  {currentReasons.length > 0 ? (
-                                                    currentReasons.map((reasonStr: string) => {
-                                                          const matchVar = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === reasonStr);
-                                                          return (
-                                                            <span
-                                                              key={reasonStr}
-                                                              onClick={() => {
-                                                                const nextReasons = currentReasons.filter(r => r !== reasonStr);
-                                                                let totalDuree = 0;
-                                                                for (const r of nextReasons) {
-                                                                  const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
-                                                                  if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
-                                                                }
-                                                                updateFsmMission(t.id, m.id, {
-                                                                  reasons: nextReasons,
-                                                                  reason: nextReasons.join(", "),
-                                                                  dureePrestation: totalDuree > 0 ? totalDuree : undefined
-                                                                });
-                                                              }}
-                                                              style={{
-                                                                fontFamily: "DefibeoMain, Civilprom, sans-serif",
-                                                                border: "none",
-                                                                boxShadow: "none",
-                                                                fontSize: "16px",
-                                                              }}
-                                                              className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[16px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none"
-                                                              title="Cliquez pour supprimer"
-                                                            >
-                                                              {reasonStr}{matchVar?.dureePrestation ? ` (${matchVar.dureePrestation} min)` : ''}
-                                                            </span>
-                                                          );
-                                                        })
-                                                      ) : (
-                                                    null
-                                                  )}
-                                                </div>
-                                              );
-                                            })()}
+                                            {/* Statut facturation. */}
+                                            <div className="space-y-0.5 bg-transparent">
+                                              <label className="block mb-1 fsm-label-style">Statut facturation.</label>
+                                              <select
+                                                value={m.statutFacturation || 'Aucune information'}
+                                                onChange={(e) => updateFsmMission(t.id, m.id, { statutFacturation: e.target.value })}
+                                                className="w-full font-sans focus:outline-none cursor-pointer text-slate-800"
+                                                style={{
+                                                  border: '1px solid #dedede',
+                                                  borderRadius: '13px',
+                                                  padding: '12px',
+                                                  fontSize: '16px',
+                                                  fontWeight: '100',
+                                                  color: '#000000',
+                                                  backgroundColor: '#ffffff'
+                                                }}
+                                              >
+                                                <option value="Aucune information">Aucune information</option>
+                                                <option value="Devis">Devis</option>
+                                                <option value="Devis Validé">Devis Validé</option>
+                                                <option value="Devis Refusé">Devis Refusé</option>
+                                                <option value="Devis Sans Réponse">Devis Sans Réponse</option>
+                                                <option value="Facture Envoyée">Facture Envoyée</option>
+                                                <option value="Facturée Payée">Facturée Payée</option>
+                                                <option value="Facture à Émettre">Facture à Émettre</option>
+                                                <option value="Facture Acompte Payé">Facture Acompte Payé</option>
+                                                <option value="Visite Prévue Accord Annuel">Visite Prévue Accord Annuel</option>
+                                                <option value="Matériel & Visite Prévue Contrat Annuel">Matériel & Visite Prévue Contrat Annuel</option>
+                                              </select>
                                             </div>
                                           </div>
-                                        </div>
-                                      </div>
+
+                                          {/* Ligne 4 (25% 25% 50%) : Date estimée. / Créneau estimé. / Raison/Prestation. */}
+                                          {(() => {
+                                            const isEstimatedFieldsLocked = !isTourStartDateValidForEstimatedFields(tourStartDate);
+                                            const lockedEstimatedTooltip = "Une date de période indicative de début dans la tournée est requise pour débloquer ces champs.";
+                                            const isMissionForced = !!(m.isForced || (m.isManualDate && m.isManualSlot));
+                                            const toggleForced = () => {
+                                              if (isEstimatedFieldsLocked) {
+                                                triggerShakeTourStartDate(t.id);
+                                                return;
+                                              }
+                                              const nextVal = !isMissionForced;
+                                              updateFsmMission(t.id, m.id, {
+                                                isForced: nextVal,
+                                                isManualDate: nextVal,
+                                                isManualSlot: nextVal
+                                              });
+                                            };
+
+                                            return (
+                                              <div className="grid grid-cols-1 md:grid-cols-4 gap-3 w-full items-start bg-transparent">
+                                                {/* Date estimée. */}
+                                                <div className="md:col-span-1 space-y-0.5 bg-transparent">
+                                                  <div className="flex items-center justify-between mb-1">
+                                                    <label className="block fsm-label-style mb-0">Date estimée.</label>
+                                                    <button
+                                                      type="button"
+                                                      onClick={toggleForced}
+                                                      className={`inline-flex items-center gap-1.5 ${isEstimatedFieldsLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} focus:outline-none select-none`}
+                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Forcer la date et le créneau"}
+                                                    >
+                                                      <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
+                                                        Forcer
+                                                      </span>
+                                                      <div
+                                                        style={{
+                                                          width: '34px',
+                                                          height: '18px',
+                                                          borderRadius: '9999px',
+                                                          backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
+                                                          position: 'relative',
+                                                          transition: 'background-color 0.2s ease',
+                                                          padding: '2px'
+                                                        }}
+                                                      >
+                                                        <div
+                                                          style={{
+                                                            width: '14px',
+                                                            height: '14px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: '#ffffff',
+                                                            position: 'absolute',
+                                                            top: '2px',
+                                                            left: isMissionForced ? '18px' : '2px',
+                                                            transition: 'left 0.2s ease',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                                                          }}
+                                                        />
+                                                      </div>
+                                                    </button>
+                                                  </div>
+                                                  <div
+                                                    className="w-full"
+                                                    title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : undefined}
+                                                    onClick={() => {
+                                                      if (isEstimatedFieldsLocked) {
+                                                        triggerShakeTourStartDate(t.id);
+                                                      }
+                                                    }}
+                                                    style={{ cursor: isEstimatedFieldsLocked ? 'not-allowed' : 'pointer' }}
+                                                  >
+                                                    <input
+                                                      type="date"
+                                                      disabled={isEstimatedFieldsLocked}
+                                                      value={estimatedDateValue}
+                                                      onChange={(e) => updateFsmMission(t.id, m.id, { estimatedDate: e.target.value })}
+                                                      className={`w-full font-sans ${isEstimatedFieldsLocked ? 'cursor-not-allowed' : 'cursor-pointer'} focus:outline-none`}
+                                                      style={{
+                                                        border: '1px solid #dedede',
+                                                        borderRadius: '13px',
+                                                        padding: '12px',
+                                                        fontSize: '16px',
+                                                        fontWeight: '100',
+                                                        color: '#000000',
+                                                        backgroundColor: isEstimatedFieldsLocked ? '#f9fafb' : '#ffffff',
+                                                        opacity: isEstimatedFieldsLocked ? 0.65 : 1,
+                                                        pointerEvents: isEstimatedFieldsLocked ? 'none' : 'auto'
+                                                      }}
+                                                    />
+                                                  </div>
+                                                </div>
+
+                                                {/* Créneau estimé. */}
+                                                <div className="md:col-span-1 space-y-0.5 bg-transparent">
+                                                  <div className="flex items-center justify-between mb-1">
+                                                    <label className="block fsm-label-style mb-0">Créneau estimé.</label>
+                                                    <button
+                                                      type="button"
+                                                      onClick={toggleForced}
+                                                      className={`inline-flex items-center gap-1.5 ${isEstimatedFieldsLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} focus:outline-none select-none`}
+                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Forcer la date et le créneau"}
+                                                    >
+                                                      <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
+                                                        Forcer
+                                                      </span>
+                                                      <div
+                                                        style={{
+                                                          width: '34px',
+                                                          height: '18px',
+                                                          borderRadius: '9999px',
+                                                          backgroundColor: isMissionForced ? '#2e54ff' : '#cbd5e1',
+                                                          position: 'relative',
+                                                          transition: 'background-color 0.2s ease',
+                                                          padding: '2px'
+                                                        }}
+                                                      >
+                                                        <div
+                                                          style={{
+                                                            width: '14px',
+                                                            height: '14px',
+                                                            borderRadius: '50%',
+                                                            backgroundColor: '#ffffff',
+                                                            position: 'absolute',
+                                                            top: '2px',
+                                                            left: isMissionForced ? '18px' : '2px',
+                                                            transition: 'left 0.2s ease',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
+                                                          }}
+                                                        />
+                                                      </div>
+                                                    </button>
+                                                  </div>
+                                                  <div
+                                                    className="w-full"
+                                                    title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : undefined}
+                                                    onClick={() => {
+                                                      if (isEstimatedFieldsLocked) {
+                                                        triggerShakeTourStartDate(t.id);
+                                                      }
+                                                    }}
+                                                    style={{ cursor: isEstimatedFieldsLocked ? 'not-allowed' : 'pointer' }}
+                                                  >
+                                                    <select
+                                                      disabled={isEstimatedFieldsLocked}
+                                                      value={normalizeFsmSlotValue(m.estimatedSlot)}
+                                                      onChange={(e) => updateFsmMission(t.id, m.id, { estimatedSlot: e.target.value })}
+                                                      className={`w-full font-sans focus:outline-none ${isEstimatedFieldsLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                                      style={{
+                                                        border: '1px solid #dedede',
+                                                        borderRadius: '13px',
+                                                        padding: '12px',
+                                                        fontSize: '16px',
+                                                        fontWeight: '100',
+                                                        color: '#000000',
+                                                        backgroundColor: isEstimatedFieldsLocked ? '#f9fafb' : '#ffffff',
+                                                        opacity: isEstimatedFieldsLocked ? 0.65 : 1,
+                                                        pointerEvents: isEstimatedFieldsLocked ? 'none' : 'auto'
+                                                      }}
+                                                    >
+                                                      <option value="">-- Non défini --</option>
+                                                      <option value="8:00am">8:00am</option>
+                                                      <option value="8:30am">8:30am</option>
+                                                      <option value="9:00am">9:00am</option>
+                                                      <option value="9:30am">9:30am</option>
+                                                      <option value="10:00am">10:00am</option>
+                                                      <option value="10:30am">10:30am</option>
+                                                      <option value="11:00am">11:00am</option>
+                                                      <option value="11:30am">11:30am</option>
+                                                      <option value="12:00pm">12:00pm</option>
+                                                      <option value="12:30pm">12:30pm</option>
+                                                      <option value="13:00pm">13:00pm</option>
+                                                      <option value="13:30pm">13:30pm</option>
+                                                      <option value="14:00pm">14:00pm</option>
+                                                      <option value="14:30pm">14:30pm</option>
+                                                      <option value="15:00pm">15:00pm</option>
+                                                      <option value="15:30pm">15:30pm</option>
+                                                      <option value="16:00pm">16:00pm</option>
+                                                      <option value="16:30pm">16:30pm</option>
+                                                      <option value="17:00pm">17:00pm</option>
+                                                      <option value="17:30pm">17:30pm</option>
+                                                      <option value="18:00pm">18:00pm</option>
+                                                      <option value="18:30pm">18:30pm</option>
+                                                      <option value="19:00pm">19:00pm</option>
+                                                    </select>
+                                                  </div>
+                                                </div>
+
+                                                {/* Raison/Prestation. */}
+                                                <div className="md:col-span-2 space-y-0.5 relative font-sans w-full bg-transparent">
+                                                  <div className="flex items-center justify-between mb-1">
+                                                    <label className="block fsm-label-style mb-0">
+                                                      {translate("Raison/Prestation.")}
+                                                    </label>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => setActiveMissionReasonSidePane({ tourId: t.id, missionId: m.id })}
+                                                      className="text-[14px] sm:text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                                      style={{ textDecoration: 'none' }}
+                                                    >
+                                                      Rechercher
+                                                    </button>
+                                                  </div>
+                                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full items-center bg-transparent">
+                                                    <div className="w-full bg-transparent">
+                                                      <select
+                                                        value=""
+                                                        onChange={(e) => {
+                                                          const val = e.target.value;
+                                                          if (val) {
+                                                            const current: string[] = Array.isArray(m.reasons)
+                                                              ? m.reasons
+                                                              : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
+                                                            if (!current.includes(val)) {
+                                                              const nextReasons = [...current, val];
+                                                              let totalDuree = 0;
+                                                              for (const r of nextReasons) {
+                                                                const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
+                                                                if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
+                                                              }
+                                                              updateFsmMission(t.id, m.id, {
+                                                                reasons: nextReasons,
+                                                                reason: nextReasons.join(", "),
+                                                                dureePrestation: totalDuree > 0 ? totalDuree : undefined
+                                                              });
+                                                            }
+                                                            e.target.value = "";
+                                                          }
+                                                        }}
+                                                        style={{
+                                                          border: "1px solid #dedede",
+                                                          borderRadius: "13px",
+                                                          padding: "12px",
+                                                          fontSize: "16px",
+                                                          fontWeight: "100",
+                                                          color: "#000000",
+                                                          backgroundColor: "#ffffff"
+                                                        }}
+                                                        className="w-full font-sans focus:outline-none cursor-pointer"
+                                                      >
+                                                        <option value="">-- Sélectionner une raison / prestation --</option>
+                                                        {variables
+                                                          .filter((v: any) => isRaisonPrestationVariable(v))
+                                                          .map((v: any) => {
+                                                            const current: string[] = Array.isArray(m.reasons)
+                                                              ? m.reasons
+                                                              : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
+                                                            const isSelected = current.includes(v.nom);
+                                                            return (
+                                                              <option key={v.id} value={v.nom} disabled={isSelected}>
+                                                                {v.nom}{v.dureePrestation ? ` (${v.dureePrestation} min)` : ''} {isSelected ? "(Déjà ajoutée)" : ""}
+                                                              </option>
+                                                            );
+                                                          })}
+                                                      </select>
+                                                    </div>
+
+                                                    <div className="w-full bg-transparent">
+                                                      {(() => {
+                                                        const currentReasons: string[] = Array.isArray(m.reasons)
+                                                          ? m.reasons
+                                                          : (m.reason ? m.reason.split(", ").map((s: string) => s.trim()).filter(Boolean) : []);
+
+                                                        return (
+                                                          <div className="flex flex-wrap gap-1.5 min-h-[42px] items-center bg-transparent">
+                                                            {currentReasons.length > 0 ? (
+                                                              currentReasons.map((reasonStr: string) => {
+                                                                const matchVar = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === reasonStr);
+                                                                return (
+                                                                  <span
+                                                                    key={reasonStr}
+                                                                    onClick={() => {
+                                                                      const nextReasons = currentReasons.filter(r => r !== reasonStr);
+                                                                      let totalDuree = 0;
+                                                                      for (const r of nextReasons) {
+                                                                        const match = variables.find((v: any) => isRaisonPrestationVariable(v) && v.nom === r);
+                                                                        if (match?.dureePrestation) totalDuree += Number(match.dureePrestation);
+                                                                      }
+                                                                      updateFsmMission(t.id, m.id, {
+                                                                        reasons: nextReasons,
+                                                                        reason: nextReasons.join(", "),
+                                                                        dureePrestation: totalDuree > 0 ? totalDuree : undefined
+                                                                      });
+                                                                    }}
+                                                                    style={{
+                                                                      fontFamily: "DefibeoMain, Civilprom, sans-serif",
+                                                                      border: "none",
+                                                                      boxShadow: "none",
+                                                                      fontSize: "16px",
+                                                                    }}
+                                                                    className="fsm-deletable-pill cursor-pointer inline-flex items-center rounded-full bg-white text-slate-800 text-[16px] px-3.5 py-1.5 font-medium transition-all duration-150 select-none"
+                                                                    title="Cliquez pour supprimer"
+                                                                  >
+                                                                    {reasonStr}{matchVar?.dureePrestation ? ` (${matchVar.dureePrestation} min)` : ''}
+                                                                  </span>
+                                                                );
+                                                              })
+                                                            ) : null}
+                                                          </div>
+                                                        );
+                                                      })()}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            );
+                                          })()}
 
                                       {/* Info block displaying Commentaires of selected Bon de commande */}
                                       {(() => {
@@ -19665,7 +20467,7 @@ export default function App() {
                                             const nextStatus = e.target.value;
                                             if (nextStatus === 'À faire' || nextStatus === 'En cours' || nextStatus === 'Effectué') {
                                               if (!isMissionEstimatedDateFilled(m) || !isMissionEstimatedSlotFilled(m)) {
-                                                alert("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
+                                                showFsmSystemInfoMessage("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
                                                 return;
                                               }
                                             }
@@ -19783,7 +20585,8 @@ export default function App() {
                                         );
                                       }
 
-                                      const canSubmitToClient = ['Brouillon', 'Attente Client', 'Refusé Client'].includes(currentSit);
+                                      const hasDateAndSlot = isMissionEstimatedDateFilled({ ...m, estimatedDate: estimatedDateValue }) && isMissionEstimatedSlotFilled(m);
+                                      const canSubmitToClient = ['Brouillon', 'Attente Client', 'Refusé Client'].includes(currentSit) && hasDateAndSlot;
                                       return (
                                         <div className="bg-transparent flex flex-col justify-end">
                                           <button
@@ -23061,7 +23864,6 @@ export default function App() {
                             defibrillateurs={defibrillateurs}
                             stocks={stocks}
                             onUpdateStocks={saveStocks}
-                            members={members}
                           />
                         </div>
                       </div>

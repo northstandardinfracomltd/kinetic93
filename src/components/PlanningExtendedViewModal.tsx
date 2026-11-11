@@ -17,6 +17,7 @@ interface PlanningExtendedViewModalProps {
   initialYear?: number;
   onUpdateSpontaneousEvents?: (events: SpontaneousEvent[]) => void;
   onUpdateTours?: (tours: any[]) => void;
+  onConsultMission?: (tour: any, mission: any) => void;
 }
 
 const MONTH_NAMES_FR = [
@@ -54,21 +55,38 @@ const getCleanTechName = (raw?: any): string => {
   return isUnassignedTechName(s) ? '' : s;
 };
 
+const SYSTEM_CRENEAU_SLOTS = [
+  '8:00am', '8:30am', '9:00am', '9:30am',
+  '10:00am', '10:30am', '11:00am', '11:30am',
+  '12:00pm', '12:30pm', '13:00pm', '13:30pm',
+  '14:00pm', '14:30pm', '15:00pm', '15:30pm',
+  '16:00pm', '16:30pm', '17:00pm',
+];
+
+const normalizeToSystemSlot = (raw: any): string => {
+  const s = String(raw ?? '').trim();
+  if (!s || s === '--:--') return '9:00am';
+  if (SYSTEM_CRENEAU_SLOTS.includes(s)) return s;
+  const match = s.match(/(\d{1,2})[:h](\d{2})\s*(am|pm)?/i);
+  if (match) {
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    const suf = (match[3] || '').toLowerCase();
+    if (suf === 'pm' && h < 12) h += 12;
+    const totalMins = h * 60 + (isNaN(m) ? 0 : m);
+    const clampedMins = Math.max(8 * 60, Math.min(17 * 60, Math.round(totalMins / 30) * 30));
+    const finalH = Math.floor(clampedMins / 60);
+    const finalM = clampedMins % 60;
+    const finalSuffix = finalH >= 12 ? 'pm' : 'am';
+    return `${finalH}:${String(finalM).padStart(2, '0')}${finalSuffix}`;
+  }
+  return '9:00am';
+};
+
 const formatSlotToAmPm = (raw: any): string => {
   const s = String(raw ?? '').trim();
   if (!s || s === '--:--') return '--:--';
-  if (/(am|pm)\b/i.test(s)) {
-    return s.replace(/\b(\d{1,2}):(\d{2})(am|pm)\b/gi, (_, hStr, mStr, suf) => {
-      return `${String(hStr).padStart(2, '0')}:${mStr}${String(suf).toLowerCase()}`;
-    });
-  }
-  return s.replace(/\b(\d{1,2})[:h](\d{2})\b/gi, (_, hStr, mStr) => {
-    const h24 = parseInt(hStr, 10);
-    if (isNaN(h24) || h24 < 0 || h24 > 23) return `${hStr}:${mStr}`;
-    const suffix = h24 >= 12 ? 'pm' : 'am';
-    const hh = String(h24).padStart(2, '0');
-    return `${hh}:${mStr}${suffix}`;
-  });
+  return normalizeToSystemSlot(s);
 };
 
 const toIsoDateStr = (rawDate?: any): string => {
@@ -185,19 +203,14 @@ const computeSlotFromDragEvent = (e: React.DragEvent<HTMLElement>) => {
   const rect = e.currentTarget.getBoundingClientRect();
   const relX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
   const ratio = rect.width > 0 ? relX / rect.width : 0.5;
-  const startMins = 7.5 * 60; // 07:30
-  const endMins = 18.5 * 60;  // 18:30
-  const rawMins = startMins + ratio * (endMins - startMins);
-  const snappedMins = Math.round(rawMins / 15) * 15;
-  const clampedMins = Math.max(startMins, Math.min(endMins, snappedMins));
-  const h24 = Math.floor(clampedMins / 60);
-  const mins = clampedMins % 60;
-  const hh = String(h24).padStart(2, '0');
-  const mm = String(mins).padStart(2, '0');
-  const suffix = h24 >= 12 ? 'pm' : 'am';
+  const slotIndex = Math.max(
+    0,
+    Math.min(SYSTEM_CRENEAU_SLOTS.length - 1, Math.round(ratio * (SYSTEM_CRENEAU_SLOTS.length - 1)))
+  );
+  const systemSlot = SYSTEM_CRENEAU_SLOTS[slotIndex];
   return {
-    slot24h: `${hh}:${mm}`,
-    slotAmPm: `${hh}:${mm}${suffix}`,
+    slot24h: systemSlot,
+    slotAmPm: systemSlot,
     clientX: e.clientX,
     clientY: e.clientY,
   };
@@ -215,7 +228,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
   initialMonth,
   initialYear,
   onUpdateSpontaneousEvents,
-  onUpdateTours
+  onUpdateTours,
+  onConsultMission,
 }) => {
   const today = useMemo(() => new Date(), []);
   const [currentMonth, setCurrentMonth] = useState<number>(() => {
@@ -281,6 +295,14 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
   // Unified Drag & Drop state for missions and spontaneous events across technicians, days, and slots
   const [draggedItem, setDraggedItem] = useState<DraggedPlanningItem | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<DragOverTargetInfo | null>(null);
+  const [openMissionMenuKey, setOpenMissionMenuKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openMissionMenuKey) return;
+    const handleClickOutside = () => setOpenMissionMenuKey(null);
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [openMissionMenuKey]);
 
   // Effective technicians list (excludes any "Non assigné" placeholder and includes any real technician assigned on active tours)
   const effectiveTechniciansList = useMemo(() => {
@@ -458,7 +480,9 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         }
 
         delete movedMission.resolvedIsoDate;
-        const effectiveSlot = slot24h || movedMission.estimatedSlot || movedMission.creneau || '09:00';
+        const effectiveSlot = normalizeToSystemSlot(
+          slotAmPm || slot24h || movedMission.estimatedSlot || movedMission.creneau || '9:00am'
+        );
 
         let workingTours = [...prevTours];
         if (!resolvedTargetTourId) {
@@ -491,6 +515,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           technicien: targetTechName,
           tourIdentifiant: resolvedTargetTourId,
           isManualDate: true,
+          isManualSlot: true,
         };
 
         const nextTours = workingTours.map((t) => {
@@ -1019,17 +1044,18 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         fontFamily: "'DefibeoMain', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
       }}
     >
-      {/* Floating slot badge next to cursor during drag & drop */}
+      {/* Floating slot badge above cursor during drag & drop */}
       {draggedItem && dragOverTarget && (
         <div
-          className="fixed pointer-events-none z-[999999] inline-flex items-center justify-center px-3.5 py-1 rounded-full font-bold shadow-md select-none"
+          className="fixed pointer-events-none z-[999999] inline-flex items-center justify-center px-4 py-1.5 rounded-full font-bold shadow-lg select-none"
           style={{
-            left: `${dragOverTarget.clientX + 14}px`,
-            top: `${dragOverTarget.clientY - 14}px`,
+            left: `${dragOverTarget.clientX + 12}px`,
+            top: `${Math.max(8, dragOverTarget.clientY - 40)}px`,
             backgroundColor: 'rgb(210, 45, 11)',
             color: '#FFFFFF',
-            fontSize: '16px',
+            fontSize: '18px',
             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+            opacity: 1,
           }}
         >
           {dragOverTarget.slotAmPm}
@@ -1313,7 +1339,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   ...slotInfo,
                                 });
                               }}
-                              onDragLeave={() => {
+                              onDragLeave={(e) => {
+                                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
                                 if (
                                   dragOverTarget?.rowKey === emptyRowKey &&
                                   dragOverTarget?.isoDate === d.isoDate &&
@@ -1345,6 +1372,22 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   : 'bg-white'
                               }`}
                             >
+                              {isDropTarget && dragOverTarget && (
+                                <div className="pointer-events-none relative z-50 flex items-center justify-center mb-1">
+                                  <span
+                                    className="inline-flex items-center justify-center px-4 py-1.5 rounded-full font-bold shadow-md"
+                                    style={{
+                                      backgroundColor: 'rgb(210, 45, 11)',
+                                      color: '#FFFFFF',
+                                      fontSize: '18px',
+                                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                      opacity: 1,
+                                    }}
+                                  >
+                                    {dragOverTarget.slotAmPm}
+                                  </span>
+                                </div>
+                              )}
                               {d.isToday && (
                                 <div
                                   className="absolute top-0 bottom-0 pointer-events-none z-20 w-[2px] bg-[#ef4444]"
@@ -1393,7 +1436,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                     ...slotInfo,
                                   });
                                 }}
-                                onDragLeave={() => {
+                                onDragLeave={(e) => {
+                                  if (e.currentTarget.contains(e.relatedTarget as Node)) return;
                                   if (
                                     dragOverTarget?.rowKey === tourRowKey &&
                                     dragOverTarget?.isoDate === d.isoDate &&
@@ -1435,6 +1479,24 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   />
                                 )}
 
+                                {/* Drop target preview gélule right on top */}
+                                {isDropTarget && dragOverTarget && (
+                                  <div className="pointer-events-none relative z-50 flex items-center justify-center mb-1.5">
+                                    <span
+                                      className="inline-flex items-center justify-center px-4 py-1.5 rounded-full font-bold shadow-md"
+                                      style={{
+                                        backgroundColor: 'rgb(210, 45, 11)',
+                                        color: '#FFFFFF',
+                                        fontSize: '18px',
+                                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                        opacity: 1,
+                                      }}
+                                    >
+                                      {dragOverTarget.slotAmPm}
+                                    </span>
+                                  </div>
+                                )}
+
                                 {/* Tournée barrette: ALWAYS visible if within tour, regardless of missions count */}
                                 {isWithinTour && (
                                   <div
@@ -1448,10 +1510,10 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   <div className="space-y-2">
                                     {dayMissions.map((m: any, mIdx: number) => {
                                       const details = getMissionDetails(m);
-                                      const isBeingDragged =
-                                        draggedItem?.type === 'mission' && draggedItem.missionId === String(m.id);
                                       const formattedSlot = formatSlotToAmPm(details.creneau);
                                       const fullMissionText = `Client : ${details.clientName}. Ville : ${details.villePostcode}. Raison(s) : ${details.reasons}. Matériel : ${details.identifiant || 'NC'}.`;
+                                      const menuKey = `ext-${tItem.tourId}-${m.id || mIdx}-${d.isoDate}`;
+                                      const isMenuOpen = openMissionMenuKey === menuKey;
 
                                       return (
                                         <div
@@ -1460,6 +1522,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                           draggable
                                           onDragStart={(e) => {
                                             e.stopPropagation();
+                                            setOpenMissionMenuKey(null);
                                             setDraggedItem({
                                               type: 'mission',
                                               missionId: String(m.id),
@@ -1476,9 +1539,9 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                             setDraggedItem(null);
                                             setDragOverTarget(null);
                                           }}
-                                          className="space-y-1 select-none cursor-grab active:cursor-grabbing"
+                                          className="relative space-y-1 select-none cursor-grab active:cursor-grabbing"
                                           style={{
-                                            opacity: isBeingDragged ? 0.45 : 1,
+                                            opacity: 1,
                                           }}
                                           title={`${fullMissionText} — Glisser-déposer pour changer de jour, de technicien ou de créneau`}
                                         >
@@ -1491,13 +1554,18 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                                 fontSize: '18px',
                                                 fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                                                 boxShadow: 'none',
+                                                opacity: 1,
                                               }}
                                             >
-                                              {formattedSlot}
+                                              {isDropTarget && dragOverTarget ? dragOverTarget.slotAmPm : formattedSlot}
                                             </span>
                                           </div>
                                           <div
-                                            className="w-full transition-all shadow-xs hover:brightness-95 whitespace-normal break-words"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setOpenMissionMenuKey((prev) => (prev === menuKey ? null : menuKey));
+                                            }}
+                                            className="w-full transition-all shadow-xs hover:brightness-95 whitespace-normal break-words cursor-pointer"
                                             style={{
                                               backgroundColor: 'rgb(230, 197, 255)',
                                               color: 'rgb(89, 22, 144)',
@@ -1506,10 +1574,40 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                               fontSize: '13px',
                                               fontWeight: 600,
                                               lineHeight: '1.35',
+                                              opacity: 1,
                                             }}
                                           >
                                             {fullMissionText}
                                           </div>
+
+                                          {isMenuOpen && (
+                                            <div
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="absolute left-0 top-full mt-1 z-[100] w-max max-w-[260px] bg-white rounded-xl shadow-lg border border-neutral-200 p-1.5 animate-fadeIn"
+                                            >
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setOpenMissionMenuKey(null);
+                                                  onClose();
+                                                  if (onConsultMission) {
+                                                    onConsultMission(tItem.rawTour, m);
+                                                  } else {
+                                                    window.dispatchEvent(
+                                                      new CustomEvent('defib_consult_mission', {
+                                                        detail: { tour: tItem.rawTour, mission: m },
+                                                      })
+                                                    );
+                                                  }
+                                                }}
+                                                className="w-full text-left px-3 py-2 rounded-lg text-[14px] font-bold text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer whitespace-nowrap"
+                                                style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
+                                              >
+                                                Afficher la mission dans la tournée
+                                              </button>
+                                            </div>
+                                          )}
                                         </div>
                                       );
                                     })}
@@ -1550,7 +1648,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   ...slotInfo,
                                 });
                               }}
-                              onDragLeave={() => {
+                              onDragLeave={(e) => {
+                                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
                                 if (
                                   dragOverTarget?.rowKey === spontRowKey &&
                                   dragOverTarget?.isoDate === d.isoDate &&
@@ -1582,6 +1681,22 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   : 'bg-white'
                               }`}
                             >
+                              {isDropTarget && dragOverTarget && (
+                                <div className="pointer-events-none relative z-50 flex items-center justify-center mb-1.5">
+                                  <span
+                                    className="inline-flex items-center justify-center px-4 py-1.5 rounded-full font-bold shadow-md"
+                                    style={{
+                                      backgroundColor: 'rgb(210, 45, 11)',
+                                      color: '#FFFFFF',
+                                      fontSize: '18px',
+                                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                      opacity: 1,
+                                    }}
+                                  >
+                                    {dragOverTarget.slotAmPm}
+                                  </span>
+                                </div>
+                              )}
                               {/* Red vertical cursor line */}
                               {d.isToday && (
                                 <div
@@ -1601,8 +1716,6 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                     const line3 = evt.commentaire || '';
                                     const timeOffset = getTimeOffsetPercent(evt.creneau);
                                     const marginLeftPx = Math.round(timeOffset * 40);
-                                    const isEvtDragged =
-                                      draggedItem?.type === 'event' && draggedItem.eventId === String(evt.id);
 
                                     return (
                                       <div
@@ -1635,7 +1748,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                           fontSize: '12px',
                                           color: '#fff',
                                           lineHeight: '16px',
-                                          opacity: isEvtDragged ? 0.45 : 1,
+                                          opacity: 1,
                                         }}
                                         title={`Événement spontané : ${evt.creneau || 'Horaire libre'} — Glisser-déposer pour changer de jour, de technicien ou de créneau`}
                                       >

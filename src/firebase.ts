@@ -2233,15 +2233,14 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
       }
       await Promise.all(
         Array.from(keysToPersist).map(targetDocKey =>
-          withTimeout(
+          Promise.race([
             setDoc(doc(db, 'appData', targetDocKey), {
               value: finalCleanValue,
               _chunked: false,
               updatedAt: new Date().toISOString(),
             }),
-            5000,
-            undefined
-          ).catch(() => {})
+            new Promise<void>(resolve => setTimeout(resolve, 5000)),
+          ]).catch(() => {})
         )
       );
     } catch (_) {}
