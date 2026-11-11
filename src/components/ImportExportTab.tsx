@@ -8,7 +8,7 @@ import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { TableSubHeaderButtons } from './TableSubHeaderButtons';
 import { logBulkExport } from '../services/suspiciousActivityService';
-import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from '../utils/googleDrive';
+import { fetchGoogleDriveStatus, uploadFileToGoogleDrive, getCachedGoogleDriveActiveSync } from '../utils/googleDrive';
 
 export type ImportExportCategory = 
   | 'Défibrillateurs.' 
@@ -1462,7 +1462,7 @@ export default function ImportExportTab({
   dropboxAccessToken = '',
   companyInfo,
 }: ImportExportTabProps) {
-  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(false);
+  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(() => getCachedGoogleDriveActiveSync(tenantId));
   const [googleDriveAccessToken, setGoogleDriveAccessToken] = useState<string>('');
 
   useEffect(() => {

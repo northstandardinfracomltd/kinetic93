@@ -359,7 +359,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
                 type="button"
                 onClick={onClose}
                 style={{
-                  backgroundColor: '#0f172a',
+                  backgroundColor: 'rgb(210, 45, 11)',
                   color: '#ffffff',
                   borderRadius: '13px',
                   fontSize: '18px',
@@ -371,7 +371,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
                   cursor: 'pointer',
                   border: 'none'
                 }}
-                className="font-sans hover:bg-neutral-900 cursor-pointer transition-all"
+                className="font-sans hover:opacity-90 cursor-pointer transition-all"
               >
                 Fermer
               </button>

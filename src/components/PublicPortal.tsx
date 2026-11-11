@@ -92,9 +92,11 @@ import HelpBubble from "./HelpBubble";
 import TopBarProgress from "./TopBarProgress";
 import { useNetworkStatus } from "../utils/useNetworkStatus";
 import {
+  preloadSounds,
   triggerPublicPortalOpenSound,
   playTechSound2,
   playTechSound3,
+  playTechTapSound,
 } from "../utils/technicianAudio";
 import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from "../utils/googleDrive";
 import {
@@ -589,7 +591,8 @@ export default function PublicPortal({
     window.addEventListener("defib-theme-changed", handleThemeChange);
     window.addEventListener("defib-favicon-changed", handleFaviconChange);
 
-    // Play Sound1 on webapp open (login or reload)
+    // Preload all audio files into memory cache & play open sound on webapp open
+    preloadSounds();
     const cleanupSound = triggerPublicPortalOpenSound();
 
     return () => {
@@ -859,7 +862,6 @@ export default function PublicPortal({
   const triggerReportSavedOverlay = () => {
     setShowReportSavedOverlay(true);
     setIsReportSavedSlidingUp(false);
-    playTechSound3();
   };
 
   const dismissReportSavedOverlay = () => {
@@ -1167,9 +1169,9 @@ export default function PublicPortal({
   });
   const [pauseReason, setPauseReason] = useState<string>(() => {
     try {
-      return localStorage.getItem("defib_pause_reason") || "Repas";
+      return localStorage.getItem("defib_pause_reason") || "";
     } catch (e) {
-      return "Repas";
+      return "";
     }
   });
 
@@ -1232,7 +1234,7 @@ export default function PublicPortal({
   }, []);
 
   const updateTourPauseState = (enabled: boolean, reason: string) => {
-    const effectiveReason = reason || pauseReason || "Repas";
+    const effectiveReason = enabled ? reason : "";
 
     // Block turning Pause ON when a report is minimized / in progress
     if (enabled && isReportOverlayOpen && isReportOverlayMinimized) {
@@ -1241,7 +1243,7 @@ export default function PublicPortal({
     }
 
     // Check if turning OFF a "Repas" pause
-    if (!enabled && (pauseReason === "Repas" || effectiveReason === "Repas")) {
+    if (!enabled && (pauseReason === "Repas" || reason === "Repas")) {
       const rules = loadCttGlobalRules();
       const minRequiredMinutes = rules.minBreakRestMinutes && rules.minBreakRestMinutes > 0 ? rules.minBreakRestMinutes : 45;
       const shouldEnforce = rules.minBreakRestEnabled || minRequiredMinutes > 0;
@@ -1266,8 +1268,8 @@ export default function PublicPortal({
     const now = Date.now();
     try {
       localStorage.setItem("defib_pause_enabled", enabled ? "true" : "false");
-      localStorage.setItem("defib_pause_reason", effectiveReason);
       if (enabled) {
+        localStorage.setItem("defib_pause_reason", effectiveReason);
         let startTimeToUse = pauseStartTime;
         if (!startTimeToUse) {
           startTimeToUse = now;
@@ -1281,6 +1283,7 @@ export default function PublicPortal({
         }
       } else {
         setPauseStartTime(null);
+        localStorage.removeItem("defib_pause_reason");
         localStorage.removeItem("defib_pause_start_time");
         localStorage.removeItem("defib_pause_repas_start_time");
       }
@@ -2057,6 +2060,7 @@ export default function PublicPortal({
 
   const handleSaveTechStockChanges = async () => {
     if (!selectedTechStock) return;
+    playTechTapSound();
     setIsSavingTechStockChanges(true);
     try {
       await persistUpdatedStocksList(effectiveTechStocksList, true);
@@ -9692,7 +9696,10 @@ export default function PublicPortal({
             {/* Alert banner if no ongoing pointage for connected technician session */}
             {!hidePointage && !pointages.some((p) => p.isOngoing && p.techName?.trim().toLowerCase() === (authenticatedUser?.name || "").trim().toLowerCase()) && (
               <div
-                onClick={() => setActiveTab("temps")}
+                onClick={() => {
+                  playTechTapSound();
+                  setActiveTab("temps");
+                }}
                 className="text-white text-center font-semibold select-none shadow-xs font-sans shrink-0 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
                 style={{
                   background: "rgb(210 45 12)",
@@ -9931,6 +9938,7 @@ export default function PublicPortal({
                               key={tab.value}
                               type="button"
                               onClick={(e) => {
+                                playTechTapSound();
                                 const btnEl = e.currentTarget;
                                 setClickedWebappNavTab({ id: tab.value, key: Date.now() });
                                 setActiveTab(tab.value);
@@ -10012,6 +10020,7 @@ export default function PublicPortal({
                           onChange={(e) => {
                             const nextTab = e.target.value as WebappTab;
                             if (!nextTab) return;
+                            playTechTapSound();
                             setActiveTab(nextTab);
                             if (["interventions", "rapports", "planning"].includes(nextTab)) {
                               handleRefreshWebappData();
@@ -10103,6 +10112,12 @@ export default function PublicPortal({
                     >
                       {/* Technician Name display field */}
                       <div className="px-1 select-none">
+                        <label
+                          className="block text-left font-bold font-sans mb-1.5"
+                          style={{ fontSize: "18px", color: "#000000" }}
+                        >
+                          {t("Technicien.")}
+                        </label>
                         <input
                           type="text"
                           readOnly
@@ -10125,12 +10140,18 @@ export default function PublicPortal({
 
                       {/* Select native dropdown system for choosing active tour - sorted by date newest first */}
                       <div className="px-1 select-none pb-4">
+                        <label
+                          className="block text-left font-bold font-sans mb-1.5"
+                          style={{ fontSize: "18px", color: "#000000" }}
+                        >
+                          {t("Tournée.")}
+                        </label>
                         <select
                           value={selectedTourId}
                           onChange={(e) => {
                             setSelectedTourId(e.target.value);
                             if (e.target.value) {
-                              playTechSound2();
+                              playTechTapSound();
                             }
                           }}
                           className="w-full cursor-pointer appearance-none transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center"
@@ -10215,7 +10236,7 @@ export default function PublicPortal({
                                   alert("Action impossible : un rapport d’intervention est actuellement réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant de suspendre pour pause.");
                                   return;
                                 }
-                                updateTourPauseState(!pauseEnabled, pauseReason || "Repas");
+                                updateTourPauseState(!pauseEnabled, "");
                               }}
                               className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${!pauseEnabled && isReportOverlayOpen && isReportOverlayMinimized ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                               style={{
@@ -10272,6 +10293,9 @@ export default function PublicPortal({
                                     backgroundImage: "none",
                                   }}
                                 >
+                                  <option value="" disabled>
+                                    {t("Sélectionnez une raison.")}
+                                  </option>
                                   <option value="Repas">Repas</option>
                                   <option value="Nuit Hôtel">Nuit Hôtel</option>
                                   <option value="Week-End">Week-End</option>
@@ -10291,6 +10315,16 @@ export default function PublicPortal({
                           .filter((t) => t.id === selectedTourId)
                           .map((t) => (
                             <div key={t.id} className="space-y-3">
+                              {t.passages.some((p: any) => p.status !== "Attente") && (
+                                <div className="px-1 select-none">
+                                  <label
+                                    className="block text-left font-bold font-sans"
+                                    style={{ fontSize: "18px", color: "#000000" }}
+                                  >
+                                    {t("Mission(s).")}
+                                  </label>
+                                </div>
+                              )}
                               {/* Stacked Passage records list */}
                               <div
                                 className="grid grid-cols-1 md:grid-cols-2 gap-3 space-y-0"
@@ -11161,7 +11195,7 @@ export default function PublicPortal({
                                   type="button"
                                   disabled={t.status === "Terminé"}
                                   onClick={() => {
-                                    playTechSound2();
+                                    playTechTapSound();
                                     const updatedTours = tours.map((item) => {
                                       if (item.id === t.id) {
                                         return {
@@ -11309,6 +11343,7 @@ export default function PublicPortal({
                                   type="button"
                                   disabled={t.status === "Terminé"}
                                   onClick={() => {
+                                    playTechTapSound();
                                     if (isReportOverlayOpen && isReportOverlayMinimized) {
                                       alert("Action impossible : un rapport d’intervention est actuellement réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant de terminer la tournée.");
                                       return;
@@ -11569,6 +11604,13 @@ export default function PublicPortal({
                 >
                   {/* Technician filter dropdown full-width tout comme dans INTERVENTIONS */}
                   <div className="px-1 select-none">
+                    <label
+                      htmlFor="select-report-technician-filter"
+                      className="block text-left font-bold font-sans mb-1.5"
+                      style={{ fontSize: "18px", color: "#000000" }}
+                    >
+                      {t("Technicien.")}
+                    </label>
                     <select
                       id="select-report-technician-filter"
                       value={selectedReportTech}
@@ -11674,6 +11716,17 @@ export default function PublicPortal({
                   >
                     {t("Actualiser les données")}
                   </button>
+
+                  {sortedAndLimitedReports.length > 0 && (
+                    <div className="px-1 select-none">
+                      <label
+                        className="block text-left font-bold font-sans"
+                        style={{ fontSize: "18px", color: "#000000" }}
+                      >
+                        {t("Rapport(s).")}
+                      </label>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 space-y-0">
                     {sortedAndLimitedReports.map((rep) => {
@@ -12130,6 +12183,12 @@ export default function PublicPortal({
                     }
                   `}</style>
                   {/* Info: Emplacement (Disabled Input en premier, hors d'une div) */}
+                  <label
+                    className="block text-left font-bold font-sans mb-1.5 px-1 select-none"
+                    style={{ fontSize: "18px", color: "#000000" }}
+                  >
+                    {t("Emplacement.")}
+                  </label>
                   <input
                     type="text"
                     value={techLocationLink || "Aucun emplacement spécifié"}
@@ -12151,9 +12210,16 @@ export default function PublicPortal({
                   />
 
                   {/* Piece / Material Select: Lookup from Spreadsheet Stocks where >= 1 traceability item is linked to logged-in technician's location */}
+                  <label
+                    className="block text-left font-bold font-sans mb-1.5 px-1 select-none"
+                    style={{ fontSize: "18px", color: "#000000" }}
+                  >
+                    {t("Stock.")}
+                  </label>
                   <select
                     value={selectedTechDistributedStockId}
                     onChange={(e) => {
+                      playTechTapSound();
                       setSelectedTechDistributedStockId(e.target.value);
                       setShowRapatriementForm(false);
                       setShowNewDistribStockForm(false);
@@ -12195,6 +12261,7 @@ export default function PublicPortal({
                     <button
                       type="button"
                       onClick={() => {
+                        playTechTapSound();
                         const nextOpen = !showNewDistribStockForm;
                         setShowNewDistribStockForm(nextOpen);
                         setSelectedTechDistributedStockId("");
@@ -12230,6 +12297,7 @@ export default function PublicPortal({
                     disabled={!canCloseTechInventory}
                     onClick={() => {
                       if (!canCloseTechInventory) return;
+                      playTechTapSound();
                       setShowCloseInventoryModal(true);
                     }}
                     style={{
@@ -12996,6 +13064,7 @@ export default function PublicPortal({
                           type="button"
                           disabled={isSavingDistribStock || !newDistribStockId}
                           onClick={async () => {
+                            playTechTapSound();
                             if (!newDistribStockId) {
                               alert("Veuillez sélectionner un équipement de la centrale des stocks.");
                               return;
@@ -14715,7 +14784,7 @@ export default function PublicPortal({
                         })
                         .slice(0, 7);
 
-                      return weekPointages.map((p) => {
+                      return weekPointages.map((p, ptIdx) => {
                         if (!p) return null;
                         const liveHHMM =
                           String(currentTime.getHours()).padStart(2, "0") +
@@ -14747,9 +14816,19 @@ export default function PublicPortal({
                         const isExpanded = !!expandedPointageIds[p.id];
 
                         return (
-                          <div
-                            key={p.id}
-                            className="p-4 sm:p-5 rounded-[16px] space-y-4 overflow-hidden max-w-full box-border"
+                          <React.Fragment key={p.id}>
+                            {ptIdx === 0 && (
+                              <div className="px-1 select-none">
+                                <label
+                                  className="block text-left font-bold font-sans"
+                                  style={{ fontSize: "18px", color: "#000000" }}
+                                >
+                                  {t("Pointage(s).")}
+                                </label>
+                              </div>
+                            )}
+                            <div
+                              className="p-4 sm:p-5 rounded-[16px] space-y-4 overflow-hidden max-w-full box-border"
                             style={{
                               backgroundColor: "#f5f7fa",
                               border: "none",
@@ -15350,6 +15429,7 @@ export default function PublicPortal({
                               </div>
                             )}
                           </div>
+                          </React.Fragment>
                         );
                       });
                     })()}

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Client, Variable, StockRecord } from '../types';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
 import { getRegionsForCountry } from '../utils/regions';
-import { playTechSound3 } from '../utils/technicianAudio';
+import { playTechTapSound, playTechRefusalSound, playTechSuccessSound } from '../utils/technicianAudio';
 
 interface GmaoOtherEquipmentCorrectionFormProps {
   otherEquipment: any;
@@ -640,6 +640,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    playTechSuccessSound();
     setSaving(true);
 
     const interventionDate = new Date().toISOString().split('T')[0];
@@ -731,7 +732,10 @@ export default function GmaoOtherEquipmentCorrectionForm({
         <div className="w-full flex flex-row items-stretch !m-0 !p-0 shrink-0 relative border-t-0" style={{ position: 'relative', borderTop: 'none' }}>
           <button
             type="button"
-            onClick={onCancel}
+            onClick={() => {
+              playTechRefusalSound();
+              onCancel();
+            }}
             id="btn-close-other-eq-modal"
             style={{
               ...rowActionButton18Style,
@@ -751,7 +755,10 @@ export default function GmaoOtherEquipmentCorrectionForm({
 
           <button
             type="button"
-            onClick={handleToggleReduce}
+            onClick={() => {
+              playTechTapSound();
+              handleToggleReduce();
+            }}
             id="btn-toggle-reduce-other-eq"
             style={{
               width: '33.3333%',
@@ -1298,8 +1305,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
                       right: '8px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      height: '28px',
-                      width: '28px',
+                      height: '34px',
+                      width: '34px',
                       objectFit: 'contain',
                       cursor: 'pointer',
                       zIndex: 10,
@@ -1369,8 +1376,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
                       right: '8px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      height: '28px',
-                      width: '28px',
+                      height: '34px',
+                      width: '34px',
                       objectFit: 'contain',
                       cursor: 'pointer',
                       zIndex: 10,
@@ -1396,8 +1403,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
                       right: '8px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      height: '28px',
-                      width: '28px',
+                      height: '34px',
+                      width: '34px',
                       objectFit: 'contain',
                       cursor: 'pointer',
                       zIndex: 10,
@@ -1426,8 +1433,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
                       right: '8px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      height: '28px',
-                      width: '28px',
+                      height: '34px',
+                      width: '34px',
                       objectFit: 'contain',
                       cursor: 'pointer',
                       zIndex: 10,
@@ -1453,8 +1460,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
                       right: '8px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      height: '28px',
-                      width: '28px',
+                      height: '34px',
+                      width: '34px',
                       objectFit: 'contain',
                       cursor: 'pointer',
                       zIndex: 10,
@@ -1480,8 +1487,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
                       right: '8px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      height: '28px',
-                      width: '28px',
+                      height: '34px',
+                      width: '34px',
                       objectFit: 'contain',
                       cursor: 'pointer',
                       zIndex: 10,

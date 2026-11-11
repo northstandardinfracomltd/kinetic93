@@ -28,6 +28,7 @@ import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT
 import { uploadMediaToFirebase } from '../firebase';
 import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile, auth, findTenantInList, KNOWN_TENANTS_REGISTRY, ensureTenantMembersClient, ensureTenantCustomLocationNames } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { fetchGoogleDriveStatus, ensureGoogleDriveFolderSetup } from '../utils/googleDrive';
 import { getAppsScriptUrl, saveAppsScriptUrl, triggerEmail2TechnicianConnexion, triggerEmail3AdminConnexion, triggerEmailNewMemberAdded, sendScriptEmail } from '../utils/emailService';
 import { setLanguage, t } from '../utils/translate';
 import { REGIONS_FRANCAISES, getLocationCustomName } from '../utils';
@@ -1993,12 +1994,13 @@ export default function SettingsModal({
     };
   };
 
-  const persistGoogleDriveForTenant = async (active: boolean, email: string, token: string) => {
+  const persistGoogleDriveForTenant = async (active: boolean, email: string, token: string, folderId?: string) => {
     const activeTid = propTenantId || myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
     try {
-      const existing = await fetchCollectionFromFirestore<any>('api_connectors', activeTid);
-      const baseObj = existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {};
-      const updatedConnectors = {
+      const rawExisting = await fetchCollectionFromFirestore<any>('api_connectors', activeTid);
+      const existing = Array.isArray(rawExisting) ? rawExisting[0] : rawExisting;
+      const baseObj = existing && typeof existing === 'object' ? existing : {};
+      const updatedConnectors: any = {
         ...baseObj,
         tenantId: activeTid,
         googleDriveActive: active,
@@ -2006,6 +2008,9 @@ export default function SettingsModal({
         googleDriveAccessToken: token,
         updatedAt: new Date().toISOString(),
       };
+      if (folderId !== undefined) {
+        updatedConnectors.googleDriveFolderId = folderId;
+      }
       await saveCollectionToFirestore('api_connectors', updatedConnectors, activeTid);
       if (onConnectorsUpdated) {
         onConnectorsUpdated();
@@ -2016,6 +2021,9 @@ export default function SettingsModal({
   };
 
   const handleGoogleDriveToggle = async (checked: boolean) => {
+    const activeTid = propTenantId || myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+    const previouslyLinked = Boolean(googleDriveActive && googleDriveEmail);
+
     if (checked) {
       try {
         const provider = new GoogleAuthProvider();
@@ -2031,22 +2039,28 @@ export default function SettingsModal({
           throw new Error("Impossible d'obtenir le jeton d'accès OAuth Google Drive.");
         }
 
+        const folderId = await ensureGoogleDriveFolderSetup(token, activeTid);
+
         setGoogleDriveActive(true);
         setGoogleDriveEmail(email);
         setGoogleDriveAccessToken(token);
-        localStorage.setItem(`defib_${myTenantId}_google_drive_active`, 'true');
+        localStorage.setItem(`defib_${activeTid}_google_drive_active`, 'true');
         localStorage.setItem('defib_google_drive_active', 'true');
-        localStorage.setItem(`defib_${myTenantId}_google_drive_email`, email);
+        localStorage.setItem(`defib_${activeTid}_google_drive_email`, email);
         localStorage.setItem('defib_google_drive_email', email);
-        localStorage.setItem(`defib_${myTenantId}_google_drive_token`, token);
+        localStorage.setItem(`defib_${activeTid}_google_drive_token`, token);
         localStorage.setItem('defib_google_drive_token', token);
-        await persistGoogleDriveForTenant(true, email, token);
+        if (folderId) {
+          localStorage.setItem(`defib_${activeTid}_google_drive_folder_id`, folderId);
+        }
+        await persistGoogleDriveForTenant(true, email, token, folderId || undefined);
         window.dispatchEvent(new Event('google-drive-status-changed'));
       } catch (err: any) {
         console.error("Google Drive connection failed with Firebase popup, falling back:", err);
-        // Fallback for custom clients if popup cancelled or domain restricted
         if (err.code === 'auth/popup-closed-by-user') {
-          setGoogleDriveActive(false);
+          if (!previouslyLinked) {
+            setGoogleDriveActive(false);
+          }
           return;
         }
         try {
@@ -2103,34 +2117,42 @@ export default function SettingsModal({
                   
                   const userinfo = userinfoRes.ok ? await userinfoRes.json() : {};
                   const email = userinfo.email || 'connected-account@google.com';
+                  const folderId = await ensureGoogleDriveFolderSetup(token, activeTid);
 
                   setGoogleDriveActive(true);
                   setGoogleDriveEmail(email);
                   setGoogleDriveAccessToken(token);
-                  localStorage.setItem(`defib_${myTenantId}_google_drive_active`, 'true');
+                  localStorage.setItem(`defib_${activeTid}_google_drive_active`, 'true');
                   localStorage.setItem('defib_google_drive_active', 'true');
-                  localStorage.setItem(`defib_${myTenantId}_google_drive_email`, email);
+                  localStorage.setItem(`defib_${activeTid}_google_drive_email`, email);
                   localStorage.setItem('defib_google_drive_email', email);
-                  localStorage.setItem(`defib_${myTenantId}_google_drive_token`, token);
+                  localStorage.setItem(`defib_${activeTid}_google_drive_token`, token);
                   localStorage.setItem('defib_google_drive_token', token);
-                  await persistGoogleDriveForTenant(true, email, token);
+                  if (folderId) {
+                    localStorage.setItem(`defib_${activeTid}_google_drive_folder_id`, folderId);
+                  }
+                  await persistGoogleDriveForTenant(true, email, token, folderId || undefined);
                   window.dispatchEvent(new Event('google-drive-status-changed'));
                 }
               }
             } catch (e: any) {
               clearInterval(pollTimer);
-              setGoogleDriveActive(false);
-              localStorage.setItem(`defib_${myTenantId}_google_drive_active`, 'false');
-              localStorage.setItem('defib_google_drive_active', 'false');
-              window.dispatchEvent(new Event('google-drive-status-changed'));
+              if (!previouslyLinked) {
+                setGoogleDriveActive(false);
+                localStorage.setItem(`defib_${activeTid}_google_drive_active`, 'false');
+                localStorage.setItem('defib_google_drive_active', 'false');
+                window.dispatchEvent(new Event('google-drive-status-changed'));
+              }
               alert("Erreur de connexion Google Drive : " + (e.message || e));
             }
           }, 500);
         } catch (fallbackErr: any) {
-          setGoogleDriveActive(false);
-          localStorage.setItem(`defib_${myTenantId}_google_drive_active`, 'false');
-          localStorage.setItem('defib_google_drive_active', 'false');
-          window.dispatchEvent(new Event('google-drive-status-changed'));
+          if (!previouslyLinked) {
+            setGoogleDriveActive(false);
+            localStorage.setItem(`defib_${activeTid}_google_drive_active`, 'false');
+            localStorage.setItem('defib_google_drive_active', 'false');
+            window.dispatchEvent(new Event('google-drive-status-changed'));
+          }
           alert("Erreur de connexion Google Drive : " + (fallbackErr.message || fallbackErr));
         }
       }
@@ -2138,13 +2160,14 @@ export default function SettingsModal({
       setGoogleDriveActive(false);
       setGoogleDriveEmail('');
       setGoogleDriveAccessToken('');
-      localStorage.setItem(`defib_${myTenantId}_google_drive_active`, 'false');
+      localStorage.setItem(`defib_${activeTid}_google_drive_active`, 'false');
       localStorage.setItem('defib_google_drive_active', 'false');
-      localStorage.removeItem(`defib_${myTenantId}_google_drive_email`);
+      localStorage.removeItem(`defib_${activeTid}_google_drive_email`);
       localStorage.removeItem('defib_google_drive_email');
-      localStorage.removeItem(`defib_${myTenantId}_google_drive_token`);
+      localStorage.removeItem(`defib_${activeTid}_google_drive_token`);
       localStorage.removeItem('defib_google_drive_token');
-      await persistGoogleDriveForTenant(false, '', '');
+      localStorage.removeItem(`defib_${activeTid}_google_drive_folder_id`);
+      await persistGoogleDriveForTenant(false, '', '', '');
       window.dispatchEvent(new Event('google-drive-status-changed'));
     }
   };
@@ -2187,9 +2210,15 @@ export default function SettingsModal({
       setAtlasanteActive(localStorage.getItem(`defib_${activeTenant}_atlasante_active`) === 'true');
       setAtlasanteDeclarantId('');
       setAtlasanteUrlAuth('https://catalogue.atlasante.fr/api/login');
-      setGoogleDriveActive(localStorage.getItem(`defib_${activeTenant}_google_drive_active`) === 'true');
-      setGoogleDriveEmail(localStorage.getItem(`defib_${activeTenant}_google_drive_email`) || '');
-      setGoogleDriveAccessToken(localStorage.getItem(`defib_${activeTenant}_google_drive_token`) || '');
+      setGoogleDriveActive(localStorage.getItem(`defib_${activeTenant}_google_drive_active`) === 'true' || localStorage.getItem('defib_google_drive_active') === 'true');
+      setGoogleDriveEmail(localStorage.getItem(`defib_${activeTenant}_google_drive_email`) || localStorage.getItem('defib_google_drive_email') || '');
+      setGoogleDriveAccessToken(localStorage.getItem(`defib_${activeTenant}_google_drive_token`) || localStorage.getItem('defib_google_drive_token') || '');
+
+      fetchGoogleDriveStatus(activeTenant).then(status => {
+        setGoogleDriveActive(status.active);
+        setGoogleDriveEmail(status.email || '');
+        setGoogleDriveAccessToken(status.accessToken || '');
+      }).catch(() => {});
 
       fetchCollectionFromFirestore<any>('api_connectors', activeTenant).then(rawData => {
         const data = Array.isArray(rawData) ? rawData[0] : rawData;

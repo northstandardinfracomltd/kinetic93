@@ -853,7 +853,7 @@ export async function triggerEmailClientSignaturePin(
   const cleanPin = (pinCode || '').trim();
 
   const subject = `${tenantCommercialName} : ${cleanPin} est votre PIN de signature à communiquer au technicien.`;
-  const body = `Bonjour, Afin de valider l’intervention de notre technicien, merci de lui transmettre le code PIN suivant : ${cleanPin}. Vous pouvez modifier votre signature à tout moment depuis votre espace client.`;
+  const body = `Bonjour, Afin de valider l’intervention de notre technicien, merci de lui transmettre le code PIN suivant : ${cleanPin}. Il s’agit d’une signature électronique. Vous pouvez en savoir plus depuis votre espace client.`;
 
   return sendScriptEmail({
     to: recipientList,

@@ -595,6 +595,139 @@ export default function AutresMaterielsTab({
   };
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isHelpFaqOpen, setIsHelpFaqOpen] = useState(false);
+  const [selectedHelpFaqIndex, setSelectedHelpFaqIndex] = useState<number | null>(null);
+  const [helpIntroTyped, setHelpIntroTyped] = useState('');
+  const [helpAnswerTyped, setHelpAnswerTyped] = useState('');
+  const [helpAnswerDone, setHelpAnswerDone] = useState(false);
+  const [helpResetTick, setHelpResetTick] = useState(0);
+  const helpChatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const HELP_FAQ_ITEMS = useMemo(() => [
+    {
+      q: "À quoi sert l’onglet « Autres Matériels » ?",
+      a: "Vous y trouverez l’infogérance et la traçabilité de l’ensemble des matériels enregistrés autres que des défibrillateurs. Il peut notamment s’agir d’extincteurs, de purificateur d’air, de BIMP, etc.",
+    },
+    {
+      q: "Comment fonctionne le filtre « Récemment » ?",
+      a: "Il affiche uniquement les matériels récemment ajoutés ou modifiés.",
+    },
+    {
+      q: "Comment fonctionne le filtre « Pro.Main.Urgente » ?",
+      a: "Il affiche les matériels dont au moins une date critique est dépassée (alerte rouge) ou arrive à échéance sous 3 mois (alerte orange). C’est le filtre idéal pour identifier les interventions prioritaires.",
+    },
+    {
+      q: "Comment fonctionne le filtre « Indicatif Postal » ?",
+      a: "Il filtre les matériels selon leur département. La recherche s’effectue en sélectionnant le code départemental à deux chiffres (ex. : 03 ou 33) et se base sur le code postal renseigné.",
+    },
+    {
+      q: "À quoi sert le bouton « Actualiser Données » ?",
+      a: "Si vous travaillez à plusieurs sur différents postes, ce bouton permet de synchroniser l'affichage instantanément avec les dernières modifications enregistrées.",
+    },
+    {
+      q: "Comment accéder à la cartographie ?",
+      a: "Cliquez sur le menu contextuel (les trois points gris), puis sélectionnez Consulter la cartographie.",
+    },
+    {
+      q: "Comment adapter l’affichage à la taille de l’écran ?",
+      a: "Cliquez sur le menu contextuel (les trois points gris), puis sélectionnez Minimiser et ajuster l’affichage.",
+    },
+    {
+      q: "Comment masquer certaines colonnes du tableau ?",
+      a: "Cliquez sur le menu contextuel (les trois points gris), puis sélectionnez Gérer la visibilité des colonnes.",
+    },
+    {
+      q: "À quoi sert l’accès aux feuilles de calcul (Google Sheets) ?",
+      a: "Par principe de redondance, vos données sont synchronisées entre le serveur et une feuille de calcul en ligne. Ce format vous permet de modifier directement vos données en masse, ou encore de brancher des outils d'automatisation externes (ex. : Zapier, Make, n8n).",
+    },
+    {
+      q: "Comment rechercher un appareil spécifique ?",
+      a: "Utilisez la barre de recherche située en haut à droite pour rechercher par numéro de série, identifiant interne ou numéro de lot. Saisissez au moins 3 caractères pour lancer la requête.",
+    },
+    {
+      q: "Comment créer un matériel à l’unité ?",
+      a: "Cliquez sur le bouton Nouveau situé en haut à droite de l'écran.",
+    },
+    {
+      q: "Comment supprimer un matériel ?",
+      a: "Sur la ligne du matériel concerné, cliquez sur le bouton Supprimer situé dans la colonne des actions.",
+    },
+    {
+      q: "Comment modifier un matériel?",
+      a: "Cliquez directement sur la ligne du matériel ou sur le bouton Modifier dans la colonne des actions.",
+    },
+    {
+      q: "Comment modifier plusieurs matériels en masse ?",
+      a: "Cochez les cases à gauche des appareils à modifier. Dans la barre d'outils supérieure qui apparaît, cliquez sur Corriger. Un volet latéral s'ouvre : sélectionnez le ou les champs à mettre à jour et appliquez les nouvelles valeurs.",
+    },
+    {
+      q: "Comment épingler des matériels en haut de liste ?",
+      a: "Cochez la case à gauche des lignes souhaitées, puis cliquez sur Dés/Épingler dans la barre supérieure. Un défibrillateur épinglé reste en haut du tableau et se distingue par une bordure bleue latérale.",
+    },
+    {
+      q: "Comment ajouter un ou plusieurs matériels à une tournée ?",
+      a: "Cochez les lignes concernées, puis cliquez sur Tournée dans la barre supérieure. Remarque : Si le bouton est grisé, vérifiez qu'aucun appareil sélectionné n'est déjà rattaché à une tournée en cours. Seules les tournées au statut « Brouillon » sont accessibles.",
+    },
+    {
+      q: "Comment forcer le retrait de matériels d'une tournée ?",
+      a: "Cochez les lignes souhaitées, puis cliquez sur Nettoyer des tournées dans la barre supérieure. Remarque : Si le bouton est grisé, la mission est déjà validée, en cours, ou la tournée n'est plus au statut « Brouillon ». Vous pouvez également effectuer cette action directement depuis l’onglet dédié aux tournées.",
+    },
+    {
+      q: "Qu'est-ce que le système de variables ?",
+      a: "Defibeo vous permet de personnaliser les listes déroulantes. Vous pouvez ajouter, modifier ou supprimer ces entrées depuis l’onglet Variables.",
+    },
+    {
+      q: "Qu'est-ce que l'identifiant ?",
+      a: "C'est une référence unique générée automatiquement par le logiciel pour chaque matériel (analogue à une immatriculation interne). Non modifiable, elle assure la traçabilité de la fiche en complément du numéro de série constructeur.",
+    },
+  ], []);
+
+  useEffect(() => {
+    if (!isHelpFaqOpen) {
+      setSelectedHelpFaqIndex(null);
+      setHelpIntroTyped('');
+      setHelpAnswerTyped('');
+      setHelpAnswerDone(false);
+      return;
+    }
+    const introText = "Ressources d’aide populaires :";
+    let idx = 0;
+    setHelpIntroTyped('');
+    const interval = window.setInterval(() => {
+      idx += 1;
+      setHelpIntroTyped(introText.slice(0, idx));
+      if (idx >= introText.length) {
+        window.clearInterval(interval);
+      }
+    }, 18);
+    return () => window.clearInterval(interval);
+  }, [isHelpFaqOpen, helpResetTick]);
+
+  useEffect(() => {
+    if (selectedHelpFaqIndex === null || !HELP_FAQ_ITEMS[selectedHelpFaqIndex]) {
+      setHelpAnswerTyped('');
+      setHelpAnswerDone(false);
+      return;
+    }
+    const fullAnswer = HELP_FAQ_ITEMS[selectedHelpFaqIndex].a;
+    let idx = 0;
+    setHelpAnswerTyped('');
+    setHelpAnswerDone(false);
+    const interval = window.setInterval(() => {
+      idx += 2;
+      if (idx >= fullAnswer.length) {
+        setHelpAnswerTyped(fullAnswer);
+        setHelpAnswerDone(true);
+        window.clearInterval(interval);
+      } else {
+        setHelpAnswerTyped(fullAnswer.slice(0, idx));
+      }
+      if (helpChatScrollRef.current) {
+        helpChatScrollRef.current.scrollTop = helpChatScrollRef.current.scrollHeight;
+      }
+    }, 14);
+    return () => window.clearInterval(interval);
+  }, [selectedHelpFaqIndex, HELP_FAQ_ITEMS]);
 
   // Pinned items state (persisted in localStorage)
   const [pinnedOtherIds, setPinnedOtherIds] = useState<string[]>(() => {
@@ -1902,6 +2035,24 @@ export default function AutresMaterielsTab({
 
               {/* Both search and buttons are placed directly next to the title */}
               <div className="flex flex-wrap items-center gap-3">
+                {/* Button Aide */}
+                <button
+                  type="button"
+                  id="btn-autres-materiels-help"
+                  onClick={() => setIsHelpFaqOpen(true)}
+                  style={{
+                    ...customButtonStyle,
+                    backgroundColor: '#0f172a',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    fontSize: '14px',
+                    padding: '4px 11px 5px 11px',
+                    boxShadow: 'none',
+                  }}
+                >
+                  Aide
+                </button>
+
                 {/* Field recherche (Search input) */}
                 <div className="relative w-full sm:w-64" style={{ width: '256px', minWidth: '256px', maxWidth: '256px' }}>
                   <style>{`
@@ -4495,6 +4646,286 @@ export default function AutresMaterielsTab({
           }}
         >
           {`${t("Génération du fichier...")}${Math.max(1, Math.min(100, Math.round(exportMainOuiProgress)))}%`}
+        </div>,
+        document.body
+      )}
+
+      {/* 📚 AIDE CHAT AGENT SIDE PANE 📚 */}
+      {isHelpFaqOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          id="autres-materiels-help-faq-side-pane-backdrop"
+          className="fixed inset-0 z-[99990] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            minHeight: '100dvh',
+            maxHeight: '100dvh',
+            zIndex: 99990,
+          }}
+          onClick={() => setIsHelpFaqOpen(false)}
+        >
+          <div
+            id="autres-materiels-help-faq-side-pane"
+            className="relative w-full sm:w-[480px] shadow-2xl flex flex-col shrink-0 transform transition-transform duration-200 ease-in-out"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              backgroundColor: '#F5F7FA',
+              borderLeft: 'none',
+              borderRadius: '0px',
+              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            }}
+          >
+            <div
+              ref={helpChatScrollRef}
+              className="flex-1 overflow-y-auto p-6 space-y-4 pb-28"
+            >
+              {/* Incoming typing text: Ressources d’aide populaires : (hidden once a question is selected) */}
+              {selectedHelpFaqIndex === null && (
+                <>
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        backgroundColor: 'transparent',
+                        fontSize: '18px',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {helpIntroTyped}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* System dropdown below */}
+                  <div className="w-full animate-fadeIn">
+                    <select
+                      id="autres-materiels-help-faq-select"
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setSelectedHelpFaqIndex(null);
+                        } else {
+                          setSelectedHelpFaqIndex(Number(val));
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        border: '1px solid #DCE1EA',
+                        borderRadius: '13px',
+                        padding: '9px 14px',
+                        fontSize: '18px',
+                        fontWeight: '100',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        cursor: 'pointer',
+                        boxSizing: 'border-box',
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                        backgroundImage: 'none',
+                        outline: 'none',
+                      }}
+                    >
+                      <option value="">Sélection d’un sujet.</option>
+                      {HELP_FAQ_ITEMS.map((item, idx) => (
+                        <option key={idx} value={String(idx)}>
+                          {item.q}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {/* First response: Selected Question */}
+              {selectedHelpFaqIndex !== null && HELP_FAQ_ITEMS[selectedHelpFaqIndex] && (
+                <>
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        padding: '15px 20px',
+                        background: 'rgb(233, 235, 239)',
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        color: '#000000',
+                        cursor: 'default',
+                        borderRadius: '13px',
+                        border: 'none',
+                        boxShadow: 'none',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {HELP_FAQ_ITEMS[selectedHelpFaqIndex].q}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Second response right after: Answer */}
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        backgroundColor: 'transparent',
+                        fontSize: '18px',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {helpAnswerTyped}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* After the answer is displayed: "Vous avez encore besoin d’aide ?" + full-width "Contacter l’assistance" + full-width "Recommencer" */}
+                  {helpAnswerDone && (
+                    <div className="flex flex-col items-start space-y-3 w-full animate-fadeIn">
+                      <div
+                        className="transition-all relative select-text w-full"
+                        style={{
+                          backgroundColor: 'transparent',
+                          fontSize: '18px',
+                          border: 'none',
+                          boxShadow: 'none',
+                          padding: 0,
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        <p
+                          className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                          style={{
+                            fontSize: '18px',
+                            color: '#000000',
+                            cursor: 'default',
+                          }}
+                        >
+                          Vous avez encore besoin d’aide ?
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsHelpFaqOpen(false);
+                          if (setActiveTab) setActiveTab('assistance');
+                        }}
+                        style={{
+                          width: '100%',
+                          backgroundColor: '#2e54ff',
+                          color: '#ffffff',
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'none',
+                        }}
+                        className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                      >
+                        Contacter l’assistance
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedHelpFaqIndex(null);
+                          setHelpAnswerTyped('');
+                          setHelpAnswerDone(false);
+                          setHelpResetTick((prev) => prev + 1);
+                        }}
+                        style={{
+                          width: '100%',
+                          backgroundColor: 'rgb(210, 45, 11)',
+                          color: '#ffffff',
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'none',
+                        }}
+                        className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                      >
+                        Recommencer
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Floating Bottom Button (Only Fermer) */}
+            <div
+              className="absolute bottom-0 left-0 right-0 p-6 flex gap-4 z-20 pointer-events-none"
+              style={{ backgroundColor: 'transparent', background: 'transparent' }}
+            >
+              <button
+                type="button"
+                onClick={() => setIsHelpFaqOpen(false)}
+                style={{
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  color: '#ffffff',
+                  borderRadius: '13px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  padding: '11px 22px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                }}
+                className="flex-1 text-center cursor-pointer animate-none pointer-events-auto"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

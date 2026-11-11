@@ -288,7 +288,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen
             type="button"
             onClick={onClose}
             style={{
-              backgroundColor: '#0f172a',
+              backgroundColor: 'rgb(210, 45, 11)',
               color: '#ffffff',
               borderRadius: '13px',
               fontSize: '18px',
@@ -301,7 +301,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({ isOpen
               border: 'none',
               boxShadow: 'none',
             }}
-            className="font-sans hover:bg-neutral-900 cursor-pointer transition-all mb-3"
+            className="font-sans hover:opacity-90 cursor-pointer transition-all mb-3"
           >
             Fermer
           </button>

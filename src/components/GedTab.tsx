@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { GedDocument, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { t } from '../utils/translate';
-import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from '../utils/googleDrive';
+import { fetchGoogleDriveStatus, uploadFileToGoogleDrive, getCachedGoogleDriveActiveSync } from '../utils/googleDrive';
 import { AlertCircle, CheckCircle, ExternalLink, Loader2 } from 'lucide-react';
 
 interface GedTabProps {
@@ -34,7 +34,7 @@ export default function GedTab({
   const [selectedGedFile, setSelectedGedFile] = useState<File | null>(null);
 
   // Google Drive connector state
-  const [googleDriveActive, setGoogleDriveActive] = useState(false);
+  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(() => getCachedGoogleDriveActiveSync(tenantId));
   const [googleDriveEmail, setGoogleDriveEmail] = useState('');
   const [googleDriveAccessToken, setGoogleDriveAccessToken] = useState('');
   const [isUploading, setIsUploading] = useState(false);

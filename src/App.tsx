@@ -2398,6 +2398,14 @@ export default function App() {
       img.src = url;
     });
   }, []);
+  const getMessageSignature = useCallback((m: any, idx?: number) => {
+    if (!m) return '';
+    return `${String(m.id || m._sheetRowNumber || idx || '').trim()}::${String(m.authorEmail || m.authorName || '').trim().toLowerCase()}::${String(m.dateStr || '').trim()}::${String(m.content || '').trim()}`;
+  }, []);
+
+  const tenantMessagesRef = useRef<TenantMessage[]>(tenantMessages);
+  tenantMessagesRef.current = tenantMessages;
+
   const [lastSeenMessageTime, setLastSeenMessageTime] = useState<number>(() => {
     try {
       const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
@@ -2408,13 +2416,86 @@ export default function App() {
     }
   });
 
+  const [seenMessageSignatures, setSeenMessageSignatures] = useState<string[] | null>(() => {
+    try {
+      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      const raw = localStorage.getItem(`defib_${activeTenant}_messages_seen_signatures`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    if (!tenantId) return;
+    try {
+      const rawTime = localStorage.getItem(`defib_${tenantId}_messages_last_seen`);
+      setLastSeenMessageTime(rawTime ? Number(rawTime) : 0);
+      const rawSigs = localStorage.getItem(`defib_${tenantId}_messages_seen_signatures`);
+      setSeenMessageSignatures(rawSigs ? JSON.parse(rawSigs) : null);
+    } catch {
+      setLastSeenMessageTime(0);
+      setSeenMessageSignatures(null);
+    }
+  }, [tenantId]);
+
+  const handleMessagesRead = useCallback((msgsToMark?: TenantMessage[]) => {
+    const now = Date.now();
+    setLastSeenMessageTime((prevTime) => (now - prevTime > 1000 ? now : prevTime));
+    const list = Array.isArray(msgsToMark) ? msgsToMark : (Array.isArray(tenantMessagesRef.current) ? tenantMessagesRef.current : []);
+    const currentSigs = list.map((m, idx) => getMessageSignature(m, idx)).filter(Boolean);
+    setSeenMessageSignatures((prev) => {
+      const prevArr = Array.isArray(prev) ? prev : [];
+      const prevSet = new Set(prevArr);
+      const hasNew = prev === null || currentSigs.some((s) => !prevSet.has(s));
+      if (!hasNew) {
+        return prev;
+      }
+      const merged = Array.from(new Set([...prevArr, ...currentSigs]));
+      try {
+        localStorage.setItem(`defib_${tenantId}_messages_seen_signatures`, JSON.stringify(merged));
+        localStorage.setItem(`defib_${tenantId}_messages_last_seen`, String(now));
+      } catch (_) {}
+      return merged;
+    });
+  }, [tenantId, getMessageSignature]);
+
+  // Seed seen signatures on first load if user had already seen messages previously, and auto-mark read while on messagerie tab
+  useEffect(() => {
+    if (!Array.isArray(tenantMessages)) return;
+    if (activeTab === 'messagerie' || isCanalMessagesOpen) {
+      handleMessagesRead(tenantMessages);
+      return;
+    }
+    if (seenMessageSignatures === null && tenantMessages.length > 0 && lastSeenMessageTime > 0) {
+      const initialSigs = tenantMessages
+        .filter((m) => !m?.createdAt || m.createdAt <= lastSeenMessageTime)
+        .map((m, idx) => getMessageSignature(m, idx))
+        .filter(Boolean);
+      setSeenMessageSignatures(initialSigs);
+      try {
+        localStorage.setItem(`defib_${tenantId}_messages_seen_signatures`, JSON.stringify(initialSigs));
+      } catch (_) {}
+    }
+  }, [tenantMessages, activeTab, isCanalMessagesOpen, tenantId, getMessageSignature, handleMessagesRead]);
+
   const unreadMessagesCount = useMemo(() => {
     if (isCanalMessagesOpen || activeTab === 'messagerie') return 0;
+    const list = Array.isArray(tenantMessages) ? tenantMessages : [];
+    if (list.length === 0) return 0;
+    if (Array.isArray(seenMessageSignatures)) {
+      const seenSet = new Set(seenMessageSignatures);
+      return list.filter((m, idx) => {
+        if (!m) return false;
+        const sig = getMessageSignature(m, idx);
+        return Boolean(sig && !seenSet.has(sig));
+      }).length;
+    }
     const myEmail = loggedUser?.email?.trim().toLowerCase() || '';
-    return (Array.isArray(tenantMessages) ? tenantMessages : []).filter(
+    return list.filter(
       (m) => m && m.createdAt > lastSeenMessageTime && m.authorEmail?.trim().toLowerCase() !== myEmail
     ).length;
-  }, [tenantMessages, lastSeenMessageTime, loggedUser?.email, isCanalMessagesOpen, activeTab]);
+  }, [tenantMessages, seenMessageSignatures, lastSeenMessageTime, loggedUser?.email, isCanalMessagesOpen, activeTab, getMessageSignature]);
 
   // Count sum of all messages from the last 3 hours (capped from 1 to 8, > 8 => '9+')
   const recentMessagesCount = useMemo(() => {
@@ -2431,12 +2512,6 @@ export default function App() {
     if (recentMessagesCount > 8) return '9+';
     return recentMessagesCount;
   }, [recentMessagesCount]);
-
-  const handleMessagesRead = useCallback(() => {
-    const now = Date.now();
-    setLastSeenMessageTime(now);
-    localStorage.setItem(`defib_${tenantId}_messages_last_seen`, String(now));
-  }, [tenantId]);
 
   // Real-time listener & periodic poll for tenant messages ONLY when spreadsheetMessagesInternes is configured
   useEffect(() => {
@@ -4366,26 +4441,35 @@ export default function App() {
             safeSetLocalStorage(`defib_${activeTid}_emargements`, JSON.stringify(items));
             break;
           case 'messagesInternes': {
-            const mappedMsgs: TenantMessage[] = items
-              .filter((m: any) => m && (m.content || m.text))
-              .map((m: any, idx: number) => {
-                const rawEmail = String(m.authorEmail || m['Nom Prénom (Username).'] || m['Nom Prénom (Username)'] || '').trim();
-                const rawName = String(m.authorName || m.sender || '').trim();
-                return {
-                  id: m.id || `msg_${m._sheetRowNumber || idx + 2}`,
-                  authorName: rawName || rawEmail || 'Membre',
-                  authorEmail: rawEmail || (rawName.includes('@') ? rawName : ''),
-                  tag: 'All',
-                  content: String(m.content || m.text || '').trim(),
-                  createdAt: Number(m.createdAt) || Date.now(),
-                  dateStr: String(m.dateStr || m.time || '').trim(),
-                  tenantId: activeTid,
-                  envId: activeTid,
-                  _sheetRowNumber: m._sheetRowNumber,
-                } as TenantMessage & { _sheetRowNumber?: number };
-              });
-            setTenantMessages((prev) => (JSON.stringify(prev) === JSON.stringify(mappedMsgs) ? prev : mappedMsgs));
-            safeSetLocalStorage(`defib_${activeTid}_tenant_messages`, JSON.stringify(mappedMsgs));
+            setTenantMessages((prev) => {
+              const prevById = new Map<string, number>();
+              if (Array.isArray(prev)) {
+                prev.forEach((pm) => {
+                  if (pm?.id && pm?.createdAt) prevById.set(String(pm.id), Number(pm.createdAt));
+                });
+              }
+              const mappedMsgs: TenantMessage[] = items
+                .filter((m: any) => m && (m.content || m.text))
+                .map((m: any, idx: number) => {
+                  const rawEmail = String(m.authorEmail || m['Nom Prénom (Username).'] || m['Nom Prénom (Username)'] || '').trim();
+                  const rawName = String(m.authorName || m.sender || '').trim();
+                  const msgId = m.id || `msg_${m._sheetRowNumber || idx + 2}`;
+                  return {
+                    id: msgId,
+                    authorName: rawName || rawEmail || 'Membre',
+                    authorEmail: rawEmail || (rawName.includes('@') ? rawName : ''),
+                    tag: 'All',
+                    content: String(m.content || m.text || '').trim(),
+                    createdAt: Number(m.createdAt) || prevById.get(String(msgId)) || 0,
+                    dateStr: String(m.dateStr || m.time || '').trim(),
+                    tenantId: activeTid,
+                    envId: activeTid,
+                    _sheetRowNumber: m._sheetRowNumber,
+                  } as TenantMessage & { _sheetRowNumber?: number };
+                });
+              safeSetLocalStorage(`defib_${activeTid}_tenant_messages`, JSON.stringify(mappedMsgs));
+              return JSON.stringify(prev) === JSON.stringify(mappedMsgs) ? prev : mappedMsgs;
+            });
             break;
           }
           case 'variables':
@@ -13135,10 +13219,10 @@ export default function App() {
                   className="relative flex flex-col"
                   style={{ gap: `${ITEM_GAP}px` }}
                 >
-                  {/* Sliding Green Active Bar */}
+                  {/* Sliding Green Active Bar (z-20 so it takes priority over status bars) */}
                   {resolvedActiveIndex !== -1 && (
                     <div
-                      className="absolute left-0 top-0 pointer-events-none z-10"
+                      className="absolute left-0 top-0 pointer-events-none z-20"
                       style={{
                         width: '6px',
                         height: `${ITEM_HEIGHT}px`,
@@ -13178,6 +13262,74 @@ export default function App() {
                           isSidebarCollapsed ? 'justify-center px-0' : 'gap-4 px-7'
                         } bg-transparent border-0 cursor-pointer text-left focus:outline-hidden`}
                       >
+                        {(item.id === 'messagerie' || item.id === 'fsm' || item.id === 'gmao') && (() => {
+                          let isRedAlert = false;
+                          if (item.id === 'messagerie') {
+                            isRedAlert = unreadMessagesCount > 0;
+                          } else if (item.id === 'fsm') {
+                            const aTrierCount = (Array.isArray(fsmTours) ? fsmTours : [])
+                              .filter((t: any) => t && (t.id === 'a-trier' || t.startDate === 'A trier'))
+                              .reduce((acc: number, t: any) => acc + (Array.isArray(t.missions) ? t.missions.length : 0), 0);
+                            isRedAlert = aTrierCount > 0;
+                          } else if (item.id === 'gmao') {
+                            const modCount = (Array.isArray(generatedReports) ? generatedReports : []).filter((rep: any) => {
+                              if (!rep) return false;
+                              const isFormation =
+                                rep.equipmentType === 'Formation' ||
+                                rep.equipmentType?.toLowerCase()?.includes('formation') ||
+                                rep.defibSnapshot?.categorie === 'Formation' ||
+                                rep.defibSnapshot?.categorie?.toLowerCase()?.includes('formation') ||
+                                !!rep.formationId ||
+                                rep.defibIdentifiant === 'Formation';
+                              if (isFormation) return false;
+
+                              if (!gmaoIncludeAutresMateriels) {
+                                const otherCategoryKeywords = ['extincteur', 'alarme', 'éclairage', 'eclairage', 'ria', 'ssi', 'désenfumage', 'desenfumage', 'trousse', 'pharmacie', 'autre matériel', 'autre materiel'];
+                                const eqTypeLower = String(rep.equipmentType || '').trim().toLowerCase();
+                                const snapCatLower = String(rep.defibSnapshot?.categorie || '').trim().toLowerCase();
+                                const isExplicitOtherCategory =
+                                  otherCategoryKeywords.some(k => eqTypeLower.includes(k) || snapCatLower.includes(k));
+                                const isKnownOtherEquipment =
+                                  Boolean(rep.defibIdentifiant) &&
+                                  Array.isArray(otherEquipments) &&
+                                  otherEquipments.some((oe: any) => oe.identifiant && oe.identifiant === rep.defibIdentifiant) &&
+                                  !(Array.isArray(defibrillateurs) && defibrillateurs.some((d: any) => d.identifiant && d.identifiant === rep.defibIdentifiant));
+                                const isOtherEquipment =
+                                  isExplicitOtherCategory ||
+                                  (rep.title && rep.title.trim().toUpperCase().startsWith("RAPPORT TECHNIQUE - ") && !rep.title.toUpperCase().includes("DÉFIBRILLATEUR") && !rep.title.toUpperCase().includes("DEFIBRILLATEUR")) ||
+                                  isKnownOtherEquipment;
+
+                                if (isOtherEquipment) return false;
+                              }
+
+                              const isEffectue =
+                                rep.missionStatus === 'Effectué' ||
+                                rep.conforme === 'Conforme' ||
+                                rep.conforme === 'Non Conforme' ||
+                                rep.conforme === 'Intervention impossible';
+
+                              const isUpcoming = !isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture);
+
+                              return !rep.validated && !isUpcoming;
+                            }).length;
+                            isRedAlert = modCount > 0;
+                          }
+
+                          if (!isRedAlert) return null;
+
+                          return (
+                            <div
+                              id={`${item.id}-nav-status-bar`}
+                              className="absolute left-0 top-0 pointer-events-none z-10"
+                              style={{
+                                width: '6px',
+                                height: `${ITEM_HEIGHT}px`,
+                                backgroundColor: 'rgb(210, 45, 11)',
+                                borderRadius: '0px 8px 8px 0px',
+                              }}
+                            />
+                          );
+                        })()}
                         <div className="flex items-center gap-4 min-w-0">
                           <img
                             src={showNoirIcon ? item.iconNoir : item.iconGris}

@@ -1548,6 +1548,171 @@ export default function DefibTab({
     }
   }, [selectedIds.length, isBulkEditOpen]);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [isHelpFaqOpen, setIsHelpFaqOpen] = useState(false);
+  const [selectedHelpFaqIndex, setSelectedHelpFaqIndex] = useState<number | null>(null);
+  const [helpIntroTyped, setHelpIntroTyped] = useState('');
+  const [helpAnswerTyped, setHelpAnswerTyped] = useState('');
+  const [helpAnswerDone, setHelpAnswerDone] = useState(false);
+  const [helpResetTick, setHelpResetTick] = useState(0);
+  const helpChatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const HELP_FAQ_ITEMS = useMemo(() => [
+    {
+      q: "À quoi sert l’onglet « Défibrillateurs » ?",
+      a: "Vous y trouverez l’infogérance et la traçabilité de l’ensemble des défibrillateurs enregistrés : identification, fiche client, électrode adulte ou pédiatrique, batterie, etc.",
+    },
+    {
+      q: "Que signifient « Main. Oui » et « Main. Non » dans les filtres en gélule ?",
+      a: "Il s’agit de deux filtres d’affichage permettant d’isoler les défibrillateurs avec ou sans maintenance autorisée. Vous pouvez modifier ce paramètre dans la section 9 (Catégories), à l’aide du champ « Maintenance autorisée ».",
+    },
+    {
+      q: "Comment fonctionne le filtre « Récemment » ?",
+      a: "Il affiche uniquement les défibrillateurs récemment ajoutés ou modifiés.",
+    },
+    {
+      q: "Comment fonctionne le filtre « Pro.Main.Urgente » ?",
+      a: "Il affiche les défibrillateurs dont au moins une date critique (prochaine visite, péremption des électrodes ou de la batterie, etc.) est dépassée (alerte rouge) ou arrive à échéance sous 3 mois (alerte orange). C’est le filtre idéal pour identifier les interventions prioritaires.",
+    },
+    {
+      q: "Comment fonctionne le filtre « Indicatif Postal » ?",
+      a: "Il filtre les défibrillateurs selon leur département. La recherche s’effectue en sélectionnant le code départemental à deux chiffres (ex. : 03 ou 33) et se base sur le code postal renseigné.",
+    },
+    {
+      q: "À quoi sert le bouton « Actualiser Données » ?",
+      a: "Si vous travaillez à plusieurs sur différents postes, ce bouton permet de synchroniser l'affichage instantanément avec les dernières modifications enregistrées.",
+    },
+    {
+      q: "Que signifie la gélule « % Conforme » ?",
+      a: "Il s'agit du taux de défibrillateurs conformes par rapport à votre parc. Il est calculé automatiquement à partir de l'état des dates critiques (visites périodiques, dates de péremption, etc.).",
+    },
+    {
+      q: "Comment appliquer des filtres avancés ?",
+      a: "Cliquez sur le menu contextuel (les trois points gris), sélectionnez Appliquer des filtres, définissez vos critères, puis cliquez sur Appliquer.",
+    },
+    {
+      q: "Comment accéder à la cartographie ?",
+      a: "Cliquez sur le menu contextuel (les trois points gris), puis sélectionnez Consulter la cartographie.",
+    },
+    {
+      q: "Comment adapter l’affichage à la taille de l’écran ?",
+      a: "Cliquez sur le menu contextuel (les trois points gris), puis sélectionnez Minimiser et ajuster l’affichage.",
+    },
+    {
+      q: "Comment masquer certaines colonnes du tableau ?",
+      a: "Cliquez sur le menu contextuel (les trois points gris), puis sélectionnez Gérer la visibilité des colonnes.",
+    },
+    {
+      q: "À quoi sert l’accès aux feuilles de calcul (Google Sheets) ?",
+      a: "Par principe de redondance, vos données sont synchronisées entre le serveur et une feuille de calcul en ligne. Ce format vous permet de modifier directement vos données en masse, ou encore de brancher des outils d'automatisation externes (ex. : Zapier, Make, n8n).",
+    },
+    {
+      q: "Comment exporter tous les défibrillateurs avec maintenance autorisée ?",
+      a: "Cliquez sur le menu contextuel (les trois points gris), puis sélectionnez Exporter Tous Main. Oui.",
+    },
+    {
+      q: "Comment consulter les statistiques de volume ?",
+      a: "En sélectionnant la vue « Tous », une synthèse s'affiche en bas de page sous la forme : « Affichage initial : X derniers ajoutés ou modifiés (X au total, X Main. Oui et X Main. Non) ».",
+    },
+    {
+      q: "Comment rechercher un appareil spécifique ?",
+      a: "Utilisez la barre de recherche située en haut à droite pour rechercher par numéro de série, identifiant interne ou numéro de lot. Saisissez au moins 3 caractères pour lancer la requête.",
+    },
+    {
+      q: "Comment créer un défibrillateur à l’unité ?",
+      a: "Cliquez sur le bouton Nouveau situé en haut à droite de l'écran.",
+    },
+    {
+      q: "Comment supprimer un défibrillateur ?",
+      a: "Sur la ligne du défibrillateur concerné, cliquez sur le bouton Supprimer situé dans la colonne des actions.",
+    },
+    {
+      q: "Comment modifier une fiche défibrillateur ?",
+      a: "Cliquez directement sur la ligne de l’appareil ou sur le bouton Modifier dans la colonne des actions.",
+    },
+    {
+      q: "Comment modifier plusieurs défibrillateurs en masse ?",
+      a: "Cochez les cases à gauche des appareils à modifier. Dans la barre d'outils supérieure qui apparaît, cliquez sur Corriger. Un volet latéral s'ouvre : sélectionnez le ou les champs à mettre à jour et appliquez les nouvelles valeurs.",
+    },
+    {
+      q: "Comment épingler des appareils en haut de liste ?",
+      a: "Cochez la case à gauche des lignes souhaitées, puis cliquez sur Dés/Épingler dans la barre supérieure. Un défibrillateur épinglé reste en haut du tableau et se distingue par une bordure bleue latérale.",
+    },
+    {
+      q: "Comment ajouter un ou plusieurs défibrillateurs à une tournée ?",
+      a: "Cochez les lignes concernées, puis cliquez sur Tournée dans la barre supérieure.\n\nRemarque : Si le bouton est grisé, vérifiez qu'aucun appareil sélectionné n'est déjà rattaché à une tournée en cours. Seules les tournées au statut « Brouillon » sont accessibles.",
+    },
+    {
+      q: "Comment télécharger une fiche récapitulative PDF pour plusieurs appareils ?",
+      a: "Cochez les lignes concernées, puis cliquez sur le bouton PDF dans la barre supérieure.",
+    },
+    {
+      q: "Comment réaliser une extraction CSV personnalisée ?",
+      a: "Cochez les lignes à exporter, puis cliquez sur le bouton CSV dans la barre supérieure.",
+    },
+    {
+      q: "Comment forcer le retrait de défibrillateurs d'une tournée ?",
+      a: "Cochez les lignes souhaitées, puis cliquez sur Nettoyer des tournées dans la barre supérieure. Remarque : Si le bouton est grisé, la mission est déjà validée, en cours, ou la tournée n'est plus au statut « Brouillon ». Vous pouvez également effectuer cette action directement depuis l’onglet dédié aux tournées.",
+    },
+    {
+      q: "Comment exporter un fichier CSV compatible avec Geo-DAE / Atlasanté ?",
+      a: "Cochez les lignes correspondantes, puis cliquez sur le bouton CSV Atlasanté dans la barre supérieure.",
+    },
+    {
+      q: "Qu'est-ce que le système de variables ?",
+      a: "Defibeo vous permet de personnaliser les listes déroulantes de l'application (modèles d'appareils, fabricants, etc.). Vous pouvez ajouter, modifier ou supprimer ces entrées depuis l’onglet Variables.",
+    },
+    {
+      q: "Qu'est-ce que l'identifiant interne ?",
+      a: "C'est une référence unique générée automatiquement par le logiciel pour chaque appareil (analogue à une immatriculation interne). Non modifiable, elle assure la traçabilité de la fiche en complément du numéro de série constructeur.",
+    },
+  ], []);
+
+  useEffect(() => {
+    if (!isHelpFaqOpen) {
+      setSelectedHelpFaqIndex(null);
+      setHelpIntroTyped('');
+      setHelpAnswerTyped('');
+      setHelpAnswerDone(false);
+      return;
+    }
+    const introText = "Ressources d’aide populaires :";
+    let idx = 0;
+    setHelpIntroTyped('');
+    const interval = window.setInterval(() => {
+      idx += 1;
+      setHelpIntroTyped(introText.slice(0, idx));
+      if (idx >= introText.length) {
+        window.clearInterval(interval);
+      }
+    }, 18);
+    return () => window.clearInterval(interval);
+  }, [isHelpFaqOpen, helpResetTick]);
+
+  useEffect(() => {
+    if (selectedHelpFaqIndex === null || !HELP_FAQ_ITEMS[selectedHelpFaqIndex]) {
+      setHelpAnswerTyped('');
+      setHelpAnswerDone(false);
+      return;
+    }
+    const fullAnswer = HELP_FAQ_ITEMS[selectedHelpFaqIndex].a;
+    let idx = 0;
+    setHelpAnswerTyped('');
+    setHelpAnswerDone(false);
+    const interval = window.setInterval(() => {
+      idx += 2;
+      if (idx >= fullAnswer.length) {
+        setHelpAnswerTyped(fullAnswer);
+        setHelpAnswerDone(true);
+        window.clearInterval(interval);
+      } else {
+        setHelpAnswerTyped(fullAnswer.slice(0, idx));
+      }
+      if (helpChatScrollRef.current) {
+        helpChatScrollRef.current.scrollTop = helpChatScrollRef.current.scrollHeight;
+      }
+    }, 14);
+    return () => window.clearInterval(interval);
+  }, [selectedHelpFaqIndex, HELP_FAQ_ITEMS]);
   const [isLotScannerOpen, setIsLotScannerOpen] = useState(false);
   const [isSerieScannerOpen, setIsSerieScannerOpen] = useState(false);
   const [isLotAScannerOpen, setIsLotAScannerOpen] = useState(false);
@@ -5239,6 +5404,24 @@ export default function DefibTab({
 
               {/* Both search and buttons are placed directly next to the title */}
               <div className="flex flex-wrap items-center gap-3">
+                {/* Button Aide */}
+                <button
+                  type="button"
+                  id="btn-defib-help-formation"
+                  onClick={() => setIsHelpFaqOpen(true)}
+                  style={{
+                    ...customButtonStyle,
+                    backgroundColor: '#0f172a',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    fontSize: '14px',
+                    padding: '4px 11px 5px 11px',
+                    boxShadow: 'none',
+                  }}
+                >
+                  Aide
+                </button>
+
                 {/* Field recherche (Search input) */}
                 <div className="relative w-full sm:w-64" style={{ width: '256px', minWidth: '256px', maxWidth: '256px' }}>
                   <style>{`
@@ -12515,6 +12698,279 @@ export default function DefibTab({
                 }}
               >
                 {t("Ouvrir (nouvel onglet)")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 📚 AIDE & FORMATION CHAT AGENT SIDE PANE 📚 */}
+      {isHelpFaqOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          id="defib-help-faq-side-pane-backdrop"
+          className="fixed inset-0 z-[99990] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            width: '100vw',
+            height: '100vh',
+            minHeight: '100dvh',
+            maxHeight: '100dvh',
+            zIndex: 99990,
+          }}
+          onClick={() => setIsHelpFaqOpen(false)}
+        >
+          <div
+            id="defib-help-faq-side-pane"
+            className="relative w-full sm:w-[480px] shadow-2xl flex flex-col shrink-0 transform transition-transform duration-200 ease-in-out"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              backgroundColor: '#F5F7FA',
+              borderLeft: 'none',
+              borderRadius: '0px',
+              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            }}
+          >
+            <div
+              ref={helpChatScrollRef}
+              className="flex-1 overflow-y-auto p-6 space-y-4 pb-28"
+            >
+              {/* Incoming typing text: Ressources d’aide populaires : (hidden once a question is selected) */}
+              {selectedHelpFaqIndex === null && (
+                <>
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        backgroundColor: 'transparent',
+                        fontSize: '18px',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {helpIntroTyped}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* System dropdown below */}
+                  <div className="w-full animate-fadeIn">
+                    <select
+                      id="defib-help-faq-select"
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setSelectedHelpFaqIndex(null);
+                        } else {
+                          setSelectedHelpFaqIndex(Number(val));
+                        }
+                      }}
+                      style={{
+                        ...filterInputStyle,
+                        width: '100%',
+                        backgroundColor: '#ffffff',
+                        color: '#000000',
+                        border: '1px solid #DCE1EA',
+                        borderRadius: '13px',
+                        padding: '9px 14px',
+                        fontSize: '18px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="">Sélection d’un sujet.</option>
+                      {HELP_FAQ_ITEMS.map((item, idx) => (
+                        <option key={idx} value={String(idx)}>
+                          {item.q}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {/* First response: Selected Question */}
+              {selectedHelpFaqIndex !== null && HELP_FAQ_ITEMS[selectedHelpFaqIndex] && (
+                <>
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        padding: '15px 20px',
+                        background: 'rgb(233, 235, 239)',
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        color: '#000000',
+                        cursor: 'default',
+                        borderRadius: '13px',
+                        border: 'none',
+                        boxShadow: 'none',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {HELP_FAQ_ITEMS[selectedHelpFaqIndex].q}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Second response right after: Answer */}
+                  <div className="flex flex-col items-start animate-fadeIn">
+                    <div
+                      className="transition-all relative select-text w-full"
+                      style={{
+                        backgroundColor: 'transparent',
+                        fontSize: '18px',
+                        border: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        color: '#000000',
+                        cursor: 'default',
+                      }}
+                    >
+                      <p
+                        className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                        style={{
+                          fontSize: '18px',
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        {helpAnswerTyped}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* After the answer is displayed: "Vous avez encore besoin d’aide ?" + full-width "Contacter l’assistance" + full-width "Recommencer" */}
+                  {helpAnswerDone && (
+                    <div className="flex flex-col items-start space-y-3 w-full animate-fadeIn">
+                      <div
+                        className="transition-all relative select-text w-full"
+                        style={{
+                          backgroundColor: 'transparent',
+                          fontSize: '18px',
+                          border: 'none',
+                          boxShadow: 'none',
+                          padding: 0,
+                          color: '#000000',
+                          cursor: 'default',
+                        }}
+                      >
+                        <p
+                          className="leading-relaxed whitespace-pre-wrap break-words m-0 select-text"
+                          style={{
+                            fontSize: '18px',
+                            color: '#000000',
+                            cursor: 'default',
+                          }}
+                        >
+                          Vous avez encore besoin d’aide ?
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsHelpFaqOpen(false);
+                          if (setActiveTab) setActiveTab('assistance');
+                        }}
+                        style={{
+                          width: '100%',
+                          backgroundColor: '#2e54ff',
+                          color: '#ffffff',
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'none',
+                        }}
+                        className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                      >
+                        Contacter l’assistance
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedHelpFaqIndex(null);
+                          setHelpAnswerTyped('');
+                          setHelpAnswerDone(false);
+                          setHelpResetTick((prev) => prev + 1);
+                        }}
+                        style={{
+                          width: '100%',
+                          backgroundColor: 'rgb(210, 45, 11)',
+                          color: '#ffffff',
+                          borderRadius: '13px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          padding: '11px 22px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          boxShadow: 'none',
+                        }}
+                        className="w-full text-center cursor-pointer animate-none whitespace-nowrap"
+                      >
+                        Recommencer
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Floating Bottom Button (Only Fermer) */}
+            <div
+              className="absolute bottom-0 left-0 right-0 p-6 flex gap-4 z-20 pointer-events-none"
+              style={{ backgroundColor: 'transparent', background: 'transparent' }}
+            >
+              <button
+                type="button"
+                onClick={() => setIsHelpFaqOpen(false)}
+                style={{
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  color: '#ffffff',
+                  borderRadius: '13px',
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  padding: '11px 22px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                }}
+                className="flex-1 text-center cursor-pointer animate-none pointer-events-auto"
+              >
+                Fermer
               </button>
             </div>
           </div>

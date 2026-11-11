@@ -3,7 +3,7 @@ import { AchatFournisseur, Variable, CompanyInfo, getTenantSpreadsheetUrl, openT
 import { ShoppingBag, Eye, Trash2, Edit, Plus, FileText, Upload, Search, X } from 'lucide-react';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { t } from '../utils/translate';
-import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from '../utils/googleDrive';
+import { fetchGoogleDriveStatus, uploadFileToGoogleDrive, getCachedGoogleDriveActiveSync } from '../utils/googleDrive';
 
 interface AchatsFournisseursTabProps {
   achatsFournisseurs: AchatFournisseur[];
@@ -29,7 +29,7 @@ export default function AchatsFournisseursTab({
   const [pdfUrl, setPdfUrl] = useState<string | undefined>(undefined);
   const [pdfName, setPdfName] = useState<string | undefined>(undefined);
   const [isUploadingFile, setIsUploadingFile] = useState(false);
-  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(false);
+  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(() => getCachedGoogleDriveActiveSync());
   const [googleDriveAccessToken, setGoogleDriveAccessToken] = useState<string>('');
 
   const refreshGoogleDriveStatus = useCallback(async () => {
@@ -119,7 +119,16 @@ export default function AchatsFournisseursTab({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!googleDriveActive) {
+    let isActive = googleDriveActive;
+    let token = googleDriveAccessToken;
+    if (!isActive || !token) {
+      const fresh = await fetchGoogleDriveStatus();
+      isActive = fresh.active;
+      token = fresh.accessToken;
+      setGoogleDriveActive(isActive);
+      setGoogleDriveAccessToken(token);
+    }
+    if (!isActive) {
       alert("Le connecteur Google Drive n'est pas activé dans les paramètres du tenant.");
       return;
     }
@@ -127,7 +136,7 @@ export default function AchatsFournisseursTab({
     setPdfName(file.name);
     setIsUploadingFile(true);
     try {
-      const sharedDriveUrl = await uploadFileToGoogleDrive(googleDriveAccessToken, file);
+      const sharedDriveUrl = await uploadFileToGoogleDrive(token, file);
       setPdfUrl(sharedDriveUrl);
     } catch (err: any) {
       alert(err?.message || "Erreur lors de l'envoi sur Google Drive.");

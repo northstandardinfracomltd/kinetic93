@@ -10,9 +10,9 @@ import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { fetchCollectionFromFirestore, uploadMediaToFirebase } from '../firebase';
-import { fetchGoogleDriveStatus } from '../utils/googleDrive';
+import { fetchGoogleDriveStatus, uploadFileToGoogleDrive, getCachedGoogleDriveActiveSync, resolveEffectiveTenantId } from '../utils/googleDrive';
 import { generateReportModerationComment, mergeReportPostInterventionAlerts, buildFlatAlertFields } from '../utils/moderationComment';
-import { playTechSound3, playTechNavClickSound } from '../utils/technicianAudio';
+import { playTechTapSound, playTechRefusalSound, playTechSuccessSound } from '../utils/technicianAudio';
 import { triggerEmailClientSignaturePin } from '../utils/emailService';
 import {
   collectLocalInterventionReferences,
@@ -506,156 +506,7 @@ export default function GmaoCorrectionForm({
     });
   };
 
-  const getOrCreateDefibeoFolder = async (accessToken: string): Promise<string> => {
-    // Search for existing non-trashed folder named "Defibeo"
-    const query = encodeURIComponent("name = 'Defibeo' and mimeType = 'application/vnd.google-apps.folder' and trashed = false");
-    const searchResponse = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id)`,
-      {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
-
-    if (!searchResponse.ok) {
-      const errText = await searchResponse.text();
-      throw new Error(`Erreur lors de la recherche du dossier Defibeo : ${searchResponse.statusText} - ${errText}`);
-    }
-
-    const searchResult = await searchResponse.json();
-    if (searchResult.files && searchResult.files.length > 0) {
-      return searchResult.files[0].id;
-    }
-
-    // Create the folder if it doesn't exist
-    const createResponse = await fetch(
-      'https://www.googleapis.com/drive/v3/files',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: 'Defibeo',
-          mimeType: 'application/vnd.google-apps.folder',
-        }),
-      }
-    );
-
-    if (!createResponse.ok) {
-      const errText = await createResponse.text();
-      throw new Error(`Erreur lors de la création du dossier Defibeo : ${createResponse.statusText} - ${errText}`);
-    }
-
-    const createResult = await createResponse.json();
-    return createResult.id;
-  };
-
-  const makeFilePubliclyReadable = async (accessToken: string, fileId: string): Promise<void> => {
-    try {
-      const response = await fetch(
-        `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            role: 'reader',
-            type: 'anyone',
-          }),
-        }
-      );
-      if (!response.ok) {
-        console.warn(`Impossible de définir les permissions publiques sur le fichier ${fileId}:`, await response.text());
-      }
-    } catch (e) {
-      console.warn(`Erreur de permissions publiques pour le fichier ${fileId}:`, e);
-    }
-  };
-
-  const uploadFileToGoogleDrive = async (accessToken: string, file: File): Promise<string> => {
-    if (!accessToken) {
-      throw new Error("Le connecteur Google Drive n'est pas configuré ou est inactif. Veuillez l'activer dans les réglages.");
-    }
-
-    // Support mock for testing/preview environments if necessary
-    if (accessToken.startsWith('mock_')) {
-      if (file.size > 1024 * 1024) {
-        throw new Error("Le fichier est trop volumineux (max 1 Mo pour le stockage de secours).");
-      }
-      return await compressFileOrConvertToBase64(file);
-    }
-
-    try {
-      // 1. Find or create the Defibeo folder
-      const folderId = await getOrCreateDefibeoFolder(accessToken);
-
-      // 2. Upload file directly inside Defibeo folder
-      const metadata = {
-        name: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        parents: [folderId],
-      };
-
-      const formData = new FormData();
-      formData.append(
-        'metadata',
-        new Blob([JSON.stringify(metadata)], { type: 'application/json' })
-      );
-      formData.append('file', file);
-
-      const response = await fetch(
-        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        const isAuthError = response.status === 401 || 
-                            errorText.includes('UNAUTHENTICATED') || 
-                            errorText.includes('authError') || 
-                            errorText.includes('invalid credentials') || 
-                            errorText.includes('Invalid Credentials');
-        
-        if (isAuthError) {
-          throw new Error("Votre session Google Drive a expiré ou vos identifiants d'accès ne sont plus valides. Veuillez désactiver puis réactiver le connecteur Google Drive dans l'onglet des réglages de l'application (en cliquant sur la déconnexion/reconnexion) pour renouveler vos autorisations d'accès.");
-        }
-
-        throw new Error(`Échec de l'upload sur Google Drive : ${response.statusText} - ${errorText}`);
-      }
-
-      const result = await response.json();
-      
-      // 3. Make file accessible by link to avoid permission request dialogs for viewers
-      if (result.id) {
-        await makeFilePubliclyReadable(accessToken, result.id);
-      }
-
-      return result.webViewLink || `https://drive.google.com/file/d/${result.id}/view`;
-    } catch (err: any) {
-      console.error("Google Drive Upload Error:", err);
-      // Re-throw with user friendly text to block silent failures and let the UI display the clear error
-      const isAuthError = err?.message?.includes('401') || 
-                          err?.message?.includes('UNAUTHENTICATED') || 
-                          err?.message?.includes('authError') ||
-                          err?.message?.includes('credentials');
-      if (isAuthError) {
-        throw new Error("Session Google Drive expirée ou invalide. Veuillez désactiver puis réactiver le connecteur Google Drive dans les réglages pour renouveler vos accès.");
-      }
-      throw err;
-    }
-  };
+  // Google Drive upload is handled via ../utils/googleDrive uploadFileToGoogleDrive
 
   const getAvailableTraceabilities = React.useCallback((category?: string) => {
     const list: {
@@ -1209,7 +1060,7 @@ export default function GmaoCorrectionForm({
   const [photoResultatTestUrl, setPhotoResultatTestUrl] = useState(report?.photoResultatTestUrl || '');
 
   // Google Drive Credentials state
-  const [googleDriveActive, setGoogleDriveActive] = useState(false);
+  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(() => getCachedGoogleDriveActiveSync());
   const [googleDriveEmail, setGoogleDriveEmail] = useState('');
   const [googleDriveAccessToken, setGoogleDriveAccessToken] = useState('');
 
@@ -1655,7 +1506,7 @@ export default function GmaoCorrectionForm({
 
   useEffect(() => {
     const refreshDrive = () => {
-      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      const activeTenant = resolveEffectiveTenantId();
       fetchGoogleDriveStatus(activeTenant)
         .then(status => {
           setGoogleDriveActive(status.active);
@@ -2260,8 +2111,22 @@ export default function GmaoCorrectionForm({
   const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-    
-    if (!googleDriveActive) {
+
+    const activeTenant = resolveEffectiveTenantId();
+    let isActive = googleDriveActive;
+    let token = googleDriveAccessToken;
+    if (!isActive || !token) {
+      try {
+        const fresh = await fetchGoogleDriveStatus(activeTenant);
+        isActive = fresh.active;
+        token = fresh.accessToken;
+        setGoogleDriveActive(isActive);
+        setGoogleDriveEmail(fresh.email);
+        setGoogleDriveAccessToken(token);
+      } catch (_) {}
+    }
+
+    if (!isActive) {
       setUploadError("Le connecteur Google Drive est désactivé. Veuillez l'activer dans les réglages.");
       return;
     }
@@ -2278,7 +2143,7 @@ export default function GmaoCorrectionForm({
       const uploadedList = [...attachments];
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const driveUrl = await uploadFileToGoogleDrive(googleDriveAccessToken, file);
+        const driveUrl = await uploadFileToGoogleDrive(token, file, activeTenant);
         uploadedList.push({
           name: file.name,
           url: driveUrl,
@@ -2704,6 +2569,7 @@ export default function GmaoCorrectionForm({
       };
 
       if (!hasClickedOnce) {
+        playTechRefusalSound();
         setAlertInfoErrors(errors);
         setHasClickedOnce(true);
         scrollToAlertBox();
@@ -2725,6 +2591,7 @@ export default function GmaoCorrectionForm({
           );
         });
         if (hasBlocking) {
+          playTechRefusalSound();
           setAlertInfoErrors(errors);
           scrollToAlertBox();
           return;
@@ -3277,6 +3144,7 @@ export default function GmaoCorrectionForm({
       Object.assign(savedReportPayload, buildFlatAlertFields(mergedAlerts));
     }
 
+    playTechSuccessSound();
     setIsSaving(true);
     setTimeout(() => {
       onSave(savedReportPayload);
@@ -3295,7 +3163,10 @@ export default function GmaoCorrectionForm({
         {/* Button Annuler */}
         <button
           type="button"
-          onClick={onCancel}
+          onClick={() => {
+            playTechRefusalSound();
+            onCancel();
+          }}
           id="btn-close-gmao-modal"
           style={{
             ...rowActionButton18Style,
@@ -3317,7 +3188,10 @@ export default function GmaoCorrectionForm({
         {shouldShowChronoAndReduce && (
           <button
             type="button"
-            onClick={handleToggleReduce}
+            onClick={() => {
+              playTechTapSound();
+              handleToggleReduce();
+            }}
             id="btn-toggle-reduce-gmao"
             style={{
               width: '33.3333%',
@@ -4262,17 +4136,17 @@ export default function GmaoCorrectionForm({
                 <label className="block text-[11px] font-bold text-black uppercase tracking-wider">
                   Photographie globale du défibrillateur.
                 </label>
-                {photoUrl && (
-                  <div className="text-[18px] text-green-600 font-bold bg-white leading-none">
-                    Chargé
-                  </div>
-                )}
-                <div className="flex items-center gap-3 flex-wrap bg-white">
+                <div className="flex flex-col items-start gap-2 bg-white w-full">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    style={rowActionButton18Style}
-                    className="transition-colors cursor-pointer font-sans"
+                    style={{
+                      ...rowActionButton18Style,
+                      width: '100%',
+                      padding: '8px 16px',
+                      borderRadius: '13px',
+                    }}
+                    className="w-full transition-colors cursor-pointer font-sans"
                   >
                     Photographier
                   </button>
@@ -4285,7 +4159,28 @@ export default function GmaoCorrectionForm({
                     className="hidden"
                   />
 
-                  {/* Carré Miniature */}
+                  {photoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        photoLocalPreviewRef.current = '';
+                        setPhoto1LoadFailed(false);
+                        setPhotoUrl('');
+                      }}
+                      style={{
+                        ...rowActionButton18Style,
+                        width: '100%',
+                        padding: '8px 16px',
+                        borderRadius: '13px',
+                        backgroundColor: '#d22d0b',
+                      }}
+                      className="w-full transition-colors cursor-pointer font-sans hover:opacity-90"
+                    >
+                      Supprimer
+                    </button>
+                  )}
+
+                  {/* Carré Miniature en dessous du bouton Supprimer */}
                   {photoUrl && (
                     <div
                       onClick={() => {
@@ -4309,24 +4204,6 @@ export default function GmaoCorrectionForm({
                       </div>
                     </div>
                   )}
-
-                  {photoUrl && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        photoLocalPreviewRef.current = '';
-                        setPhoto1LoadFailed(false);
-                        setPhotoUrl('');
-                      }}
-                      style={{
-                        ...rowActionButton18Style,
-                        backgroundColor: '#d22d0b',
-                      }}
-                      className="transition-colors cursor-pointer font-sans hover:opacity-90"
-                    >
-                      Supprimer
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -4335,17 +4212,17 @@ export default function GmaoCorrectionForm({
                 <label className="block text-[11px] font-bold text-black uppercase tracking-wider">
                   Photographie arrière / étiquette.
                 </label>
-                {photoArriereUrl && (
-                  <div className="text-[18px] text-green-600 font-bold bg-white leading-none">
-                    Chargé
-                  </div>
-                )}
-                <div className="flex items-center gap-3 flex-wrap bg-white">
+                <div className="flex flex-col items-start gap-2 bg-white w-full">
                   <button
                     type="button"
                     onClick={() => fileInputArriereRef.current?.click()}
-                    style={rowActionButton18Style}
-                    className="transition-colors cursor-pointer font-sans"
+                    style={{
+                      ...rowActionButton18Style,
+                      width: '100%',
+                      padding: '8px 16px',
+                      borderRadius: '13px',
+                    }}
+                    className="w-full transition-colors cursor-pointer font-sans"
                   >
                     Photographier
                   </button>
@@ -4358,7 +4235,28 @@ export default function GmaoCorrectionForm({
                     className="hidden"
                   />
 
-                  {/* Carré Miniature */}
+                  {photoArriereUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        photoArriereLocalPreviewRef.current = '';
+                        setPhoto2LoadFailed(false);
+                        setPhotoArriereUrl('');
+                      }}
+                      style={{
+                        ...rowActionButton18Style,
+                        width: '100%',
+                        padding: '8px 16px',
+                        borderRadius: '13px',
+                        backgroundColor: '#d22d0b',
+                      }}
+                      className="w-full transition-colors cursor-pointer font-sans hover:opacity-90"
+                    >
+                      Supprimer
+                    </button>
+                  )}
+
+                  {/* Carré Miniature en dessous du bouton Supprimer */}
                   {photoArriereUrl && (
                     <div
                       onClick={() => {
@@ -4382,24 +4280,6 @@ export default function GmaoCorrectionForm({
                       </div>
                     </div>
                   )}
-
-                  {photoArriereUrl && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        photoArriereLocalPreviewRef.current = '';
-                        setPhoto2LoadFailed(false);
-                        setPhotoArriereUrl('');
-                      }}
-                      style={{
-                        ...rowActionButton18Style,
-                        backgroundColor: '#d22d0b',
-                      }}
-                      className="transition-colors cursor-pointer font-sans hover:opacity-90"
-                    >
-                      Supprimer
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -4408,17 +4288,17 @@ export default function GmaoCorrectionForm({
                 <label className="block text-[11px] font-bold text-black uppercase tracking-wider">
                   Résultat du test.
                 </label>
-                {photoResultatTestUrl && (
-                  <div className="text-[18px] text-green-600 font-bold bg-white leading-none">
-                    Chargé
-                  </div>
-                )}
-                <div className="flex items-center gap-3 flex-wrap bg-white">
+                <div className="flex flex-col items-start gap-2 bg-white w-full">
                   <button
                     type="button"
                     onClick={() => fileInputResultatTestRef.current?.click()}
-                    style={rowActionButton18Style}
-                    className="transition-colors cursor-pointer font-sans"
+                    style={{
+                      ...rowActionButton18Style,
+                      width: '100%',
+                      padding: '8px 16px',
+                      borderRadius: '13px',
+                    }}
+                    className="w-full transition-colors cursor-pointer font-sans"
                   >
                     Photographier
                   </button>
@@ -4431,7 +4311,28 @@ export default function GmaoCorrectionForm({
                     className="hidden"
                   />
 
-                  {/* Carré Miniature */}
+                  {photoResultatTestUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        photoTestLocalPreviewRef.current = '';
+                        setPhoto3LoadFailed(false);
+                        setPhotoResultatTestUrl('');
+                      }}
+                      style={{
+                        ...rowActionButton18Style,
+                        width: '100%',
+                        padding: '8px 16px',
+                        borderRadius: '13px',
+                        backgroundColor: '#d22d0b',
+                      }}
+                      className="w-full transition-colors cursor-pointer font-sans hover:opacity-90"
+                    >
+                      Supprimer
+                    </button>
+                  )}
+
+                  {/* Carré Miniature en dessous du bouton Supprimer */}
                   {photoResultatTestUrl && (
                     <div
                       onClick={() => {
@@ -4454,24 +4355,6 @@ export default function GmaoCorrectionForm({
                         Voir
                       </div>
                     </div>
-                  )}
-
-                  {photoResultatTestUrl && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        photoTestLocalPreviewRef.current = '';
-                        setPhoto3LoadFailed(false);
-                        setPhotoResultatTestUrl('');
-                      }}
-                      style={{
-                        ...rowActionButton18Style,
-                        backgroundColor: '#d22d0b',
-                      }}
-                      className="transition-colors cursor-pointer font-sans hover:opacity-90"
-                    >
-                      Supprimer
-                    </button>
                   )}
                 </div>
               </div>
@@ -5179,8 +5062,8 @@ export default function GmaoCorrectionForm({
                       right: '8px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      height: '28px',
-                      width: '28px',
+                      height: '34px',
+                      width: '34px',
                       objectFit: 'contain',
                       cursor: 'pointer',
                       zIndex: 10,
@@ -5295,8 +5178,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -5331,8 +5214,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -5435,8 +5318,8 @@ export default function GmaoCorrectionForm({
                       right: '8px',
                       top: '50%',
                       transform: 'translateY(-50%)',
-                      height: '28px',
-                      width: '28px',
+                      height: '34px',
+                      width: '34px',
                       objectFit: 'contain',
                       cursor: 'pointer',
                       zIndex: 10,
@@ -5507,8 +5390,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -5788,8 +5671,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -5907,8 +5790,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -5980,8 +5863,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -6261,8 +6144,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -6399,8 +6282,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -6437,8 +6320,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -6475,8 +6358,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -6821,8 +6704,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -6986,8 +6869,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -7036,8 +6919,8 @@ export default function GmaoCorrectionForm({
                         right: '8px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        height: '28px',
-                        width: '28px',
+                        height: '34px',
+                        width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
                         zIndex: 10,
@@ -7130,8 +7013,8 @@ export default function GmaoCorrectionForm({
               ) : (
                 <div className="space-y-3 bg-white">
                   <div
-                    className="p-4 text-center cursor-pointer hover:bg-slate-50 transition relative"
-                    style={{ border: '1px solid #DCE1EA', borderRadius: '13px' }}
+                    className="p-4 text-center cursor-pointer transition relative"
+                    style={{ border: 'none', borderRadius: '13px', backgroundColor: 'rgb(245, 247, 250)' }}
                   >
                     <input
                       type="file"
@@ -8306,7 +8189,7 @@ export default function GmaoCorrectionForm({
                 <button
                   type="button"
                   onClick={() => {
-                    playTechNavClickSound();
+                    playTechTapSound();
                     scrollToSection(nextSec.id);
                   }}
                   className="w-full text-white font-medium focus:outline-none cursor-pointer text-center"
@@ -8334,7 +8217,7 @@ export default function GmaoCorrectionForm({
                 <button
                   type="button"
                   onClick={() => {
-                    playTechNavClickSound();
+                    playTechRefusalSound();
                     scrollToSection(prevSec.id);
                   }}
                   className="w-1/2 text-white font-medium focus:outline-none cursor-pointer text-center"
@@ -8357,7 +8240,7 @@ export default function GmaoCorrectionForm({
                 <button
                   type="button"
                   onClick={() => {
-                    playTechNavClickSound();
+                    playTechTapSound();
                     scrollToSection(nextSec.id);
                   }}
                   className="w-1/2 text-white font-medium focus:outline-none cursor-pointer text-center"
@@ -8668,26 +8551,28 @@ export default function GmaoCorrectionForm({
                           setRemoteSearchItems([]);
                         }}
                         style={{
-                          border: '1px solid #DCE1EA',
+                          border: 'none',
                           borderRadius: '13px',
-                          backgroundColor: '#F5F7FA',
+                          backgroundColor: 'rgb(245, 247, 250)',
                           padding: '12px 16px',
                           width: '100%',
                           textAlign: 'left',
                           cursor: 'pointer',
+                          fontSize: '16px',
+                          color: '#000000',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         }}
                         className="w-full flex items-center justify-between hover:bg-slate-200/70 transition-colors font-sans"
                       >
                         <span
                           className="font-bold text-black text-[16px] font-sans"
-                          style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                          style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                         >
                           {item.identifiant}
                         </span>
                         <span
-                          className="text-slate-700 text-[15px] font-sans"
-                          style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                          className="text-black text-[16px] font-sans"
+                          style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                         >
                           {item.numeroSerie}
                         </span>

@@ -7,7 +7,7 @@ import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
 import { INITIAL_TICKETS } from '../utils';
 import { sendScriptEmail, getActiveTenantCommercialName } from '../utils/emailService';
 import { fetchCollectionFromFirestore, saveCollectionToFirestore } from '../firebase';
-import { fetchGoogleDriveStatus, uploadFileToGoogleDrive } from '../utils/googleDrive';
+import { fetchGoogleDriveStatus, uploadFileToGoogleDrive, getCachedGoogleDriveActiveSync } from '../utils/googleDrive';
 
 export const getWeekNumberString = (dateStr?: string): string => {
   if (!dateStr) return '';
@@ -799,7 +799,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formFichiersDevis, setFormFichiersDevis] = useState<CommercialFileAttachment[]>([]);
   const [isAutreFichierToggle, setIsAutreFichierToggle] = useState<boolean>(false);
   const [isDraggingFile, setIsDraggingFile] = useState<boolean>(false);
-  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(false);
+  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(() => getCachedGoogleDriveActiveSync(activeTenant));
   const [googleDriveAccessToken, setGoogleDriveAccessToken] = useState<string>('');
   const [isUploadingFile, setIsUploadingFile] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);

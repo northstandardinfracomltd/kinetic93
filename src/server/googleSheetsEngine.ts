@@ -293,7 +293,7 @@ function postFormUrlEncodedIpv4(urlStr: string, bodyStr: string, timeoutMs = 120
   });
 }
 
-async function getServiceAccountAccessToken(): Promise<string | null> {
+export async function getServiceAccountAccessToken(): Promise<string | null> {
   if (cachedAccessToken && Date.now() < cachedAccessToken.expiresAt) {
     return cachedAccessToken.token;
   }
