@@ -10321,7 +10321,7 @@ export default function PublicPortal({
                                     className="block text-left font-bold font-sans"
                                     style={{ fontSize: "18px", color: "#000000" }}
                                   >
-                                    {t("Mission(s).")}
+                                    Mission(s).
                                   </label>
                                 </div>
                               )}
