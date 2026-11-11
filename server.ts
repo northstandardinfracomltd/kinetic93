@@ -6939,14 +6939,68 @@ async function warmupDefibrillateursStore() {
   app.post("/api/public/lookup-mission", async (req, res) => {
     try {
       const checkRef = String(req.body?.interventionRef || '').trim().toUpperCase();
-      const tenantHint = String(req.body?.tenantHint || '').trim();
+      const rawTenantHint = String(req.body?.tenantHint || '').trim();
       if (!checkRef) return res.json({ found: false });
 
-      const tenants = getSafePublicTenantsList();
-      const allIds = ['demo', ...tenants.map((t: any) => String(t.id))];
-      const prioritized = tenantHint ? Array.from(new Set([tenantHint, ...allIds])) : allIds;
+      let allTenants = getSafePublicTenantsList();
+      const findMatchingTenant = (hint: string, list: any[]) => {
+        if (!hint) return null;
+        const hUpper = hint.trim().toUpperCase();
+        return list.find((t: any) => {
+          if (!t) return false;
+          const tId = String(t.id || '').trim().toUpperCase();
+          const tShort = String(t.shortEnvId || '').trim().toUpperCase();
+          if (tId === hUpper || tShort === hUpper) return true;
+          if (/^D\d+$/i.test(hUpper) && (tId === 'D' || tShort === hUpper)) return true;
+          return false;
+        });
+      };
 
-      for (const tid of prioritized) {
+      let matchedTenantObj = findMatchingTenant(rawTenantHint, allTenants);
+      if (!matchedTenantObj && rawTenantHint) {
+        allTenants = await getRegisteredTenantsFromDb(true);
+        matchedTenantObj = findMatchingTenant(rawTenantHint, allTenants);
+      }
+
+      const allIds = Array.from(
+        new Set([
+          ...(matchedTenantObj ? [String(matchedTenantObj.id || ''), String(matchedTenantObj.shortEnvId || '')] : []),
+          rawTenantHint,
+          'demo',
+          ...allTenants.map((t: any) => String(t.id || '')),
+          ...allTenants.map((t: any) => String(t.shortEnvId || '')),
+        ].filter(Boolean))
+      );
+
+      for (const tid of allIds) {
+        // 1. Check Missions Google Sheet first so we always have live data if linked
+        try {
+          const missionsSheetUrl = await resolveTenantSpreadsheetUrl(tid, 'missionsTournees');
+          if (missionsSheetUrl && extractSpreadsheetIdAndGid(missionsSheetUrl)) {
+            const mSheetData = await fetchTenantSheetCollection(missionsSheetUrl, tid, 'missionsTournees', false).catch(() => null);
+            if (mSheetData && Array.isArray(mSheetData.items)) {
+              const sheetMission = mSheetData.items.find(
+                (m: any) =>
+                  m &&
+                  ((m.interventionReference && String(m.interventionReference).trim().toUpperCase() === checkRef) ||
+                    (m.id && String(m.id).trim().toUpperCase() === checkRef))
+              );
+              if (sheetMission) {
+                return res.json({
+                  found: true,
+                  tenantId: tid,
+                  tour: {
+                    id: sheetMission.tourIdentifiant || sheetMission.tourId || 'Tour',
+                    title: sheetMission.tourIdentifiant || 'Tour',
+                  },
+                  mission: sheetMission,
+                });
+              }
+            }
+          }
+        } catch (_) {}
+
+        // 2. Check server collection fsmTours
         const toursList = (await fetchServerCollection('fsmTours', tid)) || [];
         if (Array.isArray(toursList)) {
           for (const tour of toursList) {
@@ -6969,7 +7023,7 @@ async function warmupDefibrillateursStore() {
         }
       }
 
-      for (const tid of prioritized) {
+      for (const tid of allIds) {
         const reportsList = (await fetchServerCollection('generatedReports', tid)) || [];
         if (Array.isArray(reportsList)) {
           const matchedReport = reportsList.find(
@@ -7009,19 +7063,67 @@ async function warmupDefibrillateursStore() {
       const checkRef = String(req.body?.interventionRef || '').trim().toUpperCase();
       const newStatus = String(req.body?.newStatus || '').trim();
       const comment = req.body?.comment;
-      const tenantHint = String(req.body?.tenantHint || '').trim();
+      const rawTenantHint = String(req.body?.tenantHint || '').trim();
       if (!checkRef || !newStatus) return res.json({ success: false });
 
-      const tenants = getSafePublicTenantsList();
-      const allIds = ['demo', ...tenants.map((t: any) => String(t.id))];
-      const prioritized = tenantHint ? Array.from(new Set([tenantHint, ...allIds])) : allIds;
+      let allTenants = getSafePublicTenantsList();
+      const findMatchingTenant = (hint: string, list: any[]) => {
+        if (!hint) return null;
+        const hUpper = hint.trim().toUpperCase();
+        return list.find((t: any) => {
+          if (!t) return false;
+          const tId = String(t.id || '').trim().toUpperCase();
+          const tShort = String(t.shortEnvId || '').trim().toUpperCase();
+          if (tId === hUpper || tShort === hUpper) return true;
+          if (/^D\d+$/i.test(hUpper) && (tId === 'D' || tShort === hUpper)) return true;
+          return false;
+        });
+      };
+
+      let matchedTenantObj = findMatchingTenant(rawTenantHint, allTenants);
+      if (!matchedTenantObj && rawTenantHint) {
+        allTenants = await getRegisteredTenantsFromDb(true);
+        matchedTenantObj = findMatchingTenant(rawTenantHint, allTenants);
+      }
+
+      const allIds = Array.from(
+        new Set([
+          ...(matchedTenantObj ? [String(matchedTenantObj.id || ''), String(matchedTenantObj.shortEnvId || '')] : []),
+          rawTenantHint,
+          'demo',
+          ...allTenants.map((t: any) => String(t.id || '')),
+          ...allTenants.map((t: any) => String(t.shortEnvId || '')),
+        ].filter(Boolean))
+      );
+
       const nowIso = new Date().toISOString();
 
-      for (const tid of prioritized) {
+      for (const tid of allIds) {
+        let updatedMission: any = null;
+        let sheetMissionMatch: any = null;
+        let resolvedMissionsSheetUrl: string | null = null;
+
+        // 1. Check Missions Google Sheet for this tenant
+        try {
+          resolvedMissionsSheetUrl = await resolveTenantSpreadsheetUrl(tid, 'missionsTournees');
+          if (resolvedMissionsSheetUrl && extractSpreadsheetIdAndGid(resolvedMissionsSheetUrl)) {
+            const mSheetData = await fetchTenantSheetCollection(resolvedMissionsSheetUrl, tid, 'missionsTournees', false).catch(() => null);
+            if (mSheetData && Array.isArray(mSheetData.items)) {
+              sheetMissionMatch = mSheetData.items.find(
+                (m: any) =>
+                  m &&
+                  ((m.interventionReference && String(m.interventionReference).trim().toUpperCase() === checkRef) ||
+                    (m.id && String(m.id).trim().toUpperCase() === checkRef))
+              );
+            }
+          }
+        } catch (_) {}
+
+        // 2. Check and update server collection fsmTours
         const toursList = (await fetchServerCollection('fsmTours', tid)) || [];
+        let updatedTours = toursList;
         if (Array.isArray(toursList) && toursList.length > 0) {
-          let updatedMission: any = null;
-          const updatedTours = toursList.map((tour: any) => {
+          updatedTours = toursList.map((tour: any) => {
             let tourChanged = false;
             const nextMissions = (tour?.missions || []).map((m: any) => {
               if (
@@ -7030,11 +7132,21 @@ async function warmupDefibrillateursStore() {
                   (m.id && String(m.id).trim().toUpperCase() === checkRef))
               ) {
                 tourChanged = true;
+                const cleanComment = comment !== undefined ? String(comment).trim() : undefined;
                 updatedMission = {
+                  ...(sheetMissionMatch || {}),
                   ...m,
+                  tourIdentifiant:
+                    m.tourIdentifiant ||
+                    sheetMissionMatch?.tourIdentifiant ||
+                    (tour.id !== 'a-trier' ? tour.tourIdentifiant || tour.id : ''),
                   status: newStatus,
-                  refusalComment: comment !== undefined ? comment : m.refusalComment || '',
-                  clientRefusalComment: comment !== undefined ? comment : m.clientRefusalComment || '',
+                  situation: newStatus,
+                  refusalComment: cleanComment !== undefined ? cleanComment : m.refusalComment || '',
+                  clientRefusalComment: cleanComment !== undefined ? cleanComment : m.clientRefusalComment || '',
+                  rejectionReason: cleanComment !== undefined ? cleanComment : m.rejectionReason || '',
+                  raisonRejet: cleanComment !== undefined ? cleanComment : m.raisonRejet || '',
+                  commentaire: cleanComment !== undefined ? cleanComment : m.commentaire || '',
                   clientDecisionDate: nowIso,
                   updatedAt: nowIso,
                 };
@@ -7044,39 +7156,87 @@ async function warmupDefibrillateursStore() {
             });
             return tourChanged ? { ...tour, missions: nextMissions, updatedAt: nowIso } : tour;
           });
+        }
 
-          if (updatedMission) {
-            const tourKey = tid === 'demo' ? 'fsmTours' : `${tid}_fsmTours`;
-            serverMemoryStore.set(tourKey, updatedTours);
-            persistSingleCollectionToDisk(tourKey, updatedTours);
+        if (!updatedMission && sheetMissionMatch) {
+          const cleanComment = comment !== undefined ? String(comment).trim() : undefined;
+          updatedMission = {
+            ...sheetMissionMatch,
+            status: newStatus,
+            situation: newStatus,
+            refusalComment: cleanComment !== undefined ? cleanComment : sheetMissionMatch.refusalComment || '',
+            clientRefusalComment: cleanComment !== undefined ? cleanComment : sheetMissionMatch.clientRefusalComment || '',
+            rejectionReason: cleanComment !== undefined ? cleanComment : sheetMissionMatch.rejectionReason || '',
+            raisonRejet: cleanComment !== undefined ? cleanComment : sheetMissionMatch.raisonRejet || '',
+            commentaire: cleanComment !== undefined ? cleanComment : sheetMissionMatch.commentaire || '',
+            clientDecisionDate: nowIso,
+            updatedAt: nowIso,
+          };
+        }
 
-            const reportsList = (await fetchServerCollection('generatedReports', tid)) || [];
-            if (Array.isArray(reportsList)) {
-              const updatedReports = reportsList.map((rep: any) => {
-                if (
-                  rep &&
-                  ((rep.interventionReference && String(rep.interventionReference).trim().toUpperCase() === checkRef) ||
-                    (rep.missionId && String(rep.missionId) === String(updatedMission.id)))
-                ) {
-                  return {
-                    ...rep,
-                    missionStatus: newStatus,
-                    refusalComment: comment !== undefined ? comment : rep.refusalComment,
-                    updatedAt: nowIso,
-                  };
-                }
-                return rep;
-              });
-              const repKey = tid === 'demo' ? 'generatedReports' : `${tid}_generatedReports`;
-              serverMemoryStore.set(repKey, updatedReports);
-              persistSingleCollectionToDisk(repKey, updatedReports);
-            }
-            return res.json({ success: true, tenantId: tid, mission: updatedMission });
+        if (updatedMission) {
+          const tenantObj = findMatchingTenant(tid, allTenants) || matchedTenantObj;
+          const canonicalTenantId = tenantObj ? String(tenantObj.id || tid).trim() : tid;
+          const shortTenantId = tenantObj && tenantObj.shortEnvId ? String(tenantObj.shortEnvId).trim() : canonicalTenantId;
+          const tenantAliasesToUpdate = Array.from(new Set([canonicalTenantId, shortTenantId, tid].filter(Boolean)));
+
+          // Upsert to the linked Missions Google Sheet (missionsTournees)
+          if (!resolvedMissionsSheetUrl) {
+            resolvedMissionsSheetUrl = await resolveTenantSpreadsheetUrl(canonicalTenantId, 'missionsTournees');
           }
+          if (!resolvedMissionsSheetUrl && tenantObj?.spreadsheetMissionsTournees) {
+            resolvedMissionsSheetUrl = String(tenantObj.spreadsheetMissionsTournees).trim();
+          }
+          if (resolvedMissionsSheetUrl && extractSpreadsheetIdAndGid(resolvedMissionsSheetUrl)) {
+            await upsertRecordsToTenantSheet(
+              resolvedMissionsSheetUrl,
+              canonicalTenantId,
+              'missionsTournees',
+              [updatedMission]
+            ).catch((err) => console.warn('[API /api/public/update-mission-status] Missions sheet upsert warning:', err));
+
+            for (const tAlias of tenantAliasesToUpdate) {
+              invalidateSheetCache(tAlias, 'missionsTournees');
+              invalidateSheetCache(tAlias, 'tournees');
+            }
+          }
+
+          // Persist updated fsmTours across all tenant aliases
+          if (Array.isArray(updatedTours) && updatedTours.length > 0) {
+            for (const tAlias of tenantAliasesToUpdate) {
+              await saveServerCollection('fsmTours', updatedTours, tAlias).catch(() => {});
+            }
+          }
+
+          // Update generatedReports if present
+          const reportsList = (await fetchServerCollection('generatedReports', tid)) || [];
+          if (Array.isArray(reportsList) && reportsList.length > 0) {
+            const updatedReports = reportsList.map((rep: any) => {
+              if (
+                rep &&
+                ((rep.interventionReference && String(rep.interventionReference).trim().toUpperCase() === checkRef) ||
+                  (rep.missionId && String(rep.missionId) === String(updatedMission.id)))
+              ) {
+                return {
+                  ...rep,
+                  missionStatus: newStatus,
+                  refusalComment: comment !== undefined ? comment : rep.refusalComment,
+                  updatedAt: nowIso,
+                };
+              }
+              return rep;
+            });
+            for (const tAlias of tenantAliasesToUpdate) {
+              await saveServerCollection('generatedReports', updatedReports, tAlias).catch(() => {});
+            }
+          }
+
+          return res.json({ success: true, tenantId: canonicalTenantId, mission: updatedMission });
         }
       }
       return res.json({ success: false });
-    } catch (_) {
+    } catch (err) {
+      console.error('[API /api/public/update-mission-status] Error:', err);
       return res.json({ success: false });
     }
   });

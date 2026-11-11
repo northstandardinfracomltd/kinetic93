@@ -494,3 +494,26 @@ select[style*="rgb(15, 23, 42)"],
   box-shadow: none !important;
 }
 
+#defib-help-faq-select,
+#autres-materiels-help-faq-select,
+#client-help-faq-select,
+#fsm-help-faq-select,
+#gmao-help-faq-select,
+#crm-help-faq-select,
+#stocks-help-faq-select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-image: none !important;
+}
+
+#defib-help-faq-select::-ms-expand,
+#autres-materiels-help-faq-select::-ms-expand,
+#client-help-faq-select::-ms-expand,
+#fsm-help-faq-select::-ms-expand,
+#gmao-help-faq-select::-ms-expand,
+#crm-help-faq-select::-ms-expand,
+#stocks-help-faq-select::-ms-expand {
+  display: none !important;
+}
+

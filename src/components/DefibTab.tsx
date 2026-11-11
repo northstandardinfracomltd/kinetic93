@@ -5545,7 +5545,7 @@ export default function DefibTab({
                       <img
                         src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
                         alt=""
-                        style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                        style={{ width: '22px', height: '22px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
                         referrerPolicy="no-referrer"
                       />
                     </button>
@@ -7105,6 +7105,23 @@ export default function DefibTab({
                 background: none !important;
                 width: 0 !important;
                 height: 0 !important;
+              }
+              #defibrillateur-core-form #form-age,
+              #defibrillateur-core-form #form-age::placeholder,
+              #defibrillateur-core-form #form-age::-webkit-input-placeholder,
+              #defibrillateur-core-form #form-age::-moz-placeholder,
+              #defibrillateur-core-form #form-age:-ms-input-placeholder {
+                text-align: center !important;
+              }
+              #defibrillateur-core-form #form-age::-webkit-outer-spin-button,
+              #defibrillateur-core-form #form-age::-webkit-inner-spin-button {
+                -webkit-appearance: none !important;
+                margin: 0 !important;
+                display: none !important;
+              }
+              #defibrillateur-core-form #form-age {
+                -moz-appearance: textfield !important;
+                appearance: textfield !important;
               }
               #defibrillateur-core-form label,
               #defibrillateur-core-form .section-title-label,
@@ -10367,10 +10384,11 @@ export default function DefibTab({
                         <input
                           type="number"
                           id="form-age"
+                          placeholder="0"
                           value={ageVictime}
                           onChange={(e) => setAgeVictime(e.target.value)}
-                          className="px-2 py-1 border border-slate-200 rounded text-xs text-slate-800"
-                          style={{ width: '60px', maxWidth: '60px' }}
+                          className="px-2 py-1 border border-slate-200 rounded text-xs text-slate-800 text-center placeholder:text-center"
+                          style={{ width: '60px', maxWidth: '60px', textAlign: 'center' }}
                         />
                       </div>
                     </div>

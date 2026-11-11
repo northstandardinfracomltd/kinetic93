@@ -1209,7 +1209,7 @@ export default function StocksDistribuesTab({
                       <img
                         src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
                         alt=""
-                        style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                        style={{ width: '22px', height: '22px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
                         referrerPolicy="no-referrer"
                       />
                     </button>

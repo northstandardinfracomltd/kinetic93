@@ -3902,6 +3902,21 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     ).trim();
     merged.rejectionReason = resolvedRejectionReason;
     merged.raisonRejet = resolvedRejectionReason;
+    if (String(merged.status || '').toLowerCase().includes('refus')) {
+      const resolvedRefusal = String(
+        merged.refusalComment ||
+          merged.clientRefusalComment ||
+          resolvedRejectionReason ||
+          merged.commentaire ||
+          ''
+      ).trim();
+      merged.refusalComment = resolvedRefusal;
+      merged.clientRefusalComment = resolvedRefusal;
+    } else if (merged.refusalComment || merged.clientRefusalComment) {
+      const resolvedRefusal = String(merged.refusalComment || merged.clientRefusalComment || '').trim();
+      merged.refusalComment = resolvedRefusal;
+      merged.clientRefusalComment = resolvedRefusal;
+    }
     const resolvedStatutFacturation = String(
       merged.statutFacturation ??
         merged['Statut Facturation.'] ??
@@ -6720,9 +6735,14 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.rejectionReason ??
       enriched.raisonRejet ??
       enriched.motifRejet ??
+      enriched.refusalComment ??
+      enriched.clientRefusalComment ??
       enriched['Raison rejet.'] ??
       enriched['Raison rejet'] ??
       '';
+    if ((enriched.refusalComment || enriched.clientRefusalComment) && !enriched.commentaire) {
+      enriched.commentaire = String(enriched.refusalComment || enriched.clientRefusalComment || '').trim();
+    }
     enriched.statutFacturation =
       enriched.statutFacturation ??
       enriched['Statut Facturation.'] ??

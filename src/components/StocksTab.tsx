@@ -2590,7 +2590,7 @@ export default function StocksTab({
                       <img
                         src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
                         alt=""
-                        style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                        style={{ width: '22px', height: '22px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
                         referrerPolicy="no-referrer"
                       />
                     </button>
@@ -4751,6 +4751,7 @@ export default function StocksTab({
                   <div className="w-full animate-fadeIn">
                     <select
                       id="stocks-help-faq-select"
+                      className="appearance-none"
                       value=""
                       onChange={(e) => {
                         const val = e.target.value;
@@ -4772,6 +4773,10 @@ export default function StocksTab({
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         outline: 'none',
                         cursor: 'pointer',
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                        backgroundImage: 'none',
                       }}
                     >
                       <option value="">Sélection d’un sujet.</option>

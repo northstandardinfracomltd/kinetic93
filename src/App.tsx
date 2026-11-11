@@ -4399,6 +4399,18 @@ export default function App() {
                 interventionReference: cleanRef,
                 defibIdentifiant: cleanDefibId || sm.defibIdentifiant || '',
                 rejectionReason: sm.rejectionReason ?? sm.raisonRejet ?? '',
+                refusalComment:
+                  sm.refusalComment ||
+                  sm.clientRefusalComment ||
+                  (String(sm.status || '').toLowerCase().includes('refus')
+                    ? sm.rejectionReason || sm.raisonRejet || sm.commentaire || ''
+                    : ''),
+                clientRefusalComment:
+                  sm.clientRefusalComment ||
+                  sm.refusalComment ||
+                  (String(sm.status || '').toLowerCase().includes('refus')
+                    ? sm.rejectionReason || sm.raisonRejet || sm.commentaire || ''
+                    : ''),
                 statutFacturation: sm.statutFacturation || 'Aucune information',
               });
               byTourKey.set(targetTourId, list);
@@ -5404,8 +5416,23 @@ export default function App() {
               sentToClientParts: Array.isArray(m.sentToClientParts) ? m.sentToClientParts : [],
               providedByClientParts: Array.isArray(m.providedByClientParts) ? m.providedByClientParts : [],
               commentaireInterne: m.commentaireInterne ?? '',
-              rejectionReason: m.rejectionReason ?? m.raisonRejet ?? m.raisonRejeteeMission ?? '',
-              raisonRejet: m.rejectionReason ?? m.raisonRejet ?? m.raisonRejeteeMission ?? '',
+              rejectionReason:
+                m.rejectionReason ??
+                m.raisonRejet ??
+                m.raisonRejeteeMission ??
+                m.refusalComment ??
+                m.clientRefusalComment ??
+                '',
+              raisonRejet:
+                m.rejectionReason ??
+                m.raisonRejet ??
+                m.raisonRejeteeMission ??
+                m.refusalComment ??
+                m.clientRefusalComment ??
+                '',
+              refusalComment: m.refusalComment ?? m.clientRefusalComment ?? '',
+              clientRefusalComment: m.clientRefusalComment ?? m.refusalComment ?? '',
+              commentaire: m.commentaire || m.refusalComment || m.clientRefusalComment || '',
             });
           }
         }
@@ -14736,7 +14763,7 @@ export default function App() {
                             <img
                               src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
                               alt=""
-                              style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                              style={{ width: '22px', height: '22px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
                               referrerPolicy="no-referrer"
                             />
                           </button>
@@ -15022,6 +15049,7 @@ export default function App() {
                             <div className="w-full animate-fadeIn">
                               <select
                                 id="fsm-help-faq-select"
+                                className="appearance-none"
                                 value=""
                                 onChange={(e) => {
                                   const val = e.target.value;
@@ -15043,6 +15071,10 @@ export default function App() {
                                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                   outline: 'none',
                                   cursor: 'pointer',
+                                  appearance: 'none',
+                                  WebkitAppearance: 'none',
+                                  MozAppearance: 'none',
+                                  backgroundImage: 'none',
                                 }}
                               >
                                 <option value="">Sélection d’un sujet.</option>
@@ -21994,7 +22026,7 @@ export default function App() {
                             <img
                               src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
                               alt=""
-                              style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                              style={{ width: '22px', height: '22px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
                               referrerPolicy="no-referrer"
                             />
                           </button>
@@ -24145,6 +24177,7 @@ export default function App() {
                             <div className="w-full animate-fadeIn">
                               <select
                                 id="gmao-help-faq-select"
+                                className="appearance-none"
                                 value=""
                                 onChange={(e) => {
                                   const val = e.target.value;
@@ -24166,6 +24199,10 @@ export default function App() {
                                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                   outline: 'none',
                                   cursor: 'pointer',
+                                  appearance: 'none',
+                                  WebkitAppearance: 'none',
+                                  MozAppearance: 'none',
+                                  backgroundImage: 'none',
                                 }}
                               >
                                 <option value="">Sélection d’un sujet.</option>
@@ -26441,7 +26478,7 @@ export default function App() {
             <p
               className="leading-relaxed"
               style={{
-                color: '#50617A',
+                color: '#000',
                 fontSize: '16px',
                 cursor: 'default',
               }}
@@ -26458,7 +26495,8 @@ export default function App() {
                   color: '#fff',
                   boxShadow: 'none',
                   fontSize: '18px',
-                  background: '#0f172a',
+                  background: 'rgb(210, 45, 11)',
+                  backgroundColor: 'rgb(210, 45, 11)',
                   border: 'none',
                   borderRadius: '13px',
                 }}

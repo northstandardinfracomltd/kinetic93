@@ -888,6 +888,10 @@ export default function ClientTab({
       q: "Comment consulter les matériels (ou défibrillateurs) d’un client ?",
       a: "Ouvrez la fiche du client : en haut du formulaire, un bouton « Matériel(s) » vous permet d’accéder à l’ensemble des équipements qui lui sont associés.",
     },
+    {
+      q: "Comment les clients peuvent-ils accéder à leur portail client ?",
+      a: "Les clients peuvent se connecter simplement à l’aide de l’adresse email principale (aucun mot de passe requis) renseignée sur leur fiche client. Deux accès sont possibles : En marque blanche : via un lien dédié sans mention ni référence à Defibeo : https://consoledefibeo.deroesch.com/y26m8v105DRSHdatacentersession/#clientaccess ou via la page standard, directement depuis la page de connexion defibeo.com.",
+    },
   ], []);
 
   useEffect(() => {
@@ -2971,7 +2975,7 @@ export default function ClientTab({
                   <img
                     src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
                     alt=""
-                    style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                    style={{ width: '22px', height: '22px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
                     referrerPolicy="no-referrer"
                   />
                 </button>
@@ -3355,6 +3359,7 @@ export default function ClientTab({
                   <div className="w-full animate-fadeIn">
                     <select
                       id="client-help-faq-select"
+                      className="appearance-none"
                       value=""
                       onChange={(e) => {
                         const val = e.target.value;
@@ -3376,6 +3381,10 @@ export default function ClientTab({
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         outline: 'none',
                         cursor: 'pointer',
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                        backgroundImage: 'none',
                       }}
                     >
                       <option value="">Sélection d’un sujet.</option>

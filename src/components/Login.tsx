@@ -660,25 +660,32 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   const [typedAuthLine1, setTypedAuthLine1] = useState('');
   const [typedAuthLine2, setTypedAuthLine2] = useState('');
+  const [typedAuthLine3, setTypedAuthLine3] = useState('');
 
   useEffect(() => {
     if (!isAuthCodeStep) {
       setTypedAuthLine1('');
       setTypedAuthLine2('');
+      setTypedAuthLine3('');
       return;
     }
 
     const currentTranslations = (translations as any)[selectedLang] || translations['Français'];
     const authLine1 = String(currentTranslations.authCodeTitle || 'Double Authentification').replace(/[.:]+$/, '');
     const authLine2 = String(currentTranslations.authCodeDesc || 'Code de 6 caractères envoyé par email').replace(/[.:]+$/, '');
+    const authLine3 = String(currentTranslations.authCodeSpamHint || 'Email non reçu : vérifiez vos spams');
 
     let i = 0;
     let j = 0;
+    let k = 0;
     let line2Interval: ReturnType<typeof setInterval> | null = null;
+    let line3Interval: ReturnType<typeof setInterval> | null = null;
     let pauseTimeout: ReturnType<typeof setTimeout> | null = null;
+    let pauseTimeout2: ReturnType<typeof setTimeout> | null = null;
 
     setTypedAuthLine1('');
     setTypedAuthLine2('');
+    setTypedAuthLine3('');
 
     const line1Interval = setInterval(() => {
       i += 1;
@@ -689,8 +696,17 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           line2Interval = setInterval(() => {
             j += 1;
             setTypedAuthLine2(authLine2.slice(0, j));
-            if (j >= authLine2.length && line2Interval) {
-              clearInterval(line2Interval);
+            if (j >= authLine2.length) {
+              if (line2Interval) clearInterval(line2Interval);
+              pauseTimeout2 = setTimeout(() => {
+                line3Interval = setInterval(() => {
+                  k += 1;
+                  setTypedAuthLine3(authLine3.slice(0, k));
+                  if (k >= authLine3.length && line3Interval) {
+                    clearInterval(line3Interval);
+                  }
+                }, 35);
+              }, 150);
             }
           }, 35);
         }, 150);
@@ -700,7 +716,9 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     return () => {
       clearInterval(line1Interval);
       if (pauseTimeout) clearTimeout(pauseTimeout);
+      if (pauseTimeout2) clearTimeout(pauseTimeout2);
       if (line2Interval) clearInterval(line2Interval);
+      if (line3Interval) clearInterval(line3Interval);
     };
   }, [isAuthCodeStep, selectedLang]);
 
@@ -1945,14 +1963,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       <div className="animate-text-wave" style={{ minHeight: '25px' }}>{typedAuthLine1}</div>
                       <div className="animate-text-wave" style={{ minHeight: '25px' }}>{typedAuthLine2}</div>
                       <div
-                        className="mt-1"
+                        className="mt-1 animate-text-wave"
                         style={{
                           fontSize: '14px',
                           color: '#ffffff',
                           fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          minHeight: '20px',
                         }}
                       >
-                        {t.authCodeSpamHint || 'Email non reçu : vérifiez vos spams'}
+                        {typedAuthLine3}
                       </div>
                     </div>
 

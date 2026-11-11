@@ -190,12 +190,16 @@ export default function MissionValidationPage() {
           font-size: 18px !important;
         }
 
-        #validation-card button {
+        #validation-card button,
+        #validation-card button:hover,
+        #validation-card button:focus {
           transition: 0s !important;
+          outline: none !important;
+          box-shadow: none !important;
         }
 
-        #validation-card input:focus, #validation-card select:focus, #validation-card textarea:focus, #validation-card button:focus,
-        #validation-card input:hover, #validation-card select:hover, #validation-card textarea:hover, #validation-card button:hover {
+        #validation-card input:focus, #validation-card select:focus, #validation-card textarea:focus,
+        #validation-card input:hover, #validation-card select:hover, #validation-card textarea:hover {
           outline: 2.5px solid rgb(46, 84, 255) !important;
           outline-offset: 3px !important;
         }
@@ -280,17 +284,18 @@ export default function MissionValidationPage() {
               </div>
 
               {/* BOUTONS D'ACTION: VALIDER & REFUSER */}
-              {!showRefusalForm ? (
+              {!showRefusalForm && !submittedStatus && (
                 <div className="grid grid-cols-2 gap-3 pt-2">
                   {/* BOUTON VALIDER */}
                   <button
                     type="button"
                     onClick={handleValidate}
-                    disabled={isSubmitting || submittedStatus === 'validated'}
+                    disabled={isSubmitting}
                     style={{
-                      backgroundColor: submittedStatus === 'validated' ? '#94a3b8' : 'rgb(46, 84, 255)',
+                      backgroundColor: 'rgb(46, 84, 255)',
                       color: '#ffffff',
                       boxShadow: 'none',
+                      outline: 'none',
                       borderRadius: '12px',
                       fontSize: '18px',
                       padding: '14px 20px',
@@ -301,7 +306,7 @@ export default function MissionValidationPage() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '0.5rem',
-                      cursor: isSubmitting || submittedStatus === 'validated' ? 'not-allowed' : 'pointer',
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
                       border: 'none',
                       width: '100%',
                     }}
@@ -322,6 +327,7 @@ export default function MissionValidationPage() {
                       backgroundColor: 'rgb(210, 45, 11)',
                       color: '#ffffff',
                       boxShadow: 'none',
+                      outline: 'none',
                       borderRadius: '12px',
                       fontSize: '18px',
                       padding: '14px 20px',
@@ -340,7 +346,9 @@ export default function MissionValidationPage() {
                     {t("Refuser")}
                   </button>
                 </div>
-              ) : (
+              )}
+
+              {showRefusalForm && (
                 /* VOLET REFUS: COMMENTAIRE LIMITÉ À 300 CARACTÈRES & CONFIRMER LE REFUS */
                 <div className="space-y-4 pt-2">
                   <div className="flex flex-col gap-1.5">
@@ -351,6 +359,7 @@ export default function MissionValidationPage() {
                       id="refusal_comment"
                       rows={4}
                       maxLength={300}
+                      disabled={Boolean(submittedStatus)}
                       value={refusalComment}
                       onChange={(e) => setRefusalComment(e.target.value.slice(0, 300))}
                       placeholder={t("Veuillez détailler la raison ou proposer des dates et créneaux...")}
@@ -374,60 +383,101 @@ export default function MissionValidationPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={handleConfirmRefusal}
-                      disabled={isSubmitting}
-                      style={{
-                        backgroundColor: 'rgb(210, 45, 11)',
-                        color: '#ffffff',
-                        boxShadow: 'none',
-                        borderRadius: '12px',
-                        fontSize: '18px',
-                        padding: '14px 20px',
-                        fontWeight: '500',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        transition: '0s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.5rem',
-                        cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                        border: 'none',
-                        width: '100%',
-                      }}
-                    >
-                      {isSubmitting ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : (
-                        t("Confirmer le refus")
-                      )}
-                    </button>
+                  {!submittedStatus && (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={handleConfirmRefusal}
+                        disabled={isSubmitting}
+                        style={{
+                          backgroundColor: 'rgb(210, 45, 11)',
+                          color: '#ffffff',
+                          boxShadow: 'none',
+                          outline: 'none',
+                          borderRadius: '12px',
+                          fontSize: '18px',
+                          padding: '14px 20px',
+                          fontWeight: '500',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          transition: '0s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.5rem',
+                          cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                          border: 'none',
+                          width: '100%',
+                        }}
+                      >
+                        {isSubmitting ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          t("Confirmer le refus")
+                        )}
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setShowRefusalForm(false)}
-                      disabled={isSubmitting}
-                      className="w-full text-center text-sm text-slate-500 hover:text-slate-800 font-sans py-2 underline cursor-pointer"
-                    >
-                      {t("Annuler et revenir au choix")}
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowRefusalForm(false)}
+                        disabled={isSubmitting}
+                        style={{
+                          backgroundColor: 'rgb(210, 45, 11)',
+                          color: '#ffffff',
+                          boxShadow: 'none',
+                          outline: 'none',
+                          borderRadius: '12px',
+                          fontSize: '18px',
+                          padding: '14px 20px',
+                          fontWeight: '500',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          transition: '0s',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.5rem',
+                          cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                          border: 'none',
+                          width: '100%',
+                        }}
+                      >
+                        {t("Annuler et revenir au choix")}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* MESSAGES DE CONFIRMATION SUCCÈS */}
               {submittedStatus === 'validated' && (
-                <div className="mt-4 p-4 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-center font-sans font-semibold text-[16px]">
+                <p
+                  className="font-sans text-left m-0 p-0"
+                  style={{
+                    fontSize: '18px',
+                    textAlign: 'left',
+                    color: 'rgb(210, 45, 11)',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                  }}
+                >
                   {t("Proposition validée avec succès, vous pouvez fermer la page.")}
-                </div>
+                </p>
               )}
 
               {submittedStatus === 'refused' && (
-                <div className="mt-4 p-4 bg-red-50 text-red-800 border border-red-200 rounded-xl text-center font-sans font-semibold text-[16px]">
+                <p
+                  className="font-sans text-left m-0 p-0"
+                  style={{
+                    fontSize: '18px',
+                    textAlign: 'left',
+                    color: 'rgb(210, 45, 11)',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    padding: 0,
+                  }}
+                >
                   {t("Refus confirmé avec succès, vous pouvez fermer la page.")}
-                </div>
+                </p>
               )}
 
             </div>

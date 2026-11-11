@@ -2943,7 +2943,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <img
                     src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
                     alt=""
-                    style={{ width: '16px', height: '16px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                    style={{ width: '22px', height: '22px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
                     referrerPolicy="no-referrer"
                   />
                 </button>
@@ -6212,6 +6212,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <div className="w-full animate-fadeIn">
                     <select
                       id="crm-help-faq-select"
+                      className="appearance-none"
                       value=""
                       onChange={(e) => {
                         const val = e.target.value;
@@ -6233,6 +6234,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                         outline: 'none',
                         cursor: 'pointer',
+                        appearance: 'none',
+                        WebkitAppearance: 'none',
+                        MozAppearance: 'none',
+                        backgroundImage: 'none',
                       }}
                     >
                       <option value="">Sélection d’un sujet.</option>
