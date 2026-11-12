@@ -51,7 +51,8 @@ export type SheetTabType =
   | 'exportations'
   | 'autresEvents'
   | 'groupesZones'
-  | 'pointagesClient';
+  | 'pointagesClient'
+  | 'livetrack';
 
 export const GLOBAL_CLIENT_POINTAGES_SPREADSHEET_URL =
   'https://docs.google.com/spreadsheets/d/1tF8Noeh19y5exfZx0QPRPsIe7UeJSB1GGfAYlBI9HVQ/edit?usp=sharing';
@@ -1900,7 +1901,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Note globale.', field: 'noteGlobale', aliases: ['noteglobale', 'note', 'note5', 'notesur5', 'note4', 'notesur4', 'rating', 'scoreglobal', 'moyenne', 'satisfaction'] },
     { header: 'Date.', field: 'dateStr', aliases: ['date', 'datestr', 'dateavis', 'dateevaluation', 'horodatage', 'horodateur', 'createdat'], type: 'date' },
     { header: 'Intervention.', field: 'interventionReference', aliases: ['intervention', 'referenceintervention', 'interventionreference', 'interventionref', 'missionliee', 'missionref', 'mission', 'referencemission', 'defibid', 'reference'] },
-    { header: 'Rédacteur.', field: 'clientName', aliases: ['redacteur', 'client', 'clientname', 'nomclient', 'nometprenom', 'nomprenom', 'auteur', 'entreprise', 'denomination', 'societe'] },
+    { header: 'Votre nom et prénom.', field: 'clientName', aliases: ['votrenometprenom', 'redacteur', 'client', 'clientname', 'nomclient', 'nometprenom', 'nomprenom', 'votrenom', 'auteur', 'entreprise', 'denomination', 'societe'] },
     { header: 'Qualité.', field: 'qualite', aliases: ['qualite', 'qualiteglobale', 'qualitedelaprestation', 'qualiteglobaledelaprestation', 'qualitedelaprestationrealisee'], type: 'number' },
     { header: 'Ponctualité.', field: 'ponctualite', aliases: ['ponctualite', 'ponctualitedutechnicien'], type: 'number' },
     { header: 'Politesse.', field: 'politesse', aliases: ['politesse', 'politesseetcourtoisie', 'politesseetcourtoisiedutechnicien', 'politesseetpresentationdutechnicien'], type: 'number' },
@@ -3196,6 +3197,12 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Date.', field: 'date', aliases: ['date', 'datepointage', 'datedupointage'] },
     { header: 'Commentaire.', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'situation', 'statut', 'observation'] },
   ],
+  livetrack: [
+    { header: 'Nom Prénom Technicien', field: 'name', aliases: ['nomprenomtechnicien', 'nomprenom', 'nometprenom', 'technicien', 'nom', 'name', 'nomtechnicien', 'intervenant'] },
+    { header: 'Horodatage', field: 'horodatage', aliases: ['horodatage', 'date', 'dateheure', 'timestamp', 'updatedat', 'heure', 'derniereposition'] },
+    { header: 'Latitude', field: 'lat', aliases: ['latitude', 'lat'], type: 'number' },
+    { header: 'Longitude', field: 'lng', aliases: ['longitude', 'lng', 'lon', 'long'], type: 'number' },
+  ],
 };
 GENERIC_CANONICAL_HEADERS.devisFactures = GENERIC_CANONICAL_HEADERS.commandes;
 GENERIC_CANONICAL_HEADERS.stocks = GENERIC_CANONICAL_HEADERS.stocksGlobaux;
@@ -3217,6 +3224,7 @@ function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = 
       tabType === 'autresEvents' ||
       tabType === 'groupesZones' ||
       tabType === 'pointagesClient' ||
+      tabType === 'livetrack' ||
       tabType === 'variables' ||
       tabType === 'reglages'
     ) {
@@ -6596,6 +6604,68 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.planners = parseStringArray(merged.planners ?? rawByHeader['planners'] ?? rawByHeader['Planners']);
     merged.technicians = parseStringArray(merged.technicians ?? rawByHeader['technicians'] ?? rawByHeader['Technicians']);
     merged.regions = parseStringArray(merged.regions ?? rawByHeader['regions'] ?? rawByHeader['Regions']);
+  } else if (tabType === 'livetrack') {
+    const rawName = String(
+      merged.name ??
+        rawByHeader['Nom Prénom Technicien'] ??
+        rawByHeader['Nom Prénom Technicien.'] ??
+        rawByHeader['Technicien'] ??
+        rawByHeader['Nom et prénom'] ??
+        ''
+    ).trim();
+    const rawHorodatage = String(
+      merged.horodatage ??
+        rawByHeader['Horodatage'] ??
+        rawByHeader['Horodatage.'] ??
+        rawByHeader['Date'] ??
+        ''
+    ).trim();
+    const rawLatStr = String(
+      merged.lat ??
+        rawByHeader['Latitude'] ??
+        rawByHeader['Latitude.'] ??
+        ''
+    ).replace(',', '.').trim();
+    const rawLngStr = String(
+      merged.lng ??
+        rawByHeader['Longitude'] ??
+        rawByHeader['Longitude.'] ??
+        ''
+    ).replace(',', '.').trim();
+
+    const parsedLat = parseFloat(rawLatStr);
+    const parsedLng = parseFloat(rawLngStr);
+
+    let parsedTs = Number(merged.updatedAt) || 0;
+    if (!parsedTs && rawHorodatage) {
+      if (/^\d{10,13}$/.test(rawHorodatage)) {
+        const n = Number(rawHorodatage);
+        parsedTs = rawHorodatage.length === 10 ? n * 1000 : n;
+      } else {
+        // Parse DD/MM/YYYY HH:mm(:ss) or ISO
+        const frMatch = rawHorodatage.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[\sTà]+(\d{1,2})[:h](\d{1,2})(?:[:m](\d{1,2}))?)?/i);
+        if (frMatch) {
+          const dd = parseInt(frMatch[1], 10);
+          const mm = parseInt(frMatch[2], 10) - 1;
+          const yyyy = parseInt(frMatch[3], 10);
+          const hh = frMatch[4] ? parseInt(frMatch[4], 10) : 0;
+          const min = frMatch[5] ? parseInt(frMatch[5], 10) : 0;
+          const ss = frMatch[6] ? parseInt(frMatch[6], 10) : 0;
+          const d = new Date(yyyy, mm, dd, hh, min, ss);
+          if (!isNaN(d.getTime())) parsedTs = d.getTime();
+        } else {
+          const d = new Date(rawHorodatage);
+          if (!isNaN(d.getTime())) parsedTs = d.getTime();
+        }
+      }
+    }
+
+    merged.id = rawName ? rawName.toLowerCase() : `livetrack_${rowIndexZeroBased + 2}`;
+    merged.name = rawName;
+    merged.horodatage = rawHorodatage;
+    merged.lat = Number.isFinite(parsedLat) ? parsedLat : undefined;
+    merged.lng = Number.isFinite(parsedLng) ? parsedLng : undefined;
+    merged.updatedAt = parsedTs || undefined;
   } else if (tabType === 'satisfaction') {
     const parseScore = (v: any): number | null => {
       if (v === undefined || v === null || v === '') return null;
@@ -6633,8 +6703,17 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     const rawDate = String(merged.dateStr || merged.date || rawByHeader['Date.'] || rawByHeader['Date'] || '').trim();
     merged.dateStr = rawDate;
     merged.date = rawDate;
-    merged.clientName = String(merged.clientName || rawByHeader['Rédacteur.'] || rawByHeader['Rédacteur'] || rawByHeader['Client'] || '').trim();
-    merged.comment = String(merged.comment || rawByHeader['Évaluation.'] || rawByHeader['Évaluation'] || rawByHeader['Commentaire'] || '').trim();
+    merged.clientName = String(
+      merged.clientName ||
+      merged.nomPrenom ||
+      rawByHeader['Votre nom et prénom.'] ||
+      rawByHeader['Votre nom et prénom'] ||
+      rawByHeader['Rédacteur.'] ||
+      rawByHeader['Rédacteur'] ||
+      rawByHeader['Client'] ||
+      ''
+    ).trim();
+    merged.comment = String(merged.comment || rawByHeader['Évaluation.'] || rawByHeader['Évaluation'] || rawByHeader['Commentaire.'] || rawByHeader['Commentaire'] || '').trim();
   }
 
   if (!merged.id) {
@@ -6701,7 +6780,21 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.intervention = intRef;
     enriched.missionRef = intRef;
     enriched.npsScore = enriched.npsScore ?? enriched.nps ?? '';
-    enriched.clientName = String(enriched.clientName || '').trim();
+    const resolvedClientName = String(
+      enriched.clientName ||
+      enriched.nomPrenom ||
+      enriched['Votre nom et prénom.'] ||
+      enriched['Votre nom et prénom'] ||
+      enriched['Rédacteur.'] ||
+      enriched['Rédacteur'] ||
+      ''
+    ).trim();
+    enriched.clientName = resolvedClientName;
+    enriched.nomPrenom = resolvedClientName;
+    enriched['Votre nom et prénom.'] = resolvedClientName;
+    enriched['Votre nom et prénom'] = resolvedClientName;
+    enriched['Rédacteur.'] = resolvedClientName;
+    enriched['Rédacteur'] = resolvedClientName;
     enriched.comment = String(enriched.comment || '').trim();
   } else if (tabType === 'tournees') {
     enriched.tourIdentifiant = enriched.tourIdentifiant || enriched.identifiant || enriched.tourCode || enriched.id || '';
@@ -7997,6 +8090,36 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.planners = serializeArray(enriched.planners);
     enriched.technicians = serializeArray(enriched.technicians);
     enriched.regions = serializeArray(enriched.regions);
+  } else if (tabType === 'livetrack') {
+    const cleanName = String(
+      enriched.name ??
+        enriched['Nom Prénom Technicien'] ??
+        enriched['Technicien'] ??
+        ''
+    ).trim();
+    let cleanHorodatage = String(
+      enriched.horodatage ??
+        enriched['Horodatage'] ??
+        ''
+    ).trim();
+    if (!cleanHorodatage) {
+      const ts = Number(enriched.updatedAt) || Date.now();
+      const d = new Date(ts);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      cleanHorodatage = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+    const cleanLat = enriched.lat !== undefined && enriched.lat !== null ? String(enriched.lat) : '';
+    const cleanLng = enriched.lng !== undefined && enriched.lng !== null ? String(enriched.lng) : '';
+
+    enriched.id = cleanName.toLowerCase();
+    enriched.name = cleanName;
+    enriched.horodatage = cleanHorodatage;
+    enriched.lat = cleanLat;
+    enriched.lng = cleanLng;
+    enriched['Nom Prénom Technicien'] = cleanName;
+    enriched['Horodatage'] = cleanHorodatage;
+    enriched['Latitude'] = cleanLat;
+    enriched['Longitude'] = cleanLng;
   } else if (tabType === 'pointagesClient') {
     const cleanIdent = String(
       enriched.equipementIdentifiant ??
@@ -8307,6 +8430,9 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
   }
   if (tabType === 'groupesZones') {
     return [item.id, item.title].filter(Boolean).map(s => String(s).trim().toLowerCase());
+  }
+  if (tabType === 'livetrack') {
+    return [item.id, item.name, item['Nom Prénom Technicien']].filter(Boolean).map(s => String(s).trim().toLowerCase());
   }
   if (tabType === 'pointagesClient') {
     const tid = String(item.tenantId || item.envId || '').trim().toLowerCase();
@@ -10850,6 +10976,9 @@ const MASTER_SHEET_SPREADSHEET_HEADER_TO_FIELD: Record<string, string> = {
   spreadsheetgroupesetzones: 'spreadsheetGroupesZones',
   spreadsheetgroupeszones: 'spreadsheetGroupesZones',
   spreadsheetgroupestravail: 'spreadsheetGroupesZones',
+  spreadsheetlivetrack: 'spreadsheetLivetrack',
+  spreadsheetlocalisation: 'spreadsheetLivetrack',
+  spreadsheetlocalisations: 'spreadsheetLivetrack',
 };
 
 const DEFAULT_MASTER_SHEET_TENANTS: MasterSheetTenantRecord[] = [

@@ -591,6 +591,8 @@ export interface CompanyInfo {
   spreadsheetAutresEventsUrl?: string;
   spreadsheetGroupesZones?: string;
   spreadsheetGroupesZonesUrl?: string;
+  spreadsheetLivetrack?: string;
+  spreadsheetLivetrackUrl?: string;
 }
 
 export type SpreadsheetFieldKey =
@@ -627,7 +629,8 @@ export type SpreadsheetFieldKey =
   | 'spreadsheetObservateurActionsSuspectes'
   | 'spreadsheetExportations'
   | 'spreadsheetAutresEvents'
-  | 'spreadsheetGroupesZones';
+  | 'spreadsheetGroupesZones'
+  | 'spreadsheetLivetrack';
 
 export const EXTRA_SPREADSHEET_FIELDS: {
   key: SpreadsheetFieldKey;
@@ -665,6 +668,7 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetObservateurActionsSuspectes', urlKey: 'spreadsheetObservateurActionsSuspectesUrl', storageSuffix: 'spreadsheet_observateur_actions_suspectes', label: 'Spreadsheet Observateur des actions suspectes.', id: 'settings-db-spreadsheet-observateur-actions-suspectes' },
   { key: 'spreadsheetAutresEvents', urlKey: 'spreadsheetAutresEventsUrl', storageSuffix: 'spreadsheet_autres_events', label: 'Spreadsheet Autres Events.', id: 'settings-db-spreadsheet-autres-events' },
   { key: 'spreadsheetGroupesZones', urlKey: 'spreadsheetGroupesZonesUrl', storageSuffix: 'spreadsheet_groupes_zones', label: 'Spreadsheet Groupes et Zones.', id: 'settings-db-spreadsheet-groupes-zones' },
+  { key: 'spreadsheetLivetrack', urlKey: 'spreadsheetLivetrackUrl', storageSuffix: 'spreadsheet_livetrack', label: 'Spreadsheet Livetrack.', id: 'settings-db-spreadsheet-livetrack' },
 ];
 
 export interface PointageLog {

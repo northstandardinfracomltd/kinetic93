@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { findTenantByInterventionGlobally, fetchRawCollectionFromFirestore, saveCollectionToFirestore } from '../firebase';
 import { t } from '../utils/translate';
 import { getParisTimestamp } from '../utils/dateUtils';
+import { generateReportPDF } from '../utils/dropbox';
 
 interface CriteriaConfig {
   key: 'qualite' | 'ponctualite' | 'politesse' | 'clartePdf' | 'explications' | 'sensibilisation';
@@ -113,6 +114,174 @@ export default function SatisfactionFormPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [alreadyResponded, setAlreadyResponded] = useState<boolean>(false);
+  const [matchedReport, setMatchedReport] = useState<any | null>(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+
+  // Check if a satisfaction response has already been received for this intervention reference & fetch report
+  useEffect(() => {
+    let isMounted = true;
+    const cleanRef = interventionRef.trim();
+    if (!cleanRef) {
+      setAlreadyResponded(false);
+      setMatchedReport(null);
+      return;
+    }
+    const checkRefUpper = cleanRef.toUpperCase();
+
+    const checkContext = async () => {
+      let foundAlready = false;
+      let foundRep: any = null;
+
+      // 1. Check local storage / Firestore first
+      try {
+        const tid = urlTenantId.trim() || localStorage.getItem('defib_tenant_id') || 'demo';
+        const localReviewsRaw = localStorage.getItem(`defib_${tid}_customer_reviews`);
+        if (localReviewsRaw) {
+          const parsed = JSON.parse(localReviewsRaw);
+          if (
+            Array.isArray(parsed) &&
+            parsed.some(
+              (r: any) =>
+                r &&
+                String(r.interventionReference || r.interventionRef || r.intervention || r.missionRef || '')
+                  .trim()
+                  .toUpperCase() === checkRefUpper
+            )
+          ) {
+            foundAlready = true;
+          }
+        }
+        const localReportsRaw = localStorage.getItem(`defib_${tid}_generated_reports`);
+        if (localReportsRaw) {
+          const parsedReps = JSON.parse(localReportsRaw);
+          if (Array.isArray(parsedReps)) {
+            foundRep =
+              parsedReps.find(
+                (r: any) =>
+                  r &&
+                  ((r.interventionReference && String(r.interventionReference).trim().toUpperCase() === checkRefUpper) ||
+                    (r.id && String(r.id).trim().toUpperCase() === checkRefUpper))
+              ) || null;
+          }
+        }
+      } catch (_) {}
+
+      // 2. Query backend endpoint for authoritative spreadsheet + server check
+      try {
+        const res = await fetch('/api/public/satisfaction-context', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantHint: urlTenantId.trim() || localStorage.getItem('defib_tenant_id') || '',
+            interventionReference: cleanRef,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.alreadyResponded) {
+            foundAlready = true;
+          }
+          if (data?.report) {
+            foundRep = data.report;
+          }
+        }
+      } catch (_) {}
+
+      if (isMounted) {
+        setAlreadyResponded(foundAlready);
+        if (foundRep) {
+          setMatchedReport(foundRep);
+        }
+      }
+    };
+
+    checkContext();
+    return () => {
+      isMounted = false;
+    };
+  }, [interventionRef, urlTenantId]);
+
+  const handleDirectDownloadPdf = async () => {
+    if (isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    try {
+      const cleanRef = interventionRef.trim();
+      let reportToUse = matchedReport;
+
+      if (!reportToUse && cleanRef) {
+        try {
+          const res = await fetch('/api/public/satisfaction-context', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tenantHint: urlTenantId.trim() || localStorage.getItem('defib_tenant_id') || '',
+              interventionReference: cleanRef,
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data?.report) {
+              reportToUse = data.report;
+              setMatchedReport(data.report);
+            }
+          }
+        } catch (_) {}
+      }
+
+      const safeRefName = (
+        cleanRef ||
+        reportToUse?.interventionReference ||
+        reportToUse?.defibIdentifiant ||
+        reportToUse?.id ||
+        'Intervention'
+      )
+        .trim()
+        .replace(/[^a-zA-Z0-9._-]/g, '_');
+      const fileName = `Rapport_Intervention_${safeRefName}.pdf`;
+
+      const triggerBlobDownload = (blob: Blob) => {
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+      };
+
+      // If report has a direct PDF URL or data URL, try fetching it as binary PDF first
+      const rawPdfUrl = String(reportToUse?.pdfUrl || reportToUse?.rapportUrl || '').trim();
+      if (rawPdfUrl && (rawPdfUrl.startsWith('data:application/pdf') || rawPdfUrl.includes('/api/firebase-media/') || rawPdfUrl.endsWith('.pdf'))) {
+        try {
+          const pdfRes = await fetch(rawPdfUrl);
+          if (pdfRes.ok) {
+            const blob = await pdfRes.blob();
+            if (blob.size > 0 && (blob.type.includes('pdf') || rawPdfUrl.startsWith('data:application/pdf'))) {
+              triggerBlobDownload(new Blob([blob], { type: 'application/pdf' }));
+              return;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Generate PDF directly via generateReportPDF and download immediately without opening a new tab
+      const pdfBytes = generateReportPDF(
+        reportToUse || {
+          interventionReference: cleanRef || '-',
+          date: new Date().toLocaleDateString('fr-FR'),
+        }
+      );
+      const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+      triggerBlobDownload(pdfBlob);
+    } catch (err) {
+      console.error('Error downloading PDF:', err);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
 
   const criteriaValues = useMemo(() => ({
     qualite,
@@ -149,7 +318,7 @@ export default function SatisfactionFormPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
+    if (!isFormValid || alreadyResponded) return;
 
     setIsSubmitting(true);
     setErrorMessage('');
@@ -174,6 +343,9 @@ export default function SatisfactionFormPage() {
       const newReview = {
         id: 'rev-' + Date.now(),
         clientName: nomPrenom.trim(),
+        nomPrenom: nomPrenom.trim(),
+        'Votre nom et prénom.': nomPrenom.trim(),
+        'Votre nom et prénom': nomPrenom.trim(),
         comment: commentaire.trim(),
         interventionReference: interventionRef.trim(),
         interventionRef: interventionRef.trim(),
@@ -256,6 +428,7 @@ export default function SatisfactionFormPage() {
       }
 
       setIsSubmitted(true);
+      setAlreadyResponded(true);
       // Clear inputs
       setNomPrenom('');
       setCommentaire('');
@@ -324,229 +497,282 @@ export default function SatisfactionFormPage() {
           id="satisfaction-card"
           style={{ backgroundColor: 'rgb(233, 235, 239)' }}
         >
-          
           <form onSubmit={handleSubmit} className="space-y-6">
-            
-            {errorMessage && (
-              <div className="p-4 bg-rose-50 text-rose-700 border border-rose-100 rounded-xl text-xs font-sans">
-                {errorMessage}
-              </div>
-            )}
-
-            {/* RÉFÉRENCE INTERVENTION FIELD */}
+            {/* TOP DOCUMENT DOWNLOAD SECTION (Always first) */}
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="intervention_ref" className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
-                {t("Référence intervention (renseignée automatiquement).") || "Référence intervention (renseignée automatiquement)."}
-              </label>
-              <input
-                id="intervention_ref"
-                type="text"
-                placeholder={t("Référence intervention")}
-                value={interventionRef}
-                onChange={(e) => setInterventionRef(e.target.value)}
-                className="w-full text-black"
-                style={{
-                  backgroundColor: '#ffffff',
-                  color: '#000000',
-                  borderColor: '#DCE1EA',
-                  fontSize: '18px',
-                }}
-              />
-            </div>
-
-            {/* NOM PRENOM */}
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="nom_prenom" className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
-                {t("Votre nom et prénom.")}
-              </label>
-              <input
-                id="nom_prenom"
-                type="text"
-                required
-                placeholder={t("Ex: Jean Dupont.")}
-                value={nomPrenom}
-                onChange={(e) => setNomPrenom(e.target.value)}
-                className="w-full text-black"
-              />
-              <div 
-                style={{ 
-                  color: '#fff', 
-                  fontSize: '18px', 
-                  textAlign: 'center', 
-                  marginTop: '55px', 
-                  backgroundColor: 'rgb(210, 45, 11)', 
-                  border: 'none', 
-                  borderRadius: '13px', 
-                  padding: '12px' 
-                }} 
-                className="font-sans"
-              >
-                {t("Ci-dessous, évaluez notre service selon les critères suivants de 1 (Décevant) à 4 (Excellent).")}
-              </div>
-            </div>
-
-            {/* 6 CRITERIA RADIOS (1 à 4) */}
-            <div className="space-y-5 pt-2">
-              {CRITERIA_LIST.map((crit) => {
-                const currentVal = criteriaValues[crit.key];
-
-                return (
-                  <div key={crit.key} className="flex flex-col gap-2">
-                    <label className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
-                      {t(crit.label)}
-                    </label>
-                    <div className="grid grid-cols-4 gap-2 text-center">
-                      {[1, 2, 3, 4].map((num) => {
-                        const isSelected = currentVal === num;
-                        const labelText = `${num}`;
-
-                        const btnStyle: React.CSSProperties = isSelected
-                          ? {
-                              backgroundColor: 'rgb(46, 84, 255)',
-                              color: '#ffffff',
-                              boxShadow: 'none',
-                              border: 'none',
-                              borderRadius: '12px',
-                              fontSize: '18px',
-                              padding: '10px 4px',
-                              fontWeight: 'bold',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              cursor: 'pointer',
-                              transition: '0s',
-                            }
-                          : {
-                              backgroundColor: '#ffffff',
-                              color: '#000000',
-                              boxShadow: 'none',
-                              border: 'none',
-                              borderRadius: '12px',
-                              fontSize: '18px',
-                              padding: '10px 4px',
-                              fontWeight: 'bold',
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              cursor: 'pointer',
-                              transition: '0s',
-                            };
-
-                        return (
-                          <button
-                            key={num}
-                            type="button"
-                            onClick={() => setCriteriaValue(crit.key, num)}
-                            style={btnStyle}
-                            className="active:scale-98"
-                          >
-                            {t(labelText)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* QUESTION RECOMMANDATION / NPS (1 à 10) */}
-            <div className="flex flex-col gap-2 pt-8 mt-4" style={{ paddingTop: '32px' }}>
               <label className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
-                {t("Quelle est la probabilité que vous nous recommandiez?")}
+                {t("Vous avez un document disponible au téléchargement.") || "Vous avez un document disponible au téléchargement."}
               </label>
-              <div className="grid grid-cols-10 gap-1 sm:gap-1.5 text-center">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-                  const isSelected = npsScore === num;
+              <button
+                type="button"
+                id="btn-download-satisfaction-report-pdf"
+                onClick={handleDirectDownloadPdf}
+                disabled={isDownloadingPdf}
+                style={{
+                  backgroundColor: 'rgb(46, 84, 255)',
+                  color: '#ffffff',
+                  boxShadow: 'none',
+                  borderRadius: '12px',
+                  fontSize: '18px',
+                  padding: '14px 20px',
+                  fontWeight: '100',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  transition: '0s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  cursor: isDownloadingPdf ? 'wait' : 'pointer',
+                  opacity: isDownloadingPdf ? 0.75 : 1,
+                  border: 'none',
+                  width: '100%',
+                }}
+              >
+                {isDownloadingPdf ? (t("Téléchargement...") || "Téléchargement...") : (t("Télécharger PDF") || "Télécharger PDF")}
+              </button>
+            </div>
 
-                  const btnStyle: React.CSSProperties = isSelected
-                    ? {
-                        backgroundColor: 'rgb(46, 84, 255)',
-                        color: '#ffffff',
-                        boxShadow: 'none',
-                        border: 'none',
-                        borderRadius: '12px',
-                        fontSize: '18px',
-                        padding: '10px 0px',
-                        fontWeight: 'bold',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        cursor: 'pointer',
-                        transition: '0s',
-                      }
-                    : {
-                        backgroundColor: '#ffffff',
-                        color: '#000000',
-                        boxShadow: 'none',
-                        border: 'none',
-                        borderRadius: '12px',
-                        fontSize: '18px',
-                        padding: '10px 0px',
-                        fontWeight: 'bold',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        cursor: 'pointer',
-                        transition: '0s',
-                      };
-
-                  return (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() => setNpsScore(num)}
-                      style={btnStyle}
-                      className="active:scale-98 min-w-0"
-                    >
-                      {num}
-                    </button>
-                  );
-                })}
+            {alreadyResponded ? (
+              <div
+                id="satisfaction-already-responded-msg"
+                style={{
+                  color: '#000000',
+                  fontSize: '18px',
+                  textAlign: 'center',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #DCE1EA',
+                  borderRadius: '13px',
+                  padding: '16px',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+                className="font-bold font-sans"
+              >
+                {t("Vous avez déjà répondu à l’enquête.") || "Vous avez déjà répondu à l’enquête."}
               </div>
-            </div>
+            ) : (
+              <>
+                {errorMessage && (
+                  <div className="p-4 bg-rose-50 text-rose-700 border border-rose-100 rounded-xl text-xs font-sans">
+                    {errorMessage}
+                  </div>
+                )}
 
-            {/* COMMENTAIRE */}
-            <div className="flex flex-col gap-1.5 pt-4">
-              <label htmlFor="commentaire" className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
-                {t("Commentaire (max. 250 caractères).") || "Commentaire (max. 250 caractères)."}
-              </label>
-              <textarea
-                id="commentaire"
-                required
-                maxLength={250}
-                rows={4}
-                placeholder={t("Entrez votre commentaire.")}
-                value={commentaire}
-                onChange={(e) => setCommentaire(e.target.value.slice(0, 250))}
-                className="w-full text-black"
-              />
-            </div>
+                {/* RÉFÉRENCE INTERVENTION FIELD */}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="intervention_ref" className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
+                    {t("Référence intervention (renseignée automatiquement).") || "Référence intervention (renseignée automatiquement)."}
+                  </label>
+                  <input
+                    id="intervention_ref"
+                    type="text"
+                    placeholder={t("Référence intervention")}
+                    value={interventionRef}
+                    onChange={(e) => setInterventionRef(e.target.value)}
+                    className="w-full text-black"
+                    style={{
+                      backgroundColor: '#ffffff',
+                      color: '#000000',
+                      borderColor: '#DCE1EA',
+                      fontSize: '18px',
+                    }}
+                  />
+                </div>
 
-            {/* SUBMIT BUTTON */}
-            <button
-              type="submit"
-              disabled={!isFormValid || isSubmitting}
-              style={{
-                backgroundColor: 'rgb(46, 84, 255)',
-                color: '#ffffff',
-                boxShadow: 'none',
-                borderRadius: '12px',
-                fontSize: '18px',
-                padding: '14px 20px',
-                fontWeight: '100',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                transition: '0s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                cursor: isFormValid && !isSubmitting ? 'pointer' : 'not-allowed',
-                opacity: isFormValid && !isSubmitting ? 1 : 0.65,
-                border: 'none',
-                width: '100%',
-              }}
-            >
-              {isSubmitting ? t("Enregistrement...") : t("Valider")}
-            </button>
+                {/* NOM PRENOM */}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="nom_prenom" className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
+                    {t("Votre nom et prénom.")}
+                  </label>
+                  <input
+                    id="nom_prenom"
+                    type="text"
+                    required
+                    placeholder={t("Ex: Jean Dupont.")}
+                    value={nomPrenom}
+                    onChange={(e) => setNomPrenom(e.target.value)}
+                    className="w-full text-black"
+                  />
+                  <div 
+                    style={{ 
+                      color: '#fff', 
+                      fontSize: '18px', 
+                      textAlign: 'center', 
+                      marginTop: '55px', 
+                      backgroundColor: 'rgb(210, 45, 11)', 
+                      border: 'none', 
+                      borderRadius: '13px', 
+                      padding: '12px' 
+                    }} 
+                    className="font-sans"
+                  >
+                    {t("Ci-dessous, évaluez notre service selon les critères suivants de 1 (Décevant) à 4 (Excellent).")}
+                  </div>
+                </div>
 
-            {/* Form submission success feedback directly below validation button */}
-            {isSubmitted && (
-              <p className="mt-4 text-center text-[16px] font-semibold text-red-600 font-sans">
-                {t("Évaluation enregistrée avec succès, vous pouvez fermer la page.")}
-              </p>
+                {/* 6 CRITERIA RADIOS (1 à 4) */}
+                <div className="space-y-5 pt-2">
+                  {CRITERIA_LIST.map((crit) => {
+                    const currentVal = criteriaValues[crit.key];
+
+                    return (
+                      <div key={crit.key} className="flex flex-col gap-2">
+                        <label className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
+                          {t(crit.label)}
+                        </label>
+                        <div className="grid grid-cols-4 gap-2 text-center">
+                          {[1, 2, 3, 4].map((num) => {
+                            const isSelected = currentVal === num;
+                            const labelText = `${num}`;
+
+                            const btnStyle: React.CSSProperties = isSelected
+                              ? {
+                                  backgroundColor: 'rgb(46, 84, 255)',
+                                  color: '#ffffff',
+                                  boxShadow: 'none',
+                                  border: 'none',
+                                  borderRadius: '12px',
+                                  fontSize: '18px',
+                                  padding: '10px 4px',
+                                  fontWeight: 'bold',
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  cursor: 'pointer',
+                                  transition: '0s',
+                                }
+                              : {
+                                  backgroundColor: '#ffffff',
+                                  color: '#000000',
+                                  boxShadow: 'none',
+                                  border: 'none',
+                                  borderRadius: '12px',
+                                  fontSize: '18px',
+                                  padding: '10px 4px',
+                                  fontWeight: 'bold',
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  cursor: 'pointer',
+                                  transition: '0s',
+                                };
+
+                            return (
+                              <button
+                                key={num}
+                                type="button"
+                                onClick={() => setCriteriaValue(crit.key, num)}
+                                style={btnStyle}
+                                className="active:scale-98"
+                              >
+                                {t(labelText)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* QUESTION RECOMMANDATION / NPS (1 à 10) */}
+                <div className="flex flex-col gap-2 pt-8 mt-4" style={{ paddingTop: '32px' }}>
+                  <label className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
+                    {t("Quelle est la probabilité que vous nous recommandiez?")}
+                  </label>
+                  <div className="grid grid-cols-10 gap-1 sm:gap-1.5 text-center">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                      const isSelected = npsScore === num;
+
+                      const btnStyle: React.CSSProperties = isSelected
+                        ? {
+                            backgroundColor: 'rgb(46, 84, 255)',
+                            color: '#ffffff',
+                            boxShadow: 'none',
+                            border: 'none',
+                            borderRadius: '12px',
+                            fontSize: '18px',
+                            padding: '10px 0px',
+                            fontWeight: 'bold',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            cursor: 'pointer',
+                            transition: '0s',
+                          }
+                        : {
+                            backgroundColor: '#ffffff',
+                            color: '#000000',
+                            boxShadow: 'none',
+                            border: 'none',
+                            borderRadius: '12px',
+                            fontSize: '18px',
+                            padding: '10px 0px',
+                            fontWeight: 'bold',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            cursor: 'pointer',
+                            transition: '0s',
+                          };
+
+                      return (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setNpsScore(num)}
+                          style={btnStyle}
+                          className="active:scale-98 min-w-0"
+                        >
+                          {num}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* COMMENTAIRE */}
+                <div className="flex flex-col gap-1.5 pt-4">
+                  <label htmlFor="commentaire" className="font-bold font-sans" style={{ color: '#000000', fontSize: '18px' }}>
+                    {t("Commentaire (max. 250 caractères).") || "Commentaire (max. 250 caractères)."}
+                  </label>
+                  <textarea
+                    id="commentaire"
+                    required
+                    maxLength={250}
+                    rows={4}
+                    placeholder={t("Entrez votre commentaire.")}
+                    value={commentaire}
+                    onChange={(e) => setCommentaire(e.target.value.slice(0, 250))}
+                    className="w-full text-black"
+                  />
+                </div>
+
+                {/* SUBMIT BUTTON */}
+                <button
+                  type="submit"
+                  disabled={!isFormValid || isSubmitting}
+                  style={{
+                    backgroundColor: 'rgb(46, 84, 255)',
+                    color: '#ffffff',
+                    boxShadow: 'none',
+                    borderRadius: '12px',
+                    fontSize: '18px',
+                    padding: '14px 20px',
+                    fontWeight: '100',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    transition: '0s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    cursor: isFormValid && !isSubmitting ? 'pointer' : 'not-allowed',
+                    opacity: isFormValid && !isSubmitting ? 1 : 0.65,
+                    border: 'none',
+                    width: '100%',
+                  }}
+                >
+                  {isSubmitting ? t("Enregistrement...") : t("Valider")}
+                </button>
+
+                {/* Form submission success feedback directly below validation button */}
+                {isSubmitted && (
+                  <p className="mt-4 text-center text-[16px] font-semibold text-red-600 font-sans">
+                    {t("Évaluation enregistrée avec succès, vous pouvez fermer la page.")}
+                  </p>
+                )}
+              </>
             )}
           </form>
 

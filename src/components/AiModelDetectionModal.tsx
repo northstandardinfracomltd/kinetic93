@@ -661,6 +661,32 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
             </div>
           )}
 
+          {/* Detected model text displayed on top of the camera feed in place of the center square */}
+          {scanStatus === 'success' && detectedModel && (
+            <div
+              className="absolute inset-0 pointer-events-none flex items-center justify-center p-6"
+              style={{ backgroundColor: 'rgba(15, 23, 42, 0.35)' }}
+            >
+              <div
+                className="bg-white rounded-2xl px-5 py-4 text-center max-w-sm w-full"
+                style={{
+                  border: '1px solid #dedede',
+                }}
+              >
+                <p
+                  className="font-sans leading-relaxed m-0"
+                  style={{
+                    fontSize: '18px',
+                    color: '#000000',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
+                  Il semble qu’il s’agisse de ce modèle: <strong className="font-bold">{formattedModelName}</strong>.
+                </p>
+              </div>
+            </div>
+          )}
+
           {!isCameraActive && !cameraErrorMsg && (
             <div
               className="absolute inset-0 flex flex-col items-center justify-center text-center text-white p-6 z-10"
@@ -724,59 +750,47 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
           )}
 
           {scanStatus === 'success' && detectedModel && (
-            <div className="space-y-3">
-              <p
-                className="font-sans leading-relaxed m-0"
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={handleConfirmSelection}
                 style={{
+                  backgroundColor: '#2e54ff',
+                  color: '#ffffff',
+                  borderRadius: '13px',
                   fontSize: '18px',
-                  color: '#000000',
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  padding: '12px 14px',
+                  fontWeight: 'bold',
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  border: 'none',
                 }}
+                className="font-sans hover:opacity-95 cursor-pointer transition-all"
               >
-                Il semble qu’il s’agisse de ce modèle: <strong className="font-bold">{formattedModelName}</strong>.
-              </p>
-              <div className="space-y-2.5 pt-1">
-                <button
-                  type="button"
-                  onClick={handleConfirmSelection}
-                  style={{
-                    backgroundColor: '#2e54ff',
-                    color: '#ffffff',
-                    borderRadius: '13px',
-                    fontSize: '18px',
-                    padding: '12px 14px',
-                    fontWeight: 'bold',
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    border: 'none',
-                  }}
-                  className="font-sans hover:opacity-95 cursor-pointer transition-all"
-                >
-                  Oui, sélectionner
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRestartScan}
-                  style={{
-                    backgroundColor: '#0f172a',
-                    color: '#ffffff',
-                    borderRadius: '13px',
-                    fontSize: '18px',
-                    padding: '12px 14px',
-                    fontWeight: 'bold',
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    border: 'none',
-                  }}
-                  className="font-sans hover:opacity-90 cursor-pointer transition-all"
-                >
-                  Non, recommencer
-                </button>
-              </div>
+                Oui, sélectionner
+              </button>
+              <button
+                type="button"
+                onClick={handleRestartScan}
+                style={{
+                  backgroundColor: '#0f172a',
+                  color: '#ffffff',
+                  borderRadius: '13px',
+                  fontSize: '18px',
+                  padding: '12px 14px',
+                  fontWeight: 'bold',
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  border: 'none',
+                }}
+                className="font-sans hover:opacity-90 cursor-pointer transition-all"
+              >
+                Non, recommencer
+              </button>
             </div>
           )}
         </div>

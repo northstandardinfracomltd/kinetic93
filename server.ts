@@ -1408,19 +1408,58 @@ async function startServer() {
     }
   });
 
-  // Real-time technician GPS location endpoints
-  app.get("/api/tech-locations", (req, res) => {
+  // Real-time technician GPS location endpoints (backed by memory, disk, and tenant's Spreadsheet Livetrack)
+  app.get("/api/tech-locations", async (req, res) => {
     try {
       const tenantId = String(req.query.tenantId || 'demo').trim() || 'demo';
       const storeKey = `${tenantId}_tech_locations`;
-      const locations = serverMemoryStore.get(storeKey) || {};
-      return res.json({ locations });
+      const existing: Record<string, any> =
+        serverMemoryStore.get(storeKey) && typeof serverMemoryStore.get(storeKey) === 'object'
+          ? { ...serverMemoryStore.get(storeKey) }
+          : {};
+
+      // Also check tenant's Spreadsheet Livetrack if configured
+      try {
+        const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'livetrack');
+        if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
+          const sheetData = await fetchTenantSheetCollection(sheetUrl, tenantId, 'livetrack', false);
+          if (sheetData?.fromSpreadsheet && Array.isArray(sheetData.items)) {
+            let changed = false;
+            for (const item of sheetData.items) {
+              const name = String(item?.name || item?.['Nom Prénom Technicien'] || '').trim();
+              const numLat = Number(item?.lat ?? item?.['Latitude']);
+              const numLng = Number(item?.lng ?? item?.['Longitude']);
+              if (!name || isNaN(numLat) || isNaN(numLng)) continue;
+              const normKey = name.toLowerCase();
+              const sheetTs = Number(item?.updatedAt) || 0;
+              const cur = existing[normKey];
+              if (!cur || (sheetTs > 0 && (!cur.updatedAt || sheetTs > cur.updatedAt))) {
+                existing[normKey] = {
+                  name,
+                  email: cur?.email || '',
+                  lat: numLat,
+                  lng: numLng,
+                  updatedAt: sheetTs || cur?.updatedAt || undefined,
+                  horodatage: item?.horodatage || '',
+                };
+                changed = true;
+              }
+            }
+            if (changed) {
+              serverMemoryStore.set(storeKey, existing);
+              persistSingleCollectionToDisk(storeKey, existing);
+            }
+          }
+        }
+      } catch (_) {}
+
+      return res.json({ locations: existing });
     } catch (err) {
       return res.json({ locations: {} });
     }
   });
 
-  app.post("/api/tech-locations", (req, res) => {
+  app.post("/api/tech-locations", async (req, res) => {
     try {
       const { tenantId: rawTenantId, name, email, lat, lng, updatedAt } = req.body || {};
       const tenantId = String(rawTenantId || 'demo').trim() || 'demo';
@@ -1431,6 +1470,10 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid technician location payload" });
       }
       const ts = Number(updatedAt) || Date.now();
+      const d = new Date(ts);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const horodatageStr = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
       const storeKey = `${tenantId}_tech_locations`;
       const existing: Record<string, any> =
         serverMemoryStore.get(storeKey) && typeof serverMemoryStore.get(storeKey) === 'object'
@@ -1443,6 +1486,7 @@ async function startServer() {
         lat: numLat,
         lng: numLng,
         updatedAt: ts,
+        horodatage: horodatageStr,
       };
       serverMemoryStore.set(storeKey, existing);
       serverStoreTimestamps.set(storeKey, Date.now());
@@ -1471,6 +1515,27 @@ async function startServer() {
           persistSingleCollectionToDisk(membersKey, updatedMembers);
         }
       }
+
+      // Persist last known position to the tenant's Spreadsheet Livetrack in the background
+      (async () => {
+        try {
+          const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'livetrack');
+          if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
+            await upsertRecordsToTenantSheet(sheetUrl, tenantId, 'livetrack', [
+              {
+                id: normKey,
+                name: techName,
+                horodatage: horodatageStr,
+                lat: numLat,
+                lng: numLng,
+                updatedAt: ts,
+              },
+            ]);
+          }
+        } catch (sheetErr) {
+          console.warn(`[Livetrack] Could not sync tech location to spreadsheet for ${tenantId}:`, sheetErr);
+        }
+      })();
 
       return res.json({ ok: true, location: existing[normKey] });
     } catch (err) {
@@ -5178,6 +5243,7 @@ async function warmupDefibrillateursStore() {
     autresEvents: 'spreadsheetAutresEvents',
     groupesZones: 'spreadsheetGroupesZones',
     pointagesClient: 'spreadsheetPointagesClient',
+    livetrack: 'spreadsheetLivetrack',
   };
 
   function getSheetTabFieldCandidates(tabType: SheetTabType): string[] {
@@ -6860,6 +6926,196 @@ async function warmupDefibrillateursStore() {
     }
   });
 
+  app.post("/api/public/satisfaction-context", async (req, res) => {
+    try {
+      const rawTenantHint = String(req.body?.tenantHint || req.headers['x-tenant-id'] || req.headers['x-defibeo-tenant'] || '').trim();
+      const rawInterventionRef = String(req.body?.interventionReference || req.body?.interventionRef || '').trim();
+      const checkRefUpper = rawInterventionRef.toUpperCase();
+
+      let allTenants = await getRegisteredTenantsFromDb(false);
+      const findMatchingTenant = (hint: string, list: any[]) => {
+        if (!hint) return null;
+        const cleanHint = hint.trim().toLowerCase().replace(/^\?+/, '');
+        const digitsOnly = cleanHint.replace(/^d/i, '');
+        return list.find((t: any) => {
+          if (!t) return false;
+          const tid = String(t.id || '').trim().toLowerCase();
+          const tShort = String(t.shortEnvId || '').trim().toLowerCase();
+          const tCode = String(t.code || '').trim().toLowerCase();
+          if (tid === cleanHint || tShort === cleanHint || tCode === cleanHint) return true;
+          if (digitsOnly && /^\d+$/.test(digitsOnly)) {
+            if (
+              tid === `d${digitsOnly}` ||
+              tShort === `d${digitsOnly}` ||
+              tid.replace(/^d/i, '') === digitsOnly ||
+              tShort.replace(/^d/i, '') === digitsOnly
+            ) {
+              return true;
+            }
+          }
+          return false;
+        });
+      };
+
+      let matchedTenantObj = findMatchingTenant(rawTenantHint, allTenants);
+      if (!matchedTenantObj && rawTenantHint) {
+        allTenants = await getRegisteredTenantsFromDb(true);
+        matchedTenantObj = findMatchingTenant(rawTenantHint, allTenants);
+      }
+
+      let resolvedTenantId = matchedTenantObj ? String(matchedTenantObj.id || matchedTenantObj.shortEnvId || rawTenantHint).trim() : rawTenantHint;
+
+      const candidateTenants = Array.from(
+        new Set(
+          [
+            ...(matchedTenantObj ? [String(matchedTenantObj.id || ''), String(matchedTenantObj.shortEnvId || '')] : []),
+            resolvedTenantId,
+            ...allTenants.map((t: any) => String(t.id || '').trim()),
+            ...allTenants.map((t: any) => String(t.shortEnvId || '').trim()),
+            'demo',
+          ].filter(Boolean)
+        )
+      );
+
+      let matchedReport: any = null;
+      let alreadyResponded = false;
+
+      if (checkRefUpper) {
+        // 1. Locate report and/or tenant if needed
+        for (const tid of candidateTenants) {
+          // Check server collection generatedReports
+          try {
+            const reportsList = (await fetchServerCollection('generatedReports', tid)) || [];
+            if (Array.isArray(reportsList)) {
+              const foundRep = reportsList.find(
+                (r: any) =>
+                  r &&
+                  ((r.interventionReference && String(r.interventionReference).trim().toUpperCase() === checkRefUpper) ||
+                    (r.id && String(r.id).trim().toUpperCase() === checkRefUpper) ||
+                    (r.missionId && String(r.missionId).trim().toUpperCase() === checkRefUpper))
+              );
+              if (foundRep) {
+                matchedReport = foundRep;
+                if (!resolvedTenantId || resolvedTenantId === 'demo') {
+                  resolvedTenantId = tid;
+                  matchedTenantObj = findMatchingTenant(tid, allTenants) || matchedTenantObj;
+                }
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+
+        const primaryTid = matchedTenantObj ? String(matchedTenantObj.id || resolvedTenantId).trim() : (resolvedTenantId || 'demo');
+        const shortTid = matchedTenantObj && matchedTenantObj.shortEnvId ? String(matchedTenantObj.shortEnvId).trim() : primaryTid;
+        const tenantKeysToCheck = Array.from(new Set([primaryTid, shortTid, resolvedTenantId, 'demo'].filter(Boolean)));
+
+        // Also check Rapports PDF Google Sheet for the resolved tenant to get the freshest report data
+        for (const tid of tenantKeysToCheck) {
+          try {
+            const rapportsSheetUrl = await resolveTenantSpreadsheetUrl(tid, 'rapportsPdf');
+            if (rapportsSheetUrl && extractSpreadsheetIdAndGid(rapportsSheetUrl)) {
+              const rSheetData = await fetchTenantSheetCollection(rapportsSheetUrl, tid, 'rapportsPdf', false).catch(() => null);
+              if (rSheetData && Array.isArray(rSheetData.items)) {
+                const sheetRep = rSheetData.items.find(
+                  (r: any) =>
+                    r &&
+                    ((r.interventionReference && String(r.interventionReference).trim().toUpperCase() === checkRefUpper) ||
+                      (r.reportNumber && String(r.reportNumber).trim().toUpperCase() === checkRefUpper) ||
+                      (r.id && String(r.id).trim().toUpperCase() === checkRefUpper))
+                );
+                if (sheetRep) {
+                  matchedReport = matchedReport
+                    ? {
+                        ...matchedReport,
+                        ...sheetRep,
+                        defibSnapshot: {
+                          ...(matchedReport.defibSnapshot || {}),
+                          ...(sheetRep.defibSnapshot || {}),
+                        },
+                      }
+                    : sheetRep;
+                  break;
+                }
+              }
+            }
+          } catch (_) {}
+        }
+
+        // 2. Check if a satisfaction response already exists for this interventionReference
+        for (const tid of tenantKeysToCheck) {
+          try {
+            const existingReviews = ((await fetchServerCollection('customerReviews', tid)) as any[]) || [];
+            if (
+              Array.isArray(existingReviews) &&
+              existingReviews.some(
+                (rev: any) =>
+                  rev &&
+                  String(
+                    rev.interventionReference ||
+                      rev.interventionRef ||
+                      rev.intervention ||
+                      rev.missionRef ||
+                      rev.defibId ||
+                      ''
+                  )
+                    .trim()
+                    .toUpperCase() === checkRefUpper
+              )
+            ) {
+              alreadyResponded = true;
+              break;
+            }
+          } catch (_) {}
+
+          try {
+            let satSheetUrl = await resolveTenantSpreadsheetUrl(tid, 'satisfaction');
+            if (!satSheetUrl && matchedTenantObj && matchedTenantObj.spreadsheetSatisfaction) {
+              satSheetUrl = String(matchedTenantObj.spreadsheetSatisfaction).trim();
+            }
+            if (satSheetUrl && extractSpreadsheetIdAndGid(satSheetUrl)) {
+              const satSheetData = await fetchTenantSheetCollection(satSheetUrl, tid, 'satisfaction', false).catch(() => null);
+              if (
+                satSheetData &&
+                Array.isArray(satSheetData.items) &&
+                satSheetData.items.some(
+                  (rev: any) =>
+                    rev &&
+                    String(
+                      rev.interventionReference ||
+                        rev.interventionRef ||
+                        rev.intervention ||
+                        rev.missionRef ||
+                        rev.defibId ||
+                        ''
+                    )
+                      .trim()
+                      .toUpperCase() === checkRefUpper
+                )
+              ) {
+                alreadyResponded = true;
+                break;
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      return res.json({
+        status: 'ok',
+        tenantId: matchedTenantObj ? String(matchedTenantObj.id || resolvedTenantId).trim() : (resolvedTenantId || 'demo'),
+        alreadyResponded,
+        report: matchedReport,
+      });
+    } catch (err: any) {
+      return res.json({
+        status: 'error',
+        alreadyResponded: false,
+        report: null,
+      });
+    }
+  });
+
   app.post("/api/public/submit-satisfaction", async (req, res) => {
     try {
       const rawTenantHint = String(req.body?.tenantHint || req.headers['x-tenant-id'] || req.headers['x-defibeo-tenant'] || '').trim();
@@ -6971,10 +7227,21 @@ async function warmupDefibrillateursStore() {
         .filter((n: number) => Number.isFinite(n));
       const avg4 = scores.length > 0 ? Number((scores.reduce((a: number, b: number) => a + b, 0) / scores.length).toFixed(1)) : Number(reviewInput.noteGlobale || 4);
 
+      const resolvedClientName = String(
+        reviewInput.clientName ||
+        reviewInput.nomPrenom ||
+        reviewInput['Votre nom et prénom.'] ||
+        reviewInput['Votre nom et prénom'] ||
+        ''
+      ).trim();
+
       const finalReview = {
         ...reviewInput,
         id: String(reviewInput.id || `rev-${Date.now()}`),
-        clientName: String(reviewInput.clientName || '').trim(),
+        clientName: resolvedClientName,
+        nomPrenom: resolvedClientName,
+        'Votre nom et prénom.': resolvedClientName,
+        'Votre nom et prénom': resolvedClientName,
         comment: String(reviewInput.comment || '').trim(),
         interventionReference: rawInterventionRef,
         interventionRef: rawInterventionRef,
@@ -8467,6 +8734,7 @@ async function warmupDefibrillateursStore() {
             'spreadsheetExportations',
             'spreadsheetAutresEvents',
             'spreadsheetGroupesZones',
+            'spreadsheetLivetrack',
           ];
 
           const existingInMem = serverMemoryStore.get(collectionKey);

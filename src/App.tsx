@@ -1523,25 +1523,24 @@ export default function App() {
     setFsmClickedPill(null);
   }, [fsmDateFilter, fsmLastSelectedTourId, activeTab]);
 
-  // FSM Stats hidden state (always hidden initially when opening the tab)
+  // FSM Stats & Tech Skills hidden state (always hidden initially when opening the tab or refreshing)
   const [isFsmStatsHidden, setIsFsmStatsHidden] = useState<boolean>(true);
-  const [isFsmTechSkillsHidden, setIsFsmTechSkillsHidden] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('defib_hide_fsm_tech_skills') === 'true';
-    } catch (_) {
-      return false;
-    }
-  });
+  const [isFsmTechSkillsHidden, setIsFsmTechSkillsHidden] = useState<boolean>(true);
 
   useEffect(() => {
     if (activeTab === 'fsm') {
       setIsFsmStatsHidden(true);
+      setIsFsmTechSkillsHidden(true);
+      try {
+        localStorage.setItem('defib_hide_fsm_tech_skills', 'true');
+      } catch (_) {}
     }
   }, [activeTab]);
 
   // FSM System Info Message
   const [fsmSystemInfoMessage, setFsmSystemInfoMessage] = useState<string | null>(null);
   const fsmSystemInfoTimeoutRef = useRef<any>(null);
+  const previousTabBeforeLocalisationsRef = useRef<AppTab>('fsm');
 
   // CTT Global Rules (Amplitude journalière, Repos consécutif, Repos pause)
   const [cttGlobalRules, setCttGlobalRules] = useState<CttGlobalRules>(() => loadCttGlobalRules());
@@ -1710,6 +1709,7 @@ export default function App() {
         membresEnvironnement: 'spreadsheetMembresEnvironnement',
         groupesTravail: 'spreadsheetGroupesZones',
         groupesZones: 'spreadsheetGroupesZones',
+        livetrack: 'spreadsheetLivetrack',
         intituleEmplacements: 'spreadsheetIntituleEmplacements',
         connecteurs: 'spreadsheetConnecteurs',
         apparenceRapportsPdf: 'spreadsheetApparenceRapportsPdf',
@@ -4241,6 +4241,7 @@ export default function App() {
         communicationPortailClient: 'spreadsheetCommunicationPortailClient',
         observateurActionsSuspectes: 'spreadsheetObservateurActionsSuspectes',
         groupesZones: 'spreadsheetGroupesZones',
+        livetrack: 'spreadsheetLivetrack',
       };
 
       const persistSecondarySpreadsheetUrl = (fieldKey: string, resolvedUrl?: string) => {
@@ -5137,6 +5138,7 @@ export default function App() {
       spreadsheetCommunicationPortailClient: 'communicationPortailClient',
       spreadsheetObservateurActionsSuspectes: 'observateurActionsSuspectes',
       spreadsheetGroupesZones: 'groupesZones',
+      spreadsheetLivetrack: 'livetrack',
     };
 
     const handleManualSheetRefresh = (e: Event) => {
@@ -13663,7 +13665,6 @@ export default function App() {
             const dropdownItems: Array<{ id: AppTab; label: string }> = [
               { id: 'devis', label: t('Commandes') },
               { id: 'achats-fournisseurs', label: t('Achats Fournisseurs') },
-              { id: 'localisations', label: t('Localisations') },
               { id: 'tickets', label: t('Tickets Caisse') },
               { id: 'veilles', label: t('Relevé Concurrentiel') },
               { id: 'formations', label: t('Formations') },
@@ -14850,6 +14851,33 @@ export default function App() {
                         title={translate("Plannings")}
                       >
                         {translate("Plannings")}
+                      </button>
+
+                      {/* Bouton Localisations */}
+                      <button
+                        key="btn-fsm-localisations"
+                        type="button"
+                        id="btn-fsm-localisations"
+                        onClick={() => {
+                          previousTabBeforeLocalisationsRef.current = 'fsm';
+                          setActiveTab('localisations');
+                        }}
+                        style={{
+                          borderRadius: '1000px',
+                          padding: '8px 16px',
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          backgroundColor: 'rgb(232, 236, 255)',
+                          color: 'rgb(46, 84, 255)',
+                          border: 'none',
+                          boxShadow: 'none',
+                        }}
+                        className="relative overflow-hidden hover:opacity-80 select-none cursor-pointer"
+                        title={translate("Localisations")}
+                      >
+                        {translate("Localisations")}
                       </button>
 
                       {/* Button Aide */}
@@ -22209,6 +22237,33 @@ export default function App() {
                         {isRefreshingRapportsPdf ? t("Actualisation...") : t("Actualiser les données")}
                       </button>
 
+                      {/* Bouton Localisations */}
+                      <button
+                        type="button"
+                        id="btn-gmao-localisations"
+                        onClick={() => {
+                          previousTabBeforeLocalisationsRef.current = 'gmao';
+                          setActiveTab('localisations');
+                        }}
+                        style={{
+                          borderRadius: '1000px',
+                          padding: '8px 16px',
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          backgroundColor: 'rgb(232, 236, 255)',
+                          color: 'rgb(46, 84, 255)',
+                          border: 'none',
+                          boxShadow: 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                        className="relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer"
+                        title={t("Localisations")}
+                      >
+                        {t("Localisations")}
+                      </button>
+
                       {/* Button Aide */}
                       <button
                         type="button"
@@ -26572,7 +26627,11 @@ export default function App() {
           {/* LOCALISATIONS MODULE */}
           {/* ======================================= */}
           {activeTab === 'localisations' && (
-            <LocalisationsTab members={members} tenantId={tenantId} />
+            <LocalisationsTab
+              members={members}
+              tenantId={tenantId}
+              onClose={() => setActiveTab(previousTabBeforeLocalisationsRef.current || 'fsm')}
+            />
           )}
 
           {/* ======================================= */}

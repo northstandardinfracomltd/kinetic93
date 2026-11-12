@@ -3920,7 +3920,13 @@ export default function GmaoCorrectionForm({
                   type="button"
                   onClick={() => setIsAiDetectionModalOpen(true)}
                   id="btn-guess-defib-model"
-                  className="text-xs font-bold text-[#2e54ff] hover:underline cursor-pointer bg-transparent border-none p-0 font-sans select-none"
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 600,
+                    color: '#2e54ff',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                  className="hover:underline cursor-pointer bg-transparent border-none p-0 font-sans select-none leading-none"
                 >
                   Deviner
                 </button>

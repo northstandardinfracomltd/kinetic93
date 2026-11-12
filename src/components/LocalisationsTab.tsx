@@ -7,6 +7,7 @@ import { Member } from '../types';
 interface LocalisationsTabProps {
   members: Member[];
   tenantId?: string;
+  onClose?: () => void;
 }
 
 interface TechLiveLocation {
@@ -75,7 +76,7 @@ function AutoFitTechBounds({ points }: { points: TechLiveLocation[] }) {
   return null;
 }
 
-export default function LocalisationsTab({ members, tenantId }: LocalisationsTabProps) {
+export default function LocalisationsTab({ members, tenantId, onClose }: LocalisationsTabProps) {
   const effectiveTenantId = useMemo(() => {
     if (tenantId) return tenantId;
     try {
@@ -201,6 +202,32 @@ export default function LocalisationsTab({ members, tenantId }: LocalisationsTab
       id="localisations-tab-map-fullheight"
       style={{ width: '100%', height: '100%', minHeight: '100vh' }}
     >
+      {onClose && (
+        <div className="absolute top-4 right-4 z-[4000] flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            id="btn-localisations-map-close"
+            style={{
+              backgroundColor: 'rgb(210, 45, 11)',
+              boxShadow: 'none',
+              borderRadius: '12px',
+              fontSize: '18px',
+              padding: '9px 19px',
+              fontWeight: 'normal',
+              color: '#ffffff',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              transition: 'all 0.1s ease-in-out',
+            }}
+            className="hover:opacity-90 cursor-pointer select-none"
+          >
+            Fermer
+          </button>
+        </div>
+      )}
+
       <MapContainer
         center={[46.603354, 1.888334]}
         zoom={6}
