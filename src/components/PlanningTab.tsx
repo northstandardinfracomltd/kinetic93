@@ -1601,6 +1601,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                         m.time ||
                                         '--:--';
                                       const mCreneauFormatted = formatSlotToAmPm(mCreneau);
+                                      const mStatus = String(m.status || m.statut || m.situation || 'À faire').trim() || 'À faire';
 
                                       const mIdentifiant =
                                         m.defibIdentifiant ||
@@ -1618,7 +1619,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                           key={`tour-sub-mission-${tItem.tourId}-${m.id || mSubIdx}`}
                                           className="relative space-y-1.5"
                                         >
-                                          <div className="flex items-center">
+                                          <div className="flex items-center gap-2 flex-wrap">
                                             <span
                                               className="inline-flex items-center justify-center px-4 py-1.5 rounded-full font-bold"
                                               style={{
@@ -1630,6 +1631,18 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                               }}
                                             >
                                               {mCreneauFormatted}
+                                            </span>
+                                            <span
+                                              className="inline-flex items-center justify-center px-4 py-1.5 rounded-full font-bold"
+                                              style={{
+                                                backgroundColor: "rgb(247, 252, 192)",
+                                                color: "rgb(105, 114, 5)",
+                                                fontSize: "18px",
+                                                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                                boxShadow: "none",
+                                              }}
+                                            >
+                                              {mStatus}
                                             </span>
                                           </div>
                                           <div className="relative">

@@ -3912,9 +3912,19 @@ export default function GmaoCorrectionForm({
             </div>
 
             <div className="space-y-1">
-              <label htmlFor="snap-modeleId" className="block text-[11px] font-bold text-black uppercase">
-                Modèle de défibrillateur.
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="snap-modeleId" className="block text-[11px] font-bold text-black uppercase m-0">
+                  Modèle de défibrillateur.
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsAiDetectionModalOpen(true)}
+                  id="btn-guess-defib-model"
+                  className="text-xs font-bold text-[#2e54ff] hover:underline cursor-pointer bg-transparent border-none p-0 font-sans select-none"
+                >
+                  Deviner
+                </button>
+              </div>
               <select
                 id="snap-modeleId"
                 value={snapshot.modeleId || ''}
@@ -3927,34 +3937,6 @@ export default function GmaoCorrectionForm({
                   <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                 ))}
               </select>
-
-              {isCreatingNewMaterial && newMaterialType === 'Défibrillateur' && (
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsAiDetectionModalOpen(true)}
-                    style={{
-                      backgroundColor: '#2563eb',
-                      color: '#ffffff',
-                      width: '100%',
-                      padding: '8px 16px',
-                      borderRadius: '13px',
-                      fontSize: '18px',
-                      fontWeight: 'bold',
-                      cursor: 'pointer',
-                    }}
-                    className="hover:bg-blue-700 transition duration-150 ease-in-out font-sans flex items-center justify-center gap-1.5 shadow-sm border-none"
-                  >
-                    <span>Trouver avec l'IA</span>
-                  </button>
-                </div>
-              )}
-
-              {isCreatingNewMaterial && newMaterialType === 'Défibrillateur' && aiDetectedModel && (
-                <div className="mt-2 text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-2 leading-relaxed animate-fadeIn">
-                  Il semble qu'il s'agisse d'un <strong className="font-bold">{aiDetectedModel.nom}</strong> du fabricant <strong className="font-bold">{aiDetectedModel.marque}</strong>.
-                </div>
-              )}
 
               {isAiDetectionModalOpen && (
                 <AiModelDetectionModal

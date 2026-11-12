@@ -420,6 +420,9 @@ export interface Member {
   startAddressCountry?: string;
   startAddressLat?: number;
   startAddressLng?: number;
+  lastKnownLat?: number;
+  lastKnownLng?: number;
+  lastKnownLocationAt?: number | string;
   optimizationPreference?: 'loin' | 'proche';
   googleCalEmail?: string;
   googleCalId?: string;

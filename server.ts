@@ -1371,6 +1371,113 @@ async function startServer() {
     }
   }));
 
+  // Proxy endpoint for fetching external model thumbnail images without CORS canvas tainting
+  app.get("/api/proxy-image", async (req, res) => {
+    try {
+      const rawUrl = String(req.query.url || '').trim();
+      if (!rawUrl || (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://'))) {
+        return res.status(400).send('Invalid URL');
+      }
+      // Convert Google Drive sharing links to direct image links if needed
+      let fetchUrl = rawUrl;
+      const driveMatch = rawUrl.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (driveMatch && driveMatch[1]) {
+        fetchUrl = `https://drive.google.com/uc?export=view&id=${driveMatch[1]}`;
+      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const upstream = await fetch(fetchUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; DefibeoImageProxy/1.0)',
+          'Accept': 'image/*,*/*;q=0.8',
+        },
+      });
+      clearTimeout(timeoutId);
+      if (!upstream.ok) {
+        return res.status(upstream.status).send('Upstream image fetch failed');
+      }
+      const contentType = upstream.headers.get('content-type') || 'image/png';
+      const arrayBuffer = await upstream.arrayBuffer();
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.setHeader('Content-Type', contentType);
+      return res.send(Buffer.from(arrayBuffer));
+    } catch (err) {
+      return res.status(502).send('Failed to proxy image');
+    }
+  });
+
+  // Real-time technician GPS location endpoints
+  app.get("/api/tech-locations", (req, res) => {
+    try {
+      const tenantId = String(req.query.tenantId || 'demo').trim() || 'demo';
+      const storeKey = `${tenantId}_tech_locations`;
+      const locations = serverMemoryStore.get(storeKey) || {};
+      return res.json({ locations });
+    } catch (err) {
+      return res.json({ locations: {} });
+    }
+  });
+
+  app.post("/api/tech-locations", (req, res) => {
+    try {
+      const { tenantId: rawTenantId, name, email, lat, lng, updatedAt } = req.body || {};
+      const tenantId = String(rawTenantId || 'demo').trim() || 'demo';
+      const techName = String(name || '').trim();
+      const numLat = Number(lat);
+      const numLng = Number(lng);
+      if (!techName || isNaN(numLat) || isNaN(numLng)) {
+        return res.status(400).json({ error: "Invalid technician location payload" });
+      }
+      const ts = Number(updatedAt) || Date.now();
+      const storeKey = `${tenantId}_tech_locations`;
+      const existing: Record<string, any> =
+        serverMemoryStore.get(storeKey) && typeof serverMemoryStore.get(storeKey) === 'object'
+          ? { ...serverMemoryStore.get(storeKey) }
+          : {};
+      const normKey = techName.toLowerCase();
+      existing[normKey] = {
+        name: techName,
+        email: String(email || '').trim(),
+        lat: numLat,
+        lng: numLng,
+        updatedAt: ts,
+      };
+      serverMemoryStore.set(storeKey, existing);
+      serverStoreTimestamps.set(storeKey, Date.now());
+      persistSingleCollectionToDisk(storeKey, existing);
+
+      // Also enrich cached members in memory if present
+      const membersKey = `${tenantId}_members`;
+      const cachedMembers = serverMemoryStore.get(membersKey);
+      if (Array.isArray(cachedMembers)) {
+        let changed = false;
+        const updatedMembers = cachedMembers.map((m: any) => {
+          if (m && String(m.name || '').trim().toLowerCase() === normKey) {
+            changed = true;
+            return {
+              ...m,
+              lastKnownLat: numLat,
+              lastKnownLng: numLng,
+              lastKnownLocationAt: ts,
+              gpsSharingLink: 'Partagé',
+            };
+          }
+          return m;
+        });
+        if (changed) {
+          serverMemoryStore.set(membersKey, updatedMembers);
+          persistSingleCollectionToDisk(membersKey, updatedMembers);
+        }
+      }
+
+      return res.json({ ok: true, location: existing[normKey] });
+    } catch (err) {
+      return res.status(500).json({ error: "Failed to save technician location" });
+    }
+  });
+
   // Endpoint for identifying a defibrillator model using Gemini API
   app.post("/api/gemini/detect-model", async (req, res) => {
     try {

@@ -5906,6 +5906,107 @@ export default function PublicPortal({
     }
   }, [authenticatedUser, activeTab, members]);
 
+  // Automatic real-time geolocation sharing on Webapp open/refresh and every 1 minute
+  useEffect(() => {
+    if (!authenticatedUser || !authenticatedUser.name) return;
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) return;
+
+    let isMounted = true;
+    let hasReceivedPosition = false;
+
+    const pushPositionUpdate = (lat: number, lng: number) => {
+      if (!isMounted) return;
+      hasReceivedPosition = true;
+      const now = Date.now();
+      const envId =
+        techTenantId ||
+        propTenantId ||
+        localStorage.getItem("defib_tenant_id") ||
+        "demo";
+      const techName = authenticatedUser.name.trim();
+
+      try {
+        localStorage.setItem(`defib_${envId}_tech_live_lat_${techName}`, String(lat));
+        localStorage.setItem(`defib_${envId}_tech_live_lng_${techName}`, String(lng));
+        localStorage.setItem(`defib_${envId}_tech_live_at_${techName}`, String(now));
+        localStorage.setItem(`defib_tech_location_link_${techName}`, "Partagé");
+      } catch (_) {}
+
+      setGpsSharingLink("Partagé");
+
+      fetch("/api/tech-locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId: envId,
+          name: techName,
+          email: authenticatedUser.email || "",
+          lat,
+          lng,
+          updatedAt: now,
+        }),
+      }).catch(() => {});
+    };
+
+    const requestAndSendCurrentPosition = () => {
+      try {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (pos && pos.coords) {
+              pushPositionUpdate(pos.coords.latitude, pos.coords.longitude);
+            }
+          },
+          () => {
+            // If permission denied or unavailable, silently ignore
+          },
+          {
+            enableHighAccuracy: true,
+            maximumAge: 30000,
+            timeout: 15000,
+          }
+        );
+      } catch (_) {}
+    };
+
+    // 1. Immediate request on Webapp open / browser refresh
+    requestAndSendCurrentPosition();
+
+    // 2. If a mobile browser requires a gesture to show the permission prompt, trigger on first tap
+    const handleFirstInteraction = () => {
+      if (!hasReceivedPosition) {
+        requestAndSendCurrentPosition();
+      }
+      window.removeEventListener("click", handleFirstInteraction);
+      window.removeEventListener("touchstart", handleFirstInteraction);
+    };
+    window.addEventListener("click", handleFirstInteraction, { once: true, passive: true });
+    window.addEventListener("touchstart", handleFirstInteraction, { once: true, passive: true });
+
+    // 3. Repeat every 1 minute (60,000 ms) while the Webapp is active
+    const intervalId = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      requestAndSendCurrentPosition();
+    }, 60000);
+
+    // 4. Also refresh immediately when returning to the Webapp tab/app
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        requestAndSendCurrentPosition();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("click", handleFirstInteraction);
+      window.removeEventListener("touchstart", handleFirstInteraction);
+    };
+  }, [authenticatedUser?.name, authenticatedUser?.email, techTenantId, propTenantId]);
+
   // Render signature onto canvas in technician portal
   useEffect(() => {
     if (activeTab === "localisation" && activeSettingsSection === "signature" && sigCanvasRef.current) {
@@ -16194,59 +16295,6 @@ export default function PublicPortal({
                   {/* SECTION 2: LOCALISATION */}
                   {activeSettingsSection === "localisation" && (
                     <div className="space-y-4 pt-2 text-left animate-fadeIn">
-                      <div
-                        className="px-4 py-[25px]"
-                        style={{
-                          backgroundColor: "#F5F7FA",
-                          border: "none",
-                          borderRadius: "14px",
-                        }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[18px] font-bold text-black font-sans select-none">
-                            Activer la localisation.
-                          </span>
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newVal =
-                                  gpsSharingLink === "Partagé"
-                                    ? "Non partagé"
-                                    : "Partagé";
-                                setGpsSharingLink(newVal);
-                                if (authenticatedUser?.name) {
-                                  localStorage.setItem(
-                                    `defib_tech_location_link_${authenticatedUser.name}`,
-                                    newVal
-                                  );
-                                }
-                                if (newVal === "Partagé") {
-                                  setTechBottomInfoMessage("Confirmé. Vos informations ont été enregistrées.");
-                                }
-                              }}
-                              className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden"
-                              style={{
-                                backgroundColor:
-                                  gpsSharingLink === "Partagé"
-                                    ? "#2E54FF"
-                                    : "#CFD5DB",
-                              }}
-                            >
-                              <span
-                                className="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out"
-                                style={{
-                                  transform:
-                                    gpsSharingLink === "Partagé"
-                                      ? "translateX(20px)"
-                                      : "translateX(0px)",
-                                }}
-                              />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
                       <div style={{ marginTop: "12px" }}>
                         <p
                           style={{
@@ -16257,38 +16305,9 @@ export default function PublicPortal({
                           }}
                           className="font-sans block text-black no-underline"
                         >
-                          Vous devez partager votre localisation Google Maps avec l'email Google: {companyInfo?.gmailPartageLocalisation || "(Manquant)"}.
+                          Votre position est partagée en temps réel uniquement lorsque l'application est active. Si elle ne s'affiche pas, le partage de localisation est probablement désactivé : vérifiez les paramètres de votre appareil et de votre navigateur.
                         </p>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (authenticatedUser?.name) {
-                            localStorage.setItem(
-                              `defib_tech_location_link_${authenticatedUser.name}`,
-                              gpsSharingLink
-                            );
-                          }
-                          setTechBottomInfoMessage("Confirmé. Vos informations ont été enregistrées.");
-                          setActiveSettingsSection(null);
-                        }}
-                        style={{
-                          backgroundColor: "rgb(46, 84, 255)",
-                          color: "#fff",
-                          fontSize: "18px",
-                          fontWeight: "bold",
-                          borderRadius: "12px",
-                          padding: "14px 20px",
-                          border: "none",
-                          boxShadow: "none",
-                          cursor: "pointer",
-                          width: "100%",
-                        }}
-                        className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-1.5"
-                      >
-                        <span>Enregistrer</span>
-                      </button>
                     </div>
                   )}
 
@@ -17212,7 +17231,7 @@ export default function PublicPortal({
                   )}
 
                   {/* Actualiser les données button */}
-                  {activeSettingsSection !== "installer" && (
+                  {activeSettingsSection !== "installer" && activeSettingsSection !== "localisation" && (
                     <button
                       type="button"
                       disabled={isRefreshingWebappData}

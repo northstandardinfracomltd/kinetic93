@@ -14052,9 +14052,9 @@ export default function App() {
           </div>
         )}
         {/* Dashboard Workspace Viewports wrapper */}
-        <main className={`flex-1 w-full bg-white ${activeTab === 'messagerie' ? 'flex flex-col h-screen overflow-hidden' : ''}`} id="main-content">
+        <main className={`flex-1 w-full bg-white ${activeTab === 'messagerie' || activeTab === 'localisations' ? 'flex flex-col h-screen overflow-hidden' : ''}`} id="main-content">
           {/* Sub-component Active tab wrapper */}
-          <section className={`bg-white p-0 ${activeTab === 'messagerie' ? 'flex-1 flex flex-col h-full min-h-0 overflow-hidden pb-0' : 'pb-16'}`} id="active-tab-content-wrapper">
+          <section className={`bg-white p-0 ${activeTab === 'messagerie' || activeTab === 'localisations' ? 'flex-1 flex flex-col h-full min-h-0 overflow-hidden pb-0' : 'pb-16'}`} id="active-tab-content-wrapper">
           {activeTab === 'defibrillateurs' && (
             <DefibTab
               currentLang={currentLang}
@@ -26572,7 +26572,7 @@ export default function App() {
           {/* LOCALISATIONS MODULE */}
           {/* ======================================= */}
           {activeTab === 'localisations' && (
-            <LocalisationsTab members={members} />
+            <LocalisationsTab members={members} tenantId={tenantId} />
           )}
 
           {/* ======================================= */}

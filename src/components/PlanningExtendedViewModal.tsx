@@ -462,47 +462,75 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         if (!movedMission) return prevTours;
 
         // Resolve target tour ID:
-        // 1. If dropped on a specific tour row, use that tourId
-        // 2. Otherwise find an active tour belonging to targetTechName
-        // 3. Otherwise create a new active tour for targetTechName
+        // Must be an existing non-draft tour assigned to targetTechName that covers targetIsoDate
         let resolvedTargetTourId = targetTourId || '';
         const normTargetTech = normalizeName(targetTechName);
 
-        if (!resolvedTargetTourId) {
-          const existingTechTour = prevTours.find((t) => {
-            if (!t || isDraftTour(t)) return false;
-            const cleanT = getCleanTechName(t.techName || t.technicien || t.technicienNom || t.tech);
-            return normalizeName(cleanT) === normTargetTech;
+        const isTourCoveringDateForTech = (t: any, checkTourId?: string) => {
+          if (!t || isDraftTour(t)) return false;
+          if (checkTourId && String(t.id) !== String(checkTourId)) return false;
+          const tourMissions = Array.isArray(t.missions || t.passages) ? (t.missions || t.passages) : [];
+          let cleanT = getCleanTechName(t.techName || t.technicien || t.technicienNom || t.tech);
+          if (!cleanT) {
+            for (const m of tourMissions) {
+              const mt = getCleanTechName(m?.techName || m?.technicien || m?.assignedTech || m?.technicienNom);
+              if (mt) {
+                cleanT = mt;
+                break;
+              }
+            }
+          }
+          const tEmailLower = String(t.techEmail || '').trim().toLowerCase();
+          const targetEmailLower = String(targetTechEmail || '').trim().toLowerCase();
+          const techMatches =
+            (cleanT && normalizeName(cleanT) === normTargetTech) ||
+            (tEmailLower && targetEmailLower && tEmailLower === targetEmailLower);
+          if (!techMatches) return false;
+
+          const rawStart = t.startDate !== 'A trier' && t.startDate !== 'a-trier' ? t.startDate : null;
+          let startIso = toIsoDateStr(rawStart);
+          let endIso = startIso;
+          tourMissions.forEach((m: any) => {
+            if (!m) return;
+            const mStatus = String(m.status || '').trim().toLowerCase();
+            if (mStatus === 'brouillon' || mStatus === 'draft') return;
+            const mIso = getMissionIsoDate(m) || startIso;
+            if (mIso) {
+              if (!startIso || mIso < startIso) startIso = mIso;
+              if (!endIso || mIso > endIso) endIso = mIso;
+            }
           });
-          if (existingTechTour) {
-            resolvedTargetTourId = String(existingTechTour.id);
+          if (!startIso) return false;
+          if (!endIso) endIso = startIso;
+          return targetIsoDate >= startIso && targetIsoDate <= endIso;
+        };
+
+        if (resolvedTargetTourId) {
+          const explicitTour = prevTours.find((t) => isTourCoveringDateForTech(t, resolvedTargetTourId));
+          if (!explicitTour) {
+            resolvedTargetTourId = '';
           }
         }
+
+        if (!resolvedTargetTourId) {
+          const matchingTechTour = prevTours.find((t) => isTourCoveringDateForTech(t));
+          if (matchingTechTour) {
+            resolvedTargetTourId = String(matchingTechTour.id);
+          }
+        }
+
+        // Do not allow dropping a mission on a day/technician without an existing tour covering that date
+        if (!resolvedTargetTourId) {
+          return prevTours;
+        }
+
+        const targetTourObj = prevTours.find((t) => String(t.id) === String(resolvedTargetTourId));
+        const targetTourIdent = targetTourObj?.tourIdentifiant || targetTourObj?.id || resolvedTargetTourId;
 
         delete movedMission.resolvedIsoDate;
         const effectiveSlot = normalizeToSystemSlot(
           slotAmPm || slot24h || movedMission.estimatedSlot || movedMission.creneau || '9:00am'
         );
-
-        let workingTours = [...prevTours];
-        if (!resolvedTargetTourId) {
-          resolvedTargetTourId = `fsm-tour-${Date.now()}`;
-          const newTour = {
-            id: resolvedTargetTourId,
-            tourIdentifiant: `TOUR-${String(workingTours.length + 1).padStart(4, '0')}`,
-            title: `Tournée ${targetTechName}`,
-            name: `Tournée ${targetTechName}`,
-            techName: targetTechName,
-            technicien: targetTechName,
-            startDate: targetIsoDate,
-            date: targetIsoDate,
-            status: 'À faire',
-            vehicule: 'Aucun',
-            missions: [],
-            calculated: false,
-          };
-          workingTours.push(newTour);
-        }
 
         const updatedMission = {
           ...movedMission,
@@ -513,12 +541,13 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           time: effectiveSlot,
           techName: targetTechName,
           technicien: targetTechName,
-          tourIdentifiant: resolvedTargetTourId,
+          tourIdentifiant: targetTourIdent,
+          tourId: resolvedTargetTourId,
           isManualDate: true,
           isManualSlot: true,
         };
 
-        const nextTours = workingTours.map((t) => {
+        const nextTours = prevTours.map((t) => {
           const isSource = String(t.id) === String(sourceTourId);
           const isTarget = String(t.id) === String(resolvedTargetTourId);
           const listKey = Array.isArray(t.missions) ? 'missions' : Array.isArray(t.passages) ? 'passages' : 'missions';
@@ -528,12 +557,9 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             const nextList = currentList.map((m: any) =>
               String(m.id) === String(missionId) ? updatedMission : m
             );
-            const curStart = toIsoDateStr(t.startDate);
-            const nextStart = !curStart || targetIsoDate < curStart ? targetIsoDate : t.startDate;
             return {
               ...t,
               techName: getCleanTechName(t.techName) || targetTechName,
-              startDate: nextStart,
               [listKey]: nextList,
             };
           }
@@ -543,12 +569,9 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           }
           if (isTarget) {
             const nextList = [...currentList.filter((m: any) => String(m.id) !== String(missionId)), updatedMission];
-            const curStart = toIsoDateStr(t.startDate);
-            const nextStart = !curStart || targetIsoDate < curStart ? targetIsoDate : t.startDate;
             return {
               ...t,
               techName: getCleanTechName(t.techName) || targetTechName,
-              startDate: nextStart,
               [listKey]: nextList,
             };
           }
@@ -1063,77 +1086,108 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       )}
 
       {/* Header Bar */}
-      <div className="bg-white border-b border-neutral-200 px-4 py-3 sm:px-6 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        {/* Left: Month Navigation Controls */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handlePrevMonth}
-            className="transition-colors cursor-pointer hover:opacity-90 font-bold"
-            style={{
-              fontSize: '18px',
-              borderRadius: '13px',
-              padding: '10px 20px',
-              border: 'none',
-              backgroundColor: 'rgb(46, 84, 255)',
-              color: '#fff'
-            }}
-            title="Mois précédent"
-          >
-            Mois précédent
-          </button>
+      <div
+        className="px-3 py-2.5 sm:px-4 flex flex-wrap items-center justify-between gap-3 shrink-0"
+        style={{ backgroundColor: '#365cfe' }}
+      >
+        {/* Left: Month 3-part Toggle + Maintenant pill */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {(() => {
+            const prevMonthIdx = currentMonth === 0 ? 11 : currentMonth - 1;
+            const prevMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+            const nextMonthIdx = currentMonth === 11 ? 0 : currentMonth + 1;
+            const nextMonthYear = currentMonth === 11 ? currentYear + 1 : currentYear;
 
-          <div
-            className="px-4 py-0 text-neutral-950 min-w-[200px] text-center select-none"
-            style={{
-              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              fontSize: '24px',
-              lineHeight: '1.2',
-              letterSpacing: '0px'
-            }}
-          >
-            {MONTH_NAMES_FR[currentMonth]} {currentYear}
-          </div>
+            return (
+              <div
+                className="inline-flex items-center gap-1.5 p-1.5"
+                style={{
+                  backgroundColor: '#4f6dff',
+                  borderRadius: '10px',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handlePrevMonth}
+                  className="transition-opacity cursor-pointer hover:opacity-85 whitespace-nowrap"
+                  style={{
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    fontSize: '18px',
+                    fontWeight: 400,
+                    borderRadius: '8px',
+                    padding: '10px 18px',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: '#ffffff',
+                  }}
+                  title="Mois précédent"
+                >
+                  {MONTH_NAMES_FR[prevMonthIdx]} {prevMonthYear}
+                </button>
 
-          <button
-            type="button"
-            onClick={handleNextMonth}
-            className="transition-colors cursor-pointer hover:opacity-90 font-bold"
-            style={{
-              fontSize: '18px',
-              borderRadius: '13px',
-              padding: '10px 20px',
-              border: 'none',
-              backgroundColor: 'rgb(46, 84, 255)',
-              color: '#fff'
-            }}
-            title="Mois suivant"
-          >
-            Mois suivant
-          </button>
+                <button
+                  type="button"
+                  className="cursor-default whitespace-nowrap select-none"
+                  style={{
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    fontSize: '18px',
+                    fontWeight: 400,
+                    borderRadius: '8px',
+                    padding: '10px 20px',
+                    border: 'none',
+                    backgroundColor: '#1c0244',
+                    color: '#ffffff',
+                  }}
+                >
+                  {MONTH_NAMES_FR[currentMonth]} {currentYear}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  className="transition-opacity cursor-pointer hover:opacity-85 whitespace-nowrap"
+                  style={{
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    fontSize: '18px',
+                    fontWeight: 400,
+                    borderRadius: '8px',
+                    padding: '10px 18px',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    color: '#ffffff',
+                  }}
+                  title="Mois suivant"
+                >
+                  {MONTH_NAMES_FR[nextMonthIdx]} {nextMonthYear}
+                </button>
+              </div>
+            );
+          })()}
 
           <button
             type="button"
             onClick={handleCurrentMonth}
-            className="transition-colors cursor-pointer hover:opacity-90 ml-1 font-bold"
+            className="transition-opacity cursor-pointer hover:opacity-90 rounded-full whitespace-nowrap"
             style={{
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
               fontSize: '18px',
-              borderRadius: '13px',
-              padding: '10px 20px',
+              fontWeight: 400,
+              borderRadius: '9999px',
+              padding: '10px 24px',
               border: 'none',
-              backgroundColor: 'rgb(46, 84, 255)',
-              color: '#fff'
+              backgroundColor: '#ffffff',
+              color: '#000000',
             }}
             title="Revenir au mois en cours"
           >
-            Aujourd'hui
+            Maintenant
           </button>
         </div>
 
         {/* Right: Actualiser & Fermer */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {lastRefreshedText && (
-            <span className="text-[15px] font-semibold text-emerald-600 animate-fadeIn select-none mr-2">
+            <span className="text-[15px] font-medium text-white animate-fadeIn select-none mr-1">
               {lastRefreshedText}
             </span>
           )}
@@ -1142,14 +1196,16 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             type="button"
             disabled={isRefreshing}
             onClick={handleRefresh}
-            className="transition-colors cursor-pointer disabled:opacity-50 hover:opacity-90 font-bold"
+            className="transition-opacity cursor-pointer disabled:opacity-50 hover:opacity-90 whitespace-nowrap"
             style={{
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
               fontSize: '18px',
-              borderRadius: '13px',
+              fontWeight: 400,
+              borderRadius: '8px',
               padding: '10px 20px',
               border: 'none',
-              backgroundColor: '#1D0245',
-              color: '#fff'
+              backgroundColor: '#4f6dff',
+              color: '#ffffff',
             }}
             title="Recharger les données sans recharger la page"
           >
@@ -1159,14 +1215,16 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           <button
             type="button"
             onClick={onClose}
-            className="transition-colors cursor-pointer ml-2 hover:opacity-90 font-bold"
+            className="transition-opacity cursor-pointer hover:opacity-90 whitespace-nowrap"
             style={{
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
               fontSize: '18px',
-              borderRadius: '13px',
+              fontWeight: 400,
+              borderRadius: '8px',
               padding: '10px 20px',
               border: 'none',
-              color: '#fff',
-              backgroundColor: 'rgb(210, 45, 11)'
+              color: '#ffffff',
+              backgroundColor: 'rgb(210, 45, 11)',
             }}
           >
             Fermer
@@ -1317,8 +1375,9 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                       <tr className="border-b border-neutral-200">
                         {daysInMonth.map((d) => {
                           const emptyRowKey = `empty-${tech.name}`;
+                          const canDropOnEmptyRow = Boolean(draggedItem && draggedItem.type === 'event');
                           const isDropTarget =
-                            Boolean(draggedItem) &&
+                            canDropOnEmptyRow &&
                             dragOverTarget?.rowKey === emptyRowKey &&
                             dragOverTarget?.isoDate === d.isoDate &&
                             dragOverTarget?.techName === tech.name;
@@ -1327,7 +1386,10 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                             <td
                               key={`empty-${tech.name}-${d.isoDate}`}
                               onDragOver={(e) => {
-                                if (!draggedItem) return;
+                                if (!draggedItem || draggedItem.type === 'mission') {
+                                  if (dragOverTarget) setDragOverTarget(null);
+                                  return;
+                                }
                                 e.preventDefault();
                                 e.dataTransfer.dropEffect = 'move';
                                 const slotInfo = computeSlotFromDragEvent(e);
@@ -1350,6 +1412,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                 }
                               }}
                               onDrop={(e) => {
+                                if (!draggedItem || draggedItem.type === 'mission') return;
                                 e.preventDefault();
                                 e.stopPropagation();
                                 const slotInfo = computeSlotFromDragEvent(e);
@@ -1413,8 +1476,10 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                           {daysInMonth.map((d) => {
                             const isWithinTour = d.isoDate >= tItem.startIso && d.isoDate <= tItem.endIso;
                             const dayMissions = tItem.missions.filter((m: any) => m.resolvedIsoDate === d.isoDate);
+                            const canDropInTourCell =
+                              Boolean(draggedItem) && (draggedItem?.type !== 'mission' || isWithinTour);
                             const isDropTarget =
-                              Boolean(draggedItem) &&
+                              canDropInTourCell &&
                               dragOverTarget?.rowKey === tourRowKey &&
                               dragOverTarget?.isoDate === d.isoDate &&
                               dragOverTarget?.techName === tech.name;
@@ -1424,6 +1489,10 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                 key={`tour-day-${tItem.tourId}-${d.isoDate}`}
                                 onDragOver={(e) => {
                                   if (!draggedItem) return;
+                                  if (draggedItem.type === 'mission' && !isWithinTour) {
+                                    if (dragOverTarget) setDragOverTarget(null);
+                                    return;
+                                  }
                                   e.preventDefault();
                                   e.dataTransfer.dropEffect = 'move';
                                   const slotInfo = computeSlotFromDragEvent(e);
@@ -1447,6 +1516,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   }
                                 }}
                                 onDrop={(e) => {
+                                  if (!draggedItem) return;
+                                  if (draggedItem.type === 'mission' && !isWithinTour) return;
                                   e.preventDefault();
                                   e.stopPropagation();
                                   const slotInfo = computeSlotFromDragEvent(e);
@@ -1511,6 +1582,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                     {dayMissions.map((m: any, mIdx: number) => {
                                       const details = getMissionDetails(m);
                                       const formattedSlot = formatSlotToAmPm(details.creneau);
+                                      const mStatus = String(m.status || m.statut || m.situation || 'À faire').trim() || 'À faire';
                                       const fullMissionText = `Client : ${details.clientName}. Ville : ${details.villePostcode}. Raison(s) : ${details.reasons}. Matériel : ${details.identifiant || 'NC'}.`;
                                       const menuKey = `ext-${tItem.tourId}-${m.id || mIdx}-${d.isoDate}`;
                                       const isMenuOpen = openMissionMenuKey === menuKey;
@@ -1545,7 +1617,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                           }}
                                           title={`${fullMissionText} — Glisser-déposer pour changer de jour, de technicien ou de créneau`}
                                         >
-                                          <div className="flex items-center">
+                                          <div className="flex items-center gap-2 flex-wrap">
                                             <span
                                               className="inline-flex items-center justify-center px-4 py-1.5 rounded-full font-bold"
                                               style={{
@@ -1558,6 +1630,19 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                               }}
                                             >
                                               {isDropTarget && dragOverTarget ? dragOverTarget.slotAmPm : formattedSlot}
+                                            </span>
+                                            <span
+                                              className="inline-flex items-center justify-center px-4 py-1.5 rounded-full font-bold"
+                                              style={{
+                                                backgroundColor: 'rgb(247, 252, 192)',
+                                                color: 'rgb(105, 114, 5)',
+                                                fontSize: '18px',
+                                                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                                                boxShadow: 'none',
+                                                opacity: 1,
+                                              }}
+                                            >
+                                              {mStatus}
                                             </span>
                                           </div>
                                           <div
@@ -1625,9 +1710,12 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                       <tr className="border-b border-neutral-200 bg-purple-50/15 hover:bg-purple-50/25 transition-colors">
                         {daysInMonth.map((d) => {
                           const matchingEvts = techEvts.filter(e => toIsoDateStr(e.date) === d.isoDate);
+                          const matchingTourOnDay = tours.find(t => d.isoDate >= t.startIso && d.isoDate <= t.endIso);
+                          const canDropOnSpontCell =
+                            Boolean(draggedItem) && (draggedItem?.type !== 'mission' || Boolean(matchingTourOnDay));
                           const spontRowKey = `spont-${tech.name}`;
                           const isDropTarget =
-                            Boolean(draggedItem) &&
+                            canDropOnSpontCell &&
                             dragOverTarget?.rowKey === spontRowKey &&
                             dragOverTarget?.isoDate === d.isoDate &&
                             dragOverTarget?.techName === tech.name;
@@ -1637,11 +1725,16 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                               key={`spont-cell-${tech.name}-${d.isoDate}`}
                               onDragOver={(e) => {
                                 if (!draggedItem) return;
+                                if (draggedItem.type === 'mission' && !matchingTourOnDay) {
+                                  if (dragOverTarget) setDragOverTarget(null);
+                                  return;
+                                }
                                 e.preventDefault();
                                 e.dataTransfer.dropEffect = 'move';
                                 const slotInfo = computeSlotFromDragEvent(e);
                                 setDragOverTarget({
                                   rowKey: spontRowKey,
+                                  tourId: matchingTourOnDay?.tourId,
                                   isoDate: d.isoDate,
                                   techName: tech.name,
                                   techEmail: tech.email,
@@ -1659,11 +1752,13 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                 }
                               }}
                               onDrop={(e) => {
+                                if (!draggedItem) return;
+                                if (draggedItem.type === 'mission' && !matchingTourOnDay) return;
                                 e.preventDefault();
                                 e.stopPropagation();
                                 const slotInfo = computeSlotFromDragEvent(e);
                                 handleDropItem(
-                                  undefined,
+                                  matchingTourOnDay?.tourId,
                                   tech.name,
                                   tech.email,
                                   d.isoDate,
