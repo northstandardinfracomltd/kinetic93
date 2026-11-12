@@ -6906,10 +6906,6 @@ async function warmupDefibrillateursStore() {
       let sheetWriteResult: any = null;
       if (sheetUrl) {
         sheetWriteResult = await upsertRecordsToTenantSheet(sheetUrl, canonicalTenantId, 'satisfaction', [finalReview]);
-        invalidateSheetCache(canonicalTenantId, 'satisfaction');
-        if (shortTenantId && shortTenantId !== canonicalTenantId) {
-          invalidateSheetCache(shortTenantId, 'satisfaction');
-        }
       }
 
       // 4. Also persist to server collection customerReviews for all aliases of this tenant
@@ -6918,7 +6914,7 @@ async function warmupDefibrillateursStore() {
         try {
           const existingReviews = ((await fetchServerCollection('customerReviews', tKey)) as any[]) || [];
           const filtered = Array.isArray(existingReviews) ? existingReviews.filter((r: any) => r && r.id !== finalReview.id) : [];
-          await saveServerCollection('customerReviews', [finalReview, ...filtered], tKey);
+          await saveServerCollection('customerReviews', tKey, [finalReview, ...filtered]);
         } catch (_) {}
       }
 
@@ -7194,17 +7190,12 @@ async function warmupDefibrillateursStore() {
               'missionsTournees',
               [updatedMission]
             ).catch((err) => console.warn('[API /api/public/update-mission-status] Missions sheet upsert warning:', err));
-
-            for (const tAlias of tenantAliasesToUpdate) {
-              invalidateSheetCache(tAlias, 'missionsTournees');
-              invalidateSheetCache(tAlias, 'tournees');
-            }
           }
 
           // Persist updated fsmTours across all tenant aliases
           if (Array.isArray(updatedTours) && updatedTours.length > 0) {
             for (const tAlias of tenantAliasesToUpdate) {
-              await saveServerCollection('fsmTours', updatedTours, tAlias).catch(() => {});
+              await saveServerCollection('fsmTours', tAlias, updatedTours).catch(() => {});
             }
           }
 
@@ -7227,7 +7218,7 @@ async function warmupDefibrillateursStore() {
               return rep;
             });
             for (const tAlias of tenantAliasesToUpdate) {
-              await saveServerCollection('generatedReports', updatedReports, tAlias).catch(() => {});
+              await saveServerCollection('generatedReports', tAlias, updatedReports).catch(() => {});
             }
           }
 
@@ -7454,9 +7445,184 @@ async function warmupDefibrillateursStore() {
     try { fs.mkdirSync(MEDIA_ASSETS_DIR, { recursive: true }); } catch (_) {}
   }
 
+  const resolvePublicBaseUrl = (req: express.Request, explicitClientOrigin?: string): string => {
+    const cleanOriginCandidate = (raw?: string): string => {
+      const s = String(raw || '').trim().replace(/\/+$/, '');
+      if (!s) return '';
+      try {
+        const u = new URL(s.startsWith('http') ? s : `https://${s}`);
+        if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return '';
+        if (/^kinetic93-[^/]+\.run\.app$/i.test(u.hostname)) {
+          return 'https://consoledefibeo.deroesch.com';
+        }
+        return `https://${u.host}`;
+      } catch (_) {
+        return '';
+      }
+    };
+
+    const fromBody = cleanOriginCandidate(explicitClientOrigin);
+    if (fromBody) return fromBody;
+
+    const fromOriginHeader = cleanOriginCandidate(String(req.headers['origin'] || ''));
+    if (fromOriginHeader) return fromOriginHeader;
+
+    const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
+    const fromForwardedHost = cleanOriginCandidate(forwardedHost);
+    if (fromForwardedHost) return fromForwardedHost;
+
+    const refererHeader = String(req.headers['referer'] || '').trim();
+    if (refererHeader) {
+      try {
+        const refUrl = new URL(refererHeader);
+        const fromReferer = cleanOriginCandidate(refUrl.origin);
+        if (fromReferer) return fromReferer;
+      } catch (_) {}
+    }
+
+    const host = String(req.get('host') || 'localhost:3000').trim();
+    if (/^kinetic93-[^/]+\.run\.app$/i.test(host)) {
+      return 'https://consoledefibeo.deroesch.com';
+    }
+    const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
+    const proto = forwardedProto || (host.includes('localhost') ? 'http' : 'https');
+    return `${proto}://${host}`;
+  };
+
+  const resolveMediaStorageSpreadsheetId = async (tenantId: string): Promise<string> => {
+    const cleanTid = String(tenantId || 'demo').trim() || 'demo';
+    for (const tabType of ['ticketsCaisse', 'reglages', 'defibrillateurs'] as SheetTabType[]) {
+      try {
+        const url = await resolveTenantSpreadsheetUrl(cleanTid, tabType);
+        const parsed = url ? extractSpreadsheetIdAndGid(url) : null;
+        if (parsed?.spreadsheetId) return parsed.spreadsheetId;
+      } catch (_) {}
+    }
+    return '';
+  };
+
+  const saveMediaAssetToTenantSheet = async (payload: {
+    baseId: string;
+    tenantId: string;
+    fileName: string;
+    ext: string;
+    dataUrl: string;
+    createdAt: string;
+  }): Promise<void> => {
+    try {
+      const spreadsheetId = await resolveMediaStorageSpreadsheetId(payload.tenantId);
+      if (!spreadsheetId) return;
+      const saToken = await getServiceAccountAccessToken();
+      if (!saToken) return;
+
+      const sheetTitle = '_MediaAssets';
+      // Ensure _MediaAssets sheet tab exists (hidden)
+      const metaRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties(title,sheetId)`,
+        { headers: { Authorization: `Bearer ${saToken}` } }
+      );
+      if (!metaRes.ok) return;
+      const metaJson: any = await metaRes.json();
+      const hasMediaSheet = (metaJson?.sheets || []).some(
+        (s: any) => s?.properties?.title === sheetTitle
+      );
+
+      if (!hasMediaSheet) {
+        await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${saToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            requests: [
+              {
+                addSheet: {
+                  properties: {
+                    title: sheetTitle,
+                    hidden: true,
+                    gridProperties: { rowCount: 1000, columnCount: 30 },
+                  },
+                },
+              },
+            ],
+          }),
+        });
+      }
+
+      const CHUNK_LEN = 45000;
+      const chunks: string[] = [];
+      const rawDataUrl = String(payload.dataUrl || '');
+      for (let i = 0; i < rawDataUrl.length; i += CHUNK_LEN) {
+        chunks.push(rawDataUrl.slice(i, i + CHUNK_LEN));
+      }
+      if (chunks.length > 24) return; // Skip if > ~1.1MB to stay within row cell limits
+
+      const rowValues = [
+        payload.baseId,
+        payload.tenantId,
+        payload.fileName,
+        payload.ext,
+        payload.createdAt,
+        ...chunks,
+      ];
+
+      await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(`'${sheetTitle}'!A1`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${saToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ values: [rowValues] }),
+        }
+      );
+    } catch (_) {}
+  };
+
+  const loadMediaAssetFromTenantSheet = async (baseId: string): Promise<any | null> => {
+    try {
+      const tenantMatch = baseId.match(/^([A-Za-z0-9]+)_/);
+      const inferredTenant = tenantMatch ? tenantMatch[1] : 'D26';
+      const candidateTenants = Array.from(new Set([inferredTenant, 'D26', 'D27', 'demo']));
+      const saToken = await getServiceAccountAccessToken();
+      if (!saToken) return null;
+
+      const checkedSheetIds = new Set<string>();
+      for (const tid of candidateTenants) {
+        const spreadsheetId = await resolveMediaStorageSpreadsheetId(tid);
+        if (!spreadsheetId || checkedSheetIds.has(spreadsheetId)) continue;
+        checkedSheetIds.add(spreadsheetId);
+
+        const res = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent("'_MediaAssets'!A1:Z500")}`,
+          { headers: { Authorization: `Bearer ${saToken}` } }
+        );
+        if (!res.ok) continue;
+        const json: any = await res.json();
+        const rows: any[][] = json?.values || [];
+        for (let i = rows.length - 1; i >= 0; i--) {
+          const row = rows[i];
+          if (row && String(row[0] || '').trim() === baseId) {
+            const tenantId = String(row[1] || tid);
+            const fileName = String(row[2] || `${baseId}.png`);
+            const ext = String(row[3] || 'png');
+            const createdAt = String(row[4] || new Date().toISOString());
+            const dataUrl = row.slice(5).join('');
+            if (dataUrl) {
+              return { id: baseId, mediaId: baseId, tenantId, fileName, ext, dataUrl, createdAt };
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  };
+
   app.post("/api/firebase-media", async (req, res) => {
     try {
-      const { mediaId, tenantId, category, fileName, ext, dataUrl, createdAt } = req.body || {};
+      const { mediaId, tenantId, category, fileName, ext, dataUrl, createdAt, clientOrigin } = req.body || {};
       if (!mediaId || !dataUrl) {
         return res.status(400).json({ error: "mediaId et dataUrl sont requis." });
       }
@@ -7488,18 +7654,26 @@ async function warmupDefibrillateursStore() {
       serverMemoryStore.set(`media_asset_${safeRawId}`, payload);
       serverMemoryStore.set(`media_${baseId}`, payload);
 
+      // Persist in background to tenant's Google Sheet _MediaAssets tab so it survives container restarts and Firestore 429
+      saveMediaAssetToTenantSheet({
+        baseId,
+        tenantId: String(tenantId || 'demo'),
+        fileName: payload.fileName,
+        ext: cleanExt,
+        dataUrl,
+        createdAt: payload.createdAt,
+      }).catch(() => {});
+
       try {
         const docRef = doc(db, 'appData', `media_${baseId}`);
         await Promise.race([
           setDoc(docRef, payload),
-          new Promise(resolve => setTimeout(resolve, 3500))
+          new Promise(resolve => setTimeout(resolve, 2500))
         ]);
       } catch (_) {}
 
-      const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
-      const proto = forwardedProto || (req.secure ? 'https' : 'https');
-      const host = req.get('host') || 'localhost:3000';
-      const fullUrl = `${proto}://${host}/api/firebase-media/${baseId}.${cleanExt}`;
+      const publicBase = resolvePublicBaseUrl(req, clientOrigin);
+      const fullUrl = `${publicBase}/api/firebase-media/${baseId}.${cleanExt}`;
 
       return res.json({ status: "success", mediaId: baseId, url: fullUrl });
     } catch (err: any) {
@@ -7509,7 +7683,7 @@ async function warmupDefibrillateursStore() {
 
   app.post("/api/google-drive/upload", async (req, res) => {
     try {
-      const { tenantId, folderId: explicitFolderId, fileName, mimeType, dataUrl } = req.body || {};
+      const { tenantId, folderId: explicitFolderId, fileName, mimeType, dataUrl, clientOrigin } = req.body || {};
       if (!dataUrl || typeof dataUrl !== 'string') {
         return res.status(400).json({ error: "dataUrl requis." });
       }
@@ -7518,18 +7692,48 @@ async function warmupDefibrillateursStore() {
       const resolvedFileName = String(fileName || `document_${Date.now()}.pdf`).trim();
       const resolvedMime = String(mimeType || 'application/octet-stream').trim();
 
-      // 1. Look up tenant's api_connectors for folderId or latest accessToken
+      // 1. Look up tenant's api_connectors across all tenant keys & aliases for folderId or latest accessToken
       let targetFolderId = String(explicitFolderId || '').trim();
       let storedAccessToken = '';
       try {
-        const memConn: any = serverMemoryStore.get(`col_${activeTenant}_api_connectors`);
-        const connObj = Array.isArray(memConn) ? memConn[0] : memConn;
-        if (connObj && typeof connObj === 'object') {
-          if (!targetFolderId && connObj.googleDriveFolderId) {
-            targetFolderId = String(connObj.googleDriveFolderId).trim();
+        const aliases = Array.from(getTenantAliasesSync(activeTenant));
+        const candidateKeys = Array.from(
+          new Set([
+            `${activeTenant}_api_connectors`,
+            `${activeTenant.toUpperCase()}_api_connectors`,
+            `defib_${activeTenant}_api_connectors`,
+            `defib_${activeTenant.toUpperCase()}_api_connectors`,
+            `col_${activeTenant}_api_connectors`,
+            ...aliases.flatMap((a) => [
+              `${a}_api_connectors`,
+              `${a.toUpperCase()}_api_connectors`,
+              `defib_${a}_api_connectors`,
+              `defib_${a.toUpperCase()}_api_connectors`,
+            ]),
+          ])
+        );
+        for (const ck of candidateKeys) {
+          const memConn: any = serverMemoryStore.get(ck);
+          const connObj = Array.isArray(memConn) ? memConn[0] : memConn;
+          if (connObj && typeof connObj === 'object') {
+            if (!targetFolderId && connObj.googleDriveFolderId) {
+              targetFolderId = String(connObj.googleDriveFolderId).trim();
+            }
+            if (!storedAccessToken && connObj.googleDriveAccessToken) {
+              storedAccessToken = String(connObj.googleDriveAccessToken).trim();
+            }
           }
-          if (connObj.googleDriveAccessToken) {
-            storedAccessToken = String(connObj.googleDriveAccessToken).trim();
+        }
+        if (!storedAccessToken || !targetFolderId) {
+          const fetchedConn: any = await fetchServerCollection('api_connectors', activeTenant);
+          const connObj = Array.isArray(fetchedConn) ? fetchedConn[0] : fetchedConn;
+          if (connObj && typeof connObj === 'object') {
+            if (!targetFolderId && connObj.googleDriveFolderId) {
+              targetFolderId = String(connObj.googleDriveFolderId).trim();
+            }
+            if (!storedAccessToken && connObj.googleDriveAccessToken) {
+              storedAccessToken = String(connObj.googleDriveAccessToken).trim();
+            }
           }
         }
       } catch (_) {}
@@ -7612,19 +7816,22 @@ async function warmupDefibrillateursStore() {
         }
       }
 
-      // Try persistent Service Account token (never expires) if folder is shared or accessible
-      const saToken = await getServiceAccountAccessToken();
-      if (saToken) {
-        const saUrl = await tryUploadWithToken(saToken, targetFolderId);
-        if (saUrl) {
-          return res.json({ status: 'success', url: saUrl, source: 'service_account' });
+      // Try persistent Service Account token if a Shared Drive folder is configured
+      if (targetFolderId) {
+        const saToken = await getServiceAccountAccessToken();
+        if (saToken) {
+          const saUrl = await tryUploadWithToken(saToken, targetFolderId);
+          if (saUrl) {
+            return res.json({ status: 'success', url: saUrl, source: 'service_account' });
+          }
         }
       }
 
-      // Seamless server-hosted media fallback so uploads NEVER fail even when OAuth token expired and folder isn't shared yet
+      // Seamless server-hosted + Google Sheets media fallback so uploads NEVER fail even when OAuth token expired
       const fileExtMatch = resolvedFileName.match(/\.([a-zA-Z0-9]{2,5})$/);
       const cleanExt = (fileExtMatch?.[1] || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf';
       const baseId = `${activeTenant}_documents_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const createdAtIso = new Date().toISOString();
       const payload = {
         id: baseId,
         mediaId: baseId,
@@ -7633,25 +7840,34 @@ async function warmupDefibrillateursStore() {
         fileName: resolvedFileName,
         ext: cleanExt,
         dataUrl,
-        createdAt: new Date().toISOString(),
+        createdAt: createdAtIso,
       };
       try {
         fs.writeFileSync(path.join(MEDIA_ASSETS_DIR, `${baseId}.json`), JSON.stringify(payload), 'utf-8');
       } catch (_) {}
       serverMemoryStore.set(`media_asset_${baseId}`, payload);
       serverMemoryStore.set(`media_${baseId}`, payload);
+
+      // Persist to tenant's Google Spreadsheet _MediaAssets tab so it survives Cloud Run restarts and Firestore 429
+      await saveMediaAssetToTenantSheet({
+        baseId,
+        tenantId: activeTenant,
+        fileName: resolvedFileName,
+        ext: cleanExt,
+        dataUrl,
+        createdAt: createdAtIso,
+      });
+
       try {
         const docRef = doc(db, 'appData', `media_${baseId}`);
         await Promise.race([
           setDoc(docRef, payload),
-          new Promise(resolve => setTimeout(resolve, 3500))
+          new Promise(resolve => setTimeout(resolve, 2000))
         ]);
       } catch (_) {}
 
-      const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
-      const proto = forwardedProto || 'https';
-      const host = req.get('host') || 'localhost:3000';
-      const fullUrl = `${proto}://${host}/api/firebase-media/${baseId}.${cleanExt}`;
+      const publicBase = resolvePublicBaseUrl(req, clientOrigin);
+      const fullUrl = `${publicBase}/api/firebase-media/${baseId}.${cleanExt}`;
 
       return res.json({ status: 'success', url: fullUrl, source: 'server_media' });
     } catch (err: any) {
@@ -7687,10 +7903,22 @@ async function warmupDefibrillateursStore() {
         }
       }
 
+      // Check Google Sheets _MediaAssets persistent store (immune to Cloud Run restarts and Firestore 429)
       if (!asset) {
+        const sheetAsset = await loadMediaAssetFromTenantSheet(baseId);
+        if (sheetAsset && sheetAsset.dataUrl) {
+          asset = sheetAsset;
+          serverMemoryStore.set(`media_asset_${baseId}`, asset);
+          try {
+            fs.writeFileSync(path.join(MEDIA_ASSETS_DIR, `${baseId}.json`), JSON.stringify(asset), 'utf-8');
+          } catch (_) {}
+        }
+      }
+
+      if (!asset && !isServerFirestoreQuotaExhausted()) {
         try {
           for (const docKey of [`media_${baseId}`, `media_${safeRawId}`, `firebase_media_${baseId}`]) {
-            const restRes = await fetchFirestoreDocumentRest(docKey, 2500);
+            const restRes = await fetchFirestoreDocumentRest(docKey, 2000);
             const found = restRes.data?.value || restRes.data;
             if (found && found.dataUrl) {
               asset = found;
@@ -7704,9 +7932,9 @@ async function warmupDefibrillateursStore() {
         } catch (_) {}
       }
 
-      if (!asset && db) {
+      if (!asset && db && !isServerFirestoreQuotaExhausted()) {
         try {
-          const snap = await withTimeout(getDoc(doc(db, 'appData', `media_${baseId}`)), 2500, null);
+          const snap = await withTimeout(getDoc(doc(db, 'appData', `media_${baseId}`)), 2000, null);
           if (snap && snap.exists()) {
             const d = snap.data();
             asset = d?.value || d;

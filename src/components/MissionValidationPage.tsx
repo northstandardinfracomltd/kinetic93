@@ -311,11 +311,7 @@ export default function MissionValidationPage() {
                       width: '100%',
                     }}
                   >
-                    {isSubmitting && !showRefusalForm ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      t("Valider")
-                    )}
+                    {t("Valider")}
                   </button>
 
                   {/* BOUTON REFUSER */}
@@ -409,11 +405,7 @@ export default function MissionValidationPage() {
                           width: '100%',
                         }}
                       >
-                        {isSubmitting ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          t("Confirmer le refus")
-                        )}
+                        {t("Confirmer le refus")}
                       </button>
 
                       <button

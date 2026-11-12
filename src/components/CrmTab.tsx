@@ -2410,7 +2410,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     padding: '6px 18px',
     whiteSpace: 'nowrap',
     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-    cursor: 'default',
+    cursor: 'pointer',
   };
 
   const cellTextStyle: React.CSSProperties = {
@@ -2418,7 +2418,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     fontSize: '16px',
     fontWeight: 400,
     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-    cursor: 'default',
+    cursor: 'pointer',
   };
 
   const rowActionButtonStyle: React.CSSProperties = {
@@ -2622,8 +2622,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           letter-spacing: normal !important;
           text-transform: none !important;
         }
+        #crm-tab-container tbody tr,
+        #crm-tab-container tbody tr td {
+          cursor: pointer !important;
+        }
         #crm-tab-container tbody tr:hover {
           background-color: #f5f7fa !important;
+          cursor: pointer !important;
         }
         #crm-tab-container input[type="date"]::-webkit-calendar-picker-indicator {
           display: block !important;

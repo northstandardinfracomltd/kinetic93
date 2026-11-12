@@ -291,6 +291,115 @@ const fileToDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
+export const normalizePublicMediaUrl = (rawUrl: string): string => {
+  const trimmed = String(rawUrl || '').trim();
+  if (!trimmed) return '';
+  if (trimmed.includes('/api/firebase-media/')) {
+    if (typeof window !== 'undefined' && window.location?.origin && !window.location.origin.includes('localhost')) {
+      return trimmed.replace(/^https?:\/\/[^/]+/i, window.location.origin.replace(/^http:\/\//i, 'https://'));
+    }
+    if (/https?:\/\/kinetic93-[^/]+\.run\.app/i.test(trimmed)) {
+      return trimmed.replace(/https?:\/\/kinetic93-[^/]+\.run\.app/i, 'https://consoledefibeo.deroesch.com');
+    }
+  }
+  return trimmed;
+};
+
+const refreshGoogleDriveTokenSilently = (activeTenant: string, hintEmail?: string): Promise<string> => {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return Promise.resolve('');
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    let iframe: HTMLIFrameElement | null = null;
+    let pollTimer: any = null;
+    let timeoutTimer: any = null;
+
+    const cleanup = (token: string) => {
+      if (settled) return;
+      settled = true;
+      if (pollTimer) clearInterval(pollTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (iframe && iframe.parentNode) {
+        try {
+          iframe.parentNode.removeChild(iframe);
+        } catch (_) {}
+      }
+      resolve(token);
+    };
+
+    try {
+      const clientId = '627487981610-1srkug4lp1qeih26pd2thd1241andaq4.apps.googleusercontent.com';
+      const redirectUri = window.location.origin;
+      const scopes = [
+        'https://www.googleapis.com/auth/drive.file',
+        'https://www.googleapis.com/auth/userinfo.email',
+      ].join(' ');
+      const emailHint =
+        hintEmail ||
+        localStorage.getItem(`defib_${activeTenant}_google_drive_email`) ||
+        localStorage.getItem('defib_google_drive_email') ||
+        '';
+
+      let oauthUrl =
+        `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=token` +
+        `&scope=${encodeURIComponent(scopes)}` +
+        `&prompt=none`;
+      if (emailHint && emailHint.includes('@')) {
+        oauthUrl += `&login_hint=${encodeURIComponent(emailHint)}`;
+      }
+
+      iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.style.width = '0px';
+      iframe.style.height = '0px';
+      iframe.setAttribute('aria-hidden', 'true');
+      iframe.src = oauthUrl;
+      document.body.appendChild(iframe);
+
+      pollTimer = setInterval(() => {
+        try {
+          if (!iframe || !iframe.contentWindow) return;
+          const href = iframe.contentWindow.location.href;
+          if (href && href.startsWith(redirectUri)) {
+            const hash = iframe.contentWindow.location.hash || '';
+            const search = iframe.contentWindow.location.search || '';
+            const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : search.slice(1));
+            const newToken = params.get('access_token') || '';
+            const err = params.get('error') || '';
+            if (newToken) {
+              try {
+                const targets = Array.from(
+                  new Set([activeTenant, activeTenant.toUpperCase(), activeTenant.toLowerCase()])
+                ).filter(Boolean);
+                for (const t of targets) {
+                  localStorage.setItem(`defib_${t}_google_drive_token`, newToken);
+                  localStorage.setItem(`defib_${t}_google_drive_active`, 'true');
+                }
+                localStorage.setItem('defib_google_drive_token', newToken);
+              } catch (_) {}
+              cleanup(newToken);
+            } else if (err) {
+              cleanup('');
+            }
+          }
+        } catch (_) {
+          // Cross-origin while on accounts.google.com; wait until redirect back to redirectUri
+        }
+      }, 120);
+
+      timeoutTimer = setTimeout(() => {
+        cleanup('');
+      }, 2400);
+    } catch (_) {
+      cleanup('');
+    }
+  });
+};
+
 export const uploadFileToGoogleDrive = async (
   accessTokenOrFile: string | File,
   fileOrFolder?: File | string,
@@ -299,6 +408,7 @@ export const uploadFileToGoogleDrive = async (
   const activeTenant = resolveEffectiveTenantId(explicitTenantId);
   let accessToken = '';
   let folderId = '';
+  let linkedEmail = '';
   let file: File;
 
   if (typeof accessTokenOrFile !== 'string') {
@@ -306,6 +416,7 @@ export const uploadFileToGoogleDrive = async (
     const status = await fetchGoogleDriveStatus(activeTenant);
     accessToken = status.accessToken;
     folderId = status.folderId || '';
+    linkedEmail = status.email || '';
   } else {
     accessToken = accessTokenOrFile;
     file = fileOrFolder as File;
@@ -313,8 +424,13 @@ export const uploadFileToGoogleDrive = async (
       const status = await fetchGoogleDriveStatus(activeTenant);
       accessToken = status.accessToken;
       folderId = status.folderId || '';
+      linkedEmail = status.email || '';
     } else if (typeof window !== 'undefined') {
       folderId = localStorage.getItem(`defib_${activeTenant}_google_drive_folder_id`) || '';
+      linkedEmail =
+        localStorage.getItem(`defib_${activeTenant}_google_drive_email`) ||
+        localStorage.getItem('defib_google_drive_email') ||
+        '';
     }
   }
 
@@ -331,10 +447,10 @@ export const uploadFileToGoogleDrive = async (
       fetchCollectionFromFirestore<any>('api_connectors', activeTenant)
         .then((raw) => {
           const existing = Array.isArray(raw) ? raw[0] : raw;
-          if (existing && typeof existing === 'object' && !existing.googleDriveFolderId) {
+          if (existing && typeof existing === 'object') {
             saveCollectionToFirestore(
               'api_connectors',
-              { ...existing, googleDriveFolderId: targetFolderId },
+              { ...existing, googleDriveFolderId: targetFolderId, googleDriveAccessToken: token },
               activeTenant
             ).catch(() => {});
           }
@@ -381,12 +497,13 @@ export const uploadFileToGoogleDrive = async (
       return await executeDriveUpload(accessToken);
     } catch (err: any) {
       console.warn(
-        'Direct Google Drive upload attempt with cached token failed, trying refreshed status or server bridge:',
+        'Direct Google Drive upload attempt with cached token failed, trying refreshed status or silent OAuth renewal:',
         err?.message || err
       );
       try {
         const freshStatus = await fetchGoogleDriveStatus(activeTenant);
         if (freshStatus.folderId) folderId = freshStatus.folderId;
+        if (freshStatus.email) linkedEmail = freshStatus.email;
         if (freshStatus.accessToken && freshStatus.accessToken !== accessToken) {
           return await executeDriveUpload(freshStatus.accessToken);
         }
@@ -394,11 +511,25 @@ export const uploadFileToGoogleDrive = async (
     }
   }
 
-  // 2. Try server-side Google Drive bridge (/api/google-drive/upload) which uses the permanent Service Account token or server media store
+  // 1b. If Google Drive is active for this tenant and cached token was missing or expired (1h OAuth limit), try silent OAuth token refresh
+  if (getCachedGoogleDriveActiveSync(activeTenant)) {
+    try {
+      const renewedToken = await refreshGoogleDriveTokenSilently(activeTenant, linkedEmail);
+      if (renewedToken && renewedToken !== accessToken) {
+        return await executeDriveUpload(renewedToken);
+      }
+    } catch (silentErr) {
+      console.warn('Silent Google Drive token renewal upload failed:', silentErr);
+    }
+  }
+
+  // 2. Try server-side Google Drive bridge (/api/google-drive/upload) which uses stored OAuth token or permanent Google Sheets media store
   if (typeof fetch !== 'undefined' && file) {
     try {
       const dataUrl = await fileToDataUrl(file);
       if (dataUrl) {
+        const clientOrigin =
+          typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
         const res = await fetch('/api/google-drive/upload', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -408,12 +539,13 @@ export const uploadFileToGoogleDrive = async (
             fileName: file.name || `document_${Date.now()}`,
             mimeType: file.type || 'application/octet-stream',
             dataUrl,
+            clientOrigin,
           }),
         });
         if (res.ok) {
           const json = await res.json();
           if (json?.url && typeof json.url === 'string') {
-            return json.url;
+            return normalizePublicMediaUrl(json.url);
           }
         }
       }
@@ -425,7 +557,7 @@ export const uploadFileToGoogleDrive = async (
   // 3. Final seamless fallback to Firebase/Server media URL so tenant users NEVER fail to upload a file
   const fallbackUrl = await uploadMediaToFirebase(file, 'documents', file?.name);
   if (fallbackUrl) {
-    return fallbackUrl;
+    return normalizePublicMediaUrl(fallbackUrl);
   }
 
   throw new Error("Impossible d'uploader le fichier et de récupérer l'URL source.");

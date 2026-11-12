@@ -1967,6 +1967,61 @@ export default function App() {
                 }
                 return mutated ? updated : prev;
               });
+            } else if (tabType === 'tournees' && Array.isArray(data?.records) && data.records.length > 0) {
+              setFsmTours(prev => {
+                let mutated = false;
+                const updated = prev.map(t => {
+                  if (!t || t.id === 'a-trier') return t;
+                  const matched = data.records.find(
+                    (r: any) =>
+                      r &&
+                      ((r.tourIdentifiant &&
+                        t.tourIdentifiant &&
+                        String(r.tourIdentifiant).trim().toLowerCase() === String(t.tourIdentifiant).trim().toLowerCase()) ||
+                        (r.id && t.id && String(r.id).trim().toLowerCase() === String(t.id).trim().toLowerCase()))
+                  );
+                  if (matched && typeof matched._sheetRowNumber === 'number' && t._sheetRowNumber !== matched._sheetRowNumber) {
+                    mutated = true;
+                    return { ...t, _sheetRowNumber: matched._sheetRowNumber };
+                  }
+                  return t;
+                });
+                if (mutated) {
+                  safeSetLocalStorage(`defib_${effectiveTid}_fsm_tours`, JSON.stringify(updated));
+                }
+                return mutated ? updated : prev;
+              });
+            } else if (tabType === 'missionsTournees' && Array.isArray(data?.records) && data.records.length > 0) {
+              setFsmTours(prev => {
+                let mutated = false;
+                const updated = prev.map(t => {
+                  if (!t || !Array.isArray(t.missions) || t.missions.length === 0) return t;
+                  let tourMutated = false;
+                  const nextMissions = t.missions.map((m: any) => {
+                    if (!m) return m;
+                    const matched = data.records.find(
+                      (r: any) =>
+                        r &&
+                        ((r.interventionReference &&
+                          m.interventionReference &&
+                          String(r.interventionReference).trim().toLowerCase() ===
+                            String(m.interventionReference).trim().toLowerCase()) ||
+                          (r.id && m.id && String(r.id).trim().toLowerCase() === String(m.id).trim().toLowerCase()))
+                    );
+                    if (matched && typeof matched._sheetRowNumber === 'number' && m._sheetRowNumber !== matched._sheetRowNumber) {
+                      tourMutated = true;
+                      mutated = true;
+                      return { ...m, _sheetRowNumber: matched._sheetRowNumber };
+                    }
+                    return m;
+                  });
+                  return tourMutated ? { ...t, missions: nextMissions } : t;
+                });
+                if (mutated) {
+                  safeSetLocalStorage(`defib_${effectiveTid}_fsm_tours`, JSON.stringify(updated));
+                }
+                return mutated ? updated : prev;
+              });
             } else if (tabType === 'temps' && Array.isArray(data?.records) && data.records.length > 0) {
               setPointages(prev => {
                 let mutated = false;
@@ -3910,6 +3965,9 @@ export default function App() {
     if (!clean || clean.toLowerCase() === 'demo') {
       return 'D18';
     }
+    if (/^D\d+$/i.test(clean)) {
+      return clean.toUpperCase();
+    }
     if (typeof window !== 'undefined') {
       try {
         const cachedRaw = localStorage.getItem('fs_cache_registered_tenants');
@@ -3958,12 +4016,15 @@ export default function App() {
         const num = parseInt(match[2], 10);
         if (!isNaN(num) && num > maxSeq) maxSeq = num;
         const paddedNum = String(num).padStart(4, '0');
-        const targetId = `${prefix}-TOUR-${paddedNum}`;
-        if (!match[1] || match[1].toUpperCase() !== prefix.toUpperCase() || t.tourIdentifiant !== targetId) {
+        // Never overwrite an already-assigned prefix on an existing tour so its Google Sheets primary key never mutates
+        const effectivePrefix = match[1] ? match[1].toUpperCase() : prefix.toUpperCase();
+        const targetId = `${effectivePrefix}-TOUR-${paddedNum}`;
+        if (t.tourIdentifiant !== targetId) {
           prefixUpdated = true;
           return {
             ...t,
-            tourIdentifiant: targetId
+            tourIdentifiant: targetId,
+            ...(existingId && existingId !== targetId ? { _previousTourIdentifiant: existingId } : {})
           };
         }
       }
@@ -3980,26 +4041,63 @@ export default function App() {
       }
     });
 
-    if (indicesNeedingId.length === 0) {
-      return { tours: normalizedList, changed: prefixUpdated };
-    }
-
-    const updated = [...normalizedList];
-    for (let i = indicesNeedingId.length - 1; i >= 0; i--) {
-      const idx = indicesNeedingId[i];
-      maxSeq += 1;
-      const frozenId = `${prefix}-TOUR-${String(maxSeq).padStart(4, '0')}`;
-      updated[idx] = {
-        ...updated[idx],
-        tourIdentifiant: frozenId
-      };
+    let updated = normalizedList;
+    if (indicesNeedingId.length > 0) {
+      updated = [...normalizedList];
+      for (let i = indicesNeedingId.length - 1; i >= 0; i--) {
+        const idx = indicesNeedingId[i];
+        maxSeq += 1;
+        const frozenId = `${prefix}-TOUR-${String(maxSeq).padStart(4, '0')}`;
+        updated[idx] = {
+          ...updated[idx],
+          tourIdentifiant: frozenId
+        };
+      }
+      prefixUpdated = true;
     }
 
     try {
-      localStorage.setItem(`defib_${prefix}_tour_last_seq`, String(maxSeq));
+      if (maxSeq > 0) {
+        const currentSaved = parseInt(localStorage.getItem(`defib_${prefix}_tour_last_seq`) || '0', 10);
+        if (isNaN(currentSaved) || maxSeq > currentSaved) {
+          localStorage.setItem(`defib_${prefix}_tour_last_seq`, String(maxSeq));
+        }
+      }
     } catch (_) {}
 
-    return { tours: updated, changed: true };
+    // Deduplicate tours by tourIdentifiant so identical tours can never multiply in state
+    const seenByIdent = new Map<string, number>();
+    const deduped: any[] = [];
+    for (const t of updated) {
+      if (!t || t.id === 'a-trier') {
+        deduped.push(t);
+        continue;
+      }
+      const key = String(t.tourIdentifiant || t.id || '').trim().toUpperCase();
+      if (!key) {
+        deduped.push(t);
+        continue;
+      }
+      if (seenByIdent.has(key)) {
+        prefixUpdated = true;
+        const prevIdx = seenByIdent.get(key)!;
+        const prevTour = deduped[prevIdx];
+        const prevMissions = Array.isArray(prevTour?.missions) ? prevTour.missions : [];
+        const currMissions = Array.isArray(t.missions) ? t.missions : [];
+        deduped[prevIdx] = {
+          ...prevTour,
+          ...t,
+          id: prevTour.id || t.id,
+          _sheetRowNumber: t._sheetRowNumber || prevTour._sheetRowNumber,
+          missions: currMissions.length >= prevMissions.length ? currMissions : prevMissions,
+        };
+      } else {
+        seenByIdent.set(key, deduped.length);
+        deduped.push(t);
+      }
+    }
+
+    return { tours: deduped, changed: prefixUpdated };
   }, [getTenantTourPrefix, tenantId]);
 
   const gestionApresMapRef = useRef<Map<string, any>>(new Map());
@@ -4393,11 +4491,19 @@ export default function App() {
               const cleanDefibId = String(
                 sm.defibIdentifiant || (!String(sm.identifiant || '').startsWith('fsm-m-') ? sm.identifiant : '') || ''
               ).trim();
+              const rawBc = String(
+                sm.bonCommandeId === 'custom'
+                  ? (sm.customBonCommande ?? '')
+                  : (sm.bonCommandeId ?? sm.customBonCommande ?? sm['Bon de commande.'] ?? sm['Bon de commande'] ?? '')
+              ).trim();
+              const cleanBc = rawBc.toLowerCase() === 'custom' ? '' : rawBc;
               list.push({
                 ...sm,
                 id: sm.id || cleanRef || `fsm-m-${Date.now()}-${list.length}`,
                 interventionReference: cleanRef,
                 defibIdentifiant: cleanDefibId || sm.defibIdentifiant || '',
+                bonCommandeId: cleanBc ? (sm.bonCommandeId === 'custom' ? 'custom' : cleanBc) : '',
+                customBonCommande: cleanBc,
                 rejectionReason: sm.rejectionReason ?? sm.raisonRejet ?? '',
                 refusalComment:
                   sm.refusalComment ||
@@ -5300,7 +5406,7 @@ export default function App() {
 
   const [fsmTours, setFsmTours] = useState<any[]>([]);
 
-  const saveFsmTours = (updated: any[]) => {
+  const saveFsmTours = (updated: any[], forceSheetSync = false) => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
@@ -5326,6 +5432,8 @@ export default function App() {
             interventionReference: cleanRef,
             defibIdentifiant: eqIdent || m.defibIdentifiant || '',
             identifiant: eqIdent || m.defibIdentifiant || '',
+            bonCommandeId: m.bonCommandeId ?? '',
+            customBonCommande: m.customBonCommande ?? '',
           };
         }),
       };
@@ -5333,7 +5441,7 @@ export default function App() {
 
     // Synchronize Tournées (excluding 'a-trier') and Missions des tournées (all real missions) to Google Spreadsheets
     try {
-      const oldRealTours = (fsmTours || []).filter((t: any) => t && t.id !== 'a-trier');
+      const oldRealTours = forceSheetSync ? [] : (fsmTours || []).filter((t: any) => t && t.id !== 'a-trier');
       const newRealTours = (withIds || []).filter((t: any) => t && t.id !== 'a-trier');
       syncCompartmentToGoogleSheets('tournees', oldRealTours, newRealTours, ['tourIdentifiant', 'id', 'tourCode']);
 
@@ -5393,6 +5501,30 @@ export default function App() {
               rawRef && !rawRef.startsWith('fsm-m-')
                 ? rawRef
                 : `INT-2026-${String(rawRef || m.id || Date.now()).replace(/\D/g, '').slice(-5).padStart(5, '0')}`;
+            const resolvedBonCommande = (() => {
+              if (m.bonCommandeId === 'custom') {
+                return String(m.customBonCommande ?? '').trim();
+              }
+              const rawBc = String(m.bonCommandeId ?? m.customBonCommande ?? '').trim();
+              if (!rawBc || rawBc.toLowerCase() === 'custom') return '';
+              const matchedDoc = (commercialDocs || []).find(
+                (doc: any) =>
+                  doc.id === rawBc ||
+                  doc.bonCommandeEntete === rawBc ||
+                  doc.bonCommandeReference === rawBc ||
+                  doc.ref === rawBc
+              );
+              if (matchedDoc) {
+                return String(
+                  matchedDoc.bonCommandeEntete ||
+                    matchedDoc.bonCommandeReference ||
+                    matchedDoc.ref ||
+                    matchedDoc.id ||
+                    rawBc
+                ).trim();
+              }
+              return rawBc;
+            })();
             list.push({
               ...m,
               tourIdentifiant: tourIdent,
@@ -5400,6 +5532,8 @@ export default function App() {
               defibIdentifiant: eqIdent,
               identifiant: eqIdent,
               interventionReference: cleanRef,
+              bonCommandeId: resolvedBonCommande,
+              customBonCommande: resolvedBonCommande,
               clientName: resolvedClientName,
               siteName: resolvedSiteName,
               ville,
@@ -5439,7 +5573,7 @@ export default function App() {
         return list;
       };
 
-      const oldFlatMissions = extractFlatMissions(fsmTours || []);
+      const oldFlatMissions = forceSheetSync ? [] : extractFlatMissions(fsmTours || []);
       const newFlatMissions = extractFlatMissions(withIds || []);
       syncCompartmentToGoogleSheets('missionsTournees', oldFlatMissions, newFlatMissions, [
         'interventionReference',
@@ -6524,11 +6658,7 @@ export default function App() {
         return t;
       });
 
-      setFsmTours(updatedTours);
-      localStorage.setItem(`defib_${tenantId}_fsm_tours`, JSON.stringify(updatedTours));
-      if (isFirebaseLoaded && tenantId === loadedTenantIdRef.current) {
-        saveCollectionToFirestore('fsmTours', updatedTours, tenantId);
-      }
+      saveFsmTours(updatedTours, true);
     } catch (err) {
       console.error("Failed to optimize tour:", tourId, err);
     }
@@ -6550,7 +6680,19 @@ export default function App() {
         getTenantSpreadsheetUrl('spreadsheetMissionsTournees', companyInfo)
     );
     if (!hasFsmSpreadsheet) return;
-    const newId = 'fsm-tour-' + Date.now();
+    const tempTour = {
+      id: '',
+      title: 'Nouvelle Tournée',
+      techName: '',
+      startDate: new Date().toISOString().split('T')[0],
+      status: 'Brouillon',
+      missions: [],
+      vehicule: 'Aucun',
+      calculated: false
+    };
+    const { tours: resolvedTours } = ensureFsmTourIdentifiers([tempTour, ...fsmTours], tenantId);
+    const createdTour = resolvedTours[0] || tempTour;
+    const newId = createdTour.tourIdentifiant || ('fsm-tour-' + Date.now());
     const defaultTech = '';
     const assignedVehicle = 'Aucun';
     setFsmTourDrafts(prev => ({
@@ -6562,7 +6704,9 @@ export default function App() {
       }
     }));
     const newTour = {
+      ...createdTour,
       id: newId,
+      tourIdentifiant: createdTour.tourIdentifiant || newId,
       title: 'Nouvelle Tournée',
       techName: defaultTech,
       startDate: new Date().toISOString().split('T')[0],
@@ -6823,7 +6967,7 @@ export default function App() {
     const isCalculatedValue = (techChanged || dateChanged) ? false : (existingTour?.calculated ?? false);
 
     const updatedTours = fsmTours.map(t => t.id === tourId ? { ...t, ...fields, calculated: isCalculatedValue } : t);
-    saveFsmTours(updatedTours);
+    saveFsmTours(updatedTours, true);
 
     if (newStatus === 'Effectué' && existingTour) {
       const tourMissions = fields.missions !== undefined ? fields.missions : existingTour.missions;
@@ -7215,12 +7359,17 @@ export default function App() {
     const bcId = extraFieldsToUpdate?.bonCommandeId !== undefined 
       ? extraFieldsToUpdate.bonCommandeId 
       : (mission?.bonCommandeId || '');
+    const customBc = extraFieldsToUpdate?.customBonCommande !== undefined
+      ? extraFieldsToUpdate.customBonCommande
+      : (mission?.customBonCommande || '');
 
     let bcStr = '—';
-    if (bcId) {
-      const doc = (commercialDocs || []).find((d: any) => d.id === bcId || d.bonCommandeReference === bcId || d.ref === bcId);
+    if (bcId === 'custom') {
+      bcStr = customBc || '—';
+    } else if (bcId) {
+      const doc = (commercialDocs || []).find((d: any) => d.id === bcId || d.bonCommandeEntete === bcId || d.bonCommandeReference === bcId || d.ref === bcId);
       if (doc) {
-        bcStr = doc.bonCommandeReference || doc.ref || bcId;
+        bcStr = doc.bonCommandeEntete || doc.bonCommandeReference || doc.ref || bcId;
       } else {
         bcStr = bcId;
       }
@@ -7403,10 +7552,12 @@ export default function App() {
     // Compute formatted reservation info
     const bcId = mission.bonCommandeId || '';
     let bcStr = '—';
-    if (bcId) {
-      const doc = (commercialDocs || []).find((d: any) => d.id === bcId || d.bonCommandeReference === bcId || d.ref === bcId);
+    if (bcId === 'custom') {
+      bcStr = mission.customBonCommande || '—';
+    } else if (bcId) {
+      const doc = (commercialDocs || []).find((d: any) => d.id === bcId || d.bonCommandeEntete === bcId || d.bonCommandeReference === bcId || d.ref === bcId);
       if (doc) {
-        bcStr = doc.bonCommandeReference || doc.ref || bcId;
+        bcStr = doc.bonCommandeEntete || doc.bonCommandeReference || doc.ref || bcId;
       } else {
         bcStr = bcId;
       }
@@ -7576,14 +7727,38 @@ export default function App() {
     );
 
     const clientName = eq?.denominationClient || matchedClient?.denomination || m.clientName || '';
-    const siteName = eq?.nomSite || m.siteName || matchedClient?.nomSite || '';
+    const siteName = eq?.nomSite || (eq as any)?.nomPrenomSite || m.siteName || matchedClient?.nomSite || '';
 
-    const locParts = [
-      eq?.adresse || matchedClient?.adresse || '',
-      eq?.codePostal || matchedClient?.codePostal || '',
-      eq?.ville || matchedClient?.ville || ''
-    ].map(s => String(s || '').trim()).filter(Boolean);
-    const localisation = locParts.join(', ') || m.address || '';
+    const isFormationMission =
+      m.equipmentType === 'Formation' ||
+      m.equipmentType?.toLowerCase()?.includes('formation') ||
+      !!m.formationId;
+    const fmt = isFormationMission
+      ? formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant)
+      : null;
+
+    const numVoie =
+      (eq ? (eq.numVoie || (eq as any).numeroVoie || (eq as any).numero_et_voie || (eq as any).adresse || '') : '') ||
+      (fmt ? (fmt.adresse || '') : '') ||
+      (matchedClient ? (matchedClient.numVoie || (matchedClient as any).numeroVoie || (matchedClient as any).adresse || '') : '') ||
+      m.numVoie ||
+      '';
+    const ville =
+      (eq ? (eq.ville || '') : '') ||
+      (fmt ? (fmt.ville || '') : '') ||
+      (matchedClient ? (matchedClient.ville || '') : '') ||
+      m.ville ||
+      '';
+    const cp =
+      (eq ? ((eq as any).codePostal || eq.cp || '') : '') ||
+      (fmt ? (fmt.codePostal || (fmt as any).cp || '') : '') ||
+      (matchedClient ? ((matchedClient as any).codePostal || matchedClient.cp || '') : '') ||
+      m.cp ||
+      m.codePostal ||
+      '';
+
+    const locParts = [numVoie, ville, cp].map(s => String(s || '').trim()).filter(Boolean);
+    const localisation = locParts.join(', ') || m.clientAddress || m.location || m.address || '';
 
     const clientIdField = matchedClient?.id || eq?.clientId || m.clientId || '';
 
@@ -7601,7 +7776,25 @@ export default function App() {
       payeurId = clientIdField;
     }
 
-    const bonCommande = m.autreReference || '';
+    const bonCommande = (() => {
+      if (m.bonCommandeId === 'custom') {
+        return String(m.customBonCommande || m.autreReference || '').trim();
+      }
+      if (m.bonCommandeId) {
+        const doc = (commercialDocs || []).find(
+          (d: any) =>
+            d.id === m.bonCommandeId ||
+            d.bonCommandeEntete === m.bonCommandeId ||
+            d.bonCommandeReference === m.bonCommandeId ||
+            d.ref === m.bonCommandeId
+        );
+        if (doc) {
+          return String(doc.bonCommandeEntete || doc.bonCommandeReference || doc.ref || m.bonCommandeId).trim();
+        }
+        return String(m.bonCommandeId).trim();
+      }
+      return String(m.customBonCommande || m.autreReference || '').trim();
+    })();
 
     return {
       clientName,
@@ -16419,7 +16612,7 @@ export default function App() {
                                         setSavingTourIds(prev => ({ ...prev, [t.id]: true }));
 
                                         // Save fsmTours
-                                        saveFsmTours([...fsmTours]);
+                                        saveFsmTours([...fsmTours], true);
                                         setTimeout(() => {
                                           showFsmSystemInfoMessage("Les missions à trier ont été enregistrées avec succès !");
                                         }, 480);
@@ -17024,89 +17217,92 @@ export default function App() {
                                                 </div>
 
                                                 {/* Bon de commande. */}
-                                                <div className="space-y-0.5 bg-transparent">
-                                                  <label className="block mb-1 fsm-label-style">Bon de commande.</label>
-                                                  <select
-                                                    value={m.bonCommandeId || ''}
-                                                    onChange={(e) => {
-                                                      const nextBcId = e.target.value;
-                                                      if (nextBcId && nextBcId !== 'custom') {
-                                                        const foundDoc = commercialDocs.find(doc => doc.id === nextBcId);
-                                                        const articleParts = foundDoc?.articles
-                                                          ? foundDoc.articles.map(art => art.designation).filter(Boolean)
-                                                          : [];
-                                                        const uniqueParts = Array.from(new Set([...(m.requiredParts || []), ...articleParts]));
-                                                        if (uniqueParts.length > (m.requiredParts || []).length) {
-                                                          changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId });
-                                                        } else {
-                                                          updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId });
-                                                        }
-                                                      } else if (nextBcId === 'custom') {
-                                                        updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId });
-                                                      } else {
-                                                        changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], [], { bonCommandeId: '' });
-                                                      }
-                                                    }}
-                                                    className="w-full font-sans focus:outline-none cursor-pointer text-slate-800"
-                                                    style={{
-                                                      border: '1px solid #dedede',
-                                                      borderRadius: '13px',
-                                                      padding: '12px',
-                                                      fontSize: '16px',
-                                                      fontWeight: '100',
-                                                      color: '#000000',
-                                                      backgroundColor: '#ffffff'
-                                                    }}
-                                                  >
-                                                    <option value="">-- Aucun --</option>
-                                                    <option value="custom">Autre (Texte libre)</option>
-                                                    {(() => {
-                                                      const matchedClient = (() => {
-                                                        if (m.clientId) {
-                                                          const found = clients.find(c => c.id === m.clientId);
-                                                          if (found) return found;
-                                                        }
-                                                        const matchedDefib = defibrillateurs.find(df => df.identifiant === m.defibIdentifiant);
-                                                        if (matchedDefib) {
-                                                          const found = clients.find(c => c.id === matchedDefib.clientId);
-                                                          if (found) return found;
-                                                        }
-                                                        if (m.clientName) {
-                                                          const mName = m.clientName.toLowerCase();
-                                                          const found = clients.find(c => {
-                                                            if (!c.denomination) return false;
-                                                            const cDenom = c.denomination.toLowerCase();
-                                                            return mName.includes(cDenom) || cDenom.includes(mName);
-                                                          });
-                                                          if (found) return found;
-                                                        }
-                                                        return null;
-                                                      })();
+                                                {(() => {
+                                                  const matchedClient = (() => {
+                                                    if (m.clientId) {
+                                                      const found = clients.find(c => c.id === m.clientId);
+                                                      if (found) return found;
+                                                    }
+                                                    const matchedDefib = defibrillateurs.find(df => df.identifiant === m.defibIdentifiant);
+                                                    if (matchedDefib) {
+                                                      const found = clients.find(c => c.id === matchedDefib.clientId);
+                                                      if (found) return found;
+                                                    }
+                                                    if (m.clientName) {
+                                                      const mName = m.clientName.toLowerCase();
+                                                      const found = clients.find(c => {
+                                                        if (!c.denomination) return false;
+                                                        const cDenom = c.denomination.toLowerCase();
+                                                        return mName.includes(cDenom) || cDenom.includes(mName);
+                                                      });
+                                                      if (found) return found;
+                                                    }
+                                                    return null;
+                                                  })();
 
-                                                      const clientBcs = matchedClient
-                                                        ? commercialDocs.filter(doc => 
-                                                            doc.hasBonCommande && 
-                                                            (doc.clientId === matchedClient.id || 
-                                                             (doc.clientDenomination && matchedClient.denomination && 
-                                                              doc.clientDenomination.toLowerCase() === matchedClient.denomination.toLowerCase()))
-                                                          )
-                                                        : [];
+                                                  const clientBcs = matchedClient
+                                                    ? commercialDocs.filter(doc =>
+                                                        doc.hasBonCommande &&
+                                                        (doc.clientId === matchedClient.id ||
+                                                          (doc.clientDenomination && matchedClient.denomination &&
+                                                            doc.clientDenomination.toLowerCase() === matchedClient.denomination.toLowerCase()))
+                                                      )
+                                                    : [];
 
-                                                      return clientBcs.map(bcDoc => (
-                                                        <option key={bcDoc.id} value={bcDoc.id}>
-                                                          {bcDoc.bonCommandeEntete || bcDoc.bonCommandeReference || bcDoc.ref}
-                                                        </option>
-                                                      ));
-                                                    })()}
-                                                  </select>
-                                                  {m.bonCommandeId === 'custom' && (
-                                                    <div className="mt-2 space-y-0.5 bg-transparent">
-                                                      <input
-                                                        type="text"
-                                                        value={m.customBonCommande || ''}
-                                                        onChange={(e) => updateFsmMission(t.id, m.id, { customBonCommande: e.target.value })}
-                                                        placeholder={translate("Saisir le bon de commande...")}
-                                                        className="w-full font-sans focus:outline-none"
+                                                  const rawBcId = String(m.bonCommandeId || '').trim();
+                                                  const rawCustomBc = String(m.customBonCommande || '').trim();
+                                                  const matchedClientBcDoc =
+                                                    rawBcId && rawBcId !== 'custom'
+                                                      ? clientBcs.find(
+                                                          bcDoc =>
+                                                            bcDoc.id === rawBcId ||
+                                                            bcDoc.bonCommandeEntete === rawBcId ||
+                                                            bcDoc.bonCommandeReference === rawBcId ||
+                                                            bcDoc.ref === rawBcId
+                                                        )
+                                                      : null;
+                                                  const isCustomBcSelected =
+                                                    rawBcId === 'custom' ||
+                                                    Boolean(!matchedClientBcDoc && (rawBcId || rawCustomBc));
+                                                  const selectBcValue = matchedClientBcDoc
+                                                    ? matchedClientBcDoc.id
+                                                    : isCustomBcSelected
+                                                    ? 'custom'
+                                                    : '';
+                                                  const customBcInputValue =
+                                                    m.customBonCommande !== undefined &&
+                                                    m.customBonCommande !== null &&
+                                                    !(rawBcId !== 'custom' && rawBcId && !m.customBonCommande)
+                                                      ? String(m.customBonCommande)
+                                                      : rawBcId !== 'custom'
+                                                      ? rawBcId
+                                                      : '';
+
+                                                  return (
+                                                    <div className="space-y-0.5 bg-transparent">
+                                                      <label className="block mb-1 fsm-label-style">Bon de commande.</label>
+                                                      <select
+                                                        value={selectBcValue}
+                                                        onChange={(e) => {
+                                                          const nextBcId = e.target.value;
+                                                          if (nextBcId && nextBcId !== 'custom') {
+                                                            const foundDoc = commercialDocs.find(doc => doc.id === nextBcId);
+                                                            const articleParts = foundDoc?.articles
+                                                              ? foundDoc.articles.map(art => art.designation).filter(Boolean)
+                                                              : [];
+                                                            const uniqueParts = Array.from(new Set([...(m.requiredParts || []), ...articleParts]));
+                                                            if (uniqueParts.length > (m.requiredParts || []).length) {
+                                                              changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId, customBonCommande: '' });
+                                                            } else {
+                                                              updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId, customBonCommande: '' });
+                                                            }
+                                                          } else if (nextBcId === 'custom') {
+                                                            updateFsmMission(t.id, m.id, { bonCommandeId: 'custom', customBonCommande: customBcInputValue });
+                                                          } else {
+                                                            changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], [], { bonCommandeId: '', customBonCommande: '' });
+                                                          }
+                                                        }}
+                                                        className="w-full font-sans focus:outline-none cursor-pointer text-slate-800"
                                                         style={{
                                                           border: '1px solid #dedede',
                                                           borderRadius: '13px',
@@ -17116,10 +17312,38 @@ export default function App() {
                                                           color: '#000000',
                                                           backgroundColor: '#ffffff'
                                                         }}
-                                                      />
+                                                      >
+                                                        <option value="">-- Aucun --</option>
+                                                        <option value="custom">Autre (Texte libre)</option>
+                                                        {clientBcs.map(bcDoc => (
+                                                          <option key={bcDoc.id} value={bcDoc.id}>
+                                                            {bcDoc.bonCommandeEntete || bcDoc.bonCommandeReference || bcDoc.ref}
+                                                          </option>
+                                                        ))}
+                                                      </select>
+                                                      {selectBcValue === 'custom' && (
+                                                        <div className="mt-2 space-y-0.5 bg-transparent">
+                                                          <input
+                                                            type="text"
+                                                            value={customBcInputValue}
+                                                            onChange={(e) => updateFsmMission(t.id, m.id, { bonCommandeId: 'custom', customBonCommande: e.target.value })}
+                                                            placeholder={translate("Saisir le bon de commande...")}
+                                                            className="w-full font-sans focus:outline-none"
+                                                            style={{
+                                                              border: '1px solid #dedede',
+                                                              borderRadius: '13px',
+                                                              padding: '12px',
+                                                              fontSize: '16px',
+                                                              fontWeight: '100',
+                                                              color: '#000000',
+                                                              backgroundColor: '#ffffff'
+                                                            }}
+                                                          />
+                                                        </div>
+                                                      )}
                                                     </div>
-                                                  )}
-                                                </div>
+                                                  );
+                                                })()}
 
                                                 {/* Autre référence. */}
                                                 <div className="space-y-0.5 bg-transparent">
@@ -18118,9 +18342,44 @@ export default function App() {
 
                       const tourMissionsForStats = t.missions || [];
                       const totalTourMissions = tourMissionsForStats.length;
+                      const normTourStatusForStats = String(tourStatus || t.status || 'Brouillon')
+                        .trim()
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .toLowerCase();
+                      const isTourPlannedOrActive =
+                        normTourStatusForStats === 'a faire' ||
+                        normTourStatusForStats === 'afaire' ||
+                        normTourStatusForStats === 'en cours' ||
+                        normTourStatusForStats === 'encours' ||
+                        normTourStatusForStats === 'effectue' ||
+                        normTourStatusForStats === 'effectuee' ||
+                        normTourStatusForStats === 'termine' ||
+                        normTourStatusForStats === 'terminee';
                       const planifL1Count = tourMissionsForStats.filter((m: any) => {
-                        const sit = (m.status || 'Brouillon').toLowerCase();
-                        return sit.includes('accepté') || sit.includes('accepte') || sit === 'à faire' || sit === 'a faire';
+                        const sit = String(m.status || 'Brouillon')
+                          .trim()
+                          .normalize('NFD')
+                          .replace(/[\u0300-\u036f]/g, '')
+                          .toLowerCase();
+                        if (sit.includes('refus') || sit.includes('rejet') || sit.includes('annul')) {
+                          return false;
+                        }
+                        if (
+                          sit.includes('accept') ||
+                          sit === 'a faire' ||
+                          sit === 'afaire' ||
+                          sit === 'en cours' ||
+                          sit === 'encours' ||
+                          sit.includes('effectu') ||
+                          sit.includes('termin')
+                        ) {
+                          return true;
+                        }
+                        if (isTourPlannedOrActive && isMissionEstimatedDateFilled(m) && isMissionEstimatedSlotFilled(m)) {
+                          return true;
+                        }
+                        return false;
                       }).length;
                       const planifL1Percent = totalTourMissions > 0 ? Math.round((planifL1Count / totalTourMissions) * 100) : 0;
 
@@ -18206,15 +18465,28 @@ export default function App() {
                               {/* Supprimer button */}
                               {(() => {
                                 const missions = t.missions || [];
-                                const isDeleteEnabled = missions.length === 0 || missions.every((m: any) => {
-                                  const sit = String(m.status || 'Brouillon').trim().toLowerCase();
-                                  return (
-                                    sit === 'brouillon' ||
-                                    sit.includes('effectu') ||
-                                    sit.includes('termin') ||
-                                    sit.includes('rejet')
-                                  );
-                                });
+                                const normTourSit = String(tourStatus || t.status || 'Brouillon')
+                                  .trim()
+                                  .normalize('NFD')
+                                  .replace(/[\u0300-\u036f]/g, '')
+                                  .toLowerCase();
+                                const isTourStatusBlockingDelete =
+                                  normTourSit === 'a faire' ||
+                                  normTourSit === 'afaire' ||
+                                  normTourSit === 'en cours' ||
+                                  normTourSit === 'encours';
+                                const isDeleteEnabled =
+                                  !isTourStatusBlockingDelete &&
+                                  (missions.length === 0 ||
+                                    missions.every((m: any) => {
+                                      const sit = String(m.status || 'Brouillon').trim().toLowerCase();
+                                      return (
+                                        sit === 'brouillon' ||
+                                        sit.includes('effectu') ||
+                                        sit.includes('termin') ||
+                                        sit.includes('rejet')
+                                      );
+                                    }));
 
                                 return (
                                   <button
@@ -18425,7 +18697,7 @@ export default function App() {
                                       return copy;
                                     });
                                   } else {
-                                    saveFsmTours([...fsmTours]);
+                                    saveFsmTours([...fsmTours], true);
                                   }
                                   setDirtyFsmTourIds(prev => {
                                     const copy = { ...prev };
@@ -19602,94 +19874,97 @@ export default function App() {
                                             </div>
 
                                             {/* Bon de commande. */}
-                                            <div className="space-y-0.5 bg-transparent">
-                                              <label className="block mb-1 fsm-label-style">Bon de commande.</label>
-                                              <select
-                                                value={m.bonCommandeId || ''}
-                                                onChange={(e) => {
-                                                  const nextBcId = e.target.value;
-                                                  if (nextBcId === 'custom') {
-                                                    updateFsmMission(t.id, m.id, { bonCommandeId: 'custom' });
-                                                  } else if (nextBcId) {
-                                                    const selectedBcDoc = commercialDocs.find(doc => doc.id === nextBcId);
-                                                    if (selectedBcDoc) {
-                                                      const nonServiceParts = selectedBcDoc.items
-                                                        ? selectedBcDoc.items
-                                                            .filter(item => {
-                                                              const vObj = variables.find(v => v.id === item.variableId || v.nom === item.nomPiece);
-                                                              return !(vObj && vObj.category === 'Modèle Service');
-                                                            })
-                                                            .map(item => item.nomPiece)
-                                                        : [];
-                                                      const uniqueParts = Array.from(new Set(nonServiceParts)) as string[];
-                                                      changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId });
-                                                    } else {
-                                                      updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId });
-                                                    }
-                                                  } else {
-                                                    changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], [], { bonCommandeId: '' });
-                                                  }
-                                                }}
-                                                className="w-full font-sans focus:outline-none cursor-pointer text-slate-800"
-                                                style={{
-                                                  border: '1px solid #dedede',
-                                                  borderRadius: '13px',
-                                                  padding: '12px',
-                                                  fontSize: '16px',
-                                                  fontWeight: '100',
-                                                  color: '#000000',
-                                                  backgroundColor: '#ffffff'
-                                                }}
-                                              >
-                                                <option value="">-- Aucun --</option>
-                                                <option value="custom">Autre (Texte libre)</option>
-                                                {(() => {
-                                                  const matchedClient = (() => {
-                                                    if (m.clientId) {
-                                                      const found = clients.find(c => c.id === m.clientId);
-                                                      if (found) return found;
-                                                    }
-                                                    const matchedDefib = defibrillateurs.find(df => df.identifiant === m.defibIdentifiant);
-                                                    if (matchedDefib) {
-                                                      const found = clients.find(c => c.id === matchedDefib.clientId);
-                                                      if (found) return found;
-                                                    }
-                                                    if (m.clientName) {
-                                                      const mName = m.clientName.toLowerCase();
-                                                      const found = clients.find(c => {
-                                                        if (!c.denomination) return false;
-                                                        const cDenom = c.denomination.toLowerCase();
-                                                        return mName.includes(cDenom) || cDenom.includes(mName);
-                                                      });
-                                                      if (found) return found;
-                                                    }
-                                                    return null;
-                                                  })();
+                                            {(() => {
+                                              const matchedClient = (() => {
+                                                if (m.clientId) {
+                                                  const found = clients.find(c => c.id === m.clientId);
+                                                  if (found) return found;
+                                                }
+                                                const matchedDefib = defibrillateurs.find(df => df.identifiant === m.defibIdentifiant);
+                                                if (matchedDefib) {
+                                                  const found = clients.find(c => c.id === matchedDefib.clientId);
+                                                  if (found) return found;
+                                                }
+                                                if (m.clientName) {
+                                                  const mName = m.clientName.toLowerCase();
+                                                  const found = clients.find(c => {
+                                                    if (!c.denomination) return false;
+                                                    const cDenom = c.denomination.toLowerCase();
+                                                    return mName.includes(cDenom) || cDenom.includes(mName);
+                                                  });
+                                                  if (found) return found;
+                                                }
+                                                return null;
+                                              })();
 
-                                                  const clientBcs = matchedClient
-                                                    ? commercialDocs.filter(doc => 
-                                                        doc.hasBonCommande && 
-                                                        (doc.clientId === matchedClient.id || 
-                                                         (doc.clientDenomination && matchedClient.denomination && 
-                                                          doc.clientDenomination.toLowerCase() === matchedClient.denomination.toLowerCase()))
-                                                      )
-                                                    : [];
+                                              const clientBcs = matchedClient
+                                                ? commercialDocs.filter(doc =>
+                                                    doc.hasBonCommande &&
+                                                    (doc.clientId === matchedClient.id ||
+                                                      (doc.clientDenomination && matchedClient.denomination &&
+                                                        doc.clientDenomination.toLowerCase() === matchedClient.denomination.toLowerCase()))
+                                                  )
+                                                : [];
 
-                                                  return clientBcs.map(bcDoc => (
-                                                    <option key={bcDoc.id} value={bcDoc.id}>
-                                                      {bcDoc.bonCommandeEntete || bcDoc.bonCommandeReference || bcDoc.ref}
-                                                    </option>
-                                                  ));
-                                                })()}
-                                              </select>
-                                              {m.bonCommandeId === 'custom' && (
-                                                <div className="mt-2 space-y-0.5 bg-transparent">
-                                                  <input
-                                                    type="text"
-                                                    value={m.customBonCommande || ''}
-                                                    onChange={(e) => updateFsmMission(t.id, m.id, { customBonCommande: e.target.value })}
-                                                    placeholder={translate("Saisir le bon de commande...")}
-                                                    className="w-full font-sans focus:outline-none"
+                                              const rawBcId = String(m.bonCommandeId || '').trim();
+                                              const rawCustomBc = String(m.customBonCommande || '').trim();
+                                              const matchedClientBcDoc =
+                                                rawBcId && rawBcId !== 'custom'
+                                                  ? clientBcs.find(
+                                                      bcDoc =>
+                                                        bcDoc.id === rawBcId ||
+                                                        bcDoc.bonCommandeEntete === rawBcId ||
+                                                        bcDoc.bonCommandeReference === rawBcId ||
+                                                        bcDoc.ref === rawBcId
+                                                    )
+                                                  : null;
+                                              const isCustomBcSelected =
+                                                rawBcId === 'custom' ||
+                                                Boolean(!matchedClientBcDoc && (rawBcId || rawCustomBc));
+                                              const selectBcValue = matchedClientBcDoc
+                                                ? matchedClientBcDoc.id
+                                                : isCustomBcSelected
+                                                ? 'custom'
+                                                : '';
+                                              const customBcInputValue =
+                                                m.customBonCommande !== undefined &&
+                                                m.customBonCommande !== null &&
+                                                !(rawBcId !== 'custom' && rawBcId && !m.customBonCommande)
+                                                  ? String(m.customBonCommande)
+                                                  : rawBcId !== 'custom'
+                                                  ? rawBcId
+                                                  : '';
+
+                                              return (
+                                                <div className="space-y-0.5 bg-transparent">
+                                                  <label className="block mb-1 fsm-label-style">Bon de commande.</label>
+                                                  <select
+                                                    value={selectBcValue}
+                                                    onChange={(e) => {
+                                                      const nextBcId = e.target.value;
+                                                      if (nextBcId === 'custom') {
+                                                        updateFsmMission(t.id, m.id, { bonCommandeId: 'custom', customBonCommande: customBcInputValue });
+                                                      } else if (nextBcId) {
+                                                        const selectedBcDoc = commercialDocs.find(doc => doc.id === nextBcId);
+                                                        if (selectedBcDoc) {
+                                                          const nonServiceParts = selectedBcDoc.items
+                                                            ? selectedBcDoc.items
+                                                                .filter(item => {
+                                                                  const vObj = variables.find(v => v.id === item.variableId || v.nom === item.nomPiece);
+                                                                  return !(vObj && vObj.category === 'Modèle Service');
+                                                                })
+                                                                .map(item => item.nomPiece)
+                                                            : [];
+                                                          const uniqueParts = Array.from(new Set(nonServiceParts)) as string[];
+                                                          changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId, customBonCommande: '' });
+                                                        } else {
+                                                          updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId, customBonCommande: '' });
+                                                        }
+                                                      } else {
+                                                        changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], [], { bonCommandeId: '', customBonCommande: '' });
+                                                      }
+                                                    }}
+                                                    className="w-full font-sans focus:outline-none cursor-pointer text-slate-800"
                                                     style={{
                                                       border: '1px solid #dedede',
                                                       borderRadius: '13px',
@@ -19699,10 +19974,38 @@ export default function App() {
                                                       color: '#000000',
                                                       backgroundColor: '#ffffff'
                                                     }}
-                                                  />
+                                                  >
+                                                    <option value="">-- Aucun --</option>
+                                                    <option value="custom">Autre (Texte libre)</option>
+                                                    {clientBcs.map(bcDoc => (
+                                                      <option key={bcDoc.id} value={bcDoc.id}>
+                                                        {bcDoc.bonCommandeEntete || bcDoc.bonCommandeReference || bcDoc.ref}
+                                                      </option>
+                                                    ))}
+                                                  </select>
+                                                  {selectBcValue === 'custom' && (
+                                                    <div className="mt-2 space-y-0.5 bg-transparent">
+                                                      <input
+                                                        type="text"
+                                                        value={customBcInputValue}
+                                                        onChange={(e) => updateFsmMission(t.id, m.id, { bonCommandeId: 'custom', customBonCommande: e.target.value })}
+                                                        placeholder={translate("Saisir le bon de commande...")}
+                                                        className="w-full font-sans focus:outline-none"
+                                                        style={{
+                                                          border: '1px solid #dedede',
+                                                          borderRadius: '13px',
+                                                          padding: '12px',
+                                                          fontSize: '16px',
+                                                          fontWeight: '100',
+                                                          color: '#000000',
+                                                          backgroundColor: '#ffffff'
+                                                        }}
+                                                      />
+                                                    </div>
+                                                  )}
                                                 </div>
-                                              )}
-                                            </div>
+                                              );
+                                            })()}
 
                                             {/* Autre référence. */}
                                             <div className="space-y-0.5 bg-transparent">
@@ -21388,22 +21691,6 @@ export default function App() {
               activeGmaoFilters.drapeau !== 'Tous',
             ].filter(Boolean).length;
 
-            const isGmaoController = (() => {
-              if (!loggedUser || !loggedUser.email) return true;
-              const m = members.find(lm => lm.email?.toLowerCase().trim() === loggedUser.email.toLowerCase().trim());
-              if (!m) return true;
-              
-              const isSuperAdmin = m.role === 'Super-Administrateur' || 
-                                   m.role === 'Propriétaire / Admin' || 
-                                   m.role?.toLowerCase().includes('super') || 
-                                   m.role?.toLowerCase().includes('propriétaire');
-              
-              const isControllerSubRole = m.adminSubRole === 'Contrôleur' || 
-                                          m.adminSubRole === 'Administrateur & Contrôleur';
-                                          
-              return !!(isSuperAdmin || isControllerSubRole);
-            })();
-
             const filteredReports = generatedReports.filter((rep) => {
               const isFormation = 
                 rep.equipmentType === 'Formation' ||
@@ -22183,19 +22470,15 @@ export default function App() {
                             // Button states according to specifications:
                             // — À VENIR : Gérer (Enabled), Corriger (Disabled), Valider (Disabled), Télécharger (Disabled)
                             // — MODÉRATION : Gérer (Enabled), Corriger (Enabled), Valider (Enabled), Télécharger (Enabled)
-                            // — VALIDÉS : Gérer (Enabled), Corriger (Enabled), Valider (Disabled), Télécharger (Enabled)
-                            const hasGestionApresSpreadsheet = Boolean(
-                              getTenantSpreadsheetUrl('spreadsheetGestionApresIntervention', companyInfo)?.trim()
-                            );
-                            const isGererDisabled = !isGmaoController || !hasGestionApresSpreadsheet;
-                            const isCorrigerDisabled = isUpcoming || !isGmaoController;
+                            // — VALIDÉS : Gérer (Enabled), Corriger (Enabled), Valider (Enabled as Re/Envoyer PDF unless client email disabled), Télécharger (Enabled)
+                            const isGererDisabled = false;
+                            const isCorrigerDisabled = isUpcoming;
                             const isClientEmailDisabled =
                               rep.disableClientEmail === true ||
                               String(rep.disableClientEmail ?? '').trim().toLowerCase() === 'oui' ||
                               String(rep.disableClientEmail ?? '').trim().toLowerCase() === 'true';
                             const isValiderDisabled =
                               isUpcoming ||
-                              !isGmaoController ||
                               ((isValidated || gmaoFilter === 'valides') && isClientEmailDisabled);
                             const isTelechargerDisabled = isUpcoming;
 

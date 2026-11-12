@@ -3193,6 +3193,8 @@ export async function uploadMediaToFirebase(
   // 2. Persist to server endpoint /api/firebase-media (with retry) so the https://.../api/firebase-media/<mediaId>.<ext> URL serves the binary file directly
   let serverHttpsUrl = '';
   if (typeof fetch !== 'undefined') {
+    const clientOrigin =
+      typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const res = await fetch('/api/firebase-media', {
@@ -3206,17 +3208,23 @@ export async function uploadMediaToFirebase(
             ext,
             dataUrl,
             createdAt: createdAtIso,
+            clientOrigin,
           }),
         });
         if (res.ok) {
           const json = await res.json();
-          if (
+          if (typeof window !== 'undefined' && window.location?.origin && !window.location.origin.includes('localhost')) {
+            const origin = window.location.origin.replace(/^http:\/\//i, 'https://');
+            serverHttpsUrl = `${origin}/api/firebase-media/${fullMediaFileName}`;
+          } else if (
             json?.url &&
             typeof json.url === 'string' &&
             json.url.startsWith('http') &&
             !json.url.includes('localhost:')
           ) {
-            serverHttpsUrl = json.url.replace(/^http:\/\//i, 'https://');
+            serverHttpsUrl = json.url
+              .replace(/^http:\/\//i, 'https://')
+              .replace(/https?:\/\/kinetic93-[^/]+\.run\.app/i, 'https://consoledefibeo.deroesch.com');
           } else if (typeof window !== 'undefined') {
             const origin = window.location.origin.replace(/^http:\/\//i, 'https://');
             serverHttpsUrl = `${origin}/api/firebase-media/${fullMediaFileName}`;

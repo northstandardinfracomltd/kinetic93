@@ -3926,6 +3926,19 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         'Aucune information'
     ).trim() || 'Aucune information';
     merged.statutFacturation = resolvedStatutFacturation;
+    const rawBonCommande = String(
+      merged.bonCommandeId ??
+        merged.customBonCommande ??
+        merged['Bon de commande.'] ??
+        merged['Bon de commande'] ??
+        ''
+    ).trim();
+    const cleanBonCommande =
+      rawBonCommande.toLowerCase() === 'custom'
+        ? String(merged.customBonCommande || '').trim()
+        : rawBonCommande;
+    merged.bonCommandeId = cleanBonCommande;
+    merged.customBonCommande = cleanBonCommande;
     if (!merged.clientAddress && (merged.cp || merged.ville)) {
       merged.clientAddress = [merged.cp, merged.ville].filter(Boolean).join(' ');
     }
@@ -4992,7 +5005,9 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         rawByHeader['Photographie ou fichier.'] ||
         rawByHeader['Photographie ou fichier'] ||
         ''
-    ).trim();
+    )
+      .trim()
+      .replace(/https?:\/\/kinetic93-[^/]+\.run\.app\/api\/firebase-media\//i, 'https://consoledefibeo.deroesch.com/api/firebase-media/');
     merged.receiptUrl = resolvedReceiptUrl;
     merged.photoUrl = resolvedReceiptUrl;
     merged.category = merged.category || 'Frais';
@@ -6750,6 +6765,21 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched['Statut facturation.'] ??
       enriched['Statut facturation'] ??
       'Aucune information';
+    const resolvedBonCommande =
+      enriched.bonCommandeId === 'custom'
+        ? String(enriched.customBonCommande ?? '').trim()
+        : String(
+            enriched.bonCommandeId ??
+              enriched.customBonCommande ??
+              enriched['Bon de commande.'] ??
+              enriched['Bon de commande'] ??
+              ''
+          ).trim();
+    const cleanBonCommande = resolvedBonCommande.toLowerCase() === 'custom' ? '' : resolvedBonCommande;
+    enriched.bonCommandeId = cleanBonCommande;
+    enriched.customBonCommande = cleanBonCommande;
+    enriched['Bon de commande.'] = cleanBonCommande;
+    enriched['Bon de commande'] = cleanBonCommande;
   } else if (tabType === 'rapportsPdf') {
     const snap = enriched.defibSnapshot && typeof enriched.defibSnapshot === 'object' ? enriched.defibSnapshot : {};
     for (const [sk, sv] of Object.entries(snap)) {
@@ -7576,7 +7606,9 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
         enriched['URL Partagé Fichier Google Drive.'] ||
         enriched['URL Partagé Fichier Google Drive'] ||
         ''
-    ).trim();
+    )
+      .trim()
+      .replace(/https?:\/\/kinetic93-[^/]+\.run\.app\/api\/firebase-media\//i, 'https://consoledefibeo.deroesch.com/api/firebase-media/');
     enriched.receiptUrl = cleanReceiptUrl;
     enriched.photoUrl = cleanReceiptUrl;
     enriched['URL Partagé Fichier Google Drive.'] = cleanReceiptUrl;
@@ -8163,9 +8195,17 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
       .map(s => String(s).trim().toLowerCase());
   }
   if (tabType === 'tournees') {
-    return [item.tourIdentifiant, item.identifiant, item.tourCode, item.id]
-      .filter(Boolean)
-      .map(s => String(s).trim().toLowerCase());
+    const tid = String(item.tourIdentifiant || '').trim();
+    const prevTid = String(item._previousTourIdentifiant || '').trim();
+    const seqMatch = tid.match(/^(?:[A-Z0-9_-]+-)?(TOUR-\d+)$/i);
+    const bareSeq = seqMatch ? seqMatch[1].toLowerCase() : '';
+    return Array.from(
+      new Set(
+        [item.tourIdentifiant, prevTid, item.identifiant, item.tourCode, bareSeq, item.id]
+          .filter(Boolean)
+          .map(s => String(s).trim().toLowerCase())
+      )
+    );
   }
   if (tabType === 'missionsTournees') {
     return [item.interventionReference, item.id, item.defibIdentifiant]
@@ -8808,6 +8848,7 @@ export async function fetchTenantSheetCollection(
       if (!it || typeof it !== 'object') return false;
       if (String(it.interventionReference || '').startsWith('fsm-m-')) return true;
       if (!it.defibIdentifiant && (it._rawSheetRow?.['Identifiant.'] || it._rawSheetRow?.['Identifiant'])) return true;
+      if (String(it.bonCommandeId || '').trim().toLowerCase() === 'custom') return true;
       return false;
     });
   };
@@ -9384,6 +9425,30 @@ export async function fetchTenantSheetCollection(
           seenVarIds.add(vid.toLowerCase());
           item.id = vid;
         }
+      } else if (tabType === 'tournees') {
+        const dedupedTours: any[] = [];
+        const seenTourKeys = new Map<string, number>();
+        for (let i = 0; i < baseItems.length; i++) {
+          const item = baseItems[i];
+          if (!item) continue;
+          const tid = String(item.tourIdentifiant || item.identifiant || item.id || '').trim();
+          const seqMatch = tid.match(/^(?:[A-Z0-9_-]+-)?(TOUR-\d+)$/i);
+          const normKey = (seqMatch ? seqMatch[1] : tid).toLowerCase() || `row_${item._sheetRowNumber || i + 2}`;
+          item.id = tid || `sheet_tournees_${tenantId}_${item._sheetRowNumber || i + 2}`;
+          if (seenTourKeys.has(normKey)) {
+            const prevIdx = seenTourKeys.get(normKey)!;
+            dedupedTours[prevIdx] = {
+              ...dedupedTours[prevIdx],
+              ...item,
+              _sheetRowNumber: item._sheetRowNumber || dedupedTours[prevIdx]._sheetRowNumber,
+            };
+          } else {
+            seenTourKeys.set(normKey, dedupedTours.length);
+            dedupedTours.push(item);
+          }
+        }
+        baseItems.length = 0;
+        baseItems.push(...dedupedTours);
       } else {
         const seenGenericIds = new Set<string>();
         for (let i = 0; i < baseItems.length; i++) {
@@ -9942,9 +10007,9 @@ async function fetchLightweightSheetContextForColdUpsert(
           for (let i = 0; i < idRows.length; i++) {
             const r = idRows[i];
             if (!r || r.length === 0) continue;
-            if (tabType === 'temps') {
+            if (tabType === 'temps' || tabType === 'tournees') {
               const mappedLead = mapSingleRow(r.map((c: any) => String(c ?? '').trim()), i + 2);
-              const rowKeys = getRecordLookupKeys(mappedLead, 'temps');
+              const rowKeys = getRecordLookupKeys(mappedLead, tabType);
               if (rowKeys.some(rk => targetKeys.has(rk))) {
                 rowsToFetchFull.set(recIdx, i + 2);
                 break;
@@ -10137,6 +10202,37 @@ export async function upsertRecordsToTenantSheet(
       tabType === 'communicationPortailClient' ||
       (tabType === 'intituleEmplacements' && effectiveRecords.length === 1 && !effectiveRecords[0]?.emplacement);
 
+    // If warmCached was used (so fetchLightweightSheetContextForColdUpsert was skipped),
+    // check if any record in effectiveRecords lacks a match in warmCached.items AND lacks an explicit _sheetRowNumber.
+    // For tournees/missionsTournees (or any non-singleton tab), verify against the live sheet A2:D50000 before appending a duplicate!
+    if (warmCached && coldMatchedByRecordIdx.size === 0 && accessToken && !isSingletonTab) {
+      const hasUnmatchedWithoutRow = effectiveRecords.some(rec => {
+        if (!rec || typeof rec !== 'object') return false;
+        if (typeof rec._sheetRowNumber === 'number' && rec._sheetRowNumber >= 2) return false;
+        const recKeys = getRecordLookupKeys(rec, tabType);
+        if (recKeys.length === 0) return false;
+        const inWarm = updatedItemsList.some(b => {
+          if (!b) return false;
+          const bKeys = getRecordLookupKeys(b, tabType);
+          return bKeys.some(bk => recKeys.includes(bk));
+        });
+        return !inWarm;
+      });
+      if (hasUnmatchedWithoutRow) {
+        const lightCtx = await fetchLightweightSheetContextForColdUpsert(
+          extracted.spreadsheetId,
+          extracted.gid,
+          tabType,
+          tenantId,
+          effectiveRecords,
+          accessToken
+        );
+        coldMatchedByRecordIdx = lightCtx.matchedByRecordIdx;
+      }
+    }
+
+    const recentMapForUpsert = recentSheetUpserts.get(cacheKey);
+
     for (let rIdx = 0; rIdx < effectiveRecords.length; rIdx++) {
       const rec = effectiveRecords[rIdx];
       if (!rec || typeof rec !== 'object') continue;
@@ -10182,6 +10278,22 @@ export async function upsertRecordsToTenantSheet(
         existingItem = coldMatchedByRecordIdx.get(rIdx);
       }
 
+      // Fallback to recentSheetUpserts or overlay.upsertedById if still unmatched
+      if (!existingItem) {
+        for (const k of recKeys) {
+          const fromRecent = recentMapForUpsert?.get(k)?.item;
+          if (fromRecent) {
+            existingItem = fromRecent;
+            break;
+          }
+          const fromOverlay = overlay.upsertedById?.[k];
+          if (fromOverlay) {
+            existingItem = fromOverlay;
+            break;
+          }
+        }
+      }
+
       const resolvedRowNum =
         (typeof rec._sheetRowNumber === 'number' && rec._sheetRowNumber >= 2 ? rec._sheetRowNumber : undefined) ||
         existingItem?._sheetRowNumber ||
@@ -10223,6 +10335,15 @@ export async function upsertRecordsToTenantSheet(
       }
       if (tabType === 'autresMateriels' && !mergedItem.identifiant && mergedItem.id) {
         mergedItem.identifiant = mergedItem.id;
+      }
+      if (tabType === 'missionsTournees') {
+        const rawBc =
+          mergedItem.bonCommandeId === 'custom'
+            ? String(mergedItem.customBonCommande ?? '').trim()
+            : String(mergedItem.bonCommandeId ?? mergedItem.customBonCommande ?? '').trim();
+        const cleanBc = rawBc.toLowerCase() === 'custom' ? '' : rawBc;
+        mergedItem.bonCommandeId = cleanBc;
+        mergedItem.customBonCommande = cleanBc;
       }
 
       const rowValues =
@@ -10460,9 +10581,9 @@ export async function upsertRecordsToTenantSheet(
         } catch (_) {}
       });
     } else {
-      // Warm full sheet cache in background from live sheet without blocking the response
+      // Warm full sheet cache in background from live sheet without blocking the response (pass isBackgroundRevalidate = true so recent upserts are preserved!)
       setImmediate(() => {
-        fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true).catch(() => {});
+        fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true, true).catch(() => {});
       });
     }
 

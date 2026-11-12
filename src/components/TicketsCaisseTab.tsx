@@ -574,7 +574,27 @@ export default function TicketsCaisseTab({
                                 disabled={!driveFileUrl}
                                 onClick={() => {
                                   if (!driveFileUrl) return;
-                                  openTenantSpreadsheetUrl(driveFileUrl);
+                                  let targetUrl = driveFileUrl.trim();
+                                  if (
+                                    typeof window !== 'undefined' &&
+                                    targetUrl.includes('/api/firebase-media/') &&
+                                    /https?:\/\/kinetic93-[^/]+\.run\.app/i.test(targetUrl)
+                                  ) {
+                                    const currentOrigin = window.location.origin.includes('localhost')
+                                      ? 'https://consoledefibeo.deroesch.com'
+                                      : window.location.origin;
+                                    targetUrl = targetUrl.replace(
+                                      /https?:\/\/kinetic93-[^/]+\.run\.app/i,
+                                      currentOrigin
+                                    );
+                                  }
+                                  const link = document.createElement('a');
+                                  link.href = targetUrl;
+                                  link.target = '_blank';
+                                  link.rel = 'noopener noreferrer';
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
                                 }}
                                 style={{
                                   ...rowActionButton18Style,

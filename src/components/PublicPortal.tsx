@@ -5744,7 +5744,7 @@ export default function PublicPortal({
 
   useEffect(() => {
     const syncDriveStatus = () => {
-      const tid = propTenantId || localStorage.getItem("defib_tenant_id") || "demo";
+      const tid = techTenantId || localStorage.getItem("defib_tenant_id") || "demo";
       fetchGoogleDriveStatus(tid)
         .then((status) => {
           setIsGoogleDriveActive(Boolean(status.active));
@@ -5759,7 +5759,7 @@ export default function PublicPortal({
       window.removeEventListener("google-drive-status-changed", syncDriveStatus);
       window.removeEventListener("storage", syncDriveStatus);
     };
-  }, [propTenantId, activeTab]);
+  }, [techTenantId, propTenantId, activeTab]);
 
   // Localisation form states for the connected technician
   const [techStartAddress, setTechStartAddress] = useState("");
@@ -6588,7 +6588,7 @@ export default function PublicPortal({
       return;
     }
 
-    const activeTid = propTenantId || localStorage.getItem("defib_tenant_id") || "demo";
+    const activeTid = techTenantId || localStorage.getItem("defib_tenant_id") || "demo";
     let finalPhotoUrl = expensePhotoUrl || undefined;
     if (expensePhotoFile && (!finalPhotoUrl || finalPhotoUrl.startsWith("data:") || finalPhotoUrl.startsWith("blob:"))) {
       try {
@@ -15671,7 +15671,7 @@ export default function PublicPortal({
                               if (!file) return;
                               setExpensePhotoFile(file);
                               const activeTid =
-                                propTenantId ||
+                                techTenantId ||
                                 localStorage.getItem("defib_tenant_id") ||
                                 "demo";
                               try {
