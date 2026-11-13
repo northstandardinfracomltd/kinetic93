@@ -3000,9 +3000,13 @@ export default function App() {
       updatedAt: df.updatedAt || new Date(now).toISOString(),
       dateDerniereModification: (df as any).dateDerniereModification || new Date(now).toISOString(),
     };
-    const keys = [df.id, df.identifiant, df.numeroSerie]
+    const primaryKeys = [df.id, df.identifiant]
       .map(k => String(k || '').trim().toLowerCase())
       .filter(Boolean);
+    const keys =
+      primaryKeys.length > 0
+        ? primaryKeys
+        : [df.numeroSerie].map(k => String(k || '').trim().toLowerCase()).filter(Boolean);
     for (const k of keys) {
       recentLocalDefibEditsRef.current.set(k, { item: stamped, ts: now });
     }
@@ -12657,9 +12661,9 @@ export default function App() {
     const uId = cleanMatchKey(updated.id);
 
     const existingMatch =
+      (uId ? defibrillateurs.find((df) => cleanMatchKey(df.id) === uId) : undefined) ||
       (uIdent ? defibrillateurs.find((df) => cleanMatchKey(df.identifiant) === uIdent) : undefined) ||
-      (uSerie ? defibrillateurs.find((df) => cleanMatchKey(df.numeroSerie) === uSerie) : undefined) ||
-      (uId ? defibrillateurs.find((df) => cleanMatchKey(df.id) === uId) : undefined);
+      (!uIdent && uSerie ? defibrillateurs.find((df) => !df.identifiant && cleanMatchKey(df.numeroSerie) === uSerie) : undefined);
 
     const sanitizedUpdated: any = { ...updated };
     if (String(sanitizedUpdated.id || '').startsWith('sheet-rapportsPdf')) {
@@ -12711,11 +12715,17 @@ export default function App() {
     recordLocalDefibEdit(finalMerged);
 
     if (existingMatch) {
+      const targetIdKey = cleanMatchKey(finalMerged.id);
+      const targetIdentKey = cleanMatchKey(finalMerged.identifiant);
+      const targetSerieKey = cleanMatchKey(finalMerged.numeroSerie);
       const nextList = defibrillateurs.map((df) => {
+        const dfIdKey = cleanMatchKey(df.id);
+        const dfIdentKey = cleanMatchKey(df.identifiant);
+        const dfSerieKey = cleanMatchKey(df.numeroSerie);
         const isMatch = !!(
-          (df.id && finalMerged.id && df.id === finalMerged.id) ||
-          (df.identifiant && finalMerged.identifiant && cleanMatchKey(df.identifiant) === cleanMatchKey(finalMerged.identifiant)) ||
-          (df.numeroSerie && finalMerged.numeroSerie && cleanMatchKey(df.numeroSerie) === cleanMatchKey(finalMerged.numeroSerie))
+          (dfIdKey && targetIdKey && dfIdKey === targetIdKey) ||
+          (dfIdentKey && targetIdentKey && dfIdentKey === targetIdentKey) ||
+          (!dfIdentKey && !targetIdentKey && dfSerieKey && targetSerieKey && dfSerieKey === targetSerieKey)
         );
         return isMatch ? finalMerged : df;
       });

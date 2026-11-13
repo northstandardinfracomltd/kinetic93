@@ -2989,12 +2989,6 @@ export default function DefibTab({
           map.set(normDenomKey, c);
         }
       }
-      if ((c as any).nomSite && (c as any).nomSite.trim()) {
-        const siteKey = (c as any).nomSite.trim().toLowerCase();
-        if (shouldReplaceEntry(map.get(siteKey), c)) {
-          map.set(siteKey, c);
-        }
-      }
     }
     return map;
   }, [clients]);
@@ -3030,18 +3024,6 @@ export default function DefibTab({
     if (rawField && !isPlaceholderClientVal(rawField)) {
       const bySiret = clientMap.get(`siret:${rawField.toLowerCase()}`);
       if (bySiret) return bySiret;
-    }
-    if (df.nomSite && String(df.nomSite).trim()) {
-      const rawSite = String(df.nomSite).trim().toLowerCase();
-      const bySite = clientMap.get(rawSite);
-      if (bySite) return bySite;
-      const normSite = rawSite
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/&#0*39;/g, "'")
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim();
-      if (normSite && clientMap.has(normSite)) return clientMap.get(normSite);
     }
     return undefined;
   };
@@ -3279,7 +3261,6 @@ export default function DefibTab({
     if (linkedClient) {
       const cleanLinkedClientId = getCleanClientIdFromClient(linkedClient);
       setClientSearchQuery(`${linkedClient.denomination || ''}${cleanLinkedClientId ? ` (${cleanLinkedClientId})` : ''}`);
-      setNomSite((linkedClient as any).nomSite || linkedClient.denomination || '');
       const rawContact =
         linkedClient.nomPrenomSite ||
         (linkedClient as any).nomPrenom ||
@@ -3307,7 +3288,6 @@ export default function DefibTab({
       setClientIdField(cleanLinkedClientId);
     } else {
       setClientSearchQuery('');
-      setNomSite('');
       setNomPrenomSite('');
       setTelephoneSite('');
       setEmailSite('');
@@ -4587,7 +4567,7 @@ export default function DefibTab({
     const cleanResolvedClientId = getCleanClientIdFromClient(resolvedLinkedClient, df.clientIdField);
     setClientId(effClientId);
     setClientSearchQuery(resolvedLinkedClient ? `${resolvedLinkedClient.denomination}${cleanResolvedClientId ? ` (${cleanResolvedClientId})` : ''}` : ((df as any).clientNom || ''));
-    setNomSite(df.nomSite || anyDf.nom_site || (resolvedLinkedClient as any)?.nomSite || '');
+    setNomSite(df.nomSite || anyDf.nom_site || '');
     setCategorieEtablissement(df.categorieEtablissement || anyDf.categorie_etablissement || '');
     setNomPrenomSite(df.nomPrenomSite || anyDf.nom_prenom || anyDf.contact || anyDf.nom_prenom_site || anyDf.contact_site || resolvedLinkedClient?.nomPrenomSite || (resolvedLinkedClient as any)?.responsable || (resolvedLinkedClient as any)?.contact || '');
     setTelephoneSite(df.telephoneSite || anyDf.telephone_portable || anyDf.telephone_site || anyDf.phone || anyDf.telephone || anyDf.tel || resolvedLinkedClient?.telephoneSite || (resolvedLinkedClient as any)?.telephone || (resolvedLinkedClient as any)?.phone || '');
@@ -4758,6 +4738,7 @@ export default function DefibTab({
             if (json && json.defib && json.fromSpreadsheet) {
               const fresh = json.defib;
               setEditingDefib(prev => prev ? ({ ...prev, ...fresh, id: prev.id || fresh.id, _sheetRowNumber: fresh._sheetRowNumber || (prev as any)._sheetRowNumber, _rawSheetRow: fresh._rawSheetRow || (prev as any)._rawSheetRow } as any) : prev);
+              if (fresh.nomSite !== undefined) setNomSite(fresh.nomSite || '');
               if (fresh.commentaire !== undefined) setCommentaire(fresh.commentaire || '');
               if (fresh.typeDefibrillateur?.trim()) setTypeDefibrillateur(fresh.typeDefibrillateur);
               if (fresh.nomPrenomSiteSecondaire !== undefined) setNomPrenomSiteSecondaire(fresh.nomPrenomSiteSecondaire || '');
@@ -5041,7 +5022,7 @@ export default function DefibTab({
               matchDefib(df) ? { ...df, ...updatedRecord } : df
             );
           }
-          recordRecentDefibChange([editingDefib.id, payload.identifiant, payload.numeroSerie]);
+          recordRecentDefibChange([editingDefib.id, payload.identifiant]);
         }
       } else {
         const canonicalId = String(payload.identifiant || '').trim() || ('df_' + Date.now());
@@ -6559,8 +6540,8 @@ export default function DefibTab({
 
                       {/* Client */}
                       {!hiddenColumns.has('client') && (
-                        <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={linkedClient?.denomination || df.clientNom || df.nomSite || ''}>
-                          {linkedClient?.denomination || df.clientNom || df.nomSite || ''}
+                        <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={linkedClient?.denomination || df.clientNom || ''}>
+                          {linkedClient?.denomination || df.clientNom || ''}
                         </td>
                       )}
 

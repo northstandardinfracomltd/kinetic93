@@ -445,7 +445,7 @@ function saveSingleDefibrillateurToChunk(defib: any, chunkIdx: number, prefix: s
       const idx = cachedChunk.findIndex(d => d && (
         (defib.id && d.id === defib.id) ||
         (defib.identifiant && d.identifiant && d.identifiant.toUpperCase() === defib.identifiant.toUpperCase()) ||
-        (defib.numeroSerie && d.numeroSerie && d.numeroSerie.toUpperCase() === defib.numeroSerie.toUpperCase())
+        (!defib.identifiant && !d.identifiant && defib.numeroSerie && d.numeroSerie && d.numeroSerie.toUpperCase() === defib.numeroSerie.toUpperCase())
       ));
       if (idx >= 0) {
         cachedChunk[idx] = { ...cachedChunk[idx], ...defib };
@@ -472,7 +472,7 @@ function saveSingleDefibrillateurToChunk(defib: any, chunkIdx: number, prefix: s
             const idx = chunkArr.findIndex(d => d && (
               (defib.id && d.id === defib.id) ||
               (defib.identifiant && d.identifiant && d.identifiant.toUpperCase() === defib.identifiant.toUpperCase()) ||
-              (defib.numeroSerie && d.numeroSerie && d.numeroSerie.toUpperCase() === defib.numeroSerie.toUpperCase())
+              (!defib.identifiant && !d.identifiant && defib.numeroSerie && d.numeroSerie && d.numeroSerie.toUpperCase() === defib.numeroSerie.toUpperCase())
             ));
             if (idx >= 0) {
               chunkArr[idx] = { ...chunkArr[idx], ...defib };
@@ -4699,7 +4699,7 @@ async function warmupDefibrillateursStore() {
               it && (
                 (formatted.id && it.id === formatted.id) ||
                 (formatted.identifiant && it.identifiant && String(it.identifiant).toUpperCase() === String(formatted.identifiant).toUpperCase()) ||
-                (formatted.numeroSerie && it.numeroSerie && String(it.numeroSerie).toUpperCase() === String(formatted.numeroSerie).toUpperCase())
+                (!formatted.identifiant && !it.identifiant && formatted.numeroSerie && it.numeroSerie && String(it.numeroSerie).toUpperCase() === String(formatted.numeroSerie).toUpperCase())
               )
             );
             if (matchedInSheet) {
@@ -4726,13 +4726,13 @@ async function warmupDefibrillateursStore() {
       setImmediate(() => {
         try {
           const candidateKeysToFind = [
-            formatted.numeroSerie,
             formatted.identifiant,
             formatted.id,
+            defib.identifiant,
+            defib.id,
+            formatted.numeroSerie,
             defib.numeroSerie,
             (defib as any).num_serie,
-            defib.identifiant,
-            defib.id
           ].filter(Boolean).map(s => String(s).trim());
 
           let tuple: CompactDefibTuple | undefined = undefined;
@@ -4774,7 +4774,7 @@ async function warmupDefibrillateursStore() {
             const matchIdx = tenantArr.findIndex((d: any) =>
               d && ((formatted.id && d.id === formatted.id) ||
                    (formatted.identifiant && d.identifiant && d.identifiant.toUpperCase() === formatted.identifiant.toUpperCase()) ||
-                   (formatted.numeroSerie && d.numeroSerie && d.numeroSerie.toUpperCase() === formatted.numeroSerie.toUpperCase()))
+                   (!formatted.identifiant && !d.identifiant && formatted.numeroSerie && d.numeroSerie && d.numeroSerie.toUpperCase() === formatted.numeroSerie.toUpperCase()))
             );
 
             if (matchIdx >= 0) {
@@ -6979,6 +6979,14 @@ async function warmupDefibrillateursStore() {
 
       let matchedReport: any = null;
       let alreadyResponded = false;
+      let effectiveCompanyInfo: any = {};
+      let matchedDefibs: any[] = [];
+      let matchedOtherEquips: any[] = [];
+      let matchedClients: any[] = [];
+      let tenantVariables: any[] = [];
+      let tenantStocks: any[] = [];
+      let tenantMembers: any[] = [];
+      let tenantFsmTours: any[] = [];
 
       if (checkRefUpper) {
         // 1. Locate report and/or tenant if needed
@@ -7025,22 +7033,246 @@ async function warmupDefibrillateursStore() {
                       (r.id && String(r.id).trim().toUpperCase() === checkRefUpper))
                 );
                 if (sheetRep) {
+                  const localTitle = String(matchedReport?.reportTitle || matchedReport?.title || '').trim();
+                  const sheetTitle = String(sheetRep?.reportTitle || sheetRep?.title || '').trim();
+                  const resolvedTitle =
+                    localTitle && localTitle !== 'RAPPORT TECHNIQUE DÉFIBRILLATEUR' && !/^rapport d['’]intervention gmao$/i.test(localTitle)
+                      ? localTitle
+                      : sheetTitle && sheetTitle !== 'RAPPORT TECHNIQUE DÉFIBRILLATEUR' && !/^rapport d['’]intervention gmao$/i.test(sheetTitle)
+                      ? sheetTitle
+                      : 'RAPPORT D’INTERVENTION';
+                  const mergedTechSig =
+                    sheetRep.techSignature ||
+                    matchedReport?.techSignature ||
+                    sheetRep.defibSnapshot?.techSignature ||
+                    matchedReport?.defibSnapshot?.techSignature ||
+                    '';
+                  const mergedClientPin =
+                    sheetRep.clientPinCode ||
+                    matchedReport?.clientPinCode ||
+                    sheetRep.defibSnapshot?.clientPinCode ||
+                    matchedReport?.defibSnapshot?.clientPinCode ||
+                    '';
                   matchedReport = matchedReport
                     ? {
                         ...matchedReport,
                         ...sheetRep,
+                        techSignature: mergedTechSig,
+                        clientPinCode: mergedClientPin,
+                        title: resolvedTitle,
+                        reportTitle: resolvedTitle,
                         defibSnapshot: {
                           ...(matchedReport.defibSnapshot || {}),
                           ...(sheetRep.defibSnapshot || {}),
+                          techSignature: mergedTechSig,
+                          clientPinCode: mergedClientPin,
                         },
                       }
-                    : sheetRep;
+                    : {
+                        ...sheetRep,
+                        techSignature: mergedTechSig,
+                        clientPinCode: mergedClientPin,
+                        title: resolvedTitle,
+                        reportTitle: resolvedTitle,
+                      };
                   break;
                 }
               }
             }
           } catch (_) {}
         }
+
+        // Load companyInfo, apparenceRapportsPdf, reglages, variables, stocks, members, matchedDefib, matchedClient for the resolved tenant
+        const activeTid = tenantKeysToCheck[0] || 'demo';
+        try {
+          for (const tid of tenantKeysToCheck) {
+            const compData = await fetchServerCollection('companyInfo', tid).catch(() => null);
+            if (compData && typeof compData === 'object' && Object.keys(compData).length > 0) {
+              effectiveCompanyInfo = { ...effectiveCompanyInfo, ...compData };
+              break;
+            }
+          }
+
+          await Promise.all([
+            // apparenceRapportsPdf sheet
+            (async () => {
+              for (const tid of tenantKeysToCheck) {
+                const appUrl = await resolveTenantSpreadsheetUrl(tid, 'apparenceRapportsPdf').catch(() => '');
+                if (appUrl && extractSpreadsheetIdAndGid(appUrl)) {
+                  const appData = await fetchTenantSheetCollection(appUrl, tid, 'apparenceRapportsPdf', false).catch(() => null);
+                  if (appData && Array.isArray(appData.items) && appData.items.length > 0) {
+                    const appRow = appData.items[0];
+                    effectiveCompanyInfo = {
+                      ...effectiveCompanyInfo,
+                      pdfHeaderBgColor: appRow.pdfHeaderBgColor ?? effectiveCompanyInfo.pdfHeaderBgColor,
+                      pdfCardBorderColor: appRow.pdfCardBorderColor ?? effectiveCompanyInfo.pdfCardBorderColor,
+                      pdfCardBgColor: appRow.pdfCardBgColor ?? effectiveCompanyInfo.pdfCardBgColor,
+                      pdfLabelTextColor: appRow.pdfLabelTextColor ?? effectiveCompanyInfo.pdfLabelTextColor,
+                      pdfHeaderImg: appRow.pdfHeaderImg ?? effectiveCompanyInfo.pdfHeaderImg,
+                      pdfPageHeaderText: appRow.pdfPageHeaderText ?? effectiveCompanyInfo.pdfPageHeaderText,
+                      pdfPageFooterText: appRow.pdfPageFooterText ?? effectiveCompanyInfo.pdfPageFooterText,
+                      pdfLastPageInfoText: appRow.pdfLastPageInfoText ?? effectiveCompanyInfo.pdfLastPageInfoText,
+                      pdfHideElectrodeSecoursA: appRow.pdfHideElectrodeSecoursA ?? effectiveCompanyInfo.pdfHideElectrodeSecoursA,
+                      pdfHideElectrodeSecoursP: appRow.pdfHideElectrodeSecoursP ?? effectiveCompanyInfo.pdfHideElectrodeSecoursP,
+                      pdfHideKitSecours: appRow.pdfHideKitSecours ?? effectiveCompanyInfo.pdfHideKitSecours,
+                      pdfSimplifyCoffret: appRow.pdfSimplifyCoffret ?? effectiveCompanyInfo.pdfSimplifyCoffret,
+                      pdfHideVerificationsTechniques: appRow.pdfHideVerificationsTechniques ?? effectiveCompanyInfo.pdfHideVerificationsTechniques,
+                      pdfHideHorodatagesDiagnostic: appRow.pdfHideHorodatagesDiagnostic ?? effectiveCompanyInfo.pdfHideHorodatagesDiagnostic,
+                      pdfShowDemandeDevisDetails: appRow.pdfShowDemandeDevisDetails ?? effectiveCompanyInfo.pdfShowDemandeDevisDetails,
+                    };
+                    break;
+                  }
+                }
+              }
+            })(),
+            // reglages sheet
+            (async () => {
+              for (const tid of tenantKeysToCheck) {
+                const regUrl = await resolveTenantSpreadsheetUrl(tid, 'reglages').catch(() => '');
+                if (regUrl && extractSpreadsheetIdAndGid(regUrl)) {
+                  const regData = await fetchTenantSheetCollection(regUrl, tid, 'reglages', false).catch(() => null);
+                  if (regData && Array.isArray(regData.items) && regData.items.length > 0) {
+                    const regRow = regData.items[0];
+                    effectiveCompanyInfo = {
+                      ...effectiveCompanyInfo,
+                      name: regRow.name || effectiveCompanyInfo.name,
+                      logo: regRow.logo !== undefined ? regRow.logo : effectiveCompanyInfo.logo,
+                      email: regRow.email || effectiveCompanyInfo.email,
+                      phone: regRow.phone || effectiveCompanyInfo.phone,
+                      website: regRow.website || effectiveCompanyInfo.website,
+                    };
+                    break;
+                  }
+                }
+              }
+            })(),
+            // variables
+            (async () => {
+              for (const tid of tenantKeysToCheck) {
+                const varUrl = await resolveTenantSpreadsheetUrl(tid, 'variables').catch(() => '');
+                if (varUrl && extractSpreadsheetIdAndGid(varUrl)) {
+                  const varData = await fetchTenantSheetCollection(varUrl, tid, 'variables', false).catch(() => null);
+                  if (varData && Array.isArray(varData.items) && varData.items.length > 0) {
+                    tenantVariables = varData.items;
+                    return;
+                  }
+                }
+                const srvVars = await fetchServerCollection('variables', tid).catch(() => null);
+                if (Array.isArray(srvVars) && srvVars.length > 0) {
+                  tenantVariables = srvVars;
+                  return;
+                }
+              }
+            })(),
+            // stocks
+            (async () => {
+              for (const tid of tenantKeysToCheck) {
+                const stkUrl = await resolveTenantSpreadsheetUrl(tid, 'stocksGlobaux').catch(() => '');
+                if (stkUrl && extractSpreadsheetIdAndGid(stkUrl)) {
+                  const stkData = await fetchTenantSheetCollection(stkUrl, tid, 'stocksGlobaux', false).catch(() => null);
+                  if (stkData && Array.isArray(stkData.items) && stkData.items.length > 0) {
+                    tenantStocks = stkData.items;
+                    return;
+                  }
+                }
+                const srvStocks = await fetchServerCollection('stocks', tid).catch(() => null);
+                if (Array.isArray(srvStocks) && srvStocks.length > 0) {
+                  tenantStocks = srvStocks;
+                  return;
+                }
+              }
+            })(),
+            // members
+            (async () => {
+              for (const tid of tenantKeysToCheck) {
+                const memUrl = await resolveTenantSpreadsheetUrl(tid, 'membresEnvironnement').catch(() => '');
+                if (memUrl && extractSpreadsheetIdAndGid(memUrl)) {
+                  const memData = await fetchTenantSheetCollection(memUrl, tid, 'membresEnvironnement', false).catch(() => null);
+                  if (memData && Array.isArray(memData.items) && memData.items.length > 0) {
+                    tenantMembers = memData.items;
+                    return;
+                  }
+                }
+                const srvMembers = await fetchServerCollection('members', tid).catch(() => null);
+                if (Array.isArray(srvMembers) && srvMembers.length > 0) {
+                  tenantMembers = srvMembers;
+                  return;
+                }
+              }
+            })(),
+            // matchedDefib & matchedOtherEquip
+            (async () => {
+              if (!matchedReport) return;
+              const rawSnap = matchedReport.defibSnapshot || {};
+              const equipIdent = String(rawSnap.identifiant || matchedReport.identifiant || matchedReport.defibIdentifiant || '').trim().toLowerCase();
+              const equipSn = String(rawSnap.numeroSerie || matchedReport.numeroSerie || '').trim().toLowerCase();
+              if (!equipIdent && !equipSn) return;
+
+              for (const tid of tenantKeysToCheck) {
+                let defibList: any[] = [];
+                const defUrl = await resolveTenantSpreadsheetUrl(tid, 'defibrillateurs').catch(() => '');
+                if (defUrl && extractSpreadsheetIdAndGid(defUrl)) {
+                  const defData = await fetchTenantSheetCollection(defUrl, tid, 'defibrillateurs', false).catch(() => null);
+                  if (defData && Array.isArray(defData.items)) defibList = defData.items;
+                }
+                if (defibList.length === 0) {
+                  const srvDefibs = await fetchServerCollection('defibrillateurs', tid).catch(() => null);
+                  if (Array.isArray(srvDefibs)) defibList = srvDefibs;
+                }
+                const foundD = defibList.find((d: any) => {
+                  const dIdent = String(d?.identifiant || '').trim().toLowerCase();
+                  const dSn = String(d?.numeroSerie || '').trim().toLowerCase();
+                  return (equipIdent && (dIdent === equipIdent || String(d?.id || '').trim().toLowerCase() === equipIdent)) || (equipSn && dSn === equipSn);
+                });
+                if (foundD) {
+                  matchedDefibs = [foundD];
+                  break;
+                }
+              }
+            })(),
+            // matchedClient
+            (async () => {
+              if (!matchedReport) return;
+              const rawSnap = matchedReport.defibSnapshot || {};
+              const clientCandidates = [rawSnap.clientId, matchedReport.clientId, matchedReport.clientName, matchedReport.entreprise]
+                .filter(Boolean)
+                .map(s => String(s).trim().toLowerCase());
+              const siteEmail = String(rawSnap.emailSite || matchedReport.emailSite || '').trim().toLowerCase();
+              const siteNom = String(rawSnap.nomPrenomSite || '').trim();
+
+              for (const tid of tenantKeysToCheck) {
+                let cliList: any[] = [];
+                const cliUrl = await resolveTenantSpreadsheetUrl(tid, 'clients').catch(() => '');
+                if (cliUrl && extractSpreadsheetIdAndGid(cliUrl)) {
+                  const cliData = await fetchTenantSheetCollection(cliUrl, tid, 'clients', false).catch(() => null);
+                  if (cliData && Array.isArray(cliData.items)) cliList = cliData.items;
+                }
+                if (cliList.length === 0) {
+                  const srvClis = await fetchServerCollection('clients', tid).catch(() => null);
+                  if (Array.isArray(srvClis)) cliList = srvClis;
+                }
+                const foundC = cliList.find((c: any) => {
+                  const cKeys = [c?.id, c?.clientIdField, c?.denomination]
+                    .filter(Boolean)
+                    .map(s => String(s).trim().toLowerCase());
+                  if (cKeys.some(k => clientCandidates.includes(k))) return true;
+                  if (siteEmail && c?.email && String(c.email).trim().toLowerCase() === siteEmail) return true;
+                  if (siteNom && (c?.denomination === siteNom || c?.nomPrenomSite === siteNom)) return true;
+                  return false;
+                });
+                if (foundC) {
+                  matchedClients = [foundC];
+                  break;
+                }
+              }
+            })(),
+            // fsmTours
+            (async () => {
+              const tours = await fetchServerCollection('fsmTours', activeTid).catch(() => null);
+              if (Array.isArray(tours)) tenantFsmTours = tours;
+            })(),
+          ]);
+        } catch (_) {}
 
         // 2. Check if a satisfaction response already exists for this interventionReference
         for (const tid of tenantKeysToCheck) {
@@ -7106,6 +7338,14 @@ async function warmupDefibrillateursStore() {
         tenantId: matchedTenantObj ? String(matchedTenantObj.id || resolvedTenantId).trim() : (resolvedTenantId || 'demo'),
         alreadyResponded,
         report: matchedReport,
+        companyInfo: effectiveCompanyInfo,
+        defibrillateurs: matchedDefibs,
+        otherEquipments: matchedOtherEquips,
+        clients: matchedClients,
+        variables: tenantVariables,
+        stocks: tenantStocks,
+        members: tenantMembers,
+        fsmTours: tenantFsmTours,
       });
     } catch (err: any) {
       return res.json({

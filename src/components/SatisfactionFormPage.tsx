@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { findTenantByInterventionGlobally, fetchRawCollectionFromFirestore, saveCollectionToFirestore } from '../firebase';
 import { t } from '../utils/translate';
 import { getParisTimestamp } from '../utils/dateUtils';
-import { generateReportPDF } from '../utils/dropbox';
+import { downloadOfficialReportPdfDirectly } from '../utils/reportPdfTemplate';
 
 interface CriteriaConfig {
   key: 'qualite' | 'ponctualite' | 'politesse' | 'clartePdf' | 'explications' | 'sensibilisation';
@@ -116,9 +116,19 @@ export default function SatisfactionFormPage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [alreadyResponded, setAlreadyResponded] = useState<boolean>(false);
   const [matchedReport, setMatchedReport] = useState<any | null>(null);
+  const [reportContext, setReportContext] = useState<{
+    companyInfo?: any;
+    defibrillateurs?: any[];
+    otherEquipments?: any[];
+    clients?: any[];
+    variables?: any[];
+    stocks?: any[];
+    members?: any[];
+    fsmTours?: any[];
+  }>({});
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
 
-  // Check if a satisfaction response has already been received for this intervention reference & fetch report
+  // Check if a satisfaction response has already been received for this intervention reference & fetch report + tenant context
   useEffect(() => {
     let isMounted = true;
     const cleanRef = interventionRef.trim();
@@ -132,8 +142,9 @@ export default function SatisfactionFormPage() {
     const checkContext = async () => {
       let foundAlready = false;
       let foundRep: any = null;
+      let nextCtx: any = {};
 
-      // 1. Check local storage / Firestore first
+      // 1. Check local storage first
       try {
         const tid = urlTenantId.trim() || localStorage.getItem('defib_tenant_id') || 'demo';
         const localReviewsRaw = localStorage.getItem(`defib_${tid}_customer_reviews`);
@@ -165,6 +176,24 @@ export default function SatisfactionFormPage() {
               ) || null;
           }
         }
+        const safeParseLocal = (key: string) => {
+          try {
+            const raw = localStorage.getItem(`defib_${tid}_${key}`);
+            return raw ? JSON.parse(raw) : null;
+          } catch (_) {
+            return null;
+          }
+        };
+        nextCtx = {
+          companyInfo: safeParseLocal('company_info') || {},
+          defibrillateurs: safeParseLocal('defibrillateurs') || [],
+          otherEquipments: safeParseLocal('other_equipments') || [],
+          clients: safeParseLocal('clients') || [],
+          variables: safeParseLocal('variables') || [],
+          stocks: safeParseLocal('stocks') || [],
+          members: safeParseLocal('members') || [],
+          fsmTours: safeParseLocal('fsm_tours') || [],
+        };
       } catch (_) {}
 
       // 2. Query backend endpoint for authoritative spreadsheet + server check
@@ -183,8 +212,27 @@ export default function SatisfactionFormPage() {
             foundAlready = true;
           }
           if (data?.report) {
-            foundRep = data.report;
+            foundRep = foundRep
+              ? {
+                  ...foundRep,
+                  ...data.report,
+                  defibSnapshot: {
+                    ...(foundRep.defibSnapshot || {}),
+                    ...(data.report.defibSnapshot || {}),
+                  },
+                }
+              : data.report;
           }
+          nextCtx = {
+            companyInfo: { ...(nextCtx.companyInfo || {}), ...(data?.companyInfo || {}) },
+            defibrillateurs: Array.isArray(data?.defibrillateurs) && data.defibrillateurs.length > 0 ? data.defibrillateurs : (nextCtx.defibrillateurs || []),
+            otherEquipments: Array.isArray(data?.otherEquipments) && data.otherEquipments.length > 0 ? data.otherEquipments : (nextCtx.otherEquipments || []),
+            clients: Array.isArray(data?.clients) && data.clients.length > 0 ? data.clients : (nextCtx.clients || []),
+            variables: Array.isArray(data?.variables) && data.variables.length > 0 ? data.variables : (nextCtx.variables || []),
+            stocks: Array.isArray(data?.stocks) && data.stocks.length > 0 ? data.stocks : (nextCtx.stocks || []),
+            members: Array.isArray(data?.members) && data.members.length > 0 ? data.members : (nextCtx.members || []),
+            fsmTours: Array.isArray(data?.fsmTours) && data.fsmTours.length > 0 ? data.fsmTours : (nextCtx.fsmTours || []),
+          };
         }
       } catch (_) {}
 
@@ -193,6 +241,7 @@ export default function SatisfactionFormPage() {
         if (foundRep) {
           setMatchedReport(foundRep);
         }
+        setReportContext(nextCtx);
       }
     };
 
@@ -208,8 +257,10 @@ export default function SatisfactionFormPage() {
     try {
       const cleanRef = interventionRef.trim();
       let reportToUse = matchedReport;
+      let ctxToUse = { ...reportContext };
 
-      if (!reportToUse && cleanRef) {
+      // Always fetch fresh context if report or companyInfo is not yet loaded
+      if ((!reportToUse || !ctxToUse.companyInfo || Object.keys(ctxToUse.companyInfo).length === 0) && cleanRef) {
         try {
           const res = await fetch('/api/public/satisfaction-context', {
             method: 'POST',
@@ -222,9 +273,29 @@ export default function SatisfactionFormPage() {
           if (res.ok) {
             const data = await res.json();
             if (data?.report) {
-              reportToUse = data.report;
-              setMatchedReport(data.report);
+              reportToUse = reportToUse
+                ? {
+                    ...reportToUse,
+                    ...data.report,
+                    defibSnapshot: {
+                      ...(reportToUse.defibSnapshot || {}),
+                      ...(data.report.defibSnapshot || {}),
+                    },
+                  }
+                : data.report;
+              setMatchedReport(reportToUse);
             }
+            ctxToUse = {
+              companyInfo: { ...(ctxToUse.companyInfo || {}), ...(data?.companyInfo || {}) },
+              defibrillateurs: Array.isArray(data?.defibrillateurs) && data.defibrillateurs.length > 0 ? data.defibrillateurs : (ctxToUse.defibrillateurs || []),
+              otherEquipments: Array.isArray(data?.otherEquipments) && data.otherEquipments.length > 0 ? data.otherEquipments : (ctxToUse.otherEquipments || []),
+              clients: Array.isArray(data?.clients) && data.clients.length > 0 ? data.clients : (ctxToUse.clients || []),
+              variables: Array.isArray(data?.variables) && data.variables.length > 0 ? data.variables : (ctxToUse.variables || []),
+              stocks: Array.isArray(data?.stocks) && data.stocks.length > 0 ? data.stocks : (ctxToUse.stocks || []),
+              members: Array.isArray(data?.members) && data.members.length > 0 ? data.members : (ctxToUse.members || []),
+              fsmTours: Array.isArray(data?.fsmTours) && data.fsmTours.length > 0 ? data.fsmTours : (ctxToUse.fsmTours || []),
+            };
+            setReportContext(ctxToUse);
           }
         } catch (_) {}
       }
@@ -240,42 +311,23 @@ export default function SatisfactionFormPage() {
         .replace(/[^a-zA-Z0-9._-]/g, '_');
       const fileName = `Rapport_Intervention_${safeRefName}.pdf`;
 
-      const triggerBlobDownload = (blob: Blob) => {
-        const blobUrl = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = fileName;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
-      };
-
-      // If report has a direct PDF URL or data URL, try fetching it as binary PDF first
-      const rawPdfUrl = String(reportToUse?.pdfUrl || reportToUse?.rapportUrl || '').trim();
-      if (rawPdfUrl && (rawPdfUrl.startsWith('data:application/pdf') || rawPdfUrl.includes('/api/firebase-media/') || rawPdfUrl.endsWith('.pdf'))) {
-        try {
-          const pdfRes = await fetch(rawPdfUrl);
-          if (pdfRes.ok) {
-            const blob = await pdfRes.blob();
-            if (blob.size > 0 && (blob.type.includes('pdf') || rawPdfUrl.startsWith('data:application/pdf'))) {
-              triggerBlobDownload(new Blob([blob], { type: 'application/pdf' }));
-              return;
-            }
-          }
-        } catch (_) {}
-      }
-
-      // Generate PDF directly via generateReportPDF and download immediately without opening a new tab
-      const pdfBytes = generateReportPDF(
-        reportToUse || {
-          interventionReference: cleanRef || '-',
-          date: new Date().toLocaleDateString('fr-FR'),
-        }
+      await downloadOfficialReportPdfDirectly(
+        {
+          report: reportToUse || {
+            interventionReference: cleanRef || '-',
+            date: new Date().toLocaleDateString('fr-FR'),
+          },
+          companyInfo: ctxToUse.companyInfo || {},
+          defibrillateurs: ctxToUse.defibrillateurs || [],
+          otherEquipments: ctxToUse.otherEquipments || [],
+          clients: ctxToUse.clients || [],
+          variables: ctxToUse.variables || [],
+          stocks: ctxToUse.stocks || [],
+          members: ctxToUse.members || [],
+          fsmTours: ctxToUse.fsmTours || [],
+        },
+        fileName
       );
-      const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
-      triggerBlobDownload(pdfBlob);
     } catch (err) {
       console.error('Error downloading PDF:', err);
     } finally {
