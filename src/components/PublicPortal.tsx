@@ -18867,6 +18867,7 @@ export default function PublicPortal({
               allTours={fsmTours || tours || []}
               isWebapp={true}
               preferredNavApp={defaultNavApp}
+              companyInfo={companyInfo}
             />
           );
         })()}

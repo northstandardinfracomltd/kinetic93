@@ -5,6 +5,7 @@ import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../fire
 import { getActiveTenantCountry, getHolidaysForYear, SupportedCountry } from '../utils/holidays';
 import { PlanningExtendedViewModal } from './PlanningExtendedViewModal';
 import { playTechSound2 } from '../utils/technicianAudio';
+import { geocodeAddress } from '../utils/fsmOptimizer';
 
 export interface SpontaneousEvent {
   id: string;
@@ -14,6 +15,12 @@ export interface SpontaneousEvent {
   creneau: string;
   intitule: string;
   commentaire: string;
+  tournee?: string;
+  tourId?: string;
+  tourTitle?: string;
+  voie?: string;
+  latitude?: number | string;
+  longitude?: number | string;
   createdAt?: string;
 }
 
@@ -261,7 +268,35 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   const [formCreneau, setFormCreneau] = useState<string>('');
   const [formIntitule, setFormIntitule] = useState<string>('');
   const [formCommentaire, setFormCommentaire] = useState<string>('');
+  const [formTournee, setFormTournee] = useState<string>('');
+  const [formVoie, setFormVoie] = useState<string>('');
+  const [formLat, setFormLat] = useState<number | undefined>(undefined);
+  const [formLng, setFormLng] = useState<number | undefined>(undefined);
   const [formError, setFormError] = useState<string>('');
+
+  // Auto-geocode address on input change
+  useEffect(() => {
+    const trimmed = formVoie.trim();
+    if (!trimmed) {
+      setFormLat(undefined);
+      setFormLng(undefined);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const coord = await geocodeAddress(trimmed);
+        if (!cancelled && coord) {
+          setFormLat(coord.lat);
+          setFormLng(coord.lng);
+        }
+      } catch (_) {}
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [formVoie]);
 
   const resolveLocalAutresEventsUrl = (info?: CompanyInfo): string => {
     const direct = String(info?.spreadsheetAutresEvents || info?.spreadsheetAutresEventsUrl || '').trim();
@@ -350,18 +385,65 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           setAutresEventsSheetUrl('');
         }
         if (Array.isArray(data?.items) && (data.fromSpreadsheet || data.items.length > 0)) {
+          let existingLocal: SpontaneousEvent[] = [];
+          try {
+            const rawSaved = localStorage.getItem(`defib_${tid}_spontaneous_events`) || localStorage.getItem('defib_spontaneous_events');
+            if (rawSaved) existingLocal = JSON.parse(rawSaved);
+          } catch (_) {}
+
           const mapped: SpontaneousEvent[] = data.items
             .filter((it: any) => it && (it.date || it.intitule || it.creneau || it.techEmail || it.techName))
-            .map((it: any, idx: number) => ({
-              id: String(it.id || `spont_${tid}_${idx}`),
-              techName: String(it.techName || it.techEmail || '').trim(),
-              techEmail: String(it.techEmail || '').trim(),
-              date: toIsoDateStr(it.date),
-              creneau: String(it.creneau || '').trim(),
-              intitule: String(it.intitule || '').trim(),
-              commentaire: String(it.commentaire || '').trim(),
-              createdAt: it.createdAt || '',
-            }));
+            .map((it: any, idx: number) => {
+              const isoDate = toIsoDateStr(it.date);
+              const creneauStr = String(it.creneau || '').trim();
+              const intituleStr = String(it.intitule || '').trim();
+              const techEmailStr = String(it.techEmail || '').trim();
+              const techNameStr = String(it.techName || it.techEmail || '').trim();
+              const rawId = String(it.id || `spont_${tid}_${idx}`);
+
+              const matchedExisting = existingLocal.find(
+                (ex) =>
+                  ex &&
+                  (ex.id === rawId ||
+                    (toIsoDateStr(ex.date) === isoDate &&
+                      String(ex.creneau || '').trim().toLowerCase() === creneauStr.toLowerCase() &&
+                      String(ex.intitule || '').trim().toLowerCase() === intituleStr.toLowerCase()))
+              );
+
+              const rawTournee = String(
+                it.tournee ?? it['Tournée'] ?? it['Tournée.'] ?? matchedExisting?.tournee ?? ''
+              ).trim();
+              const rawVoie = String(
+                it.voie ?? it['Voie'] ?? it['Voie.'] ?? matchedExisting?.voie ?? ''
+              ).trim();
+              const rawLat = it.latitude ?? it['Latitude'] ?? it['Latitude.'] ?? matchedExisting?.latitude;
+              const rawLng = it.longitude ?? it['Longitude'] ?? it['Longitude.'] ?? matchedExisting?.longitude;
+              const numLat =
+                rawLat !== undefined && rawLat !== null && String(rawLat).trim() !== ''
+                  ? parseFloat(String(rawLat).replace(',', '.'))
+                  : NaN;
+              const numLng =
+                rawLng !== undefined && rawLng !== null && String(rawLng).trim() !== ''
+                  ? parseFloat(String(rawLng).replace(',', '.'))
+                  : NaN;
+
+              return {
+                id: rawId,
+                techName: techNameStr,
+                techEmail: techEmailStr,
+                date: isoDate,
+                creneau: creneauStr,
+                intitule: intituleStr,
+                commentaire: String(it.commentaire || '').trim(),
+                tournee: rawTournee,
+                tourId: String(it.tourId || matchedExisting?.tourId || rawTournee || '').trim(),
+                tourTitle: String(it.tourTitle || matchedExisting?.tourTitle || '').trim(),
+                voie: rawVoie,
+                latitude: !isNaN(numLat) ? numLat : '',
+                longitude: !isNaN(numLng) ? numLng : '',
+                createdAt: it.createdAt || matchedExisting?.createdAt || '',
+              };
+            });
           setSpontaneousEvents(mapped);
           localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(mapped));
           localStorage.setItem('defib_spontaneous_events', JSON.stringify(mapped));
@@ -880,7 +962,54 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     );
   };
 
-  const handleSaveSpontaneousEvent = () => {
+  // Tours eligible for "Intégrer à une tournée." ('Brouillon', 'À faire', 'En cours')
+  const integrableToursList = useMemo(() => {
+    const normSelTech = normalizeName(selectedTech);
+    const eligible = (resolvedTours || []).filter((tr: any) => {
+      if (!tr || typeof tr !== 'object') return false;
+      if (tr.id === 'a-trier' || tr.id === 'A trier') return false;
+      const stNorm = String(tr.status || 'Brouillon')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      const isAllowedStatus =
+        stNorm === 'brouillon' ||
+        stNorm === 'draft' ||
+        stNorm === 'a faire' ||
+        stNorm === 'en cours';
+      if (!isAllowedStatus) return false;
+
+      if (normSelTech) {
+        const normTourTech = normalizeName(tr.techName || tr.technicien || tr.technicienNom || tr.tech);
+        if (normTourTech && normTourTech !== normSelTech) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Fallback: if filtering by technician left 0 tours, show all 'Brouillon' / 'À faire' / 'En cours' tours
+    if (eligible.length > 0) return eligible;
+
+    return (resolvedTours || []).filter((tr: any) => {
+      if (!tr || typeof tr !== 'object') return false;
+      if (tr.id === 'a-trier' || tr.id === 'A trier') return false;
+      const stNorm = String(tr.status || 'Brouillon')
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      return (
+        stNorm === 'brouillon' ||
+        stNorm === 'draft' ||
+        stNorm === 'a faire' ||
+        stNorm === 'en cours'
+      );
+    });
+  }, [resolvedTours, selectedTech]);
+
+  const handleSaveSpontaneousEvent = async () => {
     setFormError('');
     if (!isTechSelected) {
       setFormError('Veuillez sélectionner un technicien.');
@@ -894,6 +1023,36 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       setFormError('Tous les champs sont requis.');
       return;
     }
+    if (formTournee && !formVoie.trim()) {
+      setFormError("L'adresse complète est requise lorsqu'une tournée est sélectionnée.");
+      return;
+    }
+
+    let resolvedLat = formLat;
+    let resolvedLng = formLng;
+    const cleanVoie = formVoie.trim();
+    if (cleanVoie && (resolvedLat === undefined || resolvedLng === undefined)) {
+      try {
+        const coord = await geocodeAddress(cleanVoie);
+        if (coord) {
+          resolvedLat = coord.lat;
+          resolvedLng = coord.lng;
+        }
+      } catch (_) {}
+    }
+
+    const matchedTourObj = formTournee
+      ? integrableToursList.find(
+          (tr: any) =>
+            String(tr.tourIdentifiant || tr.id || tr.title || '').trim() === formTournee ||
+            String(tr.id || '').trim() === formTournee ||
+            String(tr.title || '').trim() === formTournee
+        )
+      : null;
+
+    const resolvedTourneeVal = matchedTourObj
+      ? String(matchedTourObj.tourIdentifiant || matchedTourObj.title || matchedTourObj.id || formTournee).trim()
+      : formTournee.trim();
 
     const techForEvent = selectedTech;
     const resolvedTechEmail = String(
@@ -912,6 +1071,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       creneau: formCreneau,
       intitule: formIntitule.trim(),
       commentaire: formCommentaire.trim(),
+      tournee: resolvedTourneeVal,
+      tourId: matchedTourObj?.id ? String(matchedTourObj.id).trim() : resolvedTourneeVal,
+      tourTitle: matchedTourObj?.title ? String(matchedTourObj.title).trim() : '',
+      voie: cleanVoie,
+      latitude: resolvedLat !== undefined ? resolvedLat : '',
+      longitude: resolvedLng !== undefined ? resolvedLng : '',
       createdAt: new Date().toISOString()
     };
 
@@ -947,6 +1112,10 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             'Créneau.': formCreneau,
             'Intitulé.': formIntitule.trim(),
             'Commentaire.': formCommentaire.trim(),
+            'Tournée': resolvedTourneeVal,
+            'Voie': cleanVoie,
+            'Latitude': resolvedLat !== undefined ? resolvedLat : '',
+            'Longitude': resolvedLng !== undefined ? resolvedLng : '',
           },
         ],
       }),
@@ -968,6 +1137,10 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     setFormCreneau('');
     setFormIntitule('');
     setFormCommentaire('');
+    setFormTournee('');
+    setFormVoie('');
+    setFormLat(undefined);
+    setFormLng(undefined);
     setIsSpontaneousFormOpen(false);
   };
 
@@ -1091,7 +1264,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             if (isSpontaneousFormOpen) {
               handleSaveSpontaneousEvent();
             } else {
-              playTechSound2();
+              if (!enableExtendedView) {
+                playTechSound2();
+              }
               setIsSpontaneousFormOpen(true);
             }
           }}
@@ -1275,12 +1450,83 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
               />
             </div>
 
+            {/* Field 5: Intégrer à une tournée. */}
+            <div className="space-y-1">
+              <label className="block font-bold text-[16px] text-black">
+                Intégrer à une tournée.
+              </label>
+              <select
+                value={formTournee}
+                onChange={(e) => {
+                  setFormTournee(e.target.value);
+                  if (formError) setFormError('');
+                }}
+                className="w-full bg-white text-black font-medium transition-all duration-150 focus:outline-none appearance-none text-center cursor-pointer"
+                style={{
+                  fontSize: "18px",
+                  padding: "14px",
+                  borderRadius: "13px",
+                  border: "1px solid #DCE1EA",
+                  outline: "none",
+                  color: formTournee ? "rgb(0, 0, 0)" : "#BECADB",
+                  WebkitAppearance: "none",
+                  MozAppearance: "none",
+                  appearance: "none",
+                  backgroundImage: "none",
+                  textAlign: "center",
+                  textAlignLast: "center",
+                }}
+              >
+                <option value="">Aucune tournée sélectionnée</option>
+                {integrableToursList.map((tr: any, tIdx: number) => {
+                  const val = String(tr.tourIdentifiant || tr.id || tr.title || `tour_${tIdx}`).trim();
+                  const title = String(tr.title || tr.name || tr.tourIdentifiant || `Tournée ${tIdx + 1}`).trim();
+                  const status = String(tr.status || 'Brouillon').trim();
+                  const datePart = tr.startDate && tr.startDate !== 'A trier' ? ` • ${getFormattedDateFR(tr.startDate)}` : '';
+                  return (
+                    <option key={`${val}_${tIdx}`} value={val}>
+                      {title} ({status}){datePart}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* Field 6: Adresse complète. */}
+            <div className="space-y-1">
+              <label className="block font-bold text-[16px] text-black">
+                Adresse complète. {formTournee ? <span className="text-red-500">*</span> : null}
+              </label>
+              <input
+                type="text"
+                placeholder="Ex : 10 Rue de la Paix, 75002 Paris"
+                value={formVoie}
+                onChange={(e) => {
+                  setFormVoie(e.target.value);
+                  if (formError) setFormError('');
+                }}
+                className="w-full bg-white text-black placeholder-[#BECADB] font-medium transition-all duration-150 focus:outline-none"
+                style={{
+                  fontSize: "18px",
+                  padding: "14px",
+                  borderRadius: "13px",
+                  border: "1px solid #DCE1EA",
+                  outline: "none",
+                  color: "rgb(0, 0, 0)",
+                }}
+              />
+            </div>
+
             {/* Bouton Annuler */}
             <div className="pt-2">
               <button
                 type="button"
                 onClick={() => {
                   setIsSpontaneousFormOpen(false);
+                  setFormTournee('');
+                  setFormVoie('');
+                  setFormLat(undefined);
+                  setFormLng(undefined);
                   setFormError('');
                 }}
                 className="w-full font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer select-none"

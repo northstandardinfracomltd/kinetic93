@@ -3509,6 +3509,10 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Créneau.', field: 'creneau', aliases: ['creneau', 'heure', 'horaire', 'slot'] },
     { header: 'Intitulé.', field: 'intitule', aliases: ['intitule', 'titre', 'objet', 'nom', 'evenement'] },
     { header: 'Commentaire.', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'details', 'description', 'note', 'notes'] },
+    { header: 'Tournée', field: 'tournee', aliases: ['tournee', 'touridentifiant', 'tourid', 'idtournee', 'identifiantdelatournee', 'integreraunetournee'] },
+    { header: 'Voie', field: 'voie', aliases: ['voie', 'adresse', 'adressecomplete', 'lieu', 'rue'] },
+    { header: 'Latitude', field: 'latitude', aliases: ['latitude', 'lat'], type: 'number' },
+    { header: 'Longitude', field: 'longitude', aliases: ['longitude', 'lng', 'lon', 'long'], type: 'number' },
   ],
   groupesZones: [
     { header: 'id', field: 'id', aliases: ['id', 'identifiant', 'idgroupe', 'groupeid'] },
@@ -7029,6 +7033,20 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.creneau = String(merged.creneau ?? rawByHeader['Créneau.'] ?? rawByHeader['Créneau'] ?? '').trim();
     merged.intitule = String(merged.intitule ?? rawByHeader['Intitulé.'] ?? rawByHeader['Intitulé'] ?? '').trim();
     merged.commentaire = String(merged.commentaire ?? rawByHeader['Commentaire.'] ?? rawByHeader['Commentaire'] ?? '').trim();
+    merged.tournee = String(merged.tournee ?? rawByHeader['Tournée'] ?? rawByHeader['Tournée.'] ?? '').trim();
+    merged.voie = String(merged.voie ?? rawByHeader['Voie'] ?? rawByHeader['Voie.'] ?? '').trim();
+    const rawLat = merged.latitude ?? rawByHeader['Latitude'] ?? rawByHeader['Latitude.'];
+    const rawLng = merged.longitude ?? rawByHeader['Longitude'] ?? rawByHeader['Longitude.'];
+    const numLat =
+      rawLat !== undefined && rawLat !== null && String(rawLat).trim() !== ''
+        ? parseFloat(String(rawLat).replace(',', '.'))
+        : NaN;
+    const numLng =
+      rawLng !== undefined && rawLng !== null && String(rawLng).trim() !== ''
+        ? parseFloat(String(rawLng).replace(',', '.'))
+        : NaN;
+    merged.latitude = !isNaN(numLat) ? numLat : '';
+    merged.longitude = !isNaN(numLng) ? numLng : '';
 
     if (!merged.id || String(merged.id).startsWith('sheet_gen_')) {
       const slug = `${merged.techEmail || merged.techName}_${merged.date}_${merged.creneau}_${merged.intitule}`
@@ -8763,6 +8781,20 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.creneau = String(enriched.creneau ?? '').trim();
     enriched.intitule = String(enriched.intitule ?? '').trim();
     enriched.commentaire = String(enriched.commentaire ?? '').trim();
+    enriched.tournee = String(enriched.tournee ?? enriched['Tournée'] ?? enriched['Tournée.'] ?? '').trim();
+    enriched.voie = String(enriched.voie ?? enriched['Voie'] ?? enriched['Voie.'] ?? '').trim();
+    const rawLat = enriched.latitude ?? enriched['Latitude'] ?? enriched['Latitude.'];
+    const rawLng = enriched.longitude ?? enriched['Longitude'] ?? enriched['Longitude.'];
+    const numLat =
+      rawLat !== undefined && rawLat !== null && String(rawLat).trim() !== ''
+        ? parseFloat(String(rawLat).replace(',', '.'))
+        : NaN;
+    const numLng =
+      rawLng !== undefined && rawLng !== null && String(rawLng).trim() !== ''
+        ? parseFloat(String(rawLng).replace(',', '.'))
+        : NaN;
+    enriched.latitude = !isNaN(numLat) ? numLat : '';
+    enriched.longitude = !isNaN(numLng) ? numLng : '';
   } else if (tabType === 'groupesZones') {
     const serializeArray = (val: any): string => {
       if (Array.isArray(val)) {

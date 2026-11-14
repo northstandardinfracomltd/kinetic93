@@ -17301,34 +17301,6 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                   </div>
                 )}
 
-                {/* Persistent CTT violation alert at the top of TOURNÉES & MISSIONS */}
-                {(() => {
-                  const targetTour = displayedTour && displayedTour.id !== 'a-trier' ? displayedTour : (filteredTours.find(ft => ft.id !== 'a-trier'));
-                  if (!targetTour) return null;
-                  const topViolations = checkTourCttViolations(targetTour, cttGlobalRules, variables, fsmTours);
-                  if (topViolations.length === 0) return null;
-                  return (
-                    <div 
-                      className="mx-4 mt-3 p-4 bg-red-50 border border-red-300 rounded-xl flex flex-col gap-2 text-red-950 font-sans animate-fadeIn shadow-xs"
-                      style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                      id="fsm-top-ctt-violation-banner"
-                    >
-                      <div className="flex items-center gap-2.5 font-bold text-red-800 text-[15px]">
-                        <span className="text-lg">⚠️</span>
-                        <span>{translate("Alerte CTT — Tournée")} « {targetTour.title || targetTour.id} »</span>
-                      </div>
-                      <div className="pl-6 space-y-1.5">
-                        {topViolations.map((v, i) => (
-                          <div key={i} className="text-[14px]">
-                            <span className="font-bold text-red-900">{v.message}</span>
-                            {v.details && <span className="text-red-700 text-xs block font-normal mt-0.5">{v.details}</span>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
                 {fsmTours.length > 0 && (() => {
                   return (
                     <div 
@@ -20714,31 +20686,6 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                             })())}
                                           </span>
 
-                                        {/* CTT Violation Pill on mission */}
-                                        {(() => {
-                                          const tourViolations = checkTourCttViolations(t, cttGlobalRules, variables, fsmTours);
-                                          const mDate = estimatedDateValue;
-                                          const missionViolations = tourViolations.filter(v => v.date && (v.date === mDate || v.date.includes(mDate)));
-                                          if (missionViolations.length === 0) return null;
-                                          return (
-                                            <span 
-                                              style={{
-                                                backgroundColor: '#fee2e2',
-                                                color: '#b91c1c',
-                                                borderRadius: '1000px',
-                                                padding: '8px 16px',
-                                                fontSize: '18px',
-                                                fontWeight: 700,
-                                                border: '1px solid #fca5a5',
-                                                cursor: 'default'
-                                              }}
-                                              title={missionViolations.map(v => v.message).join(' | ')}
-                                            >
-                                              ⚠️ {translate("Alerte CTT")}
-                                            </span>
-                                          );
-                                        })()}
-
                                         {(() => {
                                           const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
                                           if (isFormationMission) return null;
@@ -22149,11 +22096,17 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                       {/* Show client refusal comment underneath Situation if Refusé Client */}
                                       {((m.status || '').toLowerCase().trim() === 'refusé client' || (m.status || '').toLowerCase().trim() === 'refuse client') && (m.refusalComment || m.clientRefusalComment) && (
                                         <div 
-                                          className="mt-2 p-2.5 bg-red-50 text-red-900 border border-red-200 rounded-xl text-xs font-sans space-y-0.5"
-                                          style={{ wordBreak: 'break-word' }}
+                                          className="mt-2 p-2.5 rounded-xl font-sans space-y-0.5"
+                                          style={{
+                                            backgroundColor: 'rgb(210, 45, 11)',
+                                            color: '#fff',
+                                            border: 'none',
+                                            fontSize: '18px',
+                                            wordBreak: 'break-word',
+                                          }}
                                         >
-                                          <span className="font-bold text-red-700 block">Commentaire client (Refus) :</span>
-                                          <p className="italic m-0">{m.refusalComment || m.clientRefusalComment}</p>
+                                          <span className="font-bold block" style={{ color: '#fff', fontSize: '18px' }}>Commentaire client (Refus) :</span>
+                                          <p className="italic m-0" style={{ color: '#fff', fontSize: '18px' }}>{m.refusalComment || m.clientRefusalComment}</p>
                                         </div>
                                       )}
                                       {/* Show technician rejection reason underneath Situation if Rejet mission */}
@@ -27983,6 +27936,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             variables={variables}
             cttGlobalRules={cttGlobalRules}
             allTours={fsmTours}
+            tenantId={tenantId}
+            companyInfo={companyInfo}
             onCalculatedMissions={(tId, scheduledMissions) => {
               const current = fsmTours.find(tr => tr.id === tId);
               if (!current) return;

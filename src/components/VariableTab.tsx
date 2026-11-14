@@ -1703,11 +1703,6 @@ export default function VariableTab({
                         <div className="font-semibold text-slate-950">
                           {v.nom}
                         </div>
-                        {v.category === 'Modèle Raison Prestation' && v.dureePrestation !== undefined && v.dureePrestation !== null && (
-                          <div className="text-[13px] text-slate-500 font-normal mt-0.5">
-                            Durée : {v.dureePrestation} min
-                          </div>
-                        )}
                         {v.category === 'Modèle Contrat' && v.couleurHex && (
                           <div className="text-[13px] text-slate-500 font-normal mt-0.5 flex items-center gap-1.5">
                             <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0 border border-slate-300" style={{ backgroundColor: v.couleurHex }} />

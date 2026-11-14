@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
+import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, ZoomControl, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -11,7 +11,7 @@ import {
   getHaversineDistance,
 } from '../utils/fsmOptimizer';
 import { formatDateToFR } from '../utils';
-import { CttGlobalRules, Defibrillateur, OtherEquipment, Client, Variable, Member } from '../types';
+import { CttGlobalRules, Defibrillateur, OtherEquipment, Client, Variable, Member, CompanyInfo } from '../types';
 
 interface TourRouteMapModalProps {
   isOpen: boolean;
@@ -28,6 +28,8 @@ interface TourRouteMapModalProps {
   onCalculatedMissions?: (tourId: string, scheduledMissions: any[]) => void;
   isWebapp?: boolean;
   preferredNavApp?: string;
+  tenantId?: string;
+  companyInfo?: CompanyInfo;
 }
 
 interface RouteMissionPoint {
@@ -42,6 +44,7 @@ interface RouteMissionPoint {
   addressQuery: string;
   estimatedDateFormatted: string;
   estimatedSlotLabel: string;
+  isSpontaneousEvent?: boolean;
 }
 
 interface TechStartPoint {
@@ -50,6 +53,36 @@ interface TechStartPoint {
   techName: string;
   addressLabel: string;
 }
+
+interface RouteLegSegmentInfo {
+  id: string;
+  fromLabel: string;
+  toLabel: string;
+  minutes: number;
+  kmFormatted: string;
+  midpoint: [number, number];
+  offsetY: number;
+}
+
+interface TechLiveLocation {
+  name: string;
+  email?: string;
+  lat: number;
+  lng: number;
+  updatedAt?: number;
+}
+
+const MISSION_STATUS_LEGEND: { label: string; color: string }[] = [
+  { label: 'Brouillon', color: 'rgb(184, 164, 164)' },
+  { label: 'Attente Client', color: 'rgb(141, 158, 60)' },
+  { label: 'Accepté Client', color: 'rgb(23, 144, 75)' },
+  { label: 'Refusé Client', color: 'rgb(146, 37, 14)' },
+  { label: 'Rejet mission', color: 'rgb(178, 13, 83)' },
+  { label: 'À faire', color: 'rgb(15, 98, 195)' },
+  { label: 'Attente', color: 'rgb(67, 98, 135)' },
+  { label: 'Effectué', color: 'rgb(93, 44, 216)' },
+  { label: 'Événement spontané', color: '#000000' },
+];
 
 function getMissionStatusPictogramColor(status?: string): string {
   const sitNorm = String(status || 'Brouillon').toLowerCase().trim();
@@ -62,6 +95,35 @@ function getMissionStatusPictogramColor(status?: string): string {
   if (sitNorm === 'attente') return 'rgb(67, 98, 135)';
   if (sitNorm === 'effectué' || sitNorm === 'effectue' || sitNorm === 'effectuée') return 'rgb(93, 44, 216)';
   return 'rgb(184, 164, 164)';
+}
+
+function escapeHtml(str: string): string {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function formatTimeAgo(updatedAt: number | undefined, now: number): string {
+  if (!updatedAt || isNaN(updatedAt) || updatedAt <= 0) {
+    return 'Position en direct';
+  }
+  const diffSec = Math.max(0, Math.floor((now - updatedAt) / 1000));
+  if (diffSec < 60) {
+    return "Il y a moins d'1 min";
+  }
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) {
+    return `Il y a ${diffMin} min`;
+  }
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) {
+    return `Il y a ${diffHours} h`;
+  }
+  const diffDays = Math.floor(diffHours / 24);
+  return `Il y a ${diffDays} j`;
 }
 
 function createMissionPassageIcon(bgColor: string, label: string | number): L.DivIcon {
@@ -132,6 +194,83 @@ function createCheckerboardDepartureIcon(): L.DivIcon {
     iconSize: [43, 43],
     iconAnchor: [21.5, 21.5],
     popupAnchor: [0, -22],
+  });
+}
+
+function createLegPillIcon(leg: RouteLegSegmentInfo, isWebapp: boolean): L.DivIcon {
+  const text = `Temps estimé point ${escapeHtml(leg.fromLabel)} vers ${escapeHtml(leg.toLabel)}: ${leg.minutes} min(s) pour ${escapeHtml(leg.kmFormatted)} km(s).`;
+  const fontSize = isWebapp ? '11px' : '13px';
+  const padding = isWebapp ? '4px 9px' : '5px 12px';
+
+  return L.divIcon({
+    className: 'defibeo-tour-route-leg-pill-icon',
+    html: `
+      <div style="
+        transform: translate(-50%, calc(-50% + ${leg.offsetY}px));
+        background-color: #ffffff;
+        color: #000000;
+        font-family: 'DefibeoMain', 'Civilprom', sans-serif;
+        font-size: ${fontSize};
+        font-weight: 600;
+        padding: ${padding};
+        border-radius: 9999px;
+        border: none;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
+        white-space: nowrap;
+        pointer-events: none;
+        user-select: none;
+        line-height: 1.25;
+      ">
+        ${text}
+      </div>
+    `,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  });
+}
+
+function createLiveTechPinIcon(name: string, updatedAt: number | undefined, nowTs: number): L.DivIcon {
+  const safeName = escapeHtml(name);
+  const timeAgoLabel = escapeHtml(formatTimeAgo(updatedAt, nowTs));
+
+  return L.divIcon({
+    className: 'defibeo-tour-route-live-tech-icon',
+    html: `
+      <div style="
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transform: translate(-50%, calc(-100% + 7px));
+        pointer-events: auto;
+      ">
+        <div style="
+          background-color: #ffffff;
+          border: none;
+          border-radius: 10px;
+          padding: 6px 10px;
+          font-family: 'DefibeoMain', 'Civilprom', sans-serif;
+          white-space: nowrap;
+          text-align: left;
+          margin-bottom: 10px;
+          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+        ">
+          <div style="font-size: 14px; font-weight: bold; color: #000000; line-height: 1.25;">${safeName}</div>
+          <div style="font-size: 13px; font-weight: 100; color: #000000; line-height: 1.25; margin-top: 1px;">${timeAgoLabel}</div>
+        </div>
+        <div style="
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background-color: rgb(210, 45, 11);
+          border: none;
+          box-shadow: 0 0 0 7px rgba(210, 45, 11, 0.35);
+          animation: defibeo-route-tech-sonar 2s infinite ease-out;
+          flex-shrink: 0;
+        "></div>
+      </div>
+    `,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
   });
 }
 
@@ -212,7 +351,6 @@ function AnimatedRouteDot({ roadPositions }: { roadPositions: [number, number][]
       zIndexOffset: 2000,
     }).addTo(map);
 
-    // Slowed down significantly (~18s to 32s per loop depending on route length)
     const DURATION_MS = Math.max(18000, Math.min(34000, Math.round(totalLen * 16000)));
     const startTime = performance.now();
     let rafId = 0;
@@ -307,105 +445,204 @@ function AutoFitRouteBounds({
   return null;
 }
 
-async function fetchRoadSegmentGeometry(coords: Coordinate[]): Promise<[number, number][]> {
-  if (coords.length < 2) {
-    return coords.map(c => [c.lat, c.lng]);
+function getPolylineMidpoint(path: [number, number][]): [number, number] {
+  if (path.length === 0) return [46.603354, 1.888334];
+  if (path.length === 1) return path[0];
+  if (path.length === 2) {
+    return [(path[0][0] + path[1][0]) / 2, (path[0][1] + path[1][1]) / 2];
   }
 
-  // Deduplicate consecutive identical coordinates (< 15 meters) to avoid OSRM zero-length leg issues
-  const deduped: Coordinate[] = [coords[0]];
-  for (let i = 1; i < coords.length; i++) {
-    const prev = deduped[deduped.length - 1];
-    if (getHaversineDistance(prev, coords[i]) >= 0.015) {
-      deduped.push(coords[i]);
+  let total = 0;
+  const segs: number[] = [];
+  for (let i = 0; i < path.length - 1; i++) {
+    const dLat = path[i + 1][0] - path[i][0];
+    const dLng = path[i + 1][1] - path[i][1];
+    const l = Math.sqrt(dLat * dLat + dLng * dLng);
+    segs.push(l);
+    total += l;
+  }
+
+  if (total <= 0) return path[Math.floor(path.length / 2)];
+  const half = total / 2;
+  let acc = 0;
+  for (let i = 0; i < segs.length; i++) {
+    if (acc + segs[i] >= half) {
+      const r = segs[i] > 0 ? (half - acc) / segs[i] : 0.5;
+      return [
+        path[i][0] + (path[i + 1][0] - path[i][0]) * r,
+        path[i][1] + (path[i + 1][1] - path[i][1]) * r,
+      ];
     }
+    acc += segs[i];
+  }
+  return path[Math.floor(path.length / 2)];
+}
+
+function formatKmValue(km: number): string {
+  if (!isFinite(km) || km <= 0) return '0,1';
+  const rounded = Math.round(km * 10) / 10;
+  return rounded % 1 === 0 ? String(rounded.toFixed(0)) : rounded.toFixed(1).replace('.', ',');
+}
+
+async function fetchRouteGeometryAndLegs(
+  waypoints: { coord: Coordinate; label: string }[]
+): Promise<{
+  roadPositions: [number, number][];
+  legSegments: RouteLegSegmentInfo[];
+}> {
+  if (waypoints.length < 2) {
+    return {
+      roadPositions: waypoints.map(w => [w.coord.lat, w.coord.lng]),
+      legSegments: [],
+    };
   }
 
-  if (deduped.length < 2) {
-    return coords.map(c => [c.lat, c.lng]);
-  }
-
-  const CHUNK_SIZE = 25;
   const fullPath: [number, number][] = [];
+  const legSegments: RouteLegSegmentInfo[] = [];
 
-  for (let startIdx = 0; startIdx < deduped.length - 1; startIdx += CHUNK_SIZE - 1) {
-    const chunk = deduped.slice(startIdx, startIdx + CHUNK_SIZE);
+  // Process in chunks of up to 25 waypoints (overlapping 1 waypoint between chunks)
+  const CHUNK_SIZE = 25;
+
+  for (let startIdx = 0; startIdx < waypoints.length - 1; startIdx += CHUNK_SIZE - 1) {
+    const chunk = waypoints.slice(startIdx, startIdx + CHUNK_SIZE);
     if (chunk.length < 2) break;
 
-    const coordQuery = chunk.map(c => `${c.lng},${c.lat}`).join(';');
+    const coordQuery = chunk.map(w => `${w.coord.lng},${w.coord.lat}`).join(';');
     const endpoints = [
-      `https://router.project-osrm.org/route/v1/driving/${coordQuery}?overview=full&geometries=geojson`,
-      `https://routing.openstreetmap.de/routed-car/route/v1/driving/${coordQuery}?overview=full&geometries=geojson`,
+      `https://router.project-osrm.org/route/v1/driving/${coordQuery}?overview=full&geometries=geojson&steps=true`,
+      `https://routing.openstreetmap.de/routed-car/route/v1/driving/${coordQuery}?overview=full&geometries=geojson&steps=true`,
     ];
 
-    let chunkGeometry: [number, number][] | null = null;
+    let routeData: any = null;
 
     for (const url of endpoints) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 6500);
         const res = await fetch(url, { signal: controller.signal });
         clearTimeout(timeoutId);
         if (res.ok) {
-          const data = await res.json();
-          const rawCoords = data?.routes?.[0]?.geometry?.coordinates;
-          if (Array.isArray(rawCoords) && rawCoords.length >= 2) {
-            chunkGeometry = rawCoords.map((pair: [number, number]) => [pair[1], pair[0]]);
+          const json = await res.json();
+          if (json?.routes?.[0]?.geometry?.coordinates?.length >= 2) {
+            routeData = json.routes[0];
             break;
           }
         }
       } catch (_) {}
     }
 
-    if (!chunkGeometry) {
-      const pairPath: [number, number][] = [];
-      for (let j = 0; j < chunk.length - 1; j++) {
-        const a = chunk[j];
-        const b = chunk[j + 1];
-        const pairQuery = `${a.lng},${a.lat};${b.lng},${b.lat}`;
-        let pairGeom: [number, number][] | null = null;
-        for (const base of [
-          'https://router.project-osrm.org/route/v1/driving',
-          'https://routing.openstreetmap.de/routed-car/route/v1/driving',
-        ]) {
-          try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
-            const res = await fetch(`${base}/${pairQuery}?overview=full&geometries=geojson`, {
-              signal: controller.signal,
-            });
-            clearTimeout(timeoutId);
-            if (res.ok) {
-              const data = await res.json();
-              const rawCoords = data?.routes?.[0]?.geometry?.coordinates;
-              if (Array.isArray(rawCoords) && rawCoords.length >= 2) {
-                pairGeom = rawCoords.map((p: [number, number]) => [p[1], p[0]]);
-                break;
-              }
-            }
-          } catch (_) {}
-        }
-        const seg = pairGeom || [
-          [a.lat, a.lng],
-          [b.lat, b.lng],
-        ];
-        if (pairPath.length > 0 && seg.length > 0) {
-          pairPath.push(...seg.slice(1));
-        } else {
-          pairPath.push(...seg);
-        }
+    if (routeData) {
+      const chunkGeom: [number, number][] = routeData.geometry.coordinates.map(
+        (pair: [number, number]) => [pair[1], pair[0]]
+      );
+      if (fullPath.length > 0 && chunkGeom.length > 0) {
+        fullPath.push(...chunkGeom.slice(1));
+      } else {
+        fullPath.push(...chunkGeom);
       }
-      chunkGeometry = pairPath;
-    }
 
-    if (fullPath.length > 0 && chunkGeometry.length > 0) {
-      fullPath.push(...chunkGeometry.slice(1));
+      const osrmLegs: any[] = Array.isArray(routeData.legs) ? routeData.legs : [];
+      for (let j = 0; j < chunk.length - 1; j++) {
+        const wpA = chunk[j];
+        const wpB = chunk[j + 1];
+        const osrmLeg = osrmLegs[j];
+
+        // Extract leg geometry from steps if available
+        const stepCoords: [number, number][] = [];
+        if (osrmLeg && Array.isArray(osrmLeg.steps)) {
+          osrmLeg.steps.forEach((st: any) => {
+            const cList = st?.geometry?.coordinates;
+            if (Array.isArray(cList)) {
+              cList.forEach((p: [number, number]) => {
+                stepCoords.push([p[1], p[0]]);
+              });
+            }
+          });
+        }
+
+        const legPath: [number, number][] =
+          stepCoords.length >= 2
+            ? stepCoords
+            : [
+                [wpA.coord.lat, wpA.coord.lng],
+                [wpB.coord.lat, wpB.coord.lng],
+              ];
+
+        const distKm =
+          osrmLeg && typeof osrmLeg.distance === 'number' && osrmLeg.distance > 0
+            ? osrmLeg.distance / 1000
+            : Math.max(0.1, getHaversineDistance(wpA.coord, wpB.coord) * 1.25);
+
+        const durationMins =
+          osrmLeg && typeof osrmLeg.duration === 'number' && osrmLeg.duration > 0
+            ? Math.max(1, Math.round(osrmLeg.duration / 60))
+            : Math.max(
+                1,
+                Math.round(
+                  (distKm / (distKm > 80 ? 85 : distKm > 25 ? 65 : 45)) * 60
+                )
+              );
+
+        legSegments.push({
+          id: `leg_${startIdx + j}_${wpA.label}_${wpB.label}`,
+          fromLabel: wpA.label,
+          toLabel: wpB.label,
+          minutes: durationMins,
+          kmFormatted: formatKmValue(distKm),
+          midpoint: getPolylineMidpoint(legPath),
+          offsetY: 0,
+        });
+      }
     } else {
-      fullPath.push(...chunkGeometry);
+      // Fallback pair-by-pair
+      for (let j = 0; j < chunk.length - 1; j++) {
+        const wpA = chunk[j];
+        const wpB = chunk[j + 1];
+        const distKm = Math.max(0.1, getHaversineDistance(wpA.coord, wpB.coord) * 1.25);
+        const durationMins = Math.max(
+          1,
+          Math.round((distKm / (distKm > 80 ? 85 : distKm > 25 ? 65 : 45)) * 60)
+        );
+        const seg: [number, number][] = [
+          [wpA.coord.lat, wpA.coord.lng],
+          [wpB.coord.lat, wpB.coord.lng],
+        ];
+        if (fullPath.length > 0) {
+          fullPath.push(seg[1]);
+        } else {
+          fullPath.push(...seg);
+        }
+        legSegments.push({
+          id: `leg_${startIdx + j}_${wpA.label}_${wpB.label}`,
+          fromLabel: wpA.label,
+          toLabel: wpB.label,
+          minutes: durationMins,
+          kmFormatted: formatKmValue(distKm),
+          midpoint: getPolylineMidpoint(seg),
+          offsetY: 0,
+        });
+      }
     }
   }
 
-  return fullPath;
+  // Offset overlapping leg midpoints (e.g. when outbound and return legs share the same road)
+  for (let i = 0; i < legSegments.length; i++) {
+    let overlapIdx = 0;
+    for (let k = 0; k < i; k++) {
+      const d = getHaversineDistance(
+        { lat: legSegments[i].midpoint[0], lng: legSegments[i].midpoint[1] },
+        { lat: legSegments[k].midpoint[0], lng: legSegments[k].midpoint[1] }
+      );
+      if (d < 0.8) {
+        overlapIdx++;
+      }
+    }
+    if (overlapIdx > 0) {
+      legSegments[i].offsetY = overlapIdx % 2 === 1 ? 26 * Math.ceil(overlapIdx / 2) : -26 * Math.ceil(overlapIdx / 2);
+    }
+  }
+
+  return { roadPositions: fullPath, legSegments };
 }
 
 export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
@@ -423,17 +660,156 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
   onCalculatedMissions,
   isWebapp = false,
   preferredNavApp = 'google-maps',
+  tenantId,
+  companyInfo,
 }) => {
   const [isLoadingRoute, setIsLoadingRoute] = useState<boolean>(false);
   const [techStartPoint, setTechStartPoint] = useState<TechStartPoint | null>(null);
   const [missionPoints, setMissionPoints] = useState<RouteMissionPoint[]>([]);
   const [roadPositions, setRoadPositions] = useState<[number, number][]>([]);
+  const [legSegments, setLegSegments] = useState<RouteLegSegmentInfo[]>([]);
+
+  // Live technician position overlay toggle ("Superposer la position du technicien.")
+  const [showLiveTechPosition, setShowLiveTechPosition] = useState<boolean>(false);
+  const [liveTechLocation, setLiveTechLocation] = useState<TechLiveLocation | null>(null);
+  const [nowTs, setNowTs] = useState<number>(() => Date.now());
+
+  const effectiveTenantId = useMemo(() => {
+    if (tenantId) return tenantId;
+    try {
+      return localStorage.getItem('defib_tenant_id') || 'demo';
+    } catch (_) {
+      return 'demo';
+    }
+  }, [tenantId]);
+
+  const fetchSelectedTechLivePosition = useCallback(async () => {
+    if (!technician) {
+      setLiveTechLocation(null);
+      return;
+    }
+
+    const techName = String(technician.name || '').trim();
+    const normName = techName.toLowerCase();
+    const normEmail = String(technician.email || '').trim().toLowerCase();
+
+    try {
+      let livetrackSheetUrl = String((companyInfo as any)?.spreadsheetLivetrack || '').trim();
+      if (!livetrackSheetUrl) {
+        try {
+          livetrackSheetUrl =
+            localStorage.getItem(`defib_${effectiveTenantId}_spreadsheet_livetrack`) ||
+            localStorage.getItem(`defib_${effectiveTenantId.toUpperCase()}_spreadsheet_livetrack`) ||
+            localStorage.getItem(`defib_${effectiveTenantId.toLowerCase()}_spreadsheet_livetrack`) ||
+            '';
+        } catch (_) {}
+      }
+
+      const params = new URLSearchParams({ tenantId: effectiveTenantId, refresh: 'true' });
+      if (livetrackSheetUrl) {
+        params.set('spreadsheetUrl', livetrackSheetUrl);
+      }
+
+      let found: TechLiveLocation | null = null;
+      const res = await fetch(`/api/tech-locations?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        const locations = data?.locations || {};
+        if (normName && locations[normName]) {
+          const loc = locations[normName];
+          const lat = Number(loc.lat);
+          const lng = Number(loc.lng);
+          if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+            found = {
+              name: loc.name || techName,
+              email: loc.email || technician.email,
+              lat,
+              lng,
+              updatedAt: loc.updatedAt,
+            };
+          }
+        }
+        if (!found) {
+          for (const [key, rawLoc] of Object.entries(locations)) {
+            const loc = rawLoc as any;
+            const kLower = String(key || '').trim().toLowerCase();
+            const nLower = String(loc?.name || '').trim().toLowerCase();
+            const eLower = String(loc?.email || '').trim().toLowerCase();
+            if (
+              (normName && (kLower === normName || nLower === normName || kLower.includes(normName) || normName.includes(nLower))) ||
+              (normEmail && eLower && eLower === normEmail)
+            ) {
+              const lat = Number(loc?.lat);
+              const lng = Number(loc?.lng);
+              if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+                found = {
+                  name: loc.name || techName,
+                  email: loc.email || technician.email,
+                  lat,
+                  lng,
+                  updatedAt: loc.updatedAt,
+                };
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Fallback to technician's lastKnownLat/lastKnownLng or localStorage
+      if (!found && technician.lastKnownLat !== undefined && technician.lastKnownLng !== undefined) {
+        const mLat = Number(technician.lastKnownLat);
+        const mLng = Number(technician.lastKnownLng);
+        if (!isNaN(mLat) && !isNaN(mLng) && (mLat !== 0 || mLng !== 0)) {
+          found = {
+            name: techName,
+            email: technician.email,
+            lat: mLat,
+            lng: mLng,
+            updatedAt: technician.lastKnownLocationAt ? Number(technician.lastKnownLocationAt) : undefined,
+          };
+        }
+      }
+
+      if (!found && techName) {
+        try {
+          const localLat = parseFloat(localStorage.getItem(`defib_${effectiveTenantId}_tech_live_lat_${techName}`) || '');
+          const localLng = parseFloat(localStorage.getItem(`defib_${effectiveTenantId}_tech_live_lng_${techName}`) || '');
+          const localAt = parseInt(localStorage.getItem(`defib_${effectiveTenantId}_tech_live_at_${techName}`) || '', 10);
+          if (!isNaN(localLat) && !isNaN(localLng) && (localLat !== 0 || localLng !== 0)) {
+            found = {
+              name: techName,
+              email: technician.email,
+              lat: localLat,
+              lng: localLng,
+              updatedAt: !isNaN(localAt) ? localAt : undefined,
+            };
+          }
+        } catch (_) {}
+      }
+
+      setNowTs(Date.now());
+      setLiveTechLocation(found);
+    } catch (_) {}
+  }, [technician, effectiveTenantId, companyInfo]);
+
+  useEffect(() => {
+    if (!isOpen || !showLiveTechPosition) {
+      return;
+    }
+    fetchSelectedTechLivePosition();
+    const interval = setInterval(() => {
+      fetchSelectedTechLivePosition();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [isOpen, showLiveTechPosition, fetchSelectedTechLivePosition]);
 
   useEffect(() => {
     if (!isOpen || !tour || !technician) {
       setTechStartPoint(null);
       setMissionPoints([]);
       setRoadPositions([]);
+      setLegSegments([]);
       return;
     }
 
@@ -547,11 +923,149 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
 
         if (cancelled) return;
 
-        // Ensure every mission has defibIdentifiant populated for sortMissionsByProximity
         const normalizedMissions = rawMissions.map((m, idx) => ({
           ...m,
           defibIdentifiant: m.defibIdentifiant || m.identifiant || m.id || `mission_${idx}`,
         }));
+
+        // 2b. Load spontaneous events integrated into this tour and resolve their coordinates
+        const tourKeys = [
+          tour.tourIdentifiant,
+          tour.id,
+          tour.title,
+          tour.name,
+        ]
+          .map((v: any) => String(v || '').trim().toLowerCase())
+          .filter(Boolean);
+
+        let allSpontaneousEvents: any[] = [];
+        try {
+          const savedSpont =
+            localStorage.getItem(`defib_${effectiveTenantId}_spontaneous_events`) ||
+            localStorage.getItem('defib_spontaneous_events');
+          if (savedSpont) {
+            const parsed = JSON.parse(savedSpont);
+            if (Array.isArray(parsed)) allSpontaneousEvents = parsed;
+          }
+        } catch (_) {}
+
+        try {
+          const sheetUrl =
+            String((companyInfo as any)?.spreadsheetAutresEvents || (companyInfo as any)?.spreadsheetAutresEventsUrl || '').trim() ||
+            localStorage.getItem(`defib_${effectiveTenantId}_spreadsheet_autres_events`) ||
+            '';
+          if (sheetUrl && sheetUrl.includes('docs.google.com/spreadsheets')) {
+            const sessionTok = localStorage.getItem('defib_session_token') || '';
+            const res = await fetch(
+              `/api/sheets/collection?tenantId=${encodeURIComponent(effectiveTenantId)}&type=autresEvents&spreadsheetUrl=${encodeURIComponent(sheetUrl)}`,
+              {
+                headers: {
+                  ...(sessionTok ? { 'x-defibeo-session': sessionTok } : {}),
+                  'x-defibeo-tenant': effectiveTenantId,
+                },
+              }
+            );
+            if (res.ok) {
+              const data = await res.json();
+              if (Array.isArray(data?.items) && data.items.length > 0) {
+                const byId = new Map<string, any>();
+                allSpontaneousEvents.forEach((ev: any) => {
+                  if (ev?.id) byId.set(String(ev.id), ev);
+                });
+                data.items.forEach((it: any, idx: number) => {
+                  const id = String(it.id || `spont_${effectiveTenantId}_${idx}`);
+                  const existing = byId.get(id);
+                  byId.set(id, {
+                    ...existing,
+                    ...it,
+                    id,
+                    tournee: String(it.tournee ?? it['Tournée'] ?? it['Tournée.'] ?? existing?.tournee ?? '').trim(),
+                    voie: String(it.voie ?? it['Voie'] ?? it['Voie.'] ?? existing?.voie ?? '').trim(),
+                    latitude: it.latitude ?? it['Latitude'] ?? it['Latitude.'] ?? existing?.latitude,
+                    longitude: it.longitude ?? it['Longitude'] ?? it['Longitude.'] ?? existing?.longitude,
+                  });
+                });
+                allSpontaneousEvents = Array.from(byId.values());
+              }
+            }
+          }
+        } catch (_) {}
+
+        const normalizeEventDateIso = (raw: any): string => {
+          const s = String(raw || '').trim();
+          if (!s) return '';
+          if (s.includes('/')) {
+            const parts = s.split('/');
+            if (parts.length === 3) {
+              if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+              if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+          }
+          if (s.includes('-')) {
+            const parts = s.split('-');
+            if (parts.length === 3) {
+              if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+              if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+          }
+          return s;
+        };
+
+        const matchedSpontaneousEvents = allSpontaneousEvents.filter((ev: any) => {
+          if (!ev) return false;
+          const evTourVals = [
+            ev.tournee,
+            ev.tourId,
+            ev.tourTitle,
+            ev['Tournée'],
+            ev['Tournée.'],
+          ]
+            .map((v: any) => String(v || '').trim().toLowerCase())
+            .filter(Boolean);
+          if (evTourVals.length === 0) return false;
+          return evTourVals.some((tv: string) => tourKeys.includes(tv));
+        });
+
+        const spontaneousRouteItems: any[] = [];
+        for (let i = 0; i < matchedSpontaneousEvents.length; i++) {
+          const ev = matchedSpontaneousEvents[i];
+          const spontKey = `spont_route_${ev.id || i}`;
+          let lat = parseFloat(String(ev.latitude ?? '').replace(',', '.'));
+          let lng = parseFloat(String(ev.longitude ?? '').replace(',', '.'));
+          let coord: Coordinate | null = null;
+          if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
+            coord = { lat, lng };
+          } else {
+            const voieStr = String(ev.voie || '').trim();
+            if (voieStr) {
+              coord = await geocodeAddress(voieStr);
+            }
+          }
+          if (coord) {
+            equipmentCoords[spontKey] = coord;
+            const isoDt = normalizeEventDateIso(ev.date) || tour.startDate || '';
+            spontaneousRouteItems.push({
+              id: spontKey,
+              defibIdentifiant: spontKey,
+              _isSpontaneousEvent: true,
+              _spontaneousEvent: ev,
+              isForced: true,
+              isManualDate: Boolean(isoDt),
+              isManualSlot: Boolean(ev.creneau),
+              estimatedDate: isoDt,
+              estimatedSlot: String(ev.creneau || '9:00am').trim(),
+              address: String(ev.voie || '').trim(),
+              latitude: coord.lat,
+              longitude: coord.lng,
+              intitule: String(ev.intitule || 'Événement spontané').trim(),
+              commentaire: String(ev.commentaire || '').trim(),
+            });
+          }
+        }
+
+        if (cancelled) return;
+
+        const combinedRouteItems = [...normalizedMissions, ...spontaneousRouteItems];
 
         // 3. Optimize route order taking into account technician startCoord, preference ('proche' / 'loin'), and forced dates/slots
         const rawPref = String(technician.optimizationPreference || '').toLowerCase();
@@ -561,7 +1075,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             : 'proche';
 
         const sortedMissions = sortMissionsByProximity(
-          normalizedMissions,
+          combinedRouteItems,
           startCoord,
           equipmentCoords,
           preference,
@@ -596,7 +1110,8 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
         if (cancelled) return;
 
         if (onCalculatedMissions) {
-          onCalculatedMissions(tour.id, scheduledMissions);
+          const onlyRealMissions = scheduledMissions.filter((m: any) => !m?._isSpontaneousEvent);
+          onCalculatedMissions(tour.id, onlyRealMissions);
         }
 
         // 4. Build mission marker points with slight visual offset if two missions share identical coordinates
@@ -614,14 +1129,37 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
           const coord = equipmentCoords[key] || (ident ? equipmentCoords[ident] : undefined);
           if (!coord) return;
 
+          if (m._isSpontaneousEvent) {
+            const rawDate = m.estimatedDate || tour.startDate || '';
+            const estimatedDateFormatted = rawDate ? formatDateToFR(rawDate) : 'Non définie';
+            const estimatedSlotLabel =
+              m.estimatedSlot && String(m.estimatedSlot).trim() !== ''
+                ? String(m.estimatedSlot).trim()
+                : 'Non défini';
+
+            builtPoints.push({
+              mission: m,
+              passageNumber: idx + 1,
+              coord,
+              displayCoord: [coord.lat, coord.lng],
+              bgColor: '#000000',
+              equipmentIdentifiant: String(m.intitule || 'Événement spontané').trim(),
+              equipmentTypeLabel: 'Événement spontané',
+              clientLabel: String(m.commentaire || '—').trim(),
+              addressQuery: String(m.address || '').trim(),
+              estimatedDateFormatted,
+              estimatedSlotLabel,
+              isSpontaneousEvent: true,
+            });
+            return;
+          }
+
           const defib = defibrillateurs.find(d => d.identifiant === ident || d.id === ident);
           const other = !defib ? otherEquipments.find(o => o.identifiant === ident || o.id === ident) : undefined;
           const eq: any = defib || other || equipmentDetails[key];
 
-          // Equipment identifier
           const equipmentIdentifiant = String(ident || eq?.identifiant || m.interventionReference || `Mission ${idx + 1}`).trim();
 
-          // Equipment type
           const isFormation =
             m.equipmentType === 'Formation' ||
             m.equipmentType?.toLowerCase().includes('formation') ||
@@ -637,7 +1175,6 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                 ? 'Autre matériel'
                 : 'Défibrillateur');
 
-          // Client label
           const rawClientId = String(eq?.clientId || m.clientId || '').trim();
           const matchedClient = rawClientId ? clientMap.get(rawClientId) : undefined;
           const clientLabel =
@@ -648,13 +1185,11 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             m.nomSite ||
             'Client non renseigné';
 
-          // Full address query for navigation ("Y aller")
           const addrParts = eq
             ? [eq.numVoie || eq.numeroVoie || eq.adresse || eq.lieu, eq.cp || eq.codePostal, eq.ville, eq.pays || 'France']
             : [m.address || m.lieu || m.nomSite, m.cp, m.ville, 'France'];
           const addressQuery = addrParts.filter(Boolean).join(', ').trim();
 
-          // Estimated Date & Slot
           const rawDate = m.estimatedDate || tour.startDate || '';
           const estimatedDateFormatted = rawDate ? formatDateToFR(rawDate) : 'Non définie';
           const estimatedSlotLabel =
@@ -677,7 +1212,6 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
           });
         });
 
-        // Apply subtle radial offset when multiple missions in the same tour share the exact same coordinates
         const groups: number[][] = [];
         const assigned = new Set<number>();
         for (let i = 0; i < builtPoints.length; i++) {
@@ -711,15 +1245,17 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
 
         setMissionPoints(builtPoints);
 
-        // 5. Fetch real road geometry along streets: Départ -> Mission 1 -> ... -> Mission N -> Retour
-        const orderedCoords: Coordinate[] = [
-          startCoord,
-          ...builtPoints.map(p => p.coord),
-          startCoord,
+        // 5. Fetch real road geometry and per-leg travel time & distance pills: D -> 1 -> ... -> N -> D
+        const orderedWaypoints: { coord: Coordinate; label: string }[] = [
+          { coord: startCoord, label: 'D' },
+          ...builtPoints.map(p => ({ coord: p.coord, label: String(p.passageNumber) })),
+          { coord: startCoord, label: 'D' },
         ];
-        const roadGeom = await fetchRoadSegmentGeometry(orderedCoords);
+        const { roadPositions: roadGeom, legSegments: computedLegs } =
+          await fetchRouteGeometryAndLegs(orderedWaypoints);
         if (!cancelled) {
           setRoadPositions(roadGeom);
+          setLegSegments(computedLegs);
         }
       } catch (err) {
         console.error('Failed to build tour route map:', err);
@@ -746,7 +1282,9 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
     >
       <style>{`
         .defibeo-tour-route-marker-icon,
-        .defibeo-tour-route-runner-icon {
+        .defibeo-tour-route-runner-icon,
+        .defibeo-tour-route-leg-pill-icon,
+        .defibeo-tour-route-live-tech-icon {
           background: transparent !important;
           border: none !important;
         }
@@ -765,9 +1303,134 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
         .defibeo-route-hover-popup .leaflet-popup-tip-container {
           display: none !important;
         }
+        @keyframes defibeo-route-tech-sonar {
+          0% {
+            box-shadow: 0 0 0 6px rgba(210, 45, 11, 0.38), 0 0 0 0 rgba(210, 45, 11, 0.55);
+          }
+          70% {
+            box-shadow: 0 0 0 8px rgba(210, 45, 11, 0.32), 0 0 0 18px rgba(210, 45, 11, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 6px rgba(210, 45, 11, 0.38), 0 0 0 0 rgba(210, 45, 11, 0);
+          }
+        }
       `}</style>
 
       <div className="relative w-full h-full flex-1">
+        {/* Top-Left Floating Sticky Legend + Technician Live Position Toggle */}
+        <div
+          className="absolute top-4 left-4 z-[4000] flex flex-col select-none pointer-events-auto"
+          style={{
+            gap: isWebapp ? '6px' : '10px',
+            maxWidth: isWebapp ? '215px' : '280px',
+          }}
+          id="tour-route-map-legend-panel"
+        >
+          {/* Legend Card */}
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: isWebapp ? '12px' : '16px',
+              padding: isWebapp ? '8px 11px' : '12px 16px',
+              boxShadow: '0 6px 20px rgba(15, 23, 42, 0.12)',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+            }}
+          >
+            <div
+              className="flex flex-col"
+              style={{ gap: isWebapp ? '4px' : '6px' }}
+            >
+              {MISSION_STATUS_LEGEND.map(item => (
+                <div
+                  key={item.label}
+                  className="flex items-center"
+                  style={{ gap: isWebapp ? '7px' : '10px' }}
+                >
+                  <span
+                    className="rounded-full shrink-0"
+                    style={{
+                      width: isWebapp ? '10px' : '14px',
+                      height: isWebapp ? '10px' : '14px',
+                      backgroundColor: item.color,
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: isWebapp ? '11.5px' : '14px',
+                      fontWeight: 600,
+                      color: '#000000',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Toggle ON/OFF: Superposer la position du technicien. */}
+          <div
+            onClick={() => setShowLiveTechPosition(prev => !prev)}
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: isWebapp ? '12px' : '16px',
+              padding: isWebapp ? '8px 11px' : '11px 15px',
+              boxShadow: '0 6px 20px rgba(15, 23, 42, 0.12)',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              cursor: 'pointer',
+            }}
+            className="flex items-center justify-between gap-2.5"
+          >
+            <span
+              style={{
+                fontSize: isWebapp ? '11.5px' : '14px',
+                fontWeight: 600,
+                color: '#000000',
+                lineHeight: 1.25,
+              }}
+            >
+              Superposer la position du technicien.
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={showLiveTechPosition}
+              onClick={e => {
+                e.stopPropagation();
+                setShowLiveTechPosition(prev => !prev);
+              }}
+              style={{
+                width: isWebapp ? '34px' : '40px',
+                height: isWebapp ? '19px' : '22px',
+                borderRadius: '9999px',
+                backgroundColor: showLiveTechPosition ? '#2e54ff' : '#cbd5e1',
+                position: 'relative',
+                transition: 'background-color 0.2s ease',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <span
+                style={{
+                  width: isWebapp ? '15px' : '18px',
+                  height: isWebapp ? '15px' : '18px',
+                  borderRadius: '50%',
+                  backgroundColor: '#ffffff',
+                  position: 'absolute',
+                  top: '2px',
+                  left: showLiveTechPosition ? (isWebapp ? '17px' : '20px') : '2px',
+                  transition: 'left 0.2s ease',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
+                }}
+              />
+            </button>
+          </div>
+        </div>
+
         {/* Top-Center Loading Indicator while computing road trace */}
         {isLoadingRoute && (
           <div
@@ -840,8 +1503,10 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
           center={[46.603354, 1.888334]}
           zoom={6}
           style={{ width: '100%', height: '100%', minHeight: '100vh', backgroundColor: '#f8fafc' }}
-          zoomControl={true}
+          zoomControl={false}
         >
+          {!isWebapp && <ZoomControl position="bottomright" />}
+
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -869,6 +1534,29 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
               />
               <AnimatedRouteDot roadPositions={roadPositions} />
             </>
+          )}
+
+          {/* Per-Leg Estimated Time & Distance Pills along the route */}
+          {legSegments.map(leg => (
+            <Marker
+              key={leg.id}
+              position={leg.midpoint}
+              icon={createLegPillIcon(leg, isWebapp)}
+              interactive={false}
+            />
+          ))}
+
+          {/* Live Technician Position Overlay (when toggle is ON) */}
+          {showLiveTechPosition && liveTechLocation && (
+            <Marker
+              position={[liveTechLocation.lat, liveTechLocation.lng]}
+              icon={createLiveTechPinIcon(
+                liveTechLocation.name,
+                liveTechLocation.updatedAt,
+                nowTs
+              )}
+              zIndexOffset={3000}
+            />
           )}
 
           {/* Technician Départ & Retour Point (Checkerboard 'D') */}
@@ -996,8 +1684,8 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                           display: 'inline-flex',
                           alignItems: 'center',
                           borderRadius: '1000px',
-                          backgroundColor: 'rgb(61, 220, 132)',
-                          color: 'rgb(19, 100, 55)',
+                          backgroundColor: pt.isSpontaneousEvent ? '#000000' : 'rgb(61, 220, 132)',
+                          color: pt.isSpontaneousEvent ? '#ffffff' : 'rgb(19, 100, 55)',
                           fontSize: '14px',
                           fontWeight: 700,
                           padding: '3px 11px',
@@ -1015,8 +1703,21 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                         marginBottom: '2px',
                       }}
                     >
-                      Client : <span style={{ fontWeight: 400 }}>{pt.clientLabel}</span>
+                      {pt.isSpontaneousEvent ? 'Commentaire :' : 'Client :'}{' '}
+                      <span style={{ fontWeight: 400 }}>{pt.clientLabel}</span>
                     </div>
+                    {pt.isSpontaneousEvent && pt.addressQuery && (
+                      <div
+                        style={{
+                          fontSize: '15px',
+                          fontWeight: 600,
+                          color: '#000000',
+                          marginBottom: '2px',
+                        }}
+                      >
+                        Adresse : <span style={{ fontWeight: 400 }}>{pt.addressQuery}</span>
+                      </div>
+                    )}
                     <div
                       style={{
                         fontSize: '15px',
