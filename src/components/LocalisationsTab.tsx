@@ -303,14 +303,13 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
       <MapContainer
         center={[46.603354, 1.888334]}
         zoom={6}
-        style={{ width: '100%', height: '100%', minHeight: '100vh', backgroundColor: '#1a1a1a' }}
+        style={{ width: '100%', height: '100%', minHeight: '100vh', backgroundColor: '#f8fafc' }}
         zoomControl={true}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          subdomains="abcd"
-          maxZoom={20}
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maxZoom={19}
         />
 
         <AutoFitTechBounds points={technicianPoints} mapRef={mapRef} />

@@ -638,12 +638,28 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
         {/* 5-ITEM FULL-WIDTH ONE-LINE CHANNEL TOGGLE BAR ABOVE INPUT */}
         <div
           id="messages-channel-toggle-bar"
-          className="grid grid-cols-5 gap-1 sm:gap-1.5 w-full mb-2 p-1 rounded-2xl select-none"
+          className="relative grid grid-cols-5 w-full mb-2 p-1 rounded-2xl select-none overflow-hidden"
           style={{
             backgroundColor: 'rgb(245, 247, 250)',
             border: '1px solid #DCE1EA',
           }}
         >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none"
+            style={{
+              position: 'absolute',
+              top: '4px',
+              bottom: '4px',
+              left: '4px',
+              width: 'calc((100% - 8px) / 5)',
+              transform: `translateX(${Math.max(0, MESSAGE_CHANNELS.indexOf(activeChannel)) * 100}%)`,
+              transition: 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+              backgroundColor: 'rgb(46, 84, 255)',
+              borderRadius: '12px',
+              zIndex: 0,
+            }}
+          />
           {MESSAGE_CHANNELS.map((canal) => {
             const isSelected = activeChannel === canal;
             return (
@@ -651,11 +667,11 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 key={canal}
                 type="button"
                 onClick={() => setActiveChannel(canal)}
-                className={`w-full py-2 px-1 sm:px-2 rounded-xl text-center truncate transition-all cursor-pointer ${
-                  isSelected ? 'font-bold text-white' : 'font-normal text-black hover:bg-white/70'
+                className={`relative z-10 w-full py-2 px-1 sm:px-2 rounded-xl text-center truncate transition-colors duration-200 cursor-pointer ${
+                  isSelected ? 'font-bold text-white' : 'font-normal text-black hover:opacity-75'
                 }`}
                 style={{
-                  backgroundColor: isSelected ? 'rgb(46, 84, 255)' : 'transparent',
+                  backgroundColor: 'transparent',
                   color: isSelected ? '#ffffff' : '#000000',
                   fontSize: 'clamp(13px, 2vw, 18px)',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',

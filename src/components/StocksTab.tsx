@@ -2746,7 +2746,7 @@ export default function StocksTab({
                 <thead>
                   <tr className="bg-white" style={{ borderTop: '0px solid transparent', borderBottom: '0px solid transparent' }}>
                     <th className="px-4 py-3.5 w-14 text-left whitespace-nowrap" style={thStyle}>Miniature.</th>
-                    <th className="px-4 py-3.5" style={thStyle}>UGS</th>
+                    <th className="px-4 py-3.5" style={thStyle}>UGS ou SKU.</th>
                     <th className="px-4 py-3.5" style={thStyle}>Pièce ou service.</th>
                     <th className="px-4 py-3.5 text-center" style={thStyle}>Inv. traça. actif.</th>
                     <th className="px-4 py-3.5 text-center" style={thStyle}>Qté disponible.</th>
