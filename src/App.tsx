@@ -74,6 +74,7 @@ import ImportExportTab from './components/ImportExportTab';
 import { SearchSidePane, SearchSidePaneItem } from './components/SearchSidePane';
 import { CanalMessagesSidePane } from './components/CanalMessagesSidePane';
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from './utils/fsmOptimizer';
+import TourRouteMapModal from './components/TourRouteMapModal';
 import { loadCttGlobalRules, checkTourCttViolations, computeTourSuggestedAlerts } from './utils/cttRules';
 import { CttGlobalRules, DEFAULT_CTT_GLOBAL_RULES } from './types';
 import SatisfactionFormPage from './components/SatisfactionFormPage';
@@ -416,6 +417,7 @@ export default function App() {
   const [minEnvLoading, setMinEnvLoading] = useState<boolean>(true);
   const [envReloadTrigger, setEnvReloadTrigger] = useState<number>(0);
   const [avisageConfirmTour, setAvisageConfirmTour] = useState<any | null>(null);
+  const [routeMapTourId, setRouteMapTourId] = useState<string | null>(null);
   const [fsmMissionToConfirmDelete, setFsmMissionToConfirmDelete] = useState<{ tourId: string; missionId: string } | null>(null);
   const [windowWidth, setWindowWidth] = useState<number>(() => {
     if (typeof window !== 'undefined') {
@@ -6728,14 +6730,20 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       const equipmentCoords: Record<string, { lat: number; lng: number }> = {};
       const equipmentDetails: Record<string, any> = {};
 
-      tour.missions.forEach((m: any) => {
+      for (const m of tour.missions) {
         const defib = defibrillateurs.find(d => d.identifiant === m.defibIdentifiant);
         if (defib) {
           equipmentDetails[m.defibIdentifiant] = defib;
           const lat = parseFloat(defib.latitude);
           const lng = parseFloat(defib.longitude);
-          if (!isNaN(lat) && !isNaN(lng)) {
+          if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
             equipmentCoords[m.defibIdentifiant] = { lat, lng };
+          } else {
+            const addr = [defib.numVoie, defib.cp, defib.ville, defib.pays || 'France'].filter(Boolean).join(' ').trim();
+            if (addr) {
+              const gc = await geocodeAddress(addr);
+              if (gc) equipmentCoords[m.defibIdentifiant] = gc;
+            }
           }
         } else {
           const other = otherEquipments.find(o => o.identifiant === m.defibIdentifiant);
@@ -6743,15 +6751,28 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             equipmentDetails[m.defibIdentifiant] = other;
             const lat = parseFloat(other.latitude);
             const lng = parseFloat(other.longitude);
-            if (!isNaN(lat) && !isNaN(lng)) {
+            if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
               equipmentCoords[m.defibIdentifiant] = { lat, lng };
+            } else {
+              const addr = [other.numVoie, other.cp, other.ville, other.pays || 'France'].filter(Boolean).join(' ').trim();
+              if (addr) {
+                const gc = await geocodeAddress(addr);
+                if (gc) equipmentCoords[m.defibIdentifiant] = gc;
+              }
             }
           }
         }
-      });
+      }
 
       const preference = tech.optimizationPreference || 'proche';
-      const sortedMissions = sortMissionsByProximity(tour.missions, startCoord, equipmentCoords, preference as any);
+      const sortedMissions = sortMissionsByProximity(
+        tour.missions,
+        startCoord,
+        equipmentCoords,
+        preference as any,
+        tour.startDate,
+        variables
+      );
 
       // Determine first mission travel hours from technician departure address
       let firstCoord = (sortedMissions.length > 0 && sortedMissions[0].defibIdentifiant)
@@ -19663,6 +19684,74 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                 );
                               })()}
 
+                              {/* Voir Parcours button */}
+                              {(() => {
+                                const isTourUnsaved = !!dirtyFsmTourIds[t.id];
+                                const draftVal = fsmTourDrafts[t.id] || {};
+                                const finalTech = draftVal.techName !== undefined ? draftVal.techName : (t.techName || '');
+                                const matchingMember =
+                                  finalTech && finalTech.trim() !== '' && finalTech !== 'Aucun'
+                                    ? members.find(m => m.name.trim().toLowerCase() === finalTech.trim().toLowerCase())
+                                    : undefined;
+                                const hasStructuredAddress = Boolean(
+                                  matchingMember &&
+                                    matchingMember.startAddressLat !== undefined &&
+                                    matchingMember.startAddressLng !== undefined &&
+                                    String(matchingMember.startAddressLat).trim() !== '' &&
+                                    String(matchingMember.startAddressLng).trim() !== ''
+                                );
+                                const hasStringAddress = Boolean(
+                                  matchingMember &&
+                                    ((matchingMember.startAddress && matchingMember.startAddress.trim() !== '') ||
+                                      (matchingMember.startAddressStreet && matchingMember.startAddressStreet.trim() !== '') ||
+                                      (matchingMember.startAddressCity && matchingMember.startAddressCity.trim() !== ''))
+                                );
+                                const hasTechWithStartPoint = Boolean(matchingMember && (hasStructuredAddress || hasStringAddress));
+                                const hasEnoughMissions = (t.missions ? t.missions.length : 0) >= 2;
+                                const isVoirParcoursDisabled = isTourUnsaved || !hasEnoughMissions || !hasTechWithStartPoint;
+
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={isVoirParcoursDisabled}
+                                    title={
+                                      isTourUnsaved
+                                        ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »."
+                                        : !hasEnoughMissions
+                                        ? "Au moins 2 missions dans la tournée sont requises pour afficher le parcours."
+                                        : !hasTechWithStartPoint
+                                        ? "Un technicien avec un point de départ renseigné doit être sélectionné."
+                                        : undefined
+                                    }
+                                    onClick={() => {
+                                      if (isVoirParcoursDisabled) return;
+                                      triggerFsmPillWave(`voir-parcours-tour-${t.id}`);
+                                      setRouteMapTourId(t.id);
+                                    }}
+                                    style={{
+                                      ...rowActionButtonStyle,
+                                      position: 'relative',
+                                      overflow: 'hidden',
+                                      padding: '12px 20px',
+                                      maxHeight: '45px',
+                                      borderRadius: '13px',
+                                      fontSize: '18px',
+                                      fontWeight: '100',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      width: 'auto',
+                                      whiteSpace: 'nowrap',
+                                      opacity: isVoirParcoursDisabled ? 0.5 : 1,
+                                      cursor: isVoirParcoursDisabled ? 'not-allowed' : 'pointer'
+                                    }}
+                                    className={`relative overflow-hidden ${isVoirParcoursDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} shrink-0 ${!isVoirParcoursDisabled && fsmClickedPill?.id === `voir-parcours-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                                  >
+                                    Voir Parcours
+                                  </button>
+                                );
+                              })()}
+
                               {/* Avisage button */}
                               {(() => {
                                 const isTourUnsaved = !!dirtyFsmTourIds[t.id];
@@ -27868,6 +27957,50 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         isReadOnly={isDeveloper}
         suspiciousActivityLogs={suspiciousActivityLogs}
       />
+
+      {/* Modal Voir Parcours Tournée */}
+      {routeMapTourId && (() => {
+        const targetTour = fsmTours.find(tr => tr.id === routeMapTourId);
+        if (!targetTour) return null;
+        const draftVal = fsmTourDrafts[targetTour.id] || {};
+        const finalTechName = draftVal.techName !== undefined ? draftVal.techName : (targetTour.techName || '');
+        const techMember =
+          members.find(m => m.name.trim().toLowerCase() === String(finalTechName).trim().toLowerCase()) || null;
+        const mergedTourForMap = {
+          ...targetTour,
+          ...draftVal,
+        };
+        return (
+          <TourRouteMapModal
+            isOpen={true}
+            onClose={() => setRouteMapTourId(null)}
+            tour={mergedTourForMap}
+            technician={techMember}
+            defibrillateurs={defibrillateurs}
+            otherEquipments={otherEquipments}
+            formations={formations}
+            clients={clients}
+            variables={variables}
+            cttGlobalRules={cttGlobalRules}
+            allTours={fsmTours}
+            onCalculatedMissions={(tId, scheduledMissions) => {
+              const current = fsmTours.find(tr => tr.id === tId);
+              if (!current) return;
+              // Sync if tour wasn't calculated yet or if order/schedule updated
+              const prevIds = (current.missions || []).map((m: any) => `${m.id}:${m.estimatedDate || ''}:${m.estimatedSlot || ''}`).join('|');
+              const nextIds = (scheduledMissions || []).map((m: any) => `${m.id}:${m.estimatedDate || ''}:${m.estimatedSlot || ''}`).join('|');
+              if (!current.calculated || prevIds !== nextIds) {
+                const updatedList = fsmTours.map(tr =>
+                  tr.id === tId
+                    ? { ...tr, missions: scheduledMissions, calculated: true }
+                    : tr
+                );
+                saveFsmTours(updatedList, true);
+              }
+            }}
+          />
+        );
+      })()}
 
       {/* Modal Avisage Tournée */}
       {avisageConfirmTour && (

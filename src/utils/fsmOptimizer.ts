@@ -144,51 +144,218 @@ export async function calculateFirstMissionTravelHours(
 }
 
 /**
- * Orders missions using a Nearest-Neighbor Traveling Salesperson algorithm.
- * Starts from the technician's start address and proceeds point-by-point,
- * sorting either by closest (proche) or furthest (loin).
+ * Utility to parse time slot like "14:00pm" or "8:30am" or "14:00" into total minutes from midnight.
+ */
+export function parseSlotToMinutes(slot: string): number {
+  if (!slot) return 480; // Default to 08:00
+  const clean = String(slot).trim();
+  const match = clean.match(/^(\d+):(\d+)\s*(am|pm)?$/i);
+  if (!match) return 480;
+  let hour = parseInt(match[1], 10);
+  const minute = parseInt(match[2], 10);
+  const ampm = match[3] ? match[3].toLowerCase() : '';
+  if (ampm === 'pm' && hour < 12) hour += 12;
+  if (ampm === 'am' && hour === 12) hour = 0;
+  return hour * 60 + minute;
+}
+
+export function isMissionForcedSlotOrDate(m: any): boolean {
+  if (!m) return false;
+  return Boolean(
+    m.isForced ||
+    (m.isManualDate && m.isManualSlot) ||
+    m.equipmentType === 'Formation' ||
+    m.equipmentType?.toLowerCase().includes('formation') ||
+    m.formationId
+  );
+}
+
+/**
+ * Orders missions using a Traveling Salesperson algorithm.
+ * Starts from the technician's start address and proceeds point-by-point:
+ * - For the first point from the technician's start address, picks either the closest (proche)
+ *   or furthest (loin) point according to the technician's preference.
+ * - Then optimizes the route point-by-point through all remaining points.
+ * - If any missions have forced dates/slots, respects their chronological constraints and adjusts
+ *   the route around them (allowing back-and-forth trips when forced dates/slots require it).
  */
 export function sortMissionsByProximity(
   missions: any[],
   startCoord: Coordinate,
   equipmentCoords: Record<string, Coordinate>,
-  preference: 'loin' | 'proche' = 'proche'
+  preference: 'loin' | 'proche' = 'proche',
+  tourStartDate?: string,
+  variables?: any[]
 ): any[] {
-  if (missions.length === 0) return [];
+  if (!missions || missions.length === 0) return [];
 
-  const hasForced = missions.some(m => m.isForced || (m.isManualDate && m.isManualSlot) || m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId);
+  const normPref: 'loin' | 'proche' =
+    String(preference || '').toLowerCase().includes('loin') ||
+    String(preference || '').toLowerCase().includes('éloigné') ||
+    String(preference || '').toLowerCase().includes('eloigne')
+      ? 'loin'
+      : 'proche';
+
+  const hasForced = missions.some(m => isMissionForcedSlotOrDate(m));
 
   if (!hasForced) {
-    return sortSingleSegment(missions, startCoord, equipmentCoords, preference);
+    return sortSingleSegment(missions, startCoord, equipmentCoords, normPref, true);
   }
 
+  // Separate forced vs non-forced missions
+  const forcedMissions = missions.filter(m => isMissionForcedSlotOrDate(m));
+  const nonForcedMissions = missions.filter(m => !isMissionForcedSlotOrDate(m));
+
+  const baseDateStr =
+    (tourStartDate && /^\d{4}-\d{2}-\d{2}$/.test(tourStartDate.trim()))
+      ? tourStartDate.trim()
+      : new Date().toISOString().split('T')[0];
+
+  // Sort forced missions chronologically by (estimatedDate, estimatedSlot)
+  const sortedForced = [...forcedMissions].sort((a, b) => {
+    const dateA = (a.estimatedDate && String(a.estimatedDate).trim()) || baseDateStr;
+    const dateB = (b.estimatedDate && String(b.estimatedDate).trim()) || baseDateStr;
+    if (dateA !== dateB) return dateA.localeCompare(dateB);
+    const slotA = parseSlotToMinutes(a.estimatedSlot || '8:00am');
+    const slotB = parseSlotToMinutes(b.estimatedSlot || '8:00am');
+    return slotA - slotB;
+  });
+
+  if (nonForcedMissions.length === 0) {
+    return sortedForced;
+  }
+
+  // Interleave non-forced missions into the available time windows before/between/after forced missions
+  const unvisitedNonForced = [...nonForcedMissions];
   const result: any[] = [];
-  let currentStart = startCoord;
-  let currentSegment: any[] = [];
+  let currentCoord: Coordinate = startCoord;
+  let cursorDateStr = baseDateStr;
+  let cursorMins = 480; // 08:00 start of day
 
-  for (let i = 0; i < missions.length; i++) {
-    const m = missions[i];
-    const isForced = !!(m.isForced || (m.isManualDate && m.isManualSlot) || m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId);
+  const pickNextNonForcedIdx = (fromCoord: Coordinate, isVeryFirstPick: boolean): number => {
+    let bestIdx = -1;
+    const useFarthest = isVeryFirstPick && normPref === 'loin';
+    let bestDist = useFarthest ? -1 : Infinity;
 
-    if (isForced) {
-      if (currentSegment.length > 0) {
-        const sortedSeg = sortSingleSegment(currentSegment, currentStart, equipmentCoords, preference);
-        result.push(...sortedSeg);
-        currentSegment = [];
+    for (let i = 0; i < unvisitedNonForced.length; i++) {
+      const cand = unvisitedNonForced[i];
+      const cCoord = equipmentCoords[cand.defibIdentifiant];
+      if (!cCoord) continue;
+      const d = getHaversineDistance(fromCoord, cCoord);
+      if (useFarthest) {
+        if (d > bestDist) {
+          bestDist = d;
+          bestIdx = i;
+        }
+      } else {
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = i;
+        }
       }
-      result.push(m);
-      const forcedCoord = equipmentCoords[m.defibIdentifiant];
-      if (forcedCoord) {
-        currentStart = forcedCoord;
+    }
+    return bestIdx !== -1 ? bestIdx : 0;
+  };
+
+  const advanceSimulatedCursor = (
+    cDateStr: string,
+    cMins: number,
+    durationMins: number,
+    isFirstOfTour: boolean,
+    candCoord?: Coordinate
+  ): { endDateStr: string; endMins: number } => {
+    let simDate = new Date(cDateStr);
+    if (isNaN(simDate.getTime())) simDate = new Date();
+    let simMins = Math.max(480, cMins);
+
+    if (isFirstOfTour && candCoord) {
+      const distKm = getHaversineDistance(startCoord, candCoord);
+      if (distKm >= 0.2) {
+        const roadDistKm = distKm * 1.25;
+        const speed = roadDistKm > 80 ? 85 : roadDistKm > 25 ? 65 : 40;
+        const travelHours = Math.max(1, Math.ceil(((roadDistKm / speed) * 60) / 60));
+        simMins = Math.max(simMins, 480 + travelHours * 60);
       }
-    } else {
-      currentSegment.push(m);
+    }
+
+    // Respect lunch break around 12:00 - 13:00
+    if (simMins < 720 && simMins + durationMins > 780) {
+      simMins = 780;
+    } else if (simMins >= 720 && simMins < 780) {
+      simMins = 780;
+    }
+
+    if (simMins + durationMins > 1080) {
+      simDate = addDays(simDate, 1);
+      simMins = 480;
+    }
+
+    return {
+      endDateStr: formatDate(simDate),
+      endMins: simMins + durationMins
+    };
+  };
+
+  for (const forcedM of sortedForced) {
+    const fDateStr = (forcedM.estimatedDate && String(forcedM.estimatedDate).trim()) || cursorDateStr;
+    const fStartMins = parseSlotToMinutes(forcedM.estimatedSlot || '8:00am');
+    const fDuration = getMissionDurationInMinutes(forcedM.reason || '', variables, forcedM);
+
+    // Fit as many non-forced missions as possible before forcedM's (fDateStr, fStartMins)
+    while (unvisitedNonForced.length > 0) {
+      const candIdx = pickNextNonForcedIdx(currentCoord, result.length === 0);
+      const cand = unvisitedNonForced[candIdx];
+      const candCoord = equipmentCoords[cand.defibIdentifiant];
+      const candDuration = getMissionDurationInMinutes(cand.reason || '', variables, cand);
+
+      const sim = advanceSimulatedCursor(cursorDateStr, cursorMins, candDuration, result.length === 0, candCoord);
+
+      const fitsBeforeForced =
+        sim.endDateStr < fDateStr ||
+        (sim.endDateStr === fDateStr && sim.endMins <= fStartMins);
+
+      if (fitsBeforeForced) {
+        unvisitedNonForced.splice(candIdx, 1);
+        result.push(cand);
+        cursorDateStr = sim.endDateStr;
+        cursorMins = sim.endMins;
+        if (candCoord) {
+          currentCoord = candCoord;
+        }
+      } else {
+        break;
+      }
+    }
+
+    // Place the forced mission at its forced time
+    result.push(forcedM);
+    const fCoord = equipmentCoords[forcedM.defibIdentifiant];
+    if (fCoord) {
+      currentCoord = fCoord;
+    }
+    if (fDateStr > cursorDateStr || (fDateStr === cursorDateStr && fStartMins + fDuration > cursorMins)) {
+      cursorDateStr = fDateStr;
+      cursorMins = fStartMins + fDuration;
+      if (cursorMins >= 1080) {
+        const nextDay = addDays(new Date(cursorDateStr), 1);
+        if (!isNaN(nextDay.getTime())) {
+          cursorDateStr = formatDate(nextDay);
+          cursorMins = 480;
+        }
+      }
     }
   }
 
-  if (currentSegment.length > 0) {
-    const sortedSeg = sortSingleSegment(currentSegment, currentStart, equipmentCoords, preference);
-    result.push(...sortedSeg);
+  // Append any remaining non-forced missions starting from the last visited coordinate
+  if (unvisitedNonForced.length > 0) {
+    const remainingSorted = sortSingleSegment(
+      unvisitedNonForced,
+      currentCoord,
+      equipmentCoords,
+      normPref,
+      result.length === 0
+    );
+    result.push(...remainingSorted);
   }
 
   return result;
@@ -198,7 +365,8 @@ function sortSingleSegment(
   missions: any[],
   startCoord: Coordinate,
   equipmentCoords: Record<string, Coordinate>,
-  preference: 'loin' | 'proche' = 'proche'
+  preference: 'loin' | 'proche' = 'proche',
+  isFirstFromDeparture: boolean = true
 ): any[] {
   if (missions.length <= 1) return [...missions];
 
@@ -211,7 +379,10 @@ function sortSingleSegment(
 
   while (unvisited.length > 0) {
     let selectedIdx = -1;
-    let selectedDist = preference === 'loin' ? -1 : Infinity;
+    // Only use 'loin' (furthest point) on the very first step from the technician's departure point;
+    // subsequent steps chain nearest-neighbor to build a coherent optimized route.
+    const pickFurthest = isFirstFromDeparture && ordered.length === 0 && preference === 'loin';
+    let selectedDist = pickFurthest ? -1 : Infinity;
 
     for (let i = 0; i < unvisited.length; i++) {
       const m = unvisited[i];
@@ -219,7 +390,7 @@ function sortSingleSegment(
       if (!coord) continue;
       const dist = getHaversineDistance(currentCoord, coord);
 
-      if (preference === 'loin') {
+      if (pickFurthest) {
         if (dist > selectedDist) {
           selectedDist = dist;
           selectedIdx = i;
@@ -242,19 +413,37 @@ function sortSingleSegment(
     }
   }
 
-  return [...noCoordsMissions, ...ordered];
-}
+  // Apply 2-opt local optimization on ordered[1..n-1] while keeping ordered[0] fixed as the chosen starting mission
+  if (ordered.length >= 4) {
+    let improved = true;
+    let iterations = 0;
+    while (improved && iterations < 50) {
+      improved = false;
+      iterations++;
+      for (let i = 1; i < ordered.length - 2; i++) {
+        for (let k = i + 1; k < ordered.length - 1; k++) {
+          const cPrev = equipmentCoords[ordered[i - 1].defibIdentifiant];
+          const cI = equipmentCoords[ordered[i].defibIdentifiant];
+          const cK = equipmentCoords[ordered[k].defibIdentifiant];
+          const cNext = equipmentCoords[ordered[k + 1].defibIdentifiant];
+          if (!cPrev || !cI || !cK || !cNext) continue;
 
-/**
- * Utility to parse time slot like "14:00pm" or "8:30am" into total minutes from midnight.
- */
-function parseSlotToMinutes(slot: string): number {
-  if (!slot) return 480; // Default to 08:00
-  const match = slot.match(/^(\d+):(\d+)(am|pm)$/i);
-  if (!match) return 480;
-  const hour = parseInt(match[1], 10);
-  const minute = parseInt(match[2], 10);
-  return hour * 60 + minute;
+          const currentDist =
+            getHaversineDistance(cPrev, cI) + getHaversineDistance(cK, cNext);
+          const newDist =
+            getHaversineDistance(cPrev, cK) + getHaversineDistance(cI, cNext);
+
+          if (newDist + 0.01 < currentDist) {
+            const reversed = ordered.slice(i, k + 1).reverse();
+            ordered.splice(i, k - i + 1, ...reversed);
+            improved = true;
+          }
+        }
+      }
+    }
+  }
+
+  return [...ordered, ...noCoordsMissions];
 }
 
 /**
