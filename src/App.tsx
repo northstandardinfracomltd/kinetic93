@@ -1316,6 +1316,33 @@ export default function App() {
       q: "À quoi sert le bouton d’actualisation des données ?",
       a: "Il permet de rafraîchir instantanément l’affichage avec les données les plus récentes du serveur, ce qui est particulièrement utile en cas de travail collaboratif simultané sur plusieurs postes.",
     },
+    {
+      q: "Quelles sont les alertes suggérées émises ?",
+      a: `Les alertes suggérées s'adaptent automatiquement en fonction de plusieurs éléments : le technicien sélectionné, ses paramètres individuels (semaines types, indisponibilités), les réglages globaux définis dans votre espace, ainsi que les dates et créneaux horaires des tournées et missions planifiées.
+
+Voici la liste des alertes pouvant apparaître et ce à quoi elles correspondent :
+
+« Au moins une mission de la tournée n’est pas compatible avec une période de semaine typique du technicien sélectionné. »
+Une ou plusieurs missions de la tournée sont planifiées en dehors des jours ou des plages horaires habituels de travail définis dans la semaine type du technicien.
+
+« La tournée n’est pas compatible avec une période de semaine typique du technicien sélectionné. »
+La tournée dans son ensemble (ou sur une partie de son créneau) déborde des horaires de travail habituels enregistrés dans la semaine type du technicien.
+
+« Au moins une mission de la tournée n’est pas compatible avec une période d’indisponibilité du technicien sélectionné. »
+Une ou plusieurs missions chevauchent une période où le technicien est déclaré indisponible (congés, absence, formation, etc.).
+
+« La tournée n’est pas compatible avec une période d’indisponibilité du technicien sélectionné. »
+La tournée empiète, même partiellement, sur un créneau où le technicien est enregistré comme indisponible.
+
+« L’amplitude maximale journalière est de _h. Le dd/mm/yyyy, cette amplitude est dépassée. »
+Le temps écoulé entre le début de la première mission et la fin de la dernière mission de la journée dépasse la durée maximale autorisée dans vos réglages (Temps - Réglages). La durée de chaque intervention est calculée selon les prestations associées (ou 1 h par défaut).
+
+« L’amplitude minimale de repos entre 2 jours consécutifs est de _h. Entre le dd/mm/yyyy et le dd/mm/yyyy, cette amplitude est inférieure. »
+Le temps de repos entre la fin de la journée de travail et la reprise le lendemain est inférieur au minimum légal ou interne configuré dans vos paramètres (Temps - Réglages).
+
+« L’amplitude minimale de repos à la mi-journée pour la pause repas est de _min. Le dd/mm/yyyy, il semble que le technicien ne bénéficiera pas de ce temps disponible. »
+Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas de plage libre suffisante pour respecter la durée minimale de pause déjeuner définie dans vos réglages (Temps - Réglages).`,
+    },
   ], []);
 
   useEffect(() => {
@@ -19068,11 +19095,12 @@ export default function App() {
                                       height: '10px',
                                       borderRadius: '50%',
                                       backgroundColor: 
-                                        tourStatus === 'Brouillon' ? '#94a3b8' : 
-                                        tourStatus === 'À faire' ? '#3b82f6' :  
-                                        tourStatus === 'En cours' ? '#ef4444' :  
-                                        tourStatus === 'Effectué' ? '#22c55e' :  
-                                        '#94a3b8',
+                                        tourStatus === 'Brouillon' ? 'rgb(107 132 255)' : 
+                                        tourStatus === 'À faire' ? 'rgb(39 73 237)' :  
+                                        tourStatus === 'En cours' ? 'rgb(62 221 133)' :  
+                                        tourStatus === 'Effectué' ? 'rgb(1 10 53)' :  
+                                        tourStatus === 'Terminé' ? 'rgb(210, 45, 11)' :
+                                        'rgb(107 132 255)',
                                       zIndex: 10,
                                       pointerEvents: 'none'
                                     }}
@@ -19217,9 +19245,9 @@ export default function App() {
                                 </select>
                               </div>
 
-                              {/* Véhicule */}
+                              {/* Véhicule ou Entrepôt */}
                               <div className="w-full">
-                                <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Véhicule.</label>
+                                <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Véhicule ou Entrepôt.</label>
                                 <select
                                   value={tourVehicule}
                                   onChange={() => {}} // No-op to satisfy React warning
@@ -19237,9 +19265,14 @@ export default function App() {
                                   }}
                                   className="font-sans cursor-not-allowed focus:outline-none bg-white"
                                 >
-                                  {['Aucun', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'].map((veh) => (
+                                  {Array.from(new Set([
+                                    'Aucun',
+                                    'Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J',
+                                    'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J',
+                                    ...(tourVehicule ? [tourVehicule] : [])
+                                  ])).map((veh) => (
                                     <option key={veh} value={veh}>
-                                      {veh === 'Aucun' ? veh : getLocationCustomName(veh)}
+                                      {veh === 'Aucun' ? veh : getLocationCustomName(veh, locationNames)}
                                     </option>
                                   ))}
                                 </select>
@@ -19723,15 +19756,15 @@ export default function App() {
                                           {/* Pictogramme situation avec '!' selon la Situation */}
                                           {(() => {
                                             const sitNorm = (m.status || "Brouillon").toLowerCase().trim();
-                                            let bgColor = "#B8B8B8";
-                                            if (sitNorm === "brouillon") bgColor = "#B8B8B8";
-                                            else if (sitNorm === "attente client") bgColor = "#B1C400";
-                                            else if (sitNorm === "accepté client" || sitNorm === "accepte client") bgColor = "#67CF11";
-                                            else if (sitNorm === "refusé client" || sitNorm === "refuse client") bgColor = "#CF2411";
-                                            else if (sitNorm === "rejet mission" || sitNorm === "rejet") bgColor = "#CF6011";
-                                            else if (sitNorm === "à faire" || sitNorm === "a faire") bgColor = "#1176CF";
-                                            else if (sitNorm === "attente") bgColor = "#CCCF11";
-                                            else if (sitNorm === "effectué" || sitNorm === "effectue" || sitNorm === "effectuée") bgColor = "#9611CF";
+                                            let bgColor = "rgb(184 164 164)";
+                                            if (sitNorm === "brouillon") bgColor = "rgb(184 164 164)";
+                                            else if (sitNorm === "attente client") bgColor = "rgb(141 158 60)";
+                                            else if (sitNorm === "accepté client" || sitNorm === "accepte client") bgColor = "rgb(23 144 75)";
+                                            else if (sitNorm === "refusé client" || sitNorm === "refuse client") bgColor = "rgb(146 37 14)";
+                                            else if (sitNorm === "rejet mission" || sitNorm === "rejet") bgColor = "rgb(178 13 83)";
+                                            else if (sitNorm === "à faire" || sitNorm === "a faire") bgColor = "rgb(15 98 195)";
+                                            else if (sitNorm === "attente") bgColor = "rgb(67 98 135)";
+                                            else if (sitNorm === "effectué" || sitNorm === "effectue" || sitNorm === "effectuée") bgColor = "rgb(93 44 216)";
 
                                             return (
                                               <div
@@ -21178,17 +21211,18 @@ export default function App() {
                                             width: "10px",
                                             height: "10px",
                                             borderRadius: "50%",
-                                            backgroundColor: 
-                                              (m.status || "Brouillon") === "Brouillon" ? "#94a3b8" : 
-                                              (m.status || "Brouillon") === "Attente Client" ? "#f59e0b" : 
-                                              (m.status || "Brouillon") === "Accepté Client" ? "#16a34a" : 
-                                              (m.status || "Brouillon") === "Refusé Client" ? "#dc2626" : 
-                                              (m.status || "Brouillon") === "Rejet mission" ? "#dc2626" : 
-                                              (m.status || "Brouillon") === "À faire" ? "#3b82f6" :  
-                                              (m.status || "Brouillon") === "En cours" ? "#ef4444" :  
-                                              (m.status || "Brouillon") === "Effectué" ? "#22c55e" :  
-                                              (m.status || "Brouillon") === "Attente" ? "#94a3b8" :  
-                                              "#3b82f6",
+                                            backgroundColor: (() => {
+                                              const sitNorm = (m.status || "Brouillon").toLowerCase().trim();
+                                              if (sitNorm === "brouillon") return "rgb(184 164 164)";
+                                              if (sitNorm === "attente client") return "rgb(141 158 60)";
+                                              if (sitNorm === "accepté client" || sitNorm === "accepte client") return "rgb(23 144 75)";
+                                              if (sitNorm === "refusé client" || sitNorm === "refuse client") return "rgb(146 37 14)";
+                                              if (sitNorm === "rejet mission" || sitNorm === "rejet") return "rgb(178 13 83)";
+                                              if (sitNorm === "à faire" || sitNorm === "a faire") return "rgb(15 98 195)";
+                                              if (sitNorm === "attente") return "rgb(67 98 135)";
+                                              if (sitNorm === "effectué" || sitNorm === "effectue" || sitNorm === "effectuée") return "rgb(93 44 216)";
+                                              return "rgb(184 164 164)";
+                                            })(),
                                             zIndex: 10,
                                             pointerEvents: "none"
                                           }}

@@ -26,6 +26,7 @@ const MONTH_NAMES_FR = [
 ];
 
 const DAY_NAMES_SHORT_FR = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+const DAY_NAMES_FR = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 
 const normalizeName = (name?: string): string => {
   return (name || '')
@@ -312,8 +313,23 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       const clean = getCleanTechName(t.name);
       if (!clean) return;
       const key = normalizeName(clean);
-      if (key && !map.has(key)) {
-        map.set(key, { ...t, name: clean });
+      if (key) {
+        if (!map.has(key)) {
+          map.set(key, { ...t, name: clean });
+        } else {
+          const existing = map.get(key)!;
+          map.set(key, {
+            ...existing,
+            semaineTypique:
+              existing.semaineTypique && existing.semaineTypique.length > 0
+                ? existing.semaineTypique
+                : t.semaineTypique,
+            absences:
+              existing.absences && existing.absences.length > 0
+                ? existing.absences
+                : t.absences,
+          });
+        }
       }
     });
 
@@ -760,6 +776,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       const isoDate = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const dayOfWeekNum = dateObj.getDay();
       const dayShort = DAY_NAMES_SHORT_FR[dayOfWeekNum];
+      const dayName = DAY_NAMES_FR[dayOfWeekNum];
       const isWeekend = dayOfWeekNum === 0 || dayOfWeekNum === 6;
       const isToday =
         dateObj.getFullYear() === today.getFullYear() &&
@@ -772,6 +789,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         dateObj,
         isoDate,
         dayShort,
+        dayName,
         isWeekend,
         isToday,
         weekNum
@@ -779,6 +797,129 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     }
     return list;
   }, [currentYear, currentMonth, today]);
+
+  const formatIsoDateToFr = useCallback((iso: string) => {
+    if (!iso || !iso.includes('-')) return iso || '';
+    const [yy, mm, dd] = iso.split('-');
+    return `${dd}/${mm}/${yy}`;
+  }, []);
+
+  const getTechDayPeriods = useCallback(
+    (tech: Member, isoDate: string, dayName: string) => {
+      const matchingAbsences = Array.isArray(tech.absences)
+        ? tech.absences.filter((abs) => {
+            if (!abs || !abs.startDate || !abs.endDate) return false;
+            const startIso = toIsoDateStr(abs.startDate);
+            const endIso = toIsoDateStr(abs.endDate);
+            if (!startIso || !endIso) return false;
+            return isoDate >= startIso && isoDate <= endIso;
+          })
+        : [];
+
+      const normDayName = normalizeName(dayName);
+      const matchingSchedules = Array.isArray(tech.semaineTypique)
+        ? tech.semaineTypique.filter((sch) => {
+            if (!sch || !Array.isArray(sch.days)) return false;
+            return sch.days.some((dStr) => normalizeName(dStr) === normDayName);
+          })
+        : [];
+
+      const hasAbsence = matchingAbsences.length > 0;
+      const hasSchedule = matchingSchedules.length > 0;
+      // PÉRIODES D’INDISPONIBILITÉ (#ffd7d7) has higher priority over SEMAINE TYPIQUE (#e7fff2)
+      const cellBgColor = hasAbsence ? '#ffd7d7' : hasSchedule ? '#e7fff2' : undefined;
+      const cellHoverTitle = hasAbsence
+        ? `Commentaire: ${matchingAbsences[0].commentaire || '-'}`
+        : hasSchedule
+        ? `Commentaire: ${matchingSchedules[0].commentaire || '-'}`
+        : undefined;
+
+      return {
+        matchingAbsences,
+        matchingSchedules,
+        hasAbsence,
+        hasSchedule,
+        cellBgColor,
+        cellHoverTitle,
+      };
+    },
+    []
+  );
+
+  const renderTechDayPeriods = useCallback(
+    (
+      matchingAbsences: NonNullable<Member['absences']>,
+      matchingSchedules: NonNullable<Member['semaineTypique']>
+    ) => {
+      if (matchingAbsences.length === 0 && matchingSchedules.length === 0) return null;
+
+      return (
+        <div className="space-y-1 mb-1 relative z-10">
+          {/* PÉRIODES D’INDISPONIBILITÉ (Priorité supérieure = par dessus le vert) */}
+          {matchingAbsences.map((abs, aIdx) => {
+            const startIso = toIsoDateStr(abs.startDate);
+            const endIso = toIsoDateStr(abs.endDate);
+            const absSlotText =
+              (abs as any).startTime && (abs as any).endTime
+                ? `${(abs as any).startTime} - ${(abs as any).endTime}`
+                : `${formatIsoDateToFr(startIso)} - ${formatIsoDateToFr(endIso)}`;
+            const absComment = `Commentaire: ${abs.commentaire || '-'}`;
+
+            return (
+              <div
+                key={`tech-abs-${aIdx}`}
+                className="w-full px-1.5 py-1 rounded-md flex flex-wrap items-center gap-1"
+                style={{ backgroundColor: '#ffd7d7' }}
+                title={absComment}
+              >
+                <span
+                  className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full font-semibold leading-tight whitespace-nowrap"
+                  style={{
+                    backgroundColor: 'rgb(157, 87, 87)',
+                    color: 'rgb(255, 209, 207)',
+                    fontSize: '11px',
+                  }}
+                  title={absComment}
+                >
+                  {absSlotText}
+                </span>
+              </div>
+            );
+          })}
+
+          {/* SEMAINE TYPIQUE */}
+          {matchingSchedules.map((sch, sIdx) => {
+            const schSlotText = sch.fermetureMidi
+              ? `${sch.openMorning || '09:00'} - ${sch.closeMorning || '12:00'} / ${sch.openAfternoon || '14:00'} - ${sch.closeAfternoon || '18:00'}`
+              : `${sch.openContinuous || '09:00'} - ${sch.closeContinuous || '17:00'}`;
+            const schComment = `Commentaire: ${sch.commentaire || '-'}`;
+
+            return (
+              <div
+                key={`tech-sch-${sIdx}`}
+                className="w-full px-1.5 py-1 rounded-md flex flex-wrap items-center gap-1"
+                style={{ backgroundColor: '#e7fff2' }}
+                title={schComment}
+              >
+                <span
+                  className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full font-semibold leading-tight whitespace-nowrap"
+                  style={{
+                    backgroundColor: '#65aa95',
+                    color: '#e7fff2',
+                    fontSize: '11px',
+                  }}
+                  title={schComment}
+                >
+                  {schSlotText}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      );
+    },
+    [formatIsoDateToFr]
+  );
 
   // Weeks breakdown
   const weeksGroup = useMemo(() => {
@@ -1415,9 +1556,22 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                             dragOverTarget?.isoDate === d.isoDate &&
                             dragOverTarget?.techName === tech.name;
 
+                          const {
+                            matchingAbsences,
+                            matchingSchedules,
+                            cellBgColor,
+                            cellHoverTitle,
+                          } = getTechDayPeriods(tech, d.isoDate, d.dayName);
+
                           return (
                             <td
                               key={`empty-${tech.name}-${d.isoDate}`}
+                              title={cellHoverTitle}
+                              style={
+                                !isDropTarget && cellBgColor
+                                  ? { backgroundColor: cellBgColor }
+                                  : undefined
+                              }
                               onDragOver={(e) => {
                                 if (!draggedItem || draggedItem.type === 'mission') {
                                   if (dragOverTarget) setDragOverTarget(null);
@@ -1458,9 +1612,11 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   slotInfo.slotAmPm
                                 );
                               }}
-                              className={`relative border-r border-neutral-200 p-1 w-[200px] min-w-[200px] max-w-[200px] min-h-[42px] transition-colors ${
+                              className={`relative border-r border-neutral-200 p-1 align-top w-[200px] min-w-[200px] max-w-[200px] min-h-[42px] transition-colors ${
                                 isDropTarget
                                   ? 'bg-blue-100/70 ring-2 ring-inset ring-[#2e54ff]'
+                                  : cellBgColor
+                                  ? ''
                                   : d.isToday
                                   ? 'bg-pink-50/30'
                                   : d.isWeekend
@@ -1490,6 +1646,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   style={{ left: `${todayCursorPercent}%` }}
                                 />
                               )}
+                              {renderTechDayPeriods(matchingAbsences, matchingSchedules)}
                             </td>
                           );
                         })}
@@ -1536,9 +1693,22 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                               dragOverTarget?.isoDate === d.isoDate &&
                               dragOverTarget?.techName === tech.name;
 
+                            const {
+                              matchingAbsences,
+                              matchingSchedules,
+                              cellBgColor,
+                              cellHoverTitle,
+                            } = getTechDayPeriods(tech, d.isoDate, d.dayName);
+
                             return (
                               <td
                                 key={`tour-day-${tItem.tourId}-${d.isoDate}`}
+                                title={cellHoverTitle}
+                                style={
+                                  !isDropTarget && cellBgColor
+                                    ? { backgroundColor: cellBgColor }
+                                    : undefined
+                                }
                                 onDragOver={(e) => {
                                   if (!draggedItem) return;
                                   if (draggedItem.type === 'mission' && !isWithinTour) {
@@ -1585,6 +1755,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                 className={`relative border-r border-neutral-200 p-1.5 align-top w-[200px] min-w-[200px] max-w-[200px] transition-colors ${
                                   isDropTarget
                                     ? 'bg-blue-100/70 ring-2 ring-inset ring-[#2e54ff]'
+                                    : cellBgColor
+                                    ? ''
                                     : d.isToday
                                     ? 'bg-pink-50/50'
                                     : isWithinTour
@@ -1619,6 +1791,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                     </span>
                                   </div>
                                 )}
+
+                                {renderTechDayPeriods(matchingAbsences, matchingSchedules)}
 
                                 {/* Tournée barrette: continuous across consecutive days, clickable via system dropdown */}
                                 {isWithinTour && (
@@ -1828,9 +2002,22 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                             dragOverTarget?.isoDate === d.isoDate &&
                             dragOverTarget?.techName === tech.name;
 
+                          const {
+                            matchingAbsences,
+                            matchingSchedules,
+                            cellBgColor,
+                            cellHoverTitle,
+                          } = getTechDayPeriods(tech, d.isoDate, d.dayName);
+
                           return (
                             <td
                               key={`spont-cell-${tech.name}-${d.isoDate}`}
+                              title={cellHoverTitle}
+                              style={
+                                !isDropTarget && cellBgColor
+                                  ? { backgroundColor: cellBgColor }
+                                  : undefined
+                              }
                               onDragOver={(e) => {
                                 if (!draggedItem) return;
                                 if (draggedItem.type === 'mission' && !matchingTourOnDay) {
@@ -1877,6 +2064,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                               className={`relative border-r border-neutral-200 p-1.5 align-top w-[200px] min-w-[200px] max-w-[200px] transition-colors ${
                                 isDropTarget
                                   ? 'bg-blue-100/70 ring-2 ring-inset ring-[#2e54ff]'
+                                  : cellBgColor
+                                  ? ''
                                   : d.isToday
                                   ? 'bg-pink-50/50'
                                   : d.isWeekend
@@ -1907,6 +2096,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   style={{ left: `${todayCursorPercent}%` }}
                                 />
                               )}
+
+                              {tours.length === 0 && renderTechDayPeriods(matchingAbsences, matchingSchedules)}
 
                               {matchingEvts.length > 0 && (
                                 <div className="space-y-1.5">
