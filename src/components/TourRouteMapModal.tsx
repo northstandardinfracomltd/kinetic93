@@ -41,6 +41,13 @@ interface RouteMissionPoint {
   estimatedSlotLabel: string;
 }
 
+interface TechStartPoint {
+  coord: Coordinate;
+  displayCoord: [number, number];
+  techName: string;
+  addressLabel: string;
+}
+
 function getMissionStatusPictogramColor(status?: string): string {
   const sitNorm = String(status || 'Brouillon').toLowerCase().trim();
   if (sitNorm === 'brouillon') return 'rgb(184, 164, 164)';
@@ -54,7 +61,7 @@ function getMissionStatusPictogramColor(status?: string): string {
   return 'rgb(184, 164, 164)';
 }
 
-function createMissionPassageIcon(bgColor: string, passageNumber: number): L.DivIcon {
+function createMissionPassageIcon(bgColor: string, label: string | number): L.DivIcon {
   return L.divIcon({
     className: 'defibeo-tour-route-marker-icon',
     html: `
@@ -73,13 +80,13 @@ function createMissionPassageIcon(bgColor: string, passageNumber: number): L.Div
         display: flex;
         align-items: center;
         justify-content: center;
-        border: 2.5px solid #ffffff;
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+        border: none;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
         cursor: pointer;
         user-select: none;
         box-sizing: border-box;
       ">
-        ${passageNumber}
+        ${label}
       </div>
     `,
     iconSize: [43, 43],
@@ -88,10 +95,112 @@ function createMissionPassageIcon(bgColor: string, passageNumber: number): L.Div
   });
 }
 
+const animatedRunnerIcon = L.divIcon({
+  className: 'defibeo-tour-route-runner-icon',
+  html: `
+    <div style="
+      width: 16px;
+      height: 16px;
+      border-radius: 9999px;
+      background: #2e54ff;
+      background-color: #2e54ff;
+      box-shadow: 0 0 0 5px rgba(46, 84, 255, 0.32), 0 2px 6px rgba(0, 0, 0, 0.35);
+      border: none;
+      pointer-events: none;
+    "></div>
+  `,
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+});
+
+/**
+ * Animates a point moving swiftly along the road polyline in an infinite loop
+ * to clearly show the direction of travel.
+ */
+function AnimatedRouteDot({ roadPositions }: { roadPositions: [number, number][] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!roadPositions || roadPositions.length < 2) return;
+
+    // Precompute cumulative distances along the polyline for constant high-speed motion
+    const segLengths: number[] = [];
+    const cumLengths: number[] = [0];
+    let totalLen = 0;
+
+    for (let i = 0; i < roadPositions.length - 1; i++) {
+      const a = roadPositions[i];
+      const b = roadPositions[i + 1];
+      const dLat = b[0] - a[0];
+      const dLng = (b[1] - a[1]) * Math.cos(((a[0] + b[0]) * 0.5 * Math.PI) / 180);
+      const len = Math.sqrt(dLat * dLat + dLng * dLng);
+      segLengths.push(len);
+      totalLen += len;
+      cumLengths.push(totalLen);
+    }
+
+    if (totalLen <= 0) return;
+
+    const marker = L.marker(roadPositions[0], {
+      icon: animatedRunnerIcon,
+      interactive: false,
+      zIndexOffset: 2000,
+    }).addTo(map);
+
+    // Traverse the entire route in ~3.8 seconds for a brisk, clear visual flow
+    const DURATION_MS = 3800;
+    let startTime = performance.now();
+    let rafId = 0;
+
+    const animate = (now: number) => {
+      const elapsed = (now - startTime) % DURATION_MS;
+      const progress = elapsed / DURATION_MS;
+      const targetDist = progress * totalLen;
+
+      // Binary search for segment index
+      let low = 0;
+      let high = segLengths.length - 1;
+      while (low < high) {
+        const mid = (low + high) >> 1;
+        if (cumLengths[mid + 1] < targetDist) {
+          low = mid + 1;
+        } else {
+          high = mid;
+        }
+      }
+
+      const segLen = segLengths[low] || 0;
+      const segStartDist = cumLengths[low] || 0;
+      const t = segLen > 0 ? Math.min(1, Math.max(0, (targetDist - segStartDist) / segLen)) : 0;
+
+      const pA = roadPositions[low];
+      const pB = roadPositions[low + 1] || pA;
+      const lat = pA[0] + (pB[0] - pA[0]) * t;
+      const lng = pA[1] + (pB[1] - pA[1]) * t;
+
+      marker.setLatLng([lat, lng]);
+      rafId = requestAnimationFrame(animate);
+    };
+
+    rafId = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      try {
+        map.removeLayer(marker);
+      } catch (_) {}
+    };
+  }, [roadPositions, map]);
+
+  return null;
+}
+
 function AutoFitRouteBounds({
+  techStartPoint,
   points,
   roadPositions,
 }: {
+  techStartPoint: TechStartPoint | null;
   points: RouteMissionPoint[];
   roadPositions: [number, number][];
 }) {
@@ -99,14 +208,18 @@ function AutoFitRouteBounds({
   const fittedRef = useRef<string>('');
 
   useEffect(() => {
+    const fallbackPoints: [number, number][] = [
+      ...(techStartPoint ? [techStartPoint.displayCoord] : []),
+      ...points.map(p => p.displayCoord),
+    ];
     const allLatLngs: [number, number][] =
-      roadPositions.length >= 2
-        ? roadPositions
-        : points.map(p => p.displayCoord);
+      roadPositions.length >= 2 ? roadPositions : fallbackPoints;
 
     if (allLatLngs.length === 0) return;
 
-    const sig = `${points.map(p => `${p.passageNumber}:${p.coord.lat.toFixed(4)},${p.coord.lng.toFixed(4)}`).join('|')}_${roadPositions.length}`;
+    const sig = `${techStartPoint ? `${techStartPoint.coord.lat.toFixed(4)},${techStartPoint.coord.lng.toFixed(4)}` : 'none'}_${points
+      .map(p => `${p.passageNumber}:${p.coord.lat.toFixed(4)},${p.coord.lng.toFixed(4)}`)
+      .join('|')}_${roadPositions.length}`;
     if (fittedRef.current === sig) return;
     fittedRef.current = sig;
 
@@ -125,7 +238,7 @@ function AutoFitRouteBounds({
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [points, roadPositions, map]);
+  }, [techStartPoint, points, roadPositions, map]);
 
   return null;
 }
@@ -250,11 +363,13 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
   onCalculatedMissions,
 }) => {
   const [isLoadingRoute, setIsLoadingRoute] = useState<boolean>(false);
+  const [techStartPoint, setTechStartPoint] = useState<TechStartPoint | null>(null);
   const [missionPoints, setMissionPoints] = useState<RouteMissionPoint[]>([]);
   const [roadPositions, setRoadPositions] = useState<[number, number][]>([]);
 
   useEffect(() => {
     if (!isOpen || !tour || !technician) {
+      setTechStartPoint(null);
       setMissionPoints([]);
       setRoadPositions([]);
       return;
@@ -266,8 +381,19 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
       setIsLoadingRoute(true);
 
       try {
-        // 1. Resolve technician departure coordinates
+        // 1. Resolve technician departure coordinates & readable address
         let startCoord: Coordinate | null = null;
+        const composedTechAddress =
+          (technician.startAddress && technician.startAddress.trim()) ||
+          [
+            technician.startAddressStreet,
+            technician.startAddressZip,
+            technician.startAddressCity,
+            technician.startAddressCountry || 'France',
+          ]
+            .filter(Boolean)
+            .join(' ');
+
         if (
           technician.startAddressLat !== undefined &&
           technician.startAddressLng !== undefined &&
@@ -281,26 +407,24 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
           }
         }
 
-        if (!startCoord) {
-          const composedTechAddress =
-            (technician.startAddress && technician.startAddress.trim()) ||
-            [
-              technician.startAddressStreet,
-              technician.startAddressZip,
-              technician.startAddressCity,
-              technician.startAddressCountry || 'France',
-            ]
-              .filter(Boolean)
-              .join(' ');
-          if (composedTechAddress.trim()) {
-            startCoord = await geocodeAddress(composedTechAddress);
-          }
+        if (!startCoord && composedTechAddress.trim()) {
+          startCoord = await geocodeAddress(composedTechAddress);
         }
 
         if (!startCoord || cancelled) {
           setIsLoadingRoute(false);
           return;
         }
+
+        const startPt: TechStartPoint = {
+          coord: startCoord,
+          displayCoord: [startCoord.lat, startCoord.lng],
+          techName: technician.name || 'Technicien',
+          addressLabel:
+            composedTechAddress.trim() ||
+            `${startCoord.lat.toFixed(5)}, ${startCoord.lng.toFixed(5)}`,
+        };
+        setTechStartPoint(startPt);
 
         // 2. Resolve coordinates and equipment details for every mission in the tour
         const equipmentCoords: Record<string, Coordinate> = {};
@@ -510,8 +634,8 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
 
         setMissionPoints(builtPoints);
 
-        // 5. Fetch real road geometry along streets connecting mission 1 -> mission 2 -> ... -> mission N
-        const orderedCoords = builtPoints.map(p => p.coord);
+        // 5. Fetch real road geometry along streets starting from Technician Start Point -> Mission 1 -> Mission 2 -> ... -> Mission N
+        const orderedCoords: Coordinate[] = [startCoord, ...builtPoints.map(p => p.coord)];
         const roadGeom = await fetchRoadSegmentGeometry(orderedCoords);
         if (!cancelled) {
           setRoadPositions(roadGeom);
@@ -540,13 +664,14 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
       id="tour-route-map-overlay"
     >
       <style>{`
-        .defibeo-tour-route-marker-icon {
+        .defibeo-tour-route-marker-icon,
+        .defibeo-tour-route-runner-icon {
           background: transparent !important;
           border: none !important;
         }
         .leaflet-tooltip.defibeo-route-hover-pill {
           background-color: #ffffff !important;
-          border: 1px solid #e2e8f0 !important;
+          border: none !important;
           border-radius: 16px !important;
           box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14) !important;
           padding: 12px 16px !important;
@@ -614,20 +739,98 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             maxZoom={19}
           />
 
-          <AutoFitRouteBounds points={missionPoints} roadPositions={roadPositions} />
+          <AutoFitRouteBounds
+            techStartPoint={techStartPoint}
+            points={missionPoints}
+            roadPositions={roadPositions}
+          />
 
           {/* Blue road-following trace */}
           {roadPositions.length >= 2 && (
-            <Polyline
-              positions={roadPositions}
-              pathOptions={{
-                color: '#2e54ff',
-                weight: 5,
-                opacity: 0.9,
-                lineCap: 'round',
-                lineJoin: 'round',
-              }}
-            />
+            <>
+              <Polyline
+                positions={roadPositions}
+                pathOptions={{
+                  color: '#2e54ff',
+                  weight: 5,
+                  opacity: 0.9,
+                  lineCap: 'round',
+                  lineJoin: 'round',
+                }}
+              />
+              <AnimatedRouteDot roadPositions={roadPositions} />
+            </>
+          )}
+
+          {/* Technician Starting Address Point */}
+          {techStartPoint && (
+            <Marker
+              position={techStartPoint.displayCoord}
+              icon={createMissionPassageIcon('rgb(210, 45, 11)', 'D')}
+            >
+              <Tooltip
+                direction="right"
+                offset={[24, 0]}
+                opacity={1}
+                className="defibeo-route-hover-pill"
+              >
+                <div
+                  style={{
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    color: '#000000',
+                    lineHeight: '1.4',
+                    textAlign: 'left',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      fontSize: '17px',
+                      color: '#000000',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    Point de départ
+                  </div>
+                  <div style={{ marginBottom: '6px' }}>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        borderRadius: '1000px',
+                        backgroundColor: 'rgb(210, 45, 11)',
+                        color: '#ffffff',
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        padding: '3px 11px',
+                        lineHeight: '1.2',
+                      }}
+                    >
+                      Technicien
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      color: '#000000',
+                      marginBottom: '2px',
+                    }}
+                  >
+                    Nom : <span style={{ fontWeight: 400 }}>{techStartPoint.techName}</span>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: '15px',
+                      fontWeight: 600,
+                      color: '#000000',
+                    }}
+                  >
+                    Adresse : <span style={{ fontWeight: 400 }}>{techStartPoint.addressLabel}</span>
+                  </div>
+                </div>
+              </Tooltip>
+            </Marker>
           )}
 
           {/* Mission Points (Status color circle + Passage number inside + Hover Gélule) */}
