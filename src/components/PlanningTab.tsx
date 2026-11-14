@@ -1705,20 +1705,28 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                       {matchingAbsences.map(({ abs }, aIdx) => (
                         <div
                           key={`abs-${aIdx}`}
-                          className="bg-white p-3 space-y-2"
+                          className="p-3 space-y-2"
                           style={{
-                            border: "1px solid rgb(201, 190, 205)",
+                            border: "none",
                             borderRadius: "14px",
+                            background: "#cffff0",
                           }}
                         >
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px]">
+                            <span
+                              className="px-3.5 py-1.5 rounded-full font-medium"
+                              style={{
+                                fontSize: "18px",
+                                background: "#65aa95",
+                                color: "#cffff0",
+                              }}
+                            >
                               Indisponible
                             </span>
                           </div>
                           {abs.commentaire && (
-                            <div className="text-[16px] text-black" style={{ color: "#000", fontSize: "16px" }}>
-                              {abs.commentaire}
+                            <div style={{ color: "rgb(25 100 77)", fontSize: "18px" }}>
+                              Commentaire: {abs.commentaire}
                             </div>
                           )}
                         </div>
@@ -1732,20 +1740,28 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         return (
                           <div
                             key={`sch-${sIdx}`}
-                            className="bg-white p-3 space-y-2"
+                            className="p-3 space-y-2"
                             style={{
-                              border: "1px solid rgb(201, 190, 205)",
+                              border: "none",
                               borderRadius: "14px",
+                              background: "#cffff0",
                             }}
                           >
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px]">
+                              <span
+                                className="px-3.5 py-1.5 rounded-full font-medium"
+                                style={{
+                                  fontSize: "18px",
+                                  background: "#65aa95",
+                                  color: "#cffff0",
+                                }}
+                              >
                                 {slotText}
                               </span>
                             </div>
                             {schedule.commentaire && (
-                              <div className="text-[16px] text-black" style={{ color: "#000", fontSize: "16px" }}>
-                                {schedule.commentaire}
+                              <div style={{ color: "rgb(25 100 77)", fontSize: "18px" }}>
+                                Commentaire: {schedule.commentaire}
                               </div>
                             )}
                           </div>

@@ -375,7 +375,7 @@ interface DefibTabProps {
   variables: Variable[];
   onAddDefib: (defib: Omit<Defibrillateur, 'id'>) => void | Promise<any>;
   onUpdateDefib: (defib: Defibrillateur) => void | Promise<any>;
-  onDeleteDefib: (id: string) => void;
+  onDeleteDefib: (id: string, df?: Defibrillateur) => void;
   onBulkDelete: (ids: string[]) => void;
   onBulkEdit: (ids: string[], updates: Partial<Omit<Defibrillateur, 'id'>>) => void | Promise<void>;
   fsmTours?: any[];
@@ -587,6 +587,7 @@ export default function DefibTab({
   const [fallbackSheetDefibs, setFallbackSheetDefibs] = useState<Defibrillateur[]>([]);
   const [remoteFilteredTotal, setRemoteFilteredTotal] = useState<number | null>(null);
   const [fallbackSheetClients, setFallbackSheetClients] = useState<Client[]>([]);
+  const [defibToConfirmDelete, setDefibToConfirmDelete] = useState<Defibrillateur | null>(null);
   const [localSheetStats, setLocalSheetStats] = useState<any>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -600,20 +601,22 @@ export default function DefibTab({
     return null;
   });
 
+  useEffect(() => {
+    if (sheetStats && typeof sheetStats.totalCount === 'number') {
+      setLocalSheetStats(sheetStats);
+    }
+  }, [sheetStats]);
+
   const effectiveSheetStats = useMemo(() => {
     const isValidDefibStats = (s: any) =>
       s &&
       typeof s.totalCount === 'number' &&
-      s.totalCount > 0 &&
+      s.totalCount >= 0 &&
       typeof s.totalMainOui === 'number' &&
-      typeof s.totalMainNon === 'number' &&
-      typeof s.conformeEtAJourCount === 'number';
-    if (isValidDefibStats(localSheetStats) && isValidDefibStats(sheetStats)) {
-      return localSheetStats.totalCount >= sheetStats.totalCount ? localSheetStats : sheetStats;
-    }
+      typeof s.totalMainNon === 'number';
     if (isValidDefibStats(localSheetStats)) return localSheetStats;
     if (isValidDefibStats(sheetStats)) return sheetStats;
-    return sheetStats || localSheetStats || null;
+    return localSheetStats || sheetStats || null;
   }, [localSheetStats, sheetStats]);
 
   // Manual Refresh State
@@ -2563,13 +2566,13 @@ export default function DefibTab({
   const [numeroLotCoffret, setNumeroLotCoffret] = useState('');
   const [commentaireCoffret, setCommentaireCoffret] = useState('');
   const [peremptionTrousse, setPeremptionTrousse] = useState('');
-  const [kitCiseauxPresents, setKitCiseauxPresents] = useState<'Oui' | 'Non'>('Oui');
-  const [kitMasquePresent, setKitMasquePresent] = useState<'Oui' | 'Non'>('Oui');
+  const [kitCiseauxPresents, setKitCiseauxPresents] = useState<'Oui' | 'Non' | ''>('');
+  const [kitMasquePresent, setKitMasquePresent] = useState<'Oui' | 'Non' | ''>('');
   const [kitPeremptionMasque, setKitPeremptionMasque] = useState('');
-  const [kitServiettesPresentes, setKitServiettesPresentes] = useState<'Oui' | 'Non'>('Oui');
+  const [kitServiettesPresentes, setKitServiettesPresentes] = useState<'Oui' | 'Non' | ''>('');
   const [kitPeremptionServiettes, setKitPeremptionServiettes] = useState('');
-  const [kitGantsPresents, setKitGantsPresents] = useState<'Oui' | 'Non'>('Oui');
-  const [kitRasoirPresent, setKitRasoirPresent] = useState<'Oui' | 'Non'>('Oui');
+  const [kitGantsPresents, setKitGantsPresents] = useState<'Oui' | 'Non' | ''>('');
+  const [kitRasoirPresent, setKitRasoirPresent] = useState<'Oui' | 'Non' | ''>('');
 
   // Section 4 - Accès
   const [numVoie, setNumVoie] = useState('');
@@ -2598,18 +2601,7 @@ export default function DefibTab({
     closeAfternoon: string;
     openContinuous: string;
     closeContinuous: string;
-  }[]>([
-    {
-      days: [],
-      fermetureMidi: false,
-      openMorning: '09:00',
-      closeMorning: '12:00',
-      openAfternoon: '14:00',
-      closeAfternoon: '18:00',
-      openContinuous: '09:00',
-      closeContinuous: '17:00'
-    }
-  ]);
+  }[]>([]);
 
   const handleToggleDay = (idx: number, day: string) => {
     // Check if the day is already taken in another block
@@ -3370,6 +3362,7 @@ export default function DefibTab({
   // Défibrillateurs avec Maintenance Autorisée = Oui ("Avec.Main") pour l'affichage Plan (depuis activeDefibrillateurs lié au Spreadsheet du tenant)
   const planDefibrillateurs = useMemo(() => {
     return activeDefibrillateurs.filter(df => {
+      if (df.archive === 'Oui') return false;
       const anyDf = df as any;
       const rawFsm = (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
       if (rawFsm === 'non' || rawFsm === 'false' || rawFsm === '0') return false;
@@ -3381,15 +3374,18 @@ export default function DefibTab({
     const localLen = activeDefibrillateurs.length;
     const remoteLen = effectiveSheetStats?.totalCount || 0;
     if (!resolvedSpreadsheetUrl && localLen === 0 && remoteLen === 0) return 0;
+    if (localLen > 0 && remoteLen <= localLen + deletedDefibSet.size) {
+      return localLen;
+    }
     return Math.max(localLen, remoteLen);
-  }, [activeDefibrillateurs.length, effectiveSheetStats?.totalCount, resolvedSpreadsheetUrl]);
+  }, [activeDefibrillateurs.length, effectiveSheetStats?.totalCount, resolvedSpreadsheetUrl, deletedDefibSet.size]);
 
   // Sum-counts pour Maintenance autorisée (Oui / Non) sur 100% des lignes du Spreadsheet Défibrillateurs
   const { totalMainOui, totalMainNon } = useMemo(() => {
     if (!resolvedSpreadsheetUrl && activeDefibrillateurs.length === 0 && !effectiveSheetStats) {
       return { totalMainOui: 0, totalMainNon: 0 };
     }
-    if (effectiveSheetStats && (effectiveSheetStats.totalCount || 0) > activeDefibrillateurs.length) {
+    if (effectiveSheetStats && (effectiveSheetStats.totalCount || 0) > activeDefibrillateurs.length + deletedDefibSet.size) {
       return {
         totalMainOui: effectiveSheetStats.totalMainOui ?? 0,
         totalMainNon: effectiveSheetStats.totalMainNon ?? 0,
@@ -3399,7 +3395,7 @@ export default function DefibTab({
     let non = 0;
     for (const df of activeDefibrillateurs) {
       const anyDf = df as any;
-      const raw = (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
+      const raw = df.archive === 'Oui' ? 'non' : (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
       if (raw === 'non' || raw === 'false' || raw === '0') {
         non++;
       } else {
@@ -3407,7 +3403,7 @@ export default function DefibTab({
       }
     }
     return { totalMainOui: oui, totalMainNon: non };
-  }, [activeDefibrillateurs, effectiveSheetStats, resolvedSpreadsheetUrl]);
+  }, [activeDefibrillateurs, effectiveSheetStats, resolvedSpreadsheetUrl, deletedDefibSet.size]);
 
   // List search & filters computation - highly optimized for datasets of 18,000+ items across all browsers
   const filteredDefibs = useMemo(() => {
@@ -3461,7 +3457,7 @@ export default function DefibTab({
 
       // 3. Maintenance autorisée (fsmAutorise) filter
       if (maintenanceFilter !== 'all' && (maintenanceFilter as string) !== 'tous') {
-        const rawFsm = (df.fsmAutorise || "").trim().toLowerCase();
+        const rawFsm = df.archive === 'Oui' ? 'non' : (df.fsmAutorise || "").trim().toLowerCase();
         const fsmVal = rawFsm === 'non' ? 'non' : 'oui';
         if (maintenanceFilter === 'oui' && fsmVal !== 'oui') return false;
         if (maintenanceFilter === 'non' && fsmVal !== 'non') return false;
@@ -3822,6 +3818,31 @@ export default function DefibTab({
     return filteredDefibs.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredDefibs, currentPage]);
 
+  // Ensemble des défibrillateurs présents dans au moins une tournée ou dans À trier / Ordres ADV
+  const defibsInTourOrTrierSet = useMemo(() => {
+    const set = new Set<string>();
+    if (Array.isArray(fsmTours)) {
+      for (const t of fsmTours) {
+        if (!t || t.deleted || t.isDeleted) continue;
+        const statusLower = String(t.status || '').trim().toLowerCase();
+        if (statusLower === 'supprimé' || statusLower === 'supprime' || statusLower === 'deleted') {
+          continue;
+        }
+        if (Array.isArray(t.missions)) {
+          for (const m of t.missions) {
+            if (!m || m.deleted || m.isDeleted) continue;
+            if (m.defibIdentifiant) set.add(String(m.defibIdentifiant).trim().toLowerCase());
+            if (m.defibId) set.add(String(m.defibId).trim().toLowerCase());
+            if (m.identifiant) set.add(String(m.identifiant).trim().toLowerCase());
+            if (m.defibSnapshot?.identifiant) set.add(String(m.defibSnapshot.identifiant).trim().toLowerCase());
+            if (m.defibSnapshot?.id) set.add(String(m.defibSnapshot.id).trim().toLowerCase());
+          }
+        }
+      }
+    }
+    return set;
+  }, [fsmTours]);
+
   // Indicateur "Conforme et à jour" — Toujours calculé sur 100% des lignes du Spreadsheet Défibrillateurs ayant "Maintenance Autorisée = Oui"
   const { conformeEtAJourCount, compliancePercent, projectedCompliancePercent, totalDefibsCount } = useMemo(() => {
     if (!resolvedSpreadsheetUrl && activeDefibrillateurs.length === 0 && !effectiveSheetStats) {
@@ -3859,13 +3880,14 @@ export default function DefibTab({
 
     // Si toutes les lignes du Spreadsheet ne sont pas encore chargées en mémoire côté navigateur,
     // utiliser directement le calcul serveur effectué sur 100% des lignes du Spreadsheet ("Maintenance Autorisée = Oui")
-    if (effectiveSheetStats && (effectiveSheetStats.totalCount || 0) > activeDefibrillateurs.length) {
+    if (effectiveSheetStats && (effectiveSheetStats.totalCount || 0) > activeDefibrillateurs.length + deletedDefibSet.size) {
       const total = effectiveSheetStats.eligibleMainOuiCount ?? effectiveSheetStats.totalMainOui ?? 0;
       const compliant = effectiveSheetStats.conformeEtAJourCount ?? 0;
       const pct = effectiveSheetStats.compliancePercent ?? (total > 0 ? Math.round((compliant / total) * 100) : 0);
       let extraInTours = 0;
       if (inTourDefibKeys.size > 0 && activeDefibrillateurs.length > 0) {
         for (const df of activeDefibrillateurs) {
+          if (df.archive === 'Oui') continue;
           const anyDf = df as any;
           const rawFsm = (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
           const isMainOui = rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || (!rawFsm && (df.fsmAutorise || 'Oui') === 'Oui');
@@ -3892,6 +3914,7 @@ export default function DefibTab({
     // Une fois 100% des lignes du Spreadsheet chargées dans activeDefibrillateurs (indépendamment des filtres / pagination de la table-view),
     // calculer sur l'intégralité des lignes ayant "Maintenance Autorisée = Oui"
     const eligibleDefibs = activeDefibrillateurs.filter(df => {
+      if (df.archive === 'Oui') return false;
       const anyDf = df as any;
       const rawFsm = (df.fsmAutorise ?? anyDf.maintenanceAutorisee ?? anyDf.maintenance_autorisee ?? anyDf.fsm_autorise ?? '').toString().trim().toLowerCase();
       return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || (!rawFsm && (df.fsmAutorise || 'Oui') === 'Oui');
@@ -4399,13 +4422,13 @@ export default function DefibTab({
     setNumeroLotCoffret('');
     setCommentaireCoffret('');
     setPeremptionTrousse('');
-    setKitCiseauxPresents('Oui');
-    setKitMasquePresent('Oui');
+    setKitCiseauxPresents('');
+    setKitMasquePresent('');
     setKitPeremptionMasque('');
-    setKitServiettesPresentes('Oui');
+    setKitServiettesPresentes('');
     setKitPeremptionServiettes('');
-    setKitGantsPresents('Oui');
-    setKitRasoirPresent('Oui');
+    setKitGantsPresents('');
+    setKitRasoirPresent('');
 
     // Reset Accès
     setNumVoie('');
@@ -4420,18 +4443,7 @@ export default function DefibTab({
     setAccesSemaine(true);
     setAccesWeekend(false);
     setExterieur(false);
-    setSchedules([
-      {
-        days: [],
-        fermetureMidi: false,
-        openMorning: '09:00',
-        closeMorning: '12:00',
-        openAfternoon: '14:00',
-        closeAfternoon: '18:00',
-        openContinuous: '09:00',
-        closeContinuous: '17:00'
-      }
-    ]);
+    setSchedules([]);
 
     // Dates
     setFinGarantie('');
@@ -4587,13 +4599,13 @@ export default function DefibTab({
     setNumeroLotCoffret(df.numeroLotCoffret || anyDf.boitier_lot || anyDf.lot_coffret || anyDf.lotCoffret || '');
     setCommentaireCoffret(df.commentaireCoffret || anyDf.commentaire_coffret || '');
     setPeremptionTrousse(toISODateOnly(df.peremptionTrousse || anyDf.peremption_trousse || anyDf.date_peremption_trousse || ''));
-    setKitCiseauxPresents(df.kitCiseauxPresents || anyDf.ciseaux_presents || 'Oui');
-    setKitMasquePresent(df.kitMasquePresent || anyDf.masque_present || 'Oui');
+    setKitCiseauxPresents(df.kitCiseauxPresents || anyDf.ciseaux_presents || '');
+    setKitMasquePresent(df.kitMasquePresent || anyDf.masque_present || '');
     setKitPeremptionMasque(toISODateOnly(df.kitPeremptionMasque || anyDf.peremption_masque || ''));
-    setKitServiettesPresentes(df.kitServiettesPresentes || anyDf.serviettes_presentes || 'Oui');
+    setKitServiettesPresentes(df.kitServiettesPresentes || anyDf.serviettes_presentes || '');
     setKitPeremptionServiettes(toISODateOnly(df.kitPeremptionServiettes || anyDf.peremption_serviettes || ''));
-    setKitGantsPresents(df.kitGantsPresents || anyDf.gants_presents || 'Oui');
-    setKitRasoirPresent(df.kitRasoirPresent || anyDf.rasoir_present || anyDf.rasoir || 'Oui');
+    setKitGantsPresents(df.kitGantsPresents || anyDf.gants_presents || '');
+    setKitRasoirPresent(df.kitRasoirPresent || anyDf.rasoir_present || anyDf.rasoir || '');
 
     setNumVoie(df.numVoie || anyDf.numero_et_voie || anyDf.adresse || '');
     setVille(df.ville || anyDf.city || '');
@@ -4610,34 +4622,17 @@ export default function DefibTab({
 
     if (df.horaires) {
       try {
-        setSchedules(JSON.parse(df.horaires));
+        const parsedHoraires = JSON.parse(df.horaires);
+        if (Array.isArray(parsedHoraires)) {
+          setSchedules(parsedHoraires.filter((s: any) => Array.isArray(s?.days) && s.days.length > 0));
+        } else {
+          setSchedules([]);
+        }
       } catch (e) {
-        setSchedules([
-          {
-            days: [],
-            fermetureMidi: false,
-            openMorning: '09:00',
-            closeMorning: '12:00',
-            openAfternoon: '14:00',
-            closeAfternoon: '18:00',
-            openContinuous: '09:00',
-            closeContinuous: '17:00'
-          }
-        ]);
+        setSchedules([]);
       }
     } else {
-      setSchedules([
-        {
-          days: [],
-          fermetureMidi: false,
-          openMorning: '09:00',
-          closeMorning: '12:00',
-          openAfternoon: '14:00',
-          closeAfternoon: '18:00',
-          openContinuous: '09:00',
-          closeContinuous: '17:00'
-        }
-      ]);
+      setSchedules([]);
     }
 
     setFinGarantie(toISODateOnly(df.finGarantie || anyDf.fin_garantie || anyDf.expiration_garantie || anyDf.garantie || ''));
@@ -4702,10 +4697,11 @@ export default function DefibTab({
     setLoue(df.loue || 'Non');
     setPrete(df.prete || 'Non');
     setStocke(df.stocke || 'Non');
-    setArchive(df.archive || 'Non');
+    const effectiveArchive = df.archive || 'Non';
+    setArchive(effectiveArchive);
     setConforme(df.conforme || 'Oui');
     setSousTraitance(df.sousTraitance || 'Non');
-    setFsmAutorise(df.fsmAutorise || anyDf.fsm_autorise || anyDf.maintenance_autorisee || 'Oui');
+    setFsmAutorise(effectiveArchive === 'Oui' ? 'Non' : (df.fsmAutorise || anyDf.fsm_autorise || anyDf.maintenance_autorisee || 'Oui'));
     setVictimeSurvie(df.victimeSurvie || 'Non');
     setVictimeSansSurvie(df.victimeSansSurvie || 'Non');
     setAgeVictime(df.ageVictime || '0');
@@ -4894,9 +4890,9 @@ export default function DefibTab({
       peremptionTrousse,
       kitCiseauxPresents,
       kitMasquePresent,
-      kitPeremptionMasque: kitMasquePresent === 'Oui' ? kitPeremptionMasque : '',
+      kitPeremptionMasque: kitMasquePresent === 'Non' ? '' : kitPeremptionMasque,
       kitServiettesPresentes,
-      kitPeremptionServiettes: kitServiettesPresentes === 'Oui' ? kitPeremptionServiettes : '',
+      kitPeremptionServiettes: kitServiettesPresentes === 'Non' ? '' : kitPeremptionServiettes,
       kitGantsPresents,
       kitRasoirPresent,
 
@@ -4977,7 +4973,7 @@ export default function DefibTab({
       archive,
       conforme,
       sousTraitance,
-      fsmAutorise,
+      fsmAutorise: archive === 'Oui' ? 'Non' : fsmAutorise,
       victimeSurvie,
       victimeSansSurvie,
       ageVictime: ageVictime.trim(),
@@ -6741,63 +6737,41 @@ export default function DefibTab({
                           >
                             Modifier
                           </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const inTour = (fsmTours || []).some(t =>
-                                (t.missions || []).some((m: any) => m.defibIdentifiant && df.identifiant && String(m.defibIdentifiant).trim().toLowerCase() === String(df.identifiant).trim().toLowerCase())
-                              );
-                              if (inTour) {
-                                return;
-                              }
-                              const keysToAdd = [df.id, df.identifiant, df.numeroSerie, (df as any).num_serie]
-                                .filter(Boolean)
-                                .map(s => String(s).trim().toLowerCase());
-                              const keySet = new Set(keysToAdd);
-                              try {
-                                const raw = sessionStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
-                                const parsed = raw ? JSON.parse(raw) : [];
-                                const combined = Array.from(new Set([...(Array.isArray(parsed) ? parsed : []), ...keysToAdd]));
-                                sessionStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
-                                localStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
-                                localStorage.setItem('defib_D27_deleted_defib_keys', JSON.stringify(combined));
-                                localStorage.setItem('defib_D58_deleted_defib_keys', JSON.stringify(combined));
-                              } catch (_) {}
-
-                              const shouldKeep = (item: any) => {
-                                if (!item) return false;
-                                const itemId = String(item.id || '').trim().toLowerCase();
-                                const itemIdent = String(item.identifiant || '').trim().toLowerCase();
-                                const itemSn = String(item.numeroSerie || item.num_serie || '').trim().toLowerCase();
-                                if (itemId && keySet.has(itemId)) return false;
-                                if (itemIdent && keySet.has(itemIdent)) return false;
-                                if (itemSn && keySet.has(itemSn)) return false;
-                                return true;
-                              };
-
-                              setLocalDeletedVersion(v => v + 1);
-                              setFallbackSheetDefibs(prev => prev.filter(shouldKeep));
-                              setRemoteQueriedDefibs(prev => prev.filter(shouldKeep));
-                              setPlanSheetDefibs(prev => prev.filter(shouldKeep));
-                              if (stableDefibsRef.current.items.length > 0) {
-                                const beforeLen = stableDefibsRef.current.items.length;
-                                stableDefibsRef.current.items = stableDefibsRef.current.items.filter(shouldKeep);
-                                if (stableDefibsRef.current.items.length < beforeLen) {
-                                  stableDefibsRef.current.totalCount = Math.max(0, stableDefibsRef.current.totalCount - 1);
+                          {(() => {
+                            const dfIdentKey = df.identifiant ? String(df.identifiant).trim().toLowerCase() : '';
+                            const dfIdKey = df.id ? String(df.id).trim().toLowerCase() : '';
+                            const isInTourOrTrier = Boolean(
+                              (dfIdentKey && defibsInTourOrTrierSet.has(dfIdentKey)) ||
+                              (dfIdKey && defibsInTourOrTrierSet.has(dfIdKey))
+                            );
+                            return (
+                              <button
+                                type="button"
+                                disabled={isInTourOrTrier}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isInTourOrTrier) {
+                                    return;
+                                  }
+                                  setDefibToConfirmDelete(df);
+                                }}
+                                style={{
+                                  ...rowActionButton18Style,
+                                  backgroundColor: 'rgb(210, 45, 11)',
+                                  opacity: isInTourOrTrier ? 0.5 : 1,
+                                  cursor: isInTourOrTrier ? 'not-allowed' : 'pointer',
+                                }}
+                                className={isInTourOrTrier ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}
+                                title={
+                                  isInTourOrTrier
+                                    ? t("Suppression impossible : ce défibrillateur est présent dans une tournée ou dans À trier / Ordres ADV.")
+                                    : t("Supprimer")
                                 }
-                              }
-                              setRemoteFilteredTotal(prev => (typeof prev === 'number' ? Math.max(0, prev - 1) : prev));
-                              setLocalSheetStats(prev => prev ? { ...prev, total: Math.max(0, (prev.total || 1) - 1) } : prev);
-                              setSelectedIds(prev => prev.filter(id => !keySet.has(String(id).trim().toLowerCase())));
-                              onDeleteDefib(df.identifiant || df.id);
-                            }}
-                            style={{ ...rowActionButton18Style, backgroundColor: 'rgb(210, 45, 11)' }}
-                            className="cursor-pointer"
-                            title={t("Supprimer")}
-                          >
-                            {t("Supprimer")}
-                          </button>
+                              >
+                                {t("Supprimer")}
+                              </button>
+                            );
+                          })()}
                         </div>
                       </td>
                     </tr>
@@ -6973,11 +6947,7 @@ export default function DefibTab({
                 }}
                 className="w-full transition-all"
               >
-                {isSubmitChecking ? (
-                  <span>Enregistrement en cours...</span>
-                ) : (
-                  <span>Enregistrer</span>
-                )}
+                <span>Enregistrer</span>
               </button>
             </div>
           </div>
@@ -7658,45 +7628,81 @@ export default function DefibTab({
                     </div>
 
                     {/* Enabled Contract fields */}
-                    <div className="space-y-1 mt-1 pt-1 font-sans">
-                      <label className="block text-[10px] uppercase font-semibold text-slate-400 font-sans">Titre du contrat.</label>
+                    <div
+                      className="space-y-1 mt-1 pt-1 font-sans"
+                      title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                    >
+                      <label
+                        className="block text-[10px] uppercase font-semibold text-slate-400 font-sans"
+                        title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                      >
+                        Titre du contrat.
+                      </label>
                       <input
                         type="text"
                         value={nomContrat}
                         disabled
+                        title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
                         placeholder="Automatique à la sélection"
                         className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-slate-100 text-slate-500 cursor-not-allowed font-sans"
                       />
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 font-sans">
-                      <div className="space-y-1">
-                        <label className="block text-[10px] uppercase font-semibold text-slate-400 font-sans">Contrat en cours.</label>
+                      <div
+                        className="space-y-1"
+                        title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                      >
+                        <label
+                          className="block text-[10px] uppercase font-semibold text-slate-400 font-sans"
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                        >
+                          Contrat en cours.
+                        </label>
                         <select
                           value={contrat || 'Non'}
                           disabled
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
                           className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-white text-slate-800 font-sans cursor-not-allowed white-disabled"
                         >
                           <option value="Oui">Oui</option>
                           <option value="Non">Non</option>
                         </select>
                       </div>
-                      <div className="space-y-1">
-                        <label className="block text-[10px] uppercase font-semibold text-slate-400 font-sans">Payeur ID</label>
+                      <div
+                        className="space-y-1"
+                        title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                      >
+                        <label
+                          className="block text-[10px] uppercase font-semibold text-slate-400 font-sans"
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                        >
+                          Payeur ID
+                        </label>
                         <input
                           type="text"
                           value={payeurId}
                           disabled
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
                           placeholder="Payeur ID"
                           className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-slate-100 text-slate-500 cursor-not-allowed font-sans"
                         />
                       </div>
-                      <div className="space-y-1">
-                        <label className="block text-[10px] uppercase font-semibold text-slate-400 font-sans">Client ID</label>
+                      <div
+                        className="space-y-1"
+                        title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                      >
+                        <label
+                          className="block text-[10px] uppercase font-semibold text-slate-400 font-sans"
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                        >
+                          Client ID
+                        </label>
                         <input
                           type="text"
                           value={clientIdField}
                           disabled
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
                           placeholder="Client ID"
                           className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-slate-100 text-slate-500 cursor-not-allowed font-sans"
                         />
@@ -7704,29 +7710,56 @@ export default function DefibTab({
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 font-sans">
-                      <div className="space-y-1 font-sans">
-                        <label className="block text-[10px] uppercase font-semibold text-slate-400 font-sans">Référence du contrat.</label>
+                      <div
+                        className="space-y-1 font-sans"
+                        title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                      >
+                        <label
+                          className="block text-[10px] uppercase font-semibold text-slate-400 font-sans"
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                        >
+                          Référence du contrat.
+                        </label>
                         <input
                           type="text"
                           value={referenceContrat}
                           disabled
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
                           placeholder="Automatique à la sélection"
                           className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-slate-100 text-slate-500 cursor-not-allowed font-mono"
                         />
                       </div>
-                      <div className="space-y-1 font-sans">
-                        <label className="block text-[10px] uppercase font-semibold text-slate-400 font-sans">Début du contrat.</label>
+                      <div
+                        className="space-y-1 font-sans"
+                        title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                      >
+                        <label
+                          className="block text-[10px] uppercase font-semibold text-slate-400 font-sans"
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                        >
+                          Début du contrat.
+                        </label>
                         <SafeDateInput
                           value={debutContrat}
                           disabled
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
                           className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-slate-100 text-slate-500 cursor-not-allowed font-sans"
                         />
                       </div>
-                      <div className="space-y-1 font-sans">
-                        <label className="block text-[10px] uppercase font-semibold text-slate-400 font-sans">Expiration du contrat.</label>
+                      <div
+                        className="space-y-1 font-sans"
+                        title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                      >
+                        <label
+                          className="block text-[10px] uppercase font-semibold text-slate-400 font-sans"
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
+                        >
+                          Expiration du contrat.
+                        </label>
                         <SafeDateInput
                           value={finContrat}
                           disabled
+                          title="Ces données sont fournies à titre indicatif. Elles proviennent du dossier client et ne peuvent pas être modifiées depuis le matériel."
                           className="w-full px-2 py-1 border border-slate-200 rounded-md text-xs bg-slate-100 text-slate-500 cursor-not-allowed font-sans"
                         />
                       </div>
@@ -7911,20 +7944,52 @@ export default function DefibTab({
                         </span>
                       </div>
 
-                      {/* Péremption de la trousse */}
-                      <div className="space-y-1">
-                        <label htmlFor="form-peremption-trousse" className="block text-[11px] font-bold text-slate-500 uppercase">
-                          {t("Péremption de la trousse.")}
-                        </label>
-                        <SafeDateInput
-                          id="form-peremption-trousse"
-                          value={peremptionTrousse}
-                          onChange={(e) => setPeremptionTrousse(e.target.value)}
-                          className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono"
-                        />
+                      {/* Première ligne en 3 colonnes : Péremption de la trousse + Péremption du masque + Péremption des serviettes */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        {/* Péremption de la trousse */}
+                        <div className="space-y-1">
+                          <label htmlFor="form-peremption-trousse" className="block text-[11px] font-bold text-slate-500 uppercase">
+                            {t("Péremption de la trousse.")}
+                          </label>
+                          <SafeDateInput
+                            id="form-peremption-trousse"
+                            value={peremptionTrousse}
+                            onChange={(e) => setPeremptionTrousse(e.target.value)}
+                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono"
+                          />
+                        </div>
+
+                        {/* Péremption du masque. */}
+                        <div className={`space-y-1 transition-opacity duration-200 ${kitMasquePresent === 'Non' ? 'opacity-50 pointer-events-none' : ''}`}>
+                          <label htmlFor="form-peremption-masque" className="block text-[11px] font-bold text-slate-500 uppercase">
+                            {t("Péremption du masque.")}
+                          </label>
+                          <SafeDateInput
+                            id="form-peremption-masque"
+                            value={kitPeremptionMasque}
+                            onChange={(e) => setKitPeremptionMasque(e.target.value)}
+                            disabled={kitMasquePresent === 'Non'}
+                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono"
+                          />
+                        </div>
+
+                        {/* Péremption des serviettes. */}
+                        <div className={`space-y-1 transition-opacity duration-200 ${kitServiettesPresentes === 'Non' ? 'opacity-50 pointer-events-none' : ''}`}>
+                          <label htmlFor="form-peremption-serviettes" className="block text-[11px] font-bold text-slate-500 uppercase">
+                            {t("Péremption des serviettes.")}
+                          </label>
+                          <SafeDateInput
+                            id="form-peremption-serviettes"
+                            value={kitPeremptionServiettes}
+                            onChange={(e) => setKitPeremptionServiettes(e.target.value)}
+                            disabled={kitServiettesPresentes === 'Non'}
+                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono"
+                          />
+                        </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                      {/* En dessous en 3 colonnes : les 5 radio-checks */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
                         {/* Ciseaux présents. */}
                         <div className="space-y-1">
                           <span className="block text-[11px] font-bold text-slate-500 uppercase">
@@ -8018,20 +8083,6 @@ export default function DefibTab({
                           </div>
                         </div>
 
-                        {/* Péremption du masque. */}
-                        <div className={`space-y-1 transition-opacity duration-200 ${kitMasquePresent !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
-                          <label htmlFor="form-peremption-masque" className="block text-[11px] font-bold text-slate-500 uppercase">
-                            {t("Péremption du masque.")}
-                          </label>
-                          <SafeDateInput
-                            id="form-peremption-masque"
-                            value={kitPeremptionMasque}
-                            onChange={(e) => setKitPeremptionMasque(e.target.value)}
-                            disabled={kitMasquePresent !== 'Oui'}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono"
-                          />
-                        </div>
-
                         {/* Serviettes présentes. */}
                         <div className="space-y-1">
                           <span className="block text-[11px] font-bold text-slate-500 uppercase">
@@ -8078,20 +8129,6 @@ export default function DefibTab({
                               Non
                             </button>
                           </div>
-                        </div>
-
-                        {/* Péremption des serviettes. */}
-                        <div className={`space-y-1 transition-opacity duration-200 ${kitServiettesPresentes !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
-                          <label htmlFor="form-peremption-serviettes" className="block text-[11px] font-bold text-slate-500 uppercase">
-                            {t("Péremption des serviettes.")}
-                          </label>
-                          <SafeDateInput
-                            id="form-peremption-serviettes"
-                            value={kitPeremptionServiettes}
-                            onChange={(e) => setKitPeremptionServiettes(e.target.value)}
-                            disabled={kitServiettesPresentes !== 'Oui'}
-                            className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs font-mono"
-                          />
                         </div>
 
                         {/* Paire de gants présents. */}
@@ -9876,8 +9913,13 @@ export default function DefibTab({
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={() => setFsmAutorise('Oui')}
-                            className="inline-flex items-center cursor-pointer gap-2 select-none"
+                            disabled={archive === 'Oui'}
+                            onClick={() => {
+                              if (archive !== 'Oui') {
+                                setFsmAutorise('Oui');
+                              }
+                            }}
+                            className={`inline-flex items-center gap-2 select-none ${archive === 'Oui' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                             style={{ fontSize: '16px', color: '#000' }}
                           >
                             <span
@@ -10048,7 +10090,10 @@ export default function DefibTab({
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={() => setArchive('Oui')}
+                            onClick={() => {
+                              setArchive('Oui');
+                              setFsmAutorise('Non');
+                            }}
                             className="inline-flex items-center cursor-pointer gap-2 select-none"
                             style={{ fontSize: '16px', color: '#000' }}
                           >
@@ -10358,21 +10403,23 @@ export default function DefibTab({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
-                      {/* Âge Victime */}
-                      <div className="space-y-1 sm:col-span-1">
-                        <label htmlFor="form-age" className="block text-[10px] font-bold text-slate-400 uppercase">Âge de la victime.</label>
-                        <input
-                          type="number"
-                          id="form-age"
-                          placeholder="0"
-                          value={ageVictime}
-                          onChange={(e) => setAgeVictime(e.target.value)}
-                          className="px-2 py-1 border border-slate-200 rounded text-xs text-slate-800 text-center placeholder:text-center"
-                          style={{ width: '60px', maxWidth: '60px', textAlign: 'center' }}
-                        />
+                    {victimeSurvie !== 'Non' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
+                        {/* Âge Victime */}
+                        <div className="space-y-1 sm:col-span-1">
+                          <label htmlFor="form-age" className="block text-[10px] font-bold text-slate-400 uppercase">Âge de la victime.</label>
+                          <input
+                            type="number"
+                            id="form-age"
+                            placeholder="0"
+                            value={ageVictime}
+                            onChange={(e) => setAgeVictime(e.target.value)}
+                            className="px-2 py-1 border border-slate-200 rounded text-xs text-slate-800 text-center placeholder:text-center"
+                            style={{ width: '60px', maxWidth: '60px', textAlign: 'center' }}
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
 
               </div>
@@ -12865,7 +12912,7 @@ export default function DefibTab({
                 cursor: 'default',
               }}
             >
-              {t("Si vous n’avez pas accès à la feuille de calcul, cliquez sur Demander l’accès afin d’obtenir l’autorisation.")}
+              {t("Si vous n’avez pas accès à la feuille de calcul, cliquez sur Demander l’accès afin d’obtenir l’autorisation. Avertissement : Il est strictement interdit de modifier les en-têtes de colonnes. Toute activité dans le document est enregistrée dans l'historique des versions.")}
             </p>
             <div className="flex items-center justify-end pt-1">
               <button
@@ -12887,6 +12934,214 @@ export default function DefibTab({
                 }}
               >
                 {t("Ouvrir (nouvel onglet)")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {defibToConfirmDelete && typeof document !== 'undefined' && createPortal(
+        <div
+          id="defib-delete-confirm-popup-backdrop"
+          onClick={() => setDefibToConfirmDelete(null)}
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn"
+        >
+          <div
+            id="defib-delete-confirm-popup-card"
+            onClick={(e) => e.stopPropagation()}
+            className="p-6 w-full flex flex-col gap-5 text-left"
+            style={{
+              background: '#f5f7fa',
+              backgroundColor: '#f5f7fa',
+              borderRadius: '13px',
+              boxShadow: 'none',
+              textAlign: 'left',
+              maxWidth: '460px',
+            }}
+          >
+            <p
+              className="leading-relaxed m-0"
+              style={{
+                color: '#000000',
+                fontSize: '18px',
+                fontWeight: 100,
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                cursor: 'default',
+              }}
+            >
+              {t("Souhaitez-vous vraiment supprimer ce matériel, cela est définitif? Préférez-vous le marquer comme archivé?")}
+            </p>
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+              <button
+                type="button"
+                id="btn-cancel-delete-defib"
+                onClick={() => setDefibToConfirmDelete(null)}
+                className="flex-1 text-center cursor-pointer outline-none hover:opacity-90 active:scale-[0.99] transition-all"
+                style={{
+                  padding: '11px 18px',
+                  color: '#000000',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                  background: '#e2e8f0',
+                  backgroundColor: '#e2e8f0',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
+              >
+                {t("Annuler")}
+              </button>
+              <button
+                type="button"
+                id="btn-archive-instead-of-delete-defib"
+                onClick={async () => {
+                  const df = defibToConfirmDelete;
+                  setDefibToConfirmDelete(null);
+                  if (!df) return;
+                  const nowIso = new Date().toISOString();
+                  const wasMainNon = df.archive === 'Oui' || String(df.fsmAutorise || 'Oui').trim().toLowerCase() === 'non';
+                  const updatedRecord: Defibrillateur = {
+                    ...df,
+                    archive: 'Oui',
+                    fsmAutorise: 'Non',
+                    updatedAt: nowIso,
+                    dateDerniereModification: nowIso,
+                  };
+                  const matchDefib = (item: any) =>
+                    item &&
+                    ((item.id && df.id && String(item.id).trim().toLowerCase() === String(df.id).trim().toLowerCase()) ||
+                      (item.identifiant && df.identifiant && String(item.identifiant).trim().toLowerCase() === String(df.identifiant).trim().toLowerCase()));
+                  setFallbackSheetDefibs(prev => prev.map(item => (matchDefib(item) ? { ...item, ...updatedRecord } : item)));
+                  setRemoteQueriedDefibs(prev => prev.map(item => (matchDefib(item) ? { ...item, ...updatedRecord } : item)));
+                  setPlanSheetDefibs(prev => prev.filter(item => !matchDefib(item)));
+                  if (stableDefibsRef.current.items.length > 0) {
+                    stableDefibsRef.current.items = stableDefibsRef.current.items.map(item =>
+                      matchDefib(item) ? { ...item, ...updatedRecord } : item
+                    );
+                  }
+                  if (!wasMainNon) {
+                    setLocalSheetStats((prev: any) => {
+                      if (!prev) return prev;
+                      const nextStats = {
+                        ...prev,
+                        totalMainOui: Math.max(0, (prev.totalMainOui || 1) - 1),
+                        totalMainNon: (prev.totalMainNon || 0) + 1,
+                      };
+                      try {
+                        for (const k of [activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase()]) {
+                          localStorage.setItem(`defib_${k}_defib_sheet_stats`, JSON.stringify(nextStats));
+                        }
+                      } catch (_) {}
+                      return nextStats;
+                    });
+                  }
+                  recordRecentDefibChange([df.id, df.identifiant]);
+                  await onUpdateDefib(updatedRecord);
+                }}
+                className="flex-1 text-center cursor-pointer outline-none hover:opacity-90 active:scale-[0.99] transition-all"
+                style={{
+                  padding: '11px 18px',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                  background: 'rgb(46, 84, 255)',
+                  backgroundColor: 'rgb(46, 84, 255)',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
+              >
+                {t("Archiver")}
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-delete-defib"
+                onClick={() => {
+                  const df = defibToConfirmDelete;
+                  setDefibToConfirmDelete(null);
+                  if (!df) return;
+                  const keysToAdd = [df.id, df.identifiant, df.numeroSerie, (df as any).num_serie]
+                    .filter(Boolean)
+                    .map(s => String(s).trim().toLowerCase());
+                  const keySet = new Set(keysToAdd);
+                  try {
+                    const raw = sessionStorage.getItem(`defib_${activeTenantId}_deleted_defib_keys`);
+                    const parsed = raw ? JSON.parse(raw) : [];
+                    const combined = Array.from(new Set([...(Array.isArray(parsed) ? parsed : []), ...keysToAdd]));
+                    sessionStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
+                    localStorage.setItem(`defib_${activeTenantId}_deleted_defib_keys`, JSON.stringify(combined));
+                    localStorage.setItem('defib_D27_deleted_defib_keys', JSON.stringify(combined));
+                    localStorage.setItem('defib_D58_deleted_defib_keys', JSON.stringify(combined));
+                  } catch (_) {}
+
+                  const upperKeySet = new Set(keysToAdd.map(k => k.toUpperCase()));
+                  setRecentDefibTimestamps(prev => {
+                    const next = { ...prev };
+                    upperKeySet.forEach(k => delete next[k]);
+                    try {
+                      const str = JSON.stringify(next);
+                      sessionStorage.setItem(`defib_${activeTenantId}_recent_defib_timestamps`, str);
+                      localStorage.setItem(`defib_${activeTenantId}_recent_defib_timestamps`, str);
+                    } catch (_) {}
+                    return next;
+                  });
+
+                  const shouldKeep = (item: any) => {
+                    if (!item) return false;
+                    const itemId = String(item.id || '').trim().toLowerCase();
+                    const itemIdent = String(item.identifiant || '').trim().toLowerCase();
+                    const itemSn = String(item.numeroSerie || item.num_serie || '').trim().toLowerCase();
+                    if (itemId && keySet.has(itemId)) return false;
+                    if (itemIdent && keySet.has(itemIdent)) return false;
+                    if (!itemId && !itemIdent && itemSn && keySet.has(itemSn)) return false;
+                    return true;
+                  };
+
+                  const wasMainNon = df.archive === 'Oui' || String(df.fsmAutorise || 'Oui').trim().toLowerCase() === 'non';
+                  setLocalDeletedVersion(v => v + 1);
+                  setFallbackSheetDefibs(prev => prev.filter(shouldKeep));
+                  setRemoteQueriedDefibs(prev => prev.filter(shouldKeep));
+                  setPlanSheetDefibs(prev => prev.filter(shouldKeep));
+                  if (stableDefibsRef.current.items.length > 0) {
+                    stableDefibsRef.current.items = stableDefibsRef.current.items.filter(shouldKeep);
+                  }
+                  setRemoteFilteredTotal(prev => (typeof prev === 'number' ? Math.max(0, prev - 1) : prev));
+                  setLocalSheetStats((prev: any) => {
+                    if (!prev) return prev;
+                    const nextStats = {
+                      ...prev,
+                      totalCount: Math.max(0, (prev.totalCount || 1) - 1),
+                      totalMainOui: wasMainNon ? (prev.totalMainOui || 0) : Math.max(0, (prev.totalMainOui || 1) - 1),
+                      totalMainNon: wasMainNon ? Math.max(0, (prev.totalMainNon || 1) - 1) : (prev.totalMainNon || 0),
+                    };
+                    try {
+                      for (const k of [activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase()]) {
+                        localStorage.setItem(`defib_${k}_defib_sheet_stats`, JSON.stringify(nextStats));
+                      }
+                    } catch (_) {}
+                    return nextStats;
+                  });
+                  setSelectedIds(prev => prev.filter(id => !keySet.has(String(id).trim().toLowerCase())));
+                  onDeleteDefib(df.identifiant || df.id, df);
+                }}
+                className="flex-1 text-center cursor-pointer outline-none hover:opacity-90 active:scale-[0.99] transition-all"
+                style={{
+                  padding: '11px 18px',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                  background: 'rgb(210, 45, 11)',
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
+              >
+                {t("Supprimer")}
               </button>
             </div>
           </div>

@@ -1003,8 +1003,19 @@ export default function SettingsModal({
     }
   }, [isOpen, isPage]);
 
-  // Helper to merge Firebase/DB members and Spreadsheet members (2 sources)
+  // Helper to merge Firebase/DB members and Spreadsheet members (2 sources, linked by email)
   const mergeFirebaseAndSpreadsheetMembers = React.useCallback((fbMembers: Member[], sheetMembers: Member[], activeTid: string): Member[] => {
+    const isDerivedEmailName = (name?: string, email?: string): boolean => {
+      const n = String(name || '').trim().toLowerCase();
+      if (!n) return true;
+      const e = String(email || '').trim().toLowerCase();
+      if (!e) return false;
+      if (n === e) return true;
+      const prefix = e.split('@')[0] || '';
+      const formattedPrefix = prefix.split(/[._-]+/).filter(Boolean).join(' ').toLowerCase();
+      return n === prefix || n === formattedPrefix;
+    };
+
     const fbBase = ensureTenantMembersClient(Array.isArray(fbMembers) ? fbMembers : [], activeTid);
     const validSheet = (Array.isArray(sheetMembers) ? sheetMembers : [])
       .filter((m: any) => m && (m.name || m.email))
@@ -1028,13 +1039,23 @@ export default function SettingsModal({
           (!smEmail && smName && String(fm.name || '').trim().toLowerCase() === smName)
       );
       if (fbMatch) {
+        const effectiveEmail = sm.email || fbMatch.email;
+        const resolvedName =
+          sm.name && (!isDerivedEmailName(sm.name, effectiveEmail) || isDerivedEmailName(fbMatch.name, effectiveEmail))
+            ? sm.name
+            : (fbMatch.name || sm.name);
         return {
           ...fbMatch,
           ...sm,
-          name: sm.name || fbMatch.name,
-          email: sm.email || fbMatch.email,
+          name: resolvedName,
+          email: effectiveEmail,
           role: sm.role || fbMatch.role,
           pin: sm.pin || fbMatch.pin || '1234',
+          adminSubRole: sm.adminSubRole || fbMatch.adminSubRole,
+          locationLink: sm.locationLink || fbMatch.locationLink,
+          semaineTypique: Array.isArray(sm.semaineTypique) && sm.semaineTypique.length > 0 ? sm.semaineTypique : fbMatch.semaineTypique,
+          absences: Array.isArray(sm.absences) && sm.absences.length > 0 ? sm.absences : fbMatch.absences,
+          competences: Array.isArray(sm.competences) && sm.competences.length > 0 ? sm.competences : fbMatch.competences,
           envId: activeTid,
           tenantId: activeTid,
           _fromSpreadsheet: true,
@@ -1047,7 +1068,7 @@ export default function SettingsModal({
       const fmEmail = String(fm.email || '').trim().toLowerCase();
       const fmName = String(fm.name || '').trim().toLowerCase();
       if (fmEmail && sheetEmails.has(fmEmail)) return false;
-      if (fmName && sheetNames.has(fmName)) return false;
+      if (!fmEmail && fmName && sheetNames.has(fmName)) return false;
       return true;
     });
 
@@ -1303,18 +1324,6 @@ export default function SettingsModal({
     await Promise.all(
       filtered.map(async (t) => {
         const sUrl = resolveSettingsSheetUrl(t.key, t.urlKey, t.storageSuffix, activeTid, compOverride);
-        if (!sUrl) {
-          if (t.section === 'membres' && activeTid && activeTid !== 'demo') {
-            try {
-              const remoteMembers = await fetchCollectionFromFirestore<Member[]>('members', activeTid);
-              const ensuredRemote = ensureTenantMembersClient(Array.isArray(remoteMembers) ? remoteMembers : latestMembersRef.current, activeTid);
-              if (ensuredRemote.length > 0) {
-                setLocalMembers(ensuredRemote);
-              }
-            } catch (_) {}
-          }
-          return;
-        }
 
         try {
           let fbMems: Member[] = latestMembersRef.current || [];
@@ -1327,12 +1336,24 @@ export default function SettingsModal({
             } catch (_) {}
           }
 
-          const qUrl = `&spreadsheetUrl=${encodeURIComponent(sUrl)}`;
+          const qUrl = sUrl ? `&spreadsheetUrl=${encodeURIComponent(sUrl)}` : '';
           const res = await fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(activeTid)}&type=${encodeURIComponent(t.tabType)}&refresh=true${qUrl}`);
           if (res.ok) {
             const data = await res.json();
+            if (data?.spreadsheetUrl) {
+              try {
+                localStorage.setItem(`defib_${activeTid}_${t.storageSuffix}`, String(data.spreadsheetUrl));
+              } catch (_) {}
+            }
             if (data?.fromSpreadsheet && Array.isArray(data.items)) {
               applySpreadsheetDataToState(t.tabType, data.items, activeTid, fbMems);
+              return;
+            }
+          }
+          if (t.section === 'membres' && activeTid && activeTid !== 'demo') {
+            const ensuredRemote = ensureTenantMembersClient(fbMems, activeTid);
+            if (ensuredRemote.length > 0) {
+              setLocalMembers(ensuredRemote);
             }
           }
         } catch (_) {}
@@ -3441,8 +3462,8 @@ export default function SettingsModal({
         );
       }
 
-      // 5. Membres de l'environnement (spreadsheetMembresEnvironnement)
-      if (activeSection === 'membres') {
+      // 5. Membres de l'environnement (spreadsheetMembresEnvironnement + MEGA ADMIN DEFIBEO UserEmail1..10 & UserRole1..10)
+      if (!activeSection || activeSection === 'membres' || Array.isArray(membersOverride)) {
         if (membersToSave.length > 0) {
           promises.push(
             fetch('/api/sheets/upsert', {
@@ -3457,9 +3478,10 @@ export default function SettingsModal({
             }).catch(() => {})
           );
         }
-      } else if (linkedMembersUrl) {
+      } else {
+        const qMembersUrl = linkedMembersUrl ? `&spreadsheetUrl=${encodeURIComponent(linkedMembersUrl)}` : '';
         promises.push(
-          fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(targetSheetTenant)}&type=membresEnvironnement&refresh=true&spreadsheetUrl=${encodeURIComponent(linkedMembersUrl)}`)
+          fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(targetSheetTenant)}&type=membresEnvironnement&refresh=true${qMembersUrl}`)
             .then(r => (r.ok ? r.json() : null))
             .then(data => {
               if (data?.fromSpreadsheet && Array.isArray(data.items)) {
@@ -6035,6 +6057,75 @@ export default function SettingsModal({
               )}
             </div>
 
+            {/* 1.b BLOCS CONTACT SUPPORT (EMAIL & TÉLÉPHONE) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-4 animate-fadeIn">
+              <div
+                className="p-5 rounded-2xl flex flex-col items-center justify-between gap-4 text-center"
+                style={{
+                  border: 'none',
+                  backgroundColor: 'rgb(245 247 250)',
+                  boxShadow: 'none',
+                }}
+              >
+                <p
+                  className="font-bold text-black text-center select-none"
+                  style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                >
+                  {t("Contactez le support par email (recommandé).")}
+                </p>
+                <a
+                  href="mailto:support@defibeo.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    ...rowActionButtonStyle,
+                    width: '100%',
+                    fontSize: '18px',
+                    backgroundColor: 'rgb(46, 84, 255)',
+                    color: '#fff',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    textDecoration: 'none',
+                  }}
+                  className="w-full text-center cursor-pointer hover:opacity-95"
+                >
+                  support@defibeo.com
+                </a>
+              </div>
+
+              <div
+                className="p-5 rounded-2xl flex flex-col items-center justify-between gap-4 text-center"
+                style={{
+                  border: 'none',
+                  backgroundColor: 'rgb(245 247 250)',
+                  boxShadow: 'none',
+                }}
+              >
+                <p
+                  className="font-bold text-black text-center select-none"
+                  style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                >
+                  {t("Contactez le support par téléphone.")}
+                </p>
+                <a
+                  href="tel:+33651517065"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    ...rowActionButtonStyle,
+                    width: '100%',
+                    fontSize: '18px',
+                    backgroundColor: 'rgb(46, 84, 255)',
+                    color: '#fff',
+                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                    textDecoration: 'none',
+                  }}
+                  className="w-full text-center cursor-pointer hover:opacity-95"
+                >
+                  +33 651 517 065
+                </a>
+              </div>
+            </div>
+
             {/* 2. ASSISTANCE DEFIBEO */}
             <div className="space-y-4 text-left mt-4 animate-fadeIn" style={{ backgroundColor: 'transparent', padding: 0, border: 'none' }} id="settings-section-assistance-group">
               <div className="grid grid-cols-1 gap-4">
@@ -6060,13 +6151,6 @@ export default function SettingsModal({
                       >
                         Defibeo {envIdDisplay.toUpperCase()}
                       </div>
-                      <a
-                        href="mailto:contact@defibeo.com"
-                        style={{ ...rowActionButtonStyle, width: '100%', fontSize: '18px', backgroundColor: '#2e54ff', color: '#fff', fontFamily: "'DefibeoMain', 'Civilprom', sans-serif", textDecoration: 'none' }}
-                        className="w-full text-center cursor-pointer mt-2"
-                      >
-                        {t("Contacter l’assistance")}
-                      </a>
                     </div>
                   </div>
                 </div>

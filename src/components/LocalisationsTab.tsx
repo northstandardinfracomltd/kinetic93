@@ -47,18 +47,25 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
-function AutoFitTechBounds({ points }: { points: TechLiveLocation[] }) {
+function AutoFitTechBounds({
+  points,
+  mapRef,
+}: {
+  points: TechLiveLocation[];
+  mapRef: React.MutableRefObject<L.Map | null>;
+}) {
   const map = useMap();
   const hasFittedRef = useRef<boolean>(false);
 
   useEffect(() => {
+    mapRef.current = map;
     const timer = setTimeout(() => {
       try {
         map.invalidateSize();
       } catch (_) {}
     }, 100);
     return () => clearTimeout(timer);
-  }, [map]);
+  }, [map, mapRef]);
 
   useEffect(() => {
     if (hasFittedRef.current || points.length === 0) return;
@@ -77,6 +84,8 @@ function AutoFitTechBounds({ points }: { points: TechLiveLocation[] }) {
 }
 
 export default function LocalisationsTab({ members, tenantId, onClose }: LocalisationsTabProps) {
+  const mapRef = useRef<L.Map | null>(null);
+
   const effectiveTenantId = useMemo(() => {
     if (tenantId) return tenantId;
     try {
@@ -196,14 +205,77 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
     return results;
   }, [members, serverLocations, effectiveTenantId]);
 
+  const handleSelectTechnician = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedName = e.target.value;
+    if (!selectedName) return;
+    const target = technicianPoints.find((pt) => pt.name === selectedName);
+    if (target && mapRef.current) {
+      try {
+        mapRef.current.setView([target.lat, target.lng], 15, { animate: true });
+      } catch (_) {}
+    }
+  };
+
   return (
     <div
-      className="w-full h-full flex-1 relative overflow-hidden bg-white"
+      className="w-full h-full flex-1 relative overflow-hidden bg-[#1a1a1a]"
       id="localisations-tab-map-fullheight"
       style={{ width: '100%', height: '100%', minHeight: '100vh' }}
     >
-      {onClose && (
-        <div className="absolute top-4 right-4 z-[4000] flex items-center gap-3">
+      <style>{`
+        @keyframes defibeo-tech-sonar {
+          0% {
+            box-shadow: 0 0 0 6px rgba(210, 45, 11, 0.38), 0 0 0 0 rgba(210, 45, 11, 0.55);
+          }
+          70% {
+            box-shadow: 0 0 0 8px rgba(210, 45, 11, 0.32), 0 0 0 18px rgba(210, 45, 11, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 6px rgba(210, 45, 11, 0.38), 0 0 0 0 rgba(210, 45, 11, 0);
+          }
+        }
+      `}</style>
+
+      <div className="absolute top-4 right-4 z-[4000] flex items-center gap-3">
+        <div className="relative inline-block">
+          <button
+            type="button"
+            id="btn-localisations-select-tech"
+            style={{
+              backgroundColor: 'rgb(46, 84, 255)',
+              boxShadow: 'none',
+              borderRadius: '12px',
+              fontSize: '18px',
+              padding: '9px 19px',
+              fontWeight: 'normal',
+              color: '#ffffff',
+              border: 'none',
+              cursor: 'pointer',
+              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              transition: 'all 0.1s ease-in-out',
+            }}
+            className="hover:opacity-90 cursor-pointer select-none"
+          >
+            Sélectionner un technicien
+          </button>
+          <select
+            aria-label="Sélectionner un technicien"
+            value=""
+            onChange={handleSelectTechnician}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          >
+            <option value="" disabled>
+              {technicianPoints.length > 0 ? 'Sélectionner un technicien' : 'Aucun technicien localisé'}
+            </option>
+            {technicianPoints.map((pt) => (
+              <option key={pt.name} value={pt.name}>
+                {pt.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {onClose && (
           <button
             type="button"
             onClick={onClose}
@@ -225,21 +297,23 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
           >
             Fermer
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       <MapContainer
         center={[46.603354, 1.888334]}
         zoom={6}
-        style={{ width: '100%', height: '100%', minHeight: '100vh' }}
+        style={{ width: '100%', height: '100%', minHeight: '100vh', backgroundColor: '#1a1a1a' }}
         zoomControl={true}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          subdomains="abcd"
+          maxZoom={20}
         />
 
-        <AutoFitTechBounds points={technicianPoints} />
+        <AutoFitTechBounds points={technicianPoints} mapRef={mapRef} />
 
         {technicianPoints.map((pt) => {
           const safeName = escapeHtml(pt.name);
@@ -252,28 +326,30 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                transform: translate(-50%, -100%);
+                transform: translate(-50%, calc(-100% + 7px));
                 pointer-events: auto;
               ">
                 <div style="
                   background-color: #ffffff;
-                  border: 1px solid #dadada;
+                  border: none;
                   border-radius: 10px;
                   padding: 6px 10px;
                   font-family: 'DefibeoMain', 'Civilprom', sans-serif;
                   white-space: nowrap;
                   text-align: left;
-                  margin-bottom: 5px;
+                  margin-bottom: 10px;
                 ">
                   <div style="font-size: 14px; font-weight: bold; color: #000000; line-height: 1.25;">${safeName}</div>
-                  <div style="font-size: 13px; font-weight: 100; color: #50617a; line-height: 1.25; margin-top: 1px;">${timeAgoLabel}</div>
+                  <div style="font-size: 13px; font-weight: 100; color: #000000; line-height: 1.25; margin-top: 1px;">${timeAgoLabel}</div>
                 </div>
                 <div style="
                   width: 14px;
                   height: 14px;
                   border-radius: 50%;
-                  background-color: #2e54ff;
-                  border: 2px solid #ffffff;
+                  background-color: rgb(210, 45, 11);
+                  border: none;
+                  box-shadow: 0 0 0 7px rgba(210, 45, 11, 0.35);
+                  animation: defibeo-tech-sonar 2s infinite ease-out;
                   flex-shrink: 0;
                 "></div>
               </div>

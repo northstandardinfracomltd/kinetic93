@@ -184,13 +184,13 @@ export interface Defibrillateur {
   numeroLotCoffret: string;
   commentaireCoffret: string;
   peremptionTrousse?: string;
-  kitCiseauxPresents?: 'Oui' | 'Non';
-  kitMasquePresent?: 'Oui' | 'Non';
+  kitCiseauxPresents?: 'Oui' | 'Non' | '';
+  kitMasquePresent?: 'Oui' | 'Non' | '';
   kitPeremptionMasque?: string;
-  kitServiettesPresentes?: 'Oui' | 'Non';
+  kitServiettesPresentes?: 'Oui' | 'Non' | '';
   kitPeremptionServiettes?: string;
-  kitGantsPresents?: 'Oui' | 'Non';
-  kitRasoirPresent?: 'Oui' | 'Non';
+  kitGantsPresents?: 'Oui' | 'Non' | '';
+  kitRasoirPresent?: 'Oui' | 'Non' | '';
 
   // Section 4 - Accès
   numVoie: string;
@@ -1240,7 +1240,7 @@ export function openTenantSpreadsheetUrl(url: string, options?: { direct?: boole
   paragraph.style.fontFamily = '"DefibeoMain", "Civilprom", sans-serif';
   paragraph.style.cursor = 'default';
   paragraph.textContent = t(
-    "Si vous n’avez pas accès à la feuille de calcul, cliquez sur Demander l’accès afin d’obtenir l’autorisation."
+    "Si vous n’avez pas accès à la feuille de calcul, cliquez sur Demander l’accès afin d’obtenir l’autorisation. Avertissement : Il est strictement interdit de modifier les en-têtes de colonnes. Toute activité dans le document est enregistrée dans l'historique des versions."
   );
 
   const btnContainer = document.createElement('div');

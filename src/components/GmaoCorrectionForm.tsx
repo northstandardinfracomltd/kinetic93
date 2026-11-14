@@ -880,46 +880,72 @@ export default function GmaoCorrectionForm({
     const modelRef = String(snapshot.modeleId || (snapshot as any).modele || report?.modeleId || report?.modele || origDefib?.modeleId || '').trim();
     if (!modelRef) return null;
     const lowerRef = modelRef.toLowerCase();
-    return (variables || []).find(v =>
-      v.category === 'Modèle Défibrillateur' &&
-      (
-        v.id === modelRef ||
-        (v.nom && v.nom.trim().toLowerCase() === lowerRef) ||
-        (v.identifiant && v.identifiant.trim().toLowerCase() === lowerRef) ||
-        (v.marque && v.nom && `${v.nom} (${v.marque})`.trim().toLowerCase() === lowerRef)
-      )
-    ) || null;
+    const parts = lowerRef.split(/\s*[—–-]\s*/).map(p => p.trim()).filter(Boolean);
+    return (variables || []).find(v => {
+      if (v.category !== 'Modèle Défibrillateur') return false;
+      const vId = String(v.id || '').trim().toLowerCase();
+      const vNom = String(v.nom || '').trim().toLowerCase();
+      const vIdent = String(v.identifiant || '').trim().toLowerCase();
+      const vNomMarque = v.marque && v.nom ? `${v.nom} (${v.marque})`.trim().toLowerCase() : '';
+      const vMarqueNom = v.marque && v.nom ? `${v.marque} ${v.nom}`.trim().toLowerCase() : '';
+      if (vId === lowerRef || vNom === lowerRef || vIdent === lowerRef || (vNomMarque && vNomMarque === lowerRef) || (vMarqueNom && vMarqueNom === lowerRef)) {
+        return true;
+      }
+      if (parts.length > 1) {
+        return parts.some(p => (vNom && p === vNom) || (vIdent && p === vIdent));
+      }
+      return false;
+    }) || null;
   }, [snapshot.modeleId, snapshot, report, origDefib, variables]);
 
-  const isVisibleNumeroAtlasante = selectedModelVar ? (selectedModelVar.visibiliteNumeroAtlasante !== 'Non') : true;
-  const isVisibleVersionLogiciel = selectedModelVar ? (selectedModelVar.visibiliteVersionLogiciel !== 'Non') : true;
-  const isVisibleFactureBrouillon = selectedModelVar ? (selectedModelVar.visibiliteFactureBrouillon !== 'Non') : true;
-  const isVisiblePadPakAdulte = selectedModelVar ? (selectedModelVar.visibilitePadPakAdulte !== 'Non') : true;
-  const isVisibleLotPadPakA = selectedModelVar ? (selectedModelVar.visibiliteLotPadPakA !== 'Non') : true;
-  const isVisiblePeremptionPadPakA = selectedModelVar ? (selectedModelVar.visibilitePeremptionPadPakA !== 'Non') : true;
-  const isVisibleLotP = selectedModelVar ? (selectedModelVar.visibiliteLotP !== 'Non') : true;
-  const isVisiblePadPakPediatrique = selectedModelVar ? (selectedModelVar.visibilitePadPakPediatrique !== 'Non') : true;
-  const isVisibleLotPadPakP = selectedModelVar ? (selectedModelVar.visibiliteLotPadPakP !== 'Non') : true;
-  const isVisiblePeremptionPadPakP = selectedModelVar ? (selectedModelVar.visibilitePeremptionPadPakP !== 'Non') : true;
-  const isVisibleFabricationBatterie = selectedModelVar ? (selectedModelVar.visibiliteFabricationBatterie !== 'Non') : true;
-  const isVisibleInsertionBatterie = selectedModelVar ? (selectedModelVar.visibiliteInsertionBatterie !== 'Non') : true;
-  const isVisiblePeremptionBatterie = selectedModelVar ? (selectedModelVar.visibilitePeremptionBatterie !== 'Non') : true;
-  const isVisiblePourcentageBatterie = selectedModelVar ? (selectedModelVar.visibilitePourcentageBatterie !== 'Non') : true;
-  const isVisibleGantsPresents = selectedModelVar ? (selectedModelVar.visibiliteGantsPresents !== 'Non') : true;
-  const isVisiblePeremptionServiettes = selectedModelVar ? (selectedModelVar.visibilitePeremptionServiettes !== 'Non') : true;
-  const isVisibleServiettesPresentes = selectedModelVar ? (selectedModelVar.visibiliteServiettesPresentes !== 'Non') : true;
-  const isVisiblePeremptionMasque = selectedModelVar ? (selectedModelVar.visibilitePeremptionMasque !== 'Non') : true;
-  const isVisibleMasquePresent = selectedModelVar ? (selectedModelVar.visibiliteMasquePresent !== 'Non') : true;
-  const isVisibleCiseauxPresents = selectedModelVar ? (selectedModelVar.visibiliteCiseauxPresents !== 'Non') : true;
-  const isVisiblePeremptionTrousse = selectedModelVar ? (selectedModelVar.visibilitePeremptionTrousse !== 'Non') : true;
-  const isVisibleRasoir = selectedModelVar ? (selectedModelVar.visibiliteRasoir !== 'Non') : true;
-  const isVisibleBranchementElectrodes = selectedModelVar ? (selectedModelVar.visibiliteBranchementElectrodes !== 'Non') : true;
-  const isVisibleGuidesVocaux = selectedModelVar ? (selectedModelVar.visibiliteGuidesVocaux !== 'Non') : true;
-  const isVisibleMessageNumeriqueConforme = selectedModelVar ? (selectedModelVar.visibiliteMessageNumeriqueConforme !== 'Non') : true;
-  const isVisibleEquipeMessageNumerique = selectedModelVar ? (selectedModelVar.visibiliteEquipeMessageNumerique !== 'Non') : true;
-  const isVisibleVoyantConforme = selectedModelVar ? (selectedModelVar.visibiliteVoyantConforme !== 'Non') : true;
-  const isVisibleNettoyage = selectedModelVar ? (selectedModelVar.visibiliteNettoyage !== 'Non') : true;
-  const isVisiblePiecesJointes = selectedModelVar ? (selectedModelVar.visibilitePiecesJointes !== 'Non') : true;
+  const isFieldVisibleForModel = (fieldVal: any, ...rawHeaders: string[]): boolean => {
+    if (!selectedModelVar) return true;
+    const rawV = selectedModelVar as any;
+    let val = fieldVal;
+    if (val === undefined || val === '') {
+      for (const h of rawHeaders) {
+        if (rawV[h] !== undefined && rawV[h] !== '') {
+          val = rawV[h];
+          break;
+        }
+        if (rawV._rawSheetRow?.[h] !== undefined && rawV._rawSheetRow?.[h] !== '') {
+          val = rawV._rawSheetRow[h];
+          break;
+        }
+      }
+    }
+    return String(val || '').trim().toLowerCase() !== 'non';
+  };
+
+  const isVisibleNumeroAtlasante = isFieldVisibleForModel(selectedModelVar?.visibiliteNumeroAtlasante, 'Visibilité du champ : Numéro Atlasanté (Identification et photos).');
+  const isVisibleVersionLogiciel = isFieldVisibleForModel(selectedModelVar?.visibiliteVersionLogiciel, 'Visibilité du champ : Version du logiciel (Identification et photos).');
+  const isVisibleFactureBrouillon = isFieldVisibleForModel(selectedModelVar?.visibiliteFactureBrouillon, 'Visibilité du champ : Émettre un facture brouillon (Client).');
+  const isVisiblePadPakAdulte = isFieldVisibleForModel(selectedModelVar?.visibilitePadPakAdulte, 'Visibilité du champ : PadPak (Électrode Adulte).');
+  const isVisibleLotPadPakA = isFieldVisibleForModel(selectedModelVar?.visibiliteLotPadPakA, 'Visibilité du champ : Lot PadPak A (Électrode Adulte).');
+  const isVisiblePeremptionPadPakA = isFieldVisibleForModel(selectedModelVar?.visibilitePeremptionPadPakA, 'Visibilité du champ : Péremption PadPak A (Électrode Adulte)', 'Visibilité du champ : Péremption PadPak A (Électrode Adulte).');
+  const isVisibleLotP = isFieldVisibleForModel(selectedModelVar?.visibiliteLotP, 'Visibilité du champ : Lot P (Électrode Pédiatrique).');
+  const isVisiblePadPakPediatrique = isFieldVisibleForModel(selectedModelVar?.visibilitePadPakPediatrique, 'Visibilité du champ : PadPak (Électrode Pédiatrique).');
+  const isVisibleLotPadPakP = isFieldVisibleForModel(selectedModelVar?.visibiliteLotPadPakP, 'Visibilité du champ : Lot PadPak P (Électrode Pédiatrique).');
+  const isVisiblePeremptionPadPakP = isFieldVisibleForModel(selectedModelVar?.visibilitePeremptionPadPakP, 'Visibilité du champ : Péremption PadPak P (Électrode Pédiatrique).');
+  const isVisibleFabricationBatterie = isFieldVisibleForModel(selectedModelVar?.visibiliteFabricationBatterie, 'Visibilité du champ : Fabrication (Batterie).');
+  const isVisibleInsertionBatterie = isFieldVisibleForModel(selectedModelVar?.visibiliteInsertionBatterie, 'Visibilité du champ : Insertion (Batterie).');
+  const isVisiblePeremptionBatterie = isFieldVisibleForModel(selectedModelVar?.visibilitePeremptionBatterie, 'Visibilité du champ : Péremption (Batterie).');
+  const isVisiblePourcentageBatterie = isFieldVisibleForModel(selectedModelVar?.visibilitePourcentageBatterie, 'Visibilité du champ : Pourcentage de charge (Batterie).');
+  const isVisibleGantsPresents = isFieldVisibleForModel(selectedModelVar?.visibiliteGantsPresents, 'Visibilité du champ : Paire de gants présents (Kit de secours).');
+  const isVisiblePeremptionServiettes = isFieldVisibleForModel(selectedModelVar?.visibilitePeremptionServiettes, 'Visibilité du champ : Péremption des serviettes (Kit de secours).');
+  const isVisibleServiettesPresentes = isFieldVisibleForModel(selectedModelVar?.visibiliteServiettesPresentes, 'Visibilité du champ : Serviettes présentes (Kit de secours).');
+  const isVisiblePeremptionMasque = isFieldVisibleForModel(selectedModelVar?.visibilitePeremptionMasque, 'Visibilité du champ : Péremption du masque (Kit de secours).');
+  const isVisibleMasquePresent = isFieldVisibleForModel(selectedModelVar?.visibiliteMasquePresent, 'Visibilité du champ : Masque présent (Kit de secours).');
+  const isVisibleCiseauxPresents = isFieldVisibleForModel(selectedModelVar?.visibiliteCiseauxPresents, 'Visibilité du champ : Ciseaux présents (Kit de secours).');
+  const isVisiblePeremptionTrousse = isFieldVisibleForModel(selectedModelVar?.visibilitePeremptionTrousse, 'Visibilité du champ : Péremption de la trousse (Kit de secours).');
+  const isVisibleRasoir = isFieldVisibleForModel(selectedModelVar?.visibiliteRasoir, 'Visibilité du champ : Rasoir (Kit de secours).');
+  const isVisibleBranchementElectrodes = isFieldVisibleForModel(selectedModelVar?.visibiliteBranchementElectrodes, 'Visibilité du champ : Branchement conforme des électrodes (Vérifications).');
+  const isVisibleGuidesVocaux = isFieldVisibleForModel(selectedModelVar?.visibiliteGuidesVocaux, 'Visibilité du champ : Guides vocaux conformes (Vérifications).');
+  const isVisibleMessageNumeriqueConforme = isFieldVisibleForModel(selectedModelVar?.visibiliteMessageNumeriqueConforme, 'Visibilité du champ : Message numérique conforme (Vérifications).');
+  const isVisibleEquipeMessageNumerique = isFieldVisibleForModel(selectedModelVar?.visibiliteEquipeMessageNumerique, 'Visibilité du champ : Équipé d’un message numérique (Vérifications).', "Visibilité du champ : Équipé d'un message numérique (Vérifications).");
+  const isVisibleVoyantConforme = isFieldVisibleForModel(selectedModelVar?.visibiliteVoyantConforme, 'Visibilité du champ : Voyant conforme (Vérifications).');
+  const isVisibleNettoyage = isFieldVisibleForModel(selectedModelVar?.visibiliteNettoyage, 'Visibilité du champ : Nettoyage (Vérifications).');
+  const isVisiblePiecesJointes = isFieldVisibleForModel(selectedModelVar?.visibilitePiecesJointes, 'Visibilité du champ : Pièces jointes (1 à 3 fichiers) (Clôture).');
 
   const SECTIONS_METADATA = useMemo(() => {
     const list = [
@@ -2488,7 +2514,7 @@ export default function GmaoCorrectionForm({
       if (batterieRemplacee === 'Oui' && selectionBatterieRemplacee === 'Autre' && !customBatterieRemplacee.trim()) {
         errors.push("Vous avez sélectionné 'Autre' pour la batterie remplacée (Section 8), mais vous n’avez pas saisi de référence.");
       }
-      if (batterieRemplacee === 'Oui') {
+      if (batterieRemplacee === 'Oui' && isVisiblePourcentageBatterie) {
         const valPct = parseInt(pourcentageChargeNouvelleBatterie, 10);
         if (!pourcentageChargeNouvelleBatterie || isNaN(valPct) || valPct < 1 || valPct > 100) {
           errors.push("Le pourcentage de charge de la nouvelle batterie doit être un chiffre compris entre 1 et 100.");
@@ -4487,7 +4513,7 @@ export default function GmaoCorrectionForm({
               </div>
             </div>
 
-            {false && isVisibleFactureBrouillon && (
+            {isVisibleFactureBrouillon && (
               <div className="pt-3 mt-2 space-y-3">
                 <div className="space-y-1">
                   <label className="block text-[11px] font-bold text-black uppercase">
@@ -5620,68 +5646,74 @@ export default function GmaoCorrectionForm({
               </>
             )}
 
-            <div className="space-y-1 bg-white">
-              <label className="block text-[11px] font-bold text-black uppercase">
-                PadPak.
-              </label>
-              <div className="flex gap-6 items-center pt-1 bg-white">
-                <FormRadio label="Oui" checked={snapshot.hasPadpakA === 'Oui'} onChange={() => handleSnapshotChange('hasPadpakA', 'Oui')} />
-                <FormRadio label="Non" checked={snapshot.hasPadpakA === 'Non'} onChange={() => handleSnapshotChange('hasPadpakA', 'Non')} />
+            {isVisiblePadPakAdulte && (
+              <div className="space-y-1 bg-white">
+                <label className="block text-[11px] font-bold text-black uppercase">
+                  PadPak.
+                </label>
+                <div className="flex gap-6 items-center pt-1 bg-white">
+                  <FormRadio label="Oui" checked={snapshot.hasPadpakA === 'Oui'} onChange={() => handleSnapshotChange('hasPadpakA', 'Oui')} />
+                  <FormRadio label="Non" checked={snapshot.hasPadpakA === 'Non'} onChange={() => handleSnapshotChange('hasPadpakA', 'Non')} />
+                </div>
               </div>
-            </div>
+            )}
 
-            {snapshot.hasPadpakA === 'Oui' && (
+            {isVisiblePadPakAdulte && snapshot.hasPadpakA === 'Oui' && (isVisibleLotPadPakA || isVisiblePeremptionPadPakA) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white animate-fadeIn">
-                <div className="space-y-1">
-                  <label htmlFor="snap-lotPadpakA" className="block text-[11px] font-bold text-black uppercase">
-                    {t("Lot PadPak A.")}
-                  </label>
-                  <input
-                    type="text"
-                    id="snap-lotPadpakA"
-                    value={snapshot.lotPadpakA || ''}
-                    onChange={(e) => handleSnapshotChange('lotPadpakA', e.target.value)}
-                    placeholder={t("Entrez le numéro de lot.")}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor="snap-peremptionPadpakA" className="block text-[11px] font-bold text-black uppercase">
-                    {t("Péremption PadPak A.")}
-                  </label>
-                  <div className="relative flex items-center w-full">
+                {isVisibleLotPadPakA && (
+                  <div className="space-y-1">
+                    <label htmlFor="snap-lotPadpakA" className="block text-[11px] font-bold text-black uppercase">
+                      {t("Lot PadPak A.")}
+                    </label>
                     <input
-                      type="date"
-                      id="snap-peremptionPadpakA"
-                      value={snapshot.peremptionPadpakA || ''}
-                      onChange={(e) => handleSnapshotChange('peremptionPadpakA', e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                      type="text"
+                      id="snap-lotPadpakA"
+                      value={snapshot.lotPadpakA || ''}
+                      onChange={(e) => handleSnapshotChange('lotPadpakA', e.target.value)}
+                      placeholder={t("Entrez le numéro de lot.")}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
                     />
-                    {snapshot.peremptionPadpakA && (
-                      <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                        alt="Effacer la date"
-                        onClick={(e) => {
-                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                          if (inp) inp.value = '';
-                          handleSnapshotChange('peremptionPadpakA', '');
-                        }}
-                        style={{
-                          position: 'absolute',
-                          right: '8px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          height: '34px',
-                          width: '34px',
-                          objectFit: 'contain',
-                          cursor: 'pointer',
-                          zIndex: 10,
-                          userSelect: 'none',
-                        }}
-                      />
-                    )}
                   </div>
-                </div>
+                )}
+                {isVisiblePeremptionPadPakA && (
+                  <div className="space-y-1">
+                    <label htmlFor="snap-peremptionPadpakA" className="block text-[11px] font-bold text-black uppercase">
+                      {t("Péremption PadPak A.")}
+                    </label>
+                    <div className="relative flex items-center w-full">
+                      <input
+                        type="date"
+                        id="snap-peremptionPadpakA"
+                        value={snapshot.peremptionPadpakA || ''}
+                        onChange={(e) => handleSnapshotChange('peremptionPadpakA', e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                      />
+                      {snapshot.peremptionPadpakA && (
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                          alt="Effacer la date"
+                          onClick={(e) => {
+                            const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                            if (inp) inp.value = '';
+                            handleSnapshotChange('peremptionPadpakA', '');
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '8px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            height: '34px',
+                            width: '34px',
+                            objectFit: 'contain',
+                            cursor: 'pointer',
+                            zIndex: 10,
+                            userSelect: 'none',
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -6099,68 +6131,74 @@ export default function GmaoCorrectionForm({
               </>
             )}
 
-            <div className="space-y-1 bg-white">
-              <label className="block text-[11px] font-bold text-black uppercase">
-                PadPak.
-              </label>
-              <div className="flex gap-6 items-center pt-1 bg-white">
-                <FormRadio label="Oui" checked={snapshot.hasPadpakP === 'Oui'} onChange={() => handleSnapshotChange('hasPadpakP', 'Oui')} />
-                <FormRadio label="Non" checked={snapshot.hasPadpakP === 'Non'} onChange={() => handleSnapshotChange('hasPadpakP', 'Non')} />
+            {isVisiblePadPakPediatrique && (
+              <div className="space-y-1 bg-white">
+                <label className="block text-[11px] font-bold text-black uppercase">
+                  PadPak.
+                </label>
+                <div className="flex gap-6 items-center pt-1 bg-white">
+                  <FormRadio label="Oui" checked={snapshot.hasPadpakP === 'Oui'} onChange={() => handleSnapshotChange('hasPadpakP', 'Oui')} />
+                  <FormRadio label="Non" checked={snapshot.hasPadpakP === 'Non'} onChange={() => handleSnapshotChange('hasPadpakP', 'Non')} />
+                </div>
               </div>
-            </div>
+            )}
 
-            {snapshot.hasPadpakP === 'Oui' && (
+            {isVisiblePadPakPediatrique && snapshot.hasPadpakP === 'Oui' && (isVisibleLotPadPakP || isVisiblePeremptionPadPakP) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white animate-fadeIn">
-                <div className="space-y-1">
-                  <label htmlFor="snap-lotPadpakP" className="block text-[11px] font-bold text-black uppercase">
-                    {t("Lot PadPak P.")}
-                  </label>
-                  <input
-                    type="text"
-                    id="snap-lotPadpakP"
-                    value={snapshot.lotPadpakP || ''}
-                    onChange={(e) => handleSnapshotChange('lotPadpakP', e.target.value)}
-                    placeholder={t("Entrez le numéro de lot.")}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label htmlFor="snap-peremptionPadpakP" className="block text-[11px] font-bold text-black uppercase">
-                    {t("Péremption PadPak P.")}
-                  </label>
-                  <div className="relative flex items-center w-full">
+                {isVisibleLotPadPakP && (
+                  <div className="space-y-1">
+                    <label htmlFor="snap-lotPadpakP" className="block text-[11px] font-bold text-black uppercase">
+                      {t("Lot PadPak P.")}
+                    </label>
                     <input
-                      type="date"
-                      id="snap-peremptionPadpakP"
-                      value={snapshot.peremptionPadpakP || ''}
-                      onChange={(e) => handleSnapshotChange('peremptionPadpakP', e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                      type="text"
+                      id="snap-lotPadpakP"
+                      value={snapshot.lotPadpakP || ''}
+                      onChange={(e) => handleSnapshotChange('lotPadpakP', e.target.value)}
+                      placeholder={t("Entrez le numéro de lot.")}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
                     />
-                    {snapshot.peremptionPadpakP && (
-                      <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                        alt="Effacer la date"
-                        onClick={(e) => {
-                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                          if (inp) inp.value = '';
-                          handleSnapshotChange('peremptionPadpakP', '');
-                        }}
-                        style={{
-                          position: 'absolute',
-                          right: '8px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          height: '34px',
-                          width: '34px',
-                          objectFit: 'contain',
-                          cursor: 'pointer',
-                          zIndex: 10,
-                          userSelect: 'none',
-                        }}
-                      />
-                    )}
                   </div>
-                </div>
+                )}
+                {isVisiblePeremptionPadPakP && (
+                  <div className="space-y-1">
+                    <label htmlFor="snap-peremptionPadpakP" className="block text-[11px] font-bold text-black uppercase">
+                      {t("Péremption PadPak P.")}
+                    </label>
+                    <div className="relative flex items-center w-full">
+                      <input
+                        type="date"
+                        id="snap-peremptionPadpakP"
+                        value={snapshot.peremptionPadpakP || ''}
+                        onChange={(e) => handleSnapshotChange('peremptionPadpakP', e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                      />
+                      {snapshot.peremptionPadpakP && (
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                          alt="Effacer la date"
+                          onClick={(e) => {
+                            const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                            if (inp) inp.value = '';
+                            handleSnapshotChange('peremptionPadpakP', '');
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '8px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            height: '34px',
+                            width: '34px',
+                            objectFit: 'contain',
+                            cursor: 'pointer',
+                            zIndex: 10,
+                            userSelect: 'none',
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -6494,25 +6532,27 @@ export default function GmaoCorrectionForm({
                   </select>
                 </div>
 
-                <div className="pt-2 space-y-1 bg-white">
-                  <label htmlFor="input-pourcentage-charge-nouvelle-batterie" className="block text-[11px] font-bold text-black uppercase">
-                    Pourcentage de charge nouvelle batterie.
-                  </label>
-                  <input
-                    type="number"
-                    id="input-pourcentage-charge-nouvelle-batterie"
-                    min="1"
-                    max="100"
-                    value={pourcentageChargeNouvelleBatterie}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9]/g, '');
-                      setPourcentageChargeNouvelleBatterie(val);
-                    }}
-                    placeholder="100"
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800"
-                    required
-                  />
-                </div>
+                {isVisiblePourcentageBatterie && (
+                  <div className="pt-2 space-y-1 bg-white">
+                    <label htmlFor="input-pourcentage-charge-nouvelle-batterie" className="block text-[11px] font-bold text-black uppercase">
+                      Pourcentage de charge nouvelle batterie.
+                    </label>
+                    <input
+                      type="number"
+                      id="input-pourcentage-charge-nouvelle-batterie"
+                      min="1"
+                      max="100"
+                      value={pourcentageChargeNouvelleBatterie}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        setPourcentageChargeNouvelleBatterie(val);
+                      }}
+                      placeholder="100"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800"
+                      required
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -6579,89 +6619,101 @@ export default function GmaoCorrectionForm({
                 </div>
 
                 {/* 1. Nettoyage. (Moved first!) */}
-                <div className="space-y-1 bg-white animate-fadeIn">
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Nettoyage.
-                  </label>
-                  <div className="flex gap-6 items-center pt-1 bg-white">
-                    <FormRadio label="Oui" checked={techNettoyage === 'Oui'} onChange={() => setTechNettoyage('Oui')} />
-                    <FormRadio label="Non" checked={techNettoyage === 'Non'} onChange={() => setTechNettoyage('Non')} />
+                {isVisibleNettoyage && (
+                  <div className="space-y-1 bg-white animate-fadeIn">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Nettoyage.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={techNettoyage === 'Oui'} onChange={() => setTechNettoyage('Oui')} />
+                      <FormRadio label="Non" checked={techNettoyage === 'Non'} onChange={() => setTechNettoyage('Non')} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 2. Voyant conforme. */}
-                <div className="space-y-1 bg-white">
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Voyant conforme.
-                  </label>
-                  <div className="flex gap-6 items-center pt-1 bg-white">
-                    <FormRadio label="Oui" checked={techVoyantConforme === 'Oui'} onChange={() => setTechVoyantConforme('Oui')} />
-                    <FormRadio label="Non" checked={techVoyantConforme === 'Non'} onChange={() => setTechVoyantConforme('Non')} />
+                {isVisibleVoyantConforme && (
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Voyant conforme.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={techVoyantConforme === 'Oui'} onChange={() => setTechVoyantConforme('Oui')} />
+                      <FormRadio label="Non" checked={techVoyantConforme === 'Non'} onChange={() => setTechVoyantConforme('Non')} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 3. Équipé d’un message numérique. (New!) */}
-                <div className="space-y-1 bg-white animate-fadeIn">
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Équipé d’un message numérique.
-                  </label>
-                  <div className="flex gap-6 items-center pt-1 bg-white">
-                    <FormRadio 
-                      label="Oui" 
-                      checked={techEquipeMessageNumerique === 'Oui'} 
-                      onChange={() => setTechEquipeMessageNumerique('Oui')} 
-                    />
-                    <FormRadio 
-                      label="Non" 
-                      checked={techEquipeMessageNumerique === 'Non'} 
-                      onChange={() => {
-                        setTechEquipeMessageNumerique('Non');
-                        setTechMessageNumeroConforme('');
-                      }} 
-                    />
+                {isVisibleEquipeMessageNumerique && (
+                  <div className="space-y-1 bg-white animate-fadeIn">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Équipé d’un message numérique.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio 
+                        label="Oui" 
+                        checked={techEquipeMessageNumerique === 'Oui'} 
+                        onChange={() => setTechEquipeMessageNumerique('Oui')} 
+                      />
+                      <FormRadio 
+                        label="Non" 
+                        checked={techEquipeMessageNumerique === 'Non'} 
+                        onChange={() => {
+                          setTechEquipeMessageNumerique('Non');
+                          setTechMessageNumeroConforme('');
+                        }} 
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 4. Message numérique conforme. (Dependent on Equipé d'un message numérique) */}
-                <div className={`space-y-1 bg-white transition-opacity duration-200 ${techEquipeMessageNumerique === 'Non' ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Message numérique conforme.
-                  </label>
-                  <div className="flex gap-6 items-center pt-1 bg-white">
-                    <FormRadio 
-                      label="Oui" 
-                      checked={techMessageNumeroConforme === 'Oui' && techEquipeMessageNumerique !== 'Non'} 
-                      onChange={() => techEquipeMessageNumerique !== 'Non' && setTechMessageNumeroConforme('Oui')} 
-                    />
-                    <FormRadio 
-                      label="Non" 
-                      checked={techMessageNumeroConforme === 'Non' && techEquipeMessageNumerique !== 'Non'} 
-                      onChange={() => techEquipeMessageNumerique !== 'Non' && setTechMessageNumeroConforme('Non')} 
-                    />
+                {isVisibleMessageNumeriqueConforme && (
+                  <div className={`space-y-1 bg-white transition-opacity duration-200 ${techEquipeMessageNumerique === 'Non' ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Message numérique conforme.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio 
+                        label="Oui" 
+                        checked={techMessageNumeroConforme === 'Oui' && techEquipeMessageNumerique !== 'Non'} 
+                        onChange={() => techEquipeMessageNumerique !== 'Non' && setTechMessageNumeroConforme('Oui')} 
+                      />
+                      <FormRadio 
+                        label="Non" 
+                        checked={techMessageNumeroConforme === 'Non' && techEquipeMessageNumerique !== 'Non'} 
+                        onChange={() => techEquipeMessageNumerique !== 'Non' && setTechMessageNumeroConforme('Non')} 
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 5. Guides vocaux conformes. */}
-                <div className="space-y-1 bg-white">
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Guides vocaux conformes.
-                  </label>
-                  <div className="flex gap-6 items-center pt-1 bg-white">
-                    <FormRadio label="Oui" checked={techGuidesVocauxConformes === 'Oui'} onChange={() => setTechGuidesVocauxConformes('Oui')} />
-                    <FormRadio label="Non" checked={techGuidesVocauxConformes === 'Non'} onChange={() => setTechGuidesVocauxConformes('Non')} />
+                {isVisibleGuidesVocaux && (
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Guides vocaux conformes.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={techGuidesVocauxConformes === 'Oui'} onChange={() => setTechGuidesVocauxConformes('Oui')} />
+                      <FormRadio label="Non" checked={techGuidesVocauxConformes === 'Non'} onChange={() => setTechGuidesVocauxConformes('Non')} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 6. Branchement conforme des électrodes. */}
-                <div className="space-y-1 bg-white">
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Branchement conforme des électrodes.
-                  </label>
-                  <div className="flex gap-6 items-center pt-1 bg-white">
-                    <FormRadio label="Oui" checked={techBranchementElectrodesConforme === 'Oui'} onChange={() => setTechBranchementElectrodesConforme('Oui')} />
-                    <FormRadio label="Non" checked={techBranchementElectrodesConforme === 'Non'} onChange={() => setTechBranchementElectrodesConforme('Non')} />
+                {isVisibleBranchementElectrodes && (
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Branchement conforme des électrodes.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={techBranchementElectrodesConforme === 'Oui'} onChange={() => setTechBranchementElectrodesConforme('Oui')} />
+                      <FormRadio label="Non" checked={techBranchementElectrodesConforme === 'Non'} onChange={() => setTechBranchementElectrodesConforme('Non')} />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -6690,45 +6742,47 @@ export default function GmaoCorrectionForm({
                   </div>
                 </div>
 
-                <div className={`space-y-1 bg-white transition-opacity duration-200 ${kitTrousseSecoursPresent !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <label htmlFor="kitPeremption" className="block text-[11px] font-bold text-black uppercase">
-                    Péremption de la trousse.
-                  </label>
-                  <div className="relative flex items-center w-full">
-                    <input
-                      type="date"
-                      id="kitPeremption"
-                      value={kitPeremption || ''}
-                      onChange={(e) => setKitPeremption(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono"
-                      disabled={kitTrousseSecoursPresent !== 'Oui'}
-                    />
-                    {kitPeremption && (
-                      <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                        alt="Effacer la date"
-                        onClick={(e) => {
-                          if (kitTrousseSecoursPresent !== 'Oui') return;
-                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                          if (inp) inp.value = '';
-                          setKitPeremption('');
-                        }}
-                        style={{
-                          position: 'absolute',
-                          right: '8px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          height: '34px',
-                          width: '34px',
-                          objectFit: 'contain',
-                          cursor: 'pointer',
-                          zIndex: 10,
-                          userSelect: 'none',
-                        }}
+                {isVisiblePeremptionTrousse && (
+                  <div className={`space-y-1 bg-white transition-opacity duration-200 ${kitTrousseSecoursPresent !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <label htmlFor="kitPeremption" className="block text-[11px] font-bold text-black uppercase">
+                      Péremption de la trousse.
+                    </label>
+                    <div className="relative flex items-center w-full">
+                      <input
+                        type="date"
+                        id="kitPeremption"
+                        value={kitPeremption || ''}
+                        onChange={(e) => setKitPeremption(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono"
+                        disabled={kitTrousseSecoursPresent !== 'Oui'}
                       />
-                    )}
+                      {kitPeremption && (
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                          alt="Effacer la date"
+                          onClick={(e) => {
+                            if (kitTrousseSecoursPresent !== 'Oui') return;
+                            const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                            if (inp) inp.value = '';
+                            setKitPeremption('');
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '8px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            height: '34px',
+                            width: '34px',
+                            objectFit: 'contain',
+                            cursor: 'pointer',
+                            zIndex: 10,
+                            userSelect: 'none',
+                          }}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* Right Column: Kit de secours remplacé ou ajouté */}
@@ -6835,141 +6889,155 @@ export default function GmaoCorrectionForm({
             {!hideKitSecours && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white pt-2">
                 {/* 3. Ciseaux présents */}
-                <div className="space-y-1 bg-white">
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Ciseaux présents.
-                  </label>
-                  <div className="flex gap-6 items-center pt-1 bg-white">
-                    <FormRadio label="Oui" checked={kitCiseauxPresents === 'Oui'} onChange={() => setKitCiseauxPresents('Oui')} />
-                    <FormRadio label="Non" checked={kitCiseauxPresents === 'Non'} onChange={() => setKitCiseauxPresents('Non')} />
+                {isVisibleCiseauxPresents && (
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Ciseaux présents.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={kitCiseauxPresents === 'Oui'} onChange={() => setKitCiseauxPresents('Oui')} />
+                      <FormRadio label="Non" checked={kitCiseauxPresents === 'Non'} onChange={() => setKitCiseauxPresents('Non')} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 4. Masque présent */}
-                <div className="space-y-1 bg-white">
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Masque présent.
-                  </label>
-                  <div className="flex gap-6 items-center pt-1 bg-white">
-                    <FormRadio label="Oui" checked={kitMasquePresent === 'Oui'} onChange={() => setKitMasquePresent('Oui')} />
-                    <FormRadio label="Non" checked={kitMasquePresent === 'Non'} onChange={() => { setKitMasquePresent('Non'); setKitPeremptionMasque(''); }} />
+                {isVisibleMasquePresent && (
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Masque présent.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={kitMasquePresent === 'Oui'} onChange={() => setKitMasquePresent('Oui')} />
+                      <FormRadio label="Non" checked={kitMasquePresent === 'Non'} onChange={() => { setKitMasquePresent('Non'); setKitPeremptionMasque(''); }} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 4b. Péremption du masque */}
-                <div className={`space-y-1 bg-white transition-opacity duration-200 ${kitMasquePresent !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <label htmlFor="kitPeremptionMasque" className="block text-[11px] font-bold text-black uppercase">
-                    Péremption du masque.
-                  </label>
-                  <div className="relative flex items-center w-full">
-                    <input
-                      type="date"
-                      id="kitPeremptionMasque"
-                      value={kitPeremptionMasque || ''}
-                      onChange={(e) => setKitPeremptionMasque(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                      disabled={kitMasquePresent !== 'Oui'}
-                    />
-                    {kitPeremptionMasque && (
-                      <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                        alt="Effacer la date"
-                        onClick={(e) => {
-                          if (kitMasquePresent !== 'Oui') return;
-                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                          if (inp) inp.value = '';
-                          setKitPeremptionMasque('');
-                        }}
-                        style={{
-                          position: 'absolute',
-                          right: '8px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          height: '34px',
-                          width: '34px',
-                          objectFit: 'contain',
-                          cursor: 'pointer',
-                          zIndex: 10,
-                          userSelect: 'none',
-                        }}
+                {isVisiblePeremptionMasque && (
+                  <div className={`space-y-1 bg-white transition-opacity duration-200 ${kitMasquePresent !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <label htmlFor="kitPeremptionMasque" className="block text-[11px] font-bold text-black uppercase">
+                      Péremption du masque.
+                    </label>
+                    <div className="relative flex items-center w-full">
+                      <input
+                        type="date"
+                        id="kitPeremptionMasque"
+                        value={kitPeremptionMasque || ''}
+                        onChange={(e) => setKitPeremptionMasque(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                        disabled={kitMasquePresent !== 'Oui'}
                       />
-                    )}
+                      {kitPeremptionMasque && (
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                          alt="Effacer la date"
+                          onClick={(e) => {
+                            if (kitMasquePresent !== 'Oui') return;
+                            const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                            if (inp) inp.value = '';
+                            setKitPeremptionMasque('');
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '8px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            height: '34px',
+                            width: '34px',
+                            objectFit: 'contain',
+                            cursor: 'pointer',
+                            zIndex: 10,
+                            userSelect: 'none',
+                          }}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 5. Serviettes présentes */}
-                <div className="space-y-1 bg-white">
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Serviettes présentes.
-                  </label>
-                  <div className="flex gap-6 items-center pt-1 bg-white">
-                    <FormRadio label="Oui" checked={kitServiettesPresentes === 'Oui'} onChange={() => setKitServiettesPresentes('Oui')} />
-                    <FormRadio label="Non" checked={kitServiettesPresentes === 'Non'} onChange={() => { setKitServiettesPresentes('Non'); setKitPeremptionServiettes(''); }} />
+                {isVisibleServiettesPresentes && (
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Serviettes présentes.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={kitServiettesPresentes === 'Oui'} onChange={() => setKitServiettesPresentes('Oui')} />
+                      <FormRadio label="Non" checked={kitServiettesPresentes === 'Non'} onChange={() => { setKitServiettesPresentes('Non'); setKitPeremptionServiettes(''); }} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 5b. Péremption des serviettes */}
-                <div className={`space-y-1 bg-white transition-opacity duration-200 ${kitServiettesPresentes !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <label htmlFor="kitPeremptionServiettes" className="block text-[11px] font-bold text-black uppercase">
-                    Péremption des serviettes.
-                  </label>
-                  <div className="relative flex items-center w-full">
-                    <input
-                      type="date"
-                      id="kitPeremptionServiettes"
-                      value={kitPeremptionServiettes || ''}
-                      onChange={(e) => setKitPeremptionServiettes(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
-                      disabled={kitServiettesPresentes !== 'Oui'}
-                    />
-                    {kitPeremptionServiettes && (
-                      <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                        alt="Effacer la date"
-                        onClick={(e) => {
-                          if (kitServiettesPresentes !== 'Oui') return;
-                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                          if (inp) inp.value = '';
-                          setKitPeremptionServiettes('');
-                        }}
-                        style={{
-                          position: 'absolute',
-                          right: '8px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          height: '34px',
-                          width: '34px',
-                          objectFit: 'contain',
-                          cursor: 'pointer',
-                          zIndex: 10,
-                          userSelect: 'none',
-                        }}
+                {isVisiblePeremptionServiettes && (
+                  <div className={`space-y-1 bg-white transition-opacity duration-200 ${kitServiettesPresentes !== 'Oui' ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <label htmlFor="kitPeremptionServiettes" className="block text-[11px] font-bold text-black uppercase">
+                      Péremption des serviettes.
+                    </label>
+                    <div className="relative flex items-center w-full">
+                      <input
+                        type="date"
+                        id="kitPeremptionServiettes"
+                        value={kitPeremptionServiettes || ''}
+                        onChange={(e) => setKitPeremptionServiettes(e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                        disabled={kitServiettesPresentes !== 'Oui'}
                       />
-                    )}
+                      {kitPeremptionServiettes && (
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                          alt="Effacer la date"
+                          onClick={(e) => {
+                            if (kitServiettesPresentes !== 'Oui') return;
+                            const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                            if (inp) inp.value = '';
+                            setKitPeremptionServiettes('');
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '8px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            height: '34px',
+                            width: '34px',
+                            objectFit: 'contain',
+                            cursor: 'pointer',
+                            zIndex: 10,
+                            userSelect: 'none',
+                          }}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 6. Paires de gants présents */}
-                <div className="space-y-1 bg-white">
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Paires de gants présents.
-                  </label>
-                  <div className="flex gap-6 items-center pt-1 bg-white">
-                    <FormRadio label="Oui" checked={kitGantsPresents === 'Oui'} onChange={() => setKitGantsPresents('Oui')} />
-                    <FormRadio label="Non" checked={kitGantsPresents === 'Non'} onChange={() => setKitGantsPresents('Non')} />
+                {isVisibleGantsPresents && (
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Paires de gants présents.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={kitGantsPresents === 'Oui'} onChange={() => setKitGantsPresents('Oui')} />
+                      <FormRadio label="Non" checked={kitGantsPresents === 'Non'} onChange={() => setKitGantsPresents('Non')} />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* 7. Rasoir */}
-                <div className="space-y-1 bg-white">
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Rasoir.
-                  </label>
-                  <div className="flex gap-6 items-center pt-1 bg-white">
-                    <FormRadio label="Oui" checked={kitRasoirPresent === 'Oui'} onChange={() => setKitRasoirPresent('Oui')} />
-                    <FormRadio label="Non" checked={kitRasoirPresent === 'Non'} onChange={() => setKitRasoirPresent('Non')} />
+                {isVisibleRasoir && (
+                  <div className="space-y-1 bg-white">
+                    <label className="block text-[11px] font-bold text-black uppercase">
+                      Rasoir.
+                    </label>
+                    <div className="flex gap-6 items-center pt-1 bg-white">
+                      <FormRadio label="Oui" checked={kitRasoirPresent === 'Oui'} onChange={() => setKitRasoirPresent('Oui')} />
+                      <FormRadio label="Non" checked={kitRasoirPresent === 'Non'} onChange={() => setKitRasoirPresent('Non')} />
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -7020,102 +7088,104 @@ export default function GmaoCorrectionForm({
             </div>
 
             {/* Point 5: Pièces jointes (1-3 fichiers) avec Google Drive */}
-            <div className="pt-2 space-y-2 bg-white">
-              <label className="block text-[11px] font-bold text-black uppercase">
-                Pièces jointes (1 à 3 fichiers)
-              </label>
-              
-              {!googleDriveActive ? (
-                <div className="text-red-600 text-xs font-medium">
-                  Le connecteur Google Drive est désactivé. Les pièces jointes sont inactives. Activez-le dans les réglages pour l'utiliser.
-                </div>
-              ) : (
-                <div className="space-y-3 bg-white">
-                  <div
-                    className="p-4 text-center cursor-pointer transition relative"
-                    style={{ border: 'none', borderRadius: '13px', backgroundColor: 'rgb(245, 247, 250)' }}
-                  >
-                    <input
-                      type="file"
-                      id="report-attachments-input"
-                      multiple
-                      disabled={attachments.length >= 3 || isUploadingFiles}
-                      onChange={handleAttachmentUpload}
-                      accept=".png,.jpg,.jpeg,.heic,.pdf,.csv,.zip"
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
-                    <div className="font-medium">
-                      {isUploadingFiles ? (
-                        <span className="text-indigo-600 font-semibold animate-pulse text-sm">Upload sur Google Drive en cours...</span>
-                      ) : attachments.length >= 3 ? (
-                        <span className="text-xs text-slate-500">Limite de 3 fichiers atteinte</span>
-                      ) : (
-                        <span className="text-base text-black">Glissez-déposez vos fichiers ici, ou <strong className="text-indigo-600 hover:underline">parcourez</strong></span>
-                      )}
-                    </div>
-                    <div className="text-[10px] mt-1" style={{ color: '#000000' }}>
-                      Formats acceptés : PNG, JPEG, HEIC, PDF, CSV, ZIP
-                    </div>
+            {isVisiblePiecesJointes && (
+              <div className="pt-2 space-y-2 bg-white">
+                <label className="block text-[11px] font-bold text-black uppercase">
+                  Pièces jointes (1 à 3 fichiers)
+                </label>
+                
+                {!googleDriveActive ? (
+                  <div className="text-red-600 text-xs font-medium">
+                    Le connecteur Google Drive est désactivé. Les pièces jointes sont inactives. Activez-le dans les réglages pour l'utiliser.
                   </div>
-
-                  {uploadError && (
-                    <div className="text-xs text-red-500 font-medium font-sans">
-                      {uploadError}
-                    </div>
-                  )}
-
-                  {attachments.length > 0 && (
-                    <div className="space-y-1.5">
-                      <div
-                        className="text-[11px] font-bold tracking-normal font-sans"
-                        style={{ color: '#000000', textTransform: 'none' }}
-                      >
-                        Fichier(s) associé(s) : {attachments.length}/3
+                ) : (
+                  <div className="space-y-3 bg-white">
+                    <div
+                      className="p-4 text-center cursor-pointer transition relative"
+                      style={{ border: 'none', borderRadius: '13px', backgroundColor: 'rgb(245, 247, 250)' }}
+                    >
+                      <input
+                        type="file"
+                        id="report-attachments-input"
+                        multiple
+                        disabled={attachments.length >= 3 || isUploadingFiles}
+                        onChange={handleAttachmentUpload}
+                        accept=".png,.jpg,.jpeg,.heic,.pdf,.csv,.zip"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                      <div className="font-medium">
+                        {isUploadingFiles ? (
+                          <span className="text-indigo-600 font-semibold animate-pulse text-sm">Upload sur Google Drive en cours...</span>
+                        ) : attachments.length >= 3 ? (
+                          <span className="text-xs text-slate-500">Limite de 3 fichiers atteinte</span>
+                        ) : (
+                          <span className="text-base text-black">Glissez-déposez vos fichiers ici, ou <strong className="text-indigo-600 hover:underline">parcourez</strong></span>
+                        )}
                       </div>
+                      <div className="text-[10px] mt-1" style={{ color: '#000000' }}>
+                        Formats acceptés : PNG, JPEG, HEIC, PDF, CSV, ZIP
+                      </div>
+                    </div>
+
+                    {uploadError && (
+                      <div className="text-xs text-red-500 font-medium font-sans">
+                        {uploadError}
+                      </div>
+                    )}
+
+                    {attachments.length > 0 && (
                       <div className="space-y-1.5">
-                        {attachments.map((file, idx) => (
-                          <div
-                            key={idx}
-                            className="flex justify-between items-center p-2.5 text-xs"
-                            style={{
-                              backgroundColor: 'rgb(245, 247, 250)',
-                              border: 'none',
-                              borderRadius: '13px',
-                            }}
-                          >
-                            <a
-                              href={file.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-sans hover:underline truncate max-w-[220px]"
+                        <div
+                          className="text-[11px] font-bold tracking-normal font-sans"
+                          style={{ color: '#000000', textTransform: 'none' }}
+                        >
+                          Fichier(s) associé(s) : {attachments.length}/3
+                        </div>
+                        <div className="space-y-1.5">
+                          {attachments.map((file, idx) => (
+                            <div
+                              key={idx}
+                              className="flex justify-between items-center p-2.5 text-xs"
                               style={{
-                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                color: 'rgb(46, 84, 255)',
-                              }}
-                            >
-                              {file.name}
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
-                              className="hover:opacity-80 font-bold cursor-pointer font-sans"
-                              style={{
-                                color: 'rgb(210, 45, 11)',
-                                fontSize: '13px',
-                                background: 'transparent',
+                                backgroundColor: 'rgb(245, 247, 250)',
                                 border: 'none',
+                                borderRadius: '13px',
                               }}
                             >
-                              Supprimer
-                            </button>
-                          </div>
-                        ))}
+                              <a
+                                href={file.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-sans hover:underline truncate max-w-[220px]"
+                                style={{
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  color: 'rgb(46, 84, 255)',
+                                }}
+                              >
+                                {file.name}
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => setAttachments(attachments.filter((_, i) => i !== idx))}
+                                className="hover:opacity-80 font-bold cursor-pointer font-sans"
+                                style={{
+                                  color: 'rgb(210, 45, 11)',
+                                  fontSize: '13px',
+                                  background: 'transparent',
+                                  border: 'none',
+                                }}
+                              >
+                                Supprimer
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <label htmlFor="client-pin-code" className="block text-[11px] font-bold text-black uppercase">

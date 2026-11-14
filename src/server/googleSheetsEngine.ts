@@ -959,11 +959,11 @@ export function mapRowToDefib(
     pays: 'France',
     contrat: 'Non',
     commentaireAdresse: '',
-    kitCiseauxPresents: 'Oui',
-    kitMasquePresent: 'Oui',
-    kitServiettesPresentes: 'Oui',
-    kitGantsPresents: 'Oui',
-    kitRasoirPresent: 'Oui',
+    kitCiseauxPresents: '',
+    kitMasquePresent: '',
+    kitServiettesPresentes: '',
+    kitGantsPresents: '',
+    kitRasoirPresent: '',
     situationElectrodeA: 'Vert',
     situationElectrodeP: 'Vert',
     situationBatterie: 'Vert',
@@ -1153,6 +1153,9 @@ export function mapRowToDefib(
   if (obj.modeleBatterieSecoursId || obj.lotBatterieSecours || obj.peremptionBatterieSecours) {
     obj.hasBatterieSecours = 'Oui';
   }
+  if (obj.archive === 'Oui') {
+    obj.fsmAutorise = 'Non';
+  }
 
   // Keep component situation aligned with actual expiration dates when dates are present
   const computeSituationFromDate = (dateStr: any): 'Vert' | 'Orange' | 'Rouge' | null => {
@@ -1221,6 +1224,9 @@ export function mapDefibToRow(headers: string[], defib: any, existingRow?: strin
     for (let i = 0; i < normHeaders.length; i++) {
       if (!def.aliases.includes(normHeaders[i]) && (!stripSubHeaders[i] || !def.aliases.includes(stripSubHeaders[i]))) continue;
       let val = defib[def.field];
+      if (def.field === 'fsmAutorise' && defib.archive === 'Oui') {
+        val = 'Non';
+      }
 
       if (def.field === 'commentaireAdresse') {
         val = defib.commentaireAdresse ?? defib.aideAcces ?? defib.aide_acces ?? '';
@@ -2160,51 +2166,51 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Intitulé', field: 'intitule', aliases: ['intitule', 'intitulepersonnalise', 'nompersonnalise', 'nom', 'valeur'] },
   ],
   membresEnvironnement: [
-    { header: 'Nom et prénom', field: 'name', aliases: ['nometprenom', 'nomprenom', 'nom', 'prenom', 'name', 'collaborateur', 'membre', 'utilisateur', 'prenometnom', 'nomcomplet', 'nometprenomcollaborateur', 'nomdumembre', 'nomutilisateur', 'intervenant', 'technicien', 'administrateur'] },
-    { header: 'Email', field: 'email', aliases: ['email', 'mail', 'courriel', 'adresseemail', 'identifiant', 'adressemail', 'emailutilisateur', 'emailmembre', 'login', 'compte', 'adresse électronique', 'adresseelectronique', 'contact'] },
-    { header: 'Rôle', field: 'role', aliases: ['role', 'profil', 'typeutilisateur', 'statutrole', 'typedecompte', 'typecompte', 'categorie', 'categoriedumembre', 'categoriemembre', 'statut', 'acces', 'type'] },
-    { header: 'PIN d’accès / Mot de passe', field: 'pin', aliases: ['pindaccesmotdepasse', 'pindacces', 'pinacces', 'motdepasse', 'pin', 'codepin', 'code', 'password', 'motdepassepindacces', 'motdepassepin', 'cledacces', 'cleacces', 'codedacces', 'codeacces', 'mdp', 'secret'] },
-    { header: 'Métier / Type de rôle', field: 'adminSubRole', aliases: ['metiertypederole', 'metier', 'typederole', 'typerole', 'adminsubrole', 'fonction', 'service', 'sousrole', 'poste', 'specialite'] },
-    { header: 'Emplacement attribué', field: 'locationLink', aliases: ['emplacementattribue', 'emplacement', 'locationlink', 'vehicule', 'entrepot', 'emplacementstock', 'affectation', 'vehiculeattribue', 'entrepotattribue'] },
-    { header: 'Compétences', field: 'competences', aliases: ['competences', 'competence', 'qualifications', 'habilitations'], type: 'array' },
-    { header: 'Numéro et voie', field: 'startAddressStreet', aliases: ['numeroetvoie', 'numerovoie', 'numvoie', 'rue', 'startaddressstreet', 'adressededepart', 'adresse'] },
-    { header: 'Ville', field: 'startAddressCity', aliases: ['ville', 'commune', 'startaddresscity', 'villedepart'] },
-    { header: 'Code postal', field: 'startAddressZip', aliases: ['codepostal', 'cp', 'zip', 'startaddresszip'] },
-    { header: 'Région', field: 'startAddressRegion', aliases: ['region', 'startaddressregion'] },
-    { header: 'Pays', field: 'startAddressCountry', aliases: ['pays', 'country', 'startaddresscountry'] },
-    { header: 'Latitude', field: 'startAddressLat', aliases: ['latitude', 'lat', 'startaddresslat'], type: 'number' },
-    { header: 'Longitude', field: 'startAddressLng', aliases: ['longitude', 'lng', 'lon', 'startaddresslng'], type: 'number' },
-    { header: "Préférence d'optimisation", field: 'optimizationPreference', aliases: ['preferencedoptimisation', 'preferenceoptimisation', 'optimizationpreference', 'optimisation'] },
+    { header: 'Nom et prénom.', field: 'name', aliases: ['nometprenom', 'nomprenom', 'nom', 'prenom', 'name', 'collaborateur', 'membre', 'utilisateur', 'prenometnom', 'nomcomplet', 'nometprenomcollaborateur', 'nomdumembre', 'nomutilisateur', 'intervenant', 'technicien', 'administrateur'] },
+    { header: 'Email.', field: 'email', aliases: ['email', 'mail', 'courriel', 'adresseemail', 'identifiant', 'adressemail', 'emailutilisateur', 'emailmembre', 'login', 'compte', 'adresse électronique', 'adresseelectronique', 'contact'] },
+    { header: 'Rôle.', field: 'role', aliases: ['role', 'profil', 'typeutilisateur', 'statutrole', 'typedecompte', 'typecompte', 'categorie', 'categoriedumembre', 'categoriemembre', 'statut', 'acces', 'type'] },
+    { header: 'Mot de passe.', field: 'pin', aliases: ['motdepasse', 'pindaccesmotdepasse', 'pindacces', 'pinacces', 'pin', 'codepin', 'code', 'password', 'motdepassepindacces', 'motdepassepin', 'cledacces', 'cleacces', 'codedacces', 'codeacces', 'mdp', 'secret'] },
+    { header: 'Métier.', field: 'adminSubRole', aliases: ['metier', 'metiertypederole', 'typederole', 'typerole', 'adminsubrole', 'fonction', 'service', 'sousrole', 'poste', 'specialite'] },
+    { header: 'Emplacement attribué.', field: 'locationLink', aliases: ['emplacementattribue', 'emplacement', 'locationlink', 'vehicule', 'entrepot', 'emplacementstock', 'affectation', 'vehiculeattribue', 'entrepotattribue'] },
+    { header: 'Numéro et voie.', field: 'startAddressStreet', aliases: ['numeroetvoie', 'numerovoie', 'numvoie', 'rue', 'startaddressstreet', 'adressededepart', 'adresse'] },
+    { header: 'Ville.', field: 'startAddressCity', aliases: ['ville', 'commune', 'startaddresscity', 'villedepart'] },
+    { header: 'Code postal.', field: 'startAddressZip', aliases: ['codepostal', 'cp', 'zip', 'startaddresszip'] },
+    { header: 'Région.', field: 'startAddressRegion', aliases: ['region', 'startaddressregion'] },
+    { header: 'Pays.', field: 'startAddressCountry', aliases: ['pays', 'country', 'startaddresscountry'] },
+    { header: 'Latitude.', field: 'startAddressLat', aliases: ['latitude', 'lat', 'startaddresslat'], type: 'number' },
+    { header: 'Longitude.', field: 'startAddressLng', aliases: ['longitude', 'lng', 'lon', 'startaddresslng'], type: 'number' },
+    { header: "Préférence d'optimisation.", field: 'optimizationPreference', aliases: ['preferencedoptimisation', 'preferenceoptimisation', 'optimizationpreference', 'optimisation'] },
+    { header: 'Compétences.', field: 'competences', aliases: ['competences', 'competence', 'qualifications', 'habilitations'], type: 'array' },
+    // Flat columns matching exact 39-column layout of Spreadsheet Membres de l'environnement.
+    { header: 'Semaine typique - Plage 1 - Fermeture le midi', field: '_st1_fermetureMidi', aliases: ['semainetypiqueplage1fermeturelemidi', 'semainetypique1fermeturelemidi', 'plage1fermeturelemidi', 'semainetypiqueplage1fermeturelemidi4plages', 'semainetypique1fermeturelemidi4plages', 'plage1fermeturelemidi4plages'] },
+    { header: 'Semaine typique - Ouvert pour missions.', field: '_st1_openForMissions', aliases: ['semainetypiqueouvertpourmissions', 'semainetypiqueplage1ouvertpourmissions', 'semainetypique1ouvertpourmissions', 'plage1ouvertpourmissions', 'ouvertpourmissions'] },
+    { header: 'Semaine typique - Plage 1 - Deb. Matin.', field: '_st1_openMorning', aliases: ['semainetypiqueplage1debmatin', 'semainetypiqueplage1debutmatin', 'semainetypique1debmatin', 'semainetypique1debutmatin', 'plage1debmatin', 'plage1debutmatin'] },
+    { header: 'Semaine typique - Plage 1 - Fin Matin.', field: '_st1_closeMorning', aliases: ['semainetypiqueplage1finmatin', 'semainetypique1finmatin', 'plage1finmatin'] },
+    { header: 'Semaine typique - Plage 1 - Deb. Apr-M.', field: '_st1_openAfternoon', aliases: ['semainetypiqueplage1debaprm', 'semainetypiqueplage1debutaprm', 'semainetypiqueplage1debutapresmidi', 'semainetypique1debaprm', 'semainetypique1debutapresmidi', 'plage1debaprm', 'plage1debutapresmidi'] },
+    { header: 'Semaine typique - Plage 1 - Fin. Apr-M.', field: '_st1_closeAfternoon', aliases: ['semainetypiqueplage1finaprm', 'semainetypiqueplage1finapresmidi', 'semainetypique1finaprm', 'semainetypique1finapresmidi', 'plage1finaprm', 'plage1finapresmidi'] },
+    { header: 'Semaine typique - Plage 1 - Jours concernés.', field: '_st1_days', aliases: ['semainetypiqueplage1joursconcernes', 'semainetypiqueplage1jours', 'semainetypique1joursconcernes', 'plage1joursconcernes', 'semainetypique1jours', 'plage1jours'] },
+    { header: 'Semaine typique - Plage 1 - Commentaire court.', field: '_st1_commentaire', aliases: ['semainetypiqueplage1commentairecourt', 'semainetypiqueplage1commentaire', 'semainetypique1commentairecourt', 'semainetypique1commentaire', 'plage1commentairecourt', 'plage1commentaire'] },
+    { header: 'Semaine typique - Plage 1 - Début.', field: '_st1_openContinuous', aliases: ['semainetypiqueplage1debut', 'semainetypique1debut', 'plage1debut'] },
+    { header: 'Semaine typique - Plage 1 - Fin.', field: '_st1_closeContinuous', aliases: ['semainetypiqueplage1fin', 'semainetypique1fin', 'plage1fin'] },
+    { header: 'Semaine typique - Plage 2 - Deb. Matin.', field: '_st2_openMorning', aliases: ['semainetypiqueplage2debmatin', 'semainetypiqueplage2debutmatin', 'semainetypique2debmatin', 'semainetypique2debutmatin', 'plage2debmatin', 'plage2debutmatin'] },
+    { header: 'Semaine typique - Plage 2 - Fin Matin.', field: '_st2_closeMorning', aliases: ['semainetypiqueplage2finmatin', 'semainetypique2finmatin', 'plage2finmatin'] },
+    { header: 'Semaine typique - Plage 2 - Deb. Apr-M.', field: '_st2_openAfternoon', aliases: ['semainetypiqueplage2debaprm', 'semainetypiqueplage2debutaprm', 'semainetypiqueplage2debutapresmidi', 'semainetypique2debaprm', 'semainetypique2debutapresmidi', 'plage2debaprm', 'plage2debutapresmidi'] },
+    { header: 'Semaine typique - Plage 2 - Fin. Apr-M.', field: '_st2_closeAfternoon', aliases: ['semainetypiqueplage2finaprm', 'semainetypiqueplage2finapresmidi', 'semainetypique2finaprm', 'semainetypique2finapresmidi', 'plage2finaprm', 'plage2finapresmidi'] },
+    { header: 'Semaine typique - Plage 2 - Jours concernés.', field: '_st2_days', aliases: ['semainetypiqueplage2joursconcernes', 'semainetypiqueplage2jours', 'semainetypique2joursconcernes', 'plage2joursconcernes', 'semainetypique2jours', 'plage2jours'] },
+    { header: 'Semaine typique - Plage 2 - Commentaire court.', field: '_st2_commentaire', aliases: ['semainetypiqueplage2commentairecourt', 'semainetypiqueplage2commentaire', 'semainetypique2commentairecourt', 'semainetypique2commentaire', 'plage2commentairecourt', 'plage2commentaire'] },
+    { header: 'Semaine typique - Plage 2 - Début.', field: '_st2_openContinuous', aliases: ['semainetypiqueplage2debut', 'semainetypique2debut', 'plage2debut'] },
+    { header: 'Semaine typique - Plage 2 - Fin.', field: '_st2_closeContinuous', aliases: ['semainetypiqueplage2fin', 'semainetypique2fin', 'plage2fin'] },
+    { header: "Période d'indisponibilité - Plage 1 - Date début.", field: '_abs1_startDate', aliases: ['periodedindisponibiliteplage1datedebut', 'periodeindisponibiliteplage1datedebut', 'indisponibiliteplage1datedebut', 'indisponibilite1datedebut', 'periodeindisponibilite1datedebut', 'periodedindisponibilite1datedebut', 'absence1datedebut', 'periode1datedebut'] },
+    { header: "Période d'indisponibilité - Plage 1 - Date fin.", field: '_abs1_endDate', aliases: ['periodedindisponibiliteplage1datefin', 'periodeindisponibiliteplage1datefin', 'indisponibiliteplage1datefin', 'indisponibilite1datefin', 'periodeindisponibilite1datefin', 'periodedindisponibilite1datefin', 'absence1datefin', 'periode1datefin'] },
+    { header: "Période d'indisponibilité - Plage 1 - Commentaire court.", field: '_abs1_commentaire', aliases: ['periodedindisponibiliteplage1commentairecourt', 'periodedindisponibiliteplage1commentaire', 'periodeindisponibiliteplage1commentairecourt', 'indisponibiliteplage1commentairecourt', 'indisponibilite1commentairecourt', 'indisponibilite1commentaire', 'periodeindisponibilite1commentairecourt', 'periodedindisponibilite1commentairecourt', 'absence1commentaire', 'periode1commentairecourt'] },
+    { header: "Période d'indisponibilité - Plage 2 - Date début.", field: '_abs2_startDate', aliases: ['periodedindisponibiliteplage2datedebut', 'periodeindisponibiliteplage2datedebut', 'indisponibiliteplage2datedebut', 'indisponibilite2datedebut', 'periodeindisponibilite2datedebut', 'periodedindisponibilite2datedebut', 'absence2datedebut', 'periode2datedebut'] },
+    { header: "Période d'indisponibilité - Plage 2 - Date fin.", field: '_abs2_endDate', aliases: ['periodedindisponibiliteplage2datefin', 'periodeindisponibiliteplage2datefin', 'indisponibiliteplage2datefin', 'indisponibilite2datefin', 'periodeindisponibilite2datefin', 'periodedindisponibilite2datefin', 'absence2datefin', 'periode2datefin'] },
+    { header: "Période d'indisponibilité - Plage 2 - Commentaire court.", field: '_abs2_commentaire', aliases: ['periodedindisponibiliteplage2commentairecourt', 'periodedindisponibiliteplage2commentaire', 'periodeindisponibiliteplage2commentairecourt', 'indisponibiliteplage2commentairecourt', 'indisponibilite2commentairecourt', 'indisponibilite2commentaire', 'periodeindisponibilite2commentairecourt', 'periodedindisponibilite2commentairecourt', 'absence2commentaire', 'periode2commentairecourt'] },
+    // Additional optional/legacy columns
+    { header: 'Semaine typique 2 - Fermeture le midi', field: '_st2_fermetureMidi', aliases: ['semainetypiqueplage2fermeturelemidi', 'semainetypique2fermeturelemidi', 'plage2fermeturelemidi', 'semainetypique2fermeturelemidi4plages', 'plage2fermeturelemidi4plages'] },
+    { header: 'Semaine typique 2 - Ouvert pour missions', field: '_st2_openForMissions', aliases: ['semainetypiqueplage2ouvertpourmissions', 'semainetypique2ouvertpourmissions', 'plage2ouvertpourmissions'] },
     { header: 'Semaine typique', field: 'semaineTypique', aliases: ['semainetypique', 'horaires', 'plageshoraires', 'planning'], type: 'json' },
     { header: "Périodes d'indisponibilité", field: 'absences', aliases: ['periodesdindisponibilite', 'periodeindisponibilite', 'indisponibilites', 'indisponibilite', 'absences', 'conges'], type: 'json' },
-    // Flat columns for Semaine typique Plage 1 & Plage 2
-    { header: 'Semaine typique 1 - Fermeture le midi', field: '_st1_fermetureMidi', aliases: ['semainetypique1fermeturelemidi', 'plage1fermeturelemidi', 'semainetypique1fermeturelemidi4plages', 'plage1fermeturelemidi4plages'] },
-    { header: 'Semaine typique 1 - Ouvert pour missions', field: '_st1_openForMissions', aliases: ['semainetypique1ouvertpourmissions', 'plage1ouvertpourmissions'] },
-    { header: 'Semaine typique 1 - Deb. Matin', field: '_st1_openMorning', aliases: ['semainetypique1debmatin', 'semainetypique1debutmatin', 'plage1debmatin', 'plage1debutmatin'] },
-    { header: 'Semaine typique 1 - Fin. Matin', field: '_st1_closeMorning', aliases: ['semainetypique1finmatin', 'plage1finmatin'] },
-    { header: 'Semaine typique 1 - Deb. Apr-M', field: '_st1_openAfternoon', aliases: ['semainetypique1debaprm', 'semainetypique1debutapresmidi', 'plage1debaprm', 'plage1debutapresmidi'] },
-    { header: 'Semaine typique 1 - Fin. Apr-M', field: '_st1_closeAfternoon', aliases: ['semainetypique1finaprm', 'semainetypique1finapresmidi', 'plage1finaprm', 'plage1finapresmidi'] },
-    { header: 'Semaine typique 1 - Début', field: '_st1_openContinuous', aliases: ['semainetypique1debut', 'plage1debut'] },
-    { header: 'Semaine typique 1 - Fin', field: '_st1_closeContinuous', aliases: ['semainetypique1fin', 'plage1fin'] },
-    { header: 'Semaine typique 1 - Jours concernés', field: '_st1_days', aliases: ['semainetypique1joursconcernes', 'plage1joursconcernes', 'semainetypique1jours', 'plage1jours'] },
-    { header: 'Semaine typique 1 - Commentaire court', field: '_st1_commentaire', aliases: ['semainetypique1commentairecourt', 'semainetypique1commentaire', 'plage1commentairecourt', 'plage1commentaire'] },
-    { header: 'Semaine typique 2 - Fermeture le midi', field: '_st2_fermetureMidi', aliases: ['semainetypique2fermeturelemidi', 'plage2fermeturelemidi', 'semainetypique2fermeturelemidi4plages', 'plage2fermeturelemidi4plages'] },
-    { header: 'Semaine typique 2 - Ouvert pour missions', field: '_st2_openForMissions', aliases: ['semainetypique2ouvertpourmissions', 'plage2ouvertpourmissions'] },
-    { header: 'Semaine typique 2 - Deb. Matin', field: '_st2_openMorning', aliases: ['semainetypique2debmatin', 'semainetypique2debutmatin', 'plage2debmatin', 'plage2debutmatin'] },
-    { header: 'Semaine typique 2 - Fin. Matin', field: '_st2_closeMorning', aliases: ['semainetypique2finmatin', 'plage2finmatin'] },
-    { header: 'Semaine typique 2 - Deb. Apr-M', field: '_st2_openAfternoon', aliases: ['semainetypique2debaprm', 'semainetypique2debutapresmidi', 'plage2debaprm', 'plage2debutapresmidi'] },
-    { header: 'Semaine typique 2 - Fin. Apr-M', field: '_st2_closeAfternoon', aliases: ['semainetypique2finaprm', 'semainetypique2finapresmidi', 'plage2finaprm', 'plage2finapresmidi'] },
-    { header: 'Semaine typique 2 - Début', field: '_st2_openContinuous', aliases: ['semainetypique2debut', 'plage2debut'] },
-    { header: 'Semaine typique 2 - Fin', field: '_st2_closeContinuous', aliases: ['semainetypique2fin', 'plage2fin'] },
-    { header: 'Semaine typique 2 - Jours concernés', field: '_st2_days', aliases: ['semainetypique2joursconcernes', 'plage2joursconcernes', 'semainetypique2jours', 'plage2jours'] },
-    { header: 'Semaine typique 2 - Commentaire court', field: '_st2_commentaire', aliases: ['semainetypique2commentairecourt', 'semainetypique2commentaire', 'plage2commentairecourt', 'plage2commentaire'] },
-    // Flat columns for Périodes d'indisponibilité 1 & 2
-    { header: 'Indisponibilité 1 - Date début', field: '_abs1_startDate', aliases: ['indisponibilite1datedebut', 'periodeindisponibilite1datedebut', 'periodedindisponibilite1datedebut', 'absence1datedebut', 'periode1datedebut'] },
-    { header: 'Indisponibilité 1 - Date fin', field: '_abs1_endDate', aliases: ['indisponibilite1datefin', 'periodeindisponibilite1datefin', 'periodedindisponibilite1datefin', 'absence1datefin', 'periode1datefin'] },
-    { header: 'Indisponibilité 1 - Commentaire court', field: '_abs1_commentaire', aliases: ['indisponibilite1commentairecourt', 'indisponibilite1commentaire', 'periodeindisponibilite1commentairecourt', 'periodedindisponibilite1commentairecourt', 'absence1commentaire', 'periode1commentairecourt'] },
-    { header: 'Indisponibilité 2 - Date début', field: '_abs2_startDate', aliases: ['indisponibilite2datedebut', 'periodeindisponibilite2datedebut', 'periodedindisponibilite2datedebut', 'absence2datedebut', 'periode2datedebut'] },
-    { header: 'Indisponibilité 2 - Date fin', field: '_abs2_endDate', aliases: ['indisponibilite2datefin', 'periodeindisponibilite2datefin', 'periodedindisponibilite2datefin', 'absence2datefin', 'periode2datefin'] },
-    { header: 'Indisponibilité 2 - Commentaire court', field: '_abs2_commentaire', aliases: ['indisponibilite2commentairecourt', 'indisponibilite2commentaire', 'periodeindisponibilite2commentairecourt', 'periodedindisponibilite2commentairecourt', 'absence2commentaire', 'periode2commentairecourt'] },
     { header: 'Signature Technicien (URL)', field: 'signature', aliases: ['signaturetechnicienurl', 'signaturetechnicien', 'signature', 'urlsignature', 'signatureurl', 'signaturecollaborateur'] },
   ],
   reglages: [
@@ -3166,6 +3172,277 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
         'typedae',
         'dsaoudea',
         'deaoudsa',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Numéro Atlasanté (Identification et photos).',
+      field: 'visibiliteNumeroAtlasante',
+      aliases: [
+        'visibiliteduchampnumeroatlasanteidentificationetphotos',
+        'visibiliteduchampnumeroatlasante',
+        'visibilitenumeroatlasante',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Version du logiciel (Identification et photos).',
+      field: 'visibiliteVersionLogiciel',
+      aliases: [
+        'visibiliteduchampversiondulogicielidentificationetphotos',
+        'visibiliteduchampversiondulogiciel',
+        'visibiliteversionlogiciel',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Émettre un facture brouillon (Client).',
+      field: 'visibiliteFactureBrouillon',
+      aliases: [
+        'visibiliteduchampemettreunfacturebrouillonclient',
+        'visibiliteduchampemettreunefacturebrouillonclient',
+        'visibiliteduchampemettreunfacturebrouillon',
+        'visibiliteduchampemettreunefacturebrouillon',
+        'visibilitefacturebrouillon',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : PadPak (Électrode Adulte).',
+      field: 'visibilitePadPakAdulte',
+      aliases: [
+        'visibiliteduchamppadpakelectrodeadulte',
+        'visibilitepadpakadulte',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Lot PadPak A (Électrode Adulte).',
+      field: 'visibiliteLotPadPakA',
+      aliases: [
+        'visibiliteduchamplotpadpakaelectrodeadulte',
+        'visibiliteduchamplotpadpaka',
+        'visibilitelotpadpaka',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Péremption PadPak A (Électrode Adulte)',
+      field: 'visibilitePeremptionPadPakA',
+      aliases: [
+        'visibiliteduchampperemptionpadpakaelectrodeadulte',
+        'visibiliteduchampperemptionpadpaka',
+        'visibiliteperemptionpadpaka',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Lot P (Électrode Pédiatrique).',
+      field: 'visibiliteLotP',
+      aliases: [
+        'visibiliteduchamplotpelectrodepediatrique',
+        'visibiliteduchamplotp',
+        'visibilitelotp',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : PadPak (Électrode Pédiatrique).',
+      field: 'visibilitePadPakPediatrique',
+      aliases: [
+        'visibiliteduchamppadpakelectrodepediatrique',
+        'visibilitepadpakpediatrique',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Lot PadPak P (Électrode Pédiatrique).',
+      field: 'visibiliteLotPadPakP',
+      aliases: [
+        'visibiliteduchamplotpadpakpelectrodepediatrique',
+        'visibiliteduchamplotpadpakp',
+        'visibilitelotpadpakp',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Péremption PadPak P (Électrode Pédiatrique).',
+      field: 'visibilitePeremptionPadPakP',
+      aliases: [
+        'visibiliteduchampperemptionpadpakpelectrodepediatrique',
+        'visibiliteduchampperemptionpadpakp',
+        'visibiliteperemptionpadpakp',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Fabrication (Batterie).',
+      field: 'visibiliteFabricationBatterie',
+      aliases: [
+        'visibiliteduchampfabricationbatterie',
+        'visibilitefabricationbatterie',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Insertion (Batterie).',
+      field: 'visibiliteInsertionBatterie',
+      aliases: [
+        'visibiliteduchampinsertionbatterie',
+        'visibiliteinsertionbatterie',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Péremption (Batterie).',
+      field: 'visibilitePeremptionBatterie',
+      aliases: [
+        'visibiliteduchampperemptionbatterie',
+        'visibiliteperemptionbatterie',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Pourcentage de charge (Batterie).',
+      field: 'visibilitePourcentageBatterie',
+      aliases: [
+        'visibiliteduchamppourcentagedechargebatterie',
+        'visibiliteduchamppourcentagedecharge',
+        'visibilitepourcentagebatterie',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Paire de gants présents (Kit de secours).',
+      field: 'visibiliteGantsPresents',
+      aliases: [
+        'visibiliteduchamppairedegantspresentskitdesecours',
+        'visibiliteduchamppairesdegantspresentskitdesecours',
+        'visibiliteduchamppairedegantspresents',
+        'visibilitegantspresents',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Péremption des serviettes (Kit de secours).',
+      field: 'visibilitePeremptionServiettes',
+      aliases: [
+        'visibiliteduchampperemptiondesservietteskitdesecours',
+        'visibiliteduchampperemptiondesserviettes',
+        'visibiliteperemptionserviettes',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Serviettes présentes (Kit de secours).',
+      field: 'visibiliteServiettesPresentes',
+      aliases: [
+        'visibiliteduchampserviettespresenteskitdesecours',
+        'visibiliteduchampserviettespresentes',
+        'visibiliteserviettespresentes',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Péremption du masque (Kit de secours).',
+      field: 'visibilitePeremptionMasque',
+      aliases: [
+        'visibiliteduchampperemptiondumasquekitdesecours',
+        'visibiliteduchampperemptiondumasque',
+        'visibiliteperemptionmasque',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Masque présent (Kit de secours).',
+      field: 'visibiliteMasquePresent',
+      aliases: [
+        'visibiliteduchampmasquepresentkitdesecours',
+        'visibiliteduchampmasquepresent',
+        'visibilitemasquepresent',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Ciseaux présents (Kit de secours).',
+      field: 'visibiliteCiseauxPresents',
+      aliases: [
+        'visibiliteduchampciseauxpresentskitdesecours',
+        'visibiliteduchampciseauxpresents',
+        'visibiliteciseauxpresents',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Péremption de la trousse (Kit de secours).',
+      field: 'visibilitePeremptionTrousse',
+      aliases: [
+        'visibiliteduchampperemptiondelatroussekitdesecours',
+        'visibiliteduchampperemptiondelatrousse',
+        'visibiliteperemptiontrousse',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Rasoir (Kit de secours).',
+      field: 'visibiliteRasoir',
+      aliases: [
+        'visibiliteduchamprasoirkitdesecours',
+        'visibiliteduchamprasoir',
+        'visibiliterasoir',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Branchement conforme des électrodes (Vérifications).',
+      field: 'visibiliteBranchementElectrodes',
+      aliases: [
+        'visibiliteduchampbranchementconformedeselectrodesverifications',
+        'visibiliteduchampbranchementconformedeselectrodes',
+        'visibilitebranchementelectrodes',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Guides vocaux conformes (Vérifications).',
+      field: 'visibiliteGuidesVocaux',
+      aliases: [
+        'visibiliteduchampguidesvocauxconformesverifications',
+        'visibiliteduchampguidesvocauxconformes',
+        'visibiliteguidesvocaux',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Message numérique conforme (Vérifications).',
+      field: 'visibiliteMessageNumeriqueConforme',
+      aliases: [
+        'visibiliteduchampmessagenumeriqueconformeverifications',
+        'visibiliteduchampmessagenumeriqueconforme',
+        'visibilitemessagenumeriqueconforme',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Équipé d’un message numérique (Vérifications).',
+      field: 'visibiliteEquipeMessageNumerique',
+      aliases: [
+        'visibiliteduchampequipedunmessagenumeriqueverifications',
+        'visibiliteduchampequipedunmessagenumerique',
+        'visibiliteequipemessagenumerique',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Voyant conforme (Vérifications).',
+      field: 'visibiliteVoyantConforme',
+      aliases: [
+        'visibiliteduchampvoyantconformeverifications',
+        'visibiliteduchampvoyantconforme',
+        'visibilitevoyantconforme',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Nettoyage (Vérifications).',
+      field: 'visibiliteNettoyage',
+      aliases: [
+        'visibiliteduchampnettoyageverifications',
+        'visibiliteduchampnettoyage',
+        'visibilitenettoyage',
+      ],
+    },
+    {
+      header: 'Visibilité du champ : Pièces jointes (1 à 3 fichiers) (Clôture).',
+      field: 'visibilitePiecesJointes',
+      aliases: [
+        'visibiliteduchamppiecesjointes1a3fichierscloture',
+        'visibiliteduchamppiecesjointes1a3fichiers',
+        'visibiliteduchamppiecesjointes',
+        'visibilitepiecesjointes',
+      ],
+    },
+    {
+      header: 'Info(s) au technicien.',
+      field: 'infosTechnicien',
+      aliases: [
+        'infosautechnicien',
+        'infoautechnicien',
+        'infostechnicien',
+        'infotechnicien',
+        'informationsautechnicien',
       ],
     },
   ],
@@ -5161,8 +5438,15 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.authorName = resolvedName || resolvedEmail || 'Membre';
     merged.sender = merged.authorName;
     merged.role = merged.role || 'Administrateur';
-    merged.tag = 'All';
-    merged.channel = 'All';
+    const rawCanal = String(
+      rawByHeader['Canal.'] ||
+      rawByHeader['Canal'] ||
+      merged.tag ||
+      merged.channel ||
+      'Général'
+    ).trim();
+    merged.tag = !rawCanal || rawCanal.toLowerCase() === 'all' ? 'Général' : rawCanal;
+    merged.channel = merged.tag;
     merged.content = String(
       merged.content ||
       merged.text ||
@@ -5290,6 +5574,24 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     } else {
       merged.role = rawRole;
     }
+    if (rawSubRole) {
+      merged.adminSubRole = rawSubRole;
+    }
+    if (merged.optimizationPreference) {
+      const optNorm = String(merged.optimizationPreference).toLowerCase();
+      if (optNorm.includes('loin') || optNorm.includes('éloigné') || optNorm.includes('eloigne')) {
+        merged.optimizationPreference = 'loin';
+      } else if (optNorm.includes('proche')) {
+        merged.optimizationPreference = 'proche';
+      }
+    }
+    if (merged.startAddressStreet || merged.startAddressZip || merged.startAddressCity) {
+      const st = String(merged.startAddressStreet || '').trim();
+      const zp = String(merged.startAddressZip || '').trim();
+      const ct = String(merged.startAddressCity || '').trim();
+      const co = String(merged.startAddressCountry || 'France').trim();
+      merged.startAddress = st ? `${st}, ${zp} ${ct}, ${co}`.trim() : `${zp} ${ct}, ${co}`.trim();
+    }
     merged.pin = merged.pin !== undefined && merged.pin !== null ? String(merged.pin).trim() : '';
     merged.status = merged.status || 'Actif';
     merged.lastActive = merged.lastActive || 'En ligne';
@@ -5307,10 +5609,20 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       const schedules: any[] = [];
       for (const idx of [1, 2]) {
         const prefix = `_st${idx}_`;
+        const hasMorningOrAfternoon = Boolean(
+          merged[`${prefix}openMorning`] ||
+          merged[`${prefix}closeMorning`] ||
+          merged[`${prefix}openAfternoon`] ||
+          merged[`${prefix}closeAfternoon`]
+        );
+        const hasContinuous = Boolean(
+          merged[`${prefix}openContinuous`] ||
+          merged[`${prefix}closeContinuous`]
+        );
         const hasAny =
           merged[`${prefix}days`] ||
-          merged[`${prefix}openContinuous`] ||
-          merged[`${prefix}openMorning`] ||
+          hasContinuous ||
+          hasMorningOrAfternoon ||
           merged[`${prefix}commentaire`];
         if (hasAny) {
           const rawDays = merged[`${prefix}days`];
@@ -5320,9 +5632,17 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
                 .split(/[,;/|]/)
                 .map(s => s.trim())
                 .filter(Boolean);
+          const inferredFermetureMidi =
+            merged[`${prefix}fermetureMidi`] !== undefined && String(merged[`${prefix}fermetureMidi`]).trim() !== ''
+              ? normalizeBool(merged[`${prefix}fermetureMidi`], false)
+              : (hasMorningOrAfternoon && !hasContinuous);
+          const rawOpenForMissions =
+            merged[`${prefix}openForMissions`] !== undefined && String(merged[`${prefix}openForMissions`]).trim() !== ''
+              ? merged[`${prefix}openForMissions`]
+              : merged._st1_openForMissions;
           schedules.push({
-            fermetureMidi: normalizeBool(merged[`${prefix}fermetureMidi`], false),
-            openForMissions: merged[`${prefix}openForMissions`] !== undefined ? normalizeBool(merged[`${prefix}openForMissions`], true) : true,
+            fermetureMidi: inferredFermetureMidi,
+            openForMissions: rawOpenForMissions !== undefined && String(rawOpenForMissions).trim() !== '' ? normalizeBool(rawOpenForMissions, true) : true,
             openMorning: merged[`${prefix}openMorning`] || '09:00',
             closeMorning: merged[`${prefix}closeMorning`] || '12:00',
             openAfternoon: merged[`${prefix}openAfternoon`] || '14:00',
@@ -6406,6 +6726,71 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       merged.typeDefibrillateur = 'Automatique (DEA)';
     } else {
       merged.typeDefibrillateur = rawTypeDefib;
+    }
+
+    const visHeaderPairs: Array<[string, string[]]> = [
+      ['visibiliteNumeroAtlasante', ['Visibilité du champ : Numéro Atlasanté (Identification et photos).', 'Visibilité du champ : Numéro Atlasanté (Identification et photos)']],
+      ['visibiliteVersionLogiciel', ['Visibilité du champ : Version du logiciel (Identification et photos).', 'Visibilité du champ : Version du logiciel (Identification et photos)']],
+      ['visibiliteFactureBrouillon', ['Visibilité du champ : Émettre un facture brouillon (Client).', 'Visibilité du champ : Émettre un facture brouillon (Client)', 'Visibilité du champ : Émettre une facture brouillon (Client).']],
+      ['visibilitePadPakAdulte', ['Visibilité du champ : PadPak (Électrode Adulte).', 'Visibilité du champ : PadPak (Électrode Adulte)']],
+      ['visibiliteLotPadPakA', ['Visibilité du champ : Lot PadPak A (Électrode Adulte).', 'Visibilité du champ : Lot PadPak A (Électrode Adulte)']],
+      ['visibilitePeremptionPadPakA', ['Visibilité du champ : Péremption PadPak A (Électrode Adulte)', 'Visibilité du champ : Péremption PadPak A (Électrode Adulte).']],
+      ['visibiliteLotP', ['Visibilité du champ : Lot P (Électrode Pédiatrique).', 'Visibilité du champ : Lot P (Électrode Pédiatrique)']],
+      ['visibilitePadPakPediatrique', ['Visibilité du champ : PadPak (Électrode Pédiatrique).', 'Visibilité du champ : PadPak (Électrode Pédiatrique)']],
+      ['visibiliteLotPadPakP', ['Visibilité du champ : Lot PadPak P (Électrode Pédiatrique).', 'Visibilité du champ : Lot PadPak P (Électrode Pédiatrique)']],
+      ['visibilitePeremptionPadPakP', ['Visibilité du champ : Péremption PadPak P (Électrode Pédiatrique).', 'Visibilité du champ : Péremption PadPak P (Électrode Pédiatrique)']],
+      ['visibiliteFabricationBatterie', ['Visibilité du champ : Fabrication (Batterie).', 'Visibilité du champ : Fabrication (Batterie)']],
+      ['visibiliteInsertionBatterie', ['Visibilité du champ : Insertion (Batterie).', 'Visibilité du champ : Insertion (Batterie)']],
+      ['visibilitePeremptionBatterie', ['Visibilité du champ : Péremption (Batterie).', 'Visibilité du champ : Péremption (Batterie)']],
+      ['visibilitePourcentageBatterie', ['Visibilité du champ : Pourcentage de charge (Batterie).', 'Visibilité du champ : Pourcentage de charge (Batterie)']],
+      ['visibiliteGantsPresents', ['Visibilité du champ : Paire de gants présents (Kit de secours).', 'Visibilité du champ : Paire de gants présents (Kit de secours)', 'Visibilité du champ : Paires de gants présents (Kit de secours).']],
+      ['visibilitePeremptionServiettes', ['Visibilité du champ : Péremption des serviettes (Kit de secours).', 'Visibilité du champ : Péremption des serviettes (Kit de secours)']],
+      ['visibiliteServiettesPresentes', ['Visibilité du champ : Serviettes présentes (Kit de secours).', 'Visibilité du champ : Serviettes présentes (Kit de secours)']],
+      ['visibilitePeremptionMasque', ['Visibilité du champ : Péremption du masque (Kit de secours).', 'Visibilité du champ : Péremption du masque (Kit de secours)']],
+      ['visibiliteMasquePresent', ['Visibilité du champ : Masque présent (Kit de secours).', 'Visibilité du champ : Masque présent (Kit de secours)']],
+      ['visibiliteCiseauxPresents', ['Visibilité du champ : Ciseaux présents (Kit de secours).', 'Visibilité du champ : Ciseaux présents (Kit de secours)']],
+      ['visibilitePeremptionTrousse', ['Visibilité du champ : Péremption de la trousse (Kit de secours).', 'Visibilité du champ : Péremption de la trousse (Kit de secours)']],
+      ['visibiliteRasoir', ['Visibilité du champ : Rasoir (Kit de secours).', 'Visibilité du champ : Rasoir (Kit de secours)']],
+      ['visibiliteBranchementElectrodes', ['Visibilité du champ : Branchement conforme des électrodes (Vérifications).', 'Visibilité du champ : Branchement conforme des électrodes (Vérifications)']],
+      ['visibiliteGuidesVocaux', ['Visibilité du champ : Guides vocaux conformes (Vérifications).', 'Visibilité du champ : Guides vocaux conformes (Vérifications)']],
+      ['visibiliteMessageNumeriqueConforme', ['Visibilité du champ : Message numérique conforme (Vérifications).', 'Visibilité du champ : Message numérique conforme (Vérifications)']],
+      ['visibiliteEquipeMessageNumerique', ['Visibilité du champ : Équipé d’un message numérique (Vérifications).', "Visibilité du champ : Équipé d'un message numérique (Vérifications).", 'Visibilité du champ : Équipé d’un message numérique (Vérifications)', "Visibilité du champ : Équipé d'un message numérique (Vérifications)"]],
+      ['visibiliteVoyantConforme', ['Visibilité du champ : Voyant conforme (Vérifications).', 'Visibilité du champ : Voyant conforme (Vérifications)']],
+      ['visibiliteNettoyage', ['Visibilité du champ : Nettoyage (Vérifications).', 'Visibilité du champ : Nettoyage (Vérifications)']],
+      ['visibilitePiecesJointes', ['Visibilité du champ : Pièces jointes (1 à 3 fichiers) (Clôture).', 'Visibilité du champ : Pièces jointes (1 à 3 fichiers) (Clôture)']],
+    ];
+
+    if (merged.category === 'Modèle Défibrillateur') {
+      for (const [field, rawHeaders] of visHeaderPairs) {
+        let rawVal = merged[field];
+        if (rawVal === undefined || rawVal === '') {
+          for (const h of rawHeaders) {
+            if (merged[h] !== undefined && merged[h] !== '') {
+              rawVal = merged[h];
+              break;
+            }
+            if (rawByHeader[h] !== undefined && rawByHeader[h] !== '') {
+              rawVal = rawByHeader[h];
+              break;
+            }
+          }
+        }
+        merged[field] = normalizeYesNo(rawVal, 'Oui');
+      }
+      const rawInfosTech = String(
+        merged.infosTechnicien ??
+          merged['Info(s) au technicien.'] ??
+          merged['Info(s) au technicien'] ??
+          rawByHeader['Info(s) au technicien.'] ??
+          rawByHeader['Info(s) au technicien'] ??
+          ''
+      ).trim();
+      merged.infosTechnicien = rawInfosTech;
+    } else {
+      for (const [field] of visHeaderPairs) {
+        merged[field] = '';
+      }
+      merged.infosTechnicien = '';
     }
 
     if (!merged.id || String(merged.id).startsWith('sheet_gen_')) {
@@ -7843,10 +8228,18 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched['Nom Prénom (Username).'] = emailToStore;
     enriched['Nom Prénom (Username)'] = emailToStore;
     enriched.authorName = String(enriched.authorName || enriched.sender || emailToStore || '').trim();
-    enriched.tag = 'All';
-    enriched.channel = 'All';
-    enriched['Canal.'] = 'All';
-    enriched['Canal'] = 'All';
+    const rawCanalToStore = String(
+      enriched.tag ||
+      enriched.channel ||
+      enriched['Canal.'] ||
+      enriched['Canal'] ||
+      'Général'
+    ).trim();
+    const canalToStore = !rawCanalToStore || rawCanalToStore.toLowerCase() === 'all' ? 'Général' : rawCanalToStore;
+    enriched.tag = canalToStore;
+    enriched.channel = canalToStore;
+    enriched['Canal.'] = canalToStore;
+    enriched['Canal'] = canalToStore;
     enriched.content = enriched.content || enriched.text || '';
     enriched['Message.'] = enriched.content;
     enriched['Message'] = enriched.content;
@@ -7854,46 +8247,109 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched['Horodatage.'] = enriched.dateStr;
     enriched['Horodatage'] = enriched.dateStr;
   } else if (tabType === 'membresEnvironnement') {
-    if (enriched.role) {
-      enriched['Rôle.'] = enriched.role;
-      enriched['Rôle'] = enriched.role;
-      enriched['Catégorie.'] = enriched.role;
-      enriched['Catégorie'] = enriched.role;
-      enriched.categorie = enriched.role;
-      if (enriched._rawSheetRow && typeof enriched._rawSheetRow === 'object') {
-        enriched._rawSheetRow = {
-          ...enriched._rawSheetRow,
-          'Rôle.': enriched.role,
-          'Rôle': enriched.role,
-          'Catégorie.': enriched.role,
-          'Catégorie': enriched.role,
-        };
-      }
-    }
+    // Clear _rawSheetRow so removed schedules/absences or updated names never fall back to stale raw column keys
+    enriched._rawSheetRow = {};
+    enriched.name = String(enriched.name ?? '').trim();
+    enriched['Nom et prénom.'] = enriched.name;
+    enriched['Nom et prénom'] = enriched.name;
+    enriched.email = String(enriched.email ?? '').trim();
+    enriched['Email.'] = enriched.email;
+    enriched['Email'] = enriched.email;
+    enriched.role = String(enriched.role ?? 'Administrateur').trim();
+    enriched['Rôle.'] = enriched.role;
+    enriched['Rôle'] = enriched.role;
+    enriched['Catégorie.'] = enriched.role;
+    enriched['Catégorie'] = enriched.role;
+    enriched.categorie = enriched.role;
+    enriched.pin = String(enriched.pin ?? '').trim();
+    enriched['Mot de passe.'] = enriched.pin;
+    enriched['Mot de passe'] = enriched.pin;
+    const isTechMember = enriched.role === 'Technicien' || enriched.role.toLowerCase().includes('tech');
+    enriched.adminSubRole = String(enriched.adminSubRole ?? (isTechMember ? 'Technicien' : enriched.role)).trim();
+    enriched['Métier.'] = enriched.adminSubRole;
+    enriched['Métier'] = enriched.adminSubRole;
+    enriched.locationLink = String(enriched.locationLink ?? '').trim();
+    enriched['Emplacement attribué.'] = enriched.locationLink;
+    enriched['Emplacement attribué'] = enriched.locationLink;
+    enriched.startAddressStreet = String(enriched.startAddressStreet ?? '').trim();
+    enriched['Numéro et voie.'] = enriched.startAddressStreet;
+    enriched.startAddressCity = String(enriched.startAddressCity ?? '').trim();
+    enriched['Ville.'] = enriched.startAddressCity;
+    enriched.startAddressZip = String(enriched.startAddressZip ?? '').trim();
+    enriched['Code postal.'] = enriched.startAddressZip;
+    enriched.startAddressRegion = String(enriched.startAddressRegion ?? '').trim();
+    enriched['Région.'] = enriched.startAddressRegion;
+    enriched.startAddressCountry = String(enriched.startAddressCountry ?? '').trim();
+    enriched['Pays.'] = enriched.startAddressCountry;
+    enriched.startAddressLat =
+      enriched.startAddressLat !== undefined && enriched.startAddressLat !== null && !isNaN(Number(enriched.startAddressLat))
+        ? String(enriched.startAddressLat)
+        : '';
+    enriched['Latitude.'] = enriched.startAddressLat;
+    enriched.startAddressLng =
+      enriched.startAddressLng !== undefined && enriched.startAddressLng !== null && !isNaN(Number(enriched.startAddressLng))
+        ? String(enriched.startAddressLng)
+        : '';
+    enriched['Longitude.'] = enriched.startAddressLng;
+    const rawOpt = String(enriched.optimizationPreference ?? '').trim();
+    enriched.optimizationPreference =
+      rawOpt === 'loin'
+        ? "Se rendre d'abord au plus éloigné"
+        : rawOpt === 'proche'
+        ? "Se rendre d'abord au plus proche"
+        : rawOpt;
+    enriched["Préférence d'optimisation."] = enriched.optimizationPreference;
     if (Array.isArray(enriched.competences)) {
       enriched.competences = enriched.competences.join(', ');
+    } else {
+      enriched.competences = String(enriched.competences ?? '').trim();
     }
+    enriched['Compétences.'] = enriched.competences;
+
     const stList = Array.isArray(enriched.semaineTypique) ? enriched.semaineTypique.slice(0, 2) : [];
-    stList.forEach((st: any, i: number) => {
+    for (let i = 0; i < 2; i++) {
+      const st = stList[i];
       const p = `_st${i + 1}_`;
-      enriched[`${p}fermetureMidi`] = st.fermetureMidi ? 'Oui' : 'Non';
-      enriched[`${p}openForMissions`] = st.openForMissions !== false ? 'Oui' : 'Non';
-      enriched[`${p}openMorning`] = st.openMorning || '';
-      enriched[`${p}closeMorning`] = st.closeMorning || '';
-      enriched[`${p}openAfternoon`] = st.openAfternoon || '';
-      enriched[`${p}closeAfternoon`] = st.closeAfternoon || '';
-      enriched[`${p}openContinuous`] = st.openContinuous || '';
-      enriched[`${p}closeContinuous`] = st.closeContinuous || '';
-      enriched[`${p}days`] = Array.isArray(st.days) ? st.days.join(', ') : (st.days || '');
-      enriched[`${p}commentaire`] = st.commentaire || '';
-    });
+      if (st && typeof st === 'object') {
+        const isMidi = Boolean(st.fermetureMidi);
+        enriched[`${p}fermetureMidi`] = isMidi ? 'Oui' : 'Non';
+        enriched[`${p}openForMissions`] = st.openForMissions !== false ? 'Oui' : 'Non';
+        enriched[`${p}openMorning`] = isMidi ? (st.openMorning || '09:00') : '';
+        enriched[`${p}closeMorning`] = isMidi ? (st.closeMorning || '12:00') : '';
+        enriched[`${p}openAfternoon`] = isMidi ? (st.openAfternoon || '14:00') : '';
+        enriched[`${p}closeAfternoon`] = isMidi ? (st.closeAfternoon || '18:00') : '';
+        enriched[`${p}openContinuous`] = !isMidi ? (st.openContinuous || '09:00') : '';
+        enriched[`${p}closeContinuous`] = !isMidi ? (st.closeContinuous || '17:00') : '';
+        enriched[`${p}days`] = Array.isArray(st.days) ? st.days.join(', ') : String(st.days || '');
+        enriched[`${p}commentaire`] = String(st.commentaire || '');
+      } else {
+        enriched[`${p}fermetureMidi`] = '';
+        enriched[`${p}openForMissions`] = '';
+        enriched[`${p}openMorning`] = '';
+        enriched[`${p}closeMorning`] = '';
+        enriched[`${p}openAfternoon`] = '';
+        enriched[`${p}closeAfternoon`] = '';
+        enriched[`${p}openContinuous`] = '';
+        enriched[`${p}closeContinuous`] = '';
+        enriched[`${p}days`] = '';
+        enriched[`${p}commentaire`] = '';
+      }
+    }
+
     const absList = Array.isArray(enriched.absences) ? enriched.absences.slice(0, 2) : [];
-    absList.forEach((ab: any, i: number) => {
+    for (let i = 0; i < 2; i++) {
+      const ab = absList[i];
       const p = `_abs${i + 1}_`;
-      enriched[`${p}startDate`] = ab.startDate || '';
-      enriched[`${p}endDate`] = ab.endDate || '';
-      enriched[`${p}commentaire`] = ab.commentaire || '';
-    });
+      if (ab && typeof ab === 'object') {
+        enriched[`${p}startDate`] = String(ab.startDate || '');
+        enriched[`${p}endDate`] = String(ab.endDate || '');
+        enriched[`${p}commentaire`] = String(ab.commentaire || '');
+      } else {
+        enriched[`${p}startDate`] = '';
+        enriched[`${p}endDate`] = '';
+        enriched[`${p}commentaire`] = '';
+      }
+    }
   } else if (tabType === 'reglages') {
     enriched.langue = enriched.langue || enriched.language || 'Français, France';
     enriched.name = enriched.name ?? enriched.nomCommercial ?? '';
@@ -8033,9 +8489,17 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched[vf] =
         enriched.category === 'Modèle Défibrillateur'
           ? normalizeYesNo(enriched[vf], 'Oui')
-          : (enriched[vf] ? normalizeYesNo(enriched[vf], 'Oui') : '');
+          : '';
     }
-    enriched.infosTechnicien = enriched.infosTechnicien ?? '';
+    enriched.infosTechnicien =
+      enriched.category === 'Modèle Défibrillateur'
+        ? String(
+            enriched.infosTechnicien ??
+              enriched['Info(s) au technicien.'] ??
+              enriched['Info(s) au technicien'] ??
+              ''
+          ).trim()
+        : '';
   } else if (tabType === 'historiqueNotifications') {
     enriched.ugs = String(enriched.ugs ?? '').trim();
     enriched.description = String(enriched.description ?? '').trim();
@@ -9009,7 +9473,10 @@ export async function fetchTenantSheetCollection(
     if (diskSnap && Array.isArray(diskSnap.items) && diskSnap.items.length > 0) {
       const isStaleVariablesSnap =
         tabType === 'variables' &&
-        (diskSnap.items.some(hasUnmappedVariableKeys) || !Array.isArray(diskSnap.headers) || diskSnap.headers.length === 0);
+        (diskSnap.items.some(hasUnmappedVariableKeys) ||
+          !Array.isArray(diskSnap.headers) ||
+          diskSnap.headers.length === 0 ||
+          !diskSnap.headers.some(h => normalizeHeaderKey(h).includes('visibiliteduchamp')));
       if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap) && !isStaleMissionsSnap(diskSnap) && !isStaleSuspiciousSnap(diskSnap) && !isStaleReglagesSnap(diskSnap) && !isStaleTempsSnap(diskSnap)) {
         if (tabType === 'defibrillateurs') {
           diskSnap.stats = computeSheetCollectionStats(diskSnap.items, 'defibrillateurs');
@@ -9036,7 +9503,10 @@ export async function fetchTenantSheetCollection(
     const cached = sheetMemoryCache.get(cacheKey)!;
     const isStaleVariablesCache =
       tabType === 'variables' &&
-      (cached.items.some(hasUnmappedVariableKeys) || !Array.isArray(cached.headers) || cached.headers.length === 0);
+      (cached.items.some(hasUnmappedVariableKeys) ||
+        !Array.isArray(cached.headers) ||
+        cached.headers.length === 0 ||
+        !cached.headers.some(h => normalizeHeaderKey(h).includes('visibiliteduchamp')));
     if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached) && !isStaleMissionsSnap(cached) && !isStaleSuspiciousSnap(cached) && !isStaleReglagesSnap(cached) && !isStaleTempsSnap(cached)) {
       if (tabType === 'defibrillateurs') {
         cached.stats = computeSheetCollectionStats(cached.items, 'defibrillateurs');
@@ -9763,7 +10233,7 @@ export async function queryTenantSheetCollection(
       }
 
       if (maintenanceFilter === 'oui' || maintenanceFilter === 'non') {
-        const rawFsm = String(df.fsmAutorise || 'Oui').trim().toLowerCase();
+        const rawFsm = df.archive === 'Oui' ? 'non' : String(df.fsmAutorise || 'Oui').trim().toLowerCase();
         const fsmVal = rawFsm === 'non' ? 'non' : 'oui';
         if (maintenanceFilter !== fsmVal) return false;
       }
@@ -10243,7 +10713,8 @@ export async function upsertRecordsToTenantSheet(
           !headers.some(h => normalizeHeaderKey(h).includes('statutfacturation')));
       const variablesMissingNewHeaders =
         tabType === 'variables' &&
-        !headers.some(h => normalizeHeaderKey(h).includes('typedusagedelelectrode'));
+        (!headers.some(h => normalizeHeaderKey(h).includes('typedusagedelelectrode')) ||
+          !headers.some(h => normalizeHeaderKey(h).includes('visibiliteduchamp')));
       const defibMissingNewHeaders =
         tabType === 'defibrillateurs' &&
         (!headers.some(h => normalizeHeaderKey(h).includes('typededefibrillateur') || normalizeHeaderKey(h).includes('typedefibrillateur')) ||
@@ -10728,7 +11199,7 @@ export async function deleteRecordsFromTenantSheet(
   tenantId: string,
   tabType: SheetTabType,
   targetKeys: string[]
-): Promise<{ success: boolean; deletedCount: number; syncedToRemoteSheet: boolean }> {
+): Promise<{ success: boolean; deletedCount: number; syncedToRemoteSheet: boolean; totalCount?: number; stats?: SheetCollectionStats }> {
   const extracted = extractSpreadsheetIdAndGid(spreadsheetUrl);
   if (!extracted || !Array.isArray(targetKeys) || targetKeys.length === 0) {
     return { success: false, deletedCount: 0, syncedToRemoteSheet: false };
@@ -10781,6 +11252,10 @@ export async function deleteRecordsFromTenantSheet(
       const uKeys = getRecordLookupKeys(upVal, tabType);
       const isUpRowTargeted = (upVal as any)?._sheetRowNumber && rowNumbersToClearSet.has((upVal as any)._sheetRowNumber);
       if (isUpRowTargeted || normTargets.has(upKey.toLowerCase()) || uKeys.some(k => normTargets.has(k))) {
+        if ((upVal as any)?._sheetRowNumber && typeof (upVal as any)._sheetRowNumber === 'number' && (upVal as any)._sheetRowNumber >= 2) {
+          rowNumbersToClearSet.add((upVal as any)._sheetRowNumber);
+        }
+        uKeys.forEach(k => normTargets.add(k));
         delete overlay.upsertedById[upKey];
       }
     }
@@ -10792,6 +11267,10 @@ export async function deleteRecordsFromTenantSheet(
         const rKeys = getRecordLookupKeys(entry.item, tabType);
         const isRecRowTargeted = entry.item._sheetRowNumber && rowNumbersToClearSet.has(entry.item._sheetRowNumber);
         if (isRecRowTargeted || normTargets.has(rk.toLowerCase()) || rKeys.some(k => normTargets.has(k))) {
+          if (entry.item._sheetRowNumber && typeof entry.item._sheetRowNumber === 'number' && entry.item._sheetRowNumber >= 2) {
+            rowNumbersToClearSet.add(entry.item._sheetRowNumber);
+          }
+          rKeys.forEach(k => normTargets.add(k));
           recentMap.delete(rk);
         }
       }
@@ -10801,60 +11280,124 @@ export async function deleteRecordsFromTenantSheet(
     overlay.lastSyncedAt = Date.now();
     saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
 
-    const rowNumbersToClear = Array.from(rowNumbersToClearSet).sort((a, b) => b - a);
     let syncedToRemoteSheet = false;
     const accessToken = await getServiceAccountAccessToken();
     const cfg = getGlobalGoogleConfig();
 
-    if (accessToken && rowNumbersToClear.length > 0) {
+    if (accessToken) {
       try {
         const tabMeta = await resolveSheetTabMeta(extracted.spreadsheetId, extracted.gid);
         const rangePrefix = buildSheetRangePrefix(tabMeta.title);
-        // 1. Clear full rows using A1 whole-row notation (e.g. 'Feuille 1'!4:4) so no trailing columns (e.g. col > 90) ever remain
-        const ranges = rowNumbersToClear.map(rn => `${rangePrefix}${rn}:${rn}`);
-        const clearRes = await fetch(
-          `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchClear`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ ranges }),
-          }
-        );
-        if (clearRes.ok) syncedToRemoteSheet = true;
 
-        // 2. Physically delete the rows from the Google Sheet in descending row order so no blank row gap stays
-        if (tabMeta.sheetId !== null && !isNaN(tabMeta.sheetId)) {
-          const deleteRequests = rowNumbersToClear.map(rn => ({
-            deleteDimension: {
-              range: {
-                sheetId: tabMeta.sheetId,
-                dimension: 'ROWS',
-                startIndex: rn - 1,
-                endIndex: rn,
-              },
-            },
-          }));
-          const delDimRes = await fetch(
-            `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}:batchUpdate`,
+        // Also scan live identifier columns A2:D50000 on Google Sheets so even if _sheetRowNumber was missing or shifted in cache,
+        // the exact live row(s) matching normTargets are guaranteed to be found and deleted.
+        try {
+          const idRange = encodeURIComponent(`${rangePrefix}A2:D50000`);
+          const idRes = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values/${idRange}`,
+            {
+              headers: { Authorization: `Bearer ${accessToken}` },
+              signal: AbortSignal.timeout(8000),
+            }
+          );
+          if (idRes.ok) {
+            const idJson = await idRes.json();
+            const idRows: any[][] = Array.isArray(idJson?.values) ? idJson.values : [];
+            const liveMatchedRowSet = new Set<number>();
+            for (let i = 0; i < idRows.length; i++) {
+              const r = idRows[i];
+              if (!r || r.length === 0) continue;
+              for (let c = 0; c < r.length; c++) {
+                const cellVal = String(r[c] ?? '').trim().toLowerCase();
+                if (cellVal && normTargets.has(cellVal)) {
+                  liveMatchedRowSet.add(i + 2);
+                  break;
+                }
+              }
+            }
+            if (liveMatchedRowSet.size > 0) {
+              rowNumbersToClearSet.clear();
+              liveMatchedRowSet.forEach(rn => rowNumbersToClearSet.add(rn));
+            }
+          }
+        } catch (_) {}
+
+        const rowNumbersToClear = Array.from(rowNumbersToClearSet).sort((a, b) => b - a);
+        if (rowNumbersToClear.length > 0) {
+          // 1. Clear full rows using A1 whole-row notation (e.g. 'Feuille 1'!4:4) so no trailing columns ever remain
+          const ranges = rowNumbersToClear.map(rn => `${rangePrefix}${rn}:${rn}`);
+          const clearRes = await fetch(
+            `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchClear`,
             {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${accessToken}`,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({ requests: deleteRequests }),
+              body: JSON.stringify({ ranges }),
             }
           );
-          if (delDimRes.ok) {
-            syncedToRemoteSheet = true;
-            // Adjust _sheetRowNumber in remainingItems for rows below deleted rows
-            for (const deletedRn of rowNumbersToClear) {
-              for (const rem of remainingItems) {
-                if (rem._sheetRowNumber && rem._sheetRowNumber > deletedRn) {
-                  rem._sheetRowNumber -= 1;
+          if (clearRes.ok) syncedToRemoteSheet = true;
+
+          // 2. Physically delete the rows from the Google Sheet in descending row order so no blank row gap stays
+          if (tabMeta.sheetId !== null && !isNaN(tabMeta.sheetId)) {
+            const deleteRequests = rowNumbersToClear.map(rn => ({
+              deleteDimension: {
+                range: {
+                  sheetId: tabMeta.sheetId,
+                  dimension: 'ROWS',
+                  startIndex: rn - 1,
+                  endIndex: rn,
+                },
+              },
+            }));
+            let delDimRes = await fetch(
+              `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}:batchUpdate`,
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ requests: deleteRequests }),
+              }
+            );
+            if (!delDimRes.ok) {
+              // If Google Sheets rejected deleting all non-frozen rows (e.g. when deleting the last remaining data row),
+              // append 1 blank row first and then delete the target row(s)
+              await fetch(
+                `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}:batchUpdate`,
+                {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    requests: [
+                      {
+                        appendDimension: {
+                          sheetId: tabMeta.sheetId,
+                          dimension: 'ROWS',
+                          length: 1,
+                        },
+                      },
+                      ...deleteRequests,
+                    ],
+                  }),
+                }
+              ).then(r => {
+                if (r.ok) delDimRes = r;
+              }).catch(() => {});
+            }
+            if (delDimRes.ok) {
+              syncedToRemoteSheet = true;
+              // Adjust _sheetRowNumber in remainingItems for rows below deleted rows
+              for (const deletedRn of rowNumbersToClear) {
+                for (const rem of remainingItems) {
+                  if (rem._sheetRowNumber && rem._sheetRowNumber > deletedRn) {
+                    rem._sheetRowNumber -= 1;
+                  }
                 }
               }
             }
@@ -10863,7 +11406,8 @@ export async function deleteRecordsFromTenantSheet(
       } catch (_) {}
     }
 
-    if (!syncedToRemoteSheet && cfg.appsScriptBridgeUrl && rowNumbersToClear.length > 0) {
+    const finalRowNumbersToClear = Array.from(rowNumbersToClearSet).sort((a, b) => b - a);
+    if (!syncedToRemoteSheet && cfg.appsScriptBridgeUrl && finalRowNumbersToClear.length > 0) {
       try {
         const bridgeRes = await fetch(cfg.appsScriptBridgeUrl, {
           method: 'POST',
@@ -10873,7 +11417,7 @@ export async function deleteRecordsFromTenantSheet(
             spreadsheetUrl,
             spreadsheetId: extracted.spreadsheetId,
             gid: extracted.gid,
-            rowNumbers: rowNumbersToClear,
+            rowNumbers: finalRowNumbersToClear,
           }),
           redirect: 'follow',
         });
@@ -10881,23 +11425,25 @@ export async function deleteRecordsFromTenantSheet(
       } catch (_) {}
     }
 
-    if (syncedToRemoteSheet) {
-      overlay.deletedIds = [];
-      saveMirrorOverlay(tenantId, tabType, extracted.spreadsheetId, overlay);
-    }
-
+    const updatedStats = computeSheetCollectionStats(remainingItems, tabType);
     if (currentData.headers.length > 0) {
       const updatedSnapshot: CachedSheetResult = {
         headers: currentData.headers,
         items: remainingItems,
-        stats: computeSheetCollectionStats(remainingItems, tabType),
+        stats: updatedStats,
         fetchedAt: Date.now(),
         spreadsheetUrl,
       };
       sheetMemoryCache.set(cacheKey, updatedSnapshot);
       saveDiskSnapshotAsync(cacheKey, updatedSnapshot);
     }
-    return { success: true, deletedCount: normTargets.size, syncedToRemoteSheet };
+    return {
+      success: true,
+      deletedCount: normTargets.size,
+      syncedToRemoteSheet,
+      totalCount: remainingItems.length,
+      stats: updatedStats,
+    };
   });
 }
 
@@ -11306,6 +11852,250 @@ export async function fetchMasterTenantsFromSpreadsheet(forceRefresh: boolean = 
   })();
 
   return masterTenantsInFlight;
+}
+
+export async function syncTenantMembersToMasterSpreadsheet(
+  tenantId: string,
+  members: any[]
+): Promise<{ synced: boolean; error?: string }> {
+  const cleanTid = String(tenantId || '').trim();
+  if (!cleanTid || cleanTid.toLowerCase() === 'demo') {
+    return { synced: false };
+  }
+  const extracted = extractSpreadsheetIdAndGid(MASTER_TENANTS_SPREADSHEET_URL);
+  if (!extracted) {
+    return { synced: false, error: 'Invalid master spreadsheet URL' };
+  }
+
+  return withSheetWriteLock(extracted.spreadsheetId, async () => {
+    try {
+      const matrix = await fetchRawSheetMatrix(MASTER_TENANTS_SPREADSHEET_URL);
+      if (!matrix || !Array.isArray(matrix.headers) || !Array.isArray(matrix.rows) || matrix.rows.length === 0) {
+        return { synced: false, error: 'Unable to read master tenants matrix' };
+      }
+
+      const headersNorm = matrix.headers.map(h =>
+        String(h || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]/g, '')
+      );
+
+      const emailColIdx = headersNorm.findIndex(
+        h => h.includes('superadmin') || (!h.startsWith('useremail') && (h.includes('email') || h.includes('mail')))
+      );
+      const idColIdx = headersNorm.findIndex(h => h === 'id' || h.includes('tenantid') || h.includes('identifiant'));
+      const codeColIdx = headersNorm.findIndex(h => h === 'code' || h.includes('code') || h.includes('short'));
+
+      const colEmail = emailColIdx >= 0 ? emailColIdx : 1;
+      const colId = idColIdx >= 0 ? idColIdx : 2;
+      const colCode = codeColIdx >= 0 ? codeColIdx : 3;
+
+      const userSlotCols: Array<{ slotIndex: number; emailIdx: number; roleIdx: number }> = [];
+      headersNorm.forEach((h, idx) => {
+        const m = h.match(/^useremail(\d+)$/);
+        if (m) {
+          const slotNum = parseInt(m[1], 10);
+          const roleColIdx = headersNorm.findIndex(rh => rh === `userrole${slotNum}`);
+          userSlotCols.push({
+            slotIndex: slotNum,
+            emailIdx: idx,
+            roleIdx: roleColIdx,
+          });
+        }
+      });
+      userSlotCols.sort((a, b) => a.slotIndex - b.slotIndex);
+
+      if (userSlotCols.length === 0) {
+        return { synced: false, error: 'No UserEmailN columns found in master spreadsheet' };
+      }
+
+      // Resolve matching tenant row in matrix.rows
+      const targetUpper = cleanTid.toUpperCase();
+      const cachedMatch = cachedMasterTenants.find(
+        t =>
+          t.id.toUpperCase() === targetUpper ||
+          (t.shortEnvId && t.shortEnvId.toUpperCase() === targetUpper) ||
+          (t.code && t.code.toUpperCase() === targetUpper)
+      );
+      const candidateIds = new Set<string>([targetUpper]);
+      if (cachedMatch) {
+        if (cachedMatch.id) candidateIds.add(cachedMatch.id.toUpperCase());
+        if (cachedMatch.shortEnvId) candidateIds.add(cachedMatch.shortEnvId.toUpperCase());
+        if (cachedMatch.code) candidateIds.add(cachedMatch.code.toUpperCase());
+      }
+
+      let matchedRowIdx = -1;
+      for (let i = 0; i < matrix.rows.length; i++) {
+        const row = matrix.rows[i];
+        if (!Array.isArray(row)) continue;
+        const rId = String(row[colId] ?? '').trim().toUpperCase();
+        const rCode = String(row[colCode] ?? '').trim().toUpperCase();
+        if ((rId && candidateIds.has(rId)) || (rCode && candidateIds.has(rCode))) {
+          matchedRowIdx = i;
+          break;
+        }
+      }
+
+      if (matchedRowIdx < 0) {
+        return { synced: false, error: `Tenant ${cleanTid} not found in master spreadsheet` };
+      }
+
+      const targetRow = [...(matrix.rows[matchedRowIdx] || [])];
+      while (targetRow.length < matrix.headers.length) {
+        targetRow.push('');
+      }
+
+      const superAdminEmailLower = String(targetRow[colEmail] ?? '')
+        .replace(/[\s\u200B-\u200D\uFEFF\u00A0]+/g, '')
+        .trim()
+        .toLowerCase();
+
+      const seenEmails = new Set<string>();
+      if (superAdminEmailLower) seenEmails.add(superAdminEmailLower);
+
+      const slotEntries: MasterSheetUserEntry[] = [];
+      for (const m of Array.isArray(members) ? members : []) {
+        if (!m || typeof m !== 'object') continue;
+        const mEmail = String(m.email ?? '')
+          .replace(/[\s\u200B-\u200D\uFEFF\u00A0]+/g, '')
+          .trim();
+        if (!mEmail || !mEmail.includes('@')) continue;
+        const mEmailLower = mEmail.toLowerCase();
+        if (seenEmails.has(mEmailLower)) continue;
+
+        const rawRole = String(m.role ?? '').trim();
+        const normRole = rawRole.toLowerCase();
+        if (normRole === 'inactif' || normRole.includes('inactif')) continue;
+        if (normRole.includes('super') || normRole.includes('propriétaire') || normRole.includes('proprietaire')) continue;
+
+        seenEmails.add(mEmailLower);
+        const mappedRole: 'Admin' | 'Technicien' =
+          normRole.includes('tech') || normRole.includes('maintenance') || normRole.includes('intervenant')
+            ? 'Technicien'
+            : 'Admin';
+
+        slotEntries.push({
+          email: mEmail,
+          role: mappedRole,
+          rawRole: mappedRole,
+          slotIndex: slotEntries.length + 1,
+        });
+      }
+
+      const sheetRowNumber = matchedRowIdx + 2; // Row 1 is header
+      const cellUpdates: Array<{ colIdx: number; value: string }> = [];
+
+      for (let sIdx = 0; sIdx < userSlotCols.length; sIdx++) {
+        const slotCol = userSlotCols[sIdx];
+        const entry = slotEntries[sIdx];
+        const newEmailVal = entry ? entry.email : '';
+        const newRoleVal = entry ? entry.role : '';
+
+        targetRow[slotCol.emailIdx] = newEmailVal;
+        cellUpdates.push({ colIdx: slotCol.emailIdx, value: newEmailVal });
+
+        if (slotCol.roleIdx >= 0) {
+          targetRow[slotCol.roleIdx] = newRoleVal;
+          cellUpdates.push({ colIdx: slotCol.roleIdx, value: newRoleVal });
+        }
+      }
+
+      // Update in-memory cachedMasterTenants and disk cache immediately
+      const updatedMasterUsers: MasterSheetUserEntry[] = slotEntries.slice(0, userSlotCols.length).map((e, idx) => ({
+        ...e,
+        slotIndex: userSlotCols[idx].slotIndex,
+      }));
+      cachedMasterTenants = cachedMasterTenants.map(t => {
+        if (
+          t.id.toUpperCase() === targetUpper ||
+          (t.shortEnvId && t.shortEnvId.toUpperCase() === targetUpper) ||
+          (t.code && t.code.toUpperCase() === targetUpper)
+        ) {
+          return {
+            ...t,
+            masterUsers: updatedMasterUsers,
+          };
+        }
+        return t;
+      });
+      saveMasterTenantsToDiskCache(cachedMasterTenants);
+
+      // Write updated UserEmailN & UserRoleN cells to live MEGA ADMIN DEFIBEO Google Sheet
+      let syncedRemote = false;
+      const accessToken = await getServiceAccountAccessToken();
+      const cfg = getGlobalGoogleConfig();
+
+      if (accessToken && cellUpdates.length > 0) {
+        try {
+          const sheetTitle = await resolveSheetTabTitle(extracted.spreadsheetId, extracted.gid);
+          const rangePrefix = buildSheetRangePrefix(sheetTitle);
+          const dataPayload = cellUpdates.map(u => {
+            const colLetter = columnIndexToLetter(u.colIdx);
+            return {
+              range: `${rangePrefix}${colLetter}${sheetRowNumber}`,
+              values: [[u.value]],
+            };
+          });
+          const batchRes = await fetchWithRetry(
+            `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values:batchUpdate`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                valueInputOption: 'USER_ENTERED',
+                data: dataPayload,
+              }),
+              signal: AbortSignal.timeout(12000),
+            },
+            3
+          );
+          if (batchRes.ok) {
+            syncedRemote = true;
+          }
+        } catch (err: any) {
+          console.warn('[MasterTenantsSheet] Remote batchUpdate warning:', err?.message || String(err));
+        }
+      }
+
+      if (!syncedRemote && cfg.appsScriptBridgeUrl) {
+        try {
+          const bridgeRes = await fetchWithRetry(
+            cfg.appsScriptBridgeUrl,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'upsertRows',
+                spreadsheetUrl: MASTER_TENANTS_SPREADSHEET_URL,
+                spreadsheetId: extracted.spreadsheetId,
+                gid: extracted.gid,
+                headers: matrix.headers,
+                updates: [{ rowNumber: sheetRowNumber, values: targetRow, key: cleanTid }],
+                appends: [],
+              }),
+              redirect: 'follow',
+              signal: AbortSignal.timeout(12000),
+            },
+            2
+          );
+          if (bridgeRes.ok) {
+            syncedRemote = true;
+          }
+        } catch (err: any) {
+          console.warn('[MasterTenantsSheet] Apps Script Bridge warning:', err?.message || String(err));
+        }
+      }
+
+      return { synced: syncedRemote };
+    } catch (err: any) {
+      return { synced: false, error: err?.message || String(err) };
+    }
+  });
 }
 
 export const TUTORIAL_VIDEOS_SPREADSHEET_URL =

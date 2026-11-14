@@ -4847,11 +4847,13 @@ export default function App() {
                   const rawEmail = String(m.authorEmail || m['Nom Prénom (Username).'] || m['Nom Prénom (Username)'] || '').trim();
                   const rawName = String(m.authorName || m.sender || '').trim();
                   const msgId = m.id || `msg_${m._sheetRowNumber || idx + 2}`;
+                  const rawCanal = String(m.tag || m.channel || m['Canal.'] || m['Canal'] || '').trim();
+                  const resolvedTag = !rawCanal || rawCanal.toLowerCase() === 'all' ? 'Général' : rawCanal;
                   return {
                     id: msgId,
                     authorName: rawName || rawEmail || 'Membre',
                     authorEmail: rawEmail || (rawName.includes('@') ? rawName : ''),
-                    tag: 'All',
+                    tag: resolvedTag,
                     content: String(m.content || m.text || '').trim(),
                     createdAt: Number(m.createdAt) || prevById.get(String(msgId)) || 0,
                     dateStr: String(m.dateStr || m.time || '').trim(),
@@ -4903,6 +4905,16 @@ export default function App() {
           }
           case 'membresEnvironnement': {
             const validSheetMembers = items.filter((m: any) => m && (m.name || m.email));
+            const isDerivedEmailName = (name?: string, email?: string): boolean => {
+              const n = String(name || '').trim().toLowerCase();
+              if (!n) return true;
+              const e = String(email || '').trim().toLowerCase();
+              if (!e) return false;
+              if (n === e) return true;
+              const prefix = e.split('@')[0] || '';
+              const formattedPrefix = prefix.split(/[._-]+/).filter(Boolean).join(' ').toLowerCase();
+              return n === prefix || n === formattedPrefix;
+            };
             // Mix Firebase/DB + Spreadsheet (2 sources), giving spreadsheet fields precedence when an email is in both
             setMembers((prevMembers) => {
               const fbBase = ensureTenantMembersClient(Array.isArray(prevMembers) ? prevMembers : [], activeTid, loggedUser?.email, loggedUser?.name);
@@ -4917,10 +4929,23 @@ export default function App() {
                     (!smEmail && smName && String(fm.name || '').trim().toLowerCase() === smName)
                 );
                 if (fbMatch) {
+                  const effectiveEmail = sm.email || fbMatch.email;
+                  const resolvedName =
+                    sm.name && (!isDerivedEmailName(sm.name, effectiveEmail) || isDerivedEmailName(fbMatch.name, effectiveEmail))
+                      ? sm.name
+                      : (fbMatch.name || sm.name);
                   return {
                     ...fbMatch,
                     ...sm,
+                    name: resolvedName,
+                    email: effectiveEmail,
                     role: sm.role || fbMatch.role,
+                    pin: sm.pin || fbMatch.pin || '1234',
+                    adminSubRole: sm.adminSubRole || fbMatch.adminSubRole,
+                    locationLink: sm.locationLink || fbMatch.locationLink,
+                    semaineTypique: Array.isArray(sm.semaineTypique) && sm.semaineTypique.length > 0 ? sm.semaineTypique : fbMatch.semaineTypique,
+                    absences: Array.isArray(sm.absences) && sm.absences.length > 0 ? sm.absences : fbMatch.absences,
+                    competences: Array.isArray(sm.competences) && sm.competences.length > 0 ? sm.competences : fbMatch.competences,
                   };
                 }
                 return sm;
@@ -6722,8 +6747,27 @@ export default function App() {
       calculated: false
     };
     saveFsmTours([newTour, ...fsmTours]);
+    setFsmSearchQuery('');
+    setFsmRegionFilter('Tous');
+    setFsmTechFilter('Tous');
+    setFsmPlannerFilter('Tous');
+    setFsmClientFilter('Tous');
+    setFsmRejectedOrRefusedFilter(false);
+    setFsmLastSelectedTourId(newId);
     setFsmDateFilter(newId);
     showFsmSystemInfoMessage("La tournée est créée, elle est accessible via la sélection de la tournée.");
+    const focusTourTitleInput = (attemptsLeft: number) => {
+      const inputEl = document.getElementById(`input-fsm-tour-title-${newId}`) as HTMLInputElement | null;
+      if (inputEl) {
+        inputEl.focus();
+        try {
+          inputEl.select();
+        } catch (_) {}
+      } else if (attemptsLeft > 0) {
+        setTimeout(() => focusTourTitleInput(attemptsLeft - 1), 50);
+      }
+    };
+    setTimeout(() => focusTourTitleInput(10), 30);
   };
 
   const deleteFsmTour = (tourId: string) => {
@@ -6797,10 +6841,10 @@ export default function App() {
         saveStocks(updatedStocks);
       }
     }
-    if (fsmDateFilter === tourId) {
+    if (fsmDateFilter === tourId || fsmDateFilter === 'Tous' || (tour.tourIdentifiant && fsmDateFilter === tour.tourIdentifiant)) {
       setFsmDateFilter('none');
     }
-    if (fsmLastSelectedTourId === tourId) {
+    if (fsmLastSelectedTourId === tourId || (tour.tourIdentifiant && fsmLastSelectedTourId === tour.tourIdentifiant)) {
       setFsmLastSelectedTourId('');
     }
     saveFsmTours(fsmTours.filter(t => t.id !== tourId));
@@ -8842,9 +8886,10 @@ export default function App() {
       return variables.find(v => {
         const vId = String(v.id || '').trim().toLowerCase();
         const vNom = String(v.nom || '').trim().toLowerCase();
+        const vIdent = String(v.identifiant || '').trim().toLowerCase();
         const vMarqueNom = `${v.marque || ''} ${v.nom || ''}`.trim().toLowerCase();
         const vNomMarque = `${v.nom || ''} (${v.marque || ''})`.trim().toLowerCase();
-        return vId === clean || vNom === clean || vMarqueNom === clean || vNomMarque === clean;
+        return vId === clean || vNom === clean || (vIdent && vIdent === clean) || vMarqueNom === clean || vNomMarque === clean;
       });
     };
     const formatModelDisplayName = (modelVar: any, fallbackRef: any, emptyFallback = 'Non spécifié') => {
@@ -12597,6 +12642,7 @@ export default function App() {
       '';
 
     const cleanIdent = String((defibData as any).identifiant || '').trim().toUpperCase();
+    const effectiveFsm = (defibData as any).archive === 'Oui' ? 'Non' : ((defibData as any).fsmAutorise || 'Oui');
     let newDefib: Defibrillateur = {
       id: cleanIdent || (defibData as any).id || 'df_' + Date.now(),
       createdAt: nowIso,
@@ -12605,6 +12651,7 @@ export default function App() {
       envId: activeTid,
       tenantId: activeTid,
       ...defibData,
+      fsmAutorise: effectiveFsm,
       ...(cleanIdent ? { id: cleanIdent, identifiant: cleanIdent } : {}),
       clientNom: effectiveClientNom || (defibData as any).clientNom || ''
     };
@@ -12621,6 +12668,7 @@ export default function App() {
       newDefib = {
         ...syncRes.syncedDefib,
         ...newDefib,
+        fsmAutorise: newDefib.archive === 'Oui' ? 'Non' : (newDefib.fsmAutorise || 'Oui'),
         id: syncRes.syncedDefib.id || newDefib.id,
         updatedAt: nowIso,
         dateDerniereModification: nowIso,
@@ -12630,6 +12678,22 @@ export default function App() {
 
     const nextList = dedupeDefibsList([newDefib, ...defibrillateurs]);
     await saveDefibs(nextList);
+
+    const isNewMainNon = newDefib.archive === 'Oui' || String(newDefib.fsmAutorise || 'Oui').trim().toLowerCase() === 'non';
+    setDefibSheetStats((prev: any) => {
+      if (!prev) return prev;
+      const nextStats = {
+        ...prev,
+        totalCount: (prev.totalCount || 0) + 1,
+        totalMainOui: isNewMainNon ? (prev.totalMainOui || 0) : (prev.totalMainOui || 0) + 1,
+        totalMainNon: isNewMainNon ? (prev.totalMainNon || 0) + 1 : (prev.totalMainNon || 0),
+      };
+      try {
+        localStorage.setItem(`defib_${activeTid}_defib_sheet_stats`, JSON.stringify(nextStats));
+      } catch (_) {}
+      return nextStats;
+    });
+
     return true;
   };
 
@@ -12670,11 +12734,15 @@ export default function App() {
       delete sanitizedUpdated.id;
       delete sanitizedUpdated._sheetRowNumber;
     }
+    if (sanitizedUpdated.archive === 'Oui') {
+      sanitizedUpdated.fsmAutorise = 'Non';
+    }
 
     let finalMerged: Defibrillateur = existingMatch
       ? {
           ...existingMatch,
           ...sanitizedUpdated,
+          fsmAutorise: sanitizedUpdated.archive === 'Oui' ? 'Non' : (sanitizedUpdated.fsmAutorise ?? existingMatch.fsmAutorise ?? 'Oui'),
           clientNom: effectiveClientNom || sanitizedUpdated.clientNom || (existingMatch as any).clientNom || '',
           envId: activeTid,
           tenantId: activeTid,
@@ -12685,6 +12753,7 @@ export default function App() {
         }
       : {
           ...sanitizedUpdated,
+          fsmAutorise: sanitizedUpdated.archive === 'Oui' ? 'Non' : (sanitizedUpdated.fsmAutorise ?? 'Oui'),
           clientNom: effectiveClientNom || sanitizedUpdated.clientNom || '',
           envId: activeTid,
           tenantId: activeTid,
@@ -12706,6 +12775,7 @@ export default function App() {
       finalMerged = {
         ...syncRes.syncedDefib,
         ...finalMerged,
+        fsmAutorise: finalMerged.archive === 'Oui' ? 'Non' : (finalMerged.fsmAutorise || 'Oui'),
         id: syncRes.syncedDefib.id || finalMerged.id,
         _sheetRowNumber: (syncRes.syncedDefib as any)._sheetRowNumber || (finalMerged as any)._sheetRowNumber,
         updatedAt: nowIso,
@@ -12715,6 +12785,22 @@ export default function App() {
     recordLocalDefibEdit(finalMerged);
 
     if (existingMatch) {
+      const wasMainNon = existingMatch.archive === 'Oui' || String(existingMatch.fsmAutorise || 'Oui').trim().toLowerCase() === 'non';
+      const isNowMainNon = finalMerged.archive === 'Oui' || String(finalMerged.fsmAutorise || 'Oui').trim().toLowerCase() === 'non';
+      if (wasMainNon !== isNowMainNon) {
+        setDefibSheetStats((prev: any) => {
+          if (!prev) return prev;
+          const nextStats = {
+            ...prev,
+            totalMainOui: isNowMainNon ? Math.max(0, (prev.totalMainOui || 1) - 1) : (prev.totalMainOui || 0) + 1,
+            totalMainNon: isNowMainNon ? (prev.totalMainNon || 0) + 1 : Math.max(0, (prev.totalMainNon || 1) - 1),
+          };
+          try {
+            localStorage.setItem(`defib_${activeTid}_defib_sheet_stats`, JSON.stringify(nextStats));
+          } catch (_) {}
+          return nextStats;
+        });
+      }
       const targetIdKey = cleanMatchKey(finalMerged.id);
       const targetIdentKey = cleanMatchKey(finalMerged.identifiant);
       const targetSerieKey = cleanMatchKey(finalMerged.numeroSerie);
@@ -12996,7 +13082,7 @@ export default function App() {
     }
   };
 
-  const handleDeleteDefib = (id: string) => {
+  const handleDeleteDefib = (id: string, explicitDefib?: Defibrillateur) => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
@@ -13004,18 +13090,21 @@ export default function App() {
     lastLocalSheetMutationRef.current = Date.now();
     const activeTid = tenantId || 'demo';
     const urlDefibs =
+      getTenantSpreadsheetUrl(activeTid, 'defibrillateurs', companyInfo) ||
       companyInfo?.spreadsheetDefibrillateurs ||
       companyInfo?.spreadsheetDefibrillateursUrl ||
       localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
       '';
     // Log suspicious activity Event D: delete defibrillator
     const cleanTargetKey = String(id || '').trim().toLowerCase();
-    const target = defibrillateurs.find(
-      (df) =>
-        df &&
-        (String(df.id || '').trim().toLowerCase() === cleanTargetKey ||
-          String(df.identifiant || '').trim().toLowerCase() === cleanTargetKey)
-    );
+    const target =
+      explicitDefib ||
+      defibrillateurs.find(
+        (df) =>
+          df &&
+          (String(df.id || '').trim().toLowerCase() === cleanTargetKey ||
+            String(df.identifiant || '').trim().toLowerCase() === cleanTargetKey)
+      );
     if (target) {
       const identifiant = target.identifiant || id;
       const materialType = variables.find(v => v.id === target.modeleId)?.nom || target.modeleId || 'Défibrillateur';
@@ -13024,6 +13113,21 @@ export default function App() {
     } else {
       recordDeletedDefibKeys([id]);
     }
+
+    const wasMainNon = target ? (target.archive === 'Oui' || String(target.fsmAutorise || 'Oui').trim().toLowerCase() === 'non') : false;
+    setDefibSheetStats((prev: any) => {
+      if (!prev) return prev;
+      const nextStats = {
+        ...prev,
+        totalCount: Math.max(0, (prev.totalCount || 1) - 1),
+        totalMainOui: wasMainNon ? (prev.totalMainOui || 0) : Math.max(0, (prev.totalMainOui || 1) - 1),
+        totalMainNon: wasMainNon ? Math.max(0, (prev.totalMainNon || 1) - 1) : (prev.totalMainNon || 0),
+      };
+      try {
+        localStorage.setItem(`defib_${activeTid}_defib_sheet_stats`, JSON.stringify(nextStats));
+      } catch (_) {}
+      return nextStats;
+    });
 
     (async () => {
       for (let delAttempt = 1; delAttempt <= 3; delAttempt++) {
@@ -13034,13 +13138,23 @@ export default function App() {
             body: JSON.stringify({
               tenantId: activeTid,
               spreadsheetUrl: urlDefibs,
-              id,
+              id: target?.id || id,
               identifiant: target?.identifiant || id,
-              numeroSerie: target?.numeroSerie || (target as any)?.num_serie
+              numeroSerie: target?.numeroSerie || (target as any)?.num_serie,
+              rowNumber: (target as any)?._sheetRowNumber
             })
           });
           if (delRes.ok) {
             lastLocalSheetMutationRef.current = Date.now();
+            try {
+              const delJson = await delRes.json();
+              if (delJson && delJson.stats && typeof delJson.stats.totalCount === 'number') {
+                setDefibSheetStats(delJson.stats);
+                try {
+                  localStorage.setItem(`defib_${activeTid}_defib_sheet_stats`, JSON.stringify(delJson.stats));
+                } catch (_) {}
+              }
+            } catch (_) {}
             break;
           }
         } catch (_) {}
@@ -13050,12 +13164,16 @@ export default function App() {
       }
     })();
 
+    const targetIdLower = target?.id ? String(target.id).trim().toLowerCase() : '';
+    const targetIdentLower = target?.identifiant ? String(target.identifiant).trim().toLowerCase() : '';
     saveDefibs(
       defibrillateurs.filter(
         (df) =>
           df &&
           String(df.id || '').trim().toLowerCase() !== cleanTargetKey &&
-          String(df.identifiant || '').trim().toLowerCase() !== cleanTargetKey
+          String(df.identifiant || '').trim().toLowerCase() !== cleanTargetKey &&
+          (!targetIdLower || String(df.id || '').trim().toLowerCase() !== targetIdLower) &&
+          (!targetIdentLower || String(df.identifiant || '').trim().toLowerCase() !== targetIdentLower)
       )
     );
   };
@@ -13068,6 +13186,7 @@ export default function App() {
     lastLocalSheetMutationRef.current = Date.now();
     const activeTid = tenantId || 'demo';
     const urlDefibs =
+      getTenantSpreadsheetUrl(activeTid, 'defibrillateurs', companyInfo) ||
       companyInfo?.spreadsheetDefibrillateurs ||
       companyInfo?.spreadsheetDefibrillateursUrl ||
       localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
@@ -13076,19 +13195,35 @@ export default function App() {
     const keysToRecord: string[] = [];
     const targetsToDelete: any[] = [];
     for (const id of ids) {
-      const target = defibrillateurs.find((df) => df.id === id);
+      const target = defibrillateurs.find((df) => df.id === id || df.identifiant === id);
       if (target) {
         const identifiant = target.identifiant || id;
         const materialType = variables.find(v => v.id === target.modeleId)?.nom || target.modeleId || 'Défibrillateur';
         logDeleteDefib(tenantId, identifiant, materialType, loggedUser?.name).catch(() => {});
         keysToRecord.push(target.id, target.identifiant);
-        targetsToDelete.push({ id: target.id, identifiant: target.identifiant, numeroSerie: target.numeroSerie });
+        targetsToDelete.push({
+          id: target.id,
+          identifiant: target.identifiant,
+          numeroSerie: target.numeroSerie,
+          rowNumber: (target as any)._sheetRowNumber
+        });
       } else {
         keysToRecord.push(id);
         targetsToDelete.push({ id });
       }
     }
     recordDeletedDefibKeys(keysToRecord);
+    setDefibSheetStats((prev: any) => {
+      if (!prev) return prev;
+      const nextStats = {
+        ...prev,
+        totalCount: Math.max(0, (prev.totalCount || ids.length) - ids.length),
+      };
+      try {
+        localStorage.setItem(`defib_${activeTid}_defib_sheet_stats`, JSON.stringify(nextStats));
+      } catch (_) {}
+      return nextStats;
+    });
     try {
       fetch('/api/delete-batch-defibs', {
         method: 'POST',
@@ -13099,8 +13234,19 @@ export default function App() {
           ids: targetsToDelete
         })
       })
-        .then(() => {
+        .then(async (res) => {
           lastLocalSheetMutationRef.current = Date.now();
+          if (res && res.ok) {
+            try {
+              const delJson = await res.json();
+              if (delJson && delJson.stats && typeof delJson.stats.totalCount === 'number') {
+                setDefibSheetStats(delJson.stats);
+                try {
+                  localStorage.setItem(`defib_${activeTid}_defib_sheet_stats`, JSON.stringify(delJson.stats));
+                } catch (_) {}
+              }
+            } catch (_) {}
+          }
         })
         .catch(() => {});
     } catch (_) {}
@@ -13108,13 +13254,18 @@ export default function App() {
     saveDefibs(defibrillateurs.filter((df) => !ids.includes(df.id) && !ids.includes(df.identifiant)));
   };
 
-  const handleBulkEditDefib = async (ids: string[], updates: Partial<Omit<Defibrillateur, 'id'>>) => {
+  const handleBulkEditDefib = async (ids: string[], rawUpdates: Partial<Omit<Defibrillateur, 'id'>>) => {
     if (isDeveloper) {
       alert("Action non autorisée : Le rôle Développeur est en mode lecture seule.");
       return;
     }
+    const updates = { ...rawUpdates };
+    if (updates.archive === 'Oui') {
+      updates.fsmAutorise = 'Non';
+    }
     const activeTid = tenantId || 'demo';
     const urlDefibs =
+      getTenantSpreadsheetUrl(activeTid, 'defibrillateurs', companyInfo) ||
       companyInfo?.spreadsheetDefibrillateurs ||
       companyInfo?.spreadsheetDefibrillateursUrl ||
       localStorage.getItem(`defib_${activeTid}_spreadsheet_defibrillateurs`) ||
@@ -13134,7 +13285,13 @@ export default function App() {
       });
       if (isMatch) {
         const nowIso = new Date().toISOString();
-        const merged = { ...df, ...updates, updatedAt: nowIso, dateDerniereModification: nowIso };
+        const merged = {
+          ...df,
+          ...updates,
+          fsmAutorise: (updates.archive === 'Oui' || (df.archive === 'Oui' && updates.archive !== 'Non')) ? 'Non' : (updates.fsmAutorise ?? df.fsmAutorise),
+          updatedAt: nowIso,
+          dateDerniereModification: nowIso
+        };
         recordLocalDefibEdit(merged);
         updatedDefibs.push(merged);
         return merged;
@@ -14274,7 +14431,7 @@ export default function App() {
 
             const baseScheduledTours = fsmTours.filter((t: any) => t.id !== 'a-trier' && t.startDate !== 'A trier');
             const scheduledTours = (fsmOnlyMyZoneFilter && teamWorkGroups.length > 0)
-              ? baseScheduledTours.filter((t: any) => t.region && currentUserZoneRegions.includes(t.region))
+              ? baseScheduledTours.filter((t: any) => (t.region && currentUserZoneRegions.includes(t.region)) || t.id === fsmDateFilter)
               : baseScheduledTours;
 
             scheduledTours.sort((a: any, b: any) => {
@@ -14309,8 +14466,8 @@ export default function App() {
               }
             }
 
-            // Déterminer la tournée active : auto-sélection de la plus proche en date si 'Tous', ou 'A trier' si aucune tournée
-            const defaultTourId = closestTour ? closestTour.id : (scheduledTours[0] ? scheduledTours[0].id : 'A trier');
+            // Déterminer la tournée active : auto-sélection de la plus proche en date si 'Tous', ou 'none' si aucune tournée
+            const defaultTourId = closestTour ? closestTour.id : (scheduledTours[0] ? scheduledTours[0].id : 'none');
             const activeDateFilter = fsmDateFilter === 'Tous' ? defaultTourId : fsmDateFilter;
 
             const getTourDisplayLabel = (tour: any): string => {
@@ -14334,29 +14491,35 @@ export default function App() {
               return label;
             };
 
+            const selectedScheduledTour =
+              activeDateFilter !== 'A trier' && activeDateFilter !== 'none'
+                ? scheduledTours.find(
+                    (st: any) =>
+                      st.id === activeDateFilter ||
+                      (st.tourIdentifiant && st.tourIdentifiant === activeDateFilter)
+                  ) || null
+                : null;
+            const isNoTourNorATrierSelected = activeDateFilter !== 'A trier' && !selectedScheduledTour;
+
             const selectedTourIdToDisplay = activeDateFilter === 'A trier'
-              ? (fsmLastSelectedTourId || (scheduledTours[0] ? scheduledTours[0].id : defaultTourId))
-              : activeDateFilter;
-            const displayedTour = activeDateFilter === 'none'
-              ? null
-              : (scheduledTours.find((t: any) => t.id === selectedTourIdToDisplay) || closestTour || scheduledTours[0]);
+              ? (fsmLastSelectedTourId || '')
+              : (selectedScheduledTour ? selectedScheduledTour.id : 'none');
+            const displayedTour =
+              selectedTourIdToDisplay && selectedTourIdToDisplay !== 'none'
+                ? scheduledTours.find((t: any) => t.id === selectedTourIdToDisplay || (t.tourIdentifiant && t.tourIdentifiant === selectedTourIdToDisplay)) || null
+                : null;
 
             const filteredTours = fsmTours.filter((tour) => {
-              if (activeDateFilter === 'none') {
+              if (isNoTourNorATrierSelected) {
                 return false;
               }
-              if (activeDateFilter !== 'Tous') {
-                if (activeDateFilter === 'A trier') {
-                  if (!(tour.id === 'a-trier' || tour.startDate === 'A trier')) {
-                    return false;
-                  }
-                } else {
-                  // Filtrer par ID de la tournée ou fallback sur la date si activeDateFilter est une date
-                  const matchesId = tour.id === activeDateFilter;
-                  const isDateOnlyFallback = !fsmTours.some((x: any) => x.id === activeDateFilter) && tour.startDate === activeDateFilter;
-                  if (!matchesId && !isDateOnlyFallback) {
-                    return false;
-                  }
+              if (activeDateFilter === 'A trier') {
+                if (!(tour.id === 'a-trier' || tour.startDate === 'A trier')) {
+                  return false;
+                }
+              } else {
+                if (!selectedScheduledTour || tour.id !== selectedScheduledTour.id) {
+                  return false;
                 }
               }
 
@@ -16405,13 +16568,19 @@ export default function App() {
                               }
                               triggerFsmPillWave('btn-fsm-to-sort-adv');
                               if (activeDateFilter === 'A trier') {
-                                const returnTourId = fsmLastSelectedTourId || (displayedTour ? displayedTour.id : (scheduledTours[0] ? scheduledTours[0].id : 'none'));
-                                setFsmDateFilter(returnTourId);
+                                const validReturnTour =
+                                  fsmLastSelectedTourId &&
+                                  scheduledTours.find(
+                                    (st: any) =>
+                                      st.id === fsmLastSelectedTourId ||
+                                      (st.tourIdentifiant && st.tourIdentifiant === fsmLastSelectedTourId)
+                                  );
+                                setFsmDateFilter(validReturnTour ? validReturnTour.id : 'none');
                               } else {
-                                if (activeDateFilter && activeDateFilter !== 'A trier' && activeDateFilter !== 'Tous' && activeDateFilter !== 'none') {
-                                  setFsmLastSelectedTourId(activeDateFilter);
-                                } else if (displayedTour?.id && displayedTour.id !== 'a-trier') {
-                                  setFsmLastSelectedTourId(displayedTour.id);
+                                if (selectedScheduledTour) {
+                                  setFsmLastSelectedTourId(selectedScheduledTour.id);
+                                } else {
+                                  setFsmLastSelectedTourId('');
                                 }
                                 setFsmDateFilter('A trier');
                               }
@@ -16460,7 +16629,7 @@ export default function App() {
                       })()}
 
                       {scheduledTours.length > 0 && (() => {
-                        const isTourSelectActive = activeDateFilter !== 'A trier' && activeDateFilter !== 'none' && scheduledTours.some((st: any) => st.id === activeDateFilter);
+                        const isTourSelectActive = Boolean(selectedScheduledTour);
                         return (
                         <div className="flex-1 min-w-0 flex flex-col justify-end">
                           <div className="flex items-center justify-between mb-1">
@@ -16505,11 +16674,7 @@ export default function App() {
                           >
                             <select
                               id="select-fsm-tour-manage"
-                              value={
-                                activeDateFilter === 'A trier'
-                                  ? (fsmLastSelectedTourId && scheduledTours.some((st: any) => st.id === fsmLastSelectedTourId) ? fsmLastSelectedTourId : 'none')
-                                  : (scheduledTours.some((st: any) => st.id === activeDateFilter) ? activeDateFilter : 'none')
-                              }
+                              value={selectedScheduledTour ? selectedScheduledTour.id : 'none'}
                               onChange={(e) => {
                                 const activeDirtyId = Object.keys(dirtyFsmTourIds).find(
                                   id => dirtyFsmTourIds[id] && document.getElementById(`btn-save-fsm-tour-${id}`)
@@ -16522,6 +16687,8 @@ export default function App() {
                                 setFsmDateFilter(val);
                                 if (val && val !== 'none') {
                                   setFsmLastSelectedTourId(val);
+                                } else {
+                                  setFsmLastSelectedTourId('');
                                 }
                               }}
                               style={{
@@ -16603,7 +16770,7 @@ export default function App() {
 
                 {fsmTours.length === 0 ? (
                   <EmptyTablePlaceholder className="p-16 text-center font-sans lg:py-24" />
-                ) : activeDateFilter === 'none' ? (
+                ) : isNoTourNorATrierSelected ? (
                   <div className="p-16 text-center font-sans lg:py-24 bg-white rounded-2xl border border-neutral-200 m-4">
                     <img
                       src="https://civilprom.s3.eu-north-1.amazonaws.com/illustration_nodatadefibeo.svg"
@@ -18726,9 +18893,8 @@ export default function App() {
                                   // Apply draft changes
                                   if (fsmTourDrafts[t.id]) {
                                     updateFsmTour(t.id, fsmTourDrafts[t.id]);
-                                    if (fsmTourDrafts[t.id].startDate) {
-                                      setFsmDateFilter(fsmTourDrafts[t.id].startDate);
-                                    }
+                                    setFsmDateFilter(t.id);
+                                    setFsmLastSelectedTourId(t.id);
                                     setFsmTourDrafts(prev => {
                                       const copy = { ...prev };
                                       delete copy[t.id];
@@ -18782,6 +18948,7 @@ export default function App() {
                               <div className="w-full">
                                 <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Titre de la tournée.</label>
                                 <input
+                                  id={`input-fsm-tour-title-${t.id}`}
                                   type="text"
                                   value={tourTitle}
                                   onChange={(e) => {
@@ -19507,44 +19674,43 @@ export default function App() {
                                             )}
                                           </button>
 
-                                          {/* Pictogramme situation style Rapports PDF avec '!' selon la Situation */}
+                                          {/* Pictogramme situation avec '!' selon la Situation */}
                                           {(() => {
                                             const sitNorm = (m.status || "Brouillon").toLowerCase().trim();
-                                            let borderColor = "#B8B8B8";
-                                            if (sitNorm === "brouillon") borderColor = "#B8B8B8";
-                                            else if (sitNorm === "attente client") borderColor = "#B1C400";
-                                            else if (sitNorm === "accepté client" || sitNorm === "accepte client") borderColor = "#67CF11";
-                                            else if (sitNorm === "refusé client" || sitNorm === "refuse client") borderColor = "#CF2411";
-                                            else if (sitNorm === "rejet mission" || sitNorm === "rejet") borderColor = "#CF6011";
-                                            else if (sitNorm === "à faire" || sitNorm === "a faire") borderColor = "#1176CF";
-                                            else if (sitNorm === "attente") borderColor = "#CCCF11";
-                                            else if (sitNorm === "effectué" || sitNorm === "effectue" || sitNorm === "effectuée") borderColor = "#9611CF";
+                                            let bgColor = "#B8B8B8";
+                                            if (sitNorm === "brouillon") bgColor = "#B8B8B8";
+                                            else if (sitNorm === "attente client") bgColor = "#B1C400";
+                                            else if (sitNorm === "accepté client" || sitNorm === "accepte client") bgColor = "#67CF11";
+                                            else if (sitNorm === "refusé client" || sitNorm === "refuse client") bgColor = "#CF2411";
+                                            else if (sitNorm === "rejet mission" || sitNorm === "rejet") bgColor = "#CF6011";
+                                            else if (sitNorm === "à faire" || sitNorm === "a faire") bgColor = "#1176CF";
+                                            else if (sitNorm === "attente") bgColor = "#CCCF11";
+                                            else if (sitNorm === "effectué" || sitNorm === "effectue" || sitNorm === "effectuée") bgColor = "#9611CF";
 
                                             return (
                                               <div
-                                                className="relative inline-flex items-center justify-center shrink-0"
-                                                style={{ width: '20px', height: '20px' }}
+                                                className="shrink-0 select-none"
+                                                style={{
+                                                  background: bgColor,
+                                                  backgroundColor: bgColor,
+                                                  color: '#FFF',
+                                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                                  fontWeight: 700,
+                                                  fontSize: '18px',
+                                                  padding: 0,
+                                                  width: '43px',
+                                                  height: '43px',
+                                                  minWidth: '43px',
+                                                  minHeight: '43px',
+                                                  borderRadius: '9999px',
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  justifyContent: 'center',
+                                                  cursor: 'default',
+                                                }}
                                                 title={`Situation : ${m.status || 'Brouillon'}`}
                                               >
-                                                <div
-                                                  className="absolute inset-0"
-                                                  style={{
-                                                    border: `3px solid ${borderColor}`,
-                                                    backgroundColor: 'transparent',
-                                                    transform: 'rotate(45deg)',
-                                                    borderRadius: '6px',
-                                                  }}
-                                                />
-                                                <span
-                                                  className="relative z-10 font-bold leading-none select-none"
-                                                  style={{
-                                                    fontSize: '16px',
-                                                    color: '#000000',
-                                                    fontFamily: 'sans-serif',
-                                                  }}
-                                                >
-                                                  !
-                                                </span>
+                                                !
                                               </div>
                                             );
                                           })()}
@@ -22721,33 +22887,32 @@ export default function App() {
                                               ((flag?.id && v.id === flag.id) ||
                                                 (flag?.nom && String(v.nom || '').trim().toLowerCase() === String(flag.nom || '').trim().toLowerCase()))
                                           );
-                                          const borderColor = flag.couleurHex?.trim() || matchedVar?.couleurHex?.trim() || '#000000';
+                                          const bgColor = flag.couleurHex?.trim() || matchedVar?.couleurHex?.trim() || '#000000';
                                           return (
                                             <div
                                               key={flag.id || fIdx}
-                                              className="relative inline-flex items-center justify-center shrink-0"
-                                              style={{ width: '20px', height: '20px' }}
+                                              className="shrink-0 select-none"
+                                              style={{
+                                                background: bgColor,
+                                                backgroundColor: bgColor,
+                                                color: '#FFF',
+                                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                                fontWeight: 700,
+                                                fontSize: '18px',
+                                                padding: 0,
+                                                width: '43px',
+                                                height: '43px',
+                                                minWidth: '43px',
+                                                minHeight: '43px',
+                                                borderRadius: '9999px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                cursor: 'default',
+                                              }}
                                               title={flag.nom}
                                             >
-                                              <div
-                                                className="absolute inset-0"
-                                                style={{
-                                                  border: `3px solid ${borderColor}`,
-                                                  backgroundColor: 'transparent',
-                                                  transform: 'rotate(45deg)',
-                                                  borderRadius: '6px',
-                                                }}
-                                              />
-                                              <span
-                                                className="relative z-10 font-bold leading-none select-none"
-                                                style={{
-                                                  fontSize: '16px',
-                                                  color: '#000000',
-                                                  fontFamily: 'sans-serif',
-                                                }}
-                                              >
-                                                !
-                                              </span>
+                                              !
                                             </div>
                                           );
                                         })}

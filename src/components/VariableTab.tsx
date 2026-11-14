@@ -614,36 +614,44 @@ export default function VariableTab({
         rawV["Observation sur le rappel ou l'alerte"] ||
         ''
     );
-    setVisibiliteNumeroAtlasante(toYesNo(v.visibiliteNumeroAtlasante));
-    setVisibiliteVersionLogiciel(toYesNo(v.visibiliteVersionLogiciel));
-    setVisibiliteFactureBrouillon(toYesNo(v.visibiliteFactureBrouillon));
-    setVisibilitePadPakAdulte(toYesNo(v.visibilitePadPakAdulte));
-    setVisibiliteLotPadPakA(toYesNo(v.visibiliteLotPadPakA));
-    setVisibilitePeremptionPadPakA(toYesNo(v.visibilitePeremptionPadPakA));
-    setVisibiliteLotP(toYesNo(v.visibiliteLotP));
-    setVisibilitePadPakPediatrique(toYesNo(v.visibilitePadPakPediatrique));
-    setVisibiliteLotPadPakP(toYesNo(v.visibiliteLotPadPakP));
-    setVisibilitePeremptionPadPakP(toYesNo(v.visibilitePeremptionPadPakP));
-    setVisibiliteFabricationBatterie(toYesNo(v.visibiliteFabricationBatterie));
-    setVisibiliteInsertionBatterie(toYesNo(v.visibiliteInsertionBatterie));
-    setVisibilitePeremptionBatterie(toYesNo(v.visibilitePeremptionBatterie));
-    setVisibilitePourcentageBatterie(toYesNo(v.visibilitePourcentageBatterie));
-    setVisibiliteGantsPresents(toYesNo(v.visibiliteGantsPresents));
-    setVisibilitePeremptionServiettes(toYesNo(v.visibilitePeremptionServiettes));
-    setVisibiliteServiettesPresentes(toYesNo(v.visibiliteServiettesPresentes));
-    setVisibilitePeremptionMasque(toYesNo(v.visibilitePeremptionMasque));
-    setVisibiliteMasquePresent(toYesNo(v.visibiliteMasquePresent));
-    setVisibiliteCiseauxPresents(toYesNo(v.visibiliteCiseauxPresents));
-    setVisibilitePeremptionTrousse(toYesNo(v.visibilitePeremptionTrousse));
-    setVisibiliteRasoir(toYesNo(v.visibiliteRasoir));
-    setVisibiliteBranchementElectrodes(toYesNo(v.visibiliteBranchementElectrodes));
-    setVisibiliteGuidesVocaux(toYesNo(v.visibiliteGuidesVocaux));
-    setVisibiliteMessageNumeriqueConforme(toYesNo(v.visibiliteMessageNumeriqueConforme));
-    setVisibiliteEquipeMessageNumerique(toYesNo(v.visibiliteEquipeMessageNumerique));
-    setVisibiliteVoyantConforme(toYesNo(v.visibiliteVoyantConforme));
-    setVisibiliteNettoyage(toYesNo(v.visibiliteNettoyage));
-    setVisibilitePiecesJointes(toYesNo(v.visibilitePiecesJointes));
-    setInfosTechnicien(v.infosTechnicien || '');
+    const getRawVis = (fieldVal: any, ...headerKeys: string[]) => {
+      if (fieldVal !== undefined && fieldVal !== '') return fieldVal;
+      for (const hk of headerKeys) {
+        if (rawV[hk] !== undefined && rawV[hk] !== '') return rawV[hk];
+        if (rawV._rawSheetRow?.[hk] !== undefined && rawV._rawSheetRow?.[hk] !== '') return rawV._rawSheetRow[hk];
+      }
+      return undefined;
+    };
+    setVisibiliteNumeroAtlasante(toYesNo(getRawVis(v.visibiliteNumeroAtlasante, 'Visibilité du champ : Numéro Atlasanté (Identification et photos).', 'Visibilité du champ : Numéro Atlasanté (Identification et photos)')));
+    setVisibiliteVersionLogiciel(toYesNo(getRawVis(v.visibiliteVersionLogiciel, 'Visibilité du champ : Version du logiciel (Identification et photos).', 'Visibilité du champ : Version du logiciel (Identification et photos)')));
+    setVisibiliteFactureBrouillon(toYesNo(getRawVis(v.visibiliteFactureBrouillon, 'Visibilité du champ : Émettre un facture brouillon (Client).', 'Visibilité du champ : Émettre un facture brouillon (Client)', 'Visibilité du champ : Émettre une facture brouillon (Client).')));
+    setVisibilitePadPakAdulte(toYesNo(getRawVis(v.visibilitePadPakAdulte, 'Visibilité du champ : PadPak (Électrode Adulte).', 'Visibilité du champ : PadPak (Électrode Adulte)')));
+    setVisibiliteLotPadPakA(toYesNo(getRawVis(v.visibiliteLotPadPakA, 'Visibilité du champ : Lot PadPak A (Électrode Adulte).', 'Visibilité du champ : Lot PadPak A (Électrode Adulte)')));
+    setVisibilitePeremptionPadPakA(toYesNo(getRawVis(v.visibilitePeremptionPadPakA, 'Visibilité du champ : Péremption PadPak A (Électrode Adulte)', 'Visibilité du champ : Péremption PadPak A (Électrode Adulte).')));
+    setVisibiliteLotP(toYesNo(getRawVis(v.visibiliteLotP, 'Visibilité du champ : Lot P (Électrode Pédiatrique).', 'Visibilité du champ : Lot P (Électrode Pédiatrique)')));
+    setVisibilitePadPakPediatrique(toYesNo(getRawVis(v.visibilitePadPakPediatrique, 'Visibilité du champ : PadPak (Électrode Pédiatrique).', 'Visibilité du champ : PadPak (Électrode Pédiatrique)')));
+    setVisibiliteLotPadPakP(toYesNo(getRawVis(v.visibiliteLotPadPakP, 'Visibilité du champ : Lot PadPak P (Électrode Pédiatrique).', 'Visibilité du champ : Lot PadPak P (Électrode Pédiatrique)')));
+    setVisibilitePeremptionPadPakP(toYesNo(getRawVis(v.visibilitePeremptionPadPakP, 'Visibilité du champ : Péremption PadPak P (Électrode Pédiatrique).', 'Visibilité du champ : Péremption PadPak P (Électrode Pédiatrique)')));
+    setVisibiliteFabricationBatterie(toYesNo(getRawVis(v.visibiliteFabricationBatterie, 'Visibilité du champ : Fabrication (Batterie).', 'Visibilité du champ : Fabrication (Batterie)')));
+    setVisibiliteInsertionBatterie(toYesNo(getRawVis(v.visibiliteInsertionBatterie, 'Visibilité du champ : Insertion (Batterie).', 'Visibilité du champ : Insertion (Batterie)')));
+    setVisibilitePeremptionBatterie(toYesNo(getRawVis(v.visibilitePeremptionBatterie, 'Visibilité du champ : Péremption (Batterie).', 'Visibilité du champ : Péremption (Batterie)')));
+    setVisibilitePourcentageBatterie(toYesNo(getRawVis(v.visibilitePourcentageBatterie, 'Visibilité du champ : Pourcentage de charge (Batterie).', 'Visibilité du champ : Pourcentage de charge (Batterie)')));
+    setVisibiliteGantsPresents(toYesNo(getRawVis(v.visibiliteGantsPresents, 'Visibilité du champ : Paire de gants présents (Kit de secours).', 'Visibilité du champ : Paire de gants présents (Kit de secours)', 'Visibilité du champ : Paires de gants présents (Kit de secours).')));
+    setVisibilitePeremptionServiettes(toYesNo(getRawVis(v.visibilitePeremptionServiettes, 'Visibilité du champ : Péremption des serviettes (Kit de secours).', 'Visibilité du champ : Péremption des serviettes (Kit de secours)')));
+    setVisibiliteServiettesPresentes(toYesNo(getRawVis(v.visibiliteServiettesPresentes, 'Visibilité du champ : Serviettes présentes (Kit de secours).', 'Visibilité du champ : Serviettes présentes (Kit de secours)')));
+    setVisibilitePeremptionMasque(toYesNo(getRawVis(v.visibilitePeremptionMasque, 'Visibilité du champ : Péremption du masque (Kit de secours).', 'Visibilité du champ : Péremption du masque (Kit de secours)')));
+    setVisibiliteMasquePresent(toYesNo(getRawVis(v.visibiliteMasquePresent, 'Visibilité du champ : Masque présent (Kit de secours).', 'Visibilité du champ : Masque présent (Kit de secours)')));
+    setVisibiliteCiseauxPresents(toYesNo(getRawVis(v.visibiliteCiseauxPresents, 'Visibilité du champ : Ciseaux présents (Kit de secours).', 'Visibilité du champ : Ciseaux présents (Kit de secours)')));
+    setVisibilitePeremptionTrousse(toYesNo(getRawVis(v.visibilitePeremptionTrousse, 'Visibilité du champ : Péremption de la trousse (Kit de secours).', 'Visibilité du champ : Péremption de la trousse (Kit de secours)')));
+    setVisibiliteRasoir(toYesNo(getRawVis(v.visibiliteRasoir, 'Visibilité du champ : Rasoir (Kit de secours).', 'Visibilité du champ : Rasoir (Kit de secours)')));
+    setVisibiliteBranchementElectrodes(toYesNo(getRawVis(v.visibiliteBranchementElectrodes, 'Visibilité du champ : Branchement conforme des électrodes (Vérifications).', 'Visibilité du champ : Branchement conforme des électrodes (Vérifications)')));
+    setVisibiliteGuidesVocaux(toYesNo(getRawVis(v.visibiliteGuidesVocaux, 'Visibilité du champ : Guides vocaux conformes (Vérifications).', 'Visibilité du champ : Guides vocaux conformes (Vérifications)')));
+    setVisibiliteMessageNumeriqueConforme(toYesNo(getRawVis(v.visibiliteMessageNumeriqueConforme, 'Visibilité du champ : Message numérique conforme (Vérifications).', 'Visibilité du champ : Message numérique conforme (Vérifications)')));
+    setVisibiliteEquipeMessageNumerique(toYesNo(getRawVis(v.visibiliteEquipeMessageNumerique, 'Visibilité du champ : Équipé d’un message numérique (Vérifications).', "Visibilité du champ : Équipé d'un message numérique (Vérifications).", 'Visibilité du champ : Équipé d’un message numérique (Vérifications)', "Visibilité du champ : Équipé d'un message numérique (Vérifications)")));
+    setVisibiliteVoyantConforme(toYesNo(getRawVis(v.visibiliteVoyantConforme, 'Visibilité du champ : Voyant conforme (Vérifications).', 'Visibilité du champ : Voyant conforme (Vérifications)')));
+    setVisibiliteNettoyage(toYesNo(getRawVis(v.visibiliteNettoyage, 'Visibilité du champ : Nettoyage (Vérifications).', 'Visibilité du champ : Nettoyage (Vérifications)')));
+    setVisibilitePiecesJointes(toYesNo(getRawVis(v.visibilitePiecesJointes, 'Visibilité du champ : Pièces jointes (1 à 3 fichiers) (Clôture).', 'Visibilité du champ : Pièces jointes (1 à 3 fichiers) (Clôture)')));
+    setInfosTechnicien(String(getRawVis(v.infosTechnicien, 'Info(s) au technicien.', 'Info(s) au technicien') || ''));
     setError('');
     setIsModalOpen(true);
   };
@@ -726,11 +734,44 @@ export default function VariableTab({
       payload.visibiliteNettoyage = visibiliteNettoyage;
       payload.visibilitePiecesJointes = visibilitePiecesJointes;
       payload.infosTechnicien = infosTechnicien.trim();
+    } else {
+      payload.visibiliteNumeroAtlasante = '';
+      payload.visibiliteVersionLogiciel = '';
+      payload.visibiliteFactureBrouillon = '';
+      payload.visibilitePadPakAdulte = '';
+      payload.visibiliteLotPadPakA = '';
+      payload.visibilitePeremptionPadPakA = '';
+      payload.visibiliteLotP = '';
+      payload.visibilitePadPakPediatrique = '';
+      payload.visibiliteLotPadPakP = '';
+      payload.visibilitePeremptionPadPakP = '';
+      payload.visibiliteFabricationBatterie = '';
+      payload.visibiliteInsertionBatterie = '';
+      payload.visibilitePeremptionBatterie = '';
+      payload.visibilitePourcentageBatterie = '';
+      payload.visibiliteGantsPresents = '';
+      payload.visibilitePeremptionServiettes = '';
+      payload.visibiliteServiettesPresentes = '';
+      payload.visibilitePeremptionMasque = '';
+      payload.visibiliteMasquePresent = '';
+      payload.visibiliteCiseauxPresents = '';
+      payload.visibilitePeremptionTrousse = '';
+      payload.visibiliteRasoir = '';
+      payload.visibiliteBranchementElectrodes = '';
+      payload.visibiliteGuidesVocaux = '';
+      payload.visibiliteMessageNumeriqueConforme = '';
+      payload.visibiliteEquipeMessageNumerique = '';
+      payload.visibiliteVoyantConforme = '';
+      payload.visibiliteNettoyage = '';
+      payload.visibilitePiecesJointes = '';
+      payload.infosTechnicien = '';
     }
 
     if (editingVariable) {
+      const cleanedExisting: any = { ...editingVariable };
+      delete cleanedExisting._rawSheetRow;
       onUpdateVariable({
-        ...editingVariable,
+        ...cleanedExisting,
         ...payload,
         id: editingVariable.id,
         ...((editingVariable as any)._sheetRowNumber ? { _sheetRowNumber: (editingVariable as any)._sheetRowNumber } : {}),

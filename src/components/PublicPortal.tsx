@@ -993,11 +993,13 @@ export default function PublicPortal({
                   m.authorEmail || m["Nom Prénom (Username)."] || m["Nom Prénom (Username)"] || "",
                 ).trim();
                 const rawName = String(m.authorName || m.sender || "").trim();
+                const rawCanal = String(m.tag || m.channel || m["Canal."] || m["Canal"] || "").trim();
+                const resolvedTag = !rawCanal || rawCanal.toLowerCase() === "all" ? "Général" : rawCanal;
                 return {
                   id: m.id || `msg_${m._sheetRowNumber || idx + 2}`,
                   authorName: rawName || rawEmail || "Membre",
                   authorEmail: rawEmail || (rawName.includes("@") ? rawName : ""),
-                  tag: "All",
+                  tag: resolvedTag,
                   content: String(m.content || m.text || "").trim(),
                   createdAt: Number(m.createdAt) || Date.now(),
                   dateStr: String(m.dateStr || m.time || "").trim(),
@@ -3263,11 +3265,13 @@ export default function PublicPortal({
                       m.authorEmail || m["Nom Prénom (Username)."] || m["Nom Prénom (Username)"] || "",
                     ).trim();
                     const rawName = String(m.authorName || m.sender || "").trim();
+                    const rawCanal = String(m.tag || m.channel || m["Canal."] || m["Canal"] || "").trim();
+                    const resolvedTag = !rawCanal || rawCanal.toLowerCase() === "all" ? "Général" : rawCanal;
                     return {
                       id: m.id || `msg_${m._sheetRowNumber || idx + 2}`,
                       authorName: rawName || rawEmail || "Membre",
                       authorEmail: rawEmail || (rawName.includes("@") ? rawName : ""),
-                      tag: "All",
+                      tag: resolvedTag,
                       content: String(m.content || m.text || "").trim(),
                       createdAt: Number(m.createdAt) || Date.now(),
                       dateStr: String(m.dateStr || m.time || "").trim(),

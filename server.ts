@@ -42,6 +42,7 @@ import {
   isSheetCollectionCached,
   fetchMasterTenantsFromSpreadsheet,
   getCachedMasterTenantsSync,
+  syncTenantMembersToMasterSpreadsheet,
   fetchTutorialVideosFromSpreadsheet,
   getServiceAccountAccessToken,
 } from "./src/server/googleSheetsEngine";
@@ -3086,12 +3087,12 @@ function formatDefibrillateurOutput(d: any): any {
   const accesSemaine = toBoolean(d.accesSemaine ?? d.acces_semaine, false);
   const accesWeekend = toBoolean(d.accesWeekend ?? d.acces_weekend, false);
   const exterieur = toBoolean(d.exterieur ?? d.exterieur_bool, false);
-  const fsmAutorise = d.fsmAutorise || d.fsm_autorise || d.maintenance_autorisee || 'Oui';
+  const archive = d.archive || 'Non';
+  const fsmAutorise = archive === 'Oui' ? 'Non' : (d.fsmAutorise || d.fsm_autorise || d.maintenance_autorisee || 'Oui');
   const sousTraitance = d.sousTraitance || d.sous_traitance || 'Non';
   const loue = d.loue || 'Non';
   const prete = d.prete || 'Non';
   const stocke = d.stocke || 'Non';
-  const archive = d.archive || 'Non';
   const numeroAtlasante = d.numeroAtlasante || d.numero_atlasante || '';
   const versionLogiciel = d.versionLogiciel || d.version_logiciel || '';
   const victimeSurvie = d.victimeSurvie || d.victime_survie || 'Non';
@@ -5036,8 +5037,8 @@ async function warmupDefibrillateursStore() {
   // Real-time single defibrillator deletion endpoint
   app.post("/api/delete-single-defib", async (req, res) => {
     try {
-      const { tenantId, id, identifiant, numeroSerie } = req.body;
-      const targetId = String(id || identifiant || numeroSerie || '').trim();
+      const { tenantId, id, identifiant, numeroSerie, rowNumber } = req.body;
+      const targetId = String(id || identifiant || numeroSerie || rowNumber || '').trim();
       if (!targetId) {
         return res.status(400).json({ error: "id, identifiant ou numeroSerie requis pour la suppression." });
       }
@@ -5050,20 +5051,35 @@ async function warmupDefibrillateursStore() {
         { id: String(id || ''), identifiant: String(identifiant || ''), numeroSerie: String(numeroSerie || '') }
       ], rawTenant, prefix);
 
+      let sheetDelResult: any = null;
       const defibSheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, 'defibrillateurs', req.body?.spreadsheetUrl);
       if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
-        await deleteRecordsFromTenantSheet(
+        const targetKeys = [
+          String(id || ''),
+          String(identifiant || ''),
+          String(numeroSerie || ''),
+          rowNumber ? `row:${rowNumber}` : ''
+        ].filter(Boolean);
+        sheetDelResult = await deleteRecordsFromTenantSheet(
           defibSheetUrl,
           rawTenant,
           'defibrillateurs',
-          [String(id || ''), String(identifiant || ''), String(numeroSerie || '')].filter(Boolean)
-        ).catch(() => {});
+          targetKeys
+        ).catch(() => null);
       }
 
       serverDefibVersion = Date.now();
       persistServerStoreToDisk();
-      const liveTotal = getCachedDefibCount(prefix);
-      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys, totalCount: liveTotal, version: serverDefibVersion });
+      const liveTotal = typeof sheetDelResult?.totalCount === 'number' ? sheetDelResult.totalCount : getCachedDefibCount(prefix);
+      return res.json({
+        status: "success",
+        deletedCount: result.deletedCount || sheetDelResult?.deletedCount || 1,
+        deletedKeys: result.deletedKeys,
+        totalCount: liveTotal,
+        stats: sheetDelResult?.stats,
+        syncedToRemoteSheet: Boolean(sheetDelResult?.syncedToRemoteSheet),
+        version: serverDefibVersion
+      });
     } catch (err: any) {
       console.error("Error in /api/delete-single-defib:", err);
       return res.status(500).json({ error: err.message || "Erreur lors de la suppression du défibrillateur." });
@@ -5094,15 +5110,23 @@ async function warmupDefibrillateursStore() {
       });
 
       const result = deleteDefibrillateursFromStore(targets, rawTenant, prefix);
+      let sheetDelResult: any = null;
       const defibSheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, 'defibrillateurs', req.body?.spreadsheetUrl);
       if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
         const flatKeys = targets.flatMap(t => [t.id, t.identifiant, t.numeroSerie]).filter(Boolean);
-        await deleteRecordsFromTenantSheet(defibSheetUrl, rawTenant, 'defibrillateurs', flatKeys).catch(() => {});
+        sheetDelResult = await deleteRecordsFromTenantSheet(defibSheetUrl, rawTenant, 'defibrillateurs', flatKeys).catch(() => null);
       }
       serverDefibVersion = Date.now();
       persistServerStoreToDisk();
-      const liveTotal = getCachedDefibCount(prefix);
-      return res.json({ status: "success", deletedCount: result.deletedCount, deletedKeys: result.deletedKeys, totalCount: liveTotal, version: serverDefibVersion });
+      const liveTotal = typeof sheetDelResult?.totalCount === 'number' ? sheetDelResult.totalCount : getCachedDefibCount(prefix);
+      return res.json({
+        status: "success",
+        deletedCount: result.deletedCount || sheetDelResult?.deletedCount || targets.length,
+        deletedKeys: result.deletedKeys,
+        totalCount: liveTotal,
+        stats: sheetDelResult?.stats,
+        version: serverDefibVersion
+      });
     } catch (err: any) {
       console.error("Error in /api/delete-batch-defibs:", err);
       return res.status(500).json({ error: err.message || "Erreur lors de la suppression en masse." });
@@ -7991,11 +8015,20 @@ async function warmupDefibrillateursStore() {
       const { tenantId, type, record, records, spreadsheetUrl: explicitUrl } = req.body || {};
       const rawTenant = String(tenantId || 'demo').trim();
       const tabType = (type || 'defibrillateurs') as SheetTabType;
+      const list = Array.isArray(records) ? records : (record ? [record] : []);
+      if (tabType === 'membresEnvironnement' && list.length > 0 && rawTenant !== 'demo') {
+        await syncTenantMembersToMasterSpreadsheet(rawTenant, list).catch(() => {});
+        const memKey = `${rawTenant}_members`;
+        serverMemoryStore.set(memKey, list);
+        serverStoreTimestamps.set(memKey, Date.now());
+        try {
+          persistSingleCollectionToDisk(memKey, list);
+        } catch (_) {}
+      }
       const sheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, tabType, explicitUrl);
       if (!sheetUrl || !extractSpreadsheetIdAndGid(sheetUrl)) {
         return res.json({ status: 'no_spreadsheet', synced: false });
       }
-      const list = Array.isArray(records) ? records : (record ? [record] : []);
       const result = await upsertRecordsToTenantSheet(sheetUrl, rawTenant, tabType, list);
       serverDefibVersion = Date.now();
       return res.json({ status: 'success', ...result });
@@ -9177,6 +9210,24 @@ async function warmupDefibrillateursStore() {
             const primaryDocRef = doc(db, 'appData', collectionKey);
             safeServerSetDoc(primaryDocRef, { value: finalValueToStore, _chunked: false }).catch(() => {});
           } catch (_) {}
+        }
+
+        if (
+          (collectionName === 'members' || collectionName === 'environment_members') &&
+          Array.isArray(finalValueToStore) &&
+          finalValueToStore.length > 0 &&
+          rawTenant !== 'demo'
+        ) {
+          const membersCopy = [...finalValueToStore];
+          setImmediate(async () => {
+            try {
+              await syncTenantMembersToMasterSpreadsheet(rawTenant, membersCopy).catch(() => {});
+              const memSheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, 'membresEnvironnement');
+              if (memSheetUrl && extractSpreadsheetIdAndGid(memSheetUrl)) {
+                await upsertRecordsToTenantSheet(memSheetUrl, rawTenant, 'membresEnvironnement', membersCopy).catch(() => {});
+              }
+            } catch (_) {}
+          });
         }
 
         // Map collection aliases in memory and on disk

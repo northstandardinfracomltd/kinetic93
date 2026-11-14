@@ -17,6 +17,26 @@ export const CANAL_TAGS = [
 
 export type CanalTagName = typeof CANAL_TAGS[number]['name'];
 
+export const MESSAGE_CHANNELS = [
+  'Général',
+  'Exploitation',
+  'Ventes',
+  'Logistique',
+  'Techniciens',
+] as const;
+
+export type MessageChannel = typeof MESSAGE_CHANNELS[number];
+
+export function normalizeMessageChannel(rawTag?: string | null): MessageChannel {
+  const s = String(rawTag || '').trim().toLowerCase();
+  if (!s || s === 'all' || s === 'général' || s === 'general') return 'Général';
+  if (s === 'exploitation') return 'Exploitation';
+  if (s === 'ventes' || s === 'vente') return 'Ventes';
+  if (s === 'logistique') return 'Logistique';
+  if (s === 'techniciens' || s === 'technicien') return 'Techniciens';
+  return 'Général';
+}
+
 interface CanalMessagesSidePaneProps {
   isOpen: boolean;
   onClose: () => void;
@@ -48,6 +68,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   const hasMessagesSpreadsheet =
     Boolean(getTenantSpreadsheetUrl('spreadsheetMessagesInternes', companyInfo, tenantId)) || remoteSheetDiscovered;
   const [messageInput, setMessageInput] = useState('');
+  const [activeChannel, setActiveChannel] = useState<MessageChannel>('Général');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: string } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -251,11 +272,12 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               .map((m: any, idx: number) => {
                 const rawEmail = String(m.authorEmail || m['Nom Prénom (Username).'] || m['Nom Prénom (Username)'] || '').trim();
                 const rawName = String(m.authorName || m.sender || '').trim();
+                const rawCanal = String(m.tag || m.channel || m['Canal.'] || m['Canal'] || '').trim();
                 return {
                   id: m.id || `msg_${m._sheetRowNumber || idx + 2}`,
                   authorName: rawName || rawEmail || 'Membre',
                   authorEmail: rawEmail || (rawName.includes('@') ? rawName : ''),
-                  tag: 'All',
+                  tag: normalizeMessageChannel(rawCanal),
                   content: String(m.content || m.text || '').trim(),
                   createdAt: Number(m.createdAt) || Date.now(),
                   dateStr: String(m.dateStr || m.time || '').trim(),
@@ -316,14 +338,22 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     };
   }, [isOpen, tenantId, setMessages, companyInfo]);
 
-  // Scroll to bottom when new messages arrive
+  const displayedMessages = useMemo(
+    () =>
+      messages.filter(
+        (m) =>
+          normalizeMessageChannel(m.tag || (m as any).channel || (m as any)['Canal.'] || (m as any)['Canal']) ===
+          activeChannel
+      ),
+    [messages, activeChannel]
+  );
+
+  // Scroll to bottom when new messages arrive or channel changes
   useEffect(() => {
     if (isOpen) {
       scrollToBottom(true);
     }
-  }, [messages.length, isOpen]);
-
-  const displayedMessages = messages;
+  }, [displayedMessages.length, activeChannel, isOpen]);
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -348,7 +378,9 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       authorName: senderName,
       authorEmail: senderEmail,
       'Nom Prénom (Username).': senderEmail || senderName,
-      tag: 'All',
+      tag: activeChannel,
+      channel: activeChannel,
+      'Canal.': activeChannel,
       content: text,
       createdAt: Date.now(),
       dateStr: dateFormatted,
@@ -603,6 +635,41 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           ...(extraBottomSpacing > 0 ? { paddingBottom: `${extraBottomSpacing}px` } : {}),
         }}
       >
+        {/* 5-ITEM FULL-WIDTH ONE-LINE CHANNEL TOGGLE BAR ABOVE INPUT */}
+        <div
+          id="messages-channel-toggle-bar"
+          className="grid grid-cols-5 gap-1 sm:gap-1.5 w-full mb-2 p-1 rounded-2xl select-none"
+          style={{
+            backgroundColor: 'rgb(245, 247, 250)',
+            border: '1px solid #DCE1EA',
+          }}
+        >
+          {MESSAGE_CHANNELS.map((canal) => {
+            const isSelected = activeChannel === canal;
+            return (
+              <button
+                key={canal}
+                type="button"
+                onClick={() => setActiveChannel(canal)}
+                className={`w-full py-2 px-1 sm:px-2 rounded-xl text-center truncate transition-all cursor-pointer ${
+                  isSelected ? 'font-bold text-white' : 'font-normal text-black hover:bg-white/70'
+                }`}
+                style={{
+                  backgroundColor: isSelected ? 'rgb(46, 84, 255)' : 'transparent',
+                  color: isSelected ? '#ffffff' : '#000000',
+                  fontSize: 'clamp(13px, 2vw, 18px)',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  border: 'none',
+                  boxShadow: 'none',
+                }}
+                title={t(canal)}
+              >
+                {t(canal)}
+              </button>
+            );
+          })}
+        </div>
+
         <form
           onSubmit={(e) => {
             if (!hasMessagesSpreadsheet) {

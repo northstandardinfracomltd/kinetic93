@@ -1540,14 +1540,15 @@ export default function StocksTab({
       return;
     }
 
-    // Check if the UGS is unique
+    // Check if the UGS is provided and unique
     const formattedUgs = (newUgs || '').trim();
-    if (formattedUgs) {
-      const isUgsAlreadyUsed = stocks.some(s => s.ugs && s.ugs.trim().toLowerCase() === formattedUgs.toLowerCase() && s.id !== editingStockId);
-      if (isUgsAlreadyUsed) {
-        alert(`Erreur : L'UGS "${formattedUgs}" est déjà associé à un autre stock. L'UGS doit être unique.`);
-        return;
-      }
+    if (!formattedUgs) {
+      return;
+    }
+    const isUgsAlreadyUsed = stocks.some(s => s.ugs && s.ugs.trim().toLowerCase() === formattedUgs.toLowerCase() && s.id !== editingStockId);
+    if (isUgsAlreadyUsed) {
+      alert(`Erreur : L'UGS "${formattedUgs}" est déjà associé à un autre stock. L'UGS doit être unique.`);
+      return;
     }
 
     const finalLivDate = newLivDate;
@@ -1590,7 +1591,7 @@ export default function StocksTab({
             totalACommander: prevoianceData.totalToOrder,
             commentaire: newCommentaire,
             mouvements: mouvements,
-            ugs: newUgs || '0001',
+            ugs: formattedUgs,
             traceabilityEnabled: traceabilityEnabled,
             traceabilities: traceabilities,
             inventaire: serializedInventaire,
@@ -1636,7 +1637,7 @@ export default function StocksTab({
         totalACommander: prevoianceData.totalToOrder,
         commentaire: newCommentaire,
         mouvements: mouvements,
-        ugs: newUgs || '0001',
+        ugs: formattedUgs,
         traceabilityEnabled: traceabilityEnabled,
         traceabilities: traceabilities,
         inventaire: serializedInventaire,
@@ -1775,13 +1776,7 @@ export default function StocksTab({
       setDistribStatut('Préparation');
       setDistribDate(new Date().toISOString().split('T')[0]);
       
-      // Auto-generate UGS
-      const numbers = stocks
-        .map(s => parseInt(s.ugs || '', 10))
-        .filter(n => !isNaN(n));
-      const max = numbers.length > 0 ? Math.max(...numbers) : 0;
-      const nextUgsVal = String(max + 1).padStart(4, '0');
-      setNewUgs(nextUgsVal);
+      setNewUgs('');
 
       setShowStockForm(true);
     }
@@ -3155,7 +3150,7 @@ export default function StocksTab({
 
               {/* UGS Reference Code - 1/4 Width on Row */}
               <div className="flex flex-col gap-1 md:col-span-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">UGS *</label>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">UGS ou SKU *</label>
                 <input
                   type="text"
                   value={newUgs}
@@ -3710,17 +3705,19 @@ export default function StocksTab({
                   </select>
                 </div>
 
-                <div 
-                  style={{
-                    color: 'rgb(80 97 122)',
-                    backgroundColor: 'rgb(233 237 241)',
-                    border: 'none',
-                    fontSize: '16px'
-                  }}
-                  className="p-4 rounded-xl mb-4 font-sans font-semibold"
-                >
-                  Nous estimons votre besoin de trésorerie à <strong className="font-extrabold">{((Number(newValAchat) || 0) * (prevoianceData.totalToOrder || 0)).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</strong>€{t(", pour l'achat des stocks requis aux actions de maintenances.")}
-                </div>
+                {((Number(newValAchat) || 0) * (prevoianceData.totalToOrder || 0)) > 0 && (
+                  <div 
+                    style={{
+                      color: 'rgb(80 97 122)',
+                      backgroundColor: 'rgb(233 237 241)',
+                      border: 'none',
+                      fontSize: '16px'
+                    }}
+                    className="p-4 rounded-xl mb-4 font-sans font-semibold"
+                  >
+                    Nous estimons votre besoin de trésorerie à <strong className="font-extrabold">{((Number(newValAchat) || 0) * (prevoianceData.totalToOrder || 0)).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</strong>€{t(", pour l'achat des stocks requis aux actions de maintenances.")}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">Besoin projeté à 2 mois.</label>

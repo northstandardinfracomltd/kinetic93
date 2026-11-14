@@ -650,8 +650,13 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
     }
   }, [onUpdateSpontaneousEvents]);
 
-  // Month navigation handlers
+  // Month navigation handlers with smooth horizontal glide animation
+  const [monthSlideDir, setMonthSlideDir] = useState<'prev' | 'next' | null>(null);
+  const [monthSlideSeq, setMonthSlideSeq] = useState(0);
+
   const handlePrevMonth = () => {
+    setMonthSlideDir('prev');
+    setMonthSlideSeq((s) => s + 1);
     if (currentMonth === 0) {
       setCurrentMonth(11);
       setCurrentYear(prev => prev - 1);
@@ -661,6 +666,8 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
   };
 
   const handleNextMonth = () => {
+    setMonthSlideDir('next');
+    setMonthSlideSeq((s) => s + 1);
     if (currentMonth === 11) {
       setCurrentMonth(0);
       setCurrentYear(prev => prev + 1);
@@ -1092,74 +1099,100 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       >
         {/* Left: Month 3-part Toggle + Maintenant pill */}
         <div className="flex flex-wrap items-center gap-2.5">
+          <style>{`
+            @keyframes defibeo-month-glide-next {
+              0% { transform: translateX(172px); }
+              100% { transform: translateX(0px); }
+            }
+            @keyframes defibeo-month-glide-prev {
+              0% { transform: translateX(-172px); }
+              100% { transform: translateX(0px); }
+            }
+          `}</style>
           {(() => {
-            const prevMonthIdx = currentMonth === 0 ? 11 : currentMonth - 1;
-            const prevMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
-            const nextMonthIdx = currentMonth === 11 ? 0 : currentMonth + 1;
-            const nextMonthYear = currentMonth === 11 ? currentYear + 1 : currentYear;
+            const getMonthAtOffset = (offset: number) => {
+              const d = new Date(currentYear, currentMonth + offset, 1);
+              return {
+                monthIdx: d.getMonth(),
+                year: d.getFullYear(),
+                label: `${MONTH_NAMES_FR[d.getMonth()]} ${d.getFullYear()}`,
+                offset,
+              };
+            };
+            const trackItems = [-2, -1, 0, 1, 2].map(getMonthAtOffset);
 
             return (
               <div
-                className="inline-flex items-center gap-1.5 p-1.5"
+                className="relative overflow-hidden inline-flex items-center select-none"
                 style={{
                   backgroundColor: '#4f6dff',
                   borderRadius: '10px',
+                  padding: '6px',
+                  width: '528px',
+                  maxWidth: '100%',
                 }}
               >
-                <button
-                  type="button"
-                  onClick={handlePrevMonth}
-                  className="transition-opacity cursor-pointer hover:opacity-85 whitespace-nowrap"
+                {/* Stationary active center pill backdrop */}
+                <div
+                  className="pointer-events-none"
                   style={{
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    fontSize: '18px',
-                    fontWeight: 400,
+                    position: 'absolute',
+                    top: '6px',
+                    bottom: '6px',
+                    left: 'calc(50% - 86px)',
+                    width: '172px',
                     borderRadius: '8px',
-                    padding: '10px 18px',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    color: '#ffffff',
-                  }}
-                  title="Mois précédent"
-                >
-                  {MONTH_NAMES_FR[prevMonthIdx]} {prevMonthYear}
-                </button>
-
-                <button
-                  type="button"
-                  className="cursor-default whitespace-nowrap select-none"
-                  style={{
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    fontSize: '18px',
-                    fontWeight: 400,
-                    borderRadius: '8px',
-                    padding: '10px 20px',
-                    border: 'none',
                     backgroundColor: '#1c0244',
-                    color: '#ffffff',
+                    zIndex: 0,
                   }}
-                >
-                  {MONTH_NAMES_FR[currentMonth]} {currentYear}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleNextMonth}
-                  className="transition-opacity cursor-pointer hover:opacity-85 whitespace-nowrap"
+                />
+                {/* Sliding track of months */}
+                <div
+                  key={monthSlideSeq}
+                  className="relative z-10 flex items-center"
                   style={{
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    fontSize: '18px',
-                    fontWeight: 400,
-                    borderRadius: '8px',
-                    padding: '10px 18px',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    color: '#ffffff',
+                    width: '860px',
+                    marginLeft: '-172px',
+                    animation:
+                      monthSlideDir === 'next'
+                        ? 'defibeo-month-glide-next 280ms cubic-bezier(0.22, 1, 0.36, 1) forwards'
+                        : monthSlideDir === 'prev'
+                        ? 'defibeo-month-glide-prev 280ms cubic-bezier(0.22, 1, 0.36, 1) forwards'
+                        : 'none',
                   }}
-                  title="Mois suivant"
                 >
-                  {MONTH_NAMES_FR[nextMonthIdx]} {nextMonthYear}
-                </button>
+                  {trackItems.map((item) => {
+                    const isPrev = item.offset === -1;
+                    const isNext = item.offset === 1;
+                    const isCenter = item.offset === 0;
+                    return (
+                      <button
+                        key={`${item.year}-${item.monthIdx}-${item.offset}`}
+                        type="button"
+                        onClick={isPrev ? handlePrevMonth : isNext ? handleNextMonth : undefined}
+                        className={`whitespace-nowrap text-center flex items-center justify-center shrink-0 ${
+                          isPrev || isNext
+                            ? 'cursor-pointer hover:opacity-85 transition-opacity'
+                            : 'cursor-default select-none'
+                        }`}
+                        style={{
+                          width: '172px',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          fontSize: '18px',
+                          fontWeight: 400,
+                          borderRadius: '8px',
+                          padding: '10px 8px',
+                          border: 'none',
+                          backgroundColor: 'transparent',
+                          color: '#ffffff',
+                        }}
+                        title={isPrev ? 'Mois précédent' : isNext ? 'Mois suivant' : isCenter ? item.label : undefined}
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             );
           })()}
@@ -1473,8 +1506,27 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                           className="border-b border-neutral-200 hover:bg-neutral-50/30 transition-colors"
                         >
                           {/* Days Columns for this Tournée (Full Width) */}
-                          {daysInMonth.map((d) => {
+                          {daysInMonth.map((d, dayIdx) => {
                             const isWithinTour = d.isoDate >= tItem.startIso && d.isoDate <= tItem.endIso;
+                            const hasPrevTourDay =
+                              dayIdx > 0 &&
+                              daysInMonth[dayIdx - 1].isoDate >= tItem.startIso &&
+                              daysInMonth[dayIdx - 1].isoDate <= tItem.endIso;
+                            const hasNextTourDay =
+                              dayIdx < daysInMonth.length - 1 &&
+                              daysInMonth[dayIdx + 1].isoDate >= tItem.startIso &&
+                              daysInMonth[dayIdx + 1].isoDate <= tItem.endIso;
+
+                            const formatIsoFr = (iso: string) => {
+                              if (!iso || !iso.includes('-')) return iso || '';
+                              const [yy, mm, dd] = iso.split('-');
+                              return `${dd}/${mm}/${yy}`;
+                            };
+                            const tourPeriodFormatted =
+                              tItem.startIso && tItem.endIso && tItem.startIso !== tItem.endIso
+                                ? `du ${formatIsoFr(tItem.startIso)} au ${formatIsoFr(tItem.endIso)}`
+                                : formatIsoFr(tItem.startIso || d.isoDate);
+
                             const dayMissions = tItem.missions.filter((m: any) => m.resolvedIsoDate === d.isoDate);
                             const canDropInTourCell =
                               Boolean(draggedItem) && (draggedItem?.type !== 'mission' || isWithinTour);
@@ -1568,12 +1620,62 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   </div>
                                 )}
 
-                                {/* Tournée barrette: ALWAYS visible if within tour, regardless of missions count */}
+                                {/* Tournée barrette: continuous across consecutive days, clickable via system dropdown */}
                                 {isWithinTour && (
                                   <div
-                                    className="h-2 w-full rounded-full bg-[#2e54ff]/80 hover:bg-[#2e54ff] transition-colors mb-1.5 cursor-default shrink-0"
-                                    title={tItem.title}
-                                  />
+                                    data-interactive="true"
+                                    className="relative z-10 h-2.5 bg-[#2e54ff] hover:brightness-95 transition-all mb-1.5 shrink-0 cursor-pointer"
+                                    style={{
+                                      marginLeft: hasPrevTourDay ? '-7px' : '0px',
+                                      marginRight: hasNextTourDay ? '-7px' : '0px',
+                                      width: `calc(100% + ${(hasPrevTourDay ? 7 : 0) + (hasNextTourDay ? 7 : 0)}px)`,
+                                      borderTopLeftRadius: hasPrevTourDay ? '0px' : '9999px',
+                                      borderBottomLeftRadius: hasPrevTourDay ? '0px' : '9999px',
+                                      borderTopRightRadius: hasNextTourDay ? '0px' : '9999px',
+                                      borderBottomRightRadius: hasNextTourDay ? '0px' : '9999px',
+                                    }}
+                                    title={`${tItem.title} (${tourPeriodFormatted})`}
+                                  >
+                                    <select
+                                      aria-label={`${tItem.title} (${tourPeriodFormatted})`}
+                                      value=""
+                                      onChange={(e) => {
+                                        if (e.target.value === 'open_tour') {
+                                          onClose();
+                                          if (onConsultMission) {
+                                            onConsultMission(tItem.rawTour, null);
+                                          } else {
+                                            window.dispatchEvent(
+                                              new CustomEvent('defib_consult_mission', {
+                                                detail: { tour: tItem.rawTour, mission: null },
+                                              })
+                                            );
+                                          }
+                                        }
+                                      }}
+                                      style={{
+                                        position: 'absolute',
+                                        inset: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        opacity: 0,
+                                        cursor: 'pointer',
+                                        border: 'none',
+                                        outline: 'none',
+                                        padding: 0,
+                                        margin: 0,
+                                        background: 'transparent',
+                                        zIndex: 20,
+                                      }}
+                                    >
+                                      <option value="" disabled>
+                                        {tItem.title} ({tourPeriodFormatted})
+                                      </option>
+                                      <option value="open_tour">
+                                        {tItem.title} — {tourPeriodFormatted}
+                                      </option>
+                                    </select>
+                                  </div>
                                 )}
 
                                 {/* Day missions: placed under the barrette with créneau gélule above */}
@@ -1584,8 +1686,6 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                       const formattedSlot = formatSlotToAmPm(details.creneau);
                                       const mStatus = String(m.status || m.statut || m.situation || 'À faire').trim() || 'À faire';
                                       const fullMissionText = `Client : ${details.clientName}. Ville : ${details.villePostcode}. Raison(s) : ${details.reasons}. Matériel : ${details.identifiant || 'NC'}.`;
-                                      const menuKey = `ext-${tItem.tourId}-${m.id || mIdx}-${d.isoDate}`;
-                                      const isMenuOpen = openMissionMenuKey === menuKey;
 
                                       return (
                                         <div
@@ -1645,36 +1745,27 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                               {mStatus}
                                             </span>
                                           </div>
-                                          <div
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setOpenMissionMenuKey((prev) => (prev === menuKey ? null : menuKey));
-                                            }}
-                                            className="w-full transition-all shadow-xs hover:brightness-95 whitespace-normal break-words cursor-pointer"
-                                            style={{
-                                              backgroundColor: 'rgb(230, 197, 255)',
-                                              color: 'rgb(89, 22, 144)',
-                                              borderRadius: '10px',
-                                              padding: '8px 12px',
-                                              fontSize: '13px',
-                                              fontWeight: 600,
-                                              lineHeight: '1.35',
-                                              opacity: 1,
-                                            }}
-                                          >
-                                            {fullMissionText}
-                                          </div>
-
-                                          {isMenuOpen && (
+                                          <div className="relative">
                                             <div
-                                              onClick={(e) => e.stopPropagation()}
-                                              className="absolute left-0 top-full mt-1 z-[100] w-max max-w-[260px] bg-white rounded-xl shadow-lg border border-neutral-200 p-1.5 animate-fadeIn"
+                                              className="w-full transition-all shadow-xs hover:brightness-95 whitespace-normal break-words select-none pointer-events-none"
+                                              style={{
+                                                backgroundColor: 'rgb(230, 197, 255)',
+                                                color: 'rgb(89, 22, 144)',
+                                                borderRadius: '10px',
+                                                padding: '8px 12px',
+                                                fontSize: '13px',
+                                                fontWeight: 600,
+                                                lineHeight: '1.35',
+                                                opacity: 1,
+                                              }}
                                             >
-                                              <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setOpenMissionMenuKey(null);
+                                              {fullMissionText}
+                                            </div>
+                                            <select
+                                              aria-label={`Mission ${details.identifiant || 'NC'}`}
+                                              value=""
+                                              onChange={(e) => {
+                                                if (e.target.value === 'consult') {
                                                   onClose();
                                                   if (onConsultMission) {
                                                     onConsultMission(tItem.rawTour, m);
@@ -1685,14 +1776,31 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                                       })
                                                     );
                                                   }
-                                                }}
-                                                className="w-full text-left px-3 py-2 rounded-lg text-[14px] font-bold text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer whitespace-nowrap"
-                                                style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
-                                              >
+                                                }
+                                              }}
+                                              style={{
+                                                position: 'absolute',
+                                                inset: 0,
+                                                width: '100%',
+                                                height: '100%',
+                                                opacity: 0,
+                                                cursor: 'pointer',
+                                                border: 'none',
+                                                outline: 'none',
+                                                padding: 0,
+                                                margin: 0,
+                                                background: 'transparent',
+                                                zIndex: 20,
+                                              }}
+                                            >
+                                              <option value="" disabled>
+                                                {details.identifiant || 'NC'}
+                                              </option>
+                                              <option value="consult">
                                                 Afficher la mission dans la tournée
-                                              </button>
-                                            </div>
-                                          )}
+                                              </option>
+                                            </select>
+                                          </div>
                                         </div>
                                       );
                                     })}
