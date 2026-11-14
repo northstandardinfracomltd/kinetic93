@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
@@ -26,6 +26,8 @@ interface TourRouteMapModalProps {
   cttGlobalRules: CttGlobalRules;
   allTours: any[];
   onCalculatedMissions?: (tourId: string, scheduledMissions: any[]) => void;
+  isWebapp?: boolean;
+  preferredNavApp?: string;
 }
 
 interface RouteMissionPoint {
@@ -37,6 +39,7 @@ interface RouteMissionPoint {
   equipmentIdentifiant: string;
   equipmentTypeLabel: string;
   clientLabel: string;
+  addressQuery: string;
   estimatedDateFormatted: string;
   estimatedSlotLabel: string;
 }
@@ -91,8 +94,71 @@ function createMissionPassageIcon(bgColor: string, label: string | number): L.Di
     `,
     iconSize: [43, 43],
     iconAnchor: [21.5, 21.5],
-    tooltipAnchor: [24, 0],
+    popupAnchor: [0, -22],
   });
+}
+
+function createCheckerboardDepartureIcon(): L.DivIcon {
+  return L.divIcon({
+    className: 'defibeo-tour-route-marker-icon',
+    html: `
+      <div style="
+        width: 43px;
+        height: 43px;
+        min-width: 43px;
+        min-height: 43px;
+        border-radius: 9999px;
+        background-color: #000000;
+        background-image: repeating-conic-gradient(#000000 0% 25%, #ffffff 0% 50%);
+        background-size: 14px 14px;
+        background-position: center;
+        color: #ffffff;
+        font-family: 'DefibeoMain', 'Civilprom', sans-serif;
+        font-weight: 800;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+        user-select: none;
+        box-sizing: border-box;
+        text-shadow: 0 0 4px #000000, 0 0 6px #000000, 1px 1px 0 #000000, -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000;
+      ">
+        D
+      </div>
+    `,
+    iconSize: [43, 43],
+    iconAnchor: [21.5, 21.5],
+    popupAnchor: [0, -22],
+  });
+}
+
+function buildNavigationHref(
+  addressQuery: string,
+  coord: Coordinate,
+  isWebapp?: boolean,
+  preferredNavApp?: string
+): string {
+  const targetQuery =
+    addressQuery && addressQuery.trim() !== ''
+      ? addressQuery.trim()
+      : `${coord.lat},${coord.lng}`;
+  const encoded = encodeURIComponent(targetQuery);
+
+  if (!isWebapp) {
+    return `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+  }
+
+  const app = String(preferredNavApp || 'google-maps').toLowerCase().trim();
+  if (app === 'waze') {
+    return `https://waze.com/ul?q=${encoded}&navigate=yes`;
+  }
+  if (app === 'apple-maps' || app === 'apple' || app === 'plans') {
+    return `https://maps.apple.com/?q=${encoded}`;
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${encoded}`;
 }
 
 const animatedRunnerIcon = L.divIcon({
@@ -114,8 +180,8 @@ const animatedRunnerIcon = L.divIcon({
 });
 
 /**
- * Animates a point moving swiftly along the road polyline in an infinite loop
- * to clearly show the direction of travel.
+ * Animates a point moving along the road polyline in a continuous loop
+ * at a moderate, readable speed to show the direction of travel.
  */
 function AnimatedRouteDot({ roadPositions }: { roadPositions: [number, number][] }) {
   const map = useMap();
@@ -123,7 +189,6 @@ function AnimatedRouteDot({ roadPositions }: { roadPositions: [number, number][]
   useEffect(() => {
     if (!roadPositions || roadPositions.length < 2) return;
 
-    // Precompute cumulative distances along the polyline for constant high-speed motion
     const segLengths: number[] = [];
     const cumLengths: number[] = [0];
     let totalLen = 0;
@@ -147,9 +212,9 @@ function AnimatedRouteDot({ roadPositions }: { roadPositions: [number, number][]
       zIndexOffset: 2000,
     }).addTo(map);
 
-    // Traverse the entire route in ~3.8 seconds for a brisk, clear visual flow
-    const DURATION_MS = 3800;
-    let startTime = performance.now();
+    // Slowed down significantly (~18s to 32s per loop depending on route length)
+    const DURATION_MS = Math.max(18000, Math.min(34000, Math.round(totalLen * 16000)));
+    const startTime = performance.now();
     let rafId = 0;
 
     const animate = (now: number) => {
@@ -157,7 +222,6 @@ function AnimatedRouteDot({ roadPositions }: { roadPositions: [number, number][]
       const progress = elapsed / DURATION_MS;
       const targetDist = progress * totalLen;
 
-      // Binary search for segment index
       let low = 0;
       let high = segLengths.length - 1;
       while (low < high) {
@@ -261,7 +325,6 @@ async function fetchRoadSegmentGeometry(coords: Coordinate[]): Promise<[number, 
     return coords.map(c => [c.lat, c.lng]);
   }
 
-  // Chunk into batches of up to 25 waypoints (with 1 overlapping waypoint between chunks)
   const CHUNK_SIZE = 25;
   const fullPath: [number, number][] = [];
 
@@ -291,13 +354,10 @@ async function fetchRoadSegmentGeometry(coords: Coordinate[]): Promise<[number, 
             break;
           }
         }
-      } catch (_) {
-        // Try next routing endpoint
-      }
+      } catch (_) {}
     }
 
     if (!chunkGeometry) {
-      // Try pair-by-pair routing if a large chunk failed
       const pairPath: [number, number][] = [];
       for (let j = 0; j < chunk.length - 1; j++) {
         const a = chunk[j];
@@ -361,6 +421,8 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
   cttGlobalRules,
   allTours,
   onCalculatedMissions,
+  isWebapp = false,
+  preferredNavApp = 'google-maps',
 }) => {
   const [isLoadingRoute, setIsLoadingRoute] = useState<boolean>(false);
   const [techStartPoint, setTechStartPoint] = useState<TechStartPoint | null>(null);
@@ -381,7 +443,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
       setIsLoadingRoute(true);
 
       try {
-        // 1. Resolve technician departure coordinates & readable address
+        // 1. Resolve technician departure & return coordinates & readable address
         let startCoord: Coordinate | null = null;
         const composedTechAddress =
           (technician.startAddress && technician.startAddress.trim()) ||
@@ -433,23 +495,24 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
 
         for (let i = 0; i < rawMissions.length; i++) {
           const m = rawMissions[i];
-          const key = m.defibIdentifiant || m.id || `mission_${i}`;
-          const defib = defibrillateurs.find(d => d.identifiant === m.defibIdentifiant);
-          const other = !defib ? otherEquipments.find(o => o.identifiant === m.defibIdentifiant) : undefined;
+          const ident = m.defibIdentifiant || m.identifiant || '';
+          const key = ident || m.id || `mission_${i}`;
+          const defib = defibrillateurs.find(d => d.identifiant === ident || d.id === ident);
+          const other = !defib ? otherEquipments.find(o => o.identifiant === ident || o.id === ident) : undefined;
           const formation =
             !defib && !other
               ? formations.find(
                   (f: any) =>
                     (m.formationId && f.id === m.formationId) ||
-                    (m.defibIdentifiant && f.identifiant === m.defibIdentifiant)
+                    (ident && (f.identifiant === ident || f.id === ident))
                 )
               : undefined;
 
           const eq: any = defib || other || formation;
           if (eq) {
             equipmentDetails[key] = eq;
-            if (m.defibIdentifiant) {
-              equipmentDetails[m.defibIdentifiant] = eq;
+            if (ident) {
+              equipmentDetails[ident] = eq;
             }
           }
 
@@ -462,11 +525,10 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
 
           if (!isNaN(lat) && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
             equipmentCoords[key] = { lat, lng };
-            if (m.defibIdentifiant) {
-              equipmentCoords[m.defibIdentifiant] = { lat, lng };
+            if (ident) {
+              equipmentCoords[ident] = { lat, lng };
             }
           } else {
-            // Geocode from equipment or mission address
             const addressParts = eq
               ? [eq.numVoie || eq.numeroVoie || eq.adresse || eq.lieu, eq.cp || eq.codePostal, eq.ville, eq.pays || 'France']
               : [m.address || m.lieu || m.nomSite, m.cp, m.ville, 'France'];
@@ -475,8 +537,8 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
               const geocoded = await geocodeAddress(addressStr);
               if (geocoded) {
                 equipmentCoords[key] = geocoded;
-                if (m.defibIdentifiant) {
-                  equipmentCoords[m.defibIdentifiant] = geocoded;
+                if (ident) {
+                  equipmentCoords[ident] = geocoded;
                 }
               }
             }
@@ -484,6 +546,12 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
         }
 
         if (cancelled) return;
+
+        // Ensure every mission has defibIdentifiant populated for sortMissionsByProximity
+        const normalizedMissions = rawMissions.map((m, idx) => ({
+          ...m,
+          defibIdentifiant: m.defibIdentifiant || m.identifiant || m.id || `mission_${idx}`,
+        }));
 
         // 3. Optimize route order taking into account technician startCoord, preference ('proche' / 'loin'), and forced dates/slots
         const rawPref = String(technician.optimizationPreference || '').toLowerCase();
@@ -493,7 +561,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             : 'proche';
 
         const sortedMissions = sortMissionsByProximity(
-          rawMissions,
+          normalizedMissions,
           startCoord,
           equipmentCoords,
           preference,
@@ -541,16 +609,17 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
         const builtPoints: RouteMissionPoint[] = [];
 
         scheduledMissions.forEach((m: any, idx: number) => {
-          const key = m.defibIdentifiant || m.id || `mission_${idx}`;
-          const coord = equipmentCoords[key] || (m.defibIdentifiant ? equipmentCoords[m.defibIdentifiant] : undefined);
+          const ident = m.defibIdentifiant || m.identifiant || '';
+          const key = ident || m.id || `mission_${idx}`;
+          const coord = equipmentCoords[key] || (ident ? equipmentCoords[ident] : undefined);
           if (!coord) return;
 
-          const defib = defibrillateurs.find(d => d.identifiant === m.defibIdentifiant);
-          const other = !defib ? otherEquipments.find(o => o.identifiant === m.defibIdentifiant) : undefined;
+          const defib = defibrillateurs.find(d => d.identifiant === ident || d.id === ident);
+          const other = !defib ? otherEquipments.find(o => o.identifiant === ident || o.id === ident) : undefined;
           const eq: any = defib || other || equipmentDetails[key];
 
           // Equipment identifier
-          const equipmentIdentifiant = String(m.defibIdentifiant || eq?.identifiant || m.interventionReference || `Mission ${idx + 1}`).trim();
+          const equipmentIdentifiant = String(ident || eq?.identifiant || m.interventionReference || `Mission ${idx + 1}`).trim();
 
           // Equipment type
           const isFormation =
@@ -579,12 +648,19 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             m.nomSite ||
             'Client non renseigné';
 
+          // Full address query for navigation ("Y aller")
+          const addrParts = eq
+            ? [eq.numVoie || eq.numeroVoie || eq.adresse || eq.lieu, eq.cp || eq.codePostal, eq.ville, eq.pays || 'France']
+            : [m.address || m.lieu || m.nomSite, m.cp, m.ville, 'France'];
+          const addressQuery = addrParts.filter(Boolean).join(', ').trim();
+
           // Estimated Date & Slot
           const rawDate = m.estimatedDate || tour.startDate || '';
           const estimatedDateFormatted = rawDate ? formatDateToFR(rawDate) : 'Non définie';
-          const estimatedSlotLabel = m.estimatedSlot && String(m.estimatedSlot).trim() !== ''
-            ? String(m.estimatedSlot).trim()
-            : 'Non défini';
+          const estimatedSlotLabel =
+            m.estimatedSlot && String(m.estimatedSlot).trim() !== ''
+              ? String(m.estimatedSlot).trim()
+              : 'Non défini';
 
           builtPoints.push({
             mission: m,
@@ -595,6 +671,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             equipmentIdentifiant,
             equipmentTypeLabel,
             clientLabel,
+            addressQuery,
             estimatedDateFormatted,
             estimatedSlotLabel,
           });
@@ -634,8 +711,12 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
 
         setMissionPoints(builtPoints);
 
-        // 5. Fetch real road geometry along streets starting from Technician Start Point -> Mission 1 -> Mission 2 -> ... -> Mission N
-        const orderedCoords: Coordinate[] = [startCoord, ...builtPoints.map(p => p.coord)];
+        // 5. Fetch real road geometry along streets: Départ -> Mission 1 -> ... -> Mission N -> Retour
+        const orderedCoords: Coordinate[] = [
+          startCoord,
+          ...builtPoints.map(p => p.coord),
+          startCoord,
+        ];
         const roadGeom = await fetchRoadSegmentGeometry(orderedCoords);
         if (!cancelled) {
           setRoadPositions(roadGeom);
@@ -669,17 +750,19 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
           background: transparent !important;
           border: none !important;
         }
-        .leaflet-tooltip.defibeo-route-hover-pill {
+        .defibeo-route-hover-popup .leaflet-popup-content-wrapper {
           background-color: #ffffff !important;
           border: none !important;
           border-radius: 16px !important;
           box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14) !important;
-          padding: 12px 16px !important;
+          padding: 0 !important;
           color: #000000 !important;
           font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
-          white-space: nowrap !important;
         }
-        .leaflet-tooltip.defibeo-route-hover-pill::before {
+        .defibeo-route-hover-popup .leaflet-popup-content {
+          margin: 12px 16px !important;
+        }
+        .defibeo-route-hover-popup .leaflet-popup-tip-container {
           display: none !important;
         }
       `}</style>
@@ -702,30 +785,56 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
           </div>
         )}
 
-        {/* Top-Right Close Button */}
-        <div className="absolute top-4 right-4 z-[4000] flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            id="btn-tour-route-map-close"
-            style={{
-              backgroundColor: 'rgb(210, 45, 11)',
-              boxShadow: 'none',
-              borderRadius: '12px',
-              fontSize: '18px',
-              padding: '9px 19px',
-              fontWeight: 'normal',
-              color: '#ffffff',
-              border: 'none',
-              cursor: 'pointer',
-              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              transition: 'all 0.1s ease-in-out',
-            }}
-            className="hover:opacity-90 cursor-pointer select-none"
-          >
-            Fermer
-          </button>
-        </div>
+        {/* Close Button: Top-Right on Main Software, Floating Sticky Bottom Full-Width on Webapp */}
+        {!isWebapp ? (
+          <div className="absolute top-4 right-4 z-[4000] flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              id="btn-tour-route-map-close"
+              style={{
+                backgroundColor: 'rgb(210, 45, 11)',
+                boxShadow: 'none',
+                borderRadius: '12px',
+                fontSize: '18px',
+                padding: '9px 19px',
+                fontWeight: 'normal',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                transition: 'all 0.1s ease-in-out',
+              }}
+              className="hover:opacity-90 cursor-pointer select-none"
+            >
+              Fermer
+            </button>
+          </div>
+        ) : (
+          <div className="fixed bottom-0 left-0 right-0 p-4 z-[4000] pointer-events-auto">
+            <button
+              type="button"
+              onClick={onClose}
+              id="btn-tour-route-map-close-webapp"
+              style={{
+                backgroundColor: 'rgb(210, 45, 11)',
+                boxShadow: 'none',
+                borderRadius: '14px',
+                fontSize: '18px',
+                padding: '14px 20px',
+                fontWeight: 'bold',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                width: '100%',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              }}
+              className="w-full hover:opacity-90 active:scale-[0.99] transition-all cursor-pointer select-none text-center"
+            >
+              Fermer
+            </button>
+          </div>
+        )}
 
         <MapContainer
           center={[46.603354, 1.888334]}
@@ -762,24 +871,28 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             </>
           )}
 
-          {/* Technician Starting Address Point */}
+          {/* Technician Départ & Retour Point (Checkerboard 'D') */}
           {techStartPoint && (
             <Marker
               position={techStartPoint.displayCoord}
-              icon={createMissionPassageIcon('rgb(210, 45, 11)', 'D')}
+              icon={createCheckerboardDepartureIcon()}
+              eventHandlers={{
+                mouseover: e => {
+                  e.target.openPopup();
+                },
+                click: e => {
+                  e.target.openPopup();
+                },
+              }}
             >
-              <Tooltip
-                direction="right"
-                offset={[24, 0]}
-                opacity={1}
-                className="defibeo-route-hover-pill"
-              >
+              <Popup closeButton={false} className="defibeo-route-hover-popup">
                 <div
                   style={{
                     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                     color: '#000000',
                     lineHeight: '1.4',
                     textAlign: 'left',
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   <div
@@ -790,7 +903,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                       marginBottom: '4px',
                     }}
                   >
-                    Point de départ
+                    Départ &amp; Retour
                   </div>
                   <div style={{ marginBottom: '6px' }}>
                     <span
@@ -829,31 +942,42 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                     Adresse : <span style={{ fontWeight: 400 }}>{techStartPoint.addressLabel}</span>
                   </div>
                 </div>
-              </Tooltip>
+              </Popup>
             </Marker>
           )}
 
-          {/* Mission Points (Status color circle + Passage number inside + Hover Gélule) */}
+          {/* Mission Points (Status color circle + Passage number inside + Hover/Click Popup with 'Y aller') */}
           {missionPoints.map(pt => {
             const icon = createMissionPassageIcon(pt.bgColor, pt.passageNumber);
+            const navHref = buildNavigationHref(
+              pt.addressQuery,
+              pt.coord,
+              isWebapp,
+              preferredNavApp
+            );
+
             return (
               <Marker
                 key={`${pt.mission.id || pt.equipmentIdentifiant}_${pt.passageNumber}`}
                 position={pt.displayCoord}
                 icon={icon}
+                eventHandlers={{
+                  mouseover: e => {
+                    e.target.openPopup();
+                  },
+                  click: e => {
+                    e.target.openPopup();
+                  },
+                }}
               >
-                <Tooltip
-                  direction="right"
-                  offset={[24, 0]}
-                  opacity={1}
-                  className="defibeo-route-hover-pill"
-                >
+                <Popup closeButton={false} className="defibeo-route-hover-popup">
                   <div
                     style={{
                       fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                       color: '#000000',
                       lineHeight: '1.4',
                       textAlign: 'left',
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     <div
@@ -908,12 +1032,39 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                         fontSize: '15px',
                         fontWeight: 600,
                         color: '#000000',
+                        marginBottom: '10px',
                       }}
                     >
                       Créneau estimé : <span style={{ fontWeight: 400 }}>{pt.estimatedSlotLabel}</span>
                     </div>
+                    <div>
+                      <a
+                        href={navHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '100%',
+                          backgroundColor: '#2e54ff',
+                          color: '#ffffff',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          fontSize: '15px',
+                          fontWeight: 700,
+                          padding: '8px 16px',
+                          borderRadius: '11px',
+                          textDecoration: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                        }}
+                        className="hover:opacity-90 transition-opacity"
+                      >
+                        Y aller
+                      </a>
+                    </div>
                   </div>
-                </Tooltip>
+                </Popup>
               </Marker>
             );
           })}

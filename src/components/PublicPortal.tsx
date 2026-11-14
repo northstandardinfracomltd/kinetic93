@@ -86,6 +86,7 @@ import { auth, saveCollectionToFirestore, fetchCollectionFromFirestore, uploadMe
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from "../utils/fsmOptimizer";
 import { loadCttGlobalRules } from "../utils/cttRules";
+import TourRouteMapModal from "./TourRouteMapModal";
 import { PlanningTab } from "./PlanningTab";
 import { getMonthlyWorkingDaysData, generateMonthlyPDFHTML } from "./TempsTab";
 import HelpBubble from "./HelpBubble";
@@ -1165,6 +1166,7 @@ export default function PublicPortal({
       return "";
     }
   });
+  const [isWebappRouteMapOpen, setIsWebappRouteMapOpen] = useState<boolean>(false);
   const [pauseEnabled, setPauseEnabled] = useState<boolean>(() => {
     try {
       return localStorage.getItem("defib_pause_enabled") === "true";
@@ -10742,6 +10744,70 @@ export default function PublicPortal({
                             </option>
                           ))}
                         </select>
+
+                        {(() => {
+                          const activeSelectedTour = selectedTourId
+                            ? getSortedTours().find((tr) => tr.id === selectedTourId)
+                            : undefined;
+                          const activeMissionsCount =
+                            activeSelectedTour && Array.isArray(activeSelectedTour.passages)
+                              ? activeSelectedTour.passages.filter((p: any) => p.status !== "Attente").length
+                              : 0;
+                          const techObj: any = resolvedLiveMember || authenticatedUser;
+                          const hasTechStartPoint = Boolean(
+                            techObj &&
+                              ((techObj.startAddressLat !== undefined &&
+                                techObj.startAddressLng !== undefined &&
+                                String(techObj.startAddressLat).trim() !== "" &&
+                                String(techObj.startAddressLng).trim() !== "") ||
+                                (techObj.startAddress && String(techObj.startAddress).trim() !== "") ||
+                                (techObj.startAddressStreet && String(techObj.startAddressStreet).trim() !== "") ||
+                                (techObj.startAddressCity && String(techObj.startAddressCity).trim() !== ""))
+                          );
+                          const isVoirParcoursDisabled =
+                            !activeSelectedTour || activeMissionsCount < 2 || !hasTechStartPoint;
+
+                          return (
+                            <button
+                              type="button"
+                              id="btn-webapp-voir-parcours"
+                              disabled={isVoirParcoursDisabled}
+                              onClick={() => {
+                                if (isVoirParcoursDisabled) return;
+                                playTechTapSound();
+                                setIsWebappRouteMapOpen(true);
+                              }}
+                              title={
+                                !activeSelectedTour
+                                  ? "Veuillez sélectionner une tournée."
+                                  : activeMissionsCount < 2
+                                  ? "Au moins 2 missions dans la tournée sont requises pour afficher le parcours."
+                                  : !hasTechStartPoint
+                                  ? "Veuillez renseigner votre adresse de départ dans vos paramètres."
+                                  : undefined
+                              }
+                              className={`w-full mt-3 transition-all duration-150 focus:outline-none text-center ${
+                                isVoirParcoursDisabled
+                                  ? "cursor-not-allowed opacity-50"
+                                  : "cursor-pointer hover:opacity-90 active:scale-[0.99]"
+                              }`}
+                              style={{
+                                backgroundColor: "rgb(46, 84, 255)",
+                                color: "#ffffff",
+                                border: "none",
+                                borderRadius: "14px",
+                                padding: "14px 20px",
+                                fontSize: "18px",
+                                fontWeight: "bold",
+                                boxShadow: "none",
+                                outline: "none",
+                                textAlign: "center",
+                              }}
+                            >
+                              {t("Voir Parcours")}
+                            </button>
+                          );
+                        })()}
                       </div>
 
                       {/* Illustration & message when no tour is selected */}
@@ -18757,6 +18823,53 @@ export default function PublicPortal({
             </div>
           </div>
         )}
+
+        {isWebappRouteMapOpen && (() => {
+          const activeSelectedTour = selectedTourId
+            ? getSortedTours().find((tr) => tr.id === selectedTourId)
+            : undefined;
+          const rawFsmTour =
+            (fsmTours || []).find((mt: any) => mt.id === selectedTourId) || null;
+          if (!activeSelectedTour && !rawFsmTour) return null;
+
+          const tourForMap = rawFsmTour
+            ? {
+                ...rawFsmTour,
+                missions: (rawFsmTour.missions || []).filter(
+                  (m: any) => m.status !== "Attente"
+                ),
+              }
+            : {
+                ...activeSelectedTour,
+                startDate: getIsoDate(activeSelectedTour?.startDate || ""),
+                missions: (activeSelectedTour?.passages || [])
+                  .filter((p: any) => p.status !== "Attente")
+                  .map((p: any) => ({
+                    ...p,
+                    defibIdentifiant: p.identifiant || p.defibIdentifiant,
+                  })),
+              };
+
+          const techMember: any = resolvedLiveMember || authenticatedUser || null;
+
+          return (
+            <TourRouteMapModal
+              isOpen={true}
+              onClose={() => setIsWebappRouteMapOpen(false)}
+              tour={tourForMap}
+              technician={techMember}
+              defibrillateurs={defibrillateurs}
+              otherEquipments={otherEquipments}
+              formations={formations}
+              clients={clients}
+              variables={variables}
+              cttGlobalRules={loadCttGlobalRules()}
+              allTours={fsmTours || tours || []}
+              isWebapp={true}
+              preferredNavApp={defaultNavApp}
+            />
+          );
+        })()}
       </div>
     </div>
   );
