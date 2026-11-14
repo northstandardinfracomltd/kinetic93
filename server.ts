@@ -1413,6 +1413,8 @@ async function startServer() {
   app.get("/api/tech-locations", async (req, res) => {
     try {
       const tenantId = String(req.query.tenantId || 'demo').trim() || 'demo';
+      const forceRefresh = req.query.refresh === 'true' || req.query.refresh === '1';
+      const querySheetUrl = String(req.query.spreadsheetUrl || '').trim();
       const storeKey = `${tenantId}_tech_locations`;
       const existing: Record<string, any> =
         serverMemoryStore.get(storeKey) && typeof serverMemoryStore.get(storeKey) === 'object'
@@ -1421,29 +1423,48 @@ async function startServer() {
 
       // Also check tenant's Spreadsheet Livetrack if configured
       try {
-        const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'livetrack');
+        const sheetUrl = querySheetUrl || (await resolveTenantSpreadsheetUrl(tenantId, 'livetrack'));
         if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
-          const sheetData = await fetchTenantSheetCollection(sheetUrl, tenantId, 'livetrack', false);
+          const sheetData = await fetchTenantSheetCollection(sheetUrl, tenantId, 'livetrack', forceRefresh);
           if (sheetData?.fromSpreadsheet && Array.isArray(sheetData.items)) {
             let changed = false;
+            const sheetKeys = new Set<string>();
             for (const item of sheetData.items) {
-              const name = String(item?.name || item?.['Nom Prénom Technicien'] || '').trim();
-              const numLat = Number(item?.lat ?? item?.['Latitude']);
-              const numLng = Number(item?.lng ?? item?.['Longitude']);
-              if (!name || isNaN(numLat) || isNaN(numLng)) continue;
+              const name = String(item?.name || item?.['Nom Prénom Technicien'] || item?.['Nom Prénom Technicien.'] || '').trim();
+              const rawLat = String(item?.lat ?? item?.['Latitude'] ?? item?.['Latitude.'] ?? '').replace(',', '.').trim();
+              const rawLng = String(item?.lng ?? item?.['Longitude'] ?? item?.['Longitude.'] ?? '').replace(',', '.').trim();
+              if (!name || !rawLat || !rawLng) continue;
+              const numLat = parseFloat(rawLat);
+              const numLng = parseFloat(rawLng);
+              if (!Number.isFinite(numLat) || !Number.isFinite(numLng) || (numLat === 0 && numLng === 0)) continue;
               const normKey = name.toLowerCase();
+              sheetKeys.add(normKey);
               const sheetTs = Number(item?.updatedAt) || 0;
               const cur = existing[normKey];
-              if (!cur || (sheetTs > 0 && (!cur.updatedAt || sheetTs > cur.updatedAt))) {
+              if (
+                !cur ||
+                forceRefresh ||
+                cur.lat !== numLat ||
+                cur.lng !== numLng ||
+                (sheetTs > 0 && (!cur.updatedAt || sheetTs >= cur.updatedAt))
+              ) {
                 existing[normKey] = {
                   name,
                   email: cur?.email || '',
                   lat: numLat,
                   lng: numLng,
                   updatedAt: sheetTs || cur?.updatedAt || undefined,
-                  horodatage: item?.horodatage || '',
+                  horodatage: item?.horodatage || cur?.horodatage || '',
                 };
                 changed = true;
+              }
+            }
+            if (forceRefresh) {
+              for (const k of Object.keys(existing)) {
+                if (!sheetKeys.has(k)) {
+                  delete existing[k];
+                  changed = true;
+                }
               }
             }
             if (changed) {

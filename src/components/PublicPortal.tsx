@@ -375,6 +375,7 @@ export default function PublicPortal({
   // Report Form full-width overlay state
   const [isReportOverlayOpen, setIsReportOverlayOpen] = useState(false);
   const [isReportOverlayMinimized, setIsReportOverlayMinimized] = useState(false);
+  const [isEditingFromRapportsPdf, setIsEditingFromRapportsPdf] = useState(false);
   const [activeSettingsSection, setActiveSettingsSection] = useState<string | null>(null);
   const [tutorialVideos, setTutorialVideos] = useState<{ title: string; url: string }[]>([]);
   const [emargementModalRecordId, setEmargementModalRecordId] = useState<string | null>(null);
@@ -1667,32 +1668,239 @@ export default function PublicPortal({
     prevActiveTabForStocksRef.current = activeTab;
   }, [activeTab, techTenantId]);
 
+  const [sheetMembers, setSheetMembers] = useState<Member[]>([]);
+  const [sheetCustomLocationNames, setSheetCustomLocationNames] = useState<Record<string, string>>({});
+
+  const refreshTechMembersAndLocationsFromSpreadsheet = async (forceRefresh = false) => {
+    const effTenant =
+      techTenantId ||
+      authenticatedUser?.envId ||
+      (authenticatedUser as any)?.tenantId ||
+      (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+      "demo";
+    const membersUrl = getTenantSpreadsheetUrl("spreadsheetMembresEnvironnement", companyInfo, effTenant);
+    const locsUrl = getTenantSpreadsheetUrl("spreadsheetIntituleEmplacements", companyInfo, effTenant);
+    await Promise.allSettled([
+      fetch(
+        `/api/sheets/collection?tenantId=${encodeURIComponent(effTenant)}&type=membresEnvironnement&refresh=${forceRefresh}${
+          membersUrl ? `&spreadsheetUrl=${encodeURIComponent(membersUrl)}` : ""
+        }&_t=${Date.now()}`,
+        { cache: "no-store" },
+      )
+        .then(async (res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.fromSpreadsheet && Array.isArray(data.items) && data.items.length > 0) {
+            const validItems = data.items.filter((m: any) => m && (m.name || m.email));
+            setSheetMembers(validItems);
+          }
+        })
+        .catch(() => {}),
+      fetch(
+        `/api/sheets/collection?tenantId=${encodeURIComponent(effTenant)}&type=intituleEmplacements&refresh=${forceRefresh}${
+          locsUrl ? `&spreadsheetUrl=${encodeURIComponent(locsUrl)}` : ""
+        }&_t=${Date.now()}`,
+        { cache: "no-store" },
+      )
+        .then(async (res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.fromSpreadsheet && Array.isArray(data.items)) {
+            const nextLocs: Record<string, string> = {};
+            const normalizeLocKey = (rawKey: string): string | null => {
+              const cleaned = String(rawKey || "").replace(/\.+$/, "").trim();
+              const m = cleaned.match(/^(entrep[oô]t|v[eé]hicule)\s*([a-j])$/i);
+              if (!m) return null;
+              const prefix = m[1].toLowerCase().startsWith("entrep") ? "Entrepôt" : "Véhicule";
+              return `${prefix} ${m[2].toUpperCase()}`;
+            };
+            for (const row of data.items) {
+              if (!row || typeof row !== "object") continue;
+              if (row.emplacement && row.intitule !== undefined) {
+                const normLoc = normalizeLocKey(String(row.emplacement));
+                if (normLoc && String(row.intitule).trim() !== "") {
+                  nextLocs[normLoc] = String(row.intitule).trim();
+                }
+              }
+              const inspectObj = (obj: Record<string, any>) => {
+                for (const [k, v] of Object.entries(obj)) {
+                  const normLoc = normalizeLocKey(k);
+                  if (normLoc && v !== undefined && v !== null && String(v).trim() !== "") {
+                    nextLocs[normLoc] = String(v).trim();
+                  }
+                }
+              };
+              if (row._rawSheetRow && typeof row._rawSheetRow === "object") {
+                inspectObj(row._rawSheetRow);
+              }
+              inspectObj(row);
+            }
+            if (Object.keys(nextLocs).length > 0) {
+              setSheetCustomLocationNames(nextLocs);
+              for (const k of [effTenant, effTenant.toUpperCase(), effTenant.toLowerCase()]) {
+                try {
+                  localStorage.setItem(`defib_${k}_custom_location_names`, JSON.stringify(nextLocs));
+                } catch (_) {}
+              }
+            }
+          }
+        })
+        .catch(() => {}),
+    ]);
+  };
+
+  useEffect(() => {
+    refreshTechMembersAndLocationsFromSpreadsheet(true);
+  }, [techTenantId, authenticatedUser?.email]);
+
+  const resolvedCustomLocationNames = useMemo<Record<string, string>>(() => {
+    const effTenant =
+      techTenantId ||
+      authenticatedUser?.envId ||
+      (authenticatedUser as any)?.tenantId ||
+      (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+      "demo";
+    let localMap: Record<string, string> = {};
+    try {
+      const raw =
+        localStorage.getItem(`defib_${effTenant}_custom_location_names`) ||
+        localStorage.getItem(`defib_${effTenant.toUpperCase()}_custom_location_names`) ||
+        localStorage.getItem(`defib_${effTenant.toLowerCase()}_custom_location_names`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") localMap = parsed;
+      }
+    } catch (_) {}
+    return {
+      ...localMap,
+      ...(companyInfo?.customLocationNames || {}),
+      ...sheetCustomLocationNames,
+    };
+  }, [techTenantId, authenticatedUser, companyInfo?.customLocationNames, sheetCustomLocationNames]);
+
+  const effectiveMembers = useMemo<Member[]>(() => {
+    const baseList = Array.isArray(members) ? members : [];
+    if (!sheetMembers || sheetMembers.length === 0) return baseList;
+    const isDerivedEmailName = (name?: string, email?: string): boolean => {
+      const n = String(name || "").trim().toLowerCase();
+      if (!n) return true;
+      const e = String(email || "").trim().toLowerCase();
+      if (!e) return false;
+      if (n === e) return true;
+      const prefix = e.split("@")[0] || "";
+      const formattedPrefix = prefix.split(/[._-]+/).filter(Boolean).join(" ").toLowerCase();
+      return n === prefix || n === formattedPrefix;
+    };
+    const sheetEmails = new Set(
+      sheetMembers.map((m: any) => String(m.email || "").trim().toLowerCase()).filter(Boolean),
+    );
+    const sheetNames = new Set(
+      sheetMembers.map((m: any) => String(m.name || "").trim().toLowerCase()).filter(Boolean),
+    );
+    const mergedFromSheet = sheetMembers.map((sm: any) => {
+      const smEmail = String(sm.email || "").trim().toLowerCase();
+      const smName = String(sm.name || "").trim().toLowerCase();
+      const fbMatch = baseList.find(
+        (fm: any) =>
+          (smEmail && String(fm.email || "").trim().toLowerCase() === smEmail) ||
+          (!smEmail && smName && String(fm.name || "").trim().toLowerCase() === smName),
+      );
+      if (fbMatch) {
+        const effectiveEmail = sm.email || fbMatch.email;
+        const resolvedName =
+          sm.name && (!isDerivedEmailName(sm.name, effectiveEmail) || isDerivedEmailName(fbMatch.name, effectiveEmail))
+            ? sm.name
+            : fbMatch.name || sm.name;
+        return {
+          ...fbMatch,
+          ...sm,
+          name: resolvedName,
+          email: effectiveEmail,
+          role: sm.role || fbMatch.role,
+          pin: sm.pin || fbMatch.pin || "1234",
+          locationLink: sm.locationLink || fbMatch.locationLink,
+          startAddress: sm.startAddress || fbMatch.startAddress,
+          startAddressStreet: sm.startAddressStreet || fbMatch.startAddressStreet,
+          startAddressCity: sm.startAddressCity || fbMatch.startAddressCity,
+          startAddressZip: sm.startAddressZip || fbMatch.startAddressZip,
+          startAddressRegion: sm.startAddressRegion || fbMatch.startAddressRegion,
+          startAddressCountry: sm.startAddressCountry || fbMatch.startAddressCountry,
+          startAddressLat: sm.startAddressLat ?? fbMatch.startAddressLat,
+          startAddressLng: sm.startAddressLng ?? fbMatch.startAddressLng,
+          semaineTypique:
+            Array.isArray(sm.semaineTypique) && sm.semaineTypique.length > 0
+              ? sm.semaineTypique
+              : fbMatch.semaineTypique,
+          absences:
+            Array.isArray(sm.absences) && sm.absences.length > 0 ? sm.absences : fbMatch.absences,
+          competences:
+            Array.isArray(sm.competences) && sm.competences.length > 0
+              ? sm.competences
+              : fbMatch.competences,
+        };
+      }
+      return sm;
+    });
+    const fbOnly = baseList.filter((fm: any) => {
+      const fmEmail = String(fm.email || "").trim().toLowerCase();
+      const fmName = String(fm.name || "").trim().toLowerCase();
+      if (fmEmail && sheetEmails.has(fmEmail)) return false;
+      if (!fmEmail && fmName && sheetNames.has(fmName)) return false;
+      return true;
+    });
+    return [...mergedFromSheet, ...fbOnly];
+  }, [members, sheetMembers]);
+
+  const resolvedLiveMember = useMemo<Member | undefined>(() => {
+    if (!authenticatedUser) return undefined;
+    const emailLower = (authenticatedUser.email || "").trim().toLowerCase();
+    const nameLower = (authenticatedUser.name || "").trim().toLowerCase();
+    return (
+      (emailLower
+        ? effectiveMembers.find((m) => (m.email || "").trim().toLowerCase() === emailLower)
+        : undefined) ||
+      (authenticatedUser.id
+        ? effectiveMembers.find((m) => m.id && m.id === authenticatedUser.id)
+        : undefined) ||
+      (nameLower
+        ? effectiveMembers.find((m) => (m.name || "").trim().toLowerCase() === nameLower)
+        : undefined)
+    );
+  }, [authenticatedUser, effectiveMembers]);
+
   // Sync techLocationLink with logged-in technician profile
   useEffect(() => {
     if (!authenticatedUser) return;
-    const emailLower = (authenticatedUser.email || "").trim().toLowerCase();
-    const nameLower = (authenticatedUser.name || "").trim().toLowerCase();
-    const matchedMember = (members || []).find(
-      (m) =>
-        (emailLower && (m.email || "").trim().toLowerCase() === emailLower) ||
-        (nameLower && (m.name || "").trim().toLowerCase() === nameLower),
-    );
     const resolvedLoc =
-      matchedMember?.locationLink ||
+      resolvedLiveMember?.locationLink ||
       authenticatedUser.locationLink ||
       (authenticatedUser as any)?.startAddress ||
       "";
     if (resolvedLoc && resolvedLoc.trim() && resolvedLoc.trim() !== techLocationLink) {
       setTechLocationLink(resolvedLoc.trim());
     }
-  }, [authenticatedUser, members]);
+  }, [authenticatedUser, resolvedLiveMember, techLocationLink]);
+
+  const resolvedTechLocationDisplayName = useMemo<string>(() => {
+    const rawLoc = (techLocationLink || resolvedLiveMember?.locationLink || authenticatedUser?.locationLink || "").trim();
+    if (!rawLoc) return "";
+    const ALL_LOCS = [
+      "Entrepôt A", "Entrepôt B", "Entrepôt C", "Entrepôt D", "Entrepôt E",
+      "Entrepôt F", "Entrepôt G", "Entrepôt H", "Entrepôt I", "Entrepôt J",
+      "Véhicule A", "Véhicule B", "Véhicule C", "Véhicule D", "Véhicule E",
+      "Véhicule F", "Véhicule G", "Véhicule H", "Véhicule I", "Véhicule J",
+    ];
+    const canonicalSlot = ALL_LOCS.find((l) => l.toLowerCase() === rawLoc.toLowerCase());
+    if (canonicalSlot) {
+      return getLocationCustomName(canonicalSlot, resolvedCustomLocationNames) || canonicalSlot;
+    }
+    return getLocationCustomName(rawLoc, resolvedCustomLocationNames) || rawLoc;
+  }, [techLocationLink, resolvedLiveMember, authenticatedUser, resolvedCustomLocationNames]);
 
   // Helper to check if a traceability item is linked to the logged-in technician's location
   const doesTraceMatchTechLocation = (
     trace: StockTraceability,
     stockMouvements?: StockMovement[],
   ): boolean => {
-    const targetLoc = (techLocationLink || authenticatedUser?.locationLink || "").trim();
+    const targetLoc = (techLocationLink || resolvedLiveMember?.locationLink || authenticatedUser?.locationLink || "").trim();
     if (!targetLoc) return false;
     let rawLoc = "";
     if (trace.emplacement && trace.emplacement.trim()) {
@@ -1715,29 +1923,57 @@ export default function PublicPortal({
     const normRaw = rawLoc.toLowerCase();
     const normTarget = targetLoc.toLowerCase();
     if (normRaw === normTarget) return true;
+    const ALL_LOCS = [
+      "Entrepôt A", "Entrepôt B", "Entrepôt C", "Entrepôt D", "Entrepôt E",
+      "Entrepôt F", "Entrepôt G", "Entrepôt H", "Entrepôt I", "Entrepôt J",
+      "Véhicule A", "Véhicule B", "Véhicule C", "Véhicule D", "Véhicule E",
+      "Véhicule F", "Véhicule G", "Véhicule H", "Véhicule I", "Véhicule J",
+    ];
+    const canonicalSlot =
+      ALL_LOCS.find((l) => l.toLowerCase() === normTarget) ||
+      ALL_LOCS.find((l) => {
+        const cName = getLocationCustomName(l, resolvedCustomLocationNames);
+        return cName && cName.trim().toLowerCase() === normTarget;
+      }) ||
+      targetLoc;
+    if (normRaw === canonicalSlot.toLowerCase()) return true;
     const customName = (
-      companyInfo?.customLocationNames?.[targetLoc] ||
-      getLocationCustomName(targetLoc) ||
+      resolvedCustomLocationNames?.[canonicalSlot] ||
+      resolvedCustomLocationNames?.[targetLoc] ||
+      getLocationCustomName(canonicalSlot, resolvedCustomLocationNames) ||
       ""
     ).trim();
     if (customName && normRaw === customName.toLowerCase()) return true;
-    const techName = (authenticatedUser?.name || "").trim();
+    const techName = (resolvedLiveMember?.name || authenticatedUser?.name || "").trim();
     if (techName) {
       const labelWithTarget = `${techName} — ${targetLoc}`.toLowerCase();
+      const labelWithCanonical = `${techName} — ${canonicalSlot}`.toLowerCase();
       const labelWithCustom = customName ? `${techName} — ${customName}`.toLowerCase() : "";
-      if (normRaw === labelWithTarget || (labelWithCustom && normRaw === labelWithCustom)) {
+      if (
+        normRaw === labelWithTarget ||
+        normRaw === labelWithCanonical ||
+        (labelWithCustom && normRaw === labelWithCustom)
+      ) {
         return true;
       }
     }
     if (normRaw.includes(" — ")) {
       const afterDash = normRaw.split(" — ").pop()?.trim() || "";
-      if (afterDash === normTarget || (customName && afterDash === customName.toLowerCase())) {
+      if (
+        afterDash === normTarget ||
+        afterDash === canonicalSlot.toLowerCase() ||
+        (customName && afterDash === customName.toLowerCase())
+      ) {
         return true;
       }
     }
     if (normRaw.includes(" : ")) {
       const afterColon = normRaw.split(" : ").pop()?.trim() || "";
-      if (afterColon === normTarget || (customName && afterColon === customName.toLowerCase())) {
+      if (
+        afterColon === normTarget ||
+        afterColon === canonicalSlot.toLowerCase() ||
+        (customName && afterColon === customName.toLowerCase())
+      ) {
         return true;
       }
     }
@@ -1764,16 +2000,20 @@ export default function PublicPortal({
   };
 
   const doesDistributedStockMatchTechLocation = (st: StockRecord): boolean => {
-    const targetLoc = (techLocationLink || authenticatedUser?.locationLink || "").trim().toLowerCase();
-    if (!targetLoc) return false;
-    return (distributedStocks || []).some(
-      (ds) =>
+    const rawTarget = (techLocationLink || resolvedLiveMember?.locationLink || authenticatedUser?.locationLink || "").trim();
+    if (!rawTarget) return false;
+    const normTarget = rawTarget.toLowerCase();
+    const customTarget = (resolvedTechLocationDisplayName || "").trim().toLowerCase();
+    return (distributedStocks || []).some((ds) => {
+      const dsLoc = String(ds.locationName || "").trim().toLowerCase();
+      return (
         (ds.stockId === st.id ||
           (st.ugs && ds.ugs && String(ds.ugs).trim() === String(st.ugs).trim()) ||
           ds.denominationPieceId === st.denominationPieceId) &&
-        String(ds.locationName || "").trim().toLowerCase() === targetLoc &&
-        (Number(ds.volumeDisponible) || 0) > 0,
-    );
+        (dsLoc === normTarget || (customTarget && dsLoc === customTarget)) &&
+        (Number(ds.volumeDisponible) || 0) > 0
+      );
+    });
   };
 
   // Lookup "Sélection d'un stock distribué." : list all stocks from Spreadsheet Stocks where >= 1 traceability item is linked to the logged-in technician's location (or distributed stock without traceability)
@@ -1790,7 +2030,7 @@ export default function PublicPortal({
           )) ||
         (st.traceabilityEnabled === false && doesDistributedStockMatchTechLocation(st)),
     );
-  }, [effectiveTechStocksList, distributedStocks, techLocationLink, authenticatedUser, members]);
+  }, [effectiveTechStocksList, distributedStocks, techLocationLink, authenticatedUser, effectiveMembers, resolvedCustomLocationNames]);
 
   const techActiveStocks = useMemo(() => {
     if (!techLocationLink) return [];
@@ -1806,7 +2046,7 @@ export default function PublicPortal({
           )) ||
         (st.traceabilityEnabled === false && doesDistributedStockMatchTechLocation(st)),
     );
-  }, [effectiveTechStocksList, distributedStocks, techLocationLink, authenticatedUser, members, selectedTechDistributedStockId]);
+  }, [effectiveTechStocksList, distributedStocks, techLocationLink, authenticatedUser, effectiveMembers, selectedTechDistributedStockId, resolvedCustomLocationNames]);
 
   const techInventoryCacheKey = useMemo(() => {
     const effTenant =
@@ -3341,6 +3581,7 @@ export default function PublicPortal({
             }
           }),
         refreshTechStocksFromSpreadsheet(true),
+        refreshTechMembersAndLocationsFromSpreadsheet(true),
       ]);
       window.dispatchEvent(new CustomEvent("defib_refresh_webapp_data", { detail: { tenantId: tid } }));
       window.dispatchEvent(
@@ -5782,8 +6023,31 @@ export default function PublicPortal({
   // Autopopulate technician location details on login / select tab
   useEffect(() => {
     if (authenticatedUser) {
-      const liveMember = members.find((m) => m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase());
+      const liveMember = resolvedLiveMember;
       if (liveMember) {
+        if (
+          liveMember.name &&
+          liveMember.name.trim() !== "" &&
+          liveMember.name.trim() !== (authenticatedUser.name || "").trim()
+        ) {
+          const syncedAuth = {
+            ...authenticatedUser,
+            name: liveMember.name.trim(),
+            locationLink: liveMember.locationLink || authenticatedUser.locationLink,
+            startAddress: liveMember.startAddress || authenticatedUser.startAddress,
+            startAddressStreet: liveMember.startAddressStreet || authenticatedUser.startAddressStreet,
+            startAddressCity: liveMember.startAddressCity || authenticatedUser.startAddressCity,
+            startAddressZip: liveMember.startAddressZip || authenticatedUser.startAddressZip,
+            startAddressRegion: liveMember.startAddressRegion || authenticatedUser.startAddressRegion,
+            startAddressCountry: liveMember.startAddressCountry || authenticatedUser.startAddressCountry,
+            startAddressLat: liveMember.startAddressLat ?? authenticatedUser.startAddressLat,
+            startAddressLng: liveMember.startAddressLng ?? authenticatedUser.startAddressLng,
+          };
+          setAuthenticatedUser(syncedAuth);
+          try {
+            localStorage.setItem("defib_active_tech_session", JSON.stringify(syncedAuth));
+          } catch (_) {}
+        }
         setTechLocationLink(liveMember.locationLink || "");
         const loadedGpsLink = liveMember.gpsSharingLink ||
             localStorage.getItem(
@@ -5798,18 +6062,74 @@ export default function PublicPortal({
           const localEmail = localStorage.getItem(`defib_google_cal_email_${liveMember.name}`);
           setSyncedGoogleEmail(localEmail || null);
         }
-        // Load structured address fields from liveMember
-        setTechStartStreet(liveMember.startAddressStreet || "");
-        setTechStartCity(liveMember.startAddressCity || "");
-        setTechStartZip(liveMember.startAddressZip || "");
-        setTechStartRegion(liveMember.startAddressRegion || "");
-        setTechStartCountry(liveMember.startAddressCountry || "France");
-        const cleanLat = (liveMember.startAddressLat !== undefined && liveMember.startAddressLat !== null && String(liveMember.startAddressLat).toLowerCase() !== 'null' && String(liveMember.startAddressLat).toLowerCase() !== 'nan' && !isNaN(Number(liveMember.startAddressLat))) ? String(liveMember.startAddressLat) : "";
-        const cleanLng = (liveMember.startAddressLng !== undefined && liveMember.startAddressLng !== null && String(liveMember.startAddressLng).toLowerCase() !== 'null' && String(liveMember.startAddressLng).toLowerCase() !== 'nan' && !isNaN(Number(liveMember.startAddressLng))) ? String(liveMember.startAddressLng) : "";
+        // Load structured address fields from liveMember (with fallback to _rawSheetRow)
+        const rawRow = (liveMember as any)._rawSheetRow || {};
+        const sheetStreet = String(
+          liveMember.startAddressStreet ||
+            rawRow["Numéro et voie."] ||
+            rawRow["Numéro et voie"] ||
+            "",
+        ).trim();
+        const sheetCity = String(
+          liveMember.startAddressCity ||
+            rawRow["Ville."] ||
+            rawRow["Ville"] ||
+            "",
+        ).trim();
+        const sheetZip = String(
+          liveMember.startAddressZip ||
+            rawRow["Code postal."] ||
+            rawRow["Code postal"] ||
+            "",
+        ).trim();
+        const sheetRegion = String(
+          liveMember.startAddressRegion ||
+            rawRow["Région."] ||
+            rawRow["Région"] ||
+            "",
+        ).trim();
+        const sheetCountry = String(
+          liveMember.startAddressCountry ||
+            rawRow["Pays."] ||
+            rawRow["Pays"] ||
+            "France",
+        ).trim();
+        const rawLatVal =
+          liveMember.startAddressLat !== undefined && liveMember.startAddressLat !== null
+            ? liveMember.startAddressLat
+            : rawRow["Latitude."] ?? rawRow["Latitude"];
+        const rawLngVal =
+          liveMember.startAddressLng !== undefined && liveMember.startAddressLng !== null
+            ? liveMember.startAddressLng
+            : rawRow["Longitude."] ?? rawRow["Longitude"];
+        setTechStartStreet(sheetStreet);
+        setTechStartCity(sheetCity);
+        setTechStartZip(sheetZip);
+        setTechStartRegion(sheetRegion);
+        setTechStartCountry(sheetCountry || "France");
+        const cleanLat =
+          rawLatVal !== undefined &&
+          rawLatVal !== null &&
+          String(rawLatVal).trim() !== "" &&
+          String(rawLatVal).toLowerCase() !== "null" &&
+          String(rawLatVal).toLowerCase() !== "nan" &&
+          !isNaN(Number(String(rawLatVal).replace(",", ".")))
+            ? String(rawLatVal).replace(",", ".")
+            : "";
+        const cleanLng =
+          rawLngVal !== undefined &&
+          rawLngVal !== null &&
+          String(rawLngVal).trim() !== "" &&
+          String(rawLngVal).toLowerCase() !== "null" &&
+          String(rawLngVal).toLowerCase() !== "nan" &&
+          !isNaN(Number(String(rawLngVal).replace(",", ".")))
+            ? String(rawLngVal).replace(",", ".")
+            : "";
         setTechStartLat(cleanLat);
         setTechStartLng(cleanLng);
         const envId = localStorage.getItem("defib_tenant_id") || "demo";
         const fallbackSig = normalizeSignatureSrc(
+          localStorage.getItem(`defib_${envId}_tech_signature_${liveMember.name}`) ||
           localStorage.getItem(`defib_${envId}_tech_signature_${authenticatedUser.name}`) ||
           liveMember.signature ||
           authenticatedUser.signature ||
@@ -5908,7 +6228,7 @@ export default function PublicPortal({
               : localStorage.getItem("defib_hide_pointage") === "true");
       setHidePointage(savedHidePointage);
     }
-  }, [authenticatedUser, activeTab, members]);
+  }, [authenticatedUser, activeTab, members, resolvedLiveMember]);
 
   // Automatic real-time geolocation sharing on Webapp open/refresh and every 1 minute
   useEffect(() => {
@@ -6773,8 +7093,14 @@ export default function PublicPortal({
     const composedAddress = `${techStartStreet}, ${techStartZip} ${techStartCity}, ${techStartCountry}`.trim();
 
     // 1. Update matching member in parent Central state database
-    const updatedMembers = members.map((m) => {
-      if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
+    const updatedMembers = effectiveMembers.map((m) => {
+      const isMatch =
+        (m.email &&
+          authenticatedUser.email &&
+          m.email.trim().toLowerCase() === authenticatedUser.email.trim().toLowerCase()) ||
+        (m.name &&
+          m.name.trim().toLowerCase() === (resolvedLiveMember?.name || authenticatedUser.name || "").trim().toLowerCase());
+      if (isMatch) {
         const updatedM = {
           ...m,
           gpsSharingLink: gpsSharingLink,
@@ -7640,6 +7966,7 @@ export default function PublicPortal({
                     forceSmartphoneLayout={false}
                     isNew={true}
                     isWebapp={true}
+                    hideTimer={isEditingFromRapportsPdf}
                     isFromInterventionMission={Boolean(reportActiveTourId || reportToEdit?.missionId || reportToEdit?.tourId)}
                     isMinimized={isReportOverlayMinimized}
                     onToggleMinimize={() => setIsReportOverlayMinimized((prev) => !prev)}
@@ -7661,6 +7988,7 @@ export default function PublicPortal({
                     onCancel={() => {
                       setIsReportOverlayOpen(false);
                       setIsReportOverlayMinimized(false);
+                      setIsEditingFromRapportsPdf(false);
                       setSelectedOtherEquipmentUnique(null);
                       setReportActiveTourId("");
                       setReportActivePassageNum(null);
@@ -7758,6 +8086,7 @@ export default function PublicPortal({
 
                       setIsReportOverlayOpen(false);
                       setIsReportOverlayMinimized(false);
+                      setIsEditingFromRapportsPdf(false);
                       setSelectedOtherEquipmentUnique(null);
                       setReportActiveTourId("");
                       setReportActivePassageNum(null);
@@ -7775,7 +8104,7 @@ export default function PublicPortal({
                     variables={variables}
                     defibrillateurs={defibrillateurs}
                     otherEquipments={otherEquipments}
-                    members={members}
+                    members={effectiveMembers}
                     onSelectOtherEquipment={(otherEq) => {
                       setSelectedOtherEquipmentUnique(otherEq);
                     }}
@@ -7783,6 +8112,7 @@ export default function PublicPortal({
                     stocks={stocks}
                     forceSmartphoneLayout={false}
                     isWebapp={true}
+                    hideTimer={isEditingFromRapportsPdf}
                     isMinimized={isReportOverlayMinimized}
                     onToggleMinimize={() => setIsReportOverlayMinimized((prev) => !prev)}
                     existingTours={tours}
@@ -7797,6 +8127,7 @@ export default function PublicPortal({
                     onCancel={() => {
                       setIsReportOverlayOpen(false);
                       setIsReportOverlayMinimized(false);
+                      setIsEditingFromRapportsPdf(false);
                       setReportToEdit(null);
                       setSelectedDefibId("");
                       setSelectedDefibData(null);
@@ -8404,6 +8735,7 @@ export default function PublicPortal({
 
                       setIsReportOverlayOpen(false);
                       setIsReportOverlayMinimized(false);
+                      setIsEditingFromRapportsPdf(false);
                       setReportToEdit(null);
                       setSelectedDefibId("");
                       setSelectedDefibData(null);
@@ -10278,7 +10610,7 @@ export default function PublicPortal({
                         <input
                           type="text"
                           readOnly
-                          value={authenticatedUser?.name || ""}
+                          value={resolvedLiveMember?.name || authenticatedUser?.name || ""}
                           className="w-full transition-all duration-150 focus:outline-none focus:ring-0 focus-visible:outline-none text-center"
                           style={{
                             backgroundColor: "#f5f7fa",
@@ -11051,6 +11383,7 @@ export default function PublicPortal({
                                               );
                                               setReportActiveTourId(t.id);
                                               setReportActivePassageNum(p.num);
+                                              setIsEditingFromRapportsPdf(false);
                                               setIsReportOverlayMinimized(false);
                                               setIsReportOverlayOpen(true);
                                             } else {
@@ -11087,6 +11420,7 @@ export default function PublicPortal({
                                                   missionId: p.id,
                                                   tourId: t.id,
                                                 });
+                                                setIsEditingFromRapportsPdf(false);
                                                 setIsReportOverlayMinimized(false);
                                                 setIsReportOverlayOpen(true);
                                               } else {
@@ -11787,6 +12121,7 @@ export default function PublicPortal({
                       setReportActiveTourId("");
                       setReportActivePassageNum(null);
                       setReportToEdit(null);
+                      setIsEditingFromRapportsPdf(false);
                       setIsReportOverlayMinimized(false);
                       setIsReportOverlayOpen(true);
                     }}
@@ -12115,7 +12450,10 @@ export default function PublicPortal({
                           </button>
 
                           {(() => {
-                            const isOwnReport = !!authenticatedUser?.name && (rep.techName || "").trim().toLowerCase() === (authenticatedUser.name || "").trim().toLowerCase();
+                            const repTechNameLower = (rep.techName || "").trim().toLowerCase();
+                            const isOwnReport =
+                              (!!authenticatedUser?.name && repTechNameLower === (authenticatedUser.name || "").trim().toLowerCase()) ||
+                              (!!resolvedLiveMember?.name && repTechNameLower === (resolvedLiveMember.name || "").trim().toLowerCase());
                             return (
                               <button
                                 type="button"
@@ -12126,6 +12464,9 @@ export default function PublicPortal({
                                     alert("Action impossible : un rapport d’intervention est déjà réduit en cours d’édition. Veuillez l’agrandir et le finaliser ou l’annuler avant d’ouvrir un autre rapport.");
                                     return;
                                   }
+                                  setIsEditingFromRapportsPdf(true);
+                                  setReportActiveTourId("");
+                                  setReportActivePassageNum(null);
                                   setReportToEdit(rep);
                                   const targetDefibId = rep.defibId || rep.defibSnapshot?.id || "";
                                   setSelectedDefibId(targetDefibId);
@@ -12220,14 +12561,22 @@ export default function PublicPortal({
                         .toLowerCase();
                       return st !== "termine" && st !== "terminee";
                     })}
-                    authenticatedUser={authenticatedUser}
+                    authenticatedUser={
+                      resolvedLiveMember
+                        ? {
+                            ...authenticatedUser,
+                            ...resolvedLiveMember,
+                            name: resolvedLiveMember.name || authenticatedUser?.name || "",
+                          }
+                        : authenticatedUser
+                    }
                     defibrillateurs={defibrillateurs}
                     otherEquipments={otherEquipments}
                     clients={clients}
                     variables={variables}
-                    members={members}
+                    members={effectiveMembers}
                     t={t}
-                    initialTech={authenticatedUser?.name || ""}
+                    initialTech={resolvedLiveMember?.name || authenticatedUser?.name || ""}
                     onConsultMission={handleConsultMissionFromPlanning}
                     onRefresh={handleRefreshCalendarFromPlanning}
                   />
@@ -12323,7 +12672,7 @@ export default function PublicPortal({
                   </label>
                   <input
                     type="text"
-                    value={techLocationLink || "Aucun emplacement spécifié"}
+                    value={resolvedTechLocationDisplayName || techLocationLink || "Aucun emplacement spécifié"}
                     disabled
                     style={{
                       color: "#000000",
@@ -12614,7 +12963,7 @@ export default function PublicPortal({
                         </label>
                         <input
                           type="text"
-                          value={techLocationLink || "Aucun emplacement spécifié"}
+                          value={resolvedTechLocationDisplayName || techLocationLink || "Aucun emplacement spécifié"}
                           disabled
                           style={{
                             color: "#000000",

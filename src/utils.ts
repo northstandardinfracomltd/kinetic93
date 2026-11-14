@@ -1088,7 +1088,24 @@ export const INITIAL_MEMBERS: Member[] = [
 
 export function getLocationCustomName(originalName: any, customMap?: Record<string, string>): string {
   if (!originalName || typeof originalName !== 'string') return typeof originalName === 'string' ? originalName : (originalName ? String(originalName) : '');
-  if (customMap && customMap[originalName]) return customMap[originalName];
+  const isLegacyFake = (val: any): boolean => {
+    if (typeof val !== 'string') return true;
+    const v = val.trim();
+    if (!v) return true;
+    if (/^Entrepôt (Principal|Secondaire)(\s*-\s*.*)?$/i.test(v)) return true;
+    if (/^(Véhicule|Dépôt)\s*-\s*.+$/i.test(v)) return true;
+    if (/^Véhicule d'intervention\s+[A-J]$/i.test(v)) return true;
+    return false;
+  };
+  if (customMap && typeof customMap === 'object') {
+    const directVal = customMap[originalName];
+    if (typeof directVal === 'string' && !isLegacyFake(directVal)) {
+      return directVal.trim();
+    }
+    if (originalName in customMap) {
+      return originalName;
+    }
+  }
   if (typeof window === 'undefined') return originalName;
   const tenantId = localStorage.getItem('defib_tenant_id') || 'demo';
   try {
@@ -1099,8 +1116,8 @@ export function getLocationCustomName(originalName: any, customMap?: Record<stri
       localStorage.getItem(`defib_${tenantId}_location_names`);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (parsed && typeof parsed === 'object' && parsed[originalName]) {
-        return parsed[originalName];
+      if (parsed && typeof parsed === 'object' && typeof parsed[originalName] === 'string' && !isLegacyFake(parsed[originalName])) {
+        return parsed[originalName].trim();
       }
     }
     const rawInfo =
@@ -1109,7 +1126,7 @@ export function getLocationCustomName(originalName: any, customMap?: Record<stri
       localStorage.getItem(`fs_cache_${tenantId}_company_info`);
     if (rawInfo) {
       const info = JSON.parse(rawInfo);
-      if (info?.customLocationNames && typeof info.customLocationNames[originalName] === 'string' && info.customLocationNames[originalName].trim() !== '') {
+      if (info?.customLocationNames && typeof info.customLocationNames[originalName] === 'string' && !isLegacyFake(info.customLocationNames[originalName])) {
         return info.customLocationNames[originalName].trim();
       }
     }

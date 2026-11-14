@@ -2257,7 +2257,22 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Couleur du texte des labels des champs', field: 'pdfLabelTextColor', aliases: ['couleurdutextedeslabelsdeschamps', 'couleurtextelabels', 'couleurlabels', 'couleurdeslabels', 'pdflabeltextcolor'] },
     { header: 'Masquer les champs concernant l’Électrode Adulte ou Mixte (A) de secours', field: 'pdfHideElectrodeSecoursA', aliases: ['masquerleschampsconcernantlelectrodeadulteoumixteadesecours', 'masquerelectrodeadultesecours', 'masquerelectrodeasecours', 'pdfhideelectrodesecoursa'], type: 'yesno' },
     { header: 'Masquer les champs concernant l’Électrode Pédiatrique (P) de secours', field: 'pdfHideElectrodeSecoursP', aliases: ['masquerleschampsconcernantlelectrodepediatriquepdesecours', 'masquerelectrodepediatriquesecours', 'masquerelectrodepsecours', 'pdfhideelectrodesecoursp'], type: 'yesno' },
-    { header: 'Masquer l’inventaire du Kit/Trousse de secours', field: 'pdfHideKitSecours', aliases: ['masquerlinventairedukittroussedesecours', 'masquerinventairekitsecours', 'masquerkitsecours', 'masquertroussedesecours', 'pdfhidekitsecours'], type: 'yesno' },
+    {
+      header: 'Masquer l’inventaire du Kit/Trousse de secours',
+      field: 'pdfHideKitSecours',
+      aliases: [
+        'masquerlinventairedukittroussedesecours',
+        'masquerlinventairedelatroussedesecours',
+        'masquerinventairedukittroussedesecours',
+        'masquerinventairedelatroussedesecours',
+        'masquerinventairekitsecours',
+        'masquerkitsecours',
+        'masquertroussedesecours',
+        'pdfhidekitsecours',
+        'kittroussedesecours',
+      ],
+      type: 'yesno',
+    },
     { header: 'Simplifier les champs du Coffret/Boîtier', field: 'pdfSimplifyCoffret', aliases: ['simplifierleschampsducoffretboitier', 'simplifiercoffretboitier', 'simplifiercoffret', 'pdfsimplifycoffret'], type: 'yesno' },
     { header: 'Masquer la section Vérifications techniques', field: 'pdfHideVerificationsTechniques', aliases: ['masquerlasectionverificationstechniques', 'masquerverificationstechniques', 'pdfhideverificationstechniques'], type: 'yesno' },
     { header: 'Masquer les horodatages de Début et Fin d’intervention à la section Diagnostic et Clôture', field: 'pdfHideHorodatagesDiagnostic', aliases: ['masquerleshorodatagesdedebutetfindinterventionalasectiondiagnosticetcloture', 'masquerhorodatagesdiagnostic', 'masquerhorodatages', 'pdfhidehorodatagesdiagnostic'], type: 'yesno' },
@@ -3444,6 +3459,20 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
         'infotechnicien',
         'informationsautechnicien',
       ],
+    },
+    {
+      header: 'Durée de la prestation. (Minutes)',
+      field: 'dureePrestation',
+      aliases: [
+        'dureedelaprestationminutes',
+        'dureedelaprestation',
+        'dureeprestationminutes',
+        'dureeprestation',
+        'dureeminutes',
+        'dureemin',
+        'duree',
+      ],
+      type: 'number',
     },
   ],
   historiqueNotifications: [
@@ -6330,6 +6359,13 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         merged[def.field] = '';
       }
     }
+    const rawKitSecours =
+      merged.pdfHideKitSecours ||
+      rawByHeader['Masquer l’inventaire du Kit/Trousse de secours'] ||
+      rawByHeader["Masquer l'inventaire du Kit/Trousse de secours"] ||
+      rawByHeader['Masquer l’inventaire du Kit/Trousse de secours.'] ||
+      rawByHeader["Masquer l'inventaire du Kit/Trousse de secours."] ||
+      '';
     merged.pdfHeaderImg = String(merged.pdfHeaderImg ?? '').trim();
     merged.pdfPageHeaderText = String(merged.pdfPageHeaderText ?? '').trim();
     merged.pdfPageFooterText = String(merged.pdfPageFooterText ?? '').trim();
@@ -6340,7 +6376,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.pdfLabelTextColor = String(merged.pdfLabelTextColor || '#9f71a2').trim();
     merged.pdfHideElectrodeSecoursA = normalizeYesNo(merged.pdfHideElectrodeSecoursA, 'Non');
     merged.pdfHideElectrodeSecoursP = normalizeYesNo(merged.pdfHideElectrodeSecoursP, 'Non');
-    merged.pdfHideKitSecours = normalizeYesNo(merged.pdfHideKitSecours, 'Non');
+    merged.pdfHideKitSecours = normalizeYesNo(rawKitSecours, 'Non');
     merged.pdfSimplifyCoffret = normalizeYesNo(merged.pdfSimplifyCoffret, 'Non');
     merged.pdfHideVerificationsTechniques = normalizeYesNo(merged.pdfHideVerificationsTechniques, 'Non');
     merged.pdfHideHorodatagesDiagnostic = normalizeYesNo(merged.pdfHideHorodatagesDiagnostic, 'Non');
@@ -6791,6 +6827,27 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         merged[field] = '';
       }
       merged.infosTechnicien = '';
+    }
+
+    if (merged.category === 'Modèle Raison Prestation') {
+      const rawDuree =
+        merged.dureePrestation ??
+        merged['Durée de la prestation. (Minutes)'] ??
+        merged['Durée de la prestation (Minutes)'] ??
+        merged['Durée de la prestation.'] ??
+        merged['Durée de la prestation'] ??
+        rawByHeader['Durée de la prestation. (Minutes)'] ??
+        rawByHeader['Durée de la prestation (Minutes)'] ??
+        rawByHeader['Durée de la prestation.'] ??
+        rawByHeader['Durée de la prestation'] ??
+        '';
+      const parsedDuree =
+        rawDuree !== undefined && rawDuree !== null && String(rawDuree).trim() !== ''
+          ? parseInt(String(rawDuree).replace(/[^\d-]/g, ''), 10)
+          : NaN;
+      merged.dureePrestation = Number.isFinite(parsedDuree) ? parsedDuree : undefined;
+    } else {
+      merged.dureePrestation = undefined;
     }
 
     if (!merged.id || String(merged.id).startsWith('sheet_gen_')) {
@@ -8436,10 +8493,22 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
         ? cleanTypeDefib
         : '';
     enriched.couleurHex = enriched.couleurHex ?? '';
+    const rawEnrichedDuree =
+      enriched.dureePrestation ??
+      enriched['Durée de la prestation. (Minutes)'] ??
+      enriched['Durée de la prestation (Minutes)'] ??
+      enriched['Durée de la prestation.'] ??
+      enriched['Durée de la prestation'] ??
+      '';
     enriched.dureePrestation =
-      enriched.dureePrestation !== undefined && enriched.dureePrestation !== null && String(enriched.dureePrestation).trim() !== ''
-        ? String(enriched.dureePrestation)
+      enriched.category === 'Modèle Raison Prestation' &&
+      rawEnrichedDuree !== undefined &&
+      rawEnrichedDuree !== null &&
+      String(rawEnrichedDuree).trim() !== '' &&
+      !isNaN(Number(rawEnrichedDuree))
+        ? String(Number(rawEnrichedDuree))
         : '';
+    enriched['Durée de la prestation. (Minutes)'] = enriched.dureePrestation;
     enriched.identifiant = enriched.identifiant ?? enriched.ugs ?? '';
     enriched.imageUrl = enriched.imageUrl ?? '';
     enriched.description = enriched.description ?? '';
@@ -8687,6 +8756,63 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.contactTelephone = String(enriched.contactTelephone ?? '').trim();
     enriched['Contact Téléphone.'] = enriched.contactTelephone;
     enriched['Contact Téléphone'] = enriched.contactTelephone;
+  } else if (tabType === 'apparenceRapportsPdf') {
+    enriched.pdfHeaderImg = String(enriched.pdfHeaderImg ?? '').trim();
+    enriched.pdfPageHeaderText = String(enriched.pdfPageHeaderText ?? '').trim();
+    enriched.pdfPageFooterText = String(enriched.pdfPageFooterText ?? '').trim();
+    enriched.pdfLastPageInfoText = String(enriched.pdfLastPageInfoText ?? '').trim();
+    enriched.pdfHeaderBgColor = String(enriched.pdfHeaderBgColor || '#7c2882').trim();
+    enriched.pdfCardBorderColor = String(enriched.pdfCardBorderColor || '#7d2882').trim();
+    enriched.pdfCardBgColor = String(enriched.pdfCardBgColor || '#fef2ff').trim();
+    enriched.pdfLabelTextColor = String(enriched.pdfLabelTextColor || '#9f71a2').trim();
+    enriched.pdfHideElectrodeSecoursA = normalizeYesNo(
+      enriched.pdfHideElectrodeSecoursA ??
+        enriched['Masquer les champs concernant l’Électrode Adulte ou Mixte (A) de secours'] ??
+        enriched["Masquer les champs concernant l'Électrode Adulte ou Mixte (A) de secours"],
+      'Non'
+    );
+    enriched.pdfHideElectrodeSecoursP = normalizeYesNo(
+      enriched.pdfHideElectrodeSecoursP ??
+        enriched['Masquer les champs concernant l’Électrode Pédiatrique (P) de secours'] ??
+        enriched["Masquer les champs concernant l'Électrode Pédiatrique (P) de secours"],
+      'Non'
+    );
+    enriched.pdfHideKitSecours = normalizeYesNo(
+      enriched.pdfHideKitSecours ??
+        enriched['Masquer l’inventaire du Kit/Trousse de secours'] ??
+        enriched["Masquer l'inventaire du Kit/Trousse de secours"] ??
+        enriched['Masquer l’inventaire du Kit/Trousse de secours.'] ??
+        enriched["Masquer l'inventaire du Kit/Trousse de secours."],
+      'Non'
+    );
+    enriched['Masquer l’inventaire du Kit/Trousse de secours'] = enriched.pdfHideKitSecours;
+    enriched["Masquer l'inventaire du Kit/Trousse de secours"] = enriched.pdfHideKitSecours;
+    enriched['Masquer l’inventaire du Kit/Trousse de secours.'] = enriched.pdfHideKitSecours;
+    enriched["Masquer l'inventaire du Kit/Trousse de secours."] = enriched.pdfHideKitSecours;
+    enriched.pdfSimplifyCoffret = normalizeYesNo(
+      enriched.pdfSimplifyCoffret ??
+        enriched['Simplifier les champs du Coffret/Boîtier'] ??
+        enriched['Simplifier les champs du Coffret/Boîtier.'],
+      'Non'
+    );
+    enriched.pdfHideVerificationsTechniques = normalizeYesNo(
+      enriched.pdfHideVerificationsTechniques ??
+        enriched['Masquer la section Vérifications techniques'] ??
+        enriched['Masquer la section Vérifications techniques.'],
+      'Non'
+    );
+    enriched.pdfHideHorodatagesDiagnostic = normalizeYesNo(
+      enriched.pdfHideHorodatagesDiagnostic ??
+        enriched['Masquer les horodatages de Début et Fin d’intervention à la section Diagnostic et Clôture'] ??
+        enriched["Masquer les horodatages de Début et Fin d'intervention à la section Diagnostic et Clôture"],
+      'Non'
+    );
+    enriched.pdfShowDemandeDevisDetails = normalizeYesNo(
+      enriched.pdfShowDemandeDevisDetails ??
+        enriched['Afficher les informations sur la demande de devis à la section Diagnostic et clôture'] ??
+        enriched['Afficher les informations sur la demande de devis à la section Diagnostic et clôture.'],
+      'Non'
+    );
   }
 
   // 1. Map via canonical definitions if tabType is known
@@ -9468,6 +9594,17 @@ export async function fetchTenantSheetCollection(
       return false;
     });
   };
+  const isStaleApparencePdfSnap = (snap: CachedSheetResult | null | undefined): boolean => {
+    if (!snap || tabType !== 'apparenceRapportsPdf' || !Array.isArray(snap.items)) return false;
+    if (
+      !Array.isArray(snap.headers) ||
+      snap.headers.length === 0 ||
+      !snap.headers.some(h => normalizeHeaderKey(h).includes('kittroussedesecours') || normalizeHeaderKey(h).includes('kitsecours'))
+    ) {
+      return true;
+    }
+    return false;
+  };
   if (!sheetMemoryCache.has(cacheKey)) {
     const diskSnap = loadDiskSnapshot(cacheKey);
     if (diskSnap && Array.isArray(diskSnap.items) && diskSnap.items.length > 0) {
@@ -9477,7 +9614,7 @@ export async function fetchTenantSheetCollection(
           !Array.isArray(diskSnap.headers) ||
           diskSnap.headers.length === 0 ||
           !diskSnap.headers.some(h => normalizeHeaderKey(h).includes('visibiliteduchamp')));
-      if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap) && !isStaleMissionsSnap(diskSnap) && !isStaleSuspiciousSnap(diskSnap) && !isStaleReglagesSnap(diskSnap) && !isStaleTempsSnap(diskSnap)) {
+      if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap) && !isStaleMissionsSnap(diskSnap) && !isStaleSuspiciousSnap(diskSnap) && !isStaleReglagesSnap(diskSnap) && !isStaleTempsSnap(diskSnap) && !isStaleApparencePdfSnap(diskSnap)) {
         if (tabType === 'defibrillateurs') {
           diskSnap.stats = computeSheetCollectionStats(diskSnap.items, 'defibrillateurs');
           saveDiskSnapshotAsync(cacheKey, diskSnap);
@@ -10714,7 +10851,8 @@ export async function upsertRecordsToTenantSheet(
       const variablesMissingNewHeaders =
         tabType === 'variables' &&
         (!headers.some(h => normalizeHeaderKey(h).includes('typedusagedelelectrode')) ||
-          !headers.some(h => normalizeHeaderKey(h).includes('visibiliteduchamp')));
+          !headers.some(h => normalizeHeaderKey(h).includes('visibiliteduchamp')) ||
+          !headers.some(h => normalizeHeaderKey(h).includes('dureedelaprestation')));
       const defibMissingNewHeaders =
         tabType === 'defibrillateurs' &&
         (!headers.some(h => normalizeHeaderKey(h).includes('typededefibrillateur') || normalizeHeaderKey(h).includes('typedefibrillateur')) ||
@@ -10725,7 +10863,10 @@ export async function upsertRecordsToTenantSheet(
       const rapportsPdfMissingNewHeaders =
         tabType === 'rapportsPdf' &&
         !headers.some(h => normalizeHeaderKey(h).includes('section11commentaireinterne'));
-      if ((!hasRemoteHeaders || clientMissingAutreContratHeaders || missionsMissingNewHeaders || variablesMissingNewHeaders || defibMissingNewHeaders || reglagesMissingNewHeaders || rapportsPdfMissingNewHeaders) && accessToken) {
+      const apparenceRapportsPdfMissingNewHeaders =
+        tabType === 'apparenceRapportsPdf' &&
+        !headers.some(h => normalizeHeaderKey(h).includes('kittroussedesecours') || normalizeHeaderKey(h).includes('kitsecours'));
+      if ((!hasRemoteHeaders || clientMissingAutreContratHeaders || missionsMissingNewHeaders || variablesMissingNewHeaders || defibMissingNewHeaders || reglagesMissingNewHeaders || rapportsPdfMissingNewHeaders || apparenceRapportsPdfMissingNewHeaders) && accessToken) {
         const lightCtx = await fetchLightweightSheetContextForColdUpsert(
           extracted.spreadsheetId,
           extracted.gid,

@@ -22,6 +22,7 @@ interface GmaoOtherEquipmentCorrectionFormProps {
   isMinimized?: boolean;
   onToggleMinimize?: () => void;
   isFromInterventionMission?: boolean;
+  hideTimer?: boolean;
 }
 
 const CODE39_PATTERNS: Record<string, string> = {
@@ -253,7 +254,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
   onSelectOtherEquipment,
   isMinimized,
   onToggleMinimize,
-  isFromInterventionMission = false
+  isFromInterventionMission = false,
+  hideTimer = false
 }: GmaoOtherEquipmentCorrectionFormProps) {
   const [internalMinimized, setInternalMinimized] = useState(false);
   const isReduced = isMinimized !== undefined ? isMinimized : internalMinimized;
@@ -739,7 +741,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
             id="btn-close-other-eq-modal"
             style={{
               ...rowActionButton18Style,
-              width: '33.3333%',
+              width: hideTimer ? '50%' : '33.3333%',
               borderRadius: '0px',
               padding: '14px 8px',
               backgroundColor: 'rgb(210, 45, 11)',
@@ -761,7 +763,7 @@ export default function GmaoOtherEquipmentCorrectionForm({
             }}
             id="btn-toggle-reduce-other-eq"
             style={{
-              width: '33.3333%',
+              width: hideTimer ? '50%' : '33.3333%',
               borderRadius: '0px',
               padding: '14px 8px',
               backgroundColor: 'rgb(15, 23, 42)',
@@ -781,27 +783,29 @@ export default function GmaoOtherEquipmentCorrectionForm({
             {isReduced ? "Agrandir" : "Réduire"}
           </button>
 
-          <div
-            style={{
-              width: '33.3333%',
-              borderRadius: '0px',
-              padding: '14px 8px',
-              backgroundColor: '#2e54ff',
-              color: '#ffffff',
-              fontSize: '18px',
-              fontWeight: 100,
-              border: 'none',
-              boxShadow: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: 0,
-              position: 'relative',
-            }}
-            className="font-sans select-none text-center"
-          >
-            {chronoText}
-          </div>
+          {!hideTimer && (
+            <div
+              style={{
+                width: '33.3333%',
+                borderRadius: '0px',
+                padding: '14px 8px',
+                backgroundColor: '#2e54ff',
+                color: '#ffffff',
+                fontSize: '18px',
+                fontWeight: 100,
+                border: 'none',
+                boxShadow: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: 0,
+                position: 'relative',
+              }}
+              className="font-sans select-none text-center"
+            >
+              {chronoText}
+            </div>
+          )}
         </div>
       )}
 

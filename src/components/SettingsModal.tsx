@@ -1253,20 +1253,31 @@ export default function SettingsModal({
         if (!row || typeof row !== 'object') continue;
         if (row.emplacement && row.intitule !== undefined) {
           const normLoc = normalizeLocKey(String(row.emplacement));
-          if (normLoc) {
+          if (normLoc && String(row.intitule).trim() !== '') {
             nextLocs[normLoc] = String(row.intitule).trim();
           }
         }
-        for (const [k, v] of Object.entries(row)) {
-          const normLoc = normalizeLocKey(k);
-          if (normLoc && v !== undefined && v !== null) {
-            nextLocs[normLoc] = String(v).trim();
+        const inspectObj = (obj: Record<string, any>) => {
+          for (const [k, v] of Object.entries(obj)) {
+            const normLoc = normalizeLocKey(k);
+            if (normLoc && v !== undefined && v !== null && String(v).trim() !== '') {
+              nextLocs[normLoc] = String(v).trim();
+            }
           }
+        };
+        if (row._rawSheetRow && typeof row._rawSheetRow === 'object') {
+          inspectObj(row._rawSheetRow);
         }
+        inspectObj(row);
       }
       setLocalLocationNames(nextLocs);
+      if (onUpdateLocationNames) {
+        onUpdateLocationNames(nextLocs);
+      }
       try {
-        localStorage.setItem(`defib_${activeTid}_custom_location_names`, JSON.stringify(nextLocs));
+        for (const k of [activeTid, activeTid.toUpperCase(), activeTid.toLowerCase()]) {
+          localStorage.setItem(`defib_${k}_custom_location_names`, JSON.stringify(nextLocs));
+        }
       } catch (_) {}
       setLocalCompany(prev => {
         const nextComp: CompanyInfo = {
@@ -1319,7 +1330,9 @@ export default function SettingsModal({
       { section: 'membres', tabType: 'membresEnvironnement', key: 'spreadsheetMembresEnvironnement', urlKey: 'spreadsheetMembresEnvironnementUrl', storageSuffix: 'spreadsheet_membres_environnement' },
     ];
 
-    const filtered = onlySection ? targetTabs.filter(t => t.section === onlySection) : targetTabs;
+    const filtered = onlySection
+      ? targetTabs.filter(t => t.section === onlySection || (onlySection === 'membres' && t.section === 'emplacements'))
+      : targetTabs;
 
     await Promise.all(
       filtered.map(async (t) => {
@@ -1433,13 +1446,16 @@ export default function SettingsModal({
       const ensuredMems = ensureTenantMembersClient(initialMems, activeTid);
       setLocalMembers(ensuredMems);
 
-      let cachedLocs: Record<string, string> | undefined = comp?.customLocationNames;
+      let cachedLocs: Record<string, string> | undefined = ensureTenantCustomLocationNames(comp?.customLocationNames, activeTid, ensuredMems);
       try {
-        const rawLocs = localStorage.getItem(`defib_${activeTid}_custom_location_names`);
+        const rawLocs =
+          localStorage.getItem(`defib_${activeTid}_custom_location_names`) ||
+          localStorage.getItem(`defib_${activeTid.toUpperCase()}_custom_location_names`) ||
+          localStorage.getItem(`defib_${activeTid.toLowerCase()}_custom_location_names`);
         if (rawLocs) {
           const parsedLocs = JSON.parse(rawLocs);
           if (parsedLocs && typeof parsedLocs === 'object') {
-            cachedLocs = parsedLocs;
+            cachedLocs = ensureTenantCustomLocationNames(parsedLocs, activeTid, ensuredMems);
           }
         }
       } catch (_) {}
@@ -1613,6 +1629,9 @@ export default function SettingsModal({
 
           if (validCompany && !resolvedHasEmplacementsSheet && validCompany.customLocationNames) {
             setLocalLocationNames(ensureTenantCustomLocationNames(validCompany.customLocationNames, activeTid, ensuredMems));
+          }
+          if (resolvedHasEmplacementsSheet) {
+            fetchSettingsCompartmentsFromSheets({ ...(validCompany || {}), ...extraEffFields }, 'emplacements');
           }
           if (validCompany && !resolvedHasComSheet && validCompany.communicationPortailClient !== undefined) {
             setCommunicationPortailClient(validCompany.communicationPortailClient);
@@ -3141,6 +3160,13 @@ export default function SettingsModal({
       enableDevisFactures: enableDevisFactures,
       communicationPortailClient: communicationPortailClient,
       disableHelpsAndTutorials: disableHelpsAndTutorials,
+      pdfHideElectrodeSecoursA: (localCompany.pdfHideElectrodeSecoursA as 'Oui' | 'Non') || 'Non',
+      pdfHideElectrodeSecoursP: (localCompany.pdfHideElectrodeSecoursP as 'Oui' | 'Non') || 'Non',
+      pdfHideKitSecours: (localCompany.pdfHideKitSecours as 'Oui' | 'Non') || 'Non',
+      pdfSimplifyCoffret: (localCompany.pdfSimplifyCoffret as 'Oui' | 'Non') || 'Non',
+      pdfHideVerificationsTechniques: (localCompany.pdfHideVerificationsTechniques as 'Oui' | 'Non') || 'Non',
+      pdfHideHorodatagesDiagnostic: (localCompany.pdfHideHorodatagesDiagnostic as 'Oui' | 'Non') || 'Non',
+      pdfShowDemandeDevisDetails: (localCompany.pdfShowDemandeDevisDetails as 'Oui' | 'Non') || 'Non',
       spreadsheetDefibrillateurs: saveDefibsUrl,
       spreadsheetAutresMateriels: saveAutresUrl,
       spreadsheetClients: saveClientsUrl,
@@ -3416,6 +3442,14 @@ export default function SettingsModal({
               spreadsheetUrl: sheetPdfUrl || undefined,
               record: {
                 ...companyToSave,
+                pdfHideElectrodeSecoursA: (companyToSave.pdfHideElectrodeSecoursA as 'Oui' | 'Non') || 'Non',
+                pdfHideElectrodeSecoursP: (companyToSave.pdfHideElectrodeSecoursP as 'Oui' | 'Non') || 'Non',
+                pdfHideKitSecours: (companyToSave.pdfHideKitSecours as 'Oui' | 'Non') || 'Non',
+                pdfSimplifyCoffret: (companyToSave.pdfSimplifyCoffret as 'Oui' | 'Non') || 'Non',
+                pdfHideVerificationsTechniques: (companyToSave.pdfHideVerificationsTechniques as 'Oui' | 'Non') || 'Non',
+                pdfHideHorodatagesDiagnostic: (companyToSave.pdfHideHorodatagesDiagnostic as 'Oui' | 'Non') || 'Non',
+                pdfShowDemandeDevisDetails: (companyToSave.pdfShowDemandeDevisDetails as 'Oui' | 'Non') || 'Non',
+                'Masquer l’inventaire du Kit/Trousse de secours': (companyToSave.pdfHideKitSecours as 'Oui' | 'Non') || 'Non',
                 id: 'tenant_pdf_template',
               },
             }),
@@ -4599,11 +4633,18 @@ export default function SettingsModal({
                     >
                       <option value="">{t("Sélect. un emplacement")}</option>
                       {(['Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'] as const)
-                        .filter(loc => !localMembers.some(mem => mem.role === 'Technicien' && mem.locationLink === loc))
+                        .filter(loc => {
+                          const customLocTitle = getLocationCustomName(loc, localLocationNames);
+                          return !localMembers.some(mem => {
+                            if (mem.role !== 'Technicien' || !mem.locationLink) return false;
+                            const memLoc = String(mem.locationLink).trim().toLowerCase();
+                            return memLoc === loc.toLowerCase() || (customLocTitle && memLoc === customLocTitle.toLowerCase());
+                          });
+                        })
                         .map(loc => {
                           return (
                             <option key={loc} value={loc}>
-                              {t(getLocationCustomName(loc))}
+                              {t(getLocationCustomName(loc, localLocationNames))}
                             </option>
                           );
                         })}
@@ -4842,7 +4883,18 @@ export default function SettingsModal({
                                   {t("Emplacement attribué *")}
                                 </span>
                                 <select
-                                  value={m.locationLink || ''}
+                                  value={(() => {
+                                    const rawLoc = String(m.locationLink || '').trim();
+                                    if (!rawLoc) return '';
+                                    const ALL_LOCS = ['Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'] as const;
+                                    const directMatch = ALL_LOCS.find(l => l.toLowerCase() === rawLoc.toLowerCase());
+                                    if (directMatch) return directMatch;
+                                    const customMatch = ALL_LOCS.find(l => {
+                                      const cName = getLocationCustomName(l, localLocationNames);
+                                      return cName && cName.toLowerCase() === rawLoc.toLowerCase();
+                                    });
+                                    return customMatch || rawLoc;
+                                  })()}
                                   disabled={!canEditThisMember}
                                   onChange={(e) => handleLocationChange(idx, e.target.value)}
                                   className="w-full font-sans text-xs bg-white text-black cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
@@ -4851,16 +4903,22 @@ export default function SettingsModal({
                                   <option value="">{t("Sélect. un emplacement")}</option>
                                   {(['Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E', 'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J', 'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E', 'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'] as const)
                                     .filter(loc => {
-                                      if (loc === m.locationLink) return true;
-                                      const isTakenByOther = localMembers.some(
-                                        (mem, otherIdx) => otherIdx !== idx && mem.role === 'Technicien' && mem.locationLink === loc
-                                      );
+                                      const customLocTitle = getLocationCustomName(loc, localLocationNames);
+                                      const curLoc = String(m.locationLink || '').trim().toLowerCase();
+                                      if (curLoc && (curLoc === loc.toLowerCase() || (customLocTitle && curLoc === customLocTitle.toLowerCase()))) {
+                                        return true;
+                                      }
+                                      const isTakenByOther = localMembers.some((mem, otherIdx) => {
+                                        if (otherIdx === idx || mem.role !== 'Technicien' || !mem.locationLink) return false;
+                                        const otherLoc = String(mem.locationLink).trim().toLowerCase();
+                                        return otherLoc === loc.toLowerCase() || (customLocTitle && otherLoc === customLocTitle.toLowerCase());
+                                      });
                                       return !isTakenByOther;
                                     })
                                     .map(loc => {
                                       return (
                                         <option key={loc} value={loc}>
-                                          {t(getLocationCustomName(loc))}
+                                          {t(getLocationCustomName(loc, localLocationNames))}
                                         </option>
                                       );
                                     })}

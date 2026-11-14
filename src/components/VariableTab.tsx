@@ -554,7 +554,17 @@ export default function VariableTab({
     setDescription(v.description || rawV['Commentaire sur la variable.'] || rawV['Commentaire sur la variable'] || '');
     setImageUrl(v.imageUrl || rawV['Image URL'] || rawV['Image URL.'] || '');
     setCouleurHex(v.couleurHex || '');
-    setDureePrestation(v.dureePrestation !== undefined && v.dureePrestation !== null && String(v.dureePrestation) !== '' ? String(v.dureePrestation) : '');
+    const rawDureeVal =
+      v.dureePrestation !== undefined && v.dureePrestation !== null && String(v.dureePrestation).trim() !== ''
+        ? v.dureePrestation
+        : rawV['Durée de la prestation. (Minutes)'] ??
+          rawV['Durée de la prestation (Minutes)'] ??
+          rawV['Durée de la prestation.'] ??
+          rawV['Durée de la prestation'] ??
+          rawV._rawSheetRow?.['Durée de la prestation. (Minutes)'] ??
+          rawV._rawSheetRow?.['Durée de la prestation (Minutes)'] ??
+          '';
+    setDureePrestation(rawDureeVal !== undefined && rawDureeVal !== null && String(rawDureeVal).trim() !== '' ? String(rawDureeVal).trim() : '');
     setIdentifiant(v.identifiant || rawV['Identifiant.'] || rawV['Identifiant'] || '');
     const rawTypeDefib = String(
       v.typeDefibrillateur ||

@@ -74,7 +74,7 @@ import ImportExportTab from './components/ImportExportTab';
 import { SearchSidePane, SearchSidePaneItem } from './components/SearchSidePane';
 import { CanalMessagesSidePane } from './components/CanalMessagesSidePane';
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from './utils/fsmOptimizer';
-import { loadCttGlobalRules, checkTourCttViolations } from './utils/cttRules';
+import { loadCttGlobalRules, checkTourCttViolations, computeTourSuggestedAlerts } from './utils/cttRules';
 import { CttGlobalRules, DEFAULT_CTT_GLOBAL_RULES } from './types';
 import SatisfactionFormPage from './components/SatisfactionFormPage';
 import MissionValidationPage from './components/MissionValidationPage';
@@ -416,6 +416,7 @@ export default function App() {
   const [minEnvLoading, setMinEnvLoading] = useState<boolean>(true);
   const [envReloadTrigger, setEnvReloadTrigger] = useState<number>(0);
   const [avisageConfirmTour, setAvisageConfirmTour] = useState<any | null>(null);
+  const [fsmMissionToConfirmDelete, setFsmMissionToConfirmDelete] = useState<{ tourId: string; missionId: string } | null>(null);
   const [windowWidth, setWindowWidth] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth;
@@ -1526,6 +1527,7 @@ export default function App() {
   // FSM Stats & Tech Skills hidden state (always hidden initially when opening the tab or refreshing)
   const [isFsmStatsHidden, setIsFsmStatsHidden] = useState<boolean>(true);
   const [isFsmTechSkillsHidden, setIsFsmTechSkillsHidden] = useState<boolean>(true);
+  const [visibleTourAlerts, setVisibleTourAlerts] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (activeTab === 'fsm') {
@@ -2724,7 +2726,7 @@ export default function App() {
   }, []);
   const getMessageSignature = useCallback((m: any, idx?: number) => {
     if (!m) return '';
-    return `${String(m.id || m._sheetRowNumber || idx || '').trim()}::${String(m.authorEmail || m.authorName || '').trim().toLowerCase()}::${String(m.dateStr || '').trim()}::${String(m.content || '').trim()}`;
+    return `${String(m.id || m._sheetRowNumber || (idx !== undefined ? idx : '') || '').trim()}::${String(m.authorEmail || m.authorName || '').trim().toLowerCase()}::${String(m.dateStr || '').trim()}::${String(m.content || '').trim()}`;
   }, []);
 
   const tenantMessagesRef = useRef<TenantMessage[]>(tenantMessages);
@@ -2767,7 +2769,7 @@ export default function App() {
     const now = Date.now();
     setLastSeenMessageTime((prevTime) => (now - prevTime > 1000 ? now : prevTime));
     const list = Array.isArray(msgsToMark) ? msgsToMark : (Array.isArray(tenantMessagesRef.current) ? tenantMessagesRef.current : []);
-    const currentSigs = list.map((m, idx) => getMessageSignature(m, idx)).filter(Boolean);
+    const currentSigs = list.map((m) => getMessageSignature(m)).filter(Boolean);
     setSeenMessageSignatures((prev) => {
       const prevArr = Array.isArray(prev) ? prev : [];
       const prevSet = new Set(prevArr);
@@ -2784,24 +2786,20 @@ export default function App() {
     });
   }, [tenantId, getMessageSignature]);
 
-  // Seed seen signatures on first load if user had already seen messages previously, and auto-mark read while on messagerie tab
+  // Seed seen signatures on first load if user had already seen messages previously
   useEffect(() => {
     if (!Array.isArray(tenantMessages)) return;
-    if (activeTab === 'messagerie' || isCanalMessagesOpen) {
-      handleMessagesRead(tenantMessages);
-      return;
-    }
     if (seenMessageSignatures === null && tenantMessages.length > 0 && lastSeenMessageTime > 0) {
       const initialSigs = tenantMessages
         .filter((m) => !m?.createdAt || m.createdAt <= lastSeenMessageTime)
-        .map((m, idx) => getMessageSignature(m, idx))
+        .map((m) => getMessageSignature(m))
         .filter(Boolean);
       setSeenMessageSignatures(initialSigs);
       try {
         localStorage.setItem(`defib_${tenantId}_messages_seen_signatures`, JSON.stringify(initialSigs));
       } catch (_) {}
     }
-  }, [tenantMessages, activeTab, isCanalMessagesOpen, tenantId, getMessageSignature, handleMessagesRead]);
+  }, [tenantMessages, seenMessageSignatures, lastSeenMessageTime, tenantId, getMessageSignature]);
 
   const unreadMessagesCount = useMemo(() => {
     if (isCanalMessagesOpen || activeTab === 'messagerie') return 0;
@@ -4888,19 +4886,34 @@ export default function App() {
               if (!row || typeof row !== 'object') continue;
               if (row.emplacement && row.intitule !== undefined) {
                 const normLoc = normalizeLocKey(String(row.emplacement));
-                if (normLoc) {
+                if (normLoc && String(row.intitule).trim() !== '') {
                   nextLocs[normLoc] = String(row.intitule).trim();
                 }
               }
-              for (const [k, v] of Object.entries(row)) {
-                const normLoc = normalizeLocKey(k);
-                if (normLoc && v !== undefined && v !== null) {
-                  nextLocs[normLoc] = String(v).trim();
+              const inspectObj = (obj: Record<string, any>) => {
+                for (const [k, v] of Object.entries(obj)) {
+                  const normLoc = normalizeLocKey(k);
+                  if (normLoc && v !== undefined && v !== null && String(v).trim() !== '') {
+                    nextLocs[normLoc] = String(v).trim();
+                  }
                 }
+              };
+              if (row._rawSheetRow && typeof row._rawSheetRow === 'object') {
+                inspectObj(row._rawSheetRow);
               }
+              inspectObj(row);
             }
             setLocationNames(nextLocs);
-            safeSetLocalStorage(`defib_${activeTid}_custom_location_names`, JSON.stringify(nextLocs));
+            for (const k of [activeTid, activeTid.toUpperCase(), activeTid.toLowerCase()]) {
+              safeSetLocalStorage(`defib_${k}_custom_location_names`, JSON.stringify(nextLocs));
+            }
+            setCompanyInfo(prev => {
+              if (!prev) return prev;
+              if (JSON.stringify(prev.customLocationNames || {}) === JSON.stringify(nextLocs)) return prev;
+              const updated = { ...prev, customLocationNames: nextLocs };
+              safeSetLocalStorage(`defib_${activeTid}_company_info`, JSON.stringify(updated));
+              return updated;
+            });
             break;
           }
           case 'membresEnvironnement': {
@@ -10454,13 +10467,13 @@ export default function App() {
                 pdfPageHeaderText: prev?.pdfPageHeaderText ?? data.pdfPageHeaderText,
                 pdfPageFooterText: prev?.pdfPageFooterText ?? data.pdfPageFooterText,
                 pdfLastPageInfoText: prev?.pdfLastPageInfoText ?? data.pdfLastPageInfoText,
-                pdfHideElectrodeSecoursA: prev?.pdfHideElectrodeSecoursA ?? data.pdfHideElectrodeSecoursA,
-                pdfHideElectrodeSecoursP: prev?.pdfHideElectrodeSecoursP ?? data.pdfHideElectrodeSecoursP,
-                pdfHideKitSecours: prev?.pdfHideKitSecours ?? data.pdfHideKitSecours,
-                pdfSimplifyCoffret: prev?.pdfSimplifyCoffret ?? data.pdfSimplifyCoffret,
-                pdfHideVerificationsTechniques: prev?.pdfHideVerificationsTechniques ?? data.pdfHideVerificationsTechniques,
-                pdfHideHorodatagesDiagnostic: prev?.pdfHideHorodatagesDiagnostic ?? data.pdfHideHorodatagesDiagnostic,
-                pdfShowDemandeDevisDetails: prev?.pdfShowDemandeDevisDetails ?? data.pdfShowDemandeDevisDetails,
+                pdfHideElectrodeSecoursA: prev?.pdfHideElectrodeSecoursA || data.pdfHideElectrodeSecoursA || 'Non',
+                pdfHideElectrodeSecoursP: prev?.pdfHideElectrodeSecoursP || data.pdfHideElectrodeSecoursP || 'Non',
+                pdfHideKitSecours: prev?.pdfHideKitSecours || data.pdfHideKitSecours || 'Non',
+                pdfSimplifyCoffret: prev?.pdfSimplifyCoffret || data.pdfSimplifyCoffret || 'Non',
+                pdfHideVerificationsTechniques: prev?.pdfHideVerificationsTechniques || data.pdfHideVerificationsTechniques || 'Non',
+                pdfHideHorodatagesDiagnostic: prev?.pdfHideHorodatagesDiagnostic || data.pdfHideHorodatagesDiagnostic || 'Non',
+                pdfShowDemandeDevisDetails: prev?.pdfShowDemandeDevisDetails || data.pdfShowDemandeDevisDetails || 'Non',
                 spreadsheetDefibrillateurs:
                   [
                     data.spreadsheetDefibrillateurs,
@@ -13800,7 +13813,6 @@ export default function App() {
                   setIsCanalMessagesOpen(false);
                   setIsSidebarMoreOpen(false);
                   setActiveTab('messagerie');
-                  handleMessagesRead();
                 },
               },
               {
@@ -18497,7 +18509,7 @@ export default function App() {
                                                 type="button"
                                                 onClick={() => {
                                                   triggerFsmPillWave(`del-mission-atrier-${m.id}`);
-                                                  deleteFsmMission(t.id, m.id);
+                                                  setFsmMissionToConfirmDelete({ tourId: t.id, missionId: m.id });
                                                 }}
                                                 style={{
                                                   color: '#fff',
@@ -18608,6 +18620,9 @@ export default function App() {
                       };
                       const planifPillTheme = getTourProgressPillTheme(planifL1Percent);
                       const compPillTheme = getTourProgressPillTheme(compL1Percent);
+                      const tourSuggestedAlerts = computeTourSuggestedAlerts(t, draft, members, cttGlobalRules, variables, fsmTours);
+                      const hasTourSuggestedAlerts = tourSuggestedAlerts.length > 0;
+                      const isTourAlertsOpen = !!visibleTourAlerts[t.id] && hasTourSuggestedAlerts;
 
                       return (
                         <div
@@ -18666,6 +18681,40 @@ export default function App() {
                               >
                                 {compL1Percent}% Effectuée(s)
                               </div>
+
+                              {/* Voir Alerte(s) button */}
+                              <button
+                                type="button"
+                                disabled={!hasTourSuggestedAlerts}
+                                onClick={() => {
+                                  if (!hasTourSuggestedAlerts) return;
+                                  triggerFsmPillWave(`alerts-tour-${t.id}`);
+                                  setVisibleTourAlerts(prev => ({
+                                    ...prev,
+                                    [t.id]: !prev[t.id]
+                                  }));
+                                }}
+                                style={{
+                                  ...rowActionButtonStyle,
+                                  position: 'relative',
+                                  overflow: 'hidden',
+                                  padding: '12px 20px',
+                                  maxHeight: '45px',
+                                  borderRadius: '13px',
+                                  fontSize: '18px',
+                                  fontWeight: '100',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: 'auto',
+                                  whiteSpace: 'nowrap',
+                                  opacity: hasTourSuggestedAlerts ? 1 : 0.4,
+                                  cursor: hasTourSuggestedAlerts ? 'pointer' : 'not-allowed'
+                                }}
+                                className={`relative overflow-hidden ${hasTourSuggestedAlerts ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} shrink-0 ${hasTourSuggestedAlerts && fsmClickedPill?.id === `alerts-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                              >
+                                {isTourAlertsOpen ? 'Masquer Alerte(s)' : 'Voir Alerte(s)'}
+                              </button>
 
                               {/* Supprimer button */}
                               {(() => {
@@ -19342,6 +19391,29 @@ export default function App() {
                               );
                             })()}
 
+                            {/* Alertes suggérées : */}
+                            {isTourAlertsOpen && (
+                              <div
+                                style={{
+                                  color: 'rgb(210 45 11)',
+                                  backgroundColor: 'rgb(255 230 225)',
+                                  fontSize: '16px',
+                                  border: 'none',
+                                  cursor: 'default'
+                                }}
+                                className="font-semibold px-4 py-3 rounded-xl flex flex-col gap-1 mx-0.5"
+                              >
+                                <span style={{ color: 'rgb(210 45 11)', fontSize: '16px' }}>
+                                  Alertes suggérées :
+                                </span>
+                                {tourSuggestedAlerts.map((alertText, alertIdx) => (
+                                  <span key={alertIdx} style={{ color: 'rgb(210 45 11)', fontSize: '16px' }}>
+                                    • {alertText}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
                             {/* Pause banner if tour is paused */}
                             {(() => {
                               if (!tourTechName || tourTechName === 'Aucun' || tourTechName.trim() === '') {
@@ -19385,32 +19457,6 @@ export default function App() {
                               );
                             })()}
                           </div>
-
-                          {/* Persistent CTT violation alert inside tour card */}
-                          {(() => {
-                            const tourViolations = checkTourCttViolations(t, cttGlobalRules, variables, fsmTours);
-                            if (tourViolations.length === 0) return null;
-                            return (
-                              <div 
-                                className="mx-5 my-3 p-4 rounded-xl border border-red-300 bg-red-50 text-red-950 space-y-2 font-sans animate-fadeIn shadow-xs"
-                                style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                                id={`tour-ctt-violations-${t.id}`}
-                              >
-                                <div className="flex items-center gap-2 font-bold text-red-800 text-[16px]">
-                                  <span className="text-xl">⚠️</span>
-                                  <span>{translate("Alerte de conformité CTT (Garde-fous temps de travail & repos)")}</span>
-                                </div>
-                                <div className="space-y-1.5 pl-7">
-                                  {tourViolations.map((v, vIdx) => (
-                                    <div key={vIdx} className="text-sm">
-                                      <p className="text-red-950 font-bold text-[15px]">{v.message}</p>
-                                      {v.details && <p className="text-red-800 text-xs font-normal mt-0.5">{v.details}</p>}
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            );
-                          })()}
 
                           {/* TOUR MISSIONS LIST */}
                           <div className="p-4 space-y-4">
@@ -21315,7 +21361,7 @@ export default function App() {
                                         type="button"
                                         onClick={() => {
                                           triggerFsmPillWave(`del-mission-tour-${m.id}`);
-                                          deleteFsmMission(t.id, m.id);
+                                          setFsmMissionToConfirmDelete({ tourId: t.id, missionId: m.id });
                                         }}
                                         style={{
                                           color: '#fff',
@@ -27035,6 +27081,78 @@ export default function App() {
                 }}
               >
                 Envoyer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmation Suppression Mission */}
+      {fsmMissionToConfirmDelete && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn"
+          onClick={() => setFsmMissionToConfirmDelete(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="p-6 w-full flex flex-col gap-4 text-left"
+            style={{
+              background: '#f5f7fa',
+              backgroundColor: '#f5f7fa',
+              borderRadius: '13px',
+              boxShadow: 'none',
+              textAlign: 'left',
+              maxWidth: '340px',
+            }}
+          >
+            <p
+              className="leading-relaxed"
+              style={{
+                color: '#000',
+                fontSize: '16px',
+                cursor: 'default',
+              }}
+            >
+              Souhaitez-vous vraiment supprimer la mission pour ce matériel ?
+            </p>
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setFsmMissionToConfirmDelete(null)}
+                className="flex-1 font-semibold cursor-pointer outline-none transition-none"
+                style={{
+                  padding: '9px 22px',
+                  color: '#fff',
+                  boxShadow: 'none',
+                  fontSize: '18px',
+                  background: '#2e54ff',
+                  backgroundColor: '#2e54ff',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const { tourId, missionId } = fsmMissionToConfirmDelete;
+                  setFsmMissionToConfirmDelete(null);
+                  deleteFsmMission(tourId, missionId);
+                }}
+                className="flex-1 font-semibold cursor-pointer outline-none transition-none"
+                style={{
+                  padding: '9px 22px',
+                  color: '#fff',
+                  fontSize: '18px',
+                  boxShadow: 'none',
+                  background: 'rgb(210, 45, 11)',
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
+              >
+                Supprimer
               </button>
             </div>
           </div>

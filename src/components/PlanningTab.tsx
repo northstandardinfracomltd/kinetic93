@@ -497,12 +497,18 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   });
 
   useEffect(() => {
-    // Only synchronize initialTech if user has not manually chosen a technician in the dropdown
+    // Only synchronize initialTech / authenticatedUser if user has not manually chosen a technician in the dropdown
     if (!userManuallySelectedRef.current) {
-      if (initialTech && initialTech.trim() !== '') {
-        const matching = techniciansList.find(m => normalizeName(m.name) === normalizeName(initialTech));
+      const authEmail = (authenticatedUser?.email || '').trim().toLowerCase();
+      const authName = (initialTech || authenticatedUser?.name || '').trim();
+      if (authName !== '' || authEmail !== '') {
+        const matching =
+          (authName ? techniciansList.find(m => normalizeName(m.name) === normalizeName(authName)) : undefined) ||
+          (authEmail ? techniciansList.find(m => (m.email || '').trim().toLowerCase() === authEmail) : undefined);
         if (matching) {
           setSelectedTech(matching.name);
+        } else if (authName && techniciansList.length === 0) {
+          setSelectedTech(authName);
         } else {
           setSelectedTech('');
         }
@@ -510,7 +516,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
         setSelectedTech('');
       }
     }
-  }, [initialTech, techniciansList]);
+  }, [initialTech, authenticatedUser, techniciansList]);
 
   // Active member object strictly for selected technician
   const isTechSelected = Boolean(selectedTech && selectedTech.trim() !== '' && selectedTech !== 'Tous' && selectedTech !== 'Sélectionner un technicien');
@@ -1709,7 +1715,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           style={{
                             border: "none",
                             borderRadius: "14px",
-                            background: "#cffff0",
+                            background: "rgb(255 209 207)",
                           }}
                         >
                           <div className="flex flex-wrap items-center gap-2">
@@ -1717,15 +1723,15 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                               className="px-3.5 py-1.5 rounded-full font-medium"
                               style={{
                                 fontSize: "18px",
-                                background: "#65aa95",
-                                color: "#cffff0",
+                                background: "rgb(157 87 87)",
+                                color: "rgb(255 209 207)",
                               }}
                             >
                               Indisponible
                             </span>
                           </div>
                           {abs.commentaire && (
-                            <div style={{ color: "rgb(25 100 77)", fontSize: "18px" }}>
+                            <div style={{ color: "rgb(158 86 87)", fontSize: "18px" }}>
                               Commentaire: {abs.commentaire}
                             </div>
                           )}

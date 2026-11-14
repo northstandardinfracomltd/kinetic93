@@ -41,6 +41,7 @@ interface GmaoCorrectionFormProps {
   isWebapp?: boolean;
   isMainSoftware?: boolean;
   hideReduceAndTimer?: boolean;
+  hideTimer?: boolean;
   isMinimized?: boolean;
   onToggleMinimize?: () => void;
   existingTours?: any[];
@@ -370,6 +371,7 @@ export default function GmaoCorrectionForm({
   isWebapp = false,
   isMainSoftware = false,
   hideReduceAndTimer = false,
+  hideTimer = false,
   isMinimized,
   onToggleMinimize,
   existingTours,
@@ -377,6 +379,7 @@ export default function GmaoCorrectionForm({
   tenantId
 }: GmaoCorrectionFormProps) {
   const shouldShowChronoAndReduce = isWebapp && !isMainSoftware && !hideReduceAndTimer;
+  const shouldShowChrono = shouldShowChronoAndReduce && !hideTimer;
   const effectiveIsFromInterventionMission = Boolean(isFromInterventionMission || report?.missionId || report?.tourId);
   const [internalMinimized, setInternalMinimized] = useState(false);
   const isReduced = isMinimized !== undefined ? isMinimized : internalMinimized;
@@ -3197,7 +3200,7 @@ export default function GmaoCorrectionForm({
           id="btn-close-gmao-modal"
           style={{
             ...rowActionButton18Style,
-            width: shouldShowChronoAndReduce ? '33.3333%' : '100%',
+            width: shouldShowChronoAndReduce ? (shouldShowChrono ? '33.3333%' : '50%') : '100%',
             borderRadius: '0px',
             padding: '14px 8px',
             backgroundColor: 'rgb(210, 45, 11)',
@@ -3221,7 +3224,7 @@ export default function GmaoCorrectionForm({
             }}
             id="btn-toggle-reduce-gmao"
             style={{
-              width: '33.3333%',
+              width: shouldShowChrono ? '33.3333%' : '50%',
               borderRadius: '0px',
               padding: '14px 8px',
               backgroundColor: 'rgb(15, 23, 42)',
@@ -3243,7 +3246,7 @@ export default function GmaoCorrectionForm({
         )}
 
         {/* Chrono */}
-        {shouldShowChronoAndReduce && (
+        {shouldShowChrono && (
           <div
             style={{
               width: '33.3333%',

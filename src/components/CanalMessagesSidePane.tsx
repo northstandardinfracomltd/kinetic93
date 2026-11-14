@@ -44,11 +44,16 @@ interface CanalMessagesSidePaneProps {
   currentUser: { email: string; name: string };
   messages: TenantMessage[];
   setMessages: React.Dispatch<React.SetStateAction<TenantMessage[]>>;
-  onMessagesRead?: () => void;
+  onMessagesRead?: (msgsToMark?: TenantMessage[]) => void;
   embedded?: boolean;
   companyInfo?: CompanyInfo;
   members?: Member[];
   extraBottomSpacing?: number;
+}
+
+export function getCanalMessageSignature(m: any): string {
+  if (!m) return '';
+  return `${String(m.id || m._sheetRowNumber || '').trim()}::${String(m.authorEmail || m.authorName || '').trim().toLowerCase()}::${String(m.dateStr || '').trim()}::${String(m.content || '').trim()}`;
 }
 
 export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
@@ -70,6 +75,25 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   const [messageInput, setMessageInput] = useState('');
   const [activeChannel, setActiveChannel] = useState<MessageChannel>('Général');
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; messageId: string } | null>(null);
+  const [seenSignatures, setSeenSignatures] = useState<string[] | null>(() => {
+    try {
+      const tid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      const raw = localStorage.getItem(`defib_${tid}_messages_seen_signatures`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    if (!tenantId) return;
+    try {
+      const raw = localStorage.getItem(`defib_${tenantId}_messages_seen_signatures`);
+      setSeenSignatures(raw ? JSON.parse(raw) : null);
+    } catch {
+      setSeenSignatures(null);
+    }
+  }, [tenantId]);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -229,10 +253,9 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     };
   }, [isOpen, contextMenu, onClose, embedded]);
 
-  // Mark messages as read when opening
+  // Focus and scroll when opening
   useEffect(() => {
     if (isOpen) {
-      if (onMessagesRead) onMessagesRead();
       setTimeout(() => {
         scrollToBottom(false);
         textareaRef.current?.focus();
@@ -315,6 +338,13 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             setMessages(parsed);
           }
         } catch (_) {}
+      } else if (e.key === `defib_${tenantId}_messages_seen_signatures` && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && isMounted) {
+            setSeenSignatures(parsed);
+          }
+        } catch (_) {}
       }
     };
     const handleVisibilityOrFocus = () => {
@@ -347,6 +377,51 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       ),
     [messages, activeChannel]
   );
+
+  // Mark messages in the currently active channel as seen when viewing that channel
+  useEffect(() => {
+    if (!isOpen || !tenantId) return;
+    const channelSigs = displayedMessages.map((m) => getCanalMessageSignature(m)).filter(Boolean);
+    setSeenSignatures((prev) => {
+      // If seenSignatures was never initialized in localStorage, seed with activeChannel messages
+      const baseArr = Array.isArray(prev) ? prev : [];
+      const prevSet = new Set(baseArr);
+      const hasNew = prev === null || channelSigs.some((s) => !prevSet.has(s));
+      if (!hasNew) return prev;
+      const merged = Array.from(new Set([...baseArr, ...channelSigs]));
+      try {
+        localStorage.setItem(`defib_${tenantId}_messages_seen_signatures`, JSON.stringify(merged));
+        localStorage.setItem(`defib_${tenantId}_messages_last_seen`, String(Date.now()));
+      } catch (_) {}
+      return merged;
+    });
+    if (onMessagesRead && displayedMessages.length > 0) {
+      onMessagesRead(displayedMessages);
+    }
+  }, [isOpen, tenantId, activeChannel, displayedMessages, onMessagesRead]);
+
+  // Compute unread message count per channel
+  const unreadCountByChannel = useMemo(() => {
+    const counts: Record<MessageChannel, number> = {
+      Général: 0,
+      Exploitation: 0,
+      Ventes: 0,
+      Logistique: 0,
+      Techniciens: 0,
+    };
+    if (!Array.isArray(messages) || messages.length === 0) return counts;
+    const seenSet = new Set(Array.isArray(seenSignatures) ? seenSignatures : []);
+    messages.forEach((m) => {
+      if (!m) return;
+      const ch = normalizeMessageChannel(m.tag || (m as any).channel || (m as any)['Canal.'] || (m as any)['Canal']);
+      if (isOpen && ch === activeChannel) return;
+      const sig = getCanalMessageSignature(m);
+      if (sig && !seenSet.has(sig)) {
+        counts[ch] = (counts[ch] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [messages, seenSignatures, activeChannel, isOpen]);
 
   // Scroll to bottom when new messages arrive or channel changes
   useEffect(() => {
@@ -662,12 +737,13 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           />
           {MESSAGE_CHANNELS.map((canal) => {
             const isSelected = activeChannel === canal;
+            const unreadCount = unreadCountByChannel[canal] || 0;
             return (
               <button
                 key={canal}
                 type="button"
                 onClick={() => setActiveChannel(canal)}
-                className={`relative z-10 w-full py-2 px-1 sm:px-2 rounded-xl text-center truncate transition-colors duration-200 cursor-pointer ${
+                className={`relative z-10 w-full py-2 px-1 sm:px-2 rounded-xl inline-flex items-center justify-center gap-1.5 text-center truncate transition-colors duration-200 cursor-pointer ${
                   isSelected ? 'font-bold text-white' : 'font-normal text-black hover:opacity-75'
                 }`}
                 style={{
@@ -680,7 +756,23 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 }}
                 title={t(canal)}
               >
-                {t(canal)}
+                <span className="truncate">{t(canal)}</span>
+                {unreadCount > 0 && (
+                  <span
+                    className="inline-flex items-center justify-center rounded-full font-bold shrink-0 leading-none select-none"
+                    style={{
+                      minWidth: '20px',
+                      height: '20px',
+                      padding: '0 6px',
+                      fontSize: '12px',
+                      backgroundColor: isSelected ? '#ffffff' : 'rgb(46, 84, 255)',
+                      color: isSelected ? 'rgb(46, 84, 255)' : '#ffffff',
+                      borderRadius: '9999px',
+                    }}
+                  >
+                    {unreadCount}
+                  </span>
+                )}
               </button>
             );
           })}

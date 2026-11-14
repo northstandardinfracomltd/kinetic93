@@ -97,31 +97,51 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
 
   const [serverLocations, setServerLocations] = useState<Record<string, TechLiveLocation>>({});
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  const fetchLocations = React.useCallback(
+    async (forceRefresh = false) => {
+      if (forceRefresh) {
+        setIsRefreshing(true);
+      }
+      try {
+        let livetrackSheetUrl = '';
+        try {
+          livetrackSheetUrl =
+            localStorage.getItem(`defib_${effectiveTenantId}_spreadsheet_livetrack`) ||
+            localStorage.getItem(`defib_${effectiveTenantId.toUpperCase()}_spreadsheet_livetrack`) ||
+            localStorage.getItem(`defib_${effectiveTenantId.toLowerCase()}_spreadsheet_livetrack`) ||
+            '';
+        } catch (_) {}
+        const params = new URLSearchParams({ tenantId: effectiveTenantId });
+        if (forceRefresh) params.set('refresh', 'true');
+        if (livetrackSheetUrl) params.set('spreadsheetUrl', livetrackSheetUrl);
+
+        const res = await fetch(`/api/tech-locations?${params.toString()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data.locations === 'object' && data.locations !== null) {
+            setServerLocations(data.locations);
+          }
+        }
+      } catch (_) {
+      } finally {
+        setNowTs(Date.now());
+        if (forceRefresh) {
+          setTimeout(() => setIsRefreshing(false), 350);
+        }
+      }
+    },
+    [effectiveTenantId]
+  );
 
   useEffect(() => {
-    let isMounted = true;
-
-    const fetchLocations = async () => {
-      try {
-        const res = await fetch(`/api/tech-locations?tenantId=${encodeURIComponent(effectiveTenantId)}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (isMounted && data && typeof data.locations === 'object' && data.locations !== null) {
-          setServerLocations(data.locations);
-        }
-      } catch (_) {}
-      if (isMounted) {
-        setNowTs(Date.now());
-      }
-    };
-
-    fetchLocations();
-    const intervalId = setInterval(fetchLocations, 15000);
+    fetchLocations(false);
+    const intervalId = setInterval(() => fetchLocations(false), 15000);
     return () => {
-      isMounted = false;
       clearInterval(intervalId);
     };
-  }, [effectiveTenantId]);
+  }, [fetchLocations]);
 
   const isTechnician = (m: Member) => {
     if (!m) return false;
@@ -148,7 +168,7 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
       if ((lat === undefined || isNaN(lat) || lng === undefined || isNaN(lng)) && m.lastKnownLat !== undefined && m.lastKnownLng !== undefined) {
         const mLat = Number(m.lastKnownLat);
         const mLng = Number(m.lastKnownLng);
-        if (!isNaN(mLat) && !isNaN(mLng)) {
+        if (!isNaN(mLat) && !isNaN(mLng) && (mLat !== 0 || mLng !== 0)) {
           lat = mLat;
           lng = mLng;
           updatedAt = m.lastKnownLocationAt ? Number(m.lastKnownLocationAt) : undefined;
@@ -160,7 +180,7 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
           const localLat = parseFloat(localStorage.getItem(`defib_${effectiveTenantId}_tech_live_lat_${name}`) || '');
           const localLng = parseFloat(localStorage.getItem(`defib_${effectiveTenantId}_tech_live_lng_${name}`) || '');
           const localAt = parseInt(localStorage.getItem(`defib_${effectiveTenantId}_tech_live_at_${name}`) || '', 10);
-          if (!isNaN(localLat) && !isNaN(localLng)) {
+          if (!isNaN(localLat) && !isNaN(localLng) && (localLat !== 0 || localLng !== 0)) {
             lat = localLat;
             lng = localLng;
             if (!isNaN(localAt)) updatedAt = localAt;
@@ -168,16 +188,7 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
         } catch (_) {}
       }
 
-      if ((lat === undefined || isNaN(lat) || lng === undefined || isNaN(lng)) && m.startAddressLat !== undefined && m.startAddressLng !== undefined) {
-        const sLat = Number(m.startAddressLat);
-        const sLng = Number(m.startAddressLng);
-        if (!isNaN(sLat) && !isNaN(sLng) && sLat !== 0 && sLng !== 0) {
-          lat = sLat;
-          lng = sLng;
-        }
-      }
-
-      if (lat !== undefined && !isNaN(lat) && lng !== undefined && !isNaN(lng)) {
+      if (lat !== undefined && !isNaN(lat) && lng !== undefined && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
         results.push({
           name,
           email: m.email,
@@ -188,15 +199,17 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
       }
     }
 
-    // Include any live technician position reported to server even if not yet in filtered local list
+    // Include any live technician position reported to server / Livetrack spreadsheet even if not yet in filtered local list
     for (const [key, rawSrv] of Object.entries(serverLocations)) {
       const srv = rawSrv as TechLiveLocation | undefined;
-      if (!seenKeys.has(key) && srv && !isNaN(Number(srv.lat)) && !isNaN(Number(srv.lng))) {
+      const sLat = Number(srv?.lat);
+      const sLng = Number(srv?.lng);
+      if (!seenKeys.has(key) && srv && !isNaN(sLat) && !isNaN(sLng) && (sLat !== 0 || sLng !== 0)) {
         results.push({
           name: srv.name || key,
           email: srv.email,
-          lat: Number(srv.lat),
-          lng: Number(srv.lng),
+          lat: sLat,
+          lng: sLng,
           updatedAt: srv.updatedAt,
         });
       }
@@ -274,6 +287,29 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
             ))}
           </select>
         </div>
+
+        <button
+          type="button"
+          id="btn-localisations-refresh"
+          onClick={() => fetchLocations(true)}
+          disabled={isRefreshing}
+          style={{
+            backgroundColor: 'rgb(46, 84, 255)',
+            boxShadow: 'none',
+            borderRadius: '12px',
+            fontSize: '18px',
+            padding: '9px 19px',
+            fontWeight: 'normal',
+            color: '#ffffff',
+            border: 'none',
+            cursor: isRefreshing ? 'wait' : 'pointer',
+            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+            transition: 'all 0.1s ease-in-out',
+          }}
+          className="hover:opacity-90 cursor-pointer select-none disabled:opacity-75"
+        >
+          Actualiser
+        </button>
 
         {onClose && (
           <button

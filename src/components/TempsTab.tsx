@@ -1318,10 +1318,6 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
         alert(t("L'amplitude maximale journalière requiert une valeur horaire valide comprise entre 1 et 24h."));
         return;
       }
-      if (!draftGlobalRules.maxDailyAmplitudeErrorText || !draftGlobalRules.maxDailyAmplitudeErrorText.trim()) {
-        alert(t("Veuillez renseigner le texte message d'erreur pour l'amplitude maximale journalière."));
-        return;
-      }
     }
 
     // Validation for Amplitude minimale de repos
@@ -1331,10 +1327,6 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
         alert(t("L'amplitude minimale de repos requiert une valeur horaire valide comprise entre 1 et 24h."));
         return;
       }
-      if (!draftGlobalRules.minConsecutiveRestErrorText || !draftGlobalRules.minConsecutiveRestErrorText.trim()) {
-        alert(t("Veuillez renseigner le texte message d'erreur pour l'amplitude minimale de repos entre 2 jours consécutifs."));
-        return;
-      }
     }
 
     // Validation for Amplitude minimale de repos pendant un pointage en cours
@@ -1342,10 +1334,6 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
       const mins = Number(draftGlobalRules.minBreakRestMinutes);
       if (!mins || isNaN(mins) || mins < 1 || mins > 60) {
         alert(t("L'amplitude minimale de repos pendant un pointage requiert une valeur horaire (mins) comprise entre 1 et 60 mins."));
-        return;
-      }
-      if (!draftGlobalRules.minBreakRestErrorText || !draftGlobalRules.minBreakRestErrorText.trim()) {
-        alert(t("Veuillez renseigner le texte message d'erreur pour l'amplitude minimale de repos pendant un pointage."));
         return;
       }
       if (!draftGlobalRules.minBreakRestTechErrorText || !draftGlobalRules.minBreakRestTechErrorText.trim()) {
@@ -2203,27 +2191,6 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       className={`short-input-field ${!draftGlobalRules.maxDailyAmplitudeEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                     />
                   </div>
-
-                  {/* Triple Champ 1.3: Texte message d'erreur. */}
-                  <div>
-                    <label
-                      className="block mb-1 font-sans font-bold"
-                      style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
-                    >
-                      {t("Texte message d’erreur.")} {draftGlobalRules.maxDailyAmplitudeEnabled && <span className="text-red-500">*</span>}
-                    </label>
-                    <input
-                      type="text"
-                      id="input-max-daily-amplitude-error-text"
-                      value={draftGlobalRules.maxDailyAmplitudeErrorText}
-                      disabled={!draftGlobalRules.maxDailyAmplitudeEnabled}
-                      onChange={(e) => {
-                        setDraftGlobalRules(prev => ({ ...prev, maxDailyAmplitudeErrorText: e.target.value }));
-                      }}
-                      placeholder={t("Texte du message d'erreur...")}
-                      className={!draftGlobalRules.maxDailyAmplitudeEnabled ? 'opacity-40 cursor-not-allowed' : ''}
-                    />
-                  </div>
                 </div>
 
                 {/* LOT 2: Amplitude minimale de repos entre 2 jours consécutifs */}
@@ -2302,27 +2269,6 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       className={`short-input-field ${!draftGlobalRules.minConsecutiveRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                     />
                   </div>
-
-                  {/* Triple Champ 2.3: Texte message d'erreur. */}
-                  <div>
-                    <label
-                      className="block mb-1 font-sans font-bold"
-                      style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
-                    >
-                      {t("Texte message d’erreur.")} {draftGlobalRules.minConsecutiveRestEnabled && <span className="text-red-500">*</span>}
-                    </label>
-                    <input
-                      type="text"
-                      id="input-min-consecutive-rest-error-text"
-                      value={draftGlobalRules.minConsecutiveRestErrorText}
-                      disabled={!draftGlobalRules.minConsecutiveRestEnabled}
-                      onChange={(e) => {
-                        setDraftGlobalRules(prev => ({ ...prev, minConsecutiveRestErrorText: e.target.value }));
-                      }}
-                      placeholder={t("Texte du message d'erreur...")}
-                      className={!draftGlobalRules.minConsecutiveRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}
-                    />
-                  </div>
                 </div>
 
                 {/* LOT 3: Amplitude minimale de repos pendant un pointage en cours */}
@@ -2399,27 +2345,6 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       }}
                       placeholder={t("Nombre entre 1 et 60 (ex: 45)")}
                       className={`short-input-field ${!draftGlobalRules.minBreakRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
-                    />
-                  </div>
-
-                  {/* Triple Champ 3.3: Texte message d'erreur. */}
-                  <div>
-                    <label
-                      className="block mb-1 font-sans font-bold"
-                      style={{ color: '#000000', fontSize: '18px', cursor: 'default' }}
-                    >
-                      {t("Texte message d’erreur.")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
-                    </label>
-                    <input
-                      type="text"
-                      id="input-min-break-rest-error-text"
-                      value={draftGlobalRules.minBreakRestErrorText}
-                      disabled={!draftGlobalRules.minBreakRestEnabled}
-                      onChange={(e) => {
-                        setDraftGlobalRules(prev => ({ ...prev, minBreakRestErrorText: e.target.value }));
-                      }}
-                      placeholder={t("Texte du message d'erreur pour tournées et missions...")}
-                      className={!draftGlobalRules.minBreakRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}
                     />
                   </div>
 

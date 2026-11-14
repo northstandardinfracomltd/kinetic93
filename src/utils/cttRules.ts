@@ -13,7 +13,8 @@ export interface CttViolation {
  */
 export function parseSlotToMinutes(slot: string): number {
   if (!slot) return 480; // 08:00 default
-  const clean = String(slot).trim().toLowerCase();
+  const rawPart = String(slot).includes('-') ? String(slot).split('-')[0] : String(slot);
+  const clean = rawPart.trim().toLowerCase();
 
   // Format "8h30", "17h", "8h"
   const hMatch = clean.match(/^(\d+)\s*h\s*(\d*)$/i);
@@ -394,3 +395,398 @@ export function checkTourCttViolations(
 
   return violations;
 }
+
+function toIsoDateForAlert(dStr: any): string {
+  if (!dStr) return '';
+  const clean = String(dStr).trim();
+  if (!clean) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+  if (clean.includes('/')) {
+    const parts = clean.split('/');
+    if (parts.length === 3) {
+      const dd = parts[0].padStart(2, '0');
+      const mm = parts[1].padStart(2, '0');
+      const yyyy = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
+      return `${yyyy}-${mm}-${dd}`;
+    }
+  }
+  const d = parseDateStringToDate(clean);
+  if (!d) return '';
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function formatIsoToFRForAlert(isoDate: string): string {
+  if (!isoDate) return '';
+  const parts = isoDate.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return isoDate;
+}
+
+function getFrenchWeekdayFromIso(isoDate: string): string {
+  const d = new Date(`${isoDate}T00:00:00`);
+  if (isNaN(d.getTime())) return '';
+  const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+  return days[d.getDay()] || '';
+}
+
+/**
+ * Mission duration for suggested tour alerts:
+ * Default 60 min (1h) per mission UNLESS the mission's reason(s)/prestation(s)
+ * match variables with dureePrestation (in minutes), in which case sum those minutes.
+ */
+export function getMissionDurationForAlert(m: any, variables?: any[]): number {
+  if (!m) return 60;
+  if (Array.isArray(variables) && variables.length > 0) {
+    const reasonsToCheck: string[] = [];
+    if (Array.isArray(m.reasons) && m.reasons.length > 0) {
+      reasonsToCheck.push(...m.reasons);
+    } else if (m.reason) {
+      reasonsToCheck.push(...String(m.reason).split(',').map((s: string) => s.trim()).filter(Boolean));
+    }
+    let foundDuration = 0;
+    let anyFound = false;
+    for (const r of reasonsToCheck) {
+      const matchVar = variables.find((v: any) =>
+        v && v.category === 'Modèle Raison Prestation' &&
+        (String(v.nom || '').toLowerCase().trim() === String(r).toLowerCase().trim() || v.id === r)
+      );
+      if (matchVar && matchVar.dureePrestation !== undefined && matchVar.dureePrestation !== null && !isNaN(Number(matchVar.dureePrestation))) {
+        const d = Number(matchVar.dureePrestation);
+        if (d > 0) {
+          foundDuration += d;
+          anyFound = true;
+        }
+      }
+    }
+    if (anyFound && foundDuration > 0) {
+      return foundDuration;
+    }
+  }
+  if (m.dureePrestation !== undefined && m.dureePrestation !== null && !isNaN(Number(m.dureePrestation)) && Number(m.dureePrestation) > 0) {
+    return Number(m.dureePrestation);
+  }
+  return 60;
+}
+
+/**
+ * Computes the list of suggested alerts ("Alertes suggérées :") for a given tour.
+ */
+export function computeTourSuggestedAlerts(
+  tour: any,
+  draftVal: any,
+  members: any[],
+  rules: CttGlobalRules,
+  variables?: any[],
+  allTours?: any[]
+): string[] {
+  const alerts: string[] = [];
+  if (!tour) return alerts;
+
+  const getSlot = (m: any) => m?.estimatedSlot || m?.creneau || m?.slot || m?.creneauHoraire || m?.estimatedTime || m?.time;
+
+  const techName = String(draftVal?.techName !== undefined ? draftVal.techName : (tour.techName || '')).trim();
+  const startRaw = draftVal?.startDate !== undefined ? draftVal.startDate : (tour.startDate || '');
+  const startIso = toIsoDateForAlert(startRaw);
+
+  const activeMissions = (Array.isArray(tour.missions) ? tour.missions : []).filter((m: any) => {
+    if (!m) return false;
+    const sit = String(m.status || '').toLowerCase();
+    return !sit.includes('rejet') && !sit.includes('annul');
+  });
+
+  // Collect all mission dates (ISO) and determine the tour's calendar day span
+  const missionIsoDates: string[] = [];
+  activeMissions.forEach((m: any) => {
+    const mIso = toIsoDateForAlert(m.estimatedDate || startIso);
+    if (mIso) missionIsoDates.push(mIso);
+  });
+
+  const tourDaysSet = new Set<string>();
+  if (startIso) {
+    let maxIso = startIso;
+    missionIsoDates.forEach(d => {
+      if (d > maxIso) maxIso = d;
+    });
+    const cur = new Date(`${startIso}T00:00:00`);
+    const end = new Date(`${maxIso}T00:00:00`);
+    let guard = 0;
+    while (!isNaN(cur.getTime()) && !isNaN(end.getTime()) && cur <= end && guard < 90) {
+      const yyyy = cur.getFullYear();
+      const mm = String(cur.getMonth() + 1).padStart(2, '0');
+      const dd = String(cur.getDate()).padStart(2, '0');
+      tourDaysSet.add(`${yyyy}-${mm}-${dd}`);
+      cur.setDate(cur.getDate() + 1);
+      guard++;
+    }
+  }
+  missionIsoDates.forEach(d => tourDaysSet.add(d));
+  const tourDaysIso = Array.from(tourDaysSet).sort();
+
+  const techMember = (techName && techName !== 'Aucun' && Array.isArray(members))
+    ? members.find((m: any) => m && m.name && String(m.name).trim().toLowerCase() === techName.toLowerCase())
+    : undefined;
+
+  // Helper to get open schedule intervals for a given French weekday from techMember.semaineTypique
+  const getScheduleIntervalsForDay = (schedules: any[], dayName: string): { start: number; end: number }[] => {
+    const intervals: { start: number; end: number }[] = [];
+    if (!dayName || !Array.isArray(schedules)) return intervals;
+    schedules.forEach((s: any) => {
+      if (!s || s.openForMissions === false) return;
+      const daysArr = Array.isArray(s.days) ? s.days : [];
+      const matchesDay = daysArr.some((d: any) => String(d || '').trim().toLowerCase() === dayName.toLowerCase());
+      if (!matchesDay) return;
+      if (s.fermetureMidi) {
+        const s1 = parseSlotToMinutes(s.openMorning || '09:00');
+        const e1 = parseSlotToMinutes(s.closeMorning || '12:00');
+        if (s1 < e1) intervals.push({ start: s1, end: e1 });
+        const s2 = parseSlotToMinutes(s.openAfternoon || '14:00');
+        const e2 = parseSlotToMinutes(s.closeAfternoon || '18:00');
+        if (s2 < e2) intervals.push({ start: s2, end: e2 });
+      } else {
+        const s1 = parseSlotToMinutes(s.openContinuous || '09:00');
+        const e1 = parseSlotToMinutes(s.closeContinuous || '17:00');
+        if (s1 < e1) intervals.push({ start: s1, end: e1 });
+      }
+    });
+    return intervals;
+  };
+
+  const isMissionCompatibleWithSchedules = (m: any, schedules: any[]): boolean => {
+    const mIso = toIsoDateForAlert(m.estimatedDate || startIso);
+    if (!mIso) return false;
+    const dayName = getFrenchWeekdayFromIso(mIso);
+    const intervals = getScheduleIntervalsForDay(schedules, dayName);
+    if (intervals.length === 0) return false;
+    const slotStr = getSlot(m);
+    if (!slotStr) return false;
+    const mStart = parseSlotToMinutes(slotStr);
+    const mEnd = mStart + getMissionDurationForAlert(m, variables);
+    return intervals.some(iv => mStart >= iv.start && mEnd <= iv.end);
+  };
+
+  // 1 & 2. Semaine typique checks
+  const validSchedules = (techMember && Array.isArray(techMember.semaineTypique))
+    ? techMember.semaineTypique.filter((s: any) => s && Array.isArray(s.days) && s.days.length > 0)
+    : [];
+
+  if (techMember && validSchedules.length > 0) {
+    // Alert 1: Au moins une mission de la tournée n'est pas compatible avec une période de semaine typique du technicien sélectionné.
+    if (activeMissions.length > 0) {
+      const hasIncompatibleMission = activeMissions.some((m: any) => !isMissionCompatibleWithSchedules(m, validSchedules));
+      if (hasIncompatibleMission) {
+        alerts.push("Au moins une mission de la tournée n’est pas compatible avec une période de semaine typique du technicien sélectionné.");
+      }
+    }
+
+    // Alert 2: La tournée n'est pas compatible avec une période de semaine typique du technicien sélectionné.
+    if (tourDaysIso.length > 0) {
+      const hasIncompatibleTourDay = tourDaysIso.some(dIso => {
+        const dayName = getFrenchWeekdayFromIso(dIso);
+        return getScheduleIntervalsForDay(validSchedules, dayName).length === 0;
+      });
+      const hasIncompatibleTourMission = activeMissions.some((m: any) => !isMissionCompatibleWithSchedules(m, validSchedules));
+      if (hasIncompatibleTourDay || hasIncompatibleTourMission) {
+        alerts.push("La tournée n’est pas compatible avec une période de semaine typique du technicien sélectionné.");
+      }
+    }
+  }
+
+  // 3 & 4. Périodes d'indisponibilité checks
+  const validAbsences = (techMember && Array.isArray(techMember.absences))
+    ? techMember.absences
+        .map((a: any) => {
+          if (!a) return null;
+          const aStart = toIsoDateForAlert(a.startDate);
+          const aEnd = toIsoDateForAlert(a.endDate || a.startDate) || aStart;
+          if (!aStart) return null;
+          return { aStart, aEnd };
+        })
+        .filter(Boolean) as { aStart: string; aEnd: string }[]
+    : [];
+
+  if (techMember && validAbsences.length > 0) {
+    // Alert 3: Au moins une mission de la tournée n'est pas compatible avec une période d'indisponibilité du technicien sélectionné.
+    if (activeMissions.length > 0) {
+      const hasMissionInAbsence = activeMissions.some((m: any) => {
+        const mIso = toIsoDateForAlert(m.estimatedDate || startIso);
+        if (!mIso) return false;
+        return validAbsences.some(abs => mIso >= abs.aStart && mIso <= abs.aEnd);
+      });
+      if (hasMissionInAbsence) {
+        alerts.push("Au moins une mission de la tournée n’est pas compatible avec une période d’indisponibilité du technicien sélectionné.");
+      }
+    }
+
+    // Alert 4: La tournée n'est pas compatible avec une période d'indisponibilité du technicien sélectionné.
+    if (tourDaysIso.length > 0) {
+      const hasTourInAbsence = tourDaysIso.some(dIso =>
+        validAbsences.some(abs => dIso >= abs.aStart && dIso <= abs.aEnd)
+      );
+      if (hasTourInAbsence) {
+        alerts.push("La tournée n’est pas compatible avec une période d’indisponibilité du technicien sélectionné.");
+      }
+    }
+  }
+
+  // Group active missions with time slots by ISO date for rules 5, 6, 7
+  const missionsByIsoDate: Record<string, any[]> = {};
+  activeMissions.forEach((m: any) => {
+    const mIso = toIsoDateForAlert(m.estimatedDate || startIso);
+    if (!mIso || !getSlot(m)) return;
+    if (!missionsByIsoDate[mIso]) missionsByIsoDate[mIso] = [];
+    missionsByIsoDate[mIso].push(m);
+  });
+  const sortedMissionIsoDates = Object.keys(missionsByIsoDate).sort();
+
+  // 5. Amplitude maximale journalière
+  if (rules && rules.maxDailyAmplitudeEnabled && rules.maxDailyAmplitudeHours > 0) {
+    const maxMinutes = rules.maxDailyAmplitudeHours * 60;
+    for (const dateIso of sortedMissionIsoDates) {
+      const dayMissions = missionsByIsoDate[dateIso];
+      if (!dayMissions || dayMissions.length === 0) continue;
+      let minStart = Infinity;
+      let maxEnd = -Infinity;
+      dayMissions.forEach((m: any) => {
+        const start = parseSlotToMinutes(getSlot(m));
+        const dur = getMissionDurationForAlert(m, variables);
+        if (start < minStart) minStart = start;
+        if (start + dur > maxEnd) maxEnd = start + dur;
+      });
+      if (minStart !== Infinity && maxEnd !== -Infinity && (maxEnd - minStart) > maxMinutes) {
+        alerts.push(
+          `L’amplitude maximale journalière est de ${rules.maxDailyAmplitudeHours}h. Le ${formatIsoToFRForAlert(dateIso)}, cette amplitude est dépassée.`
+        );
+      }
+    }
+  }
+
+  // 6. Amplitude minimale de repos entre 2 jours consécutifs
+  if (rules && rules.minConsecutiveRestEnabled && rules.minConsecutiveRestHours > 0) {
+    const minRestMinutes = rules.minConsecutiveRestHours * 60;
+
+    // Combine current tour missions and (if technician is selected) other tours of the same technician
+    const combinedByDate: Record<string, { start: number; end: number; isCurrentTour: boolean }[]> = {};
+    sortedMissionIsoDates.forEach(dateIso => {
+      combinedByDate[dateIso] = (missionsByIsoDate[dateIso] || []).map((m: any) => {
+        const s = parseSlotToMinutes(getSlot(m));
+        const d = getMissionDurationForAlert(m, variables);
+        return { start: s, end: s + d, isCurrentTour: true };
+      });
+    });
+
+    if (techName && techName !== 'Aucun' && Array.isArray(allTours)) {
+      allTours.forEach((ot: any) => {
+        if (!ot || ot.id === tour.id) return;
+        const otTech = String(ot.techName || '').trim();
+        if (!otTech || otTech.toLowerCase() !== techName.toLowerCase()) return;
+        const otStartIso = toIsoDateForAlert(ot.startDate);
+        (Array.isArray(ot.missions) ? ot.missions : []).forEach((m: any) => {
+          if (!m) return;
+          const sit = String(m.status || '').toLowerCase();
+          if (sit.includes('rejet') || sit.includes('annul')) return;
+          const slot = getSlot(m);
+          if (!slot) return;
+          const mIso = toIsoDateForAlert(m.estimatedDate || otStartIso);
+          if (!mIso) return;
+          const s = parseSlotToMinutes(slot);
+          const d = getMissionDurationForAlert(m, variables);
+          if (!combinedByDate[mIso]) combinedByDate[mIso] = [];
+          combinedByDate[mIso].push({ start: s, end: s + d, isCurrentTour: false });
+        });
+      });
+    }
+
+    const allCombinedDates = Object.keys(combinedByDate).sort();
+    for (let i = 0; i < allCombinedDates.length - 1; i++) {
+      const d1Iso = allCombinedDates[i];
+      const d2Iso = allCombinedDates[i + 1];
+      const list1 = combinedByDate[d1Iso];
+      const list2 = combinedByDate[d2Iso];
+      if (!list1.some(x => x.isCurrentTour) && !list2.some(x => x.isCurrentTour)) continue;
+
+      const dt1 = new Date(`${d1Iso}T00:00:00`);
+      const dt2 = new Date(`${d2Iso}T00:00:00`);
+      if (isNaN(dt1.getTime()) || isNaN(dt2.getTime())) continue;
+      const diffDays = Math.round((dt2.getTime() - dt1.getTime()) / (1000 * 3600 * 24));
+      if (diffDays === 1) {
+        const maxEndDay1 = Math.max(...list1.map(x => x.end));
+        const minStartDay2 = Math.min(...list2.map(x => x.start));
+        const restMinutes = (1440 - maxEndDay1) + minStartDay2;
+        if (restMinutes < minRestMinutes) {
+          alerts.push(
+            `L’amplitude minimale de repos entre 2 jours consécutifs est de ${rules.minConsecutiveRestHours}h. Entre le ${formatIsoToFRForAlert(d1Iso)} et le ${formatIsoToFRForAlert(d2Iso)}, cette amplitude est inférieure.`
+          );
+        }
+      }
+    }
+  }
+
+  // 7. Amplitude minimale de repos à la mi-journée pour la pause repas (entre 11h et 15h)
+  if (rules && rules.minBreakRestEnabled && rules.minBreakRestMinutes > 0) {
+    const requiredBreakMins = rules.minBreakRestMinutes;
+    const windowStart = 11 * 60; // 11h00 = 660
+    const windowEnd = 15 * 60;   // 15h00 = 900
+
+    for (const dateIso of sortedMissionIsoDates) {
+      const dayMissions = missionsByIsoDate[dateIso];
+      if (!dayMissions || dayMissions.length === 0) continue;
+
+      const busyIntervals: { start: number; end: number }[] = [];
+      dayMissions.forEach((m: any) => {
+        const s = parseSlotToMinutes(getSlot(m));
+        const d = getMissionDurationForAlert(m, variables);
+        const e = s + d;
+        const clipStart = Math.max(windowStart, s);
+        const clipEnd = Math.min(windowEnd, e);
+        if (clipStart < clipEnd) {
+          busyIntervals.push({ start: clipStart, end: clipEnd });
+        }
+      });
+
+      if (busyIntervals.length === 0) continue;
+
+      busyIntervals.sort((a, b) => a.start - b.start);
+      const merged: { start: number; end: number }[] = [];
+      busyIntervals.forEach(cur => {
+        if (merged.length === 0) {
+          merged.push({ ...cur });
+        } else {
+          const last = merged[merged.length - 1];
+          if (cur.start <= last.end) {
+            last.end = Math.max(last.end, cur.end);
+          } else {
+            merged.push({ ...cur });
+          }
+        }
+      });
+
+      let maxContinuousFree = 0;
+      let cursor = windowStart;
+      merged.forEach(b => {
+        if (b.start > cursor) {
+          const free = b.start - cursor;
+          if (free > maxContinuousFree) maxContinuousFree = free;
+        }
+        cursor = Math.max(cursor, b.end);
+      });
+      if (windowEnd > cursor) {
+        const free = windowEnd - cursor;
+        if (free > maxContinuousFree) maxContinuousFree = free;
+      }
+
+      if (maxContinuousFree < requiredBreakMins) {
+        alerts.push(
+          `L’amplitude minimale de repos à la mi-journée pour la pause repas est de ${requiredBreakMins}min. Le ${formatIsoToFRForAlert(dateIso)}, il semble que le technicien ne bénéficiera pas de ce temps disponible.`
+        );
+      }
+    }
+  }
+
+  return alerts;
+}
+
