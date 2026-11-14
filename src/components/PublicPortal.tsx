@@ -2882,15 +2882,39 @@ export default function PublicPortal({
                     providedByClientParts: Array.isArray(m.providedByClientParts) ? m.providedByClientParts : [],
                     estimatedDate: rawEstDate,
                     estimatedSlot: m.estimatedSlot || "",
-                    rejectionReason: m.rejectionReason || "",
+                    rejectionReason: (() => {
+                      const sitLower = String(m.status || "À faire").trim().toLowerCase();
+                      if (
+                        sitLower === "accepté client" ||
+                        sitLower === "accepte client" ||
+                        sitLower === "à faire" ||
+                        sitLower === "a faire" ||
+                        sitLower.includes("refus")
+                      ) {
+                        return "";
+                      }
+                      return m.rejectionReason || "";
+                    })(),
                     rejectedAt: m.rejectedAt || "",
                     interventionReference: m.interventionReference || "",
                     autreReference: m.autreReference || "",
                     clientId: m.clientId,
                     clientName: m.clientName,
                     formationId: m.formationId,
-                    bonCommandeId: m.bonCommandeId,
-                    customBonCommande: m.customBonCommande,
+                    bonCommandeId:
+                      m.bonCommandeId ||
+                      m.customBonCommande ||
+                      m.bonDeCommande ||
+                      m["Bon de commande."] ||
+                      m["Bon de commande"] ||
+                      "",
+                    customBonCommande:
+                      m.customBonCommande ||
+                      (m.bonCommandeId && m.bonCommandeId !== "custom" ? m.bonCommandeId : "") ||
+                      m.bonDeCommande ||
+                      m["Bon de commande."] ||
+                      m["Bon de commande"] ||
+                      "",
                     commentaireInterne:
                       m.commentaireInterne ||
                       m["Commentaire visible par le technicien."] ||
@@ -3335,15 +3359,39 @@ export default function PublicPortal({
                 providedByClientParts: Array.isArray(m.providedByClientParts) ? m.providedByClientParts : [],
                 estimatedDate: rawEstDate,
                 estimatedSlot: m.estimatedSlot || "",
-                rejectionReason: m.rejectionReason || m.raisonRejet || m.raisonRejeteeMission || "",
+                rejectionReason: (() => {
+                  const sitLower = String(m.status || "À faire").trim().toLowerCase();
+                  if (
+                    sitLower === "accepté client" ||
+                    sitLower === "accepte client" ||
+                    sitLower === "à faire" ||
+                    sitLower === "a faire" ||
+                    sitLower.includes("refus")
+                  ) {
+                    return "";
+                  }
+                  return m.rejectionReason || m.raisonRejet || m.raisonRejeteeMission || "";
+                })(),
                 rejectedAt: m.rejectedAt || "",
                 interventionReference: m.interventionReference || "",
                 autreReference: m.autreReference || "",
                 clientId: m.clientId,
                 clientName: m.clientName,
                 formationId: m.formationId,
-                bonCommandeId: m.bonCommandeId,
-                customBonCommande: m.customBonCommande,
+                bonCommandeId:
+                  m.bonCommandeId ||
+                  m.customBonCommande ||
+                  m.bonDeCommande ||
+                  m["Bon de commande."] ||
+                  m["Bon de commande"] ||
+                  "",
+                customBonCommande:
+                  m.customBonCommande ||
+                  (m.bonCommandeId && m.bonCommandeId !== "custom" ? m.bonCommandeId : "") ||
+                  m.bonDeCommande ||
+                  m["Bon de commande."] ||
+                  m["Bon de commande"] ||
+                  "",
                 commentaireInterne:
                   m.commentaireInterne ||
                   m["Commentaire visible par le technicien."] ||
@@ -3467,6 +3515,10 @@ export default function PublicPortal({
   const handleRefreshCalendarFromPlanning = async () => {
     try {
       const tid = techTenantId || localStorage.getItem("defib_tenant_id") || "demo";
+      await Promise.allSettled([
+        fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(tid)}&type=tournees&refresh=true&_=${Date.now()}`),
+        fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(tid)}&type=missionsTournees&refresh=true&_=${Date.now()}`),
+      ]);
       const res = await fetch(`/api/sync-collection?collectionName=fsm_tours&tenantId=${encodeURIComponent(tid)}`);
       if (res.ok) {
         const data = await res.json();
@@ -3637,16 +3689,38 @@ export default function PublicPortal({
   };
 
   const getBonCommandeLabel = (p: any) => {
+    if (!p) return "";
     if (p.bonCommandeId === 'custom') {
-      return p.customBonCommande || "";
+      return String(p.customBonCommande || "").trim();
     }
-    if (p.bonCommandeId) {
-      const doc = commercialDocs?.find((d: any) => d.id === p.bonCommandeId);
-      if (doc) {
-        return doc.bonCommandeEntete || doc.bonCommandeReference || doc.ref || p.bonCommandeId;
-      }
+    const rawBc = String(
+      p.bonCommandeId ||
+        p.customBonCommande ||
+        p.bonDeCommande ||
+        p["Bon de commande."] ||
+        p["Bon de commande"] ||
+        ""
+    ).trim();
+    if (!rawBc || rawBc.toLowerCase() === 'custom') {
+      const fallbackCustom = String(p.customBonCommande || "").trim();
+      return fallbackCustom.toLowerCase() === 'custom' ? "" : fallbackCustom;
     }
-    return "";
+    const doc = commercialDocs?.find(
+      (d: any) =>
+        d &&
+        (d.id === rawBc ||
+          d.bonCommandeEntete === rawBc ||
+          d.bonCommandeReference === rawBc ||
+          d.ref === rawBc)
+    );
+    if (doc) {
+      return String(doc.bonCommandeEntete || doc.bonCommandeReference || doc.ref || rawBc).trim();
+    }
+    const customVal = String(p.customBonCommande || "").trim();
+    if (customVal && customVal.toLowerCase() !== 'custom') {
+      return customVal;
+    }
+    return rawBc;
   };
 
   const [selectedDefibId, setSelectedDefibId] = useState("");

@@ -4534,19 +4534,35 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                 defibIdentifiant: cleanDefibId || sm.defibIdentifiant || '',
                 bonCommandeId: cleanBc ? (sm.bonCommandeId === 'custom' ? 'custom' : cleanBc) : '',
                 customBonCommande: cleanBc,
-                rejectionReason: sm.rejectionReason ?? sm.raisonRejet ?? '',
-                refusalComment:
-                  sm.refusalComment ||
-                  sm.clientRefusalComment ||
-                  (String(sm.status || '').toLowerCase().includes('refus')
-                    ? sm.rejectionReason || sm.raisonRejet || sm.commentaire || ''
-                    : ''),
-                clientRefusalComment:
-                  sm.clientRefusalComment ||
-                  sm.refusalComment ||
-                  (String(sm.status || '').toLowerCase().includes('refus')
-                    ? sm.rejectionReason || sm.raisonRejet || sm.commentaire || ''
-                    : ''),
+                ...(() => {
+                  const sitLower = String(sm.status || '').trim().toLowerCase();
+                  const isAcceptedOrAFaire =
+                    sitLower === 'accepté client' ||
+                    sitLower === 'accepte client' ||
+                    sitLower === 'à faire' ||
+                    sitLower === 'a faire';
+                  if (isAcceptedOrAFaire) {
+                    return {
+                      rejectionReason: '',
+                      raisonRejet: '',
+                      refusalComment: '',
+                      clientRefusalComment: '',
+                      commentaire: '',
+                    };
+                  }
+                  const isRefused = sitLower.includes('refus');
+                  return {
+                    rejectionReason: isRefused ? '' : (sm.rejectionReason ?? sm.raisonRejet ?? ''),
+                    refusalComment:
+                      sm.refusalComment ||
+                      sm.clientRefusalComment ||
+                      (isRefused ? sm.rejectionReason || sm.raisonRejet || sm.commentaire || '' : ''),
+                    clientRefusalComment:
+                      sm.clientRefusalComment ||
+                      sm.refusalComment ||
+                      (isRefused ? sm.rejectionReason || sm.raisonRejet || sm.commentaire || '' : ''),
+                  };
+                })(),
                 statutFacturation: sm.statutFacturation || 'Aucune information',
               });
               byTourKey.set(targetTourId, list);
@@ -5497,6 +5513,12 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
           const eqIdent = String(
             m.defibIdentifiant || (!String(m.identifiant || '').startsWith('fsm-m-') ? m.identifiant : '') || ''
           ).trim();
+          const sitLower = String(m.status || 'Brouillon').trim().toLowerCase();
+          const isAcceptedOrAFaire =
+            sitLower === 'accepté client' ||
+            sitLower === 'accepte client' ||
+            sitLower === 'à faire' ||
+            sitLower === 'a faire';
           return {
             ...m,
             status: m.status || 'Brouillon',
@@ -5505,6 +5527,16 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             identifiant: eqIdent || m.defibIdentifiant || '',
             bonCommandeId: m.bonCommandeId ?? '',
             customBonCommande: m.customBonCommande ?? '',
+            ...(isAcceptedOrAFaire
+              ? {
+                  commentaire: '',
+                  refusalComment: '',
+                  clientRefusalComment: '',
+                  rejectionReason: '',
+                  raisonRejet: '',
+                  raisonRejeteeMission: '',
+                }
+              : {}),
           };
         }),
       };
@@ -5621,23 +5653,42 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
               sentToClientParts: Array.isArray(m.sentToClientParts) ? m.sentToClientParts : [],
               providedByClientParts: Array.isArray(m.providedByClientParts) ? m.providedByClientParts : [],
               commentaireInterne: m.commentaireInterne ?? '',
-              rejectionReason:
-                m.rejectionReason ??
-                m.raisonRejet ??
-                m.raisonRejeteeMission ??
-                m.refusalComment ??
-                m.clientRefusalComment ??
-                '',
-              raisonRejet:
-                m.rejectionReason ??
-                m.raisonRejet ??
-                m.raisonRejeteeMission ??
-                m.refusalComment ??
-                m.clientRefusalComment ??
-                '',
-              refusalComment: m.refusalComment ?? m.clientRefusalComment ?? '',
-              clientRefusalComment: m.clientRefusalComment ?? m.refusalComment ?? '',
-              commentaire: m.commentaire || m.refusalComment || m.clientRefusalComment || '',
+              ...(() => {
+                const sitLower = String(m.status || 'Brouillon').trim().toLowerCase();
+                const isAcceptedOrAFaire =
+                  sitLower === 'accepté client' ||
+                  sitLower === 'accepte client' ||
+                  sitLower === 'à faire' ||
+                  sitLower === 'a faire';
+                if (isAcceptedOrAFaire) {
+                  return {
+                    rejectionReason: '',
+                    raisonRejet: '',
+                    refusalComment: '',
+                    clientRefusalComment: '',
+                    commentaire: '',
+                  };
+                }
+                return {
+                  rejectionReason:
+                    m.rejectionReason ??
+                    m.raisonRejet ??
+                    m.raisonRejeteeMission ??
+                    m.refusalComment ??
+                    m.clientRefusalComment ??
+                    '',
+                  raisonRejet:
+                    m.rejectionReason ??
+                    m.raisonRejet ??
+                    m.raisonRejeteeMission ??
+                    m.refusalComment ??
+                    m.clientRefusalComment ??
+                    '',
+                  refusalComment: m.refusalComment ?? m.clientRefusalComment ?? '',
+                  clientRefusalComment: m.clientRefusalComment ?? m.refusalComment ?? '',
+                  commentaire: m.commentaire || m.refusalComment || m.clientRefusalComment || '',
+                };
+              })(),
             });
           }
         }
@@ -5811,7 +5862,18 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             tourDate: tour.startDate || tour.date || '',
             origin: tourOrigin,
             missionStatus: m.status || 'Brouillon',
-            rejectionReason: m.rejectionReason || m.raisonRejet || m.raisonRejeteeMission || '',
+            rejectionReason: (() => {
+              const sitLower = String(m.status || 'Brouillon').trim().toLowerCase();
+              if (
+                sitLower === 'accepté client' ||
+                sitLower === 'accepte client' ||
+                sitLower === 'à faire' ||
+                sitLower === 'a faire'
+              ) {
+                return '';
+              }
+              return m.rejectionReason || m.raisonRejet || m.raisonRejeteeMission || '';
+            })(),
             defibSnapshot: { 
               identifiant: m.defibIdentifiant, 
               categorie: m.equipmentType || 'Défibrillateur' 
@@ -5822,7 +5884,15 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         } else {
           const existing = updatedReports[existingReportIndex];
           if (existing.isUpcoming) {
-            const nextRejectionReason = m.rejectionReason || m.raisonRejet || m.raisonRejeteeMission || existing.rejectionReason || '';
+            const sitLower = String(m.status || 'Brouillon').trim().toLowerCase();
+            const isAcceptedOrAFaire =
+              sitLower === 'accepté client' ||
+              sitLower === 'accepte client' ||
+              sitLower === 'à faire' ||
+              sitLower === 'a faire';
+            const nextRejectionReason = isAcceptedOrAFaire
+              ? ''
+              : (m.rejectionReason || m.raisonRejet || m.raisonRejeteeMission || existing.rejectionReason || '');
             // Keep pending report details synchronized with tour mission changes
             if (
               existing.missionStatus !== (m.status || 'Brouillon') ||
@@ -7761,7 +7831,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     updateFsmMission(tourId, missionId, { providedByClientParts: newProvidedParts });
   };
 
-  const updateFsmMission = (tourId: string, missionId: string, fields: any) => {
+  const updateFsmMission = (tourId: string, missionId: string, fields: any, markDirty: boolean = true) => {
     if (fields.status === 'À faire' || fields.status === 'En cours' || fields.status === 'Effectué') {
       const tour = fsmTours.find(t => t.id === tourId);
       const mission = (tour?.missions || []).find((m: any) => m.id === missionId);
@@ -7778,6 +7848,22 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     }
     if ('estimatedSlot' in fields) {
       extraFields.isManualSlot = !!fields.estimatedSlot && fields.estimatedSlot !== '';
+    }
+    if (fields.status) {
+      const sitNorm = String(fields.status).trim().toLowerCase();
+      if (
+        sitNorm === 'accepté client' ||
+        sitNorm === 'accepte client' ||
+        sitNorm === 'à faire' ||
+        sitNorm === 'a faire'
+      ) {
+        extraFields.commentaire = '';
+        extraFields.refusalComment = '';
+        extraFields.clientRefusalComment = '';
+        extraFields.rejectionReason = '';
+        extraFields.raisonRejet = '';
+        extraFields.raisonRejeteeMission = '';
+      }
     }
 
     const updatedTours = fsmTours.map(t => {
@@ -7801,24 +7887,15 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       }
     }
 
-    if (tourId && tourId !== 'a-trier') {
+    if (markDirty && tourId) {
       setDirtyFsmTourIds(prev => ({ ...prev, [tourId]: true }));
     }
 
-    saveFsmTours(updatedTours);
+    saveFsmTours(updatedTours, !markDirty);
   };
 
   const resolveMissionAvisageInfo = (m: any, defibObj?: any, otherEqObj?: any, clientObj?: any) => {
     const eq = defibObj || otherEqObj || defibrillateurs.find(df => df.identifiant === m.defibIdentifiant) || otherEquipments.find((oe: any) => oe.identifiant === m.defibIdentifiant);
-    const matchedClient = clientObj || clients.find(c =>
-      (m.clientId && (c.id === m.clientId || c.denomination === m.clientId)) ||
-      (eq?.clientId && (c.id === eq.clientId || c.denomination === eq.clientId)) ||
-      (m.clientName && c.denomination && c.denomination.trim().toLowerCase() === m.clientName.trim().toLowerCase())
-    );
-
-    const clientName = eq?.denominationClient || matchedClient?.denomination || m.clientName || '';
-    const siteName = eq?.nomSite || (eq as any)?.nomPrenomSite || m.siteName || matchedClient?.nomSite || '';
-
     const isFormationMission =
       m.equipmentType === 'Formation' ||
       m.equipmentType?.toLowerCase()?.includes('formation') ||
@@ -7826,6 +7903,39 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     const fmt = isFormationMission
       ? formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant)
       : null;
+
+    const candidateClientIds = [
+      m?.clientId,
+      (m as any)?.clientIdField,
+      eq?.clientId,
+      (eq as any)?.clientIdField,
+      fmt?.clientId
+    ]
+      .map(s => String(s || '').trim().toLowerCase())
+      .filter(Boolean);
+
+    const candidateClientNames = [
+      (eq as any)?.denominationClient,
+      (eq as any)?.clientName,
+      (eq as any)?.clientNom,
+      m?.clientName,
+      (fmt as any)?.clientName
+    ]
+      .map(s => String(s || '').trim().toLowerCase())
+      .filter(Boolean);
+
+    const matchedClient = clientObj || clients.find(c => {
+      if (!c) return false;
+      const cKeys = [c.id, c.clientIdField, (c as any).codeClient, c.denomination]
+        .map(s => String(s || '').trim().toLowerCase())
+        .filter(Boolean);
+      if (candidateClientIds.some(k => cKeys.includes(k))) return true;
+      if (c.denomination && candidateClientNames.includes(c.denomination.trim().toLowerCase())) return true;
+      return false;
+    });
+
+    const clientName = eq?.denominationClient || matchedClient?.denomination || m.clientName || '';
+    const siteName = eq?.nomSite || (eq as any)?.nomPrenomSite || m.siteName || matchedClient?.nomSite || '';
 
     const numVoie =
       (eq ? (eq.numVoie || (eq as any).numeroVoie || (eq as any).numero_et_voie || (eq as any).adresse || '') : '') ||
@@ -7850,10 +7960,52 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     const locParts = [numVoie, ville, cp].map(s => String(s || '').trim()).filter(Boolean);
     const localisation = locParts.join(', ') || m.clientAddress || m.location || m.address || '';
 
-    const clientIdField = matchedClient?.id || eq?.clientId || m.clientId || '';
+    const isInternalDatasetId = (val: any) => {
+      const s = String(val || '').trim();
+      return (
+        !s ||
+        s.startsWith('sheet_cli_') ||
+        s.startsWith('sheet_def_') ||
+        s.startsWith('sheet_am_') ||
+        s.startsWith('sheet_gen_') ||
+        /^c-\d+$/.test(s)
+      );
+    };
+
+    let clientIdField =
+      (!isInternalDatasetId((matchedClient as any)?.clientIdField) ? String((matchedClient as any).clientIdField).trim() : '') ||
+      (!isInternalDatasetId((eq as any)?.clientIdField) ? String((eq as any).clientIdField).trim() : '') ||
+      (!isInternalDatasetId((m as any)?.clientIdField) ? String((m as any).clientIdField).trim() : '') ||
+      '';
+    if (!clientIdField && m.autreReference) {
+      const matchedDoc = commercialDocs.find((d: any) =>
+        d.reference === m.autreReference || d.numeroCommande === m.autreReference || d.ref === m.autreReference
+      );
+      if (matchedDoc && !isInternalDatasetId((matchedDoc as any).clientIdField)) {
+        clientIdField = String((matchedDoc as any).clientIdField).trim();
+      }
+    }
+    if (!clientIdField && m.bonCommandeId && m.bonCommandeId !== 'custom') {
+      const matchedDoc = commercialDocs.find((d: any) =>
+        d.id === m.bonCommandeId ||
+        d.bonCommandeEntete === m.bonCommandeId ||
+        d.bonCommandeReference === m.bonCommandeId ||
+        d.ref === m.bonCommandeId
+      );
+      if (matchedDoc && !isInternalDatasetId((matchedDoc as any).clientIdField)) {
+        clientIdField = String((matchedDoc as any).clientIdField).trim();
+      }
+    }
+    if (!clientIdField) {
+      clientIdField = !isInternalDatasetId(eq?.clientId)
+        ? String(eq.clientId).trim()
+        : !isInternalDatasetId(m?.clientId)
+        ? String(m.clientId).trim()
+        : '';
+    }
 
     // Bidirectional lookup for Payeur ID from equipment, client, or commercialDocs
-    let payeurId = (eq as any)?.payeurId || (matchedClient as any)?.payeurId || '';
+    let payeurId = (eq as any)?.payeurId || (matchedClient as any)?.payeurId || (m as any)?.payeurId || '';
     if (!payeurId && m.autreReference) {
       const matchedDoc = commercialDocs.find((d: any) =>
         d.reference === m.autreReference || d.numeroCommande === m.autreReference
@@ -7910,7 +8062,12 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       const otherEq = otherEquipments.find((oe: any) => oe.identifiant === defibId);
       const eq = defib || otherEq;
       if (eq) {
-        const index = updatedClientsList.findIndex(c => c.id === eq.clientId || c.denomination === eq.clientId);
+        const index = updatedClientsList.findIndex(c =>
+          c.id === eq.clientId ||
+          (c.clientIdField && (c.clientIdField === eq.clientId || c.clientIdField === (eq as any).clientIdField)) ||
+          c.denomination === eq.clientId ||
+          ((eq as any).denominationClient && c.denomination && c.denomination.trim().toLowerCase() === String((eq as any).denominationClient).trim().toLowerCase())
+        );
         if (index !== -1) {
           const matchedClient = updatedClientsList[index];
           const clientEmail = eq.emailSite || matchedClient.email || matchedClient.emailSite;
@@ -7971,13 +8128,23 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
 
     let client: any = null;
     if (m.clientId) {
-      client = clients.find(c => c.id === m.clientId || c.denomination === m.clientId);
+      client = clients.find(c => c.id === m.clientId || c.clientIdField === m.clientId || c.denomination === m.clientId);
     }
     if (!client && defib?.clientId) {
-      client = clients.find(c => c.id === defib.clientId || c.denomination === defib.clientId);
+      client = clients.find(c => c.id === defib.clientId || c.clientIdField === defib.clientId || c.denomination === defib.clientId);
+    }
+    if (!client && (defib as any)?.clientIdField) {
+      client = clients.find(c => c.clientIdField === (defib as any).clientIdField || c.id === (defib as any).clientIdField);
     }
     if (!client && otherEq?.clientId) {
-      client = clients.find(c => c.id === otherEq.clientId || c.denomination === otherEq.clientId);
+      client = clients.find(c => c.id === otherEq.clientId || c.clientIdField === otherEq.clientId || c.denomination === otherEq.clientId);
+    }
+    if (!client && (otherEq as any)?.clientIdField) {
+      client = clients.find(c => c.clientIdField === (otherEq as any).clientIdField || c.id === (otherEq as any).clientIdField);
+    }
+    if (!client && (defib as any)?.denominationClient) {
+      const cName = String((defib as any).denominationClient).trim().toLowerCase();
+      client = clients.find(c => c.denomination && c.denomination.trim().toLowerCase() === cName);
     }
     if (!client && m.clientName) {
       const cName = m.clientName.trim().toLowerCase();
@@ -8088,10 +8255,15 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       );
 
       if (isSent) {
-        updateFsmMission(tour.id, m.id, { 
-          status: 'Attente Client',
-          interventionReference: interventionRef
-        });
+        updateFsmMission(
+          tour.id,
+          m.id,
+          {
+            status: 'Attente Client',
+            interventionReference: interventionRef
+          },
+          false
+        );
         showFsmSystemInfoMessage("La proposition a été soumise au client par email avec succès.");
       } else {
         showFsmSystemInfoMessage("Une erreur est survenue lors de l'envoi de l'email.");
@@ -12866,16 +13038,104 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
   const syncEquipmentFromReportSnapshot = async (rep: any, isValidation: boolean = false): Promise<void> => {
     if (!rep) return;
     const rawSnap = rep.defibSnapshot || {};
+    const rawSheetRow = rep._rawSheetRow || rawSnap._rawSheetRow || {};
     const norm = (v: any) => String(v ?? '').trim().toUpperCase();
 
-    const candIdent = String(rawSnap.identifiant || rep.defibIdentifiant || rep.identifiant || '').trim();
-    const candSerie = String(
-      rawSnap.numeroSerie ||
-        rep.numeroSerie ||
-        rep.numSerie ||
-        rawSnap.specifiques?.numSerie ||
-        ''
-    ).trim();
+    const toIsoDate = (val: any): string => {
+      if (!val) return '';
+      const s = String(val).trim();
+      if (!s) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})[T\s,]/);
+      if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+      const ymdSlash = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})(?:[T\s,].*)?$/);
+      if (ymdSlash) return `${ymdSlash[1]}-${ymdSlash[2].padStart(2, '0')}-${ymdSlash[3].padStart(2, '0')}`;
+      const dmY = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})(?:[T\s,].*)?$/);
+      if (dmY) return `${dmY[3]}-${dmY[2].padStart(2, '0')}-${dmY[1].padStart(2, '0')}`;
+      const dmyShort = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})(?:[T\s,].*)?$/);
+      if (dmyShort) {
+        const yr = parseInt(dmyShort[3], 10);
+        const fullYr = yr < 70 ? 2000 + yr : 1900 + yr;
+        return `${fullYr}-${dmyShort[2].padStart(2, '0')}-${dmyShort[1].padStart(2, '0')}`;
+      }
+      return s;
+    };
+
+    const pickVal = (...vals: any[]): string => {
+      for (const v of vals) {
+        if (v !== undefined && v !== null) {
+          const s = String(v).trim();
+          if (s !== '' && s !== 'undefined' && s !== 'null') {
+            return s;
+          }
+        }
+      }
+      return '';
+    };
+
+    const pickLot = (...vals: any[]): string => {
+      for (const v of vals) {
+        if (v !== undefined && v !== null) {
+          const s = String(v).trim();
+          const low = s.toLowerCase();
+          if (s !== '' && low !== 'non' && low !== 'oui' && s !== '-' && low !== 'undefined' && low !== 'null') {
+            return s;
+          }
+        }
+      }
+      return '';
+    };
+
+    const pickDate = (...vals: any[]): string => {
+      for (const v of vals) {
+        const d = toIsoDate(v);
+        if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+          return d;
+        }
+      }
+      for (const v of vals) {
+        const d = toIsoDate(v);
+        if (d) return d;
+      }
+      return '';
+    };
+
+    const resolveVarIdAndLabel = (rawVal: any, categoryName: string, fallbackId?: string, fallbackLabel?: string): { id: string; label: string } => {
+      const val = String(rawVal || fallbackId || fallbackLabel || '').trim();
+      if (!val) return { id: fallbackId || '', label: fallbackLabel || '' };
+      const catVars = (variables || []).filter((v) => v && v.category === categoryName);
+      const exactId = catVars.find((v) => v.id === val);
+      if (exactId) {
+        return { id: exactId.id, label: exactId.nom || val };
+      }
+      const lower = val.toLowerCase();
+      const byName = catVars.find((v) => {
+        const n = String(v.nom || '').trim().toLowerCase();
+        const m = String(v.marque || '').trim().toLowerCase();
+        const full = m && m !== 'standard' ? `${n} (${m})` : n;
+        return n === lower || full === lower;
+      });
+      if (byName) {
+        return { id: byName.id, label: byName.nom || val };
+      }
+      return { id: val, label: val };
+    };
+
+    const candIdent = pickVal(
+      rawSnap.identifiant,
+      rep.defibIdentifiant,
+      rep.identifiant,
+      rawSheetRow['Section 1 - Identifiant'],
+      rawSheetRow['Section 1 - Identifiant.']
+    );
+    const candSerie = pickVal(
+      rawSnap.numeroSerie,
+      rep.numeroSerie,
+      rep.numSerie,
+      rawSnap.specifiques?.numSerie,
+      rawSheetRow['Section 1 - Numéro de série'],
+      rawSheetRow['Section 1 - Numéro de série.']
+    );
     const rawId = String(rawSnap.id || rep.defibId || '').trim();
     const candId =
       rawId && !rawId.startsWith('sheet-rapportsPdf') && rawId !== String(rep.id || '').trim()
@@ -12898,7 +13158,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         : undefined) ||
       (candId ? otherEquipments.find((o) => norm(o.id) === norm(candId)) : undefined);
 
-    const catStr = String(rawSnap.categorie || rep.categorie || matchedOther?.categorie || matchedDefib?.categorie || '').trim();
+    const catStr = pickVal(rawSnap.categorie, rep.categorie, matchedOther?.categorie, matchedDefib?.categorie);
     const catNorm = norm(catStr);
     const isDefibCategory =
       !catNorm ||
@@ -12910,8 +13170,14 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       (!matchedDefib && !!matchedOther) ||
       (!matchedDefib && !matchedOther && (!isDefibCategory || rawSnap.isOtherEquipment === true));
 
-    const cleanSnap: any = { ...rawSnap };
-    delete cleanSnap._sheetRowNumber;
+    const cleanSnap: Record<string, any> = {};
+    Object.keys(rawSnap).forEach((k) => {
+      if (k === '_sheetRowNumber' || k === '_rawSheetRow') return;
+      const v = rawSnap[k];
+      if (v !== undefined && v !== null && String(v).trim() !== '') {
+        cleanSnap[k] = v;
+      }
+    });
     if (
       String(cleanSnap.id || '').startsWith('sheet-rapportsPdf') ||
       (rep.id && cleanSnap.id === rep.id && !matchedDefib && !matchedOther)
@@ -12919,72 +13185,577 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       delete cleanSnap.id;
     }
 
-    const effectiveDerniereMaint =
-      cleanSnap.derniereMaintenance ||
-      rep.derniereMaintenance ||
-      (isValidation
-        ? new Date().toISOString().split('T')[0]
-        : (matchedDefib as any)?.derniereMaintenance || (matchedOther as any)?.derniereMaintenance || '');
+    const effectiveDerniereMaint = pickDate(
+      cleanSnap.derniereMaintenance,
+      rep.derniereMaintenance,
+      rawSheetRow['Section 5 - Dernière maintenance.'],
+      rawSheetRow['Section 5 - Dernière maintenance'],
+      rep.date,
+      rep.dateStr,
+      rep.interventionDate,
+      isValidation ? new Date().toISOString().split('T')[0] : '',
+      (matchedDefib as any)?.derniereMaintenance,
+      (matchedOther as any)?.derniereMaintenance
+    );
+
+    const reportProchaineMaint = pickDate(
+      cleanSnap.prochaineMaintenance,
+      rep.prochaineMaintenance,
+      rawSheetRow['Section 5 - Prochaine maintenance.'],
+      rawSheetRow['Section 5 - Prochaine maintenance']
+    );
+    const oldProchaineMaint = pickDate((matchedDefib as any)?.prochaineMaintenance, (matchedOther as any)?.prochaineMaintenance);
+    const computedNextMaint = effectiveDerniereMaint ? computeProchaineMaintenance(effectiveDerniereMaint) : '';
+    const effectiveProchaineMaint =
+      reportProchaineMaint && reportProchaineMaint !== oldProchaineMaint
+        ? reportProchaineMaint
+        : computedNextMaint || reportProchaineMaint || oldProchaineMaint || '';
+
+    const remplaceElectrodeAFlag =
+      pickVal(
+        rep.electrodeARemplacee,
+        rep.remplaceElectrodeA,
+        cleanSnap.remplaceElectrodeA,
+        rawSheetRow["Section 6 - Remplacée lors de l'intervention"],
+        rawSheetRow['Section 6 - Électrode A remplacée.']
+      ) === 'Oui';
+    const remplaceElectrodePFlag =
+      pickVal(
+        rep.electrodePRemplacee,
+        rep.remplaceElectrodeP,
+        cleanSnap.remplaceElectrodeP,
+        rawSheetRow["Section 7 - Remplacée lors de l'intervention"],
+        rawSheetRow['Section 7 - Électrode P remplacée.']
+      ) === 'Oui';
+    const remplaceBatterieFlag =
+      pickVal(
+        rep.batterieRemplacee,
+        rep.remplaceBatterie,
+        cleanSnap.remplaceBatterie,
+        rawSheetRow["Section 8 - Remplacée lors de l'intervention"],
+        rawSheetRow['Section 8 - Batterie remplacée.']
+      ) === 'Oui';
 
     if (!shouldTreatAsOther) {
+      const daeModel = resolveVarIdAndLabel(
+        pickVal(cleanSnap.modeleId, cleanSnap.modele, rep.modeleId, rep.modele, rawSheetRow['Section 1 - Modèle sélectionné'], rawSheetRow['Section 1 - Modèle de défibrillateur.']),
+        'Modèle DAE',
+        matchedDefib?.modeleId,
+        matchedDefib?.modele
+      );
+      const coffretModel = resolveVarIdAndLabel(
+        pickVal(cleanSnap.modeleCoffretId, cleanSnap.modeleCoffret, rep.modeleCoffretId, rep.modeleCoffret, rawSheetRow['Section 3 - Modèle sélectionné'], rawSheetRow['Section 3 - Modèle de boîtier.']),
+        'Modèle Coffret',
+        matchedDefib?.modeleCoffretId,
+        (matchedDefib as any)?.modeleCoffret
+      );
+      const elecAModel = resolveVarIdAndLabel(
+        pickVal(cleanSnap.modeleElectrodeAId, cleanSnap.modeleElectrodeA, rep.modeleElectrodeAId, rep.modeleElectrodeA, rawSheetRow['Section 6 - Modèle sélectionné'], rawSheetRow["Section 6 - Modèle d'électrode A."]),
+        'Modèle Électrode',
+        matchedDefib?.modeleElectrodeAId,
+        (matchedDefib as any)?.modeleElectrodeA
+      );
+      const elecASecoursModel = resolveVarIdAndLabel(
+        pickVal(
+          cleanSnap.modeleElectrodeASecoursId,
+          cleanSnap.modeleElectrodeSecoursA,
+          rep.modeleElectrodeASecoursId,
+          rep.modeleElectrodeSecoursA,
+          rawSheetRow['Section 6 (Secours) - Modèle sélectionné'],
+          rawSheetRow["Section 6 - Modèle d'électrode de secours."]
+        ),
+        'Modèle Électrode',
+        matchedDefib?.modeleElectrodeASecoursId,
+        (matchedDefib as any)?.modeleElectrodeASecours
+      );
+      const elecPModel = resolveVarIdAndLabel(
+        pickVal(cleanSnap.modeleElectrodePId, cleanSnap.modeleElectrodeP, rep.modeleElectrodePId, rep.modeleElectrodeP, rawSheetRow['Section 7 - Modèle sélectionné'], rawSheetRow["Section 7 - Modèle d'électrode P."]),
+        'Modèle Électrode',
+        matchedDefib?.modeleElectrodePId,
+        (matchedDefib as any)?.modeleElectrodeP
+      );
+      const elecPSecoursModel = resolveVarIdAndLabel(
+        pickVal(
+          cleanSnap.modeleElectrodePSecoursId,
+          cleanSnap.modeleElectrodeSecoursP,
+          rep.modeleElectrodePSecoursId,
+          rep.modeleElectrodeSecoursP,
+          rawSheetRow['Section 7 (Secours) - Modèle sélectionné'],
+          rawSheetRow["Section 7 - Modèle d'électrode de secours."]
+        ),
+        'Modèle Électrode',
+        matchedDefib?.modeleElectrodePSecoursId,
+        (matchedDefib as any)?.modeleElectrodePSecours
+      );
+      const batModel = resolveVarIdAndLabel(
+        pickVal(cleanSnap.modeleBatterieId, cleanSnap.modeleBatterie, rep.modeleBatterieId, rep.modeleBatterie, rawSheetRow['Section 8 - Modèle sélectionné'], rawSheetRow['Section 8 - Modèle de batterie.']),
+        'Modèle Batterie',
+        matchedDefib?.modeleBatterieId,
+        (matchedDefib as any)?.modeleBatterie
+      );
+      const batSecoursModel = resolveVarIdAndLabel(
+        pickVal(cleanSnap.modeleBatterieSecoursId, cleanSnap.modelePile, rep.modeleBatterieSecoursId, rep.modelePile, rawSheetRow['Section 9 - Modèle sélectionné']),
+        'Modèle Batterie',
+        matchedDefib?.modeleBatterieSecoursId,
+        (matchedDefib as any)?.modeleBatterieSecours
+      );
+
+      const lotASecours = pickLot(
+        cleanSnap.lotElectrodeASecours,
+        cleanSnap.lotElectrodeSecoursA,
+        rep.lotElectrodeASecours,
+        rep.lotElectrodeSecoursA,
+        rawSheetRow['Section 6 (Secours) - Numéro de lot'],
+        rawSheetRow["Section 6 - Lot de l'électrode de secours."],
+        matchedDefib?.lotElectrodeASecours
+      );
+      const perempASecours = pickDate(
+        cleanSnap.peremptionSecoursElectrodeA,
+        cleanSnap.peremptionElectrodeSecoursA,
+        rep.peremptionSecoursElectrodeA,
+        rep.peremptionElectrodeSecoursA,
+        rawSheetRow['Section 6 (Secours) - Date de péremption'],
+        rawSheetRow["Section 6 - Péremption de l'électrode de secours."],
+        matchedDefib?.peremptionSecoursElectrodeA
+      );
+      const lotPSecours = pickLot(
+        cleanSnap.lotElectrodePSecours,
+        cleanSnap.lotElectrodeSecoursP,
+        rep.lotElectrodePSecours,
+        rep.lotElectrodeSecoursP,
+        rawSheetRow['Section 7 (Secours) - Numéro de lot'],
+        rawSheetRow["Section 7 - Lot de l'électrode de secours."],
+        matchedDefib?.lotElectrodePSecours
+      );
+      const perempPSecours = pickDate(
+        cleanSnap.peremptionSecoursElectrodeP,
+        cleanSnap.peremptionElectrodeSecoursP,
+        rep.peremptionSecoursElectrodeP,
+        rep.peremptionElectrodeSecoursP,
+        rawSheetRow['Section 7 (Secours) - Date de péremption'],
+        rawSheetRow["Section 7 - Péremption de l'électrode de secours."],
+        matchedDefib?.peremptionSecoursElectrodeP
+      );
+      const lotBatSecours = pickLot(
+        cleanSnap.lotBatterieSecours,
+        cleanSnap.lotPile,
+        rep.lotBatterieSecours,
+        rep.lotPile,
+        rawSheetRow['Section 9 - Numéro de lot'],
+        matchedDefib?.lotBatterieSecours
+      );
+      const perempBatSecours = pickDate(
+        cleanSnap.peremptionBatterieSecours,
+        cleanSnap.peremptionPile,
+        rep.peremptionBatterieSecours,
+        rep.peremptionPile,
+        rawSheetRow['Section 9 - Date de péremption'],
+        matchedDefib?.peremptionBatterieSecours
+      );
+
+      const instExtVal = pickVal(
+        cleanSnap.installeExterieur,
+        rep.installeExterieur,
+        rawSheetRow['Section 3 - Installé en extérieur'],
+        rawSheetRow["Section 3 - Installé à l'extérieur."],
+        matchedDefib?.installeExterieur
+      );
+      const isExt =
+        instExtVal === 'Oui' ||
+        cleanSnap.interieurExterieur === 'Extérieur' ||
+        cleanSnap.exterieur === true ||
+        cleanSnap.exterieur === 'Oui' ||
+        (instExtVal !== 'Non' && (matchedDefib?.interieurExterieur === 'Extérieur' || matchedDefib?.exterieur === true));
+
       const mergedDefib: any = {
         ...(matchedDefib || {}),
         ...cleanSnap,
         id: matchedDefib?.id || candId || cleanSnap.id || 'df_' + Date.now(),
         _sheetRowNumber: matchedDefib ? (matchedDefib as any)._sheetRowNumber : undefined,
+        // Section 1 - Identification & État
         identifiant: candIdent || matchedDefib?.identifiant || '',
         numeroSerie: candSerie || matchedDefib?.numeroSerie || '',
         categorie: catStr || matchedDefib?.categorie || 'Défibrillateur',
-        marque: cleanSnap.marque || rep.marque || matchedDefib?.marque || '',
-        modele: cleanSnap.modele || rep.modele || matchedDefib?.modele || '',
-        etat: cleanSnap.etat || rep.etat || matchedDefib?.etat || '',
-        nomSite:
-          cleanSnap.nomSite ||
-          cleanSnap.denomination ||
-          rep.nomSite ||
-          rep.denomination ||
-          matchedDefib?.nomSite ||
-          '',
-        denomination:
-          cleanSnap.denomination ||
-          cleanSnap.nomSite ||
-          rep.denomination ||
-          rep.nomSite ||
-          (matchedDefib as any)?.denomination ||
-          matchedDefib?.nomSite ||
-          '',
-        emplacement:
-          cleanSnap.emplacement ||
-          cleanSnap.commentaireAdresse ||
-          rep.emplacement ||
-          matchedDefib?.emplacement ||
-          '',
-        adresse: cleanSnap.adresse || rep.adresse || matchedDefib?.adresse || '',
-        codePostal: cleanSnap.codePostal || rep.codePostal || matchedDefib?.codePostal || '',
-        ville: cleanSnap.ville || rep.ville || matchedDefib?.ville || '',
-        pays: cleanSnap.pays || rep.pays || matchedDefib?.pays || '',
-        latitude: cleanSnap.latitude || rep.latitude || matchedDefib?.latitude || '',
-        longitude: cleanSnap.longitude || rep.longitude || matchedDefib?.longitude || '',
-        fabrication:
-          cleanSnap.fabrication ||
-          cleanSnap.dateFabrication ||
-          rep.fabrication ||
-          rep.dateFabrication ||
-          matchedDefib?.fabrication ||
-          '',
-        miseEnService:
-          cleanSnap.miseEnService ||
-          cleanSnap.dateMiseEnService ||
-          rep.miseEnService ||
-          rep.dateMiseEnService ||
-          matchedDefib?.miseEnService ||
-          '',
+        marque: pickVal(cleanSnap.marque, rep.marque, matchedDefib?.marque),
+        modeleId: daeModel.id,
+        modele: daeModel.label,
+        numeroAtlasante: pickVal(
+          cleanSnap.numeroAtlasante,
+          rep.numeroAtlasante,
+          rawSheetRow['Section 1 - Numéro Atlasanté.'],
+          rawSheetRow['Section 1 - Numéro Atlasanté'],
+          matchedDefib?.numeroAtlasante
+        ),
+        versionLogiciel: pickVal(
+          cleanSnap.versionLogiciel,
+          rep.versionLogiciel,
+          rawSheetRow['Section 1 - Version du logiciel.'],
+          rawSheetRow['Section 1 - Version du logiciel'],
+          matchedDefib?.versionLogiciel
+        ),
+        typeDefibrillateur: pickVal(
+          cleanSnap.typeDefibrillateur,
+          rep.typeDefibrillateur,
+          rawSheetRow['Section 1 - Type de défibrillateur.'],
+          rawSheetRow['Section 1 - Type de défibrillateur'],
+          matchedDefib?.typeDefibrillateur
+        ),
+        dea: pickVal(cleanSnap.dea, rep.dea, matchedDefib?.dea, 'Non'),
+        ecran: pickVal(cleanSnap.ecran, rep.ecran, matchedDefib?.ecran, 'Non'),
+        chocs: pickVal(cleanSnap.chocs, rep.chocs, matchedDefib?.chocs, '0'),
+        rcp: pickVal(cleanSnap.rcp, rep.rcp, matchedDefib?.rcp, 'Non'),
+        horsService: pickVal(cleanSnap.horsService, rep.horsService, matchedDefib?.horsService, 'Non'),
+        pretEnCours: pickVal(cleanSnap.pretEnCours, rep.pretEnCours, matchedDefib?.pretEnCours, 'Non'),
+        pretId: pickVal(cleanSnap.pretId, rep.pretId, matchedDefib?.pretId),
+        etat: pickVal(cleanSnap.etat, rep.etat, matchedDefib?.etat),
+        conforme: pickVal(cleanSnap.conforme, rep.conforme, matchedDefib?.conforme, 'Oui'),
+        commentaire: pickVal(cleanSnap.commentaire, rep.diagnosticCommentaire, rep.remarques, matchedDefib?.commentaire),
+        photoUrl: pickVal(cleanSnap.photoUrl, rep.photoUrl, matchedDefib?.photoUrl),
+        photo2Url: pickVal(cleanSnap.photo2Url, rep.photo2Url, rep.photoArriereUrl, matchedDefib?.photo2Url),
+        photo3Url: pickVal(cleanSnap.photo3Url, rep.photo3Url, rep.photoResultatTestUrl, matchedDefib?.photo3Url),
+        // Section 2 - Client & Contrat
+        clientId: pickVal(cleanSnap.clientId, rep.clientId, matchedDefib?.clientId),
+        nomSite: pickVal(
+          cleanSnap.nomSite,
+          cleanSnap.denomination,
+          rep.nomSite,
+          rep.denomination,
+          rawSheetRow['Section 1 - Dénomination'],
+          rawSheetRow['Section 1 - Dénomination.'],
+          matchedDefib?.nomSite
+        ),
+        denomination: pickVal(
+          cleanSnap.denomination,
+          cleanSnap.nomSite,
+          rep.denomination,
+          rep.nomSite,
+          rawSheetRow['Section 1 - Dénomination'],
+          rawSheetRow['Section 1 - Dénomination.'],
+          (matchedDefib as any)?.denomination,
+          matchedDefib?.nomSite
+        ),
+        nomPrenomSite: pickVal(
+          cleanSnap.nomPrenomSite,
+          rep.nomPrenomSite,
+          rawSheetRow['Section 2 - Contact sur site (Nom/Prénom)'],
+          rawSheetRow['Section 2 - Nom et prénom (site).'],
+          matchedDefib?.nomPrenomSite
+        ),
+        telephoneSite: pickVal(
+          cleanSnap.telephoneSite,
+          rep.telephoneSite,
+          rawSheetRow['Section 2 - Téléphone sur site'],
+          rawSheetRow['Section 2 - Téléphone (site).'],
+          matchedDefib?.telephoneSite
+        ),
+        emailSite: pickVal(
+          cleanSnap.emailSite,
+          rep.emailSite,
+          rawSheetRow['Section 2 - Email sur site'],
+          rawSheetRow['Section 2 - E-mail (site).'],
+          matchedDefib?.emailSite
+        ),
+        contrat: pickVal(cleanSnap.contrat, rep.contrat, matchedDefib?.contrat, 'Non'),
+        nomContrat: pickVal(cleanSnap.nomContrat, rep.nomContrat, matchedDefib?.nomContrat),
+        referenceContrat: pickVal(cleanSnap.referenceContrat, rep.referenceContrat, matchedDefib?.referenceContrat),
+        debutContrat: pickDate(cleanSnap.debutContrat, rep.debutContrat, matchedDefib?.debutContrat),
+        finContrat: pickDate(cleanSnap.finContrat, rep.finContrat, matchedDefib?.finContrat),
+        // Section 3 - Coffret / Boîtier & Kit / Trousse
+        modeleCoffretId: coffretModel.id,
+        modeleCoffret: coffretModel.label,
+        numeroLotCoffret: pickLot(
+          cleanSnap.numeroLotCoffret,
+          rep.numeroLotCoffret,
+          rawSheetRow['Section 3 - Numéro de lot du boîtier.'],
+          rawSheetRow['Section 3 - Numéro de lot du boîtier'],
+          rawSheetRow['Section 3 - Numéro de lot du coffret'],
+          matchedDefib?.numeroLotCoffret
+        ),
+        commentaireCoffret: pickVal(
+          cleanSnap.commentaireCoffret,
+          rep.commentaireCoffret,
+          rawSheetRow['Section 3 - Commentaire concernant le boîtier.'],
+          rawSheetRow['Section 3 - Commentaire coffret'],
+          matchedDefib?.commentaireCoffret
+        ),
+        equipeAlarme: pickVal(cleanSnap.equipeAlarme, rep.equipeAlarme, cleanSnap.alarmeCoffret, rep.alarme, matchedDefib?.equipeAlarme, 'Oui'),
+        alarmeCoffret: pickVal(cleanSnap.alarmeCoffret, cleanSnap.alarme, rep.alarme, matchedDefib?.alarmeCoffret, 'Oui'),
+        armoireConnectee: pickVal(cleanSnap.armoireConnectee, rep.armoireConnectee, matchedDefib?.armoireConnectee, 'Non'),
+        dispositifHandicap: pickVal(cleanSnap.dispositifHandicap, rep.dispositifHandicap, matchedDefib?.dispositifHandicap, 'Non'),
+        signaletiqueBoitier: pickVal(
+          cleanSnap.signaletiqueBoitier,
+          cleanSnap.signaletiqueConforme,
+          rep.signaletiqueConforme,
+          matchedDefib?.signaletiqueBoitier,
+          'Oui'
+        ),
+        installeExterieur: isExt ? 'Oui' : 'Non',
+        exterieur: isExt,
+        interieurExterieur: isExt ? 'Extérieur' : 'Intérieur',
+        peremptionTrousse: pickDate(
+          cleanSnap.peremptionTrousse,
+          cleanSnap.peremptionKit,
+          rep.peremptionTrousse,
+          rep.peremptionKit,
+          rawSheetRow['Section 10 - Date de péremption'],
+          rawSheetRow['Section 9 - Péremption de la trousse.'],
+          matchedDefib?.peremptionTrousse
+        ),
+        kitCiseauxPresents: pickVal(cleanSnap.kitCiseauxPresents, cleanSnap.kitCiseaux, rep.kitCiseauxPresents, rep.kitCiseaux, matchedDefib?.kitCiseauxPresents, 'Oui'),
+        kitServiettesPresentes: pickVal(cleanSnap.kitServiettesPresentes, cleanSnap.kitCompresses, rep.kitServiettesPresentes, rep.kitCompresses, matchedDefib?.kitServiettesPresentes, 'Oui'),
+        kitRasoirPresent: pickVal(cleanSnap.kitRasoirPresent, cleanSnap.kitRasoir, rep.kitRasoirPresent, rep.kitRasoir, matchedDefib?.kitRasoirPresent, 'Oui'),
+        kitGantsPresents: pickVal(cleanSnap.kitGantsPresents, cleanSnap.kitGants, rep.kitGantsPresents, rep.kitGants, matchedDefib?.kitGantsPresents, 'Oui'),
+        kitMasquePresent: pickVal(cleanSnap.kitMasquePresent, cleanSnap.kitMasque, rep.kitMasquePresent, rep.kitMasque, matchedDefib?.kitMasquePresent, 'Oui'),
+        kitPeremptionMasque: pickDate(cleanSnap.kitPeremptionMasque, rep.kitPeremptionMasque, matchedDefib?.kitPeremptionMasque),
+        kitPeremptionServiettes: pickDate(cleanSnap.kitPeremptionServiettes, rep.kitPeremptionServiettes, matchedDefib?.kitPeremptionServiettes),
+        // Section 4 - Adresse & Localisation
+        numVoie: pickVal(cleanSnap.numVoie, cleanSnap.adresse, rep.numVoie, rep.adresse, rawSheetRow['Section 4 - Adresse (Numéro et voie)'], rawSheetRow['Section 4 - Numéro et voie.'], matchedDefib?.numVoie, matchedDefib?.adresse),
+        adresse: pickVal(cleanSnap.adresse, cleanSnap.numVoie, rep.adresse, rep.numVoie, rawSheetRow['Section 4 - Adresse (Numéro et voie)'], rawSheetRow['Section 4 - Numéro et voie.'], matchedDefib?.adresse, matchedDefib?.numVoie),
+        cp: pickVal(cleanSnap.cp, cleanSnap.codePostal, rep.cp, rep.codePostal, rawSheetRow['Section 4 - Code postal'], rawSheetRow['Section 4 - Code postal.'], matchedDefib?.cp, matchedDefib?.codePostal),
+        codePostal: pickVal(cleanSnap.codePostal, cleanSnap.cp, rep.codePostal, rep.cp, rawSheetRow['Section 4 - Code postal'], rawSheetRow['Section 4 - Code postal.'], matchedDefib?.codePostal, matchedDefib?.cp),
+        ville: pickVal(cleanSnap.ville, rep.ville, rawSheetRow['Section 4 - Ville'], rawSheetRow['Section 4 - Ville.'], matchedDefib?.ville),
+        region: pickVal(cleanSnap.region, rep.region, rawSheetRow['Section 4 - Région'], rawSheetRow['Section 4 - Région.'], matchedDefib?.region),
+        pays: pickVal(cleanSnap.pays, rep.pays, rawSheetRow['Section 4 - Pays'], rawSheetRow['Section 4 - Pays.'], matchedDefib?.pays, 'France'),
+        latitude: pickVal(cleanSnap.latitude, rep.latitude, rawSheetRow['Section 4 - Latitude GPS'], rawSheetRow['Section 4 - Latitude.'], matchedDefib?.latitude),
+        longitude: pickVal(cleanSnap.longitude, rep.longitude, rawSheetRow['Section 4 - Longitude GPS'], rawSheetRow['Section 4 - Longitude.'], matchedDefib?.longitude),
+        emplacement: pickVal(cleanSnap.emplacement, cleanSnap.commentaireAdresse, rep.emplacement, rawSheetRow['Section 1 - Emplacement'], rawSheetRow['Section 1 - Emplacement.'], matchedDefib?.emplacement),
+        commentaireAdresse: pickVal(cleanSnap.commentaireAdresse, cleanSnap.emplacement, rep.commentaireAdresse, rep.emplacement, rawSheetRow['Section 4 - Commentaire concernant l’adresse.'], matchedDefib?.commentaireAdresse, matchedDefib?.emplacement),
+        acces247: pickVal(cleanSnap.acces247, rep.acces247, rawSheetRow['Section 4 - Accès 24h/24 et 7j/7.'], matchedDefib?.acces247, 'Non'),
+        accesSemaine: pickVal(cleanSnap.accesSemaine, rep.accesSemaine, rawSheetRow['Section 4 - Plage horaire en semaine.'], matchedDefib?.accesSemaine),
+        accesWeekend: pickVal(cleanSnap.accesWeekend, rep.accesWeekend, rawSheetRow['Section 4 - Plage horaire le weekend.'], matchedDefib?.accesWeekend),
+        // Section 5 - Dates DAE
+        fabrication: pickDate(
+          cleanSnap.fabrication,
+          cleanSnap.dateFabrication,
+          rep.fabrication,
+          rep.dateFabrication,
+          rawSheetRow['Section 5 - Date de fabrication'],
+          rawSheetRow['Section 5 - Fabrication.'],
+          matchedDefib?.fabrication
+        ),
+        miseEnService: pickDate(
+          cleanSnap.miseEnService,
+          cleanSnap.dateMiseEnService,
+          rep.miseEnService,
+          rep.dateMiseEnService,
+          rawSheetRow['Section 5 - Date de mise en service'],
+          rawSheetRow['Section 5 - Mise en service.'],
+          matchedDefib?.miseEnService
+        ),
+        finGarantie: pickDate(
+          cleanSnap.finGarantie,
+          rep.finGarantie,
+          rawSheetRow['Section 5 - Date de fin de garantie'],
+          rawSheetRow['Section 5 - Fin de garantie.'],
+          matchedDefib?.finGarantie
+        ),
+        sortieFabricant: pickDate(
+          cleanSnap.sortieFabricant,
+          rep.sortieFabricant,
+          rawSheetRow['Section 5 - Sortie fabricant.'],
+          rawSheetRow['Section 5 - Sortie d’usine.'],
+          rawSheetRow["Section 5 - Sortie d'usine."],
+          matchedDefib?.sortieFabricant
+        ),
         derniereMaintenance: effectiveDerniereMaint,
-        prochaineMaintenance:
-          cleanSnap.prochaineMaintenance ||
-          rep.prochaineMaintenance ||
-          matchedDefib?.prochaineMaintenance ||
-          '',
+        prochaineMaintenance: effectiveProchaineMaint,
+        preconisationRemplacement:
+          cleanSnap.preconisationRemplacement !== undefined
+            ? Boolean(cleanSnap.preconisationRemplacement === true || cleanSnap.preconisationRemplacement === 'Oui')
+            : rep.preconisationRemplacement !== undefined
+            ? Boolean(rep.preconisationRemplacement === true || rep.preconisationRemplacement === 'Oui')
+            : Boolean(matchedDefib?.preconisationRemplacement),
+        recommandationPreconisationRemplacement: pickVal(
+          cleanSnap.recommandationPreconisationRemplacement,
+          rep.recommandationPreconisationRemplacement,
+          matchedDefib?.recommandationPreconisationRemplacement
+        ),
+        // Section 6 - Électrode Adulte ou Mixte (A)
+        modeleElectrodeAId: elecAModel.id,
+        modeleElectrodeA: elecAModel.label,
+        lotElectrodeA: pickLot(
+          cleanSnap.lotElectrodeA,
+          rep.lotElectrodeA,
+          rawSheetRow['Section 6 - Numéro de lot'],
+          rawSheetRow['Section 6 - Lot A.'],
+          matchedDefib?.lotElectrodeA
+        ),
+        insertionElectrodeA: pickDate(
+          cleanSnap.insertionElectrodeA,
+          cleanSnap.fabricationElectrodeA,
+          rep.insertionElectrodeA,
+          rep.fabricationElectrodeA,
+          rawSheetRow['Section 6 - Date de fabrication'],
+          rawSheetRow['Section 6 - Insertion.'],
+          rawSheetRow['Section 6 - Insertion A.'],
+          remplaceElectrodeAFlag ? effectiveDerniereMaint : '',
+          matchedDefib?.insertionElectrodeA
+        ),
+        peremptionElectrodeA: pickDate(
+          cleanSnap.peremptionElectrodeA,
+          rep.peremptionElectrodeA,
+          rawSheetRow['Section 6 - Date de péremption'],
+          rawSheetRow['Section 6 - Péremption.'],
+          matchedDefib?.peremptionElectrodeA
+        ),
+        livraisonElectrodeA: pickDate(
+          cleanSnap.livraisonElectrodeA,
+          rep.livraisonElectrodeA,
+          rawSheetRow['Section 6 - Livraison A.'],
+          rawSheetRow['Section 6 - Livraison.'],
+          matchedDefib?.livraisonElectrodeA
+        ),
+        hasElectrodeASecours:
+          Boolean(elecASecoursModel.id || lotASecours || perempASecours)
+            ? 'Oui'
+            : pickVal(cleanSnap.hasElectrodeASecours, matchedDefib?.hasElectrodeASecours, 'Non'),
+        modeleElectrodeASecoursId: elecASecoursModel.id,
+        modeleElectrodeASecours: elecASecoursModel.label,
+        lotElectrodeASecours: lotASecours,
+        peremptionSecoursElectrodeA: perempASecours,
+        situationElectrodeA: pickVal(
+          cleanSnap.situationElectrodeA,
+          rep.situationElectrodeA,
+          rep.electrodeAConformeSante === 'Non' ? 'Rouge' : rep.electrodeAConformeSante === 'Oui' ? 'Vert' : '',
+          matchedDefib?.situationElectrodeA,
+          'Vert'
+        ),
+        commentaireElectrodeA: pickVal(
+          cleanSnap.commentaireElectrodeA,
+          rep.commentaireElectrodeA,
+          rawSheetRow['Section 6 - Commentaire concernant l’électrode A.'],
+          matchedDefib?.commentaireElectrodeA
+        ),
+        hasPadpakA: pickVal(cleanSnap.hasPadpakA, rep.hasPadpakA, rawSheetRow['Section 6 - PadPak.'], rawSheetRow['Section 6 - Padpak.'], matchedDefib?.hasPadpakA, 'Non'),
+        lotPadpakA: pickLot(cleanSnap.lotPadpakA, rep.lotPadpakA, rawSheetRow['Section 6 - Lot PadPak A.'], matchedDefib?.lotPadpakA),
+        peremptionPadpakA: pickDate(cleanSnap.peremptionPadpakA, rep.peremptionPadpakA, rawSheetRow['Section 6 - Péremption PadPak A.'], matchedDefib?.peremptionPadpakA),
+        // Section 7 - Électrode Pédiatrique (P)
+        modeleElectrodePId: elecPModel.id,
+        modeleElectrodeP: elecPModel.label,
+        lotElectrodeP: pickLot(
+          cleanSnap.lotElectrodeP,
+          rep.lotElectrodeP,
+          rawSheetRow['Section 7 - Numéro de lot'],
+          rawSheetRow['Section 7 - Lot P.'],
+          matchedDefib?.lotElectrodeP
+        ),
+        insertionElectrodeP: pickDate(
+          cleanSnap.insertionElectrodeP,
+          cleanSnap.fabricationElectrodeP,
+          rep.insertionElectrodeP,
+          rep.fabricationElectrodeP,
+          rawSheetRow['Section 7 - Date de fabrication'],
+          rawSheetRow['Section 7 - Insertion.'],
+          rawSheetRow['Section 7 - Insertion P.'],
+          remplaceElectrodePFlag ? effectiveDerniereMaint : '',
+          matchedDefib?.insertionElectrodeP
+        ),
+        peremptionElectrodeP: pickDate(
+          cleanSnap.peremptionElectrodeP,
+          rep.peremptionElectrodeP,
+          rawSheetRow['Section 7 - Date de péremption'],
+          rawSheetRow['Section 7 - Péremption.'],
+          matchedDefib?.peremptionElectrodeP
+        ),
+        livraisonElectrodeP: pickDate(
+          cleanSnap.livraisonElectrodeP,
+          rep.livraisonElectrodeP,
+          rawSheetRow['Section 7 - Livraison P.'],
+          rawSheetRow['Section 7 - Livraison.'],
+          matchedDefib?.livraisonElectrodeP
+        ),
+        hasElectrodePSecours:
+          Boolean(elecPSecoursModel.id || lotPSecours || perempPSecours)
+            ? 'Oui'
+            : pickVal(cleanSnap.hasElectrodePSecours, matchedDefib?.hasElectrodePSecours, 'Non'),
+        modeleElectrodePSecoursId: elecPSecoursModel.id,
+        modeleElectrodePSecours: elecPSecoursModel.label,
+        lotElectrodePSecours: lotPSecours,
+        peremptionSecoursElectrodeP: perempPSecours,
+        situationElectrodeP: pickVal(
+          cleanSnap.situationElectrodeP,
+          rep.situationElectrodeP,
+          rep.electrodePConformeSante === 'Non' ? 'Rouge' : rep.electrodePConformeSante === 'Oui' ? 'Vert' : '',
+          matchedDefib?.situationElectrodeP,
+          'Vert'
+        ),
+        commentaireElectrodeP: pickVal(
+          cleanSnap.commentaireElectrodeP,
+          rep.commentaireElectrodeP,
+          rawSheetRow['Section 7 - Commentaire concernant l’électrode P.'],
+          matchedDefib?.commentaireElectrodeP
+        ),
+        hasPadpakP: pickVal(cleanSnap.hasPadpakP, rep.hasPadpakP, rawSheetRow['Section 7 - PadPak.'], rawSheetRow['Section 7 - Padpak.'], matchedDefib?.hasPadpakP, 'Non'),
+        lotPadpakP: pickLot(cleanSnap.lotPadpakP, rep.lotPadpakP, rawSheetRow['Section 7 - Lot PadPak P.'], matchedDefib?.lotPadpakP),
+        peremptionPadpakP: pickDate(cleanSnap.peremptionPadpakP, rep.peremptionPadpakP, rawSheetRow['Section 7 - Péremption PadPak P.'], matchedDefib?.peremptionPadpakP),
+        // Section 8 - Batterie (B)
+        modeleBatterieId: batModel.id,
+        modeleBatterie: batModel.label,
+        lotBatterie: pickLot(
+          cleanSnap.lotBatterie,
+          rep.lotBatterie,
+          rawSheetRow['Section 8 - Numéro de lot'],
+          rawSheetRow['Section 8 - Lot B.'],
+          matchedDefib?.lotBatterie
+        ),
+        fabricationBatterie: pickDate(
+          cleanSnap.fabricationBatterie,
+          rep.fabricationBatterie,
+          rawSheetRow['Section 8 - Date de fabrication'],
+          rawSheetRow['Section 8 - Fabrication.'],
+          matchedDefib?.fabricationBatterie
+        ),
+        insertionBatterie: pickDate(
+          cleanSnap.insertionBatterie,
+          cleanSnap.miseEnServiceBatterie,
+          rep.insertionBatterie,
+          rep.miseEnServiceBatterie,
+          rawSheetRow['Section 8 - Date de mise en service'],
+          rawSheetRow['Section 8 - Insertion.'],
+          remplaceBatterieFlag ? effectiveDerniereMaint : '',
+          matchedDefib?.insertionBatterie
+        ),
+        livraisonBatterie: pickDate(
+          cleanSnap.livraisonBatterie,
+          rep.livraisonBatterie,
+          rawSheetRow['Section 8 - Livraison B.'],
+          rawSheetRow['Section 8 - Livraison.'],
+          matchedDefib?.livraisonBatterie
+        ),
+        peremptionBatterie: pickDate(
+          cleanSnap.peremptionBatterie,
+          rep.peremptionBatterie,
+          rawSheetRow['Section 8 - Date de péremption'],
+          rawSheetRow['Section 8 - Péremption.'],
+          matchedDefib?.peremptionBatterie
+        ),
+        pourcentageBatterie: pickVal(
+          cleanSnap.pourcentageBatterie,
+          rep.pourcentageBatterie,
+          rawSheetRow['Section 8 - Pourcentage constaté (%)'],
+          rawSheetRow['Section 8 - Pourcentage de charge.'],
+          matchedDefib?.pourcentageBatterie
+        ),
+        situationBatterie: pickVal(
+          cleanSnap.situationBatterie,
+          rep.situationBatterie,
+          rep.batterieConformeSante === 'Non' ? 'Rouge' : rep.batterieConformeSante === 'Oui' ? 'Vert' : '',
+          matchedDefib?.situationBatterie,
+          'Vert'
+        ),
+        commentaireBatterie: pickVal(
+          cleanSnap.commentaireBatterie,
+          rep.commentaireBatterie,
+          rawSheetRow['Section 8 - Commentaire concernant la batterie.'],
+          matchedDefib?.commentaireBatterie
+        ),
+        hasBatterieSecours:
+          Boolean(batSecoursModel.id || lotBatSecours || perempBatSecours)
+            ? 'Oui'
+            : pickVal(cleanSnap.hasBatterieSecours, matchedDefib?.hasBatterieSecours, 'Non'),
+        modeleBatterieSecoursId: batSecoursModel.id,
+        lotBatterieSecours: lotBatSecours,
+        peremptionBatterieSecours: perempBatSecours,
       };
       await handleUpdateDefib(mergedDefib as Defibrillateur);
     } else {
@@ -12997,20 +13768,20 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       if (effectiveSerie) {
         mergedSpecifiques.numSerie = effectiveSerie;
       }
-      if (cleanSnap.dateFabrication || cleanSnap.fabrication || rep.dateFabrication || rep.fabrication) {
-        mergedSpecifiques.dateFabrication =
-          cleanSnap.dateFabrication || cleanSnap.fabrication || rep.dateFabrication || rep.fabrication;
+      const fabDate = pickDate(cleanSnap.dateFabrication, cleanSnap.fabrication, rep.dateFabrication, rep.fabrication, mergedSpecifiques.dateFabrication, (matchedOther as any)?.fabrication);
+      if (fabDate) {
+        mergedSpecifiques.dateFabrication = fabDate;
       }
-      if (cleanSnap.dateMiseEnService || cleanSnap.miseEnService || rep.dateMiseEnService || rep.miseEnService) {
-        mergedSpecifiques.dateMiseEnService =
-          cleanSnap.dateMiseEnService || cleanSnap.miseEnService || rep.dateMiseEnService || rep.miseEnService;
+      const mesDate = pickDate(cleanSnap.dateMiseEnService, cleanSnap.miseEnService, rep.dateMiseEnService, rep.miseEnService, mergedSpecifiques.dateMiseEnService, (matchedOther as any)?.miseEnService);
+      if (mesDate) {
+        mergedSpecifiques.dateMiseEnService = mesDate;
       }
-      if (cleanSnap.dateReepreuve || rep.dateReepreuve) {
-        mergedSpecifiques.dateReepreuve = cleanSnap.dateReepreuve || rep.dateReepreuve;
+      const reepDate = pickDate(cleanSnap.dateReepreuve, rep.dateReepreuve, mergedSpecifiques.dateReepreuve);
+      if (reepDate) {
+        mergedSpecifiques.dateReepreuve = reepDate;
       }
-      if (cleanSnap.dateRemplacement || cleanSnap.prochaineMaintenance || rep.prochaineMaintenance) {
-        mergedSpecifiques.dateRemplacement =
-          cleanSnap.dateRemplacement || cleanSnap.prochaineMaintenance || rep.prochaineMaintenance;
+      if (effectiveProchaineMaint || cleanSnap.dateRemplacement) {
+        mergedSpecifiques.dateRemplacement = pickDate(cleanSnap.dateRemplacement, effectiveProchaineMaint, mergedSpecifiques.dateRemplacement);
       }
 
       const mergedOther: any = {
@@ -13021,70 +13792,24 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         identifiant: candIdent || matchedOther?.identifiant || '',
         numeroSerie: effectiveSerie,
         categorie: catStr || matchedOther?.categorie || 'Autre matériel',
-        marque: cleanSnap.marque || rep.marque || matchedOther?.marque || '',
-        modele: cleanSnap.modele || rep.modele || matchedOther?.modele || '',
-        etat: cleanSnap.etat || rep.etat || matchedOther?.etat || '',
-        denomination:
-          cleanSnap.denomination ||
-          cleanSnap.nomSite ||
-          rep.denomination ||
-          rep.nomSite ||
-          matchedOther?.denomination ||
-          '',
-        nomSite:
-          cleanSnap.nomSite ||
-          cleanSnap.denomination ||
-          rep.nomSite ||
-          rep.denomination ||
-          (matchedOther as any)?.nomSite ||
-          matchedOther?.denomination ||
-          '',
-        adresse: cleanSnap.adresse || rep.adresse || matchedOther?.adresse || '',
-        codePostal: cleanSnap.codePostal || rep.codePostal || matchedOther?.codePostal || '',
-        ville: cleanSnap.ville || rep.ville || matchedOther?.ville || '',
-        pays: cleanSnap.pays || rep.pays || matchedOther?.pays || '',
-        commentaireAdresse:
-          cleanSnap.commentaireAdresse ||
-          cleanSnap.emplacement ||
-          rep.emplacement ||
-          matchedOther?.commentaireAdresse ||
-          '',
-        emplacement:
-          cleanSnap.emplacement ||
-          cleanSnap.commentaireAdresse ||
-          rep.emplacement ||
-          (matchedOther as any)?.emplacement ||
-          matchedOther?.commentaireAdresse ||
-          '',
-        latitude: cleanSnap.latitude || rep.latitude || matchedOther?.latitude || '',
-        longitude: cleanSnap.longitude || rep.longitude || matchedOther?.longitude || '',
-        fabrication:
-          cleanSnap.fabrication ||
-          cleanSnap.dateFabrication ||
-          rep.fabrication ||
-          rep.dateFabrication ||
-          mergedSpecifiques.dateFabrication ||
-          '',
-        miseEnService:
-          cleanSnap.miseEnService ||
-          cleanSnap.dateMiseEnService ||
-          rep.miseEnService ||
-          rep.dateMiseEnService ||
-          mergedSpecifiques.dateMiseEnService ||
-          '',
+        marque: pickVal(cleanSnap.marque, rep.marque, matchedOther?.marque),
+        modele: pickVal(cleanSnap.modele, rep.modele, matchedOther?.modele),
+        etat: pickVal(cleanSnap.etat, rep.etat, matchedOther?.etat),
+        denomination: pickVal(cleanSnap.denomination, cleanSnap.nomSite, rep.denomination, rep.nomSite, matchedOther?.denomination),
+        nomSite: pickVal(cleanSnap.nomSite, cleanSnap.denomination, rep.nomSite, rep.denomination, (matchedOther as any)?.nomSite, matchedOther?.denomination),
+        adresse: pickVal(cleanSnap.adresse, cleanSnap.numVoie, rep.adresse, rep.numVoie, matchedOther?.adresse),
+        codePostal: pickVal(cleanSnap.codePostal, cleanSnap.cp, rep.codePostal, rep.cp, matchedOther?.codePostal),
+        ville: pickVal(cleanSnap.ville, rep.ville, matchedOther?.ville),
+        pays: pickVal(cleanSnap.pays, rep.pays, matchedOther?.pays, 'France'),
+        commentaireAdresse: pickVal(cleanSnap.commentaireAdresse, cleanSnap.emplacement, rep.emplacement, matchedOther?.commentaireAdresse),
+        emplacement: pickVal(cleanSnap.emplacement, cleanSnap.commentaireAdresse, rep.emplacement, (matchedOther as any)?.emplacement, matchedOther?.commentaireAdresse),
+        latitude: pickVal(cleanSnap.latitude, rep.latitude, matchedOther?.latitude),
+        longitude: pickVal(cleanSnap.longitude, rep.longitude, matchedOther?.longitude),
+        fabrication: fabDate,
+        miseEnService: mesDate,
         derniereMaintenance: effectiveDerniereMaint,
-        prochaineMaintenance:
-          cleanSnap.prochaineMaintenance ||
-          rep.prochaineMaintenance ||
-          (matchedOther as any)?.prochaineMaintenance ||
-          mergedSpecifiques.dateRemplacement ||
-          '',
-        observation:
-          cleanSnap.observation ||
-          cleanSnap.observationsGenerales ||
-          rep.observationsGenerales ||
-          matchedOther?.observation ||
-          '',
+        prochaineMaintenance: effectiveProchaineMaint,
+        observation: pickVal(cleanSnap.observation, cleanSnap.observationsGenerales, rep.observationsGenerales, matchedOther?.observation),
         specifiques: mergedSpecifiques,
       };
 
@@ -14345,6 +15070,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
               tenantId={tenantId}
               clients={clients}
               defibrillateurs={defibrillateurs}
+              otherEquipments={otherEquipments}
               defibSheetStats={defibSheetStats}
               variables={variables}
               onAddClient={handleAddClient}
@@ -16843,6 +17569,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                   return (
                                     <button
                                       type="button"
+                                      id={`btn-save-fsm-tour-${t.id}`}
+                                      data-fsm-save-btn="true"
                                       disabled={isSaveDisabled}
                                       onMouseDown={() => {
                                         if (isSaveDisabled) return;
@@ -16854,6 +17582,11 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
 
                                         // Disable button and lower opacity
                                         setSavingTourIds(prev => ({ ...prev, [t.id]: true }));
+                                        setDirtyFsmTourIds(prev => {
+                                          const copy = { ...prev };
+                                          delete copy[t.id];
+                                          return copy;
+                                        });
 
                                         // Save fsmTours
                                         saveFsmTours([...fsmTours], true);
@@ -16984,9 +17717,13 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                           </button>
                                           
                                           {/* Transférer */}
-                                          <div className="relative inline-flex items-center">
+                                          <div
+                                            className="relative inline-flex items-center"
+                                            title={dirtyFsmTourIds[t.id] ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »." : undefined}
+                                          >
                                             <button
                                               type="button"
+                                              disabled={!!dirtyFsmTourIds[t.id]}
                                               id="btn-bulk-assign-tour"
                                               style={{
                                                 backgroundColor: 'rgb(15, 23, 42)',
@@ -16998,7 +17735,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                 fontSize: '18px',
                                                 fontWeight: '600',
                                                 fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                                                cursor: 'pointer',
+                                                cursor: dirtyFsmTourIds[t.id] ? 'not-allowed' : 'pointer',
+                                                opacity: dirtyFsmTourIds[t.id] ? 0.4 : 1,
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
@@ -17013,14 +17751,16 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                             <select
                                               id="fsm-bulk-assign-tour-dropdown"
                                               aria-label="Transférer"
+                                              disabled={!!dirtyFsmTourIds[t.id]}
                                               value=""
                                               onChange={(e) => {
+                                                if (dirtyFsmTourIds[t.id]) return;
                                                 const targetTourId = e.target.value;
                                                 if (targetTourId) {
                                                   bulkAssignFsmMissionsToTour(targetTourId);
                                                 }
                                               }}
-                                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                                              className={`absolute inset-0 w-full h-full opacity-0 ${dirtyFsmTourIds[t.id] ? 'cursor-not-allowed pointer-events-none' : 'cursor-pointer'} z-20`}
                                             >
                                               <option value="" disabled>
                                                 {draftToursForLookup.length === 0
@@ -17038,8 +17778,13 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                           {/* Supprimer */}
                                           <button
                                             type="button"
-                                            onClick={bulkCancelFsmMissions}
+                                            disabled={!!dirtyFsmTourIds[t.id]}
+                                            onClick={() => {
+                                              if (dirtyFsmTourIds[t.id]) return;
+                                              bulkCancelFsmMissions();
+                                            }}
                                             id="btn-bulk-cancel-intervention"
+                                            title={dirtyFsmTourIds[t.id] ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »." : undefined}
                                             style={{
                                               backgroundColor: 'rgb(210, 45, 11)',
                                               background: 'rgb(210, 45, 11)',
@@ -17050,7 +17795,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                               fontSize: '18px',
                                               fontWeight: '600',
                                               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                                              cursor: 'pointer',
+                                              cursor: dirtyFsmTourIds[t.id] ? 'not-allowed' : 'pointer',
+                                              opacity: dirtyFsmTourIds[t.id] ? 0.4 : 1,
                                               display: 'inline-flex',
                                               alignItems: 'center',
                                               justifyContent: 'center',
@@ -17058,7 +17804,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                               boxSizing: 'border-box',
                                               lineHeight: '1.25',
                                             }}
-                                            className="hover:opacity-90 transition-opacity"
+                                            className={`${dirtyFsmTourIds[t.id] ? 'cursor-not-allowed opacity-40' : 'hover:opacity-90'} transition-opacity`}
                                           >
                                             Supprimer
                                           </button>
@@ -17531,14 +18277,17 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                           const nextBcId = e.target.value;
                                                           if (nextBcId && nextBcId !== 'custom') {
                                                             const foundDoc = commercialDocs.find(doc => doc.id === nextBcId);
+                                                            const bcLabel = foundDoc
+                                                              ? String(foundDoc.bonCommandeEntete || foundDoc.bonCommandeReference || foundDoc.ref || nextBcId).trim()
+                                                              : nextBcId;
                                                             const articleParts = foundDoc?.articles
                                                               ? foundDoc.articles.map(art => art.designation).filter(Boolean)
                                                               : [];
                                                             const uniqueParts = Array.from(new Set([...(m.requiredParts || []), ...articleParts]));
                                                             if (uniqueParts.length > (m.requiredParts || []).length) {
-                                                              changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId, customBonCommande: '' });
+                                                              changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId, customBonCommande: bcLabel });
                                                             } else {
-                                                              updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId, customBonCommande: '' });
+                                                              updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId, customBonCommande: bcLabel });
                                                             }
                                                           } else if (nextBcId === 'custom') {
                                                             updateFsmMission(t.id, m.id, { bonCommandeId: 'custom', customBonCommande: customBcInputValue });
@@ -18473,9 +19222,11 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                   }
                                                 </select>
 
-                                                <button
+                                                 <button
                                                   type="button"
+                                                  disabled={!!dirtyFsmTourIds[t.id]}
                                                   onClick={() => {
+                                                    if (dirtyFsmTourIds[t.id]) return;
                                                     const selectEl = document.getElementById(`transfer-select-${m.id}`) as HTMLSelectElement;
                                                     const targetId = selectEl?.value;
                                                     if (!targetId) {
@@ -18508,6 +19259,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                     saveFsmTours(updated);
                                                     showFsmSystemInfoMessage("Mission transférée avec succès !");
                                                   }}
+                                                  title={dirtyFsmTourIds[t.id] ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »." : undefined}
                                                   style={{
                                                     backgroundColor: '#0f172a',
                                                     color: '#ffffff',
@@ -18515,7 +19267,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                     borderRadius: '13px',
                                                     fontSize: '18px',
                                                     fontWeight: 'bold',
-                                                    cursor: 'pointer',
+                                                    cursor: dirtyFsmTourIds[t.id] ? 'not-allowed' : 'pointer',
+                                                    opacity: dirtyFsmTourIds[t.id] ? 0.4 : 1,
                                                     border: 'none',
                                                     width: '185px',
                                                     minWidth: '185px',
@@ -18523,7 +19276,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                     justifyContent: 'center',
                                                     alignItems: 'center',
                                                   }}
-                                                  className="hover:opacity-90 transition-opacity whitespace-nowrap shrink-0"
+                                                  className={`${dirtyFsmTourIds[t.id] ? 'cursor-not-allowed opacity-40' : 'hover:opacity-90'} transition-opacity whitespace-nowrap shrink-0`}
                                                 >
                                                   Transférer
                                                 </button>
@@ -18534,10 +19287,13 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                             <div className="bg-transparent flex flex-col justify-end shrink-0">
                                               <button
                                                 type="button"
+                                                disabled={!!dirtyFsmTourIds[t.id]}
                                                 onClick={() => {
+                                                  if (dirtyFsmTourIds[t.id]) return;
                                                   triggerFsmPillWave(`del-mission-atrier-${m.id}`);
                                                   setFsmMissionToConfirmDelete({ tourId: t.id, missionId: m.id });
                                                 }}
+                                                title={dirtyFsmTourIds[t.id] ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »." : undefined}
                                                 style={{
                                                   color: '#fff',
                                                   boxShadow: 'none',
@@ -18553,10 +19309,12 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                   display: 'flex',
                                                   justifyContent: 'center',
                                                   alignItems: 'center',
+                                                  opacity: dirtyFsmTourIds[t.id] ? 0.4 : 1,
+                                                  cursor: dirtyFsmTourIds[t.id] ? 'not-allowed' : 'pointer',
                                                   position: 'relative',
                                                   overflow: 'hidden'
                                                 }}
-                                                className={`cursor-pointer ${fsmClickedPill?.id === `del-mission-atrier-${m.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                                                className={`${dirtyFsmTourIds[t.id] ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'} ${!dirtyFsmTourIds[t.id] && fsmClickedPill?.id === `del-mission-atrier-${m.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                               >
                                                 Supprimer
                                               </button>
@@ -18745,6 +19503,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
 
                               {/* Supprimer button */}
                               {(() => {
+                                const isTourUnsaved = !!dirtyFsmTourIds[t.id];
                                 const missions = t.missions || [];
                                 const normTourSit = String(tourStatus || t.status || 'Brouillon')
                                   .trim()
@@ -18757,6 +19516,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                   normTourSit === 'en cours' ||
                                   normTourSit === 'encours';
                                 const isDeleteEnabled =
+                                  !isTourUnsaved &&
                                   !isTourStatusBlockingDelete &&
                                   (missions.length === 0 ||
                                     missions.every((m: any) => {
@@ -18803,7 +19563,13 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                       cursor: isDeleteEnabled ? 'pointer' : 'not-allowed'
                                     }}
                                     className={`relative overflow-hidden ${isDeleteEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} shrink-0 ${isDeleteEnabled && fsmClickedPill?.id === `del-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
-                                    title={!isDeleteEnabled ? "Le bouton Supprimer est désactivé (une ou plusieurs missions ne sont pas en situation Brouillon, Effectué ou Rejet mission)" : undefined}
+                                    title={
+                                      isTourUnsaved
+                                        ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »."
+                                        : !isDeleteEnabled
+                                        ? "Le bouton Supprimer est désactivé (une ou plusieurs missions ne sont pas en situation Brouillon, Effectué ou Rejet mission)"
+                                        : undefined
+                                    }
                                   >
                                     Supprimer
                                   </button>
@@ -18811,88 +19577,96 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                               })()}
 
                               {/* Calculer button */}
-                              <button
-                                type="button"
-                                disabled={(t.missions ? t.missions.length : 0) <= 1}
-                                onClick={async () => {
-                                  if ((t.missions ? t.missions.length : 0) <= 1) return;
-                                  triggerFsmPillWave(`calc-tour-${t.id}`);
-                                  const draftVal = fsmTourDrafts[t.id] || {};
-                                  const finalTitle = draftVal.title !== undefined ? draftVal.title : (t.title || '');
-                                  const finalTech = draftVal.techName !== undefined ? draftVal.techName : (t.techName || '');
-                                  const finalStartDate = draftVal.startDate !== undefined ? draftVal.startDate : (t.startDate || '');
-                                  const finalStatus = draftVal.status !== undefined ? draftVal.status : (t.status || 'Brouillon');
-                                  const finalVehicule = draftVal.vehicule !== undefined ? draftVal.vehicule : (t.vehicule || 'Aucun');
-                                  const finalRegion = draftVal.region !== undefined ? draftVal.region : (t.region || '');
-                                  const finalPlannerName = draftVal.plannerName !== undefined ? draftVal.plannerName : (t.plannerName || '');
+                              {(() => {
+                                const isTourUnsaved = !!dirtyFsmTourIds[t.id];
+                                const isCalcDisabled = isTourUnsaved || (t.missions ? t.missions.length : 0) <= 1;
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={isCalcDisabled}
+                                    title={isTourUnsaved ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »." : undefined}
+                                    onClick={async () => {
+                                      if (isCalcDisabled) return;
+                                      triggerFsmPillWave(`calc-tour-${t.id}`);
+                                      const draftVal = fsmTourDrafts[t.id] || {};
+                                      const finalTitle = draftVal.title !== undefined ? draftVal.title : (t.title || '');
+                                      const finalTech = draftVal.techName !== undefined ? draftVal.techName : (t.techName || '');
+                                      const finalStartDate = draftVal.startDate !== undefined ? draftVal.startDate : (t.startDate || '');
+                                      const finalStatus = draftVal.status !== undefined ? draftVal.status : (t.status || 'Brouillon');
+                                      const finalVehicule = draftVal.vehicule !== undefined ? draftVal.vehicule : (t.vehicule || 'Aucun');
+                                      const finalRegion = draftVal.region !== undefined ? draftVal.region : (t.region || '');
+                                      const finalPlannerName = draftVal.plannerName !== undefined ? draftVal.plannerName : (t.plannerName || '');
 
-                                  if (!finalTech || finalTech.trim() === '') {
-                                    showFsmSystemInfoMessage("Veuillez sélectionner un technicien avec une adresse de départ renseignée pour pouvoir calculer l'itinéraire.");
-                                    return;
-                                  }
+                                      if (!finalTech || finalTech.trim() === '') {
+                                        showFsmSystemInfoMessage("Veuillez sélectionner un technicien avec une adresse de départ renseignée pour pouvoir calculer l'itinéraire.");
+                                        return;
+                                      }
 
-                                  const matchingMember = members.find(m => m.name.trim().toLowerCase() === finalTech.trim().toLowerCase());
-                                  const hasStructuredAddress = matchingMember && matchingMember.startAddressLat !== undefined && matchingMember.startAddressLng !== undefined;
-                                  const hasStringAddress = matchingMember && matchingMember.startAddress && matchingMember.startAddress.trim() !== '';
-                                  if (!matchingMember || (!hasStructuredAddress && !hasStringAddress)) {
-                                    console.warn("Calculer clicked but technician not found or missing starting coordinates:", { finalTech, matchingMember, members });
-                                    showFsmSystemInfoMessage("Le technicien sélectionné doit avoir une adresse de départ renseignée (avec latitude et longitude renseignées) pour pouvoir calculer l'itinéraire.");
-                                    return;
-                                  }
+                                      const matchingMember = members.find(m => m.name.trim().toLowerCase() === finalTech.trim().toLowerCase());
+                                      const hasStructuredAddress = matchingMember && matchingMember.startAddressLat !== undefined && matchingMember.startAddressLng !== undefined;
+                                      const hasStringAddress = matchingMember && matchingMember.startAddress && matchingMember.startAddress.trim() !== '';
+                                      if (!matchingMember || (!hasStructuredAddress && !hasStringAddress)) {
+                                        console.warn("Calculer clicked but technician not found or missing starting coordinates:", { finalTech, matchingMember, members });
+                                        showFsmSystemInfoMessage("Le technicien sélectionné doit avoir une adresse de départ renseignée (avec latitude et longitude renseignées) pour pouvoir calculer l'itinéraire.");
+                                        return;
+                                      }
 
-                                  const mergedTour = {
-                                    ...t,
-                                    title: finalTitle,
-                                    techName: finalTech,
-                                    startDate: finalStartDate,
-                                    status: finalStatus,
-                                    vehicule: finalVehicule,
-                                    region: finalRegion,
-                                    plannerName: finalPlannerName
-                                  };
+                                      const mergedTour = {
+                                        ...t,
+                                        title: finalTitle,
+                                        techName: finalTech,
+                                        startDate: finalStartDate,
+                                        status: finalStatus,
+                                        vehicule: finalVehicule,
+                                        region: finalRegion,
+                                        plannerName: finalPlannerName
+                                      };
 
-                                  const updatedToursList = fsmTours.map(tourItem => tourItem.id === t.id ? mergedTour : tourItem);
-                                  
-                                  await optimizeFsmTour(t.id, updatedToursList);
+                                      const updatedToursList = fsmTours.map(tourItem => tourItem.id === t.id ? mergedTour : tourItem);
+                                      
+                                      await optimizeFsmTour(t.id, updatedToursList);
 
-                                  // Clear draft since it is now successfully calculated and saved
-                                  setFsmTourDrafts(prev => {
-                                    const copy = { ...prev };
-                                    delete copy[t.id];
-                                    return copy;
-                                  });
-                                  setDirtyFsmTourIds(prev => {
-                                    const copy = { ...prev };
-                                    delete copy[t.id];
-                                    return copy;
-                                  });
-                                  showFsmSystemInfoMessage("L'itinéraire et les horaires ont été calculés et optimisés avec succès !");
-                                }}
-                                style={{
-                                  ...rowActionButtonStyle,
-                                  position: 'relative',
-                                  overflow: 'hidden',
-                                  padding: '12px 20px',
-                                  maxHeight: '45px',
-                                  borderRadius: '13px',
-                                  fontSize: '18px',
-                                  fontWeight: '100',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  width: 'auto',
-                                  whiteSpace: 'nowrap',
-                                  opacity: (t.missions ? t.missions.length : 0) <= 1 ? 0.5 : 1,
-                                  cursor: (t.missions ? t.missions.length : 0) <= 1 ? 'not-allowed' : 'pointer'
-                                }}
-                                className={`relative overflow-hidden ${(t.missions ? t.missions.length : 0) <= 1 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} shrink-0 ${(t.missions ? t.missions.length : 0) > 1 && fsmClickedPill?.id === `calc-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
-                              >
-                                Calculer
-                              </button>
+                                      // Clear draft since it is now successfully calculated and saved
+                                      setFsmTourDrafts(prev => {
+                                        const copy = { ...prev };
+                                        delete copy[t.id];
+                                        return copy;
+                                      });
+                                      setDirtyFsmTourIds(prev => {
+                                        const copy = { ...prev };
+                                        delete copy[t.id];
+                                        return copy;
+                                      });
+                                      showFsmSystemInfoMessage("L'itinéraire et les horaires ont été calculés et optimisés avec succès !");
+                                    }}
+                                    style={{
+                                      ...rowActionButtonStyle,
+                                      position: 'relative',
+                                      overflow: 'hidden',
+                                      padding: '12px 20px',
+                                      maxHeight: '45px',
+                                      borderRadius: '13px',
+                                      fontSize: '18px',
+                                      fontWeight: '100',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      width: 'auto',
+                                      whiteSpace: 'nowrap',
+                                      opacity: isCalcDisabled ? 0.5 : 1,
+                                      cursor: isCalcDisabled ? 'not-allowed' : 'pointer'
+                                    }}
+                                    className={`relative overflow-hidden ${isCalcDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} shrink-0 ${!isCalcDisabled && fsmClickedPill?.id === `calc-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                                  >
+                                    Calculer
+                                  </button>
+                                );
+                              })()}
 
                               {/* Avisage button */}
                               {(() => {
-                                const isAvisageEnabled = tourMissionsHaveDatesAndSlots(t) && (t.missions || []).some((m: any) => {
+                                const isTourUnsaved = !!dirtyFsmTourIds[t.id];
+                                const isAvisageEnabled = !isTourUnsaved && tourMissionsHaveDatesAndSlots(t) && (t.missions || []).some((m: any) => {
                                   const sit = m.status || 'Brouillon';
                                   return sit === 'Accepté Client' || sit === 'À faire' || sit === 'Attente';
                                 });
@@ -18900,6 +19674,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                   <button
                                     type="button"
                                     disabled={!isAvisageEnabled}
+                                    title={isTourUnsaved ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »." : undefined}
                                     onClick={() => {
                                       if (!isAvisageEnabled) return;
                                       triggerFsmPillWave(`avisage-tour-${t.id}`);
@@ -19548,12 +20323,13 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                         {/* À trier */}
                                         <button
                                           type="button"
-                                          disabled={isInATrier}
+                                          disabled={isInATrier || !!dirtyFsmTourIds[t.id]}
                                           onClick={() => {
-                                            if (isInATrier) return;
+                                            if (isInATrier || dirtyFsmTourIds[t.id]) return;
                                             bulkMoveFsmMissionsToATrier();
                                           }}
                                           id="btn-bulk-a-trier"
+                                          title={dirtyFsmTourIds[t.id] ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »." : undefined}
                                           style={{
                                             backgroundColor: 'rgb(46, 84, 255)',
                                             background: 'rgb(46, 84, 255)',
@@ -19564,8 +20340,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                             fontSize: '18px',
                                             fontWeight: '600',
                                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                                            cursor: isInATrier ? 'not-allowed' : 'pointer',
-                                            opacity: isInATrier ? 0.45 : 1,
+                                            cursor: (isInATrier || dirtyFsmTourIds[t.id]) ? 'not-allowed' : 'pointer',
+                                            opacity: (isInATrier || dirtyFsmTourIds[t.id]) ? 0.45 : 1,
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
@@ -19573,15 +20349,19 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                             boxSizing: 'border-box',
                                             lineHeight: '1.25',
                                           }}
-                                          className={`${isInATrier ? 'cursor-not-allowed opacity-45' : 'hover:opacity-90'} transition-opacity`}
+                                          className={`${(isInATrier || dirtyFsmTourIds[t.id]) ? 'cursor-not-allowed opacity-45' : 'hover:opacity-90'} transition-opacity`}
                                         >
                                           À trier
                                         </button>
                                         
                                         {/* Transférer */}
-                                        <div className="relative inline-flex items-center">
+                                        <div
+                                          className="relative inline-flex items-center"
+                                          title={dirtyFsmTourIds[t.id] ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »." : undefined}
+                                        >
                                           <button
                                             type="button"
+                                            disabled={!!dirtyFsmTourIds[t.id]}
                                             id="btn-bulk-assign-tour"
                                             style={{
                                               backgroundColor: 'rgb(15, 23, 42)',
@@ -19593,7 +20373,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                               fontSize: '18px',
                                               fontWeight: '600',
                                               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                                              cursor: 'pointer',
+                                              cursor: dirtyFsmTourIds[t.id] ? 'not-allowed' : 'pointer',
+                                              opacity: dirtyFsmTourIds[t.id] ? 0.45 : 1,
                                               display: 'inline-flex',
                                               alignItems: 'center',
                                               justifyContent: 'center',
@@ -19608,14 +20389,16 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                           <select
                                             id="fsm-bulk-assign-tour-dropdown"
                                             aria-label="Transférer"
+                                            disabled={!!dirtyFsmTourIds[t.id]}
                                             value=""
                                             onChange={(e) => {
+                                              if (dirtyFsmTourIds[t.id]) return;
                                               const targetTourId = e.target.value;
                                               if (targetTourId) {
                                                 bulkAssignFsmMissionsToTour(targetTourId);
                                               }
                                             }}
-                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                                            className={`absolute inset-0 w-full h-full opacity-0 ${dirtyFsmTourIds[t.id] ? 'cursor-not-allowed pointer-events-none' : 'cursor-pointer'} z-20`}
                                           >
                                             <option value="" disabled>
                                               {draftToursForLookup.length === 0
@@ -19633,8 +20416,13 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                         {/* Supprimer */}
                                         <button
                                           type="button"
-                                          onClick={bulkCancelFsmMissions}
+                                          disabled={!!dirtyFsmTourIds[t.id]}
+                                          onClick={() => {
+                                            if (dirtyFsmTourIds[t.id]) return;
+                                            bulkCancelFsmMissions();
+                                          }}
                                           id="btn-bulk-cancel-intervention"
+                                          title={dirtyFsmTourIds[t.id] ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »." : undefined}
                                           style={{
                                             backgroundColor: 'rgb(210, 45, 11)',
                                             background: 'rgb(210, 45, 11)',
@@ -19645,7 +20433,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                             fontSize: '18px',
                                             fontWeight: '600',
                                             fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                                            cursor: 'pointer',
+                                            cursor: dirtyFsmTourIds[t.id] ? 'not-allowed' : 'pointer',
+                                            opacity: dirtyFsmTourIds[t.id] ? 0.45 : 1,
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
@@ -19653,7 +20442,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                             boxSizing: 'border-box',
                                             lineHeight: '1.25',
                                           }}
-                                          className="hover:opacity-90 transition-opacity"
+                                          className={`${dirtyFsmTourIds[t.id] ? 'cursor-not-allowed opacity-45' : 'hover:opacity-90'} transition-opacity`}
                                         >
                                           Supprimer
                                         </button>
@@ -20230,6 +21019,12 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                       } else if (nextBcId) {
                                                         const selectedBcDoc = commercialDocs.find(doc => doc.id === nextBcId);
                                                         if (selectedBcDoc) {
+                                                          const bcLabel = String(
+                                                            selectedBcDoc.bonCommandeEntete ||
+                                                              selectedBcDoc.bonCommandeReference ||
+                                                              selectedBcDoc.ref ||
+                                                              nextBcId
+                                                          ).trim();
                                                           const nonServiceParts = selectedBcDoc.items
                                                             ? selectedBcDoc.items
                                                                 .filter(item => {
@@ -20239,9 +21034,9 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                                 .map(item => item.nomPiece)
                                                             : [];
                                                           const uniqueParts = Array.from(new Set(nonServiceParts)) as string[];
-                                                          changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId, customBonCommande: '' });
+                                                          changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], uniqueParts, { bonCommandeId: nextBcId, customBonCommande: bcLabel });
                                                         } else {
-                                                          updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId, customBonCommande: '' });
+                                                          updateFsmMission(t.id, m.id, { bonCommandeId: nextBcId, customBonCommande: nextBcId });
                                                         }
                                                       } else {
                                                         changeFsmMissionParts(t.id, m.id, (m.requiredParts || []) as string[], [], { bonCommandeId: '', customBonCommande: '' });
@@ -21351,13 +22146,15 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                         );
                                       }
 
+                                      const isTourUnsaved = !!dirtyFsmTourIds[t.id];
                                       const hasDateAndSlot = isMissionEstimatedDateFilled({ ...m, estimatedDate: estimatedDateValue }) && isMissionEstimatedSlotFilled(m);
-                                      const canSubmitToClient = ['Brouillon', 'Attente Client', 'Refusé Client'].includes(currentSit) && hasDateAndSlot;
+                                      const canSubmitToClient = !isTourUnsaved && ['Brouillon', 'Attente Client', 'Refusé Client'].includes(currentSit) && hasDateAndSlot;
                                       return (
                                         <div className="bg-transparent flex flex-col justify-end">
                                           <button
                                             type="button"
                                             disabled={!canSubmitToClient}
+                                            title={isTourUnsaved ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »." : undefined}
                                             onClick={() => {
                                               if (!canSubmitToClient) return;
                                               triggerFsmPillWave(`avisage-client-mission-${m.id}`);
@@ -21390,41 +22187,52 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                     })()}
 
                                     {/* Supprimer button */}
-                                    <div className="bg-transparent flex flex-col justify-end">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          triggerFsmPillWave(`del-mission-tour-${m.id}`);
-                                          setFsmMissionToConfirmDelete({ tourId: t.id, missionId: m.id });
-                                        }}
-                                        style={{
-                                          color: '#fff',
-                                          boxShadow: 'none',
-                                          background: 'rgb(210, 45, 11)',
-                                          backgroundColor: 'rgb(210, 45, 11)',
-                                          borderRadius: '13px',
-                                          border: 'none',
-                                          fontSize: '18px',
-                                          fontWeight: '500',
-                                          padding: '12px 16px',
-                                          width: '100%',
-                                          display: 'flex',
-                                          justifyContent: 'center',
-                                          alignItems: 'center',
-                                          position: 'relative',
-                                          overflow: 'hidden'
-                                        }}
-                                        className={`cursor-pointer ${fsmClickedPill?.id === `del-mission-tour-${m.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
-                                      >
-                                        Supprimer
-                                      </button>
-                                    </div>
+                                    {(() => {
+                                      const isTourUnsaved = !!dirtyFsmTourIds[t.id];
+                                      return (
+                                        <div className="bg-transparent flex flex-col justify-end">
+                                          <button
+                                            type="button"
+                                            disabled={isTourUnsaved}
+                                            title={isTourUnsaved ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »." : undefined}
+                                            onClick={() => {
+                                              if (isTourUnsaved) return;
+                                              triggerFsmPillWave(`del-mission-tour-${m.id}`);
+                                              setFsmMissionToConfirmDelete({ tourId: t.id, missionId: m.id });
+                                            }}
+                                            style={{
+                                              color: '#fff',
+                                              boxShadow: 'none',
+                                              background: 'rgb(210, 45, 11)',
+                                              backgroundColor: 'rgb(210, 45, 11)',
+                                              borderRadius: '13px',
+                                              border: 'none',
+                                              fontSize: '18px',
+                                              fontWeight: '500',
+                                              padding: '12px 16px',
+                                              width: '100%',
+                                              display: 'flex',
+                                              justifyContent: 'center',
+                                              alignItems: 'center',
+                                              opacity: isTourUnsaved ? 0.4 : 1,
+                                              cursor: isTourUnsaved ? 'not-allowed' : 'pointer',
+                                              position: 'relative',
+                                              overflow: 'hidden'
+                                            }}
+                                            className={`${isTourUnsaved ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'} ${!isTourUnsaved && fsmClickedPill?.id === `del-mission-tour-${m.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                                          >
+                                            Supprimer
+                                          </button>
+                                        </div>
+                                      );
+                                    })()}
 
                                     {/* Mettre à trier button */}
                                     {(() => {
+                                      const isTourUnsaved = !!dirtyFsmTourIds[t.id];
                                       const isTourDisabled = ['à faire', 'effectué', 'effectuée'].includes((tourStatus || '').toLowerCase().trim());
                                       const isMissionDisabled = ['accepté client', 'effectué', 'effectuée'].includes((m.status || '').toLowerCase().trim());
-                                      const isMettreATrierDisabled = isTourDisabled || isMissionDisabled;
+                                      const isMettreATrierDisabled = isTourUnsaved || isTourDisabled || isMissionDisabled;
 
                                       return (
                                         <div className="bg-transparent flex flex-col justify-end">
@@ -21457,7 +22265,9 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                             }}
                                             className={`${isMettreATrierDisabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer'} ${!isMettreATrierDisabled && fsmClickedPill?.id === `mettre-a-trier-mission-${m.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                             title={
-                                              isMettreATrierDisabled
+                                              isTourUnsaved
+                                                ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »."
+                                                : isMettreATrierDisabled
                                                 ? "Impossible de mettre à trier si la tournée est 'À faire' / 'Effectué' ou si la mission est 'Accepté client' / 'Effectué'"
                                                 : ""
                                             }
@@ -26897,8 +27707,9 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
               customerReviews={customerReviews}
               onUpdateReviews={(updated) => saveReviews(updated)}
               onShowInterventionDetails={(interventionRef) => {
-                setActiveTab('gmao');
+                setGmaoFilter('validated');
                 setGmaoSearchQuery(interventionRef);
+                setActiveTab('gmao');
               }}
               companyInfo={companyInfo}
             />

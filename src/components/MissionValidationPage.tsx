@@ -413,7 +413,7 @@ export default function MissionValidationPage() {
                         onClick={() => setShowRefusalForm(false)}
                         disabled={isSubmitting}
                         style={{
-                          backgroundColor: 'rgb(210, 45, 11)',
+                          backgroundColor: '#000',
                           color: '#ffffff',
                           boxShadow: 'none',
                           outline: 'none',

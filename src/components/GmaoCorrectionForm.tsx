@@ -637,16 +637,61 @@ export default function GmaoCorrectionForm({
     );
   }, [defibrillateurs, selectedDefibId, report, initialDefibId]);
 
+  const toIsoDateStr = (val: any): string => {
+    if (!val) return '';
+    const s = String(val).trim();
+    if (!s) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})[T\s,]/);
+    if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    const ymdSlash = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})(?:[T\s,].*)?$/);
+    if (ymdSlash) return `${ymdSlash[1]}-${ymdSlash[2].padStart(2, '0')}-${ymdSlash[3].padStart(2, '0')}`;
+    const dmY = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})(?:[T\s,].*)?$/);
+    if (dmY) return `${dmY[3]}-${dmY[2].padStart(2, '0')}-${dmY[1].padStart(2, '0')}`;
+    const dmyShort = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})(?:[T\s,].*)?$/);
+    if (dmyShort) {
+      const yr = parseInt(dmyShort[3], 10);
+      const fullYr = yr < 70 ? 2000 + yr : 1900 + yr;
+      return `${fullYr}-${dmyShort[2].padStart(2, '0')}-${dmyShort[1].padStart(2, '0')}`;
+    }
+    return s;
+  };
+
+  const resolveModelVarId = (rawVal: any, categoryName: string): string => {
+    const val = String(rawVal || '').trim();
+    if (!val) return '';
+    const catVars = variables.filter(v => v.category === categoryName);
+    const exactId = catVars.find(v => v.id === val);
+    if (exactId) return exactId.id;
+    const lower = val.toLowerCase();
+    const byName = catVars.find(v => {
+      const n = String(v.nom || '').trim().toLowerCase();
+      const m = String(v.marque || '').trim().toLowerCase();
+      const full = m && m !== 'standard' ? `${n} (${m})` : n;
+      return n === lower || full === lower;
+    });
+    return byName ? byName.id : val;
+  };
+
   const getInitialSnapshot = (): Defibrillateur => {
+    const snapRaw = (report?.defibSnapshot || {}) as Record<string, any>;
+    const nonEmptySnap: Record<string, any> = {};
+    Object.keys(snapRaw).forEach((k) => {
+      const v = snapRaw[k];
+      if (v !== undefined && v !== null && String(v).trim() !== '') {
+        nonEmptySnap[k] = v;
+      }
+    });
+
     const base: Defibrillateur = {
       ...DEFAULT_DEFIB,
       ...(origDefib ? origDefib : {}),
-      ...(report?.defibSnapshot ? report.defibSnapshot : {}),
+      ...nonEmptySnap,
       // Fallback fields directly on report if defibSnapshot was flattened or omitted:
       ...(report?.numeroSerie ? { numeroSerie: report.numeroSerie } : {}),
       ...(report?.identifiant ? { identifiant: report.identifiant } : {}),
       ...(report?.defibIdentifiant ? { identifiant: report.defibIdentifiant } : {}),
-      ...(report?.modeleId ? { modeleId: report.modeleId } : {}),
+      ...(report?.modeleId || report?.modele ? { modeleId: report.modeleId || report.modele } : {}),
       ...(report?.clientId ? { clientId: report.clientId } : {}),
       ...(report?.nomPrenomSite ? { nomPrenomSite: report.nomPrenomSite } : {}),
       ...(report?.telephoneSite ? { telephoneSite: report.telephoneSite } : {}),
@@ -660,6 +705,7 @@ export default function GmaoCorrectionForm({
       ...(report?.longitude ? { longitude: report.longitude } : {}),
       ...(report?.commentaireAdresse ? { commentaireAdresse: report.commentaireAdresse } : {}),
       ...(report?.derniereMaintenance ? { derniereMaintenance: report.derniereMaintenance } : {}),
+      ...(report?.prochaineMaintenance ? { prochaineMaintenance: report.prochaineMaintenance } : {}),
       ...(report?.miseEnService ? { miseEnService: report.miseEnService } : {}),
       ...(report?.finGarantie ? { finGarantie: report.finGarantie } : {}),
       ...(report?.fabrication ? { fabrication: report.fabrication } : {}),
@@ -673,29 +719,29 @@ export default function GmaoCorrectionForm({
       ...(report?.accesSemaine ? { accesSemaine: report.accesSemaine } : {}),
       ...(report?.accesWeekend ? { accesWeekend: report.accesWeekend } : {}),
       ...(report?.exterieur ? { exterieur: report.exterieur } : {}),
-      ...(report?.modeleCoffretId ? { modeleCoffretId: report.modeleCoffretId } : {}),
+      ...(report?.modeleCoffretId || report?.modeleCoffret ? { modeleCoffretId: report.modeleCoffretId || report.modeleCoffret } : {}),
       ...(report?.numeroLotCoffret ? { numeroLotCoffret: report.numeroLotCoffret } : {}),
       ...(report?.commentaireCoffret ? { commentaireCoffret: report.commentaireCoffret } : {}),
-      ...(report?.modeleElectrodeAId ? { modeleElectrodeAId: report.modeleElectrodeAId } : {}),
+      ...(report?.modeleElectrodeAId || report?.modeleElectrodeA ? { modeleElectrodeAId: report.modeleElectrodeAId || report.modeleElectrodeA } : {}),
       ...(report?.lotElectrodeA ? { lotElectrodeA: report.lotElectrodeA } : {}),
       ...(report?.peremptionElectrodeA ? { peremptionElectrodeA: report.peremptionElectrodeA } : {}),
-      ...(report?.insertionElectrodeA ? { insertionElectrodeA: report.insertionElectrodeA } : {}),
+      ...(report?.insertionElectrodeA || report?.fabricationElectrodeA ? { insertionElectrodeA: report.insertionElectrodeA || report.fabricationElectrodeA } : {}),
       ...(report?.livraisonElectrodeA ? { livraisonElectrodeA: report.livraisonElectrodeA } : {}),
       ...(report?.situationElectrodeA ? { situationElectrodeA: report.situationElectrodeA } : {}),
       ...(report?.commentaireElectrodeA ? { commentaireElectrodeA: report.commentaireElectrodeA } : {}),
-      ...(report?.peremptionSecoursElectrodeA ? { peremptionSecoursElectrodeA: report.peremptionSecoursElectrodeA } : {}),
-      ...(report?.modeleElectrodePId ? { modeleElectrodePId: report.modeleElectrodePId } : {}),
+      ...(report?.peremptionSecoursElectrodeA || report?.peremptionElectrodeSecoursA ? { peremptionSecoursElectrodeA: report.peremptionSecoursElectrodeA || report.peremptionElectrodeSecoursA } : {}),
+      ...(report?.modeleElectrodePId || report?.modeleElectrodeP ? { modeleElectrodePId: report.modeleElectrodePId || report.modeleElectrodeP } : {}),
       ...(report?.lotElectrodeP ? { lotElectrodeP: report.lotElectrodeP } : {}),
       ...(report?.peremptionElectrodeP ? { peremptionElectrodeP: report.peremptionElectrodeP } : {}),
-      ...(report?.insertionElectrodeP ? { insertionElectrodeP: report.insertionElectrodeP } : {}),
+      ...(report?.insertionElectrodeP || report?.fabricationElectrodeP ? { insertionElectrodeP: report.insertionElectrodeP || report.fabricationElectrodeP } : {}),
       ...(report?.livraisonElectrodeP ? { livraisonElectrodeP: report.livraisonElectrodeP } : {}),
       ...(report?.situationElectrodeP ? { situationElectrodeP: report.situationElectrodeP } : {}),
       ...(report?.commentaireElectrodeP ? { commentaireElectrodeP: report.commentaireElectrodeP } : {}),
-      ...(report?.peremptionSecoursElectrodeP ? { peremptionSecoursElectrodeP: report.peremptionSecoursElectrodeP } : {}),
-      ...(report?.modeleBatterieId ? { modeleBatterieId: report.modeleBatterieId } : {}),
+      ...(report?.peremptionSecoursElectrodeP || report?.peremptionElectrodeSecoursP ? { peremptionSecoursElectrodeP: report.peremptionSecoursElectrodeP || report.peremptionElectrodeSecoursP } : {}),
+      ...(report?.modeleBatterieId || report?.modeleBatterie ? { modeleBatterieId: report.modeleBatterieId || report.modeleBatterie } : {}),
       ...(report?.lotBatterie ? { lotBatterie: report.lotBatterie } : {}),
       ...(report?.peremptionBatterie ? { peremptionBatterie: report.peremptionBatterie } : {}),
-      ...(report?.insertionBatterie ? { insertionBatterie: report.insertionBatterie } : {}),
+      ...(report?.insertionBatterie || report?.miseEnServiceBatterie ? { insertionBatterie: report.insertionBatterie || report.miseEnServiceBatterie } : {}),
       ...(report?.fabricationBatterie ? { fabricationBatterie: report.fabricationBatterie } : {}),
       ...(report?.livraisonBatterie ? { livraisonBatterie: report.livraisonBatterie } : {}),
       ...(report?.situationBatterie ? { situationBatterie: report.situationBatterie } : {}),
@@ -708,6 +754,40 @@ export default function GmaoCorrectionForm({
         : (report?.diagnosticCommentaire || report?.defibSnapshot?.commentaire || ''),
       ...(report?.commentaireInterne || report?.internalComment ? { commentaireInterne: report.commentaireInterne || report.internalComment } : {}),
     };
+
+    base.modeleId = resolveModelVarId(base.modeleId || (base as any).modele, 'Modèle DAE');
+    base.modeleCoffretId = resolveModelVarId(base.modeleCoffretId || (base as any).modeleCoffret, 'Modèle Coffret');
+    base.modeleElectrodeAId = resolveModelVarId(base.modeleElectrodeAId || (base as any).modeleElectrodeA, 'Modèle Électrode');
+    base.modeleElectrodeASecoursId = resolveModelVarId(base.modeleElectrodeASecoursId || (base as any).modeleElectrodeSecoursA, 'Modèle Électrode');
+    base.modeleElectrodePId = resolveModelVarId(base.modeleElectrodePId || (base as any).modeleElectrodeP, 'Modèle Électrode');
+    base.modeleElectrodePSecoursId = resolveModelVarId(base.modeleElectrodePSecoursId || (base as any).modeleElectrodeSecoursP, 'Modèle Électrode');
+    base.modeleBatterieId = resolveModelVarId(base.modeleBatterieId || (base as any).modeleBatterie, 'Modèle Batterie');
+    base.modeleBatterieSecoursId = resolveModelVarId(base.modeleBatterieSecoursId || (base as any).modeleBatterieSecours, 'Modèle Batterie');
+
+    base.derniereMaintenance = toIsoDateStr(base.derniereMaintenance || report?.date);
+    base.prochaineMaintenance = toIsoDateStr(base.prochaineMaintenance);
+    base.sortieFabricant = toIsoDateStr(base.sortieFabricant);
+    base.fabrication = toIsoDateStr(base.fabrication);
+    base.miseEnService = toIsoDateStr(base.miseEnService);
+    base.finGarantie = toIsoDateStr(base.finGarantie);
+    base.debutContrat = toIsoDateStr(base.debutContrat);
+    base.finContrat = toIsoDateStr(base.finContrat);
+    base.insertionElectrodeA = toIsoDateStr(base.insertionElectrodeA || (base as any).fabricationElectrodeA);
+    base.peremptionElectrodeA = toIsoDateStr(base.peremptionElectrodeA);
+    base.livraisonElectrodeA = toIsoDateStr(base.livraisonElectrodeA);
+    base.peremptionSecoursElectrodeA = toIsoDateStr(base.peremptionSecoursElectrodeA || (base as any).peremptionElectrodeSecoursA);
+    base.peremptionPadpakA = toIsoDateStr(base.peremptionPadpakA);
+    base.insertionElectrodeP = toIsoDateStr(base.insertionElectrodeP || (base as any).fabricationElectrodeP);
+    base.peremptionElectrodeP = toIsoDateStr(base.peremptionElectrodeP);
+    base.livraisonElectrodeP = toIsoDateStr(base.livraisonElectrodeP);
+    base.peremptionSecoursElectrodeP = toIsoDateStr(base.peremptionSecoursElectrodeP || (base as any).peremptionElectrodeSecoursP);
+    base.peremptionPadpakP = toIsoDateStr(base.peremptionPadpakP);
+    base.fabricationBatterie = toIsoDateStr(base.fabricationBatterie);
+    base.insertionBatterie = toIsoDateStr(base.insertionBatterie || (base as any).miseEnServiceBatterie);
+    base.livraisonBatterie = toIsoDateStr(base.livraisonBatterie);
+    base.peremptionBatterie = toIsoDateStr(base.peremptionBatterie);
+    base.peremptionTrousse = toIsoDateStr(base.peremptionTrousse || (base as any).peremptionKit);
+
     if (isNew && !report) {
       base.conforme = '' as any; // Par défaut à l’arrivée deselect
     }
@@ -2636,15 +2716,17 @@ export default function GmaoCorrectionForm({
     if (!endTimeStamp) setEndTimeStamp(finalEndTimeStamp);
 
     const todayStr = new Date().toISOString().split('T')[0];
-    const maintDate = finalIntervDate || todayStr;
+    const maintDate = toIsoDateStr(finalIntervDate) || todayStr;
 
     const finalSnapshot = {
       ...snapshot,
-      derniereMaintenance: maintDate,
+      derniereMaintenance: toIsoDateStr(snapshot.derniereMaintenance) || maintDate,
+      sortieFabricant: toIsoDateStr(snapshot.sortieFabricant) || '',
+      prochaineMaintenance: toIsoDateStr(snapshot.prochaineMaintenance) || '',
       situationBatterie: (batterieConformeSante === 'Oui' ? 'Vert' : 'Rouge') as 'Vert' | 'Rouge',
       situationElectrodeA: (electrodeAConformeSante === 'Oui' ? 'Vert' : 'Rouge') as 'Vert' | 'Rouge',
       situationElectrodeP: (electrodePConformeSante === 'Oui' ? 'Vert' : 'Rouge') as 'Vert' | 'Rouge',
-      peremptionTrousse: kitPeremption
+      peremptionTrousse: toIsoDateStr(kitPeremption) || kitPeremption
     };
 
     // Auto-update replacement parts details in the defibrillator snap on submit
@@ -2929,28 +3011,36 @@ export default function GmaoCorrectionForm({
       pays: finalSnapshot.pays || 'France',
       latitude: finalSnapshot.latitude || '',
       longitude: finalSnapshot.longitude || '',
-      fabrication: finalSnapshot.fabrication || '',
-      miseEnService: finalSnapshot.miseEnService || '',
-      finGarantie: finalSnapshot.finGarantie || '',
+      derniereMaintenance: toIsoDateStr(finalSnapshot.derniereMaintenance) || maintDate,
+      sortieFabricant: toIsoDateStr(finalSnapshot.sortieFabricant) || '',
+      prochaineMaintenance: toIsoDateStr(finalSnapshot.prochaineMaintenance) || '',
+      fabrication: toIsoDateStr(finalSnapshot.fabrication) || '',
+      miseEnService: toIsoDateStr(finalSnapshot.miseEnService) || '',
+      finGarantie: toIsoDateStr(finalSnapshot.finGarantie) || '',
       modeleElectrodeA: resolveVarLabel(finalSnapshot.modeleElectrodeA || finalSnapshot.modeleElectrodeAId),
       modeleElectrodeAId: finalSnapshot.modeleElectrodeAId || finalSnapshot.modeleElectrodeA || '',
       lotElectrodeA: (() => {
         const l = String(finalSnapshot.lotElectrodeA || '').trim();
         return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
       })(),
-      peremptionElectrodeA: finalSnapshot.peremptionElectrodeA || '',
+      insertionElectrodeA: toIsoDateStr(finalSnapshot.insertionElectrodeA || (finalSnapshot as any).fabricationElectrodeA) || '',
+      fabricationElectrodeA: toIsoDateStr(finalSnapshot.insertionElectrodeA || (finalSnapshot as any).fabricationElectrodeA) || '',
+      livraisonElectrodeA: toIsoDateStr(finalSnapshot.livraisonElectrodeA) || '',
+      peremptionElectrodeA: toIsoDateStr(finalSnapshot.peremptionElectrodeA) || '',
       modeleElectrodeSecoursA: resolveVarLabel((finalSnapshot as any).modeleElectrodeSecoursA || finalSnapshot.modeleElectrodeASecoursId),
+      modeleElectrodeASecoursId: finalSnapshot.modeleElectrodeASecoursId || (finalSnapshot as any).modeleElectrodeSecoursA || '',
       lotElectrodeSecoursA: (() => {
         const l = String(finalSnapshot.lotElectrodeASecours || '').trim();
         return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
       })(),
-      peremptionElectrodeSecoursA: finalSnapshot.peremptionSecoursElectrodeA || '',
+      peremptionElectrodeSecoursA: toIsoDateStr(finalSnapshot.peremptionSecoursElectrodeA) || '',
+      peremptionSecoursElectrodeA: toIsoDateStr(finalSnapshot.peremptionSecoursElectrodeA) || '',
       hasPadpakA: finalSnapshot.hasPadpakA || 'Non',
       lotPadpakA: (() => {
         const l = String(finalSnapshot.lotPadpakA || '').trim();
         return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
       })(),
-      peremptionPadpakA: finalSnapshot.peremptionPadpakA || '',
+      peremptionPadpakA: toIsoDateStr(finalSnapshot.peremptionPadpakA) || '',
       commentaireElectrodeA: finalSnapshot.commentaireElectrodeA || '',
       modeleElectrodeP: resolveVarLabel(finalSnapshot.modeleElectrodeP || finalSnapshot.modeleElectrodePId),
       modeleElectrodePId: finalSnapshot.modeleElectrodePId || finalSnapshot.modeleElectrodeP || '',
@@ -2958,19 +3048,24 @@ export default function GmaoCorrectionForm({
         const l = String(finalSnapshot.lotElectrodeP || '').trim();
         return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
       })(),
-      peremptionElectrodeP: finalSnapshot.peremptionElectrodeP || '',
+      insertionElectrodeP: toIsoDateStr(finalSnapshot.insertionElectrodeP || (finalSnapshot as any).fabricationElectrodeP) || '',
+      fabricationElectrodeP: toIsoDateStr(finalSnapshot.insertionElectrodeP || (finalSnapshot as any).fabricationElectrodeP) || '',
+      livraisonElectrodeP: toIsoDateStr(finalSnapshot.livraisonElectrodeP) || '',
+      peremptionElectrodeP: toIsoDateStr(finalSnapshot.peremptionElectrodeP) || '',
       modeleElectrodeSecoursP: resolveVarLabel((finalSnapshot as any).modeleElectrodeSecoursP || finalSnapshot.modeleElectrodePSecoursId),
+      modeleElectrodePSecoursId: finalSnapshot.modeleElectrodePSecoursId || (finalSnapshot as any).modeleElectrodeSecoursP || '',
       lotElectrodeSecoursP: (() => {
         const l = String(finalSnapshot.lotElectrodePSecours || '').trim();
         return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
       })(),
-      peremptionElectrodeSecoursP: finalSnapshot.peremptionSecoursElectrodeP || '',
+      peremptionElectrodeSecoursP: toIsoDateStr(finalSnapshot.peremptionSecoursElectrodeP) || '',
+      peremptionSecoursElectrodeP: toIsoDateStr(finalSnapshot.peremptionSecoursElectrodeP) || '',
       hasPadpakP: finalSnapshot.hasPadpakP || 'Non',
       lotPadpakP: (() => {
         const l = String(finalSnapshot.lotPadpakP || '').trim();
         return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
       })(),
-      peremptionPadpakP: finalSnapshot.peremptionPadpakP || '',
+      peremptionPadpakP: toIsoDateStr(finalSnapshot.peremptionPadpakP) || '',
       commentaireElectrodeP: finalSnapshot.commentaireElectrodeP || '',
       modeleBatterie: resolveVarLabel(finalSnapshot.modeleBatterie || finalSnapshot.modeleBatterieId),
       modeleBatterieId: finalSnapshot.modeleBatterieId || finalSnapshot.modeleBatterie || '',
@@ -2978,10 +3073,11 @@ export default function GmaoCorrectionForm({
         const l = String(finalSnapshot.lotBatterie || '').trim();
         return l && l.toLowerCase() !== 'non' && l.toLowerCase() !== 'oui' && l !== '-' ? l : '';
       })(),
-      fabricationBatterie: finalSnapshot.fabricationBatterie || '',
-      miseEnServiceBatterie: finalSnapshot.insertionBatterie || finalSnapshot.miseEnServiceBatterie || '',
-      insertionBatterie: finalSnapshot.insertionBatterie || finalSnapshot.miseEnServiceBatterie || '',
-      peremptionBatterie: finalSnapshot.peremptionBatterie || '',
+      fabricationBatterie: toIsoDateStr(finalSnapshot.fabricationBatterie) || '',
+      miseEnServiceBatterie: toIsoDateStr(finalSnapshot.insertionBatterie || finalSnapshot.miseEnServiceBatterie) || '',
+      insertionBatterie: toIsoDateStr(finalSnapshot.insertionBatterie || finalSnapshot.miseEnServiceBatterie) || '',
+      livraisonBatterie: toIsoDateStr(finalSnapshot.livraisonBatterie) || '',
+      peremptionBatterie: toIsoDateStr(finalSnapshot.peremptionBatterie) || '',
       pourcentageBatterie: finalSnapshot.pourcentageBatterie || '',
       commentaireBatterie: finalSnapshot.commentaireBatterie || '',
       conforme: finalSnapshot.conforme || 'Oui',
@@ -4515,102 +4611,6 @@ export default function GmaoCorrectionForm({
                 />
               </div>
             </div>
-
-            {isVisibleFactureBrouillon && (
-              <div className="pt-3 mt-2 space-y-3">
-                <div className="space-y-1">
-                  <label className="block text-[11px] font-bold text-black uppercase">
-                    Émettre une facture brouillon.
-                  </label>
-                  <div className="flex items-center gap-4 text-xs mt-1">
-                    <FormRadio
-                      label="Oui"
-                      checked={emettreFactureBrouillon === 'Oui'}
-                      onChange={() => setEmettreFactureBrouillon('Oui')}
-                    />
-                    <FormRadio
-                      label="Non"
-                      checked={emettreFactureBrouillon === 'Non'}
-                      onChange={() => {
-                        setEmettreFactureBrouillon('Non');
-                        setServiceEmettreId('');
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {emettreFactureBrouillon === 'Oui' && (
-                  <div className="space-y-1 animate-fadeIn">
-                    <label htmlFor="serviceEmettreId" className="block text-[11px] font-bold text-black uppercase">
-                      Sélection d’un service.
-                    </label>
-                    <select
-                      id="serviceEmettreId"
-                      value={serviceEmettreId}
-                      onChange={(e) => setServiceEmettreId(e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
-                    >
-                      <option value="">Sélectionner un service (optionnel)...</option>
-                       {(() => {
-                        const serviceStocks = (stocks || []).filter(st => {
-                          const variable = variables.find(v => v.id === st.denominationPieceId);
-                          if (!variable) return false;
-                          const cat = (variable.category || '').toLowerCase();
-                          const nom = (variable.nom || '').toLowerCase();
-                          return cat.includes('service') || nom.includes('service');
-                        });
-
-                        const serviceVariablesOnly = (variables || []).filter(v => {
-                          const cat = (v.category || '').toLowerCase();
-                          const nom = (v.nom || '').toLowerCase();
-                          const isService = cat.includes('service') || nom.includes('service');
-                          if (!isService) return false;
-                          return !serviceStocks.some(st => st.denominationPieceId === v.id);
-                        });
-
-                        const hasAny = serviceStocks.length > 0 || serviceVariablesOnly.length > 0;
-                        
-                        if (hasAny) {
-                          return (
-                            <>
-                              {serviceStocks.map(st => {
-                                const variable = variables.find(v => v.id === st.denominationPieceId);
-                                const label = variable
-                                  ? (variable.marque && variable.marque !== 'Standard' ? `${variable.nom} (${variable.marque})` : variable.nom)
-                                  : 'Service Inconnu';
-                                return (
-                                  <option key={st.id} value={st.id}>
-                                    {label} — {st.prixVenteHt} € HT
-                                  </option>
-                                );
-                              })}
-                              {serviceVariablesOnly.map(v => (
-                                <option key={v.id} value={v.id}>
-                                  {v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''} — 150 € HT (Virtuel)
-                                </option>
-                              ))}
-                            </>
-                          );
-                        }
-
-                        // Fallback options when tenant has empty variables/stocks
-                        const fallbacks = [
-                          { id: 'st_fallback_srv_1', label: 'Maintenance Préventive standard (Défibeo)', price: 150 },
-                          { id: 'st_fallback_srv_2', label: 'Mise en service DAE (Défibeo)', price: 120 },
-                          { id: 'st_fallback_srv_3', label: 'Audit de conformité (Défibeo)', price: 95 }
-                        ];
-
-                        return fallbacks.map(fb => (
-                          <option key={fb.id} value={fb.id}>
-                            {fb.label} — {fb.price} € HT
-                          </option>
-                        ));
-                      })()}
-                    </select>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Section 3 - Coffret */}
@@ -5248,6 +5248,48 @@ export default function GmaoCorrectionForm({
                     )}
                   </div>
                 </div>
+                <div className="space-y-1">
+                  <label htmlFor="snap-sortieFabricant" className="block text-[11px] font-bold text-black uppercase">
+                    Sortie d’usine.
+                  </label>
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-sortieFabricant"
+                      value={snapshot.sortieFabricant || ''}
+                      onChange={(e) => handleSnapshotChange('sortieFabricant', e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="snap-derniereMaintenance" className="block text-[11px] font-bold text-black uppercase">
+                    Dernière maintenance.
+                  </label>
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-derniereMaintenance"
+                      value={snapshot.derniereMaintenance || ''}
+                      onChange={(e) => handleSnapshotChange('derniereMaintenance', e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label htmlFor="snap-prochaineMaintenance" className="block text-[11px] font-bold text-black uppercase">
+                    Prochaine maintenance.
+                  </label>
+                  <div className="relative flex items-center w-full">
+                    <input
+                      type="date"
+                      id="snap-prochaineMaintenance"
+                      value={snapshot.prochaineMaintenance || ''}
+                      onChange={(e) => handleSnapshotChange('prochaineMaintenance', e.target.value)}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -5355,6 +5397,37 @@ export default function GmaoCorrectionForm({
                 </div>
               </div>
             )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label htmlFor="snap-insertionElectrodeA" className="block text-[11px] font-bold text-black uppercase">
+                  Insertion A.
+                </label>
+                <div className="relative flex items-center w-full">
+                  <input
+                    type="date"
+                    id="snap-insertionElectrodeA"
+                    value={snapshot.insertionElectrodeA || ''}
+                    onChange={(e) => handleSnapshotChange('insertionElectrodeA', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="snap-livraisonElectrodeA" className="block text-[11px] font-bold text-black uppercase">
+                  Livraison A.
+                </label>
+                <div className="relative flex items-center w-full">
+                  <input
+                    type="date"
+                    id="snap-livraisonElectrodeA"
+                    value={snapshot.livraisonElectrodeA || ''}
+                    onChange={(e) => handleSnapshotChange('livraisonElectrodeA', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                </div>
+              </div>
+            </div>
 
             <div className="pt-3 mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
               <div className="space-y-1">
@@ -5839,6 +5912,34 @@ export default function GmaoCorrectionForm({
                   </div>
                 </div>
               )}
+              <div className="space-y-1">
+                <label htmlFor="snap-insertionElectrodeP" className="block text-[11px] font-bold text-black uppercase">
+                  Insertion P.
+                </label>
+                <div className="relative flex items-center w-full">
+                  <input
+                    type="date"
+                    id="snap-insertionElectrodeP"
+                    value={snapshot.insertionElectrodeP || ''}
+                    onChange={(e) => handleSnapshotChange('insertionElectrodeP', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="snap-livraisonElectrodeP" className="block text-[11px] font-bold text-black uppercase">
+                  Livraison P.
+                </label>
+                <div className="relative flex items-center w-full">
+                  <input
+                    type="date"
+                    id="snap-livraisonElectrodeP"
+                    value={snapshot.livraisonElectrodeP || ''}
+                    onChange={(e) => handleSnapshotChange('livraisonElectrodeP', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="pt-3 mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
@@ -6423,6 +6524,20 @@ export default function GmaoCorrectionForm({
                   </div>
                 </div>
               )}
+              <div className="space-y-1">
+                <label htmlFor="snap-livraisonBatterie" className="block text-[11px] font-bold text-black uppercase">
+                  Livraison B.
+                </label>
+                <div className="relative flex items-center w-full">
+                  <input
+                    type="date"
+                    id="snap-livraisonBatterie"
+                    value={snapshot.livraisonBatterie || ''}
+                    onChange={(e) => handleSnapshotChange('livraisonBatterie', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Section 8 Extra Fields requested by User */}

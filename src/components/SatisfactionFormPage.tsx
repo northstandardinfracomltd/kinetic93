@@ -411,6 +411,7 @@ export default function SatisfactionFormPage() {
         sensibilisation,
         npsScore,
         nps: npsScore,
+        'Quelle est la probabilité que vous nous recommandiez?': npsScore,
         noteGlobale: avgNum,
         rating: avgNum,
         dateStr: new Date().toISOString().split('T')[0],

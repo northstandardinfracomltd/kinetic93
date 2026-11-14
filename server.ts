@@ -4186,25 +4186,54 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
           })),
         ];
         if (sheetMissions.length > 0) {
+          const byTourKey = new Map<string, any[]>();
+          const extractTourNum = (s: string) => {
+            const m = String(s || '').match(/TOUR-(\d+)$/i);
+            return m ? parseInt(m[1], 10) : null;
+          };
           for (const sm of sheetMissions) {
             if (!sm || typeof sm !== 'object') continue;
             const tid = String(sm.tourIdentifiant || sm.tourId || '').trim();
+            const tidLower = tid.toLowerCase();
+            const tidNum = extractTourNum(tid);
             const matchedTour = tid
-              ? baseTours.find(
-                  (bt: any) =>
-                    bt.id !== 'a-trier' &&
-                    (String(bt.tourIdentifiant || '').trim().toLowerCase() === tid.toLowerCase() ||
-                      String(bt.id || '').trim().toLowerCase() === tid.toLowerCase() ||
-                      String(bt.title || bt.name || '').trim().toLowerCase() === tid.toLowerCase())
-                )
+              ? baseTours.find((bt: any) => {
+                  if (bt.id === 'a-trier') return false;
+                  const btIdent = String(bt.tourIdentifiant || '').trim().toLowerCase();
+                  const btId = String(bt.id || '').trim().toLowerCase();
+                  const btTitle = String(bt.title || bt.name || '').trim().toLowerCase();
+                  if (btIdent === tidLower || btId === tidLower || btTitle === tidLower) return true;
+                  if (tidNum !== null) {
+                    const btNum = extractTourNum(btIdent) ?? extractTourNum(btId);
+                    if (btNum !== null && btNum === tidNum) return true;
+                  }
+                  return false;
+                })
               : null;
-            const target = matchedTour || baseTours[0];
-            target.missions.push({
+            const targetId = matchedTour ? matchedTour.id : 'a-trier';
+            const list = byTourKey.get(targetId) || [];
+            const rawBc = String(
+              sm.bonCommandeId === 'custom'
+                ? (sm.customBonCommande ?? '')
+                : (sm.bonCommandeId ?? sm.customBonCommande ?? sm['Bon de commande.'] ?? sm['Bon de commande'] ?? '')
+            ).trim();
+            const cleanBc = rawBc.toLowerCase() === 'custom' ? '' : rawBc;
+            list.push({
               ...sm,
-              id: sm.id || sm.interventionReference || `fsm-m-${target.missions.length + 1}`,
+              id: sm.id || sm.interventionReference || `fsm-m-${list.length + 1}`,
               interventionReference: sm.interventionReference || sm.id,
+              bonCommandeId: cleanBc ? (sm.bonCommandeId === 'custom' ? 'custom' : cleanBc) : '',
+              customBonCommande: cleanBc,
             });
+            byTourKey.set(targetId, list);
           }
+          return baseTours.map((bt: any) => {
+            const assignedFromSheet = byTourKey.get(bt.id) || [];
+            return {
+              ...bt,
+              missions: assignedFromSheet.length > 0 ? assignedFromSheet : (bt.id === 'a-trier' ? [] : bt.missions),
+            };
+          });
         }
         return baseTours;
       } catch (sheetErr) {
@@ -5829,38 +5858,71 @@ async function warmupDefibrillateursStore() {
 
       if (tabType === 'clients') {
         try {
+          const defibVolMap: Record<string, number> = {};
+          const autresVolMap: Record<string, number> = {};
+          const combinedVolMap: Record<string, number> = {};
+
           const defibSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'defibrillateurs');
           if (defibSheetUrl && extractSpreadsheetIdAndGid(defibSheetUrl)) {
             const defibData = await fetchTenantSheetCollection(defibSheetUrl, tenantId, 'defibrillateurs', false);
             const volMap = defibData.stats?.clientVolumes || {};
-            effectiveStats = defibData.stats || {
-              ...data.stats,
-              clientVolumes: volMap,
+            for (const [k, v] of Object.entries(volMap)) {
+              const num = Number(v) || 0;
+              defibVolMap[k] = num;
+              combinedVolMap[k] = (combinedVolMap[k] || 0) + num;
+            }
+            effectiveStats = {
+              ...(defibData.stats || data.stats),
+              clientVolumes: combinedVolMap,
             };
-            const normKey = (val: any): string =>
-              String(val || '')
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .replace(/&#0*39;?/g, '')
-                .replace(/[^a-z0-9]+/gi, ' ')
-                .trim()
-                .toLowerCase();
-            itemsToSlice = data.items.map((cl: any) => {
-              if (!cl || typeof cl !== 'object') return cl;
-              const nameKey = normKey(cl.denomination || cl.nomSite || cl.nom || cl.entreprise || '');
-              const idKey = cl.id ? `id:${String(cl.id).trim().toLowerCase()}` : '';
-              const fieldRaw = String(cl.clientIdField || '').trim().toLowerCase();
-              const fieldKey = fieldRaw && !fieldRaw.includes('vierge') && !fieldRaw.startsWith('sheet_cli_') ? `id:${fieldRaw}` : '';
-              const payeurRaw = String(cl.payeurId || '').trim().toLowerCase();
-              const payeurKey = payeurRaw && !payeurRaw.includes('vierge') ? `payeur:${payeurRaw}` : '';
-              const vName = nameKey ? volMap[nameKey] || 0 : 0;
-              const vId = idKey ? volMap[idKey] || 0 : 0;
-              const vField = fieldKey ? volMap[fieldKey] || 0 : 0;
-              const vPayeur = payeurKey ? volMap[payeurKey] || 0 : 0;
-              const defibVolume = Math.max(vName, vId, vField, vPayeur);
-              return { ...cl, defibVolume };
-            });
           }
+
+          const autresSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'autresMateriels');
+          if (autresSheetUrl && extractSpreadsheetIdAndGid(autresSheetUrl)) {
+            const autresData = await fetchTenantSheetCollection(autresSheetUrl, tenantId, 'autresMateriels', false);
+            const aMap = autresData.stats?.clientVolumes || {};
+            for (const [k, v] of Object.entries(aMap)) {
+              const num = Number(v) || 0;
+              autresVolMap[k] = num;
+              combinedVolMap[k] = (combinedVolMap[k] || 0) + num;
+            }
+            effectiveStats = {
+              ...(effectiveStats || data.stats),
+              clientVolumes: combinedVolMap,
+            };
+          }
+
+          const normKey = (val: any): string =>
+            String(val || '')
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/&#0*39;?/g, '')
+              .replace(/[^a-z0-9]+/gi, ' ')
+              .trim()
+              .toLowerCase();
+
+          const lookupVol = (volMap: Record<string, number>, nameKey: string, idKey: string, fieldKey: string, payeurKey: string): number => {
+            const vName = nameKey ? volMap[nameKey] || 0 : 0;
+            const vId = idKey ? volMap[idKey] || 0 : 0;
+            const vField = fieldKey ? volMap[fieldKey] || 0 : 0;
+            const primary = Math.max(vName, vId, vField);
+            if (primary > 0) return primary;
+            return payeurKey ? volMap[payeurKey] || 0 : 0;
+          };
+
+          itemsToSlice = data.items.map((cl: any) => {
+            if (!cl || typeof cl !== 'object') return cl;
+            const nameKey = normKey(cl.denomination || cl.nomSite || cl.nom || cl.entreprise || '');
+            const idKey = cl.id ? `id:${String(cl.id).trim().toLowerCase()}` : '';
+            const fieldRaw = String(cl.clientIdField || '').trim().toLowerCase();
+            const fieldKey = fieldRaw && !fieldRaw.includes('vierge') && !fieldRaw.startsWith('sheet_cli_') ? `id:${fieldRaw}` : '';
+            const payeurRaw = String(cl.payeurId || '').trim().toLowerCase();
+            const payeurKey = payeurRaw && !payeurRaw.includes('vierge') ? `payeur:${payeurRaw}` : '';
+            const defibVolume =
+              lookupVol(defibVolMap, nameKey, idKey, fieldKey, payeurKey) +
+              lookupVol(autresVolMap, nameKey, idKey, fieldKey, payeurKey);
+            return { ...cl, defibVolume };
+          });
         } catch (_) {}
       }
 
@@ -7538,8 +7600,21 @@ async function warmupDefibrillateursStore() {
         clartePdf: reviewInput.clartePdf,
         explications: reviewInput.explications,
         sensibilisation: reviewInput.sensibilisation,
-        npsScore: reviewInput.npsScore ?? reviewInput.nps ?? null,
-        nps: reviewInput.npsScore ?? reviewInput.nps ?? null,
+        npsScore:
+          reviewInput.npsScore ??
+          reviewInput.nps ??
+          reviewInput['Quelle est la probabilité que vous nous recommandiez?'] ??
+          null,
+        nps:
+          reviewInput.npsScore ??
+          reviewInput.nps ??
+          reviewInput['Quelle est la probabilité que vous nous recommandiez?'] ??
+          null,
+        'Quelle est la probabilité que vous nous recommandiez?':
+          reviewInput.npsScore ??
+          reviewInput.nps ??
+          reviewInput['Quelle est la probabilité que vous nous recommandiez?'] ??
+          '',
         noteGlobale: avg4,
         rating: avg4,
         dateStr: String(reviewInput.dateStr || reviewInput.date || new Date().toISOString().split('T')[0]).trim(),
@@ -7788,6 +7863,17 @@ async function warmupDefibrillateursStore() {
               ) {
                 tourChanged = true;
                 const cleanComment = comment !== undefined ? String(comment).trim() : undefined;
+                const normNewStatus = newStatus.toLowerCase().trim();
+                const shouldClearComment =
+                  normNewStatus === 'accepté client' ||
+                  normNewStatus === 'accepte client' ||
+                  normNewStatus === 'à faire' ||
+                  normNewStatus === 'a faire';
+                const resolvedComment = shouldClearComment
+                  ? ''
+                  : cleanComment !== undefined
+                  ? cleanComment
+                  : m.refusalComment || m.commentaire || '';
                 updatedMission = {
                   ...(sheetMissionMatch || {}),
                   ...m,
@@ -7797,11 +7883,11 @@ async function warmupDefibrillateursStore() {
                     (tour.id !== 'a-trier' ? tour.tourIdentifiant || tour.id : ''),
                   status: newStatus,
                   situation: newStatus,
-                  refusalComment: cleanComment !== undefined ? cleanComment : m.refusalComment || '',
-                  clientRefusalComment: cleanComment !== undefined ? cleanComment : m.clientRefusalComment || '',
-                  rejectionReason: cleanComment !== undefined ? cleanComment : m.rejectionReason || '',
-                  raisonRejet: cleanComment !== undefined ? cleanComment : m.raisonRejet || '',
-                  commentaire: cleanComment !== undefined ? cleanComment : m.commentaire || '',
+                  refusalComment: resolvedComment,
+                  clientRefusalComment: resolvedComment,
+                  rejectionReason: shouldClearComment ? '' : (cleanComment !== undefined ? cleanComment : m.rejectionReason || ''),
+                  raisonRejet: shouldClearComment ? '' : (cleanComment !== undefined ? cleanComment : m.raisonRejet || ''),
+                  commentaire: resolvedComment,
                   clientDecisionDate: nowIso,
                   updatedAt: nowIso,
                 };
@@ -7815,15 +7901,26 @@ async function warmupDefibrillateursStore() {
 
         if (!updatedMission && sheetMissionMatch) {
           const cleanComment = comment !== undefined ? String(comment).trim() : undefined;
+          const normNewStatus = newStatus.toLowerCase().trim();
+          const shouldClearComment =
+            normNewStatus === 'accepté client' ||
+            normNewStatus === 'accepte client' ||
+            normNewStatus === 'à faire' ||
+            normNewStatus === 'a faire';
+          const resolvedComment = shouldClearComment
+            ? ''
+            : cleanComment !== undefined
+            ? cleanComment
+            : sheetMissionMatch.refusalComment || sheetMissionMatch.commentaire || '';
           updatedMission = {
             ...sheetMissionMatch,
             status: newStatus,
             situation: newStatus,
-            refusalComment: cleanComment !== undefined ? cleanComment : sheetMissionMatch.refusalComment || '',
-            clientRefusalComment: cleanComment !== undefined ? cleanComment : sheetMissionMatch.clientRefusalComment || '',
-            rejectionReason: cleanComment !== undefined ? cleanComment : sheetMissionMatch.rejectionReason || '',
-            raisonRejet: cleanComment !== undefined ? cleanComment : sheetMissionMatch.raisonRejet || '',
-            commentaire: cleanComment !== undefined ? cleanComment : sheetMissionMatch.commentaire || '',
+            refusalComment: resolvedComment,
+            clientRefusalComment: resolvedComment,
+            rejectionReason: shouldClearComment ? '' : (cleanComment !== undefined ? cleanComment : sheetMissionMatch.rejectionReason || ''),
+            raisonRejet: shouldClearComment ? '' : (cleanComment !== undefined ? cleanComment : sheetMissionMatch.raisonRejet || ''),
+            commentaire: resolvedComment,
             clientDecisionDate: nowIso,
             updatedAt: nowIso,
           };
@@ -7861,6 +7958,12 @@ async function warmupDefibrillateursStore() {
           // Update generatedReports if present
           const reportsList = (await fetchServerCollection('generatedReports', tid)) || [];
           if (Array.isArray(reportsList) && reportsList.length > 0) {
+            const normNewStatus = newStatus.toLowerCase().trim();
+            const shouldClearComment =
+              normNewStatus === 'accepté client' ||
+              normNewStatus === 'accepte client' ||
+              normNewStatus === 'à faire' ||
+              normNewStatus === 'a faire';
             const updatedReports = reportsList.map((rep: any) => {
               if (
                 rep &&
@@ -7870,7 +7973,8 @@ async function warmupDefibrillateursStore() {
                 return {
                   ...rep,
                   missionStatus: newStatus,
-                  refusalComment: comment !== undefined ? comment : rep.refusalComment,
+                  refusalComment: shouldClearComment ? '' : (comment !== undefined ? comment : rep.refusalComment),
+                  rejectionReason: shouldClearComment ? '' : rep.rejectionReason,
                   updatedAt: nowIso,
                 };
               }

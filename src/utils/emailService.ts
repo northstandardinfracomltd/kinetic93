@@ -426,7 +426,7 @@ export async function triggerEmail5AvisageFSM(
   const pinText = pinCode ? `\n\nVoici le code pin à fournir au technicien pour signer la visite sur site : ${pinCode}\n` : '';
   const slotStr = estimatedSlot || '09:00am';
   const infoLines = missionDetails ? `\nClient: ${missionDetails.clientName || ''}.\nSite: ${missionDetails.siteName || ''}.\nLocalisation: ${missionDetails.localisation || ''}.\nClient ID: ${missionDetails.clientIdField || ''}.\nPayeur ID: ${missionDetails.payeurId || ''}.\nBon de commande: ${missionDetails.bonCommande || ''}.\n` : '';
-  const body = `${companyName} a prévu une visite sur votre matériel ${defibIdentifiant} le ${periodDate} (estimé) à ${slotStr} (estimé).${infoLines}${pinText}\nAccédez à Portail Client (https://consoledefibeo.deroesch.com/y26m8v105DRSHdatacentersession187DVF) puis cliquez sur Connexion, en tant que Client.\nSi vous souhaitez en savoir plus ou vous opposer à l’intervention, répondez simplement au présent email.`;
+  const body = `${companyName} a prévu une visite sur votre matériel ${defibIdentifiant} le ${periodDate} (estimé) à ${slotStr} (estimé).${infoLines}${pinText}\nSi vous souhaitez en savoir plus ou vous opposer à l’intervention, répondez simplement au présent email.\n\n${senderName}`;
   const htmlBody = `<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
     <p>${companyName} a prévu une visite sur votre matériel <strong>${defibIdentifiant}</strong> le <strong>${periodDate}</strong> (estimé) à <strong>${slotStr}</strong> (estimé).</p>
     ${missionDetails ? `<p style="margin: 12px 0;">
@@ -438,8 +438,8 @@ export async function triggerEmail5AvisageFSM(
       Bon de commande: ${missionDetails.bonCommande || ''}.
     </p>` : ''}
     ${pinCode ? `<p>Voici le code pin à fournir au technicien pour signer la visite sur site : <strong>${pinCode}</strong></p>` : ''}
-    <p>Vous pouvez également accéder à votre portail client pour consulter les détails : accédez à <a href="https://consoledefibeo.deroesch.com/y26m8v105DRSHdatacentersession187DVF" style="color: #3556ec; text-decoration: underline;">Portail Client</a> puis cliquez sur Connexion, en tant que Client.</p>
     <p>Si vous souhaitez en savoir plus ou vous opposer à l’intervention, répondez simplement au présent email.</p>
+    <p style="margin-top: 16px; font-weight: bold;">${senderName}</p>
   </div>`;
   
   return sendScriptEmail({
@@ -724,7 +724,6 @@ export async function triggerEmailSoumettreAuClient(
   const dateText = missionDetails?.estimatedDate ? `Date estimée proposée : ${missionDetails.estimatedDate}\n` : '';
   const slotText = missionDetails?.estimatedSlot ? `Créneau estimé proposé : ${missionDetails.estimatedSlot}\n` : '';
   const urlLink = missionDetails?.actionUrl || 'https://consoledefibeo.deroesch.com';
-  const clientPortalUrl = 'https://consoledefibeo.deroesch.com/y26m8v105DRSHdatacentersession187DVF';
 
   const body = `Bonjour,
 
@@ -733,9 +732,9 @@ ${clientText}${siteText}${locText}${clientIdText}${payeurIdText}${bdcText}${refT
 Pour valider ou refuser cette proposition de passage, veuillez cliquer sur le lien ci-dessous :
 ${urlLink}
 
-Vous pouvez également accéder à votre portail client pour consulter les détails : accédez à Portail Client (${clientPortalUrl}) puis cliquez sur Connexion, en tant que Client.
+Vous remerciant pour votre retour.
 
-Vous remerciant pour votre retour.`;
+${senderName}`;
 
   const htmlBody = `
 <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; line-height: 1.6; padding: 20px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;">
@@ -771,12 +770,9 @@ Vous remerciant pour votre retour.`;
 
   <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
 
-  <p style="font-size: 13px; color: #475569; margin-bottom: 8px;">
-    Vous pouvez également accéder à votre portail client pour consulter les détails : accédez à <a href="${clientPortalUrl}" style="color: #3556ec; text-decoration: underline;">Portail Client</a> puis cliquez sur Connexion, en tant que Client.
-  </p>
-
   <p style="margin-top: 20px; font-size: 14px; color: #000000;">
-    Vous remerciant pour votre retour.
+    Vous remerciant pour votre retour.<br/><br/>
+    <strong>${senderName}</strong>
   </p>
 </div>
 `;

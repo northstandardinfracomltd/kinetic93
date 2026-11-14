@@ -470,17 +470,17 @@ function normalizeDateStr(val: any): string {
   const s = String(val).trim();
   if (!s) return '';
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})[T\s]/);
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})[T\s,]/);
   if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-  const ymdSlash = s.match(/^(\d{4})[\/\.](\d{1,2})[\/\.](\d{1,2})$/);
+  const ymdSlash = s.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})(?:[T\s,].*)?$/);
   if (ymdSlash) {
     return `${ymdSlash[1]}-${ymdSlash[2].padStart(2, '0')}-${ymdSlash[3].padStart(2, '0')}`;
   }
-  const dmY = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  const dmY = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})(?:[T\s,].*)?$/);
   if (dmY) {
     return `${dmY[3]}-${dmY[2].padStart(2, '0')}-${dmY[1].padStart(2, '0')}`;
   }
-  const dmyShort = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/);
+  const dmyShort = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})(?:[T\s,].*)?$/);
   if (dmyShort) {
     const yr = parseInt(dmyShort[3], 10);
     const fullYr = yr < 70 ? 2000 + yr : 1900 + yr;
@@ -1385,6 +1385,9 @@ export function mapRowToAutreMateriel(
     }
   });
 
+  if (obj.archive === 'Oui') {
+    obj.fsmAutorise = 'Non';
+  }
   if (obj.clientIdField && !obj.clientId) obj.clientId = obj.clientIdField;
   if (obj.clientNom && !obj.clientId) obj.clientId = obj.clientNom;
   if (specifiques.numSerie && !obj.numeroSerie) obj.numeroSerie = specifiques.numSerie;
@@ -1914,7 +1917,21 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Clarté PDF.', field: 'clartePdf', aliases: ['clartepdf', 'clartedurapportpdf', 'clartedurapportdintervention', 'clarterapport'], type: 'number' },
     { header: 'Explications.', field: 'explications', aliases: ['explications', 'clartedesexplications', 'clartedesexplicationsdutechnicien', 'explicationsfourniessurlamaintenance'], type: 'number' },
     { header: 'Sensibilisation.', field: 'sensibilisation', aliases: ['sensibilisation', 'sensibilisationaumateriel', 'qualitedelasensibilisationaumateriel'], type: 'number' },
-    { header: 'NPS Score /10.', field: 'npsScore', aliases: ['npsscore10', 'npsscore', 'nps', 'scorenps', 'recommandation', 'probabiliterecommandation'], type: 'number' },
+    {
+      header: 'Quelle est la probabilité que vous nous recommandiez?',
+      field: 'npsScore',
+      aliases: [
+        'quelleestlaprobabilitequevousnousrecommandiez',
+        'probabilitequevousnousrecommandiez',
+        'npsscore10',
+        'npsscore',
+        'nps',
+        'scorenps',
+        'recommandation',
+        'probabiliterecommandation',
+      ],
+      type: 'number',
+    },
     { header: 'Évaluation.', field: 'comment', aliases: ['evaluation', 'commentaire', 'comment', 'avis', 'message', 'retour', 'observation', 'temoignage'] },
     { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idavis'] },
   ],
@@ -2369,18 +2386,20 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Section 4 - Plage horaire le weekend.', field: 'accesWeekend', aliases: ['section4plagehoraireleweekend', 'plagehoraireleweekend', 'accesweekend'] },
     { header: 'Section 4 - Commentaire concernant l’adresse.', field: 'commentaireAdresse', aliases: ['section4commentaireconcernantladresse', 'commentaireconcernantladresse', 'commentaireadresse'] },
     // Section 5 - Dates
-    { header: 'Section 5 - Dernière maintenance.', field: 'derniereMaintenance', aliases: ['section5dernieremaintenance', 'dernieremaintenance'] },
+    { header: 'Section 5 - Dernière maintenance.', field: 'derniereMaintenance', aliases: ['section5dernieremaintenance', 'section5datededernieremaintenance', 'dernieremaintenance', 'datededernieremaintenance'] },
+    { header: 'Section 5 - Prochaine maintenance.', field: 'prochaineMaintenance', aliases: ['section5prochainemaintenance', 'section5datedeprochainemaintenance', 'prochainemaintenance', 'datedeprochainemaintenance'] },
     { header: 'Section 5 - Date de fabrication', field: '_s5_fabrication', aliases: ['section5datedefabrication', 'section5fabrication', 'fabrication'] },
     { header: 'Section 5 - Date de mise en service', field: '_s5_miseEnService', aliases: ['section5datedemiseenservice', 'section5miseenservice', 'miseenservice'] },
     { header: 'Section 5 - Date de fin de garantie', field: 'finGarantie', aliases: ['section5datedefindegarantie', 'section5findegarantie', 'findegarantie', 'fingarantie'] },
-    { header: 'Section 5 - Sortie fabricant.', field: 'sortieFabricant', aliases: ['section5sortiefabricant', 'sortiefabricant'] },
+    { header: 'Section 5 - Sortie fabricant.', field: 'sortieFabricant', aliases: ['section5sortiefabricant', 'section5sortiedusine', 'section5datedesortiedusine', 'sortiefabricant', 'sortiedusine', 'datedesortiedusine'] },
     { header: 'Section 5 - Préconisation de remplacement.', field: 'preconisationRemplacement', aliases: ['section5preconisationderemplacement', 'preconisationderemplacement', 'section5preconisationderemplacementdudae', 'preconisationderemplacementdudae', 'preconisationremplacement'], type: 'bool' },
     { header: 'Section 5 - Recommandation ou observation pour la préconisation de remplacement.', field: 'recommandationPreconisationRemplacement', aliases: ['section5recommandationouobservationpourlapreconisationderemplacement', 'recommandationouobservationpourlapreconisationderemplacement', 'section5recommandationpreconisationderemplacement', 'recommandationpreconisationderemplacement', 'recommandationpreconisationremplacement'] },
     // Section 6 - Électrode Adulte (A)
     { header: 'Section 6 - Modèle sélectionné', field: '_s6_modeleElectrodeA', aliases: ['section6modeleselectionne', 'section6modeledelectrodea', 'modeledelectrodea', 'modeleelectrodea', 'modeleelectrodeaid'] },
-    { header: 'Section 6 - Numéro de lot', field: '_s6_lotElectrodeA', aliases: ['section6numerodelot', 'section6lota', 'lota', 'lotelectrodea'] },
-    { header: 'Section 6 - Date de fabrication', field: '_s6_fabricationElectrodeA', aliases: ['section6datedefabrication', 'section6insertion', 'insertionelectrodea', 'fabricationelectrodea'] },
-    { header: 'Section 6 - Date de péremption', field: '_s6_peremptionElectrodeA', aliases: ['section6datedeperemption', 'section6peremption', 'peremptionelectrodea'] },
+    { header: 'Section 6 - Numéro de lot', field: '_s6_lotElectrodeA', aliases: ['section6numerodelot', 'section6lota', 'lota', 'lotelectrodea', 'numerodelotdelelectrodeadulteoumixte'] },
+    { header: 'Section 6 - Date de fabrication', field: '_s6_fabricationElectrodeA', aliases: ['section6datedefabrication', 'section6insertion', 'section6insertiona', 'section6datedinsertion', 'section6dateinsertion', 'insertionelectrodea', 'dateinsertionelectrodea', 'dateinsertionelectrodeadulteoumixte', 'fabricationelectrodea'] },
+    { header: 'Section 6 - Livraison A.', field: 'livraisonElectrodeA', aliases: ['section6livraisona', 'section6livraison', 'section6datedelivraison', 'livraisonelectrodea', 'livraisonelectrodeadulteoumixte'] },
+    { header: 'Section 6 - Date de péremption', field: '_s6_peremptionElectrodeA', aliases: ['section6datedeperemption', 'section6peremption', 'section6peremptiona', 'peremptionelectrodea', 'peremptionelectrodeadulteoumixte', 'preremptionelectrodeadulteoumixte'] },
     { header: "Section 6 - Remplacée lors de l'intervention", field: '_s6_remplaceElectrodeA', aliases: ['section6remplaceelorsdelintervention', 'section6electrodearemplacee', 'electrodearemplacee', 'remplaceelectrodea'], type: 'yesno' },
     { header: 'Section 6 - Électrode A conforme et fonctionnelle.', field: 'electrodeAConformeSante', aliases: ['section6electrodeaconformeetfonctionnelle', 'electrodeaconformeetfonctionnelle', 'electrodeaconformesante'], type: 'yesno' },
     { header: "Section 6 - Déstocké depuis l'emplacement", field: '_s6_destockElectrodeA', aliases: ['section6destockedepuislemplacement', 'section6selectiondelelectroderemplacee', 'selectionelectrodearemplacee', 'destockelectrodea'] },
@@ -2398,9 +2417,10 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Section 6 - Commentaire concernant l’électrode A.', field: 'commentaireElectrodeA', aliases: ['section6commentaireconcernantlelectrodea', 'commentaireconcernantlelectrodea', 'commentaireelectrodea'] },
     // Section 7 - Électrode Pédiatrique (P)
     { header: 'Section 7 - Modèle sélectionné', field: '_s7_modeleElectrodeP', aliases: ['section7modeleselectionne', 'section7modeledelectrodep', 'modeledelectrodep', 'modeleelectrodep', 'modeleelectrodepid'] },
-    { header: 'Section 7 - Numéro de lot', field: '_s7_lotElectrodeP', aliases: ['section7numerodelot', 'section7lotp', 'lotp', 'lotelectrodep'] },
-    { header: 'Section 7 - Date de fabrication', field: '_s7_fabricationElectrodeP', aliases: ['section7datedefabrication', 'section7insertion', 'insertionelectrodep', 'fabricationelectrodep'] },
-    { header: 'Section 7 - Date de péremption', field: '_s7_peremptionElectrodeP', aliases: ['section7datedeperemption', 'section7peremption', 'peremptionelectrodep'] },
+    { header: 'Section 7 - Numéro de lot', field: '_s7_lotElectrodeP', aliases: ['section7numerodelot', 'section7lotp', 'lotp', 'lotelectrodep', 'numerodelotdelelectrodepediatrique'] },
+    { header: 'Section 7 - Date de fabrication', field: '_s7_fabricationElectrodeP', aliases: ['section7datedefabrication', 'section7insertion', 'section7insertionp', 'section7datedinsertion', 'section7dateinsertion', 'insertionelectrodep', 'dateinsertionelectrodep', 'dateinsertionelectrodepediatrique', 'fabricationelectrodep'] },
+    { header: 'Section 7 - Livraison P.', field: 'livraisonElectrodeP', aliases: ['section7livraisonp', 'section7livraison', 'section7datedelivraison', 'livraisonelectrodep', 'livraisonelectrodepediatrique'] },
+    { header: 'Section 7 - Date de péremption', field: '_s7_peremptionElectrodeP', aliases: ['section7datedeperemption', 'section7peremption', 'section7peremptionp', 'peremptionelectrodep', 'peremptionelectrodepediatrique', 'preremptionelectrodepediatrique'] },
     { header: "Section 7 - Remplacée lors de l'intervention", field: '_s7_remplaceElectrodeP', aliases: ['section7remplaceelorsdelintervention', 'section7electrodepemplacee', 'section7electroderemplacee', 'section7electrodepremplacee', 'electrodepremplacee', 'remplaceelectrodep'], type: 'yesno' },
     { header: 'Section 7 - Électrode P conforme et fonctionnelle.', field: 'electrodePConformeSante', aliases: ['section7electrodepconformeetfonctionnelle', 'electrodepconformeetfonctionnelle', 'electrodepconformesante'], type: 'yesno' },
     { header: "Section 7 - Déstocké depuis l'emplacement", field: '_s7_destockElectrodeP', aliases: ['section7destockedepuislemplacement', 'section7selectiondelelectroderemplacee', 'selectionelectrodepremplacee', 'destockelectrodep'] },
@@ -2418,10 +2438,11 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Section 7 - Commentaire concernant l’électrode P.', field: 'commentaireElectrodeP', aliases: ['section7commentaireconcernantlelectrodep', 'commentaireconcernantlelectrodep', 'commentaireelectrodep'] },
     // Section 8 - Batterie (B)
     { header: 'Section 8 - Modèle sélectionné', field: '_s8_modeleBatterie', aliases: ['section8modeleselectionne', 'section8modeledebatterie', 'section8modeledelabatterie', 'modeledelabatterie', 'modeledebatterie', 'modelebatterie', 'modelebatterieid'] },
-    { header: 'Section 8 - Numéro de lot', field: '_s8_lotBatterie', aliases: ['section8numerodelot', 'section8lotb', 'lotb', 'lotbatterie'] },
-    { header: 'Section 8 - Date de fabrication', field: '_s8_fabricationBatterie', aliases: ['section8datedefabrication', 'section8fabrication', 'fabricationbatterie'] },
-    { header: 'Section 8 - Date de mise en service', field: '_s8_miseEnServiceBatterie', aliases: ['section8datedemiseenservice', 'section8insertion', 'insertionbatterie', 'miseenservicebatterie'] },
-    { header: 'Section 8 - Date de péremption', field: '_s8_peremptionBatterie', aliases: ['section8datedeperemption', 'section8peremption', 'peremptionbatterie'] },
+    { header: 'Section 8 - Numéro de lot', field: '_s8_lotBatterie', aliases: ['section8numerodelot', 'section8lotb', 'lotb', 'lotbatterie', 'numerodelotdelabatterie'] },
+    { header: 'Section 8 - Date de fabrication', field: '_s8_fabricationBatterie', aliases: ['section8datedefabrication', 'section8fabrication', 'section8fabricationb', 'fabricationbatterie', 'datefabricationdelabatterie'] },
+    { header: 'Section 8 - Date de mise en service', field: '_s8_miseEnServiceBatterie', aliases: ['section8datedemiseenservice', 'section8insertion', 'section8insertionb', 'section8datedinsertion', 'insertionbatterie', 'dateinsertiondelabatterie', 'miseenservicebatterie'] },
+    { header: 'Section 8 - Livraison B.', field: 'livraisonBatterie', aliases: ['section8livraisonb', 'section8livraison', 'section8datedelivraison', 'livraisonbatterie', 'datelivraisonbatterie'] },
+    { header: 'Section 8 - Date de péremption', field: '_s8_peremptionBatterie', aliases: ['section8datedeperemption', 'section8peremption', 'section8peremptionb', 'peremptionbatterie', 'peremptiondelabatterie'] },
     { header: 'Section 8 - Pourcentage constaté (%)', field: 'pourcentageBatterie', aliases: ['section8pourcentageconstate', 'section8pourcentagedecharge', 'pourcentagedecharge', 'pourcentageconstate', 'pourcentagebatterie'] },
     { header: "Section 8 - Remplacée lors de l'intervention", field: '_s8_remplaceBatterie', aliases: ['section8remplaceelorsdelintervention', 'section8batterieremplacee', 'batterieremplacee', 'remplacebatterie'], type: 'yesno' },
     { header: 'Section 8 - Batterie conforme et fonctionnelle.', field: 'batterieConformeSante', aliases: ['section8batterieconformeetfonctionnelle', 'batterieconformeetfonctionnelle', 'section8batterieconformeetfonctionelle', 'batterieconformeetfonctionelle', 'batterieconformesante'], type: 'yesno' },
@@ -4205,31 +4226,46 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         merged['Commentaire interne'] ??
         ''
     ).trim();
-    const resolvedRejectionReason = String(
-      merged.rejectionReason ??
-        merged.raisonRejet ??
-        merged['Raison rejet.'] ??
-        merged['Raison rejet'] ??
-        merged['Raison de rejet.'] ??
-        merged['Raison de rejet'] ??
-        ''
-    ).trim();
-    merged.rejectionReason = resolvedRejectionReason;
-    merged.raisonRejet = resolvedRejectionReason;
-    if (String(merged.status || '').toLowerCase().includes('refus')) {
-      const resolvedRefusal = String(
-        merged.refusalComment ||
-          merged.clientRefusalComment ||
-          resolvedRejectionReason ||
-          merged.commentaire ||
+    const sitLower = String(merged.status || '').trim().toLowerCase();
+    const isAcceptedOrAFaire =
+      sitLower === 'accepté client' ||
+      sitLower === 'accepte client' ||
+      sitLower === 'à faire' ||
+      sitLower === 'a faire';
+    if (isAcceptedOrAFaire) {
+      merged.rejectionReason = '';
+      merged.raisonRejet = '';
+      merged.refusalComment = '';
+      merged.clientRefusalComment = '';
+      merged.commentaire = '';
+    } else {
+      const resolvedRejectionReason = String(
+        merged.rejectionReason ??
+          merged.raisonRejet ??
+          merged['Raison rejet.'] ??
+          merged['Raison rejet'] ??
+          merged['Raison de rejet.'] ??
+          merged['Raison de rejet'] ??
           ''
       ).trim();
-      merged.refusalComment = resolvedRefusal;
-      merged.clientRefusalComment = resolvedRefusal;
-    } else if (merged.refusalComment || merged.clientRefusalComment) {
-      const resolvedRefusal = String(merged.refusalComment || merged.clientRefusalComment || '').trim();
-      merged.refusalComment = resolvedRefusal;
-      merged.clientRefusalComment = resolvedRefusal;
+      merged.rejectionReason = sitLower.includes('refus') ? '' : resolvedRejectionReason;
+      merged.raisonRejet = sitLower.includes('refus') ? '' : resolvedRejectionReason;
+      if (sitLower.includes('refus')) {
+        const resolvedRefusal = String(
+          merged.refusalComment ||
+            merged.clientRefusalComment ||
+            merged.commentaire ||
+            resolvedRejectionReason ||
+            ''
+        ).trim();
+        merged.refusalComment = resolvedRefusal;
+        merged.clientRefusalComment = resolvedRefusal;
+        merged.commentaire = resolvedRefusal;
+      } else if (merged.refusalComment || merged.clientRefusalComment) {
+        const resolvedRefusal = String(merged.refusalComment || merged.clientRefusalComment || '').trim();
+        merged.refusalComment = resolvedRefusal;
+        merged.clientRefusalComment = resolvedRefusal;
+      }
     }
     const resolvedStatutFacturation = String(
       merged.statutFacturation ??
@@ -4653,6 +4689,32 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       if (!merged.piecesJointes) merged.piecesJointes = merged.attachments;
     }
 
+    merged.derniereMaintenance = normalizeDateStr(merged.derniereMaintenance || existingSnap.derniereMaintenance || merged.date || '');
+    merged.sortieFabricant = normalizeDateStr(merged.sortieFabricant || existingSnap.sortieFabricant || '');
+    merged.prochaineMaintenance = normalizeDateStr(merged.prochaineMaintenance || existingSnap.prochaineMaintenance || '');
+    merged.fabrication = normalizeDateStr(merged.fabrication || existingSnap.fabrication || '');
+    merged.miseEnService = normalizeDateStr(merged.miseEnService || existingSnap.miseEnService || '');
+    merged.finGarantie = normalizeDateStr(merged.finGarantie || existingSnap.finGarantie || '');
+    merged.insertionElectrodeA = normalizeDateStr(merged.fabricationElectrodeA || merged.insertionElectrodeA || existingSnap.insertionElectrodeA || existingSnap.fabricationElectrodeA || '');
+    merged.fabricationElectrodeA = merged.insertionElectrodeA;
+    merged.peremptionElectrodeA = normalizeDateStr(merged.peremptionElectrodeA || existingSnap.peremptionElectrodeA || '');
+    merged.livraisonElectrodeA = normalizeDateStr(merged.livraisonElectrodeA || existingSnap.livraisonElectrodeA || '');
+    merged.peremptionElectrodeSecoursA = normalizeDateStr(merged.peremptionElectrodeSecoursA || existingSnap.peremptionElectrodeSecoursA || existingSnap.peremptionSecoursElectrodeA || '');
+    merged.peremptionSecoursElectrodeA = merged.peremptionElectrodeSecoursA;
+    merged.insertionElectrodeP = normalizeDateStr(merged.fabricationElectrodeP || merged.insertionElectrodeP || existingSnap.insertionElectrodeP || existingSnap.fabricationElectrodeP || '');
+    merged.fabricationElectrodeP = merged.insertionElectrodeP;
+    merged.peremptionElectrodeP = normalizeDateStr(merged.peremptionElectrodeP || existingSnap.peremptionElectrodeP || '');
+    merged.livraisonElectrodeP = normalizeDateStr(merged.livraisonElectrodeP || existingSnap.livraisonElectrodeP || '');
+    merged.peremptionElectrodeSecoursP = normalizeDateStr(merged.peremptionElectrodeSecoursP || existingSnap.peremptionElectrodeSecoursP || existingSnap.peremptionSecoursElectrodeP || '');
+    merged.peremptionSecoursElectrodeP = merged.peremptionElectrodeSecoursP;
+    merged.fabricationBatterie = normalizeDateStr(merged.fabricationBatterie || existingSnap.fabricationBatterie || '');
+    merged.insertionBatterie = normalizeDateStr(merged.miseEnServiceBatterie || merged.insertionBatterie || existingSnap.insertionBatterie || existingSnap.miseEnServiceBatterie || '');
+    merged.miseEnServiceBatterie = merged.insertionBatterie;
+    merged.livraisonBatterie = normalizeDateStr(merged.livraisonBatterie || existingSnap.livraisonBatterie || '');
+    merged.peremptionBatterie = normalizeDateStr(merged.peremptionBatterie || existingSnap.peremptionBatterie || '');
+    merged.peremptionKit = normalizeDateStr(merged.peremptionKit || merged.peremptionTrousse || existingSnap.peremptionKit || existingSnap.peremptionTrousse || '');
+    merged.peremptionTrousse = merged.peremptionKit;
+
     merged.defibSnapshot = {
       ...existingSnap,
       id: existingSnap.id || merged.defibId || merged.defibrillateurId || merged.identifiant || '',
@@ -4674,7 +4736,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       denomination: merged.denomination || existingSnap.denomination || existingSnap.nomSite || '',
       nomSite: merged.denomination || existingSnap.nomSite || existingSnap.denomination || '',
       emplacement: merged.emplacement || existingSnap.emplacement || existingSnap.commentaireAdresse || '',
-      commentaireAdresse: merged.emplacement || existingSnap.commentaireAdresse || existingSnap.emplacement || '',
+      commentaireAdresse: merged.commentaireAdresse || merged.emplacement || existingSnap.commentaireAdresse || existingSnap.emplacement || '',
       photoUrl: merged.photoUrl || existingSnap.photoUrl || '',
       photo2Url: merged.photo2Url || merged.photoArriereUrl || existingSnap.photo2Url || '',
       photo3Url: merged.photo3Url || merged.photoResultatTestUrl || existingSnap.photo3Url || '',
@@ -4685,6 +4747,8 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       contrat: merged.contrat || existingSnap.contrat || 'Non',
       referenceContrat: merged.referenceContrat || existingSnap.referenceContrat || '',
       nomContrat: merged.nomContrat || existingSnap.nomContrat || '',
+      debutContrat: normalizeDateStr(merged.debutContrat || existingSnap.debutContrat || ''),
+      finContrat: normalizeDateStr(merged.finContrat || existingSnap.finContrat || ''),
       emettreFactureBrouillon: merged.emettreFactureBrouillon || existingSnap.emettreFactureBrouillon || 'Non',
       serviceEmettreId: merged.serviceEmettreId || existingSnap.serviceEmettreId || '',
       modeleCoffret: merged.modeleCoffret || existingSnap.modeleCoffret || '',
@@ -4707,74 +4771,94 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
           : existingSnap.interieurExterieur || 'Intérieur',
       commentaireCoffret: merged.commentaireCoffret || existingSnap.commentaireCoffret || '',
       numVoie: merged.numVoie || existingSnap.numVoie || '',
+      adresse: merged.numVoie || merged.adresse || existingSnap.adresse || existingSnap.numVoie || '',
       ville: merged.ville || existingSnap.ville || '',
       cp: merged.cp || existingSnap.cp || '',
+      codePostal: merged.cp || merged.codePostal || existingSnap.codePostal || existingSnap.cp || '',
       region: merged.region || existingSnap.region || '',
       pays: merged.pays || existingSnap.pays || 'France',
       latitude: merged.latitude !== undefined ? String(merged.latitude) : (existingSnap.latitude || ''),
       longitude: merged.longitude !== undefined ? String(merged.longitude) : (existingSnap.longitude || ''),
-      fabrication: merged.fabrication || existingSnap.fabrication || '',
-      miseEnService: merged.miseEnService || existingSnap.miseEnService || '',
-      finGarantie: merged.finGarantie || existingSnap.finGarantie || '',
+      acces247: merged.acces247 || existingSnap.acces247 || 'Non',
+      accesSemaine: merged.accesSemaine || existingSnap.accesSemaine || '',
+      accesWeekend: merged.accesWeekend || existingSnap.accesWeekend || '',
+      derniereMaintenance: merged.derniereMaintenance,
+      sortieFabricant: merged.sortieFabricant,
+      prochaineMaintenance: merged.prochaineMaintenance,
+      fabrication: merged.fabrication,
+      miseEnService: merged.miseEnService,
+      finGarantie: merged.finGarantie,
       preconisationRemplacement: merged.preconisationRemplacement,
       recommandationPreconisationRemplacement: merged.recommandationPreconisationRemplacement,
       modeleElectrodeA: merged.modeleElectrodeA || existingSnap.modeleElectrodeA || '',
       modeleElectrodeAId: merged.modeleElectrodeA || existingSnap.modeleElectrodeAId || '',
       lotElectrodeA: merged.lotElectrodeA,
-      fabricationElectrodeA: merged.fabricationElectrodeA || existingSnap.fabricationElectrodeA || existingSnap.insertionElectrodeA || '',
-      insertionElectrodeA: merged.fabricationElectrodeA || merged.insertionElectrodeA || existingSnap.insertionElectrodeA || existingSnap.fabricationElectrodeA || '',
-      peremptionElectrodeA: merged.peremptionElectrodeA || existingSnap.peremptionElectrodeA || '',
+      fabricationElectrodeA: merged.insertionElectrodeA,
+      insertionElectrodeA: merged.insertionElectrodeA,
+      livraisonElectrodeA: merged.livraisonElectrodeA,
+      peremptionElectrodeA: merged.peremptionElectrodeA,
       remplaceElectrodeA: merged.remplaceElectrodeA || existingSnap.remplaceElectrodeA || 'Non',
       destockElectrodeA: merged.destockElectrodeA || existingSnap.destockElectrodeA || '',
+      hasPadpakA: merged.hasPadpakA || existingSnap.hasPadpakA || 'Non',
+      lotPadpakA: merged.lotPadpakA || existingSnap.lotPadpakA || '',
+      peremptionPadpakA: normalizeDateStr(merged.peremptionPadpakA || existingSnap.peremptionPadpakA || ''),
+      commentaireElectrodeA: merged.commentaireElectrodeA || existingSnap.commentaireElectrodeA || '',
       modeleElectrodeSecoursA: merged.modeleElectrodeSecoursA || existingSnap.modeleElectrodeSecoursA || existingSnap.modeleElectrodeASecoursId || '',
       modeleElectrodeSecoursAId: merged.modeleElectrodeSecoursA || existingSnap.modeleElectrodeSecoursAId || existingSnap.modeleElectrodeASecoursId || '',
       modeleElectrodeASecoursId: merged.modeleElectrodeSecoursA || existingSnap.modeleElectrodeASecoursId || existingSnap.modeleElectrodeSecoursAId || '',
       lotElectrodeSecoursA: merged.lotElectrodeSecoursA,
       lotElectrodeASecours: merged.lotElectrodeSecoursA,
-      peremptionElectrodeSecoursA: merged.peremptionElectrodeSecoursA || existingSnap.peremptionElectrodeSecoursA || existingSnap.peremptionSecoursElectrodeA || '',
-      peremptionSecoursElectrodeA: merged.peremptionElectrodeSecoursA || existingSnap.peremptionSecoursElectrodeA || existingSnap.peremptionElectrodeSecoursA || '',
+      peremptionElectrodeSecoursA: merged.peremptionElectrodeSecoursA,
+      peremptionSecoursElectrodeA: merged.peremptionElectrodeSecoursA,
       remplaceElectrodeSecoursA: merged.remplaceElectrodeSecoursA || existingSnap.remplaceElectrodeSecoursA || 'Non',
       destockElectrodeSecoursA: merged.destockElectrodeSecoursA || existingSnap.destockElectrodeSecoursA || '',
       modeleElectrodeP: merged.modeleElectrodeP || existingSnap.modeleElectrodeP || '',
       modeleElectrodePId: merged.modeleElectrodeP || existingSnap.modeleElectrodePId || '',
       lotElectrodeP: merged.lotElectrodeP,
-      fabricationElectrodeP: merged.fabricationElectrodeP || existingSnap.fabricationElectrodeP || existingSnap.insertionElectrodeP || '',
-      insertionElectrodeP: merged.fabricationElectrodeP || merged.insertionElectrodeP || existingSnap.insertionElectrodeP || existingSnap.fabricationElectrodeP || '',
-      peremptionElectrodeP: merged.peremptionElectrodeP || existingSnap.peremptionElectrodeP || '',
+      fabricationElectrodeP: merged.insertionElectrodeP,
+      insertionElectrodeP: merged.insertionElectrodeP,
+      livraisonElectrodeP: merged.livraisonElectrodeP,
+      peremptionElectrodeP: merged.peremptionElectrodeP,
       remplaceElectrodeP: merged.remplaceElectrodeP || existingSnap.remplaceElectrodeP || 'Non',
       destockElectrodeP: merged.destockElectrodeP || existingSnap.destockElectrodeP || '',
+      hasPadpakP: merged.hasPadpakP || existingSnap.hasPadpakP || 'Non',
+      lotPadpakP: merged.lotPadpakP || existingSnap.lotPadpakP || '',
+      peremptionPadpakP: normalizeDateStr(merged.peremptionPadpakP || existingSnap.peremptionPadpakP || ''),
+      commentaireElectrodeP: merged.commentaireElectrodeP || existingSnap.commentaireElectrodeP || '',
       modeleElectrodeSecoursP: merged.modeleElectrodeSecoursP || existingSnap.modeleElectrodeSecoursP || existingSnap.modeleElectrodePSecoursId || '',
       modeleElectrodeSecoursPId: merged.modeleElectrodeSecoursP || existingSnap.modeleElectrodeSecoursPId || existingSnap.modeleElectrodePSecoursId || '',
       modeleElectrodePSecoursId: merged.modeleElectrodeSecoursP || existingSnap.modeleElectrodePSecoursId || existingSnap.modeleElectrodeSecoursPId || '',
       lotElectrodeSecoursP: merged.lotElectrodeSecoursP,
       lotElectrodePSecours: merged.lotElectrodeSecoursP,
-      peremptionElectrodeSecoursP: merged.peremptionElectrodeSecoursP || existingSnap.peremptionElectrodeSecoursP || existingSnap.peremptionSecoursElectrodeP || '',
-      peremptionSecoursElectrodeP: merged.peremptionElectrodeSecoursP || existingSnap.peremptionSecoursElectrodeP || existingSnap.peremptionElectrodeSecoursP || '',
+      peremptionElectrodeSecoursP: merged.peremptionElectrodeSecoursP,
+      peremptionSecoursElectrodeP: merged.peremptionElectrodeSecoursP,
       remplaceElectrodeSecoursP: merged.remplaceElectrodeSecoursP || existingSnap.remplaceElectrodeSecoursP || 'Non',
       destockElectrodeSecoursP: merged.destockElectrodeSecoursP || existingSnap.destockElectrodeSecoursP || '',
       modeleBatterie: merged.modeleBatterie || existingSnap.modeleBatterie || '',
       modeleBatterieId: merged.modeleBatterie || existingSnap.modeleBatterieId || '',
       lotBatterie: merged.lotBatterie,
-      fabricationBatterie: merged.fabricationBatterie || existingSnap.fabricationBatterie || '',
-      miseEnServiceBatterie: merged.miseEnServiceBatterie || existingSnap.miseEnServiceBatterie || existingSnap.insertionBatterie || '',
-      insertionBatterie: merged.miseEnServiceBatterie || existingSnap.insertionBatterie || existingSnap.miseEnServiceBatterie || '',
-      peremptionBatterie: merged.peremptionBatterie || existingSnap.peremptionBatterie || '',
+      fabricationBatterie: merged.fabricationBatterie,
+      miseEnServiceBatterie: merged.insertionBatterie,
+      insertionBatterie: merged.insertionBatterie,
+      livraisonBatterie: merged.livraisonBatterie,
+      peremptionBatterie: merged.peremptionBatterie,
       pourcentageBatterie: merged.pourcentageBatterie !== undefined ? String(merged.pourcentageBatterie) : (existingSnap.pourcentageBatterie || ''),
+      commentaireBatterie: merged.commentaireBatterie || existingSnap.commentaireBatterie || '',
       remplaceBatterie: merged.remplaceBatterie || existingSnap.remplaceBatterie || 'Non',
       destockBatterie: merged.destockBatterie || existingSnap.destockBatterie || '',
       modelePile: merged.modelePile || existingSnap.modelePile || '',
       modelePileId: merged.modelePile || existingSnap.modelePileId || '',
       lotPile: merged.lotPile,
-      fabricationPile: merged.fabricationPile || existingSnap.fabricationPile || '',
-      miseEnServicePile: merged.miseEnServicePile || existingSnap.miseEnServicePile || '',
-      peremptionPile: merged.peremptionPile || existingSnap.peremptionPile || '',
+      fabricationPile: normalizeDateStr(merged.fabricationPile || existingSnap.fabricationPile || ''),
+      miseEnServicePile: normalizeDateStr(merged.miseEnServicePile || existingSnap.miseEnServicePile || ''),
+      peremptionPile: normalizeDateStr(merged.peremptionPile || existingSnap.peremptionPile || ''),
       remplacePile: merged.remplacePile || existingSnap.remplacePile || 'Non',
       destockPile: merged.destockPile || existingSnap.destockPile || '',
       modeleKit: merged.modeleKit || existingSnap.modeleKit || '',
       modeleKitId: merged.modeleKit || existingSnap.modeleKitId || '',
       lotKit: merged.lotKit,
-      peremptionKit: merged.peremptionKit || existingSnap.peremptionKit || existingSnap.peremptionTrousse || '',
-      peremptionTrousse: merged.peremptionKit || existingSnap.peremptionTrousse || existingSnap.peremptionKit || '',
+      peremptionKit: merged.peremptionKit,
+      peremptionTrousse: merged.peremptionTrousse,
       remplaceKit: merged.remplaceKit || existingSnap.remplaceKit || 'Non',
       destockKit: merged.destockKit || existingSnap.destockKit || '',
       kitCiseaux: merged.kitCiseaux || existingSnap.kitCiseaux || existingSnap.kitCiseauxPresents || 'Oui',
@@ -7120,7 +7204,16 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.clartePdf = parseScore(merged.clartePdf ?? rawByHeader['Clarté PDF.'] ?? rawByHeader['Clarté PDF']);
     merged.explications = parseScore(merged.explications ?? rawByHeader['Explications.'] ?? rawByHeader['Explications']);
     merged.sensibilisation = parseScore(merged.sensibilisation ?? rawByHeader['Sensibilisation.'] ?? rawByHeader['Sensibilisation']);
-    const npsVal = parseScore(merged.npsScore ?? merged.nps ?? rawByHeader['NPS Score /10.'] ?? rawByHeader['NPS Score /10'] ?? rawByHeader['NPS']);
+    const npsVal = parseScore(
+      merged.npsScore ??
+        merged.nps ??
+        rawByHeader['Quelle est la probabilité que vous nous recommandiez?'] ??
+        rawByHeader['Quelle est la probabilité que vous nous recommandiez ?'] ??
+        rawByHeader['Quelle est la probabilité que vous nous recommandiez'] ??
+        rawByHeader['NPS Score /10.'] ??
+        rawByHeader['NPS Score /10'] ??
+        rawByHeader['NPS']
+    );
     merged.npsScore = npsVal;
     merged.nps = npsVal;
     const critScores = [merged.qualite, merged.ponctualite, merged.politesse, merged.clartePdf, merged.explications, merged.sensibilisation].filter((v): v is number => typeof v === 'number');
@@ -7221,7 +7314,20 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.interventionRef = intRef;
     enriched.intervention = intRef;
     enriched.missionRef = intRef;
-    enriched.npsScore = enriched.npsScore ?? enriched.nps ?? '';
+    const resolvedNps =
+      enriched.npsScore ??
+      enriched.nps ??
+      enriched['Quelle est la probabilité que vous nous recommandiez?'] ??
+      enriched['Quelle est la probabilité que vous nous recommandiez ?'] ??
+      '';
+    const resolvedNpsStr = resolvedNps !== null && resolvedNps !== undefined && resolvedNps !== '' ? String(resolvedNps).trim() : '';
+    enriched.npsScore = resolvedNpsStr;
+    enriched.nps = resolvedNpsStr;
+    enriched['Quelle est la probabilité que vous nous recommandiez?'] = resolvedNpsStr;
+    enriched['Quelle est la probabilité que vous nous recommandiez ?'] = resolvedNpsStr;
+    enriched['Quelle est la probabilité que vous nous recommandiez'] = resolvedNpsStr;
+    enriched['NPS Score /10.'] = resolvedNpsStr;
+    enriched['NPS Score /10'] = resolvedNpsStr;
     const resolvedClientName = String(
       enriched.clientName ||
       enriched.nomPrenom ||
@@ -7281,17 +7387,48 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched['Commentaire visible par le technicien'] ??
       enriched.internalComment ??
       '';
-    enriched.rejectionReason =
-      enriched.rejectionReason ??
-      enriched.raisonRejet ??
-      enriched.motifRejet ??
-      enriched.refusalComment ??
-      enriched.clientRefusalComment ??
-      enriched['Raison rejet.'] ??
-      enriched['Raison rejet'] ??
-      '';
-    if ((enriched.refusalComment || enriched.clientRefusalComment) && !enriched.commentaire) {
-      enriched.commentaire = String(enriched.refusalComment || enriched.clientRefusalComment || '').trim();
+    const sitLower = String(enriched.status || enriched.situation || '').trim().toLowerCase();
+    const isAcceptedOrAFaire =
+      sitLower === 'accepté client' ||
+      sitLower === 'accepte client' ||
+      sitLower === 'à faire' ||
+      sitLower === 'a faire';
+    if (isAcceptedOrAFaire) {
+      enriched.rejectionReason = '';
+      enriched.raisonRejet = '';
+      enriched.refusalComment = '';
+      enriched.clientRefusalComment = '';
+      enriched.commentaire = '';
+      enriched['Commentaire'] = '';
+      enriched['Commentaire.'] = '';
+      enriched['Raison rejet.'] = '';
+      enriched['Raison rejet'] = '';
+      for (let hi = 0; hi < headers.length; hi++) {
+        const hNorm = String(headers[hi] || '').trim().toLowerCase();
+        if (
+          hNorm === 'commentaire' ||
+          hNorm === 'commentaire.' ||
+          hNorm === 'raison rejet.' ||
+          hNorm === 'raison rejet' ||
+          hNorm === 'raison de rejet' ||
+          hNorm === 'raison de rejet.'
+        ) {
+          outRow[hi] = '';
+        }
+      }
+    } else {
+      enriched.rejectionReason =
+        enriched.rejectionReason ??
+        enriched.raisonRejet ??
+        enriched.motifRejet ??
+        enriched.refusalComment ??
+        enriched.clientRefusalComment ??
+        enriched['Raison rejet.'] ??
+        enriched['Raison rejet'] ??
+        '';
+      if ((enriched.refusalComment || enriched.clientRefusalComment) && !enriched.commentaire) {
+        enriched.commentaire = String(enriched.refusalComment || enriched.clientRefusalComment || '').trim();
+      }
     }
     enriched.statutFacturation =
       enriched.statutFacturation ??
@@ -7552,13 +7689,22 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     if (rawExisting['Section 1 - Numéro Atlasanté.'] && String(rawExisting['Section 1 - Numéro Atlasanté.']).startsWith('data:image')) {
       rawExisting['Section 1 - Numéro Atlasanté.'] = '';
     }
-    enriched._s5_fabrication = snap.fabrication || enriched.fabrication || '';
-    enriched._s5_miseEnService = snap.miseEnService || enriched.miseEnService || '';
+    enriched.derniereMaintenance = normalizeDateStr(snap.derniereMaintenance || enriched.derniereMaintenance || enriched.date || '');
+    enriched.sortieFabricant = normalizeDateStr(snap.sortieFabricant || enriched.sortieFabricant || '');
+    enriched.prochaineMaintenance = normalizeDateStr(snap.prochaineMaintenance || enriched.prochaineMaintenance || '');
+    enriched.finGarantie = normalizeDateStr(snap.finGarantie || enriched.finGarantie || '');
+    enriched._s5_fabrication = normalizeDateStr(snap.fabrication || enriched.fabrication || '');
+    enriched.fabrication = enriched._s5_fabrication;
+    enriched._s5_miseEnService = normalizeDateStr(snap.miseEnService || enriched.miseEnService || '');
+    enriched.miseEnService = enriched._s5_miseEnService;
     enriched._s6_modeleElectrodeA = snap.modeleElectrodeA || snap.modeleElectrodeAId || enriched.modeleElectrodeA || '';
     enriched._s6_lotElectrodeA = sanitizeLotOut(snap.lotElectrodeA || enriched.lotElectrodeA);
     enriched.lotElectrodeA = enriched._s6_lotElectrodeA;
-    enriched._s6_fabricationElectrodeA = snap.fabricationElectrodeA || snap.insertionElectrodeA || enriched.fabricationElectrodeA || enriched.insertionElectrodeA || '';
-    enriched._s6_peremptionElectrodeA = snap.peremptionElectrodeA || enriched.peremptionElectrodeA || '';
+    enriched._s6_fabricationElectrodeA = normalizeDateStr(snap.insertionElectrodeA || snap.fabricationElectrodeA || enriched.insertionElectrodeA || enriched.fabricationElectrodeA || '');
+    enriched.insertionElectrodeA = enriched._s6_fabricationElectrodeA;
+    enriched.livraisonElectrodeA = normalizeDateStr(snap.livraisonElectrodeA || enriched.livraisonElectrodeA || '');
+    enriched._s6_peremptionElectrodeA = normalizeDateStr(snap.peremptionElectrodeA || enriched.peremptionElectrodeA || '');
+    enriched.peremptionElectrodeA = enriched._s6_peremptionElectrodeA;
     enriched._s6_remplaceElectrodeA = enriched.electrodeARemplacee || enriched.remplaceElectrodeA || snap.remplaceElectrodeA || '';
     enriched._s6_destockElectrodeA =
       (enriched.selectionElectrodeARemplacee === 'Autre' ? enriched.customElectrodeARemplacee : enriched.selectionElectrodeARemplacee) ||
@@ -7567,7 +7713,7 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       '';
     enriched.hasPadpakA = enriched.hasPadpakA || snap.hasPadpakA || 'Non';
     enriched.lotPadpakA = sanitizeLotOut(enriched.lotPadpakA || snap.lotPadpakA);
-    enriched.peremptionPadpakA = enriched.peremptionPadpakA || snap.peremptionPadpakA || '';
+    enriched.peremptionPadpakA = normalizeDateStr(enriched.peremptionPadpakA || snap.peremptionPadpakA || '');
     enriched.electrodeAConformeSante = enriched.electrodeAConformeSante || snap.electrodeAConformeSante || 'Oui';
     enriched.commentaireElectrodeA = enriched.commentaireElectrodeA || snap.commentaireElectrodeA || '';
     enriched._s6s_modeleElectrodeSecoursA =
@@ -7579,11 +7725,12 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched._s6s_lotElectrodeSecoursA = sanitizeLotOut(snap.lotElectrodeASecours || snap.lotElectrodeSecoursA || enriched.lotElectrodeSecoursA);
     enriched.lotElectrodeSecoursA = enriched._s6s_lotElectrodeSecoursA;
     enriched.lotElectrodeASecours = enriched._s6s_lotElectrodeSecoursA;
-    enriched._s6s_peremptionElectrodeSecoursA =
+    enriched._s6s_peremptionElectrodeSecoursA = normalizeDateStr(
       snap.peremptionSecoursElectrodeA ||
       snap.peremptionElectrodeSecoursA ||
       enriched.peremptionElectrodeSecoursA ||
-      '';
+      ''
+    );
     enriched._s6s_remplaceElectrodeSecoursA =
       enriched.electrodeASecoursRemplacee || enriched.remplaceElectrodeSecoursA || snap.remplaceElectrodeSecoursA || '';
     enriched._s6s_destockElectrodeSecoursA =
@@ -7596,8 +7743,11 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched._s7_modeleElectrodeP = snap.modeleElectrodeP || snap.modeleElectrodePId || enriched.modeleElectrodeP || '';
     enriched._s7_lotElectrodeP = sanitizeLotOut(snap.lotElectrodeP || enriched.lotElectrodeP);
     enriched.lotElectrodeP = enriched._s7_lotElectrodeP;
-    enriched._s7_fabricationElectrodeP = snap.fabricationElectrodeP || snap.insertionElectrodeP || enriched.fabricationElectrodeP || enriched.insertionElectrodeP || '';
-    enriched._s7_peremptionElectrodeP = snap.peremptionElectrodeP || enriched.peremptionElectrodeP || '';
+    enriched._s7_fabricationElectrodeP = normalizeDateStr(snap.insertionElectrodeP || snap.fabricationElectrodeP || enriched.insertionElectrodeP || enriched.fabricationElectrodeP || '');
+    enriched.insertionElectrodeP = enriched._s7_fabricationElectrodeP;
+    enriched.livraisonElectrodeP = normalizeDateStr(snap.livraisonElectrodeP || enriched.livraisonElectrodeP || '');
+    enriched._s7_peremptionElectrodeP = normalizeDateStr(snap.peremptionElectrodeP || enriched.peremptionElectrodeP || '');
+    enriched.peremptionElectrodeP = enriched._s7_peremptionElectrodeP;
     enriched._s7_remplaceElectrodeP = enriched.electrodePRemplacee || enriched.remplaceElectrodeP || snap.remplaceElectrodeP || '';
     enriched._s7_destockElectrodeP =
       (enriched.selectionElectrodePRemplacee === 'Autre' ? enriched.customElectrodePRemplacee : enriched.selectionElectrodePRemplacee) ||
@@ -7606,7 +7756,7 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       '';
     enriched.hasPadpakP = enriched.hasPadpakP || snap.hasPadpakP || 'Non';
     enriched.lotPadpakP = sanitizeLotOut(enriched.lotPadpakP || snap.lotPadpakP);
-    enriched.peremptionPadpakP = enriched.peremptionPadpakP || snap.peremptionPadpakP || '';
+    enriched.peremptionPadpakP = normalizeDateStr(enriched.peremptionPadpakP || snap.peremptionPadpakP || '');
     enriched.electrodePConformeSante = enriched.electrodePConformeSante || snap.electrodePConformeSante || 'Oui';
     enriched.commentaireElectrodeP = enriched.commentaireElectrodeP || snap.commentaireElectrodeP || '';
     enriched._s7s_modeleElectrodeSecoursP =
@@ -7618,11 +7768,12 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched._s7s_lotElectrodeSecoursP = sanitizeLotOut(snap.lotElectrodePSecours || snap.lotElectrodeSecoursP || enriched.lotElectrodeSecoursP);
     enriched.lotElectrodeSecoursP = enriched._s7s_lotElectrodeSecoursP;
     enriched.lotElectrodePSecours = enriched._s7s_lotElectrodeSecoursP;
-    enriched._s7s_peremptionElectrodeSecoursP =
+    enriched._s7s_peremptionElectrodeSecoursP = normalizeDateStr(
       snap.peremptionSecoursElectrodeP ||
       snap.peremptionElectrodeSecoursP ||
       enriched.peremptionElectrodeSecoursP ||
-      '';
+      ''
+    );
     enriched._s7s_remplaceElectrodeSecoursP =
       enriched.electrodePSecoursRemplacee || enriched.remplaceElectrodeSecoursP || snap.remplaceElectrodeSecoursP || '';
     enriched._s7s_destockElectrodeSecoursP =
@@ -7635,6 +7786,7 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched._s8_modeleBatterie = snap.modeleBatterie || snap.modeleBatterieId || enriched.modeleBatterie || '';
     enriched._s8_lotBatterie = sanitizeLotOut(snap.lotBatterie || enriched.lotBatterie);
     enriched.lotBatterie = enriched._s8_lotBatterie;
+    enriched.livraisonBatterie = normalizeDateStr(snap.livraisonBatterie || enriched.livraisonBatterie || '');
     if (rawExisting['Section 8 - Numéro de lot']) {
       rawExisting['Section 8 - Numéro de lot'] = sanitizeLotOut(rawExisting['Section 8 - Numéro de lot']);
     }
@@ -9222,8 +9374,38 @@ function computeNextMaintFromLast(lastStr: string | undefined | null): string {
   return `${y}-${m}-${day}`;
 }
 
+let _cachedDeletedEqKeysSet: Set<string> | null = null;
+let _cachedDeletedEqKeysTime = 0;
+
+function getGlobalDeletedEquipmentKeysSet(): Set<string> {
+  const now = Date.now();
+  if (_cachedDeletedEqKeysSet && now - _cachedDeletedEqKeysTime < 2000) {
+    return _cachedDeletedEqKeysSet;
+  }
+  const set = new Set<string>();
+  const candidateFiles = [
+    path.join(process.cwd(), 'data', 'deleted_defib_keys.json'),
+    path.join(process.cwd(), 'dist', 'data', 'deleted_defib_keys.json'),
+  ];
+  for (const f of candidateFiles) {
+    try {
+      if (fs.existsSync(f)) {
+        const arr = JSON.parse(fs.readFileSync(f, 'utf-8'));
+        if (Array.isArray(arr)) {
+          for (const k of arr) {
+            if (k) set.add(String(k).trim().toLowerCase());
+          }
+        }
+      }
+    } catch (_) {}
+  }
+  _cachedDeletedEqKeysSet = set;
+  _cachedDeletedEqKeysTime = now;
+  return set;
+}
+
 function computeSheetCollectionStats(items: any[], tabType: SheetTabType): SheetCollectionStats {
-  if (tabType !== 'defibrillateurs') {
+  if (tabType !== 'defibrillateurs' && tabType !== 'autresMateriels') {
     return {
       totalCount: items.length,
       totalMainOui: items.length,
@@ -9242,11 +9424,13 @@ function computeSheetCollectionStats(items: any[], tabType: SheetTabType): Sheet
   let totalMainNon = 0;
   let eligibleMainOuiCount = 0;
   let conformeEtAJourCount = 0;
+  let activeTotalCount = 0;
   const modelsSet = new Set<string>();
   const coffretsSet = new Set<string>();
   const electrodesSet = new Set<string>();
   const batteriesSet = new Set<string>();
   const clientVolumes: Record<string, number> = {};
+  const globalDeletedSet = getGlobalDeletedEquipmentKeysSet();
 
   const normClientName = (val: any): string =>
     String(val || '')
@@ -9263,30 +9447,28 @@ function computeSheetCollectionStats(items: any[], tabType: SheetTabType): Sheet
 
   for (let i = 0; i < items.length; i++) {
     const df = items[i];
-    if (!df) continue;
+    if (!df || typeof df !== 'object') continue;
 
-    const cNameKey = normClientName(df.clientNom || df.client || '');
-    const siteNameKey = normClientName(df.nomSite || '');
-    if (cNameKey) {
-      clientVolumes[cNameKey] = (clientVolumes[cNameKey] || 0) + 1;
+    // Exclude deleted items
+    const rawDeleted = String(df.supprime ?? df.deleted ?? df.isDeleted ?? 'Non').trim().toLowerCase();
+    if (rawDeleted === 'oui' || rawDeleted === 'true' || rawDeleted === '1' || rawDeleted === 'yes') {
+      continue;
     }
-    if (siteNameKey && siteNameKey !== cNameKey) {
-      clientVolumes[siteNameKey] = (clientVolumes[siteNameKey] || 0) + 1;
-    }
-    if (df.clientId && !isPlaceholderClientValue(df.clientId)) {
-      const cidKey = `id:${String(df.clientId).trim().toLowerCase()}`;
-      clientVolumes[cidKey] = (clientVolumes[cidKey] || 0) + 1;
-    }
-    if (df.clientIdField && !isPlaceholderClientValue(df.clientIdField)) {
-      const cifKey = `id:${String(df.clientIdField).trim().toLowerCase()}`;
-      if (cifKey !== `id:${String(df.clientId || '').trim().toLowerCase()}`) {
-        clientVolumes[cifKey] = (clientVolumes[cifKey] || 0) + 1;
+    if (globalDeletedSet.size > 0) {
+      const idLower = String(df.id || '').trim().toLowerCase();
+      const idfLower = String(df.identifiant || '').trim().toLowerCase();
+      if ((idLower && globalDeletedSet.has(idLower)) || (idfLower && globalDeletedSet.has(idfLower))) {
+        continue;
+      }
+      if (!idLower && !idfLower) {
+        const snLower = String(df.numeroSerie || df.num_serie || df.specifiques?.numSerie || '').trim().toLowerCase();
+        if (snLower && snLower !== 'non renseigné' && snLower !== 'n/a' && snLower !== '-' && globalDeletedSet.has(snLower)) {
+          continue;
+        }
       }
     }
-    if (df.payeurId && !isPlaceholderClientValue(df.payeurId)) {
-      const pidKey = `payeur:${String(df.payeurId).trim().toLowerCase()}`;
-      clientVolumes[pidKey] = (clientVolumes[pidKey] || 0) + 1;
-    }
+
+    activeTotalCount++;
 
     if (df.modeleId) modelsSet.add(String(df.modeleId).trim());
     if (df.modeleCoffretId) coffretsSet.add(String(df.modeleCoffretId).trim());
@@ -9297,20 +9479,69 @@ function computeSheetCollectionStats(items: any[], tabType: SheetTabType): Sheet
     if (df.modeleBatterieId) batteriesSet.add(String(df.modeleBatterieId).trim());
     if (df.modeleBatterieSecoursId) batteriesSet.add(String(df.modeleBatterieSecoursId).trim());
 
-    const rawFsm = String(
-      df.fsmAutorise ?? df.maintenanceAutorisee ?? df.maintenance_autorisee ?? df.fsm_autorise ?? 'Oui'
-    )
+    const rawArchive = String(df.archive ?? df.archived ?? df.isArchived ?? df.specifiques?.archive ?? 'Non')
       .trim()
       .toLowerCase();
+    const isArchived =
+      rawArchive === 'oui' ||
+      rawArchive === 'true' ||
+      rawArchive === '1' ||
+      rawArchive === 'yes' ||
+      rawArchive === 'archivé' ||
+      rawArchive === 'archive';
 
-    if (rawFsm === 'non' || rawFsm === 'false' || rawFsm === '0') {
+    const rawFsm = isArchived
+      ? 'non'
+      : String(
+          df.fsmAutorise ??
+            df.maintenanceAutorisee ??
+            df.maintenance_autorisee ??
+            df.fsm_autorise ??
+            df.specifiques?.fsmAutorise ??
+            df.specifiques?.maintenanceAutorisee ??
+            'Oui'
+        )
+          .trim()
+          .toLowerCase();
+
+    if (isArchived || rawFsm === 'non' || rawFsm === 'false' || rawFsm === '0' || rawFsm === 'no') {
       totalMainNon++;
     } else {
       totalMainOui++;
       eligibleMainOuiCount++;
 
+      // Only count in clientVolumes when Maintenance Autorisée = Oui + Pas archivé + Pas supprimé
+      const cNameKey = normClientName(df.clientNom || df.client || '');
+      const siteNameKey = normClientName(df.nomSite || df.denomination || '');
+      if (cNameKey) {
+        clientVolumes[cNameKey] = (clientVolumes[cNameKey] || 0) + 1;
+      }
+      if (siteNameKey && siteNameKey !== cNameKey) {
+        clientVolumes[siteNameKey] = (clientVolumes[siteNameKey] || 0) + 1;
+      }
+      const rawCid =
+        df.clientId && !isPlaceholderClientValue(df.clientId) && !String(df.clientId).startsWith('sheet_cli_')
+          ? String(df.clientId).trim().toLowerCase()
+          : '';
+      if (rawCid) {
+        const cidKey = `id:${rawCid}`;
+        clientVolumes[cidKey] = (clientVolumes[cidKey] || 0) + 1;
+      }
+      const rawCif =
+        df.clientIdField && !isPlaceholderClientValue(df.clientIdField) && !String(df.clientIdField).startsWith('sheet_cli_')
+          ? String(df.clientIdField).trim().toLowerCase()
+          : '';
+      if (rawCif && rawCif !== rawCid) {
+        const cifKey = `id:${rawCif}`;
+        clientVolumes[cifKey] = (clientVolumes[cifKey] || 0) + 1;
+      }
+      if (!cNameKey && !rawCif && df.payeurId && !isPlaceholderClientValue(df.payeurId)) {
+        const pidKey = `payeur:${String(df.payeurId).trim().toLowerCase()}`;
+        clientVolumes[pidKey] = (clientVolumes[pidKey] || 0) + 1;
+      }
+
       let isCompliant = df.conforme !== 'Non';
-      if (isCompliant) {
+      if (isCompliant && tabType === 'defibrillateurs') {
         const nextMaintStr = df.prochaineMaintenance || computeNextMaintFromLast(df.derniereMaintenance);
         const datesToCheck = [
           parseSheetDateHelper(nextMaintStr),
@@ -9340,7 +9571,7 @@ function computeSheetCollectionStats(items: any[], tabType: SheetTabType): Sheet
       : 0;
 
   return {
-    totalCount: items.length,
+    totalCount: activeTotalCount,
     totalMainOui,
     totalMainNon,
     conformeEtAJourCount,
@@ -9615,8 +9846,8 @@ export async function fetchTenantSheetCollection(
           diskSnap.headers.length === 0 ||
           !diskSnap.headers.some(h => normalizeHeaderKey(h).includes('visibiliteduchamp')));
       if (!isStaleVariablesSnap && !isStaleDefibSnap(diskSnap) && !isStaleMissionsSnap(diskSnap) && !isStaleSuspiciousSnap(diskSnap) && !isStaleReglagesSnap(diskSnap) && !isStaleTempsSnap(diskSnap) && !isStaleApparencePdfSnap(diskSnap)) {
-        if (tabType === 'defibrillateurs') {
-          diskSnap.stats = computeSheetCollectionStats(diskSnap.items, 'defibrillateurs');
+        if (tabType === 'defibrillateurs' || tabType === 'autresMateriels') {
+          diskSnap.stats = computeSheetCollectionStats(diskSnap.items, tabType);
           saveDiskSnapshotAsync(cacheKey, diskSnap);
         }
         sheetMemoryCache.set(cacheKey, diskSnap);
@@ -9645,8 +9876,8 @@ export async function fetchTenantSheetCollection(
         cached.headers.length === 0 ||
         !cached.headers.some(h => normalizeHeaderKey(h).includes('visibiliteduchamp')));
     if (cached.items.length > 0 && !isStaleVariablesCache && !isStaleDefibSnap(cached) && !isStaleMissionsSnap(cached) && !isStaleSuspiciousSnap(cached) && !isStaleReglagesSnap(cached) && !isStaleTempsSnap(cached)) {
-      if (tabType === 'defibrillateurs') {
-        cached.stats = computeSheetCollectionStats(cached.items, 'defibrillateurs');
+      if (tabType === 'defibrillateurs' || tabType === 'autresMateriels') {
+        cached.stats = computeSheetCollectionStats(cached.items, tabType);
       }
       const staleMs = tabType === 'messagesInternes' ? 4000 : 120000;
       if (Date.now() - cached.fetchedAt > staleMs && !inFlightSheetFetches.has(cacheKey)) {

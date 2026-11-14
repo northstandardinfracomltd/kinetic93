@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Client, ClientContract, Defibrillateur, Variable, CompanyInfo, openTenantSpreadsheetUrl } from '../types';
+import { Client, ClientContract, Defibrillateur, OtherEquipment, Variable, CompanyInfo, openTenantSpreadsheetUrl } from '../types';
 import { Plus, Search, Trash2, Edit2, X, Briefcase, Mail, Phone, FileText, Calendar, ShieldCheck, Download, ChevronDown, RefreshCw, FileSpreadsheet } from 'lucide-react';
 import { checkIfEmailExistsAnywhere } from '../firebase';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
@@ -144,6 +144,7 @@ interface ClientTabProps {
   tenantId?: string;
   clients: Client[];
   defibrillateurs?: Defibrillateur[];
+  otherEquipments?: OtherEquipment[];
   defibSheetStats?: { totalCount?: number; clientVolumes?: Record<string, number> } | null;
   variables?: Variable[];
   onAddClient: (client: Omit<Client, 'id'>) => void;
@@ -162,6 +163,7 @@ export default function ClientTab({
   tenantId,
   clients,
   defibrillateurs = [],
+  otherEquipments = [],
   defibSheetStats = null,
   variables = [],
   onAddClient,
@@ -210,20 +212,47 @@ export default function ClientTab({
     return (trimmed.includes('1tB1e41') || trimmed.includes('2mX5O6r9hD0i3Z9m')) ? '' : trimmed;
   }, [companyInfo?.spreadsheetDefibrillateurs, companyInfo?.spreadsheetDefibrillateursUrl, activeTenantId]);
 
+  const resolvedAutresSpreadsheetUrl = useMemo(() => {
+    const raw =
+      companyInfo?.spreadsheetAutresMateriels ||
+      companyInfo?.spreadsheetAutresMaterielsUrl ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem(`defib_${activeTenantId}_spreadsheet_autres_materiels`) ||
+          localStorage.getItem(`defib_${activeTenantId.toUpperCase()}_spreadsheet_autres_materiels`) ||
+          localStorage.getItem(`defib_${activeTenantId.toLowerCase()}_spreadsheet_autres_materiels`)
+        : '') ||
+      '';
+    const trimmed = String(raw).trim();
+    return (trimmed.includes('1tB1e41') || trimmed.includes('2mX5O6r9hD0i3Z9m')) ? '' : trimmed;
+  }, [companyInfo?.spreadsheetAutresMateriels, companyInfo?.spreadsheetAutresMaterielsUrl, activeTenantId]);
+
   const [remoteClientVolumes, setRemoteClientVolumes] = useState<Record<string, number>>({});
+  const [remoteAutresClientVolumes, setRemoteAutresClientVolumes] = useState<Record<string, number>>({});
 
   const fetchDefibVolumeStats = React.useCallback(async (force = false) => {
     try {
-      const res = await fetch(
-        `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=defibrillateurs&mode=stats&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(resolvedDefibsSpreadsheetUrl)}`
-      );
-      if (!res.ok) return;
-      const json = await res.json();
-      if (json?.stats?.clientVolumes && typeof json.stats.clientVolumes === 'object') {
-        setRemoteClientVolumes(json.stats.clientVolumes);
+      const [defibRes, autresRes] = await Promise.all([
+        fetch(
+          `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=defibrillateurs&mode=stats&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(resolvedDefibsSpreadsheetUrl)}`
+        ).catch(() => null),
+        fetch(
+          `/api/sheets/data?tenantId=${encodeURIComponent(activeTenantId)}&type=autresMateriels&mode=stats&forceRefresh=${force}&spreadsheetUrl=${encodeURIComponent(resolvedAutresSpreadsheetUrl)}`
+        ).catch(() => null),
+      ]);
+      if (defibRes && defibRes.ok) {
+        const json = await defibRes.json();
+        if (json?.stats?.clientVolumes && typeof json.stats.clientVolumes === 'object') {
+          setRemoteClientVolumes(json.stats.clientVolumes);
+        }
+      }
+      if (autresRes && autresRes.ok) {
+        const json = await autresRes.json();
+        if (json?.stats?.clientVolumes && typeof json.stats.clientVolumes === 'object') {
+          setRemoteAutresClientVolumes(json.stats.clientVolumes);
+        }
       }
     } catch (_) {}
-  }, [activeTenantId, resolvedDefibsSpreadsheetUrl]);
+  }, [activeTenantId, resolvedDefibsSpreadsheetUrl, resolvedAutresSpreadsheetUrl]);
 
   useEffect(() => {
     fetchDefibVolumeStats(false);
@@ -1104,37 +1133,166 @@ export default function ClientTab({
       .toLowerCase();
   }, []);
 
-  // Fast defib count lookup by client (matching Section 2 - Client., Nom du site, Client ID, Payeur ID, and internal clientId)
-  const localClientVolumeMap = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const d of (defibrillateurs || []) as any[]) {
-      if (!d) continue;
-      const cNameKey = normalizeClientVolumeKey(d.clientNom || d.client || '');
-      const siteNameKey = normalizeClientVolumeKey(d.nomSite || '');
-      if (cNameKey) {
-        map.set(cNameKey, (map.get(cNameKey) || 0) + 1);
-      }
-      if (siteNameKey && siteNameKey !== cNameKey) {
-        map.set(siteNameKey, (map.get(siteNameKey) || 0) + 1);
-      }
-      const rawCid = String(d.clientId || '').trim().toLowerCase();
-      if (rawCid && !rawCid.includes('vierge') && !rawCid.startsWith('sheet_cli_')) {
-        const k = `id:${rawCid}`;
-        map.set(k, (map.get(k) || 0) + 1);
-      }
-      const rawCif = String(d.clientIdField || '').trim().toLowerCase();
-      if (rawCif && !rawCif.includes('vierge') && !rawCif.startsWith('sheet_cli_') && rawCif !== rawCid) {
-        const k = `id:${rawCif}`;
-        map.set(k, (map.get(k) || 0) + 1);
-      }
-      const rawPid = String(d.payeurId || '').trim().toLowerCase();
-      if (rawPid && !rawPid.includes('vierge')) {
-        const k = `payeur:${rawPid}`;
-        map.set(k, (map.get(k) || 0) + 1);
+  const deletedEquipmentKeysSet = useMemo(() => {
+    const set = new Set<string>();
+    if (typeof window === 'undefined') return set;
+    const tenantKeysToCheck = Array.from(
+      new Set([activeTenantId, activeTenantId.toLowerCase(), activeTenantId.toUpperCase()].filter(Boolean))
+    );
+    for (const t of tenantKeysToCheck) {
+      for (const suffix of ['deleted_defib_keys', 'deleted_autres_keys']) {
+        try {
+          const rawSession = sessionStorage.getItem(`defib_${t}_${suffix}`);
+          if (rawSession) {
+            const arr = JSON.parse(rawSession);
+            if (Array.isArray(arr)) arr.forEach((s: any) => s && set.add(String(s).trim().toLowerCase()));
+          }
+        } catch (_) {}
+        try {
+          const rawLocal = localStorage.getItem(`defib_${t}_${suffix}`);
+          if (rawLocal) {
+            const arr = JSON.parse(rawLocal);
+            if (Array.isArray(arr)) arr.forEach((s: any) => s && set.add(String(s).trim().toLowerCase()));
+          }
+        } catch (_) {}
       }
     }
-    return map;
-  }, [defibrillateurs, normalizeClientVolumeKey]);
+    return set;
+  }, [activeTenantId, defibrillateurs, otherEquipments]);
+
+  const isEligibleEquipmentForClientVolume = React.useCallback(
+    (item: any): boolean => {
+      if (!item || typeof item !== 'object') return false;
+      const rawId = String(item.id || '').trim();
+      if (
+        (rawId.startsWith('sheet_df_') || rawId.startsWith('sheet_am_')) &&
+        !item.identifiant &&
+        !item.numeroSerie &&
+        !item.specifiques?.numSerie &&
+        !item.clientNom &&
+        !item.clientIdField
+      ) {
+        return false;
+      }
+
+      // 1. Pas supprimé
+      const rawDeleted = String(item.supprime ?? item.deleted ?? item.isDeleted ?? 'Non').trim().toLowerCase();
+      if (rawDeleted === 'oui' || rawDeleted === 'true' || rawDeleted === '1' || rawDeleted === 'yes') {
+        return false;
+      }
+      if (deletedEquipmentKeysSet.size > 0) {
+        const idLower = String(item.id || '').trim().toLowerCase();
+        const idfLower = String(item.identifiant || '').trim().toLowerCase();
+        if ((idLower && deletedEquipmentKeysSet.has(idLower)) || (idfLower && deletedEquipmentKeysSet.has(idfLower))) {
+          return false;
+        }
+        if (!idLower && !idfLower) {
+          const snLower = String(item.numeroSerie || item.num_serie || item.specifiques?.numSerie || '')
+            .trim()
+            .toLowerCase();
+          if (
+            snLower &&
+            snLower !== 'non renseigné' &&
+            snLower !== 'n/a' &&
+            snLower !== '-' &&
+            deletedEquipmentKeysSet.has(snLower)
+          ) {
+            return false;
+          }
+        }
+      }
+
+      // 2. Pas archivé
+      const rawArchive = String(
+        item.archive ?? item.archived ?? item.isArchived ?? item.specifiques?.archive ?? 'Non'
+      )
+        .trim()
+        .toLowerCase();
+      if (
+        rawArchive === 'oui' ||
+        rawArchive === 'true' ||
+        rawArchive === '1' ||
+        rawArchive === 'yes' ||
+        rawArchive === 'archivé' ||
+        rawArchive === 'archive'
+      ) {
+        return false;
+      }
+
+      // 3. Maintenance Autorisée = Oui
+      const rawFsm = String(
+        item.fsmAutorise ??
+          item.maintenanceAutorisee ??
+          item.maintenance_autorisee ??
+          item.fsm_autorise ??
+          item.specifiques?.fsmAutorise ??
+          item.specifiques?.maintenanceAutorisee ??
+          'Oui'
+      )
+        .trim()
+        .toLowerCase();
+      if (rawFsm === 'non' || rawFsm === 'false' || rawFsm === '0' || rawFsm === 'no') {
+        return false;
+      }
+      return rawFsm === 'oui' || rawFsm === 'true' || rawFsm === '1' || rawFsm === 'yes' || rawFsm === '';
+    },
+    [deletedEquipmentKeysSet]
+  );
+
+  const buildEligibleEquipmentVolumeMap = React.useCallback(
+    (itemsList: any[]): Map<string, number> => {
+      const deduped = new Map<string, any>();
+      (itemsList || []).forEach((item, idx) => {
+        if (!item || typeof item !== 'object') return;
+        const key = String(
+          item.identifiant || item.id || item.numeroSerie || item.specifiques?.numSerie || `idx_${idx}`
+        )
+          .trim()
+          .toLowerCase();
+        deduped.set(key, item);
+      });
+
+      const map = new Map<string, number>();
+      for (const d of deduped.values()) {
+        if (!isEligibleEquipmentForClientVolume(d)) continue;
+        const cNameKey = normalizeClientVolumeKey(d.clientNom || d.client || '');
+        const siteNameKey = normalizeClientVolumeKey(d.nomSite || d.denomination || '');
+        if (cNameKey) {
+          map.set(cNameKey, (map.get(cNameKey) || 0) + 1);
+        }
+        if (siteNameKey && siteNameKey !== cNameKey) {
+          map.set(siteNameKey, (map.get(siteNameKey) || 0) + 1);
+        }
+        const rawCid = String(d.clientId || '').trim().toLowerCase();
+        if (rawCid && !rawCid.includes('vierge') && !rawCid.startsWith('sheet_cli_')) {
+          const k = `id:${rawCid}`;
+          map.set(k, (map.get(k) || 0) + 1);
+        }
+        const rawCif = String(d.clientIdField || '').trim().toLowerCase();
+        if (rawCif && !rawCif.includes('vierge') && !rawCif.startsWith('sheet_cli_') && rawCif !== rawCid) {
+          const k = `id:${rawCif}`;
+          map.set(k, (map.get(k) || 0) + 1);
+        }
+        const rawPid = String(d.payeurId || '').trim().toLowerCase();
+        if (!cNameKey && !rawCif && rawPid && !rawPid.includes('vierge')) {
+          const k = `payeur:${rawPid}`;
+          map.set(k, (map.get(k) || 0) + 1);
+        }
+      }
+      return map;
+    },
+    [isEligibleEquipmentForClientVolume, normalizeClientVolumeKey]
+  );
+
+  const localDefibVolumeMap = useMemo(
+    () => buildEligibleEquipmentVolumeMap(defibrillateurs || []),
+    [defibrillateurs, buildEligibleEquipmentVolumeMap]
+  );
+
+  const localAutresVolumeMap = useMemo(
+    () => buildEligibleEquipmentVolumeMap(otherEquipments || []),
+    [otherEquipments, buildEligibleEquipmentVolumeMap]
+  );
 
   const getClientDefibVolume = React.useCallback(
     (client: Client): number => {
@@ -1144,34 +1302,52 @@ export default function ClientTab({
       );
       const idKey = client.id ? `id:${String(client.id).trim().toLowerCase()}` : '';
       const fieldRaw = String(client.clientIdField || '').trim().toLowerCase();
-      const fieldKey = fieldRaw && !fieldRaw.includes('vierge') && !fieldRaw.startsWith('sheet_cli_') ? `id:${fieldRaw}` : '';
+      const fieldKey =
+        fieldRaw && !fieldRaw.includes('vierge') && !fieldRaw.startsWith('sheet_cli_') ? `id:${fieldRaw}` : '';
       const payeurRaw = String(client.payeurId || '').trim().toLowerCase();
       const payeurKey = payeurRaw && !payeurRaw.includes('vierge') ? `payeur:${payeurRaw}` : '';
 
-      const localByName = nameKey ? localClientVolumeMap.get(nameKey) || 0 : 0;
-      const localById = idKey ? localClientVolumeMap.get(idKey) || 0 : 0;
-      const localByField = fieldKey ? localClientVolumeMap.get(fieldKey) || 0 : 0;
-      const localByPayeur = payeurKey ? localClientVolumeMap.get(payeurKey) || 0 : 0;
-      const localVol = Math.max(localByName, localById, localByField, localByPayeur);
+      const lookupCount = (source: Map<string, number> | Record<string, number>): number => {
+        const readVal = (k: string): number => {
+          if (!k) return 0;
+          return source instanceof Map ? source.get(k) || 0 : source[k] || 0;
+        };
+        const byName = readVal(nameKey);
+        const byId = readVal(idKey);
+        const byField = readVal(fieldKey);
+        const primary = Math.max(byName, byId, byField);
+        if (primary > 0) return primary;
+        return readVal(payeurKey);
+      };
 
-      const propVolMap = defibSheetStats?.clientVolumes || {};
-      const propByName = nameKey ? propVolMap[nameKey] || 0 : 0;
-      const propById = idKey ? propVolMap[idKey] || 0 : 0;
-      const propByField = fieldKey ? propVolMap[fieldKey] || 0 : 0;
-      const propByPayeur = payeurKey ? propVolMap[payeurKey] || 0 : 0;
-      const propVol = Math.max(propByName, propById, propByField, propByPayeur);
+      const hasFullLocalDefibs =
+        Array.isArray(defibrillateurs) &&
+        defibrillateurs.length > 0 &&
+        (!defibSheetStats?.totalCount || defibrillateurs.length >= defibSheetStats.totalCount * 0.5);
 
-      const remoteByName = nameKey ? remoteClientVolumes[nameKey] || 0 : 0;
-      const remoteById = idKey ? remoteClientVolumes[idKey] || 0 : 0;
-      const remoteByField = fieldKey ? remoteClientVolumes[fieldKey] || 0 : 0;
-      const remoteByPayeur = payeurKey ? remoteClientVolumes[payeurKey] || 0 : 0;
-      const remoteVol = Math.max(remoteByName, remoteById, remoteByField, remoteByPayeur);
+      const defibVol = hasFullLocalDefibs
+        ? lookupCount(localDefibVolumeMap)
+        : Object.keys(remoteClientVolumes).length > 0
+        ? lookupCount(remoteClientVolumes)
+        : lookupCount(localDefibVolumeMap);
 
-      const embeddedVol = Number((client as any).defibVolume || (client as any).volume || 0) || 0;
+      const hasLocalAutres = Array.isArray(otherEquipments) && otherEquipments.length > 0;
+      const autresVol = hasLocalAutres
+        ? lookupCount(localAutresVolumeMap)
+        : lookupCount(remoteAutresClientVolumes);
 
-      return Math.max(localVol, propVol, remoteVol, embeddedVol);
+      return defibVol + autresVol;
     },
-    [defibSheetStats?.clientVolumes, localClientVolumeMap, normalizeClientVolumeKey, remoteClientVolumes]
+    [
+      defibrillateurs,
+      otherEquipments,
+      defibSheetStats?.totalCount,
+      localDefibVolumeMap,
+      localAutresVolumeMap,
+      normalizeClientVolumeKey,
+      remoteClientVolumes,
+      remoteAutresClientVolumes,
+    ]
   );
 
   // Clients added or modified in the last 5 minutes
