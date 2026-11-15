@@ -2102,69 +2102,124 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                           return false;
                         });
 
-                        return daySpontaneousEvents.map((evt) => (
-                          <div
-                            key={evt.id}
-                            className="p-4 space-y-3"
-                            style={{
-                              border: "none",
-                              backgroundColor: "rgb(255 240 207)",
-                              color: "rgb(142 122 72)",
-                              borderRadius: "14px",
-                            }}
-                          >
-                            {/* Gélules Créneau, Badge + Bouton Supprimer */}
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-                                <span className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-bold text-[16px] inline-flex items-center shrink-0 whitespace-nowrap">
-                                  Événement spontané
-                                </span>
-                                <span
-                                  className="px-3.5 py-1.5 rounded-full bg-[#0f172a] text-white font-medium text-[16px] inline-flex items-center max-w-full min-w-0"
-                                  title={`Créneau : ${evt.creneau}`}
+                        return daySpontaneousEvents.map((evt) => {
+                          const localisationDisplay = String(
+                            evt.voie ?? (evt as any)['Voie'] ?? (evt as any)['Voie.'] ?? ''
+                          ).trim();
+                          const rawTourVal = String(
+                            evt.tournee ??
+                              evt.tourId ??
+                              evt.tourTitle ??
+                              (evt as any)['Tournée'] ??
+                              (evt as any)['Tournée.'] ??
+                              ''
+                          ).trim();
+                          let resolvedTourDisplay = '';
+                          if (rawTourVal) {
+                            const matchedTour = (resolvedTours || []).find(
+                              (tr: any) =>
+                                tr &&
+                                (String(tr.tourIdentifiant || '').trim().toLowerCase() === rawTourVal.toLowerCase() ||
+                                  String(tr.id || '').trim().toLowerCase() === rawTourVal.toLowerCase() ||
+                                  String(tr.title || '').trim().toLowerCase() === rawTourVal.toLowerCase())
+                            );
+                            resolvedTourDisplay = matchedTour
+                              ? String(matchedTour.title || matchedTour.name || matchedTour.tourIdentifiant || rawTourVal).trim()
+                              : String(evt.tourTitle || evt.tournee || rawTourVal).trim();
+                          }
+
+                          return (
+                            <div
+                              key={evt.id}
+                              className="p-4 space-y-3"
+                              style={{
+                                border: "none",
+                                backgroundColor: "rgb(255 240 207)",
+                                color: "rgb(142 122 72)",
+                                borderRadius: "14px",
+                              }}
+                            >
+                              {/* Gélules Créneau, Badge + Bouton Supprimer */}
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                                  <span
+                                    className="px-3.5 py-1.5 rounded-full font-bold inline-flex items-center shrink-0 whitespace-nowrap"
+                                    style={{
+                                      background: "#8e7a48",
+                                      backgroundColor: "#8e7a48",
+                                      color: "#fef1cf",
+                                      fontSize: "18px",
+                                    }}
+                                  >
+                                    Événement spontané
+                                  </span>
+                                  <span
+                                    className="px-3.5 py-1.5 rounded-full font-medium inline-flex items-center max-w-full min-w-0"
+                                    style={{
+                                      background: "#8e7a48",
+                                      backgroundColor: "#8e7a48",
+                                      color: "#fef1cf",
+                                      fontSize: "18px",
+                                    }}
+                                    title={`Créneau : ${evt.creneau}`}
+                                  >
+                                    <span className="shrink-0 whitespace-nowrap" style={{ color: "#fef1cf", fontSize: "18px" }}>
+                                      Créneau :&nbsp;
+                                    </span>
+                                    <span className="truncate whitespace-nowrap" style={{ color: "#fef1cf", fontSize: "18px" }}>
+                                      {evt.creneau}
+                                    </span>
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSpontaneousEvent(evt.id)}
+                                  style={{
+                                    boxShadow: "none",
+                                    color: "#FFF",
+                                    background: "rgb(210, 45, 11)",
+                                    borderRadius: "13px",
+                                    padding: "10px 18px",
+                                    fontSize: "18px",
+                                    fontWeight: 700,
+                                    border: "none",
+                                    cursor: "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "6px",
+                                  }}
+                                  className="w-full sm:w-auto mx-0 sm:ml-10 sm:mr-2.5 shrink-0 select-none"
                                 >
-                                  <span className="shrink-0 whitespace-nowrap">Créneau :&nbsp;</span>
-                                  <span className="truncate whitespace-nowrap">{evt.creneau}</span>
-                                </span>
+                                  Supprimer
+                                </button>
                               </div>
 
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteSpontaneousEvent(evt.id)}
-                                style={{
-                                  boxShadow: "none",
-                                  color: "#FFF",
-                                  background: "rgb(210, 45, 11)",
-                                  borderRadius: "13px",
-                                  padding: "10px 18px",
-                                  fontSize: "18px",
-                                  fontWeight: 700,
-                                  border: "none",
-                                  cursor: "pointer",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                  gap: "6px",
-                                }}
-                                className="w-full sm:w-auto mx-0 sm:ml-10 sm:mr-2.5 shrink-0 select-none"
-                              >
-                                Supprimer
-                              </button>
-                            </div>
-
-                            {/* Details */}
-                            <div className="space-y-1.5 text-[16px] pt-1" style={{ color: "rgb(142 122 72)", fontSize: "16px" }}>
-                              <div>
-                                <span className="font-bold">Intitulé : </span>
-                                <span>{evt.intitule}</span>
-                              </div>
-                              <div>
-                                <span className="font-bold">Commentaire : </span>
-                                <span className="whitespace-pre-wrap">{evt.commentaire}</span>
+                              {/* Details */}
+                              <div className="space-y-1.5 text-[16px] pt-1" style={{ color: "rgb(142 122 72)", fontSize: "16px" }}>
+                                <div>
+                                  <span className="font-bold">Intitulé : </span>
+                                  <span>{evt.intitule}</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold">Commentaire : </span>
+                                  <span className="whitespace-pre-wrap">{evt.commentaire}</span>
+                                </div>
+                                <div>
+                                  <span className="font-bold">Localisation : </span>
+                                  <span>{localisationDisplay}</span>
+                                </div>
+                                {resolvedTourDisplay && (
+                                  <div>
+                                    <span className="font-bold">Tournée : </span>
+                                    <span>{resolvedTourDisplay}</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
-                          </div>
-                        ));
+                          );
+                        });
                       })()}
                     </div>
                   );

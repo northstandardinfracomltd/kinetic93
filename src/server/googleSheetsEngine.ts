@@ -7214,7 +7214,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         const n = Number(rawHorodatage);
         parsedTs = rawHorodatage.length === 10 ? n * 1000 : n;
       } else {
-        // Parse DD/MM/YYYY HH:mm(:ss) or ISO
+        // Parse DD/MM/YYYY HH:mm(:ss) in Europe/Paris timezone or ISO
         const frMatch = rawHorodatage.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[\sTà]+(\d{1,2})[:h](\d{1,2})(?:[:m](\d{1,2}))?)?/i);
         if (frMatch) {
           const dd = parseInt(frMatch[1], 10);
@@ -7223,8 +7223,31 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
           const hh = frMatch[4] ? parseInt(frMatch[4], 10) : 0;
           const min = frMatch[5] ? parseInt(frMatch[5], 10) : 0;
           const ss = frMatch[6] ? parseInt(frMatch[6], 10) : 0;
-          const d = new Date(yyyy, mm, dd, hh, min, ss);
-          if (!isNaN(d.getTime())) parsedTs = d.getTime();
+          const utcGuess = Date.UTC(yyyy, mm, dd, hh, min, ss);
+          if (!isNaN(utcGuess)) {
+            const parts = new Intl.DateTimeFormat('en-US', {
+              timeZone: 'Europe/Paris',
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: false,
+            }).formatToParts(new Date(utcGuess));
+            const getPart = (type: string) => Number(parts.find((p) => p.type === type)?.value || 0);
+            const parisHour = getPart('hour') === 24 ? 0 : getPart('hour');
+            const parisAsUtc = Date.UTC(
+              getPart('year'),
+              getPart('month') - 1,
+              getPart('day'),
+              parisHour,
+              getPart('minute'),
+              getPart('second')
+            );
+            const offsetMs = parisAsUtc - utcGuess;
+            parsedTs = utcGuess - offsetMs;
+          }
         } else {
           const d = new Date(rawHorodatage);
           if (!isNaN(d.getTime())) parsedTs = d.getTime();
@@ -8895,9 +8918,19 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     ).trim();
     if (!cleanHorodatage) {
       const ts = Number(enriched.updatedAt) || Date.now();
-      const d = new Date(ts);
-      const pad = (n: number) => String(n).padStart(2, '0');
-      cleanHorodatage = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      const parisParts = new Intl.DateTimeFormat('fr-FR', {
+        timeZone: 'Europe/Paris',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date(ts));
+      const getPart = (type: string) => parisParts.find((p) => p.type === type)?.value || '00';
+      const hhVal = getPart('hour') === '24' ? '00' : getPart('hour');
+      cleanHorodatage = `${getPart('day')}/${getPart('month')}/${getPart('year')} ${hhVal}:${getPart('minute')}:${getPart('second')}`;
     }
     const cleanLat = enriched.lat !== undefined && enriched.lat !== null ? String(enriched.lat) : '';
     const cleanLng = enriched.lng !== undefined && enriched.lng !== null ? String(enriched.lng) : '';
@@ -11190,7 +11223,7 @@ export async function upsertRecordsToTenantSheet(
     let hasRemoteHeaders = false;
     let coldMatchedByRecordIdx = new Map<number, any>();
 
-    if (warmCached && warmCached.headers.length > 0) {
+    if (warmCached && warmCached.headers.length > 0 && tabType !== 'livetrack') {
       headers = warmCached.headers;
       hasRemoteHeaders = warmCached.hasRemoteHeaders === true;
       const clientMissingAutreContratHeaders =
@@ -11239,6 +11272,7 @@ export async function upsertRecordsToTenantSheet(
     } else {
       // FAST PATH: Never block on downloading 18,000+ rows when cache is cold!
       // Fetch only the header row + target row(s) directly from Google Sheets in ~150-300ms.
+      // For 'livetrack', always read the live sheet directly so cleared/deleted rows are immediately re-created.
       const lightCtx = await fetchLightweightSheetContextForColdUpsert(
         extracted.spreadsheetId,
         extracted.gid,
@@ -11312,7 +11346,7 @@ export async function upsertRecordsToTenantSheet(
     // If warmCached was used (so fetchLightweightSheetContextForColdUpsert was skipped),
     // check if any record in effectiveRecords lacks a match in warmCached.items AND lacks an explicit _sheetRowNumber.
     // For tournees/missionsTournees (or any non-singleton tab), verify against the live sheet A2:D50000 before appending a duplicate!
-    if (warmCached && coldMatchedByRecordIdx.size === 0 && accessToken && !isSingletonTab) {
+    if (warmCached && coldMatchedByRecordIdx.size === 0 && accessToken && !isSingletonTab && tabType !== 'livetrack') {
       const hasUnmatchedWithoutRow = effectiveRecords.some(rec => {
         if (!rec || typeof rec !== 'object') return false;
         if (typeof rec._sheetRowNumber === 'number' && rec._sheetRowNumber >= 2) return false;
@@ -11353,7 +11387,12 @@ export async function upsertRecordsToTenantSheet(
       let existingIdx = -1;
       let existingItem: any = undefined;
 
-      if (warmCached) {
+      if (tabType === 'livetrack') {
+        existingItem = coldMatchedByRecordIdx.get(rIdx);
+        if (warmCached && existingItem?._sheetRowNumber) {
+          existingIdx = updatedItemsList.findIndex(b => b && b._sheetRowNumber === existingItem._sheetRowNumber);
+        }
+      } else if (warmCached) {
         const candidateRn =
           (typeof rec._sheetRowNumber === 'number' && rec._sheetRowNumber >= 2 ? rec._sheetRowNumber : undefined) ||
           extractRowNumFromSyntheticId(rec.id) ||
@@ -11385,8 +11424,8 @@ export async function upsertRecordsToTenantSheet(
         existingItem = coldMatchedByRecordIdx.get(rIdx);
       }
 
-      // Fallback to recentSheetUpserts or overlay.upsertedById if still unmatched
-      if (!existingItem) {
+      // Fallback to recentSheetUpserts or overlay.upsertedById if still unmatched (except livetrack, which strictly trusts live sheet state)
+      if (!existingItem && tabType !== 'livetrack') {
         for (const k of recKeys) {
           const fromRecent = recentMapForUpsert?.get(k)?.item;
           if (fromRecent) {

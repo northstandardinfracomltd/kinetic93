@@ -1513,6 +1513,41 @@ export default function GmaoCorrectionForm({
     }
   }, [report]);
 
+  const adjustAutoTextareaHeight = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    if (el.scrollHeight > 0) {
+      el.style.height = `${Math.max(el.scrollHeight, 48)}px`;
+    }
+  };
+
+  useEffect(() => {
+    const ids = [
+      'snap-commentaireCoffret',
+      'snap-commentaireElectrodeA',
+      'snap-commentaireElectrodeP',
+      'snap-commentaireBatterie',
+      'techCommentaireArrivee',
+      'snap-commentaire',
+      'snap-commentaire-interne',
+    ];
+    ids.forEach((id) => {
+      const el = document.getElementById(id) as HTMLTextAreaElement | null;
+      if (el && el.offsetParent !== null) {
+        adjustAutoTextareaHeight(el);
+      }
+    });
+  }, [
+    activeSection,
+    snapshot.commentaireCoffret,
+    snapshot.commentaireElectrodeA,
+    snapshot.commentaireElectrodeP,
+    snapshot.commentaireBatterie,
+    techCommentaireArrivee,
+    snapshot.commentaire,
+    snapshot.commentaireInterne,
+  ]);
+
   useEffect(() => {
     if (!isWebapp && !shouldShowChronoAndReduce) return;
     const interval = setInterval(() => {
@@ -4880,10 +4915,18 @@ export default function GmaoCorrectionForm({
               </label>
               <textarea
                 id="snap-commentaireCoffret"
+                rows={1}
+                ref={(el) => {
+                  if (el && el.offsetParent !== null) adjustAutoTextareaHeight(el);
+                }}
                 value={snapshot.commentaireCoffret || ''}
-                onChange={(e) => handleSnapshotChange('commentaireCoffret', e.target.value)}
-                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-850"
-                rows={2}
+                onInput={(e) => adjustAutoTextareaHeight(e.currentTarget)}
+                onChange={(e) => {
+                  adjustAutoTextareaHeight(e.currentTarget);
+                  handleSnapshotChange('commentaireCoffret', e.target.value);
+                }}
+                style={{ overflow: 'hidden', resize: 'none', minHeight: '48px' }}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-850 overflow-hidden resize-none"
                 placeholder="Entrez un commentaire."
               />
             </div>
@@ -5797,12 +5840,20 @@ export default function GmaoCorrectionForm({
               <label htmlFor="snap-commentaireElectrodeA" className="block text-[11px] font-bold text-black uppercase">
                 Commentaire concernant l’électrode A.
               </label>
-              <input
-                type="text"
+              <textarea
                 id="snap-commentaireElectrodeA"
+                rows={1}
+                ref={(el) => {
+                  if (el && el.offsetParent !== null) adjustAutoTextareaHeight(el);
+                }}
                 value={snapshot.commentaireElectrodeA || ''}
-                onChange={(e) => handleSnapshotChange('commentaireElectrodeA', e.target.value)}
-                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-850"
+                onInput={(e) => adjustAutoTextareaHeight(e.currentTarget)}
+                onChange={(e) => {
+                  adjustAutoTextareaHeight(e.currentTarget);
+                  handleSnapshotChange('commentaireElectrodeA', e.target.value);
+                }}
+                style={{ overflow: 'hidden', resize: 'none', minHeight: '48px' }}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-850 overflow-hidden resize-none"
                 placeholder="Entrez un commentaire."
               />
             </div>
@@ -6310,12 +6361,20 @@ export default function GmaoCorrectionForm({
               <label htmlFor="snap-commentaireElectrodeP" className="block text-[11px] font-bold text-black uppercase">
                 Commentaire concernant l’électrode P.
               </label>
-              <input
-                type="text"
+              <textarea
                 id="snap-commentaireElectrodeP"
+                rows={1}
+                ref={(el) => {
+                  if (el && el.offsetParent !== null) adjustAutoTextareaHeight(el);
+                }}
                 value={snapshot.commentaireElectrodeP || ''}
-                onChange={(e) => handleSnapshotChange('commentaireElectrodeP', e.target.value)}
-                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-850"
+                onInput={(e) => adjustAutoTextareaHeight(e.currentTarget)}
+                onChange={(e) => {
+                  adjustAutoTextareaHeight(e.currentTarget);
+                  handleSnapshotChange('commentaireElectrodeP', e.target.value);
+                }}
+                style={{ overflow: 'hidden', resize: 'none', minHeight: '48px' }}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-850 overflow-hidden resize-none"
                 placeholder="Entrez un commentaire."
               />
             </div>
@@ -6678,12 +6737,20 @@ export default function GmaoCorrectionForm({
               <label htmlFor="snap-commentaireBatterie" className="block text-[11px] font-bold text-black uppercase">
                 Commentaire concernant la batterie.
               </label>
-              <input
-                type="text"
+              <textarea
                 id="snap-commentaireBatterie"
+                rows={1}
+                ref={(el) => {
+                  if (el && el.offsetParent !== null) adjustAutoTextareaHeight(el);
+                }}
                 value={snapshot.commentaireBatterie || ''}
-                onChange={(e) => handleSnapshotChange('commentaireBatterie', e.target.value)}
-                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-850"
+                onInput={(e) => adjustAutoTextareaHeight(e.currentTarget)}
+                onChange={(e) => {
+                  adjustAutoTextareaHeight(e.currentTarget);
+                  handleSnapshotChange('commentaireBatterie', e.target.value);
+                }}
+                style={{ overflow: 'hidden', resize: 'none', minHeight: '48px' }}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-850 overflow-hidden resize-none"
                 placeholder="Entrez un commentaire."
               />
             </div>
@@ -6726,12 +6793,20 @@ export default function GmaoCorrectionForm({
                   <label htmlFor="techCommentaireArrivee" className="block text-[11px] font-bold text-black uppercase">
                     Commentaire sur l’état à mon arrivée.
                   </label>
-                  <input
-                    type="text"
+                  <textarea
                     id="techCommentaireArrivee"
+                    rows={1}
+                    ref={(el) => {
+                      if (el && el.offsetParent !== null) adjustAutoTextareaHeight(el);
+                    }}
                     value={techCommentaireArrivee}
-                    onChange={(e) => setTechCommentaireArrivee(e.target.value)}
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-805 rounded-lg text-xs"
+                    onInput={(e) => adjustAutoTextareaHeight(e.currentTarget)}
+                    onChange={(e) => {
+                      adjustAutoTextareaHeight(e.currentTarget);
+                      setTechCommentaireArrivee(e.target.value);
+                    }}
+                    style={{ overflow: 'hidden', resize: 'none', minHeight: '48px' }}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-805 rounded-lg text-xs overflow-hidden resize-none"
                     placeholder="Saisissez un commentaire sur l'état constaté à votre arrivée..."
                   />
                 </div>
@@ -7197,10 +7272,18 @@ export default function GmaoCorrectionForm({
               </label>
               <textarea
                 id="snap-commentaire"
-                rows={4}
+                rows={1}
+                ref={(el) => {
+                  if (el && el.offsetParent !== null) adjustAutoTextareaHeight(el);
+                }}
                 value={snapshot.commentaire || ''}
-                onChange={(e) => handleSnapshotChange('commentaire', e.target.value)}
-                className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 text-xs rounded-lg leading-relaxed focus:ring-1 focus:ring-indigo-500"
+                onInput={(e) => adjustAutoTextareaHeight(e.currentTarget)}
+                onChange={(e) => {
+                  adjustAutoTextareaHeight(e.currentTarget);
+                  handleSnapshotChange('commentaire', e.target.value);
+                }}
+                style={{ overflow: 'hidden', resize: 'none', minHeight: '48px' }}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 text-xs rounded-lg leading-relaxed focus:ring-1 focus:ring-indigo-500 overflow-hidden resize-none"
                 placeholder="Entrez un commentaire."
               />
             </div>
@@ -8218,10 +8301,18 @@ export default function GmaoCorrectionForm({
               </label>
               <textarea
                 id="snap-commentaire-interne"
-                rows={4}
+                rows={1}
+                ref={(el) => {
+                  if (el && el.offsetParent !== null) adjustAutoTextareaHeight(el);
+                }}
                 value={snapshot.commentaireInterne || ''}
-                onChange={(e) => handleSnapshotChange('commentaireInterne', e.target.value)}
-                className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 text-xs rounded-lg leading-relaxed focus:ring-1 focus:ring-indigo-500"
+                onInput={(e) => adjustAutoTextareaHeight(e.currentTarget)}
+                onChange={(e) => {
+                  adjustAutoTextareaHeight(e.currentTarget);
+                  handleSnapshotChange('commentaireInterne', e.target.value);
+                }}
+                style={{ overflow: 'hidden', resize: 'none', minHeight: '48px' }}
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 text-xs rounded-lg leading-relaxed focus:ring-1 focus:ring-indigo-500 overflow-hidden resize-none"
                 placeholder="Entrez un commentaire."
               />
             </div>

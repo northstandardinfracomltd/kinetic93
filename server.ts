@@ -1483,18 +1483,64 @@ async function startServer() {
 
   app.post("/api/tech-locations", async (req, res) => {
     try {
-      const { tenantId: rawTenantId, name, email, lat, lng, updatedAt } = req.body || {};
-      const tenantId = String(rawTenantId || 'demo').trim() || 'demo';
-      const techName = String(name || '').trim();
+      const { tenantId: rawTenantId, name, email, lat, lng, updatedAt, spreadsheetUrl: bodySpreadsheetUrl } = req.body || {};
+      const sessionTenant = String((req as any).authSession?.tenantId || '').trim();
+      const cleanRawTenant = String(rawTenantId || '').trim();
+      const tenantId =
+        cleanRawTenant && cleanRawTenant.toLowerCase() !== 'demo'
+          ? cleanRawTenant
+          : sessionTenant && sessionTenant.toLowerCase() !== 'demo'
+          ? sessionTenant
+          : cleanRawTenant || sessionTenant || 'demo';
+
+      const cleanEmail = String(email || (req as any).authSession?.email || '').trim().toLowerCase();
+      let techName = String(name || '').trim();
       const numLat = Number(lat);
       const numLng = Number(lng);
-      if (!techName || isNaN(numLat) || isNaN(numLng)) {
+      if ((!techName && !cleanEmail) || isNaN(numLat) || isNaN(numLng)) {
         return res.status(400).json({ error: "Invalid technician location payload" });
       }
+
+      // Resolve canonical technician full name from members if possible (e.g. when initial reload only had email prefix)
+      const membersKey = `${tenantId}_members`;
+      let cachedMembers = serverMemoryStore.get(membersKey);
+      if (!Array.isArray(cachedMembers) || cachedMembers.length === 0) {
+        try {
+          const memSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'membresEnvironnement');
+          if (memSheetUrl && extractSpreadsheetIdAndGid(memSheetUrl)) {
+            const memData = await fetchTenantSheetCollection(memSheetUrl, tenantId, 'membresEnvironnement', false);
+            if (Array.isArray(memData?.items) && memData.items.length > 0) {
+              cachedMembers = memData.items;
+            }
+          }
+        } catch (_) {}
+      }
+      if (Array.isArray(cachedMembers) && cleanEmail) {
+        const matchedMember = cachedMembers.find(
+          (m: any) => m && String(m.email || '').trim().toLowerCase() === cleanEmail
+        );
+        if (matchedMember && matchedMember.name && String(matchedMember.name).trim()) {
+          techName = String(matchedMember.name).trim();
+        }
+      }
+      if (!techName) {
+        techName = cleanEmail.split('@')[0] || 'Technicien';
+      }
+
       const ts = Number(updatedAt) || Date.now();
-      const d = new Date(ts);
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const horodatageStr = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      const parisParts = new Intl.DateTimeFormat('fr-FR', {
+        timeZone: 'Europe/Paris',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date(ts));
+      const getPart = (type: string) => parisParts.find((p) => p.type === type)?.value || '00';
+      const hhVal = getPart('hour') === '24' ? '00' : getPart('hour');
+      const horodatageStr = `${getPart('day')}/${getPart('month')}/${getPart('year')} ${hhVal}:${getPart('minute')}:${getPart('second')}`;
 
       const storeKey = `${tenantId}_tech_locations`;
       const existing: Record<string, any> =
@@ -1504,7 +1550,7 @@ async function startServer() {
       const normKey = techName.toLowerCase();
       existing[normKey] = {
         name: techName,
-        email: String(email || '').trim(),
+        email: cleanEmail,
         lat: numLat,
         lng: numLng,
         updatedAt: ts,
@@ -1515,12 +1561,12 @@ async function startServer() {
       persistSingleCollectionToDisk(storeKey, existing);
 
       // Also enrich cached members in memory if present
-      const membersKey = `${tenantId}_members`;
-      const cachedMembers = serverMemoryStore.get(membersKey);
       if (Array.isArray(cachedMembers)) {
         let changed = false;
         const updatedMembers = cachedMembers.map((m: any) => {
-          if (m && String(m.name || '').trim().toLowerCase() === normKey) {
+          const mNameLower = String(m?.name || '').trim().toLowerCase();
+          const mEmailLower = String(m?.email || '').trim().toLowerCase();
+          if (m && (mNameLower === normKey || (cleanEmail && mEmailLower === cleanEmail))) {
             changed = true;
             return {
               ...m,
@@ -1538,28 +1584,32 @@ async function startServer() {
         }
       }
 
-      // Persist last known position to the tenant's Spreadsheet Livetrack in the background
-      (async () => {
-        try {
-          const sheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'livetrack');
-          if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
-            await upsertRecordsToTenantSheet(sheetUrl, tenantId, 'livetrack', [
-              {
-                id: normKey,
-                name: techName,
-                horodatage: horodatageStr,
-                lat: numLat,
-                lng: numLng,
-                updatedAt: ts,
-              },
-            ]);
-          }
-        } catch (sheetErr) {
-          console.warn(`[Livetrack] Could not sync tech location to spreadsheet for ${tenantId}:`, sheetErr);
+      // Persist last known position to the tenant's Spreadsheet Livetrack
+      let syncedToRemoteSheet = false;
+      try {
+        const sheetUrl = await resolveTenantSpreadsheetUrl(
+          tenantId,
+          'livetrack',
+          typeof bodySpreadsheetUrl === 'string' ? bodySpreadsheetUrl.trim() : undefined
+        );
+        if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
+          const upRes = await upsertRecordsToTenantSheet(sheetUrl, tenantId, 'livetrack', [
+            {
+              id: normKey,
+              name: techName,
+              horodatage: horodatageStr,
+              lat: numLat,
+              lng: numLng,
+              updatedAt: ts,
+            },
+          ]);
+          syncedToRemoteSheet = Boolean(upRes?.syncedToRemoteSheet);
         }
-      })();
+      } catch (sheetErr) {
+        console.warn(`[Livetrack] Could not sync tech location to spreadsheet for ${tenantId}:`, sheetErr);
+      }
 
-      return res.json({ ok: true, location: existing[normKey] });
+      return res.json({ ok: true, syncedToRemoteSheet, location: existing[normKey] });
     } catch (err) {
       return res.status(500).json({ error: "Failed to save technician location" });
     }
@@ -4229,9 +4279,14 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
           }
           return baseTours.map((bt: any) => {
             const assignedFromSheet = byTourKey.get(bt.id) || [];
+            const resolvedMissions = assignedFromSheet.length > 0 ? assignedFromSheet : (bt.id === 'a-trier' ? [] : bt.missions);
             return {
               ...bt,
-              missions: assignedFromSheet.length > 0 ? assignedFromSheet : (bt.id === 'a-trier' ? [] : bt.missions),
+              missions: resolvedMissions,
+              calculated: bt.calculated !== undefined
+                ? Boolean(bt.calculated)
+                : (['À faire', 'En cours', 'Terminé', 'Effectué'].includes(bt.status) ||
+                   (Array.isArray(resolvedMissions) && resolvedMissions.length > 0 && resolvedMissions.every((m: any) => m && m.estimatedDate && m.estimatedSlot))),
             };
           });
         }

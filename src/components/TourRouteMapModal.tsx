@@ -195,7 +195,7 @@ function computeMissionDurationFromVariables(mission: any, variables: Variable[]
     }
   }
 
-  return foundAny && totalMinutes > 0 ? `${totalMinutes} min` : '';
+  return foundAny && totalMinutes > 0 ? `${totalMinutes} min(s)` : '';
 }
 
 function formatTimeAgo(updatedAt: number | undefined, now: number): string {
@@ -277,33 +277,42 @@ function createCheckerboardDepartureIcon(): L.DivIcon {
   });
 }
 
-function createLegPillIcon(leg: RouteLegSegmentInfo): L.DivIcon {
+function createLegPillIcon(leg: RouteLegSegmentInfo, isWebapp?: boolean): L.DivIcon {
   const safeDay = escapeHtml(leg.dayLabel || 'J1');
   const text = `Temps estimé point ${escapeHtml(leg.fromLabel)} vers ${escapeHtml(leg.toLabel)}: ${leg.minutes} min(s) pour ${escapeHtml(leg.kmFormatted)} km(s).`;
 
   return L.divIcon({
     className: 'defibeo-tour-route-leg-pill-icon',
     html: `
-      <div style="
-        transform: translate(-50%, calc(-50% + ${leg.offsetY}px));
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        width: max-content;
-        background-color: #ffffff;
-        color: #000000;
-        font-family: 'DefibeoMain', 'Civilprom', sans-serif;
-        font-size: 18px;
-        font-weight: 600;
-        padding: 6px 14px 6px 8px;
-        border-radius: 9999px;
-        border: none;
-        box-shadow: none;
-        white-space: nowrap;
-        pointer-events: none;
-        user-select: none;
-        line-height: 1.25;
-      ">
+      <div
+        class="defibeo-leg-pill-card ${isWebapp ? 'defibeo-leg-pill-webapp' : ''}"
+        style="
+          --leg-offset-y: ${leg.offsetY}px;
+          transform: translate(-50%, calc(-50% + ${leg.offsetY}px));
+          transform-origin: center center;
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          width: max-content;
+          max-width: ${isWebapp ? '98vw' : 'none'};
+          box-sizing: border-box;
+          background-color: #ffffff;
+          color: #000000;
+          font-family: 'DefibeoMain', 'Civilprom', sans-serif;
+          font-size: 18px;
+          font-weight: 600;
+          padding: 6px 14px 6px 8px;
+          border-radius: 9999px;
+          border: none;
+          box-shadow: none;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          pointer-events: none;
+          user-select: none;
+          line-height: 1.25;
+        "
+      >
         <span style="
           display: inline-flex;
           align-items: center;
@@ -319,7 +328,7 @@ function createLegPillIcon(leg: RouteLegSegmentInfo): L.DivIcon {
           line-height: 1;
           flex-shrink: 0;
         ">${safeDay}</span>
-        <span>${text}</span>
+        <span style="overflow: hidden; text-overflow: ellipsis;">${text}</span>
       </div>
     `,
   });
@@ -402,9 +411,9 @@ const animatedRunnerIcon = L.divIcon({
       width: 16px;
       height: 16px;
       border-radius: 9999px;
-      background: #2e54ff;
-      background-color: #2e54ff;
-      box-shadow: 0 0 0 5px rgba(46, 84, 255, 0.32);
+      background: #ff4f00;
+      background-color: #ff4f00;
+      box-shadow: 0 0 0 5px rgba(255, 79, 0, 0.32);
       border: none;
       pointer-events: none;
     "></div>
@@ -443,7 +452,7 @@ function AnimatedRouteDot({ roadPositions }: { roadPositions: [number, number][]
     const marker = L.marker(roadPositions[0], {
       icon: animatedRunnerIcon,
       interactive: false,
-      zIndexOffset: 2000,
+      zIndexOffset: -1000,
     }).addTo(map);
 
     // Slower speed along the route trace
@@ -1458,9 +1467,25 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
           height: auto !important;
           max-height: none !important;
           width: auto !important;
+          font-size: 18px !important;
+          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
+        }
+        .defibeo-route-hover-popup .defibeo-route-type-pill {
+          font-size: 18px !important;
+          font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
         }
         .defibeo-route-hover-popup .leaflet-popup-tip-container {
           display: none !important;
+        }
+        @media (max-width: 767px) {
+          .defibeo-leg-pill-card {
+            transform: translate(-50%, calc(-50% + calc(var(--leg-offset-y, 0px) * 0.25))) scale(0.25) !important;
+            transform-origin: center center !important;
+            max-width: 392vw !important;
+          }
+          #tour-route-map-legend-panel {
+            max-width: min(280px, calc(100vw - 32px)) !important;
+          }
         }
         @keyframes defibeo-route-tech-sonar {
           0% {
@@ -1482,7 +1507,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             className="absolute top-4 left-4 z-[4000] flex flex-col select-none pointer-events-auto"
             style={{
               gap: '10px',
-              maxWidth: '340px',
+              maxWidth: 'min(340px, calc(100vw - 32px))',
             }}
             id="tour-route-map-legend-panel"
           >
@@ -1690,7 +1715,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
               }}
               className="w-1/2 hover:opacity-90 active:scale-[0.99] transition-all cursor-pointer select-none text-center"
             >
-              Infos Affichage
+              Infos
             </button>
             <button
               type="button"
@@ -1736,13 +1761,13 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             roadPositions={roadPositions}
           />
 
-          {/* Blue road-following trace */}
+          {/* Orange road-following trace */}
           {roadPositions.length >= 2 && (
             <>
               <Polyline
                 positions={roadPositions}
                 pathOptions={{
-                  color: '#2e54ff',
+                  color: '#ff4f00',
                   weight: 5,
                   opacity: 0.9,
                   lineCap: 'round',
@@ -1758,8 +1783,9 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             <Marker
               key={leg.id}
               position={leg.midpoint}
-              icon={createLegPillIcon(leg)}
+              icon={createLegPillIcon(leg, isWebapp)}
               interactive={false}
+              zIndexOffset={500}
             />
           ))}
 
@@ -1772,7 +1798,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                 liveTechLocation.updatedAt,
                 nowTs
               )}
-              zIndexOffset={3000}
+              zIndexOffset={2500}
             />
           )}
 
@@ -1782,6 +1808,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
               position={techStartPoint.displayCoord}
               icon={createCheckerboardDepartureIcon()}
               interactive={false}
+              zIndexOffset={1500}
             />
           )}
 
@@ -1800,6 +1827,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                 key={`${pt.mission.id || pt.equipmentIdentifiant}_${pt.passageNumber}`}
                 position={pt.displayCoord}
                 icon={icon}
+                zIndexOffset={4000}
                 eventHandlers={{
                   mouseover: e => {
                     e.target.openPopup();
@@ -1834,16 +1862,18 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                     </div>
                     <div style={{ marginBottom: '8px' }}>
                       <span
+                        className="defibeo-route-type-pill"
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
                           borderRadius: '1000px',
-                          backgroundColor: pt.isSpontaneousEvent ? '#000000' : 'rgb(61, 220, 132)',
-                          color: pt.isSpontaneousEvent ? '#ffffff' : 'rgb(19, 100, 55)',
+                          backgroundColor: 'rgb(61, 220, 132)',
+                          color: 'rgb(19, 100, 55)',
                           fontSize: '18px',
                           fontWeight: 700,
                           padding: '5px 14px',
                           lineHeight: '1.25',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                         }}
                       >
                         {pt.equipmentTypeLabel}
@@ -1887,24 +1917,26 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                         fontSize: '18px',
                         fontWeight: 600,
                         color: '#000000',
-                        marginBottom: '4px',
+                        marginBottom: pt.isSpontaneousEvent ? '12px' : '4px',
                       }}
                     >
                       Créneau estimé : <span style={{ fontWeight: 400 }}>{pt.estimatedSlotLabel}</span>
                     </div>
-                    <div
-                      style={{
-                        fontSize: '18px',
-                        fontWeight: 600,
-                        color: '#000000',
-                        marginBottom: '12px',
-                      }}
-                    >
-                      Durée estimée :{' '}
-                      {pt.estimatedDurationLabel ? (
-                        <span style={{ fontWeight: 400 }}>{pt.estimatedDurationLabel}</span>
-                      ) : null}
-                    </div>
+                    {!pt.isSpontaneousEvent && (
+                      <div
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 600,
+                          color: '#000000',
+                          marginBottom: '12px',
+                        }}
+                      >
+                        Durée estimée :{' '}
+                        {pt.estimatedDurationLabel ? (
+                          <span style={{ fontWeight: 400 }}>{pt.estimatedDurationLabel}</span>
+                        ) : null}
+                      </div>
+                    )}
                     <div>
                       <a
                         href={navHref}

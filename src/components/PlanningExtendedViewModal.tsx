@@ -141,6 +141,29 @@ const isDraftTour = (tour: any): boolean => {
   return statusStr === 'brouillon' || statusStr === 'draft' || statusStr === 'à trier' || statusStr === 'a trier';
 };
 
+const isMissionDateSlotLocked = (m: any): boolean => {
+  if (!m) return false;
+  const sitLower = String(m.status || m.statut || m.situation || '').trim().toLowerCase();
+  const isStatusLocked =
+    sitLower === 'accepté client' ||
+    sitLower === 'accepte client' ||
+    sitLower === 'à faire' ||
+    sitLower === 'a faire';
+  const rawPrio = String(m.priority ?? m['Priorité'] ?? m['Priorité.'] ?? m.priorite ?? '').trim();
+  const isFormation =
+    m.equipmentType === 'Formation' ||
+    String(m.equipmentType || '').toLowerCase().includes('formation') ||
+    Boolean(m.formationId);
+  return (
+    isStatusLocked ||
+    m.isForced === true ||
+    rawPrio === '1' ||
+    rawPrio.toLowerCase() === 'true' ||
+    (m.isForced !== false && rawPrio !== '0' && Boolean(m.isManualDate && m.isManualSlot)) ||
+    isFormation
+  );
+};
+
 const getISOWeekNumber = (date: Date): number => {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
   const dayNum = d.getUTCDay() || 7;
@@ -585,7 +608,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         if (!movedMission && missionObj) {
           movedMission = { ...missionObj };
         }
-        if (!movedMission) return prevTours;
+        if (!movedMission || isMissionDateSlotLocked(movedMission)) return prevTours;
 
         // Resolve target tour ID:
         // Must be an existing non-draft tour assigned to targetTechName that covers targetIsoDate
@@ -669,8 +692,10 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
           technicien: targetTechName,
           tourIdentifiant: targetTourIdent,
           tourId: resolvedTargetTourId,
-          isManualDate: true,
-          isManualSlot: true,
+          isForced: false,
+          isManualDate: false,
+          isManualSlot: false,
+          priority: '0',
         };
 
         const nextTours = prevTours.map((t) => {
@@ -2014,13 +2039,19 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                       const marginLeftPx = getMissionHorizontalOffsetPx(details.creneau);
                                       const durationMinutes = computeMissionDurationMinutes(m, effectiveVariables);
                                       const missionWidthPx = getMissionCardWidthPx(durationMinutes);
+                                      const isLockedMission = isMissionDateSlotLocked(m);
 
                                       return (
                                         <div
                                           key={`mission-bar-${m.id || mIdx}`}
                                           data-interactive="true"
-                                          draggable
+                                          draggable={!isLockedMission}
                                           onDragStart={(e) => {
+                                            if (isLockedMission) {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              return;
+                                            }
                                             e.stopPropagation();
                                             setOpenMissionMenuKey(null);
                                             setDraggedItem({
@@ -2039,14 +2070,20 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                             setDraggedItem(null);
                                             setDragOverTarget(null);
                                           }}
-                                          className="relative space-y-1 select-none cursor-grab active:cursor-grabbing"
+                                          className={`relative space-y-1 select-none ${
+                                            isLockedMission ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+                                          }`}
                                           style={{
                                             marginLeft: `${marginLeftPx}px`,
                                             width: `${missionWidthPx}px`,
                                             minWidth: `${BASE_MISSION_WIDTH_PX}px`,
                                             opacity: 1,
                                           }}
-                                          title={`${fullMissionText}${durationMinutes > 0 ? ` (Durée estimée : ${durationMinutes} min)` : ''} — Glisser-déposer pour changer de jour, de technicien ou de créneau`}
+                                          title={
+                                            isLockedMission
+                                              ? `${fullMissionText}${durationMinutes > 0 ? ` (Durée estimée : ${durationMinutes} min)` : ''} — Date et créneau verrouillés`
+                                              : `${fullMissionText}${durationMinutes > 0 ? ` (Durée estimée : ${durationMinutes} min)` : ''} — Glisser-déposer pour changer de jour, de technicien ou de créneau`
+                                          }
                                         >
                                           <div className="flex items-center gap-2 flex-wrap">
                                             <span

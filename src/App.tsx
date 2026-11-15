@@ -4683,6 +4683,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                 ...bt,
                 techName: resolvedTourTech || bt.techName || 'Non assigné',
                 missions: syncedMissions,
+                calculated: bt.calculated !== undefined
+                  ? Boolean(bt.calculated)
+                  : (['À faire', 'En cours', 'Terminé', 'Effectué'].includes(bt.status) ||
+                     (syncedMissions.length > 0 && syncedMissions.every((m: any) => m && m.estimatedDate && m.estimatedSlot))),
               };
             });
             setFsmTours(mergedTours);

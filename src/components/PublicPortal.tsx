@@ -572,6 +572,26 @@ export default function PublicPortal({
         try {
           return JSON.parse(saved);
         } catch {
+          // fall through
+        }
+      }
+      const role = localStorage.getItem("defib_logged_user_role");
+      const adminLogged = localStorage.getItem("defib_admin_logged_user");
+      if (role === "technicien" && adminLogged) {
+        try {
+          const parsed = JSON.parse(adminLogged);
+          if (parsed && (parsed.email || parsed.name)) {
+            return {
+              id: parsed.id || parsed.email || "tech-1",
+              name: parsed.name || "Technicien",
+              email: parsed.email || "",
+              role: "Maintenance Terrain",
+              status: "Actif",
+              lastActive: "En ligne",
+              pin: "xxxx",
+            } as Member;
+          }
+        } catch {
           return null;
         }
       }
@@ -2772,7 +2792,18 @@ export default function PublicPortal({
                 return dateStr;
               };
 
-              const isTourCalculated = !!mt.calculated;
+              const hasScheduledMissions =
+                Array.isArray(mt.missions) &&
+                mt.missions.length > 0 &&
+                mt.missions.every((m: any) => m && m.estimatedDate && m.estimatedSlot);
+              const isTourCalculated =
+                mt.calculated !== undefined
+                  ? !!mt.calculated
+                  : mt.status === "À faire" ||
+                    mt.status === "En cours" ||
+                    mt.status === "Terminé" ||
+                    mt.status === "Effectué" ||
+                    hasScheduledMissions;
               return {
                 id: mt.id || `fsm-tour-${index}`,
                 title: mt.title || "Tournée",
@@ -2868,7 +2899,7 @@ export default function PublicPortal({
                   })();
                   const rawEstDate = m.estimatedDate || calculatedDate;
 
-                  const passageNumVal: any = !isTourCalculated ? "?" : (m.passageNumber || m.num || (idx + 1));
+                  const passageNumVal: any = !isTourCalculated ? "?" : (idx + 1);
                   return {
                     num: idx + 1,
                     displayNum: passageNumVal,
@@ -3251,7 +3282,18 @@ export default function PublicPortal({
             return dateStr;
           };
 
-          const isTourCalculated = !!mt.calculated;
+          const hasScheduledMissions =
+            Array.isArray(mt.missions) &&
+            mt.missions.length > 0 &&
+            mt.missions.every((m: any) => m && m.estimatedDate && m.estimatedSlot);
+          const isTourCalculated =
+            mt.calculated !== undefined
+              ? !!mt.calculated
+              : mt.status === "À faire" ||
+                mt.status === "En cours" ||
+                mt.status === "Terminé" ||
+                mt.status === "Effectué" ||
+                hasScheduledMissions;
           return {
             id: mt.id || `fsm-tour-${index}`,
             title: mt.title || "Tournée",
@@ -3345,7 +3387,7 @@ export default function PublicPortal({
               })();
               const rawEstDate = m.estimatedDate || calculatedDate;
 
-              const passageNumVal: any = !isTourCalculated ? "?" : (m.passageNumber || m.num || (idx + 1));
+              const passageNumVal: any = !isTourCalculated ? "?" : (idx + 1);
               return {
                 num: idx + 1,
                 displayNum: passageNumVal,
@@ -6306,24 +6348,119 @@ export default function PublicPortal({
     }
   }, [authenticatedUser, activeTab, members, resolvedLiveMember]);
 
-  // Automatic real-time geolocation sharing on Webapp open/refresh and every 1 minute
+  // Automatic real-time geolocation sharing on Webapp open/refresh and every 1 minute (60s)
+  const latestLiveTrackMetaRef = useRef<{
+    envId: string;
+    techName: string;
+    email: string;
+    spreadsheetUrl: string;
+  }>({
+    envId: "demo",
+    techName: "",
+    email: "",
+    spreadsheetUrl: "",
+  });
+  const lastLiveCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastSentTechNameRef = useRef<string>("");
+
   useEffect(() => {
-    if (!authenticatedUser || !authenticatedUser.name) return;
+    const envId =
+      (techTenantId && techTenantId !== "demo" ? techTenantId : "") ||
+      (propTenantId && propTenantId !== "demo" ? propTenantId : "") ||
+      localStorage.getItem("defib_tenant_id") ||
+      techTenantId ||
+      propTenantId ||
+      "demo";
+    const resolvedName = (
+      resolvedLiveMember?.name ||
+      techCurrentUser?.name ||
+      authenticatedUser?.name ||
+      ""
+    ).trim();
+    const resolvedEmail = (
+      authenticatedUser?.email ||
+      resolvedLiveMember?.email ||
+      techCurrentUser?.email ||
+      ""
+    ).trim();
+    let livetrackSheetUrl = String((companyInfo as any)?.spreadsheetLivetrack || "").trim();
+    if (!livetrackSheetUrl) {
+      try {
+        livetrackSheetUrl =
+          localStorage.getItem(`defib_${envId}_spreadsheet_livetrack`) ||
+          localStorage.getItem(`defib_${envId.toUpperCase()}_spreadsheet_livetrack`) ||
+          localStorage.getItem(`defib_${envId.toLowerCase()}_spreadsheet_livetrack`) ||
+          "";
+      } catch (_) {}
+    }
+    latestLiveTrackMetaRef.current = {
+      envId,
+      techName: resolvedName,
+      email: resolvedEmail,
+      spreadsheetUrl: livetrackSheetUrl,
+    };
+
+    // If we already acquired coordinates before resolvedLiveMember finished loading the canonical name, re-push immediately with the resolved name
+    if (
+      lastLiveCoordsRef.current &&
+      resolvedName &&
+      lastSentTechNameRef.current &&
+      lastSentTechNameRef.current.toLowerCase() !== resolvedName.toLowerCase()
+    ) {
+      lastSentTechNameRef.current = resolvedName;
+      const { lat, lng } = lastLiveCoordsRef.current;
+      const now = Date.now();
+      fetch("/api/tech-locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenantId: envId,
+          name: resolvedName,
+          email: resolvedEmail,
+          lat,
+          lng,
+          updatedAt: now,
+          spreadsheetUrl: livetrackSheetUrl || undefined,
+        }),
+      }).catch(() => {});
+    }
+  }, [
+    authenticatedUser?.name,
+    authenticatedUser?.email,
+    resolvedLiveMember?.name,
+    resolvedLiveMember?.email,
+    techCurrentUser?.name,
+    techCurrentUser?.email,
+    techTenantId,
+    propTenantId,
+    (companyInfo as any)?.spreadsheetLivetrack,
+  ]);
+
+  const isTechAuthenticated = Boolean(authenticatedUser && (authenticatedUser.name || authenticatedUser.email));
+
+  useEffect(() => {
+    if (!isTechAuthenticated) return;
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) return;
 
     let isMounted = true;
     let hasReceivedPosition = false;
+    let lastPushAt = 0;
 
     const pushPositionUpdate = (lat: number, lng: number) => {
       if (!isMounted) return;
-      hasReceivedPosition = true;
       const now = Date.now();
-      const envId =
-        techTenantId ||
-        propTenantId ||
-        localStorage.getItem("defib_tenant_id") ||
-        "demo";
-      const techName = authenticatedUser.name.trim();
+      // Deduplicate rapid double callbacks (coarse + high-accuracy within 2s)
+      if (hasReceivedPosition && now - lastPushAt < 2000) {
+        lastLiveCoordsRef.current = { lat, lng };
+        return;
+      }
+      hasReceivedPosition = true;
+      lastPushAt = now;
+      lastLiveCoordsRef.current = { lat, lng };
+
+      const { envId, techName: metaName, email, spreadsheetUrl } = latestLiveTrackMetaRef.current;
+      const techName = (metaName || authenticatedUser?.name || "Technicien").trim();
+      lastSentTechNameRef.current = techName;
 
       try {
         localStorage.setItem(`defib_${envId}_tech_live_lat_${techName}`, String(lat));
@@ -6340,16 +6477,33 @@ export default function PublicPortal({
         body: JSON.stringify({
           tenantId: envId,
           name: techName,
-          email: authenticatedUser.email || "",
+          email,
           lat,
           lng,
           updatedAt: now,
+          spreadsheetUrl: spreadsheetUrl || undefined,
         }),
       }).catch(() => {});
     };
 
-    const requestAndSendCurrentPosition = () => {
+    const requestAndSendCurrentPosition = (includeFastCoarse = false) => {
       try {
+        if (includeFastCoarse) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              if (pos && pos.coords) {
+                pushPositionUpdate(pos.coords.latitude, pos.coords.longitude);
+              }
+            },
+            () => {},
+            {
+              enableHighAccuracy: false,
+              maximumAge: 60000,
+              timeout: 4500,
+            }
+          );
+        }
+
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             if (pos && pos.coords) {
@@ -6357,24 +6511,39 @@ export default function PublicPortal({
             }
           },
           () => {
-            // If permission denied or unavailable, silently ignore
+            // Fallback to Wi-Fi / cellular location if high-accuracy GPS times out or is unavailable indoors
+            try {
+              navigator.geolocation.getCurrentPosition(
+                (fallbackPos) => {
+                  if (fallbackPos && fallbackPos.coords) {
+                    pushPositionUpdate(fallbackPos.coords.latitude, fallbackPos.coords.longitude);
+                  }
+                },
+                () => {},
+                {
+                  enableHighAccuracy: false,
+                  maximumAge: 300000,
+                  timeout: 10000,
+                }
+              );
+            } catch (_) {}
           },
           {
             enableHighAccuracy: true,
-            maximumAge: 30000,
-            timeout: 15000,
+            maximumAge: 15000,
+            timeout: 8000,
           }
         );
       } catch (_) {}
     };
 
-    // 1. Immediate request on Webapp open / browser refresh
-    requestAndSendCurrentPosition();
+    // 1. Immediate request on Webapp open / browser refresh (both fast coarse + high accuracy)
+    requestAndSendCurrentPosition(true);
 
     // 2. If a mobile browser requires a gesture to show the permission prompt, trigger on first tap
     const handleFirstInteraction = () => {
       if (!hasReceivedPosition) {
-        requestAndSendCurrentPosition();
+        requestAndSendCurrentPosition(true);
       }
       window.removeEventListener("click", handleFirstInteraction);
       window.removeEventListener("touchstart", handleFirstInteraction);
@@ -6387,13 +6556,13 @@ export default function PublicPortal({
       if (typeof document !== "undefined" && document.visibilityState === "hidden") {
         return;
       }
-      requestAndSendCurrentPosition();
+      requestAndSendCurrentPosition(false);
     }, 60000);
 
     // 4. Also refresh immediately when returning to the Webapp tab/app
     const handleVisibilityChange = () => {
       if (typeof document !== "undefined" && document.visibilityState === "visible") {
-        requestAndSendCurrentPosition();
+        requestAndSendCurrentPosition(true);
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -6405,7 +6574,7 @@ export default function PublicPortal({
       window.removeEventListener("click", handleFirstInteraction);
       window.removeEventListener("touchstart", handleFirstInteraction);
     };
-  }, [authenticatedUser?.name, authenticatedUser?.email, techTenantId, propTenantId]);
+  }, [isTechAuthenticated]);
 
   // Render signature onto canvas in technician portal
   useEffect(() => {
@@ -10804,7 +10973,7 @@ export default function PublicPortal({
                                 textAlign: "center",
                               }}
                             >
-                              {t("Voir Parcours")}
+                              {t("Parcours Map")}
                             </button>
                           );
                         })()}
@@ -10875,9 +11044,12 @@ export default function PublicPortal({
                           {pauseEnabled && (
                             <div className="space-y-3 pt-1">
                               {getNextPassageZone(selectedTourId) && (
-                                <div className="text-[18px] font-semibold text-[#fe4eba] font-sans">
+                                <div
+                                  className="text-[18px] font-semibold font-sans"
+                                  style={{ color: "rgb(210, 45, 11)" }}
+                                >
                                   {t("Zone recommandée pour votre pause :")}{" "}
-                                  <span className="font-bold">
+                                  <span className="font-bold" style={{ color: "rgb(210, 45, 11)" }}>
                                     {getNextPassageZone(selectedTourId)}
                                   </span>
                                   .
@@ -11053,16 +11225,22 @@ export default function PublicPortal({
                                           >
                                             {(() => {
                                               const matchingFsmTour = (fsmTours || []).find((mt: any) => mt.id === t.id) || t;
-                                              const isTourCalculated = matchingFsmTour.calculated !== undefined ? !!matchingFsmTour.calculated : !!t.calculated;
-                                              if (!isTourCalculated) return '?';
-
-                                              if (matchingFsmTour.missions && Array.isArray(matchingFsmTour.missions)) {
-                                                const mIdx = matchingFsmTour.missions.findIndex((m: any) => m.id === p.id || (m.defibIdentifiant && m.defibIdentifiant === p.identifiant));
-                                                if (mIdx !== -1) {
-                                                  return (matchingFsmTour.missions[mIdx].passageNumber || (mIdx + 1));
-                                                }
-                                              }
-                                              return (p.displayNum !== undefined && p.displayNum !== '?' ? p.displayNum : p.num);
+                                              const hasScheduledMissions =
+                                                Array.isArray(matchingFsmTour.missions) &&
+                                                matchingFsmTour.missions.length > 0 &&
+                                                matchingFsmTour.missions.every((m: any) => m && m.estimatedDate && m.estimatedSlot);
+                                              const isTourCalculated =
+                                                matchingFsmTour.calculated !== undefined
+                                                  ? !!matchingFsmTour.calculated
+                                                  : t.calculated !== undefined
+                                                    ? !!t.calculated
+                                                    : t.status === "À faire" ||
+                                                      t.status === "En cours" ||
+                                                      hasScheduledMissions ||
+                                                      (Array.isArray(t.passages) &&
+                                                        t.passages.length > 0 &&
+                                                        t.passages.every((pass: any) => pass && pass.estimatedDate && pass.estimatedSlot));
+                                              return !isTourCalculated ? "?" : (pIdx + 1);
                                             })()}
                                           </div>
 
