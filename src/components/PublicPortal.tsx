@@ -884,8 +884,10 @@ export default function PublicPortal({
   const reportSavedTouchStartY = useRef<number | null>(null);
 
   const triggerReportSavedOverlay = () => {
-    setShowReportSavedOverlay(true);
-    setIsReportSavedSlidingUp(false);
+    setShowReportSavedOverlay(false);
+    setTechBottomInfoMessage(
+      "Enregistré. Le rapport est émis avec succès, il est disponible pour modération avant communication au client et actualisation de l'infogérance."
+    );
   };
 
   const dismissReportSavedOverlay = () => {
@@ -1152,7 +1154,7 @@ export default function PublicPortal({
   useEffect(() => {
     const updateGreenBarPosition = () => {
       const containerEl = webappNavContainerRef.current;
-      const isMoreTab = ["planning", "veille", "frais", "messages"].includes(activeTab);
+      const isMoreTab = ["planning", "veille", "frais"].includes(activeTab);
       const targetKey = isMoreTab ? "more" : activeTab;
       const iconEl = webappNavIconRefs.current[targetKey];
       if (!containerEl || !iconEl) {
@@ -8075,58 +8077,6 @@ export default function PublicPortal({
         </div>
       )}
 
-      {/* REPORT SAVED FULL-SCREEN OVERLAY (SAME AS PRELOADER) */}
-      {showReportSavedOverlay && (
-        <div
-          className={`fixed inset-0 z-[999999] flex flex-col items-center justify-between py-12 text-center font-sans transition-transform duration-700 ease-in-out cursor-pointer select-none rounded-none ${
-            isReportSavedSlidingUp ? "pointer-events-none" : "pointer-events-auto"
-          }`}
-          style={{
-            background: "rgb(46, 84, 255)",
-            borderRadius: "0px",
-            borderBottomLeftRadius: "0px",
-            borderBottomRightRadius: "0px",
-            transform: isReportSavedSlidingUp ? "translateY(-100%)" : "translateY(0%)",
-            boxShadow: isReportSavedSlidingUp ? "0 10px 25px -5px rgba(0, 0, 0, 0.3)" : "none",
-            willChange: "transform",
-            touchAction: "none",
-          }}
-          id="webapp-report-saved-overlay"
-          onClick={dismissReportSavedOverlay}
-          onTouchStart={handleReportSavedTouchStart}
-          onTouchMove={handleReportSavedTouchMove}
-          onWheel={handleReportSavedWheel}
-        >
-          {/* Top spacer */}
-          <div className="h-8" />
-
-          {/* Centered Title & Subtitle */}
-          <div className="flex flex-col items-center justify-center gap-4 px-6 max-w-xl">
-            <span
-              className="text-white font-bold text-center"
-              style={{ fontSize: "30px" }}
-            >
-              Enregistré
-            </span>
-            <p
-              className="text-white font-medium text-center leading-relaxed"
-              style={{ fontSize: "18px" }}
-            >
-              Le rapport est émis avec succès, il est disponible pour modération avant communication au client et actualisation de l’infogérance.
-            </p>
-          </div>
-
-          {/* Bottom Swipe text */}
-          <div className="flex flex-col items-center justify-center gap-2 px-4">
-            <span
-              className="font-medium tracking-normal animate-text-wave"
-              style={{ fontSize: "14px", color: "#ffffff", letterSpacing: "0px" }}
-            >
-              Glissez vers le haut pour fermer.
-            </span>
-          </div>
-        </div>
-      )}
       {/* Main Responsive Portal Container (Standalone App Layout) */}
       <div
         className={`w-full max-w-[1100px] ${
@@ -10451,7 +10401,7 @@ export default function PublicPortal({
               </div>
             )}
 
-            {/* Top Header with SVG illustration, Gradient Overlay, Defibeo Logo, Tenant Pill, and One-Line Icon Nav Bar */}
+            {/* Top Single-Line Horizontally Scrollable Header with Tenant Pill and Icon Nav Bar */}
             {(() => {
               const commercialTenantName = (
                 companyInfo?.nomLogiciel?.trim() ||
@@ -10462,28 +10412,24 @@ export default function PublicPortal({
               const mainNavTabs: Array<{
                 value: WebappTab;
                 label: string;
-                iconGris: string;
-                iconNoir: string;
+                icon: string;
               }> = [
                 {
                   value: "interventions",
                   label: t("Interventions"),
-                  iconGris: "https://civilprom.s3.eu-north-1.amazonaws.com/tourneesgris.svg",
-                  iconNoir: "https://civilprom.s3.eu-north-1.amazonaws.com/tourneesnoir.svg",
+                  icon: "https://civilprom.s3.eu-north-1.amazonaws.com/tournee-ico-app-defibeo.svg",
                 },
                 {
                   value: "rapports",
                   label: t("Rapports PDF"),
-                  iconGris: "https://civilprom.s3.eu-north-1.amazonaws.com/rapportsgris.svg",
-                  iconNoir: "https://civilprom.s3.eu-north-1.amazonaws.com/rapportsnoir.svg",
+                  icon: "https://civilprom.s3.eu-north-1.amazonaws.com/rapports-ico-app-defibeo.svg",
                 },
                 ...(!hidePointage && !companyInfo?.hiddenTabs?.includes("Temps (Webapp)")
                   ? [
                       {
                         value: "temps" as WebappTab,
                         label: t("Temps"),
-                        iconGris: "https://civilprom.s3.eu-north-1.amazonaws.com/tempsgris.svg",
-                        iconNoir: "https://civilprom.s3.eu-north-1.amazonaws.com/tempsnoir.svg",
+                        icon: "https://civilprom.s3.eu-north-1.amazonaws.com/temps-ico-app-defibeo.svg",
                       },
                     ]
                   : []),
@@ -10492,16 +10438,19 @@ export default function PublicPortal({
                       {
                         value: "stocks" as WebappTab,
                         label: t("Stocks"),
-                        iconGris: "https://civilprom.s3.eu-north-1.amazonaws.com/stocksgris.svg",
-                        iconNoir: "https://civilprom.s3.eu-north-1.amazonaws.com/stocksnoir.svg",
+                        icon: "https://civilprom.s3.eu-north-1.amazonaws.com/stocks-ico-app-defibeo.svg",
                       },
                     ]
                   : []),
                 {
                   value: "localisation",
                   label: t("Réglages"),
-                  iconGris: "https://civilprom.s3.eu-north-1.amazonaws.com/parametresgris.svg",
-                  iconNoir: "https://civilprom.s3.eu-north-1.amazonaws.com/parametresnoir.svg",
+                  icon: "https://civilprom.s3.eu-north-1.amazonaws.com/settings-ico-app-defibeo.svg",
+                },
+                {
+                  value: "messages",
+                  label: t("Messages"),
+                  icon: "https://civilprom.s3.eu-north-1.amazonaws.com/messages-ico-app-defibeo.svg",
                 },
               ];
 
@@ -10513,7 +10462,6 @@ export default function PublicPortal({
                 ...(!isFraisHidden
                   ? [{ value: "frais" as WebappTab, label: t("Frais") }]
                   : []),
-                { value: "messages", label: t("Messages") },
               ];
 
               const isMoreTabActive = moreDropdownOptions.some((opt) => opt.value === activeTab);
@@ -10526,9 +10474,9 @@ export default function PublicPortal({
                 el.classList.add("sidebar-nav-click-shrink-wave");
               };
 
-              const greenPillStyle: React.CSSProperties = {
-                backgroundColor: "#3ddc84",
-                color: "#136437",
+              const tenantPillStyle: React.CSSProperties = {
+                backgroundColor: "#0000b9",
+                color: "#ffffff",
                 fontSize: "18px",
                 fontWeight: 400,
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -10541,129 +10489,69 @@ export default function PublicPortal({
               return (
                 <div
                   className="relative w-full shrink-0 select-none"
-                  style={{ backgroundColor: "rgb(245, 247, 250)" }}
+                  style={{ backgroundColor: "#2e54fd" }}
                   id="nav-tabs"
                 >
-                  {/* Top Illustration Header with Gradient Overlay, Defibeo Icon Left, Tenant Pill Right */}
-                  <div
-                    className="relative w-full overflow-hidden"
-                    style={{ backgroundColor: "#e9edf1" }}
-                  >
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/svgentete.svg"
-                      alt=""
-                      className="w-[280px] max-w-none h-auto block select-none pointer-events-none"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div
-                      className="absolute inset-0 pointer-events-none"
-                      style={{
-                        background: "linear-gradient(1deg, rgb(245, 247, 250), transparent)",
-                      }}
-                    />
-
-                    {/* Bottom-Left: Defibeo Logo with Hover/Click Eclat Icon & 'Logiciel Defibeo' Floating Pill */}
-                    <div className="absolute bottom-3 left-5 z-30 flex items-center" style={{ zIndex: 30 }}>
-                      <div
-                        className="relative flex items-center cursor-pointer sidebar-nav-item-bounce"
-                        onMouseEnter={() => setIsWebappLogoHovered(true)}
-                        onMouseLeave={() => setIsWebappLogoHovered(false)}
-                        onClick={() => setIsWebappLogoHovered((prev) => !prev)}
-                      >
-                        <img
-                          src={
-                            isWebappLogoHovered
-                              ? "https://civilprom.s3.eu-north-1.amazonaws.com/eclatdefibeoiconlogo2027.svg"
-                              : "https://civilprom.s3.eu-north-1.amazonaws.com/defibeoiconlogo2027.svg"
-                          }
-                          alt="Defibeo"
-                          className="w-11 h-11 object-contain select-none sidebar-nav-icon-bounce"
-                          referrerPolicy="no-referrer"
-                        />
-                        {isWebappLogoHovered && (
-                          <div
-                            className="absolute left-14 z-50 pointer-events-none whitespace-nowrap"
-                            style={{
-                              backgroundColor: "#040116",
-                              color: "#ffffff",
-                              fontSize: "15px",
-                              fontWeight: 400,
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                              padding: "6px 14px",
-                              borderRadius: "9999px",
-                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.18)",
-                              zIndex: 9999,
-                            }}
-                          >
-                            Logiciel Defibeo
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Bottom-Right: Commercial Tenant Name Green Pill (clickable system dropdown for logout) */}
-                    <div className="absolute bottom-3 right-5 z-20 flex items-center justify-end max-w-[calc(100%-100px)]">
-                      <div
-                        className="relative inline-flex items-center justify-center rounded-full max-w-full hover:opacity-90 transition-opacity"
-                        title={commercialTenantName}
-                      >
-                        <div
-                          ref={tenantPillVisualRef}
-                          className="flex items-center justify-center rounded-full truncate pointer-events-none"
-                          style={greenPillStyle}
-                        >
-                          <span className="truncate">{commercialTenantName}</span>
-                        </div>
-                        <select
-                          id="webapp-tenant-session-dropdown"
-                          aria-label={commercialTenantName}
-                          value=""
-                          onMouseDown={triggerTenantPillWave}
-                          onTouchStart={triggerTenantPillWave}
-                          onChange={(e) => {
-                            if (e.target.value === "logout") {
-                              handleLogout();
-                            }
-                          }}
-                          style={{
-                            position: "absolute",
-                            inset: 0,
-                            width: "100%",
-                            height: "100%",
-                            opacity: 0,
-                            cursor: "pointer",
-                            border: "none",
-                            outline: "none",
-                            padding: 0,
-                            margin: 0,
-                            background: "transparent",
-                            zIndex: 20,
-                          }}
-                        >
-                          <option value="" disabled>
-                            {commercialTenantName}
-                          </option>
-                          <option value="logout">Quitter la session</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Bottom One-Line Horizontal Navigation Bar (Horizontally Scrollable when needed) */}
+                  {/* One-Line Horizontal Navigation Bar (Horizontally Scrollable when needed) */}
                   <div
                     className="w-full overflow-x-auto no-scrollbar"
                     style={{
-                      backgroundColor: "rgb(245, 247, 250)",
+                      backgroundColor: "#2e54fd",
                       WebkitOverflowScrolling: "touch",
                     }}
                   >
                     <div
                       ref={webappNavContainerRef}
-                      className="relative min-w-full w-max flex items-center justify-between gap-6 px-5 pt-2.5 pb-3.5"
-                      style={{ backgroundColor: "rgb(245, 247, 250)" }}
+                      className="relative min-w-full w-max flex items-center justify-between gap-6 px-4 py-3.5"
+                      style={{ backgroundColor: "#2e54fd" }}
                     >
-                      {/* Left-Aligned Main Tabs (Interventions to Réglages) */}
+                      {/* Left-Aligned Tenant Pill + Main Tabs (Interventions to Messages) */}
                       <div className="flex items-center gap-5 sm:gap-7 shrink-0">
+                        {/* Commercial Tenant Name Pill (clickable system dropdown for logout) */}
+                        <div
+                          className="relative inline-flex items-center justify-center rounded-full shrink-0 hover:opacity-90 transition-opacity"
+                          title={commercialTenantName}
+                        >
+                          <div
+                            ref={tenantPillVisualRef}
+                            className="flex items-center justify-center rounded-full truncate pointer-events-none"
+                            style={tenantPillStyle}
+                          >
+                            <span className="truncate">{commercialTenantName}</span>
+                          </div>
+                          <select
+                            id="webapp-tenant-session-dropdown"
+                            aria-label={commercialTenantName}
+                            value=""
+                            onMouseDown={triggerTenantPillWave}
+                            onTouchStart={triggerTenantPillWave}
+                            onChange={(e) => {
+                              if (e.target.value === "logout") {
+                                handleLogout();
+                              }
+                            }}
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              width: "100%",
+                              height: "100%",
+                              opacity: 0,
+                              cursor: "pointer",
+                              border: "none",
+                              outline: "none",
+                              padding: 0,
+                              margin: 0,
+                              background: "transparent",
+                              zIndex: 20,
+                            }}
+                          >
+                            <option value="" disabled>
+                              {commercialTenantName}
+                            </option>
+                            <option value="logout">Quitter la session</option>
+                          </select>
+                        </div>
+
                         {mainNavTabs.map((tab) => {
                           const isActive = activeTab === tab.value;
                           const isWaveActive = clickedWebappNavTab?.id === tab.value;
@@ -10701,7 +10589,7 @@ export default function PublicPortal({
                                 className="w-7 h-7 min-w-[28px] flex items-center justify-center shrink-0"
                               >
                                 <img
-                                  src={isActive ? tab.iconNoir : tab.iconGris}
+                                  src={tab.icon}
                                   alt={tab.label}
                                   className="w-6 h-6 object-contain select-none pointer-events-none sidebar-nav-icon-bounce"
                                   referrerPolicy="no-referrer"
@@ -10716,7 +10604,7 @@ export default function PublicPortal({
                                   style={{
                                     fontSize: "18px",
                                     fontWeight: 400,
-                                    color: "#040116",
+                                    color: "#ffffff",
                                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                     lineHeight: 1.2,
                                   }}
@@ -10729,7 +10617,7 @@ export default function PublicPortal({
                         })}
                       </div>
 
-                      {/* Right-Aligned 3-Dots System Dropdown (Planning, Relevé Concurrentiel, Frais, Messages) */}
+                      {/* Right-Aligned 3-Dots System Dropdown (Planning, Relevé Concurrentiel, Frais) */}
                       <div
                         ref={(el) => {
                           webappNavIconRefs.current["more"] = el;
@@ -10738,11 +10626,7 @@ export default function PublicPortal({
                         title={t("Plus d'options")}
                       >
                         <img
-                          src={
-                            isMoreTabActive
-                              ? "https://civilprom.s3.eu-north-1.amazonaws.com/3dotsnoir.svg"
-                              : "https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
-                          }
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/3dots-ico-app-defibeo.svg"
                           alt=""
                           className="w-5 h-5 object-contain select-none pointer-events-none sidebar-nav-icon-bounce"
                           referrerPolicy="no-referrer"

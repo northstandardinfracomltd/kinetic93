@@ -2856,13 +2856,13 @@ export default function GmaoCorrectionForm({
       if (electrodeARemplacee === 'Oui' && !selectionElectrodeARemplacee) {
         errors.push("Une électrode est marquée comme remplacée (électrode A remplacée), mais vous n’avez pas sélectionné d’électrode en remplacement.");
       }
-      if (electrodeASecoursRemplacee === 'Oui' && !selectionElectrodeASecoursRemplacee) {
+      if (!hideElectrodeSecoursA && !isDefibElectrodeASecoursNon && electrodeASecoursRemplacee === 'Oui' && !selectionElectrodeASecoursRemplacee) {
         errors.push("Une électrode de secours est marquée comme remplacée (électrode A Secours remplacée), mais vous n’avez pas sélectionné d’électrode de secours en remplacement.");
       }
       if (electrodeARemplacee === 'Oui' && selectionElectrodeARemplacee === 'Autre' && !customElectrodeARemplacee.trim()) {
         errors.push("Vous avez sélectionné 'Autre' pour l'électrode remplacée (Section 6), mais vous n’avez pas saisi de référence.");
       }
-      if (electrodeASecoursRemplacee === 'Oui' && selectionElectrodeASecoursRemplacee === 'Autre' && !customElectrodeASecoursRemplacee.trim()) {
+      if (!hideElectrodeSecoursA && !isDefibElectrodeASecoursNon && electrodeASecoursRemplacee === 'Oui' && selectionElectrodeASecoursRemplacee === 'Autre' && !customElectrodeASecoursRemplacee.trim()) {
         errors.push("Vous avez sélectionné 'Autre' pour l'électrode Secours A remplacée (Section 6), mais vous n’avez pas saisi de référence.");
       }
     }
@@ -2870,13 +2870,13 @@ export default function GmaoCorrectionForm({
       if (electrodePRemplacee === 'Oui' && !selectionElectrodePRemplacee) {
         errors.push("Une électrode est marquée comme remplacée (électrode P remplacée), mais vous n’avez pas sélectionné d’électrode en remplacement.");
       }
-      if (electrodePSecoursRemplacee === 'Oui' && !selectionElectrodePSecoursRemplacee) {
+      if (!hideElectrodeSecoursP && !isDefibElectrodePSecoursNon && electrodePSecoursRemplacee === 'Oui' && !selectionElectrodePSecoursRemplacee) {
         errors.push("Une électrode de secours est marquée comme remplacée (électrode P Secours remplacée), mais vous n’avez pas sélectionné d’électrode de secours en remplacement.");
       }
       if (electrodePRemplacee === 'Oui' && selectionElectrodePRemplacee === 'Autre' && !customElectrodePRemplacee.trim()) {
         errors.push("Vous avez sélectionné 'Autre' pour l'électrode pédiatrique remplacée (Section 7), mais vous n’avez pas saisi de référence.");
       }
-      if (electrodePSecoursRemplacee === 'Oui' && selectionElectrodePSecoursRemplacee === 'Autre' && !customElectrodePSecoursRemplacee.trim()) {
+      if (!hideElectrodeSecoursP && !isDefibElectrodePSecoursNon && electrodePSecoursRemplacee === 'Oui' && selectionElectrodePSecoursRemplacee === 'Autre' && !customElectrodePSecoursRemplacee.trim()) {
         errors.push("Vous avez sélectionné 'Autre' pour l'électrode Secours P remplacée (Section 7), mais vous n’avez pas saisi de référence.");
       }
     }
@@ -5985,7 +5985,7 @@ export default function GmaoCorrectionForm({
             )}
 
             {/* Secours Electrode A Replacement Fields */}
-            {!hideElectrodeSecoursA && (
+            {!hideElectrodeSecoursA && !isDefibElectrodeASecoursNon && (
               <>
                 <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
                   <div className="space-y-1 bg-white">
@@ -6564,7 +6564,7 @@ export default function GmaoCorrectionForm({
             )}
 
             {/* Secours Electrode P Replacement Fields */}
-            {!hideElectrodeSecoursP && (
+            {!hideElectrodeSecoursP && !isDefibElectrodePSecoursNon && (
               <>
                 <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
                   <div className="space-y-1 bg-white">

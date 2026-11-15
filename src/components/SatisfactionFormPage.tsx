@@ -600,7 +600,7 @@ export default function SatisfactionFormPage() {
                 }}
                 className="font-bold font-sans"
               >
-                {t("Vous avez déjà répondu à l’enquête.") || "Vous avez déjà répondu à l’enquête."}
+                {t("Merci d'avoir répondu à l'enquête.") || "Merci d'avoir répondu à l'enquête."}
               </div>
             ) : (
               <>
