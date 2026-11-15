@@ -262,15 +262,20 @@ function createCheckerboardDepartureIcon(): L.DivIcon {
         min-width: 43px;
         min-height: 43px;
         border-radius: 9999px;
-        background-color: #000000;
-        background-image: repeating-conic-gradient(#000000 0% 25%, #ffffff 0% 50%);
-        background-size: 14px 14px;
-        background-position: center;
+        background: #ff4f00;
+        background-color: #ff4f00;
+        color: #ffffff;
+        font-family: 'DefibeoMain', 'Civilprom', sans-serif;
+        font-weight: 700;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         border: none;
         box-shadow: none;
         user-select: none;
         box-sizing: border-box;
-      "></div>
+      ">Go</div>
     `,
     iconSize: [43, 43],
     iconAnchor: [21.5, 21.5],
@@ -833,6 +838,8 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
 
   // Live technician position overlay toggle ("Superposer la position du technicien.")
   const [showLiveTechPosition, setShowLiveTechPosition] = useState<boolean>(false);
+  // Toggle to hide point-to-point leg pills ("Masquer les indicatifs point à point.")
+  const [hideLegPills, setHideLegPills] = useState<boolean>(false);
   const [liveTechLocation, setLiveTechLocation] = useState<TechLiveLocation | null>(null);
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
 
@@ -1479,9 +1486,9 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
         }
         @media (max-width: 767px) {
           .defibeo-leg-pill-card {
-            transform: translate(-50%, calc(-50% + calc(var(--leg-offset-y, 0px) * 0.25))) scale(0.25) !important;
+            transform: translate(-50%, calc(-50% + calc(var(--leg-offset-y, 0px) * 0.48))) scale(0.48) !important;
             transform-origin: center center !important;
-            max-width: 392vw !important;
+            max-width: 204vw !important;
           }
           #tour-route-map-legend-panel {
             max-width: min(280px, calc(100vw - 32px)) !important;
@@ -1627,6 +1634,67 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                 />
               </button>
             </div>
+
+            {/* Toggle ON/OFF: Masquer les indicatifs point à point. */}
+            <div
+              onClick={() => setHideLegPills(prev => !prev)}
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                padding: '14px 18px',
+                boxShadow: 'none',
+                border: 'none',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                cursor: 'pointer',
+              }}
+              className="flex items-center justify-between gap-3"
+            >
+              <span
+                style={{
+                  fontSize: '18px',
+                  fontWeight: 600,
+                  color: '#000000',
+                  lineHeight: 1.25,
+                }}
+              >
+                Masquer les indicatifs point à point.
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={hideLegPills}
+                onClick={e => {
+                  e.stopPropagation();
+                  setHideLegPills(prev => !prev);
+                }}
+                style={{
+                  width: '44px',
+                  height: '24px',
+                  borderRadius: '9999px',
+                  backgroundColor: hideLegPills ? '#2e54ff' : '#cbd5e1',
+                  position: 'relative',
+                  transition: 'background-color 0.2s ease',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    backgroundColor: '#ffffff',
+                    position: 'absolute',
+                    top: '2px',
+                    left: hideLegPills ? '22px' : '2px',
+                    transition: 'left 0.2s ease',
+                    boxShadow: 'none',
+                  }}
+                />
+              </button>
+            </div>
           </div>
         )}
 
@@ -1643,7 +1711,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
               border: 'none',
             }}
           >
-            <span>Chargement du parcours.</span>
+            <span>Chargement</span>
           </div>
         )}
 
@@ -1779,15 +1847,16 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
           )}
 
           {/* Per-Leg Estimated Time & Distance Pills along the route */}
-          {legSegments.map(leg => (
-            <Marker
-              key={leg.id}
-              position={leg.midpoint}
-              icon={createLegPillIcon(leg, isWebapp)}
-              interactive={false}
-              zIndexOffset={500}
-            />
-          ))}
+          {!hideLegPills &&
+            legSegments.map(leg => (
+              <Marker
+                key={leg.id}
+                position={leg.midpoint}
+                icon={createLegPillIcon(leg, isWebapp)}
+                interactive={false}
+                zIndexOffset={500}
+              />
+            ))}
 
           {/* Live Technician Position Overlay (when toggle is ON) */}
           {showLiveTechPosition && liveTechLocation && (

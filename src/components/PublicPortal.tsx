@@ -8218,7 +8218,7 @@ export default function PublicPortal({
                     otherEquipments={otherEquipments}
                     defibrillateurs={defibrillateurs}
                     variables={variables}
-                    stocks={stocks}
+                    stocks={effectiveTechStocksList}
                     onSelectDefibrillator={(defibId) => {
                       setSelectedOtherEquipmentUnique(null);
                       setSelectedDefibId(defibId);
@@ -8354,7 +8354,7 @@ export default function PublicPortal({
                       setSelectedOtherEquipmentUnique(otherEq);
                     }}
                     initialDefibId={selectedDefibId}
-                    stocks={stocks}
+                    stocks={effectiveTechStocksList}
                     forceSmartphoneLayout={false}
                     isWebapp={true}
                     hideTimer={isEditingFromRapportsPdf}
@@ -10918,8 +10918,10 @@ export default function PublicPortal({
                           const activeSelectedTour = selectedTourId
                             ? getSortedTours().find((tr) => tr.id === selectedTourId)
                             : undefined;
+                          if (!activeSelectedTour) return null;
+
                           const activeMissionsCount =
-                            activeSelectedTour && Array.isArray(activeSelectedTour.passages)
+                            Array.isArray(activeSelectedTour.passages)
                               ? activeSelectedTour.passages.filter((p: any) => p.status !== "Attente").length
                               : 0;
                           const techObj: any = resolvedLiveMember || authenticatedUser;
@@ -10934,7 +10936,7 @@ export default function PublicPortal({
                                 (techObj.startAddressCity && String(techObj.startAddressCity).trim() !== ""))
                           );
                           const isVoirParcoursDisabled =
-                            !activeSelectedTour || activeMissionsCount < 2 || !hasTechStartPoint;
+                            activeMissionsCount < 2 || !hasTechStartPoint;
 
                           return (
                             <button

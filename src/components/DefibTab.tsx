@@ -4764,6 +4764,10 @@ export default function DefibTab({
               if (fresh.insertionElectrodeP !== undefined) setInsertionElectrodeP(toISODateOnly(fresh.insertionElectrodeP));
               if (fresh.livraisonElectrodeP !== undefined) setLivraisonElectrodeP(toISODateOnly(fresh.livraisonElectrodeP));
               if (fresh.derniereMaintenance !== undefined) setDerniereMaintenance(toISODateOnly(fresh.derniereMaintenance));
+              if (fresh.prochaineMaintenance !== undefined && String(fresh.prochaineMaintenance).trim() !== '') {
+                setProchaineMaintenance(toISODateOnly(fresh.prochaineMaintenance));
+                isProchaineMaintenanceCustomRef.current = true;
+              }
             }
           }
         } catch (_) {}
@@ -6546,19 +6550,6 @@ export default function DefibTab({
                       {!hiddenColumns.has('nomSite') && (
                         <td className="px-4 py-5 font-sans whitespace-nowrap" style={{ fontSize: '16px', color: '#000000', fontWeight: 100 }} title={df.nomSite}>
                           <div>{df.nomSite || ''}</div>
-                          {df.categorieEtablissement ? (
-                            <div 
-                              className="mt-0.5" 
-                              style={{
-                                color: '#000',
-                                fontFamily: "'DefibeoMain', sans-serif",
-                                fontSize: '12px'
-                              }}
-                              title="Catégorie d'établissement"
-                            >
-                              Catégorie : {df.categorieEtablissement}
-                            </div>
-                          ) : null}
                         </td>
                       )}
 

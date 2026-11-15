@@ -482,7 +482,9 @@ export function computeTourSuggestedAlerts(
   members: any[],
   rules: CttGlobalRules,
   variables?: any[],
-  allTours?: any[]
+  allTours?: any[],
+  defibrillateurs?: any[],
+  otherEquipments?: any[]
 ): string[] {
   const alerts: string[] = [];
   if (!tour) return alerts;
@@ -493,7 +495,8 @@ export function computeTourSuggestedAlerts(
   const startRaw = draftVal?.startDate !== undefined ? draftVal.startDate : (tour.startDate || '');
   const startIso = toIsoDateForAlert(startRaw);
 
-  const activeMissions = (Array.isArray(tour.missions) ? tour.missions : []).filter((m: any) => {
+  const allTourMissions = Array.isArray(tour.missions) ? tour.missions : [];
+  const activeMissions = allTourMissions.filter((m: any) => {
     if (!m) return false;
     const sit = String(m.status || '').toLowerCase();
     return !sit.includes('rejet') && !sit.includes('annul');
@@ -786,6 +789,123 @@ export function computeTourSuggestedAlerts(
       }
     }
   }
+
+  // 8. Plages d'ouverture renseignées pour le matériel (Défibrillateur ou Autre matériel)
+  allTourMissions.forEach((m: any, idx: number) => {
+    if (!m) return;
+    const sit = String(m.status || '').toLowerCase();
+    if (sit.includes('rejet') || sit.includes('annul')) return;
+
+    const isFormationMission =
+      m.equipmentType === 'Formation' ||
+      String(m.equipmentType || '').toLowerCase().includes('formation') ||
+      Boolean(m.formationId);
+    if (isFormationMission) return;
+
+    const calculatedDate = (() => {
+      if (!startIso) return '';
+      const d = new Date(`${startIso}T00:00:00`);
+      if (isNaN(d.getTime())) return startIso;
+      const daysToAdd = Math.floor(idx / 6);
+      d.setDate(d.getDate() + daysToAdd);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    })();
+
+    const rawDateVal = String(m.estimatedDate || (tour.calculated ? calculatedDate : '') || '').trim();
+    const lowerDate = rawDateVal.toLowerCase();
+    if (
+      !rawDateVal ||
+      lowerDate === 'a trier' ||
+      lowerDate === 'a-trier' ||
+      lowerDate === 'non renseigné' ||
+      lowerDate === 'non renseigne' ||
+      lowerDate === '--' ||
+      lowerDate === 'nc' ||
+      lowerDate === 'null' ||
+      lowerDate === 'undefined'
+    ) {
+      return;
+    }
+    const mIso = toIsoDateForAlert(rawDateVal);
+    if (!mIso) return;
+
+    const rawSlotVal = String(getSlot(m) || '').trim();
+    const lowerSlot = rawSlotVal.toLowerCase();
+    if (
+      !rawSlotVal ||
+      lowerSlot === '-- non défini --' ||
+      lowerSlot === '-- non defini --' ||
+      lowerSlot === 'non renseigné' ||
+      lowerSlot === 'non renseigne' ||
+      lowerSlot === '--' ||
+      lowerSlot === 'nc' ||
+      lowerSlot === 'null' ||
+      lowerSlot === 'undefined' ||
+      lowerSlot === 'sélectionnez un créneau' ||
+      lowerSlot === 'selectionnez un creneau'
+    ) {
+      return;
+    }
+
+    const matchedDefib = Array.isArray(defibrillateurs)
+      ? defibrillateurs.find(
+          (d: any) =>
+            d &&
+            ((m.defibIdentifiant && d.identifiant === m.defibIdentifiant) ||
+              (m.identifiant && d.identifiant === m.identifiant) ||
+              (m.defibId && d.id === m.defibId))
+        )
+      : undefined;
+    const matchedOther =
+      !matchedDefib && Array.isArray(otherEquipments)
+        ? otherEquipments.find(
+            (o: any) =>
+              o &&
+              ((m.defibIdentifiant && o.identifiant === m.defibIdentifiant) ||
+                (m.identifiant && o.identifiant === m.identifiant) ||
+                (m.otherEquipmentId && o.id === m.otherEquipmentId))
+          )
+        : undefined;
+    const eq = matchedDefib || matchedOther;
+
+    const rawHoraires = eq?.horaires ?? eq?.schedules ?? m?.horaires ?? m?.schedules;
+    let parsedSchedules: any[] = [];
+    if (typeof rawHoraires === 'string' && rawHoraires.trim()) {
+      try {
+        const parsed = JSON.parse(rawHoraires);
+        if (Array.isArray(parsed)) parsedSchedules = parsed;
+      } catch {
+        parsedSchedules = [];
+      }
+    } else if (Array.isArray(rawHoraires)) {
+      parsedSchedules = rawHoraires;
+    }
+
+    const validEqSchedules = parsedSchedules.filter(
+      (s: any) => s && Array.isArray(s.days) && s.days.length > 0
+    );
+    // Si aucun horaire d'ouverture renseigné, pas d'alerte
+    if (validEqSchedules.length === 0) return;
+
+    const dayName = getFrenchWeekdayFromIso(mIso);
+    const intervals = getScheduleIntervalsForDay(validEqSchedules, dayName);
+    const mStart = parseSlotToMinutes(rawSlotVal);
+    const isCompatible = intervals.some(iv => mStart >= iv.start && mStart < iv.end);
+
+    if (!isCompatible) {
+      const identifiantRef = String(eq?.identifiant || m.defibIdentifiant || m.identifiant || m.id || '').trim();
+      const dateFR = formatIsoToFRForAlert(mIso);
+      const hh = String(Math.floor(mStart / 60)).padStart(2, '0');
+      const mm = String(mStart % 60).padStart(2, '0');
+      const timeHHMM = `${hh}:${mm}`;
+      alerts.push(
+        `D’après les plages d’ouverture renseignées pour le matériel ${identifiantRef}, il est probable que le technicien ne puisse pas y accéder le ${dateFR} à ${timeHHMM}.`
+      );
+    }
+  });
 
   return alerts;
 }

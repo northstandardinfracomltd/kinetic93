@@ -13313,7 +13313,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         ? rawId
         : '';
 
-    const matchedDefib =
+    let matchedDefib =
       (candIdent ? defibrillateurs.find((df) => norm(df.identifiant) === norm(candIdent)) : undefined) ||
       (candSerie ? defibrillateurs.find((df) => norm(df.numeroSerie) === norm(candSerie)) : undefined) ||
       (candId ? defibrillateurs.find((df) => norm(df.id) === norm(candId)) : undefined);
@@ -13341,6 +13341,35 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       (!matchedDefib && !!matchedOther) ||
       (!matchedDefib && !matchedOther && (!isDefibCategory || rawSnap.isOtherEquipment === true));
 
+    // Fetch latest defibrillator record from Spreadsheet if needed so existing Commentaire Général is never lost
+    if (!shouldTreatAsOther && (candIdent || candSerie || candId)) {
+      const activeTidForLookup = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+      const urlDefibsForLookup =
+        getTenantSpreadsheetUrl(activeTidForLookup, 'defibrillateurs', companyInfo) ||
+        companyInfo?.spreadsheetDefibrillateurs ||
+        companyInfo?.spreadsheetDefibrillateursUrl ||
+        localStorage.getItem(`defib_${activeTidForLookup}_spreadsheet_defibrillateurs`) ||
+        '';
+      if (urlDefibsForLookup) {
+        try {
+          const lookupKey = candIdent || candSerie || candId;
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 2500);
+          const resp = await fetch(
+            `/api/sync-single-defib?id=${encodeURIComponent(lookupKey)}&tenantId=${encodeURIComponent(activeTidForLookup)}&spreadsheetUrl=${encodeURIComponent(urlDefibsForLookup)}`,
+            { signal: controller.signal }
+          );
+          clearTimeout(timeoutId);
+          if (resp.ok) {
+            const json = await resp.json();
+            if (json && json.defib) {
+              matchedDefib = matchedDefib ? ({ ...json.defib, ...matchedDefib, commentaire: matchedDefib.commentaire || json.defib.commentaire || '' } as Defibrillateur) : (json.defib as Defibrillateur);
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
     const cleanSnap: Record<string, any> = {};
     Object.keys(rawSnap).forEach((k) => {
       if (k === '_sheetRowNumber' || k === '_rawSheetRow') return;
@@ -13356,6 +13385,34 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       delete cleanSnap.id;
     }
 
+    const getParisTodayIsoDate = (): string => {
+      try {
+        const parts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Europe/Paris',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).formatToParts(new Date());
+        const y = parts.find((p) => p.type === 'year')?.value;
+        const m = parts.find((p) => p.type === 'month')?.value;
+        const d = parts.find((p) => p.type === 'day')?.value;
+        if (y && m && d) return `${y}-${m}-${d}`;
+      } catch (_) {}
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    };
+
+    const appendCommentInComplement = (existingVal: string, newDiagnosticVal: string): string => {
+      const ex = String(existingVal || '').trim();
+      const nw = String(newDiagnosticVal || '').trim();
+      if (!ex) return nw;
+      if (!nw) return ex;
+      if (ex === nw || ex.endsWith(nw) || ex.includes(nw)) return ex;
+      return `${ex} ${nw}`;
+    };
+
+    const validationTodayIso = getParisTodayIsoDate();
+
     const effectiveDerniereMaint = pickDate(
       cleanSnap.derniereMaintenance,
       rep.derniereMaintenance,
@@ -13364,7 +13421,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       rep.date,
       rep.dateStr,
       rep.interventionDate,
-      isValidation ? new Date().toISOString().split('T')[0] : '',
+      isValidation ? validationTodayIso : '',
       (matchedDefib as any)?.derniereMaintenance,
       (matchedOther as any)?.derniereMaintenance
     );
@@ -13376,11 +13433,12 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       rawSheetRow['Section 5 - Prochaine maintenance']
     );
     const oldProchaineMaint = pickDate((matchedDefib as any)?.prochaineMaintenance, (matchedOther as any)?.prochaineMaintenance);
-    const computedNextMaint = effectiveDerniereMaint ? computeProchaineMaintenance(effectiveDerniereMaint) : '';
-    const effectiveProchaineMaint =
-      reportProchaineMaint && reportProchaineMaint !== oldProchaineMaint
-        ? reportProchaineMaint
-        : computedNextMaint || reportProchaineMaint || oldProchaineMaint || '';
+    const validationNextMaint = computeProchaineMaintenance(validationTodayIso);
+    const effectiveProchaineMaint = isValidation
+      ? validationNextMaint
+      : reportProchaineMaint && reportProchaineMaint !== oldProchaineMaint
+      ? reportProchaineMaint
+      : oldProchaineMaint || reportProchaineMaint || '';
 
     const remplaceElectrodeAFlag =
       pickVal(
@@ -13580,7 +13638,24 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         pretId: pickVal(cleanSnap.pretId, rep.pretId, matchedDefib?.pretId),
         etat: pickVal(cleanSnap.etat, rep.etat, matchedDefib?.etat),
         conforme: pickVal(cleanSnap.conforme, rep.conforme, matchedDefib?.conforme, 'Oui'),
-        commentaire: pickVal(cleanSnap.commentaire, rep.diagnosticCommentaire, rep.remarques, matchedDefib?.commentaire),
+        commentaire: appendCommentInComplement(
+          pickVal(
+            matchedDefib?.commentaire,
+            (matchedDefib as any)?._rawSheetRow?.['Section 1 - Commentaire Général.'],
+            (matchedDefib as any)?._rawSheetRow?.['Section 1 - Commentaire Général'],
+            (matchedDefib as any)?._rawSheetRow?.['Section 1 - Commentaire.'],
+            (matchedDefib as any)?.notes,
+            (matchedDefib as any)?.note,
+            (matchedDefib as any)?.commentaireDAE
+          ),
+          pickVal(
+            rep.diagnosticCommentaire,
+            rawSheetRow['Section 11 - Commentaire de diagnostic et de clôture'],
+            rawSheetRow['Section 11 - Commentaire de diagnostic et de clôture.'],
+            cleanSnap.commentaire,
+            rep.remarques
+          )
+        ),
         photoUrl: pickVal(cleanSnap.photoUrl, rep.photoUrl, matchedDefib?.photoUrl),
         photo2Url: pickVal(cleanSnap.photo2Url, rep.photo2Url, rep.photoArriereUrl, matchedDefib?.photo2Url),
         photo3Url: pickVal(cleanSnap.photo3Url, rep.photo3Url, rep.photoResultatTestUrl, matchedDefib?.photo3Url),
@@ -13952,7 +14027,9 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         mergedSpecifiques.dateReepreuve = reepDate;
       }
       if (effectiveProchaineMaint || cleanSnap.dateRemplacement) {
-        mergedSpecifiques.dateRemplacement = pickDate(cleanSnap.dateRemplacement, effectiveProchaineMaint, mergedSpecifiques.dateRemplacement);
+        mergedSpecifiques.dateRemplacement = isValidation
+          ? pickDate(effectiveProchaineMaint, cleanSnap.dateRemplacement, mergedSpecifiques.dateRemplacement)
+          : pickDate(cleanSnap.dateRemplacement, effectiveProchaineMaint, mergedSpecifiques.dateRemplacement);
       }
 
       const mergedOther: any = {
@@ -13980,7 +14057,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         miseEnService: mesDate,
         derniereMaintenance: effectiveDerniereMaint,
         prochaineMaintenance: effectiveProchaineMaint,
-        observation: pickVal(cleanSnap.observation, cleanSnap.observationsGenerales, rep.observationsGenerales, matchedOther?.observation),
+        observation: appendCommentInComplement(
+          pickVal(matchedOther?.observation),
+          pickVal(cleanSnap.observation, cleanSnap.observationsGenerales, rep.observationsGenerales, rep.diagnosticCommentaire, cleanSnap.commentaire)
+        ),
         specifiques: mergedSpecifiques,
       };
 
@@ -19382,7 +19462,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                       };
                       const planifPillTheme = getTourProgressPillTheme(planifL1Percent);
                       const compPillTheme = getTourProgressPillTheme(compL1Percent);
-                      const tourSuggestedAlerts = computeTourSuggestedAlerts(t, draft, members, cttGlobalRules, variables, fsmTours);
+                      const tourSuggestedAlerts = computeTourSuggestedAlerts(t, draft, members, cttGlobalRules, variables, fsmTours, defibrillateurs, otherEquipments);
                       const hasTourSuggestedAlerts = tourSuggestedAlerts.length > 0;
                       const isTourAlertsOpen = !!visibleTourAlerts[t.id] && hasTourSuggestedAlerts;
 
@@ -24307,11 +24387,29 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                           return;
                                         }
 
+                                        const nowValParts = new Intl.DateTimeFormat('en-CA', {
+                                          timeZone: 'Europe/Paris',
+                                          year: 'numeric',
+                                          month: '2-digit',
+                                          day: '2-digit',
+                                        }).formatToParts(new Date());
+                                        const valY = nowValParts.find(p => p.type === 'year')?.value || String(new Date().getFullYear());
+                                        const valM = nowValParts.find(p => p.type === 'month')?.value || String(new Date().getMonth() + 1).padStart(2, '0');
+                                        const valD = nowValParts.find(p => p.type === 'day')?.value || String(new Date().getDate()).padStart(2, '0');
+                                        const validationNextMaintIso = computeProchaineMaintenance(`${valY}-${valM}-${valD}`);
+
                                         const validatedReport = {
                                           ...rep,
                                           validated: true,
                                           statutRapport: 'Validé',
                                           status: 'Validé',
+                                          prochaineMaintenance: validationNextMaintIso || rep.prochaineMaintenance,
+                                          defibSnapshot: rep.defibSnapshot
+                                            ? {
+                                                ...rep.defibSnapshot,
+                                                prochaineMaintenance: validationNextMaintIso || rep.defibSnapshot.prochaineMaintenance,
+                                              }
+                                            : rep.defibSnapshot,
                                           _sheetRowNumber: rep._sheetRowNumber,
                                         };
                                         const updatedReports = generatedReports.map(r =>

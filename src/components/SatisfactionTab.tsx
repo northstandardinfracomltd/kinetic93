@@ -157,6 +157,7 @@ export default function SatisfactionTab({
   const [clickedPill, setClickedPill] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [spreadsheetVersion, setSpreadsheetVersion] = useState(0);
+  const [popupEvaluationText, setPopupEvaluationText] = useState<string | null>(null);
 
   useEffect(() => {
     const handleSpreadsheetUpdated = () => setSpreadsheetVersion((v) => v + 1);
@@ -774,8 +775,12 @@ export default function SatisfactionTab({
           letter-spacing: normal !important;
           text-transform: none !important;
         }
+        #satisfaction-tab-container-harmonized tbody tr {
+          cursor: default !important;
+        }
         #satisfaction-tab-container-harmonized tbody tr:hover {
           background-color: #f5f7fa !important;
+          cursor: default !important;
         }
       `}</style>
       
@@ -1133,7 +1138,8 @@ export default function SatisfactionTab({
                     : rev.clientName || '-';
 
                   const cleanComment = rev.comment ? rev.comment.replace(/\r?\n|\r/g, " ").trim() : '';
-                  const truncatedComment = cleanComment.length > 30 
+                  const isCommentTruncated = cleanComment.length > 30;
+                  const truncatedComment = isCommentTruncated 
                     ? `${cleanComment.substring(0, 30)}...` 
                     : cleanComment || '-';
 
@@ -1142,10 +1148,11 @@ export default function SatisfactionTab({
                   return (
                     <tr 
                       key={rev.id} 
-                      className={`group hover:bg-[#f5f7fa] transition-all cursor-pointer ${isChecked ? 'bg-[#f5f7fa]' : ''}`}
+                      className={`group hover:bg-[#f5f7fa] transition-all cursor-default ${isChecked ? 'bg-[#f5f7fa]' : ''}`}
+                      style={{ cursor: 'default' }}
                     >
                       {/* Radio selection column */}
-                      <td className="px-4 py-3.5 w-12 text-center select-none" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-4 py-3.5 w-12 text-center select-none cursor-default" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1205,43 +1212,64 @@ export default function SatisfactionTab({
                       </td>
 
                       {/* Qualité */}
-                      <td className="px-3 py-4 text-center align-middle font-medium" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <td className="px-3 py-4 text-center align-middle font-medium cursor-default" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                         {rev.qualite ?? '-'}
                       </td>
 
                       {/* Ponctualité */}
-                      <td className="px-3 py-4 text-center align-middle font-medium" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <td className="px-3 py-4 text-center align-middle font-medium cursor-default" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                         {rev.ponctualite ?? '-'}
                       </td>
 
                       {/* Politesse */}
-                      <td className="px-3 py-4 text-center align-middle font-medium" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <td className="px-3 py-4 text-center align-middle font-medium cursor-default" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                         {rev.politesse ?? '-'}
                       </td>
 
                       {/* Clarté PDF */}
-                      <td className="px-3 py-4 text-center align-middle font-medium" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <td className="px-3 py-4 text-center align-middle font-medium cursor-default" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                         {rev.clartePdf ?? '-'}
                       </td>
 
                       {/* Explications */}
-                      <td className="px-3 py-4 text-center align-middle font-medium" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <td className="px-3 py-4 text-center align-middle font-medium cursor-default" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                         {rev.explications ?? '-'}
                       </td>
 
                       {/* Sensibilisation */}
-                      <td className="px-3 py-4 text-center align-middle font-medium" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <td className="px-3 py-4 text-center align-middle font-medium cursor-default" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                         {rev.sensibilisation ?? '-'}
                       </td>
 
                       {/* NPS Score /10 */}
-                      <td className="px-3 py-4 text-center align-middle font-medium" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <td className="px-3 py-4 text-center align-middle font-medium cursor-default" style={{ fontSize: '16px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
                         {rev.npsScore ?? rev.nps ?? '-'}
                       </td>
 
                       {/* Comment (Évaluation) */}
-                      <td className="px-4 py-4 font-sans align-middle cursor-default whitespace-nowrap" style={{ fontSize: '15px', color: '#000000', fontWeight: 100, fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
-                        <div className="text-black" style={{ color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}>
+                      <td
+                        className="px-4 py-4 font-sans align-middle whitespace-nowrap"
+                        style={{
+                          fontSize: '15px',
+                          color: '#000000',
+                          fontWeight: 100,
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          cursor: isCommentTruncated ? 'pointer' : 'default',
+                        }}
+                        onClick={() => {
+                          if (isCommentTruncated && rev.comment) {
+                            setPopupEvaluationText(rev.comment.trim());
+                          }
+                        }}
+                      >
+                        <div
+                          className="text-black"
+                          style={{
+                            color: '#000000',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            cursor: isCommentTruncated ? 'pointer' : 'default',
+                          }}
+                        >
                           {truncatedComment}
                         </div>
                       </td>
@@ -1922,6 +1950,63 @@ export default function SatisfactionTab({
                 <span>{t("Fermer")}</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Popup fenêtre Évaluation complète */}
+      {popupEvaluationText !== null && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 animate-fadeIn"
+          onClick={() => setPopupEvaluationText(null)}
+          id="satisfaction-evaluation-popup-modal"
+        >
+          <div
+            className="w-full max-w-lg flex flex-col gap-5 p-6 shadow-2xl"
+            style={{
+              backgroundColor: 'rgb(245, 247, 250)',
+              borderRadius: '18px',
+              border: 'none',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="p-4 max-h-[60vh] overflow-y-auto"
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '13px',
+                color: '#000000',
+                fontSize: '16px',
+                fontWeight: 100,
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                lineHeight: 1.5,
+              }}
+            >
+              {popupEvaluationText}
+            </div>
+            <button
+              type="button"
+              id="btn-close-evaluation-popup"
+              onClick={() => setPopupEvaluationText(null)}
+              style={{
+                width: '100%',
+                backgroundColor: 'rgb(210, 45, 11)',
+                color: '#ffffff',
+                fontSize: '18px',
+                fontWeight: '600',
+                padding: '13px 20px',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                border: 'none',
+                boxShadow: 'none',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+              className="hover:opacity-90 transition-opacity"
+            >
+              <span>{t("Fermer")}</span>
+            </button>
           </div>
         </div>
       )}

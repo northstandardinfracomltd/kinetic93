@@ -448,22 +448,121 @@ export default function GmaoCorrectionForm({
     return `${l1}${l2}${l3}-${tenantIdDigit}-${l4}${l5}${l6}`;
   };
 
+  const [localCachedStocks, setLocalCachedStocks] = useState<StockRecord[]>(() => {
+    if (Array.isArray(stocks) && stocks.length > 0) return stocks;
+    try {
+      const tid =
+        tenantId ||
+        (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) ||
+        'demo';
+      const raw =
+        (typeof window !== 'undefined' &&
+          (localStorage.getItem(`defib_${tid}_stocks`) ||
+            localStorage.getItem(`defib_${tid.toUpperCase()}_stocks`) ||
+            localStorage.getItem(`defib_${tid.toLowerCase()}_stocks`))) ||
+        null;
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  useEffect(() => {
+    if (Array.isArray(stocks) && stocks.length > 0) {
+      setLocalCachedStocks(stocks);
+    }
+  }, [stocks]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const effTid =
+      tenantId ||
+      (typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') : null) ||
+      'demo';
+    const sheetUrl = (effectiveCompanyInfo as any)?.spreadsheetStocks || '';
+    fetch(
+      `/api/sheets/collection?tenantId=${encodeURIComponent(effTid)}&type=stocksGlobaux${
+        sheetUrl ? `&spreadsheetUrl=${encodeURIComponent(sheetUrl)}` : ''
+      }&_t=${Date.now()}`,
+      { cache: 'no-store' }
+    )
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data && Array.isArray(data.items) && data.items.length > 0) {
+          setLocalCachedStocks(data.items);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [tenantId, effectiveCompanyInfo]);
+
+  const effectiveStocksList = useMemo<StockRecord[]>(() => {
+    if (localCachedStocks.length > 0) return localCachedStocks;
+    return Array.isArray(stocks) ? stocks : [];
+  }, [stocks, localCachedStocks]);
+
+  const extractTraceabilitiesFromStock = React.useCallback((st: any): {
+    id: string;
+    lotOrSerial: string;
+    expirationDate?: string;
+    situation: string;
+    emplacement?: string;
+  }[] => {
+    if (!st) return [];
+    if (Array.isArray(st.traceabilities) && st.traceabilities.length > 0) {
+      return st.traceabilities.map((tr: any, idx: number) => ({
+        id: String(tr.id || `TR-${st.ugs || st.id}-${idx + 1}`).trim(),
+        lotOrSerial: String(tr.lotOrSerial || '').trim(),
+        expirationDate: String(tr.expirationDate || '').trim() || undefined,
+        situation: String(tr.situation || 'Disponible').trim(),
+        emplacement: String(tr.emplacement || '').trim(),
+      }));
+    }
+    const rawInv = String(st.inventaire || '').trim();
+    if (rawInv) {
+      const lines = rawInv
+        .split(';')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return lines.map((lineStr, idx) => {
+        const parts = lineStr.split('|');
+        const trEmp = String(parts[0] ?? '').trim();
+        const trLot = String(parts[1] ?? '').trim();
+        const trExp = String(parts[2] ?? '').trim();
+        const trSit = String(parts[3] ?? '').trim() || 'Disponible';
+        return {
+          id: `TR-${st.ugs || st.id}-${idx + 1}`,
+          lotOrSerial: trLot,
+          expirationDate: trExp || undefined,
+          situation: trSit,
+          emplacement: trEmp,
+        };
+      });
+    }
+    return [];
+  }, []);
+
   const getTraceAndStock = React.useCallback((selectionId: string) => {
     if (!selectionId || selectionId === 'Autre') return null;
-    for (const st of stocks || []) {
-      if (st.traceabilities) {
-        const trace = st.traceabilities.find(t => t.id === selectionId);
-        if (trace) return { trace, stock: st };
+    for (const st of effectiveStocksList || []) {
+      const traceList = extractTraceabilitiesFromStock(st);
+      if (traceList.length > 0) {
+        const trace = traceList.find(t => t.id === selectionId);
+        if (trace) return { trace: trace as any, stock: st };
       }
       if (st.id === selectionId) {
         return {
-          trace: { id: st.id, lotOrSerial: (st as any).ugs || '', situation: 'Disponible' as const },
+          trace: { id: st.id, lotOrSerial: '', expirationDate: '', situation: 'Disponible' as const },
           stock: st
         };
       }
     }
     return null;
-  }, [stocks]);
+  }, [effectiveStocksList, extractTraceabilitiesFromStock]);
 
   const compressFileOrConvertToBase64 = async (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -511,6 +610,17 @@ export default function GmaoCorrectionForm({
 
   // Google Drive upload is handled via ../utils/googleDrive uploadFileToGoogleDrive
 
+  const formatTraceabilityDropdownLabel = React.useCallback((denom: string, lotOrSerial?: string, expirationDate?: string) => {
+    const cleanLot = String(lotOrSerial || '').trim();
+    const hasLot = Boolean(cleanLot && cleanLot !== '-' && cleanLot !== '—' && cleanLot.toLowerCase() !== 'non');
+    const cleanExp = String(expirationDate || '').trim();
+    const hasExp = Boolean(cleanExp && cleanExp !== '-' && cleanExp !== '—' && cleanExp.toLowerCase() !== 'non');
+    const details: string[] = [];
+    if (hasLot) details.push(`Série : ${cleanLot}`);
+    if (hasExp) details.push(`Péremption : ${cleanExp}`);
+    return details.length > 0 ? `${denom} - ${details.join(' - ')}` : denom;
+  }, []);
+
   const getAvailableTraceabilities = React.useCallback((category?: string) => {
     const list: {
       stockId: string;
@@ -521,31 +631,41 @@ export default function GmaoCorrectionForm({
       denominationPieceId: string;
     }[] = [];
     
-    (stocks || []).forEach(st => {
+    (effectiveStocksList || []).forEach(st => {
+      const rawDenomRef = String(st.denominationPieceId || (st as any).denominationPieceNom || (st as any).piece || '').trim();
+      const lowerDenomRef = rawDenomRef.toLowerCase();
       const varObj = variables.find(
         v =>
-          v.id === st.denominationPieceId ||
-          (v.nom && st.denominationPieceId && v.nom.trim().toLowerCase() === st.denominationPieceId.trim().toLowerCase()) ||
-          (v.identifiant && st.denominationPieceId && v.identifiant.trim().toLowerCase() === st.denominationPieceId.trim().toLowerCase())
+          v.id === rawDenomRef ||
+          (v.nom && lowerDenomRef && v.nom.trim().toLowerCase() === lowerDenomRef) ||
+          (v.identifiant && lowerDenomRef && v.identifiant.trim().toLowerCase() === lowerDenomRef) ||
+          (v.nom && v.marque && lowerDenomRef && `${v.nom} (${v.marque})`.trim().toLowerCase() === lowerDenomRef)
       );
       if (category && varObj?.category !== category) return;
       
       const denom = varObj
         ? (varObj.marque && varObj.marque !== 'Standard' ? `${varObj.nom} (${varObj.marque})` : varObj.nom)
-        : `Pièce (${st.denominationPieceId || st.id})`;
+        : ((st as any).denominationPieceNom || st.denominationPieceId || `Pièce (${st.id})`);
       
       let addedTrace = false;
-      if (st.traceabilityEnabled && st.traceabilities && st.traceabilities.length > 0) {
-        st.traceabilities.forEach(trace => {
-          if (trace.situation === 'Disponible') {
+      const traceList = extractTraceabilitiesFromStock(st);
+      const isTraceDisabled = st.traceabilityEnabled === false || String(st.traceabilityEnabled).trim().toLowerCase() === 'non';
+      if (!isTraceDisabled && traceList.length > 0) {
+        traceList.forEach(trace => {
+          const sitLow = String(trace.situation || 'Disponible').trim().toLowerCase();
+          if (sitLow === 'disponible' || sitLow === '' || sitLow === 'réservé' || sitLow === 'reserve') {
             addedTrace = true;
+            const cleanLot = String(trace.lotOrSerial || '').trim();
+            const validLot = (cleanLot && cleanLot !== '-' && cleanLot !== '—' && cleanLot.toLowerCase() !== 'non') ? cleanLot : '';
+            const cleanExp = String(trace.expirationDate || '').trim();
+            const validExp = (cleanExp && cleanExp !== '-' && cleanExp !== '—' && cleanExp.toLowerCase() !== 'non') ? cleanExp : undefined;
             list.push({
               stockId: st.id,
               traceId: trace.id,
-              lotOrSerial: trace.lotOrSerial,
-              expirationDate: trace.expirationDate,
+              lotOrSerial: validLot,
+              expirationDate: validExp,
               denominationPieceId: varObj?.id || st.denominationPieceId,
-              label: `${denom} - Lot/Série: ${trace.lotOrSerial}${trace.expirationDate ? ` (Pér: ${trace.expirationDate})` : ''}`
+              label: formatTraceabilityDropdownLabel(denom, validLot, validExp)
             });
           }
         });
@@ -554,14 +674,15 @@ export default function GmaoCorrectionForm({
         list.push({
           stockId: st.id,
           traceId: st.id,
-          lotOrSerial: (st as any).ugs || '',
+          lotOrSerial: '',
+          expirationDate: undefined,
           denominationPieceId: varObj?.id || st.denominationPieceId,
-          label: `${denom}${(st as any).ugs ? ` - UGS: ${(st as any).ugs}` : ''}`
+          label: denom
         });
       }
     });
     return list;
-  }, [stocks, variables]);
+  }, [effectiveStocksList, variables, extractTraceabilitiesFromStock, formatTraceabilityDropdownLabel]);
 
   const getAvailableKitsTraceabilities = React.useCallback(() => {
     const list: {
@@ -573,12 +694,15 @@ export default function GmaoCorrectionForm({
       denominationPieceId: string;
     }[] = [];
     
-    (stocks || []).forEach(st => {
+    (effectiveStocksList || []).forEach(st => {
+      const rawDenomRef = String(st.denominationPieceId || (st as any).denominationPieceNom || (st as any).piece || '').trim();
+      const lowerDenomRef = rawDenomRef.toLowerCase();
       const varObj = variables.find(
         v =>
-          v.id === st.denominationPieceId ||
-          (v.nom && st.denominationPieceId && v.nom.trim().toLowerCase() === st.denominationPieceId.trim().toLowerCase()) ||
-          (v.identifiant && st.denominationPieceId && v.identifiant.trim().toLowerCase() === st.denominationPieceId.trim().toLowerCase())
+          v.id === rawDenomRef ||
+          (v.nom && lowerDenomRef && v.nom.trim().toLowerCase() === lowerDenomRef) ||
+          (v.identifiant && lowerDenomRef && v.identifiant.trim().toLowerCase() === lowerDenomRef) ||
+          (v.nom && v.marque && lowerDenomRef && `${v.nom} (${v.marque})`.trim().toLowerCase() === lowerDenomRef)
       );
       const isElectrodeOrBatteryOrDefibOrCoffretOrService = varObj && [
         'Modèle Défibrillateur',
@@ -592,20 +716,27 @@ export default function GmaoCorrectionForm({
       
       const denom = varObj
         ? (varObj.marque && varObj.marque !== 'Standard' ? `${varObj.nom} (${varObj.marque})` : varObj.nom)
-        : `Pièce (${st.denominationPieceId || st.id})`;
+        : ((st as any).denominationPieceNom || st.denominationPieceId || `Pièce (${st.id})`);
       
       let addedTrace = false;
-      if (st.traceabilityEnabled && st.traceabilities && st.traceabilities.length > 0) {
-        st.traceabilities.forEach(trace => {
-          if (trace.situation === 'Disponible') {
+      const traceList = extractTraceabilitiesFromStock(st);
+      const isTraceDisabled = st.traceabilityEnabled === false || String(st.traceabilityEnabled).trim().toLowerCase() === 'non';
+      if (!isTraceDisabled && traceList.length > 0) {
+        traceList.forEach(trace => {
+          const sitLow = String(trace.situation || 'Disponible').trim().toLowerCase();
+          if (sitLow === 'disponible' || sitLow === '' || sitLow === 'réservé' || sitLow === 'reserve') {
             addedTrace = true;
+            const cleanLot = String(trace.lotOrSerial || '').trim();
+            const validLot = (cleanLot && cleanLot !== '-' && cleanLot !== '—' && cleanLot.toLowerCase() !== 'non') ? cleanLot : '';
+            const cleanExp = String(trace.expirationDate || '').trim();
+            const validExp = (cleanExp && cleanExp !== '-' && cleanExp !== '—' && cleanExp.toLowerCase() !== 'non') ? cleanExp : undefined;
             list.push({
               stockId: st.id,
               traceId: trace.id,
-              lotOrSerial: trace.lotOrSerial,
-              expirationDate: trace.expirationDate,
+              lotOrSerial: validLot,
+              expirationDate: validExp,
               denominationPieceId: varObj?.id || st.denominationPieceId,
-              label: `${denom} - Lot/Série: ${trace.lotOrSerial}${trace.expirationDate ? ` (Pér: ${trace.expirationDate})` : ''}`
+              label: formatTraceabilityDropdownLabel(denom, validLot, validExp)
             });
           }
         });
@@ -614,14 +745,15 @@ export default function GmaoCorrectionForm({
         list.push({
           stockId: st.id,
           traceId: st.id,
-          lotOrSerial: (st as any).ugs || '',
+          lotOrSerial: '',
+          expirationDate: undefined,
           denominationPieceId: varObj?.id || st.denominationPieceId,
-          label: `${denom}${(st as any).ugs ? ` - UGS: ${(st as any).ugs}` : ''}`
+          label: denom
         });
       }
     });
     return list;
-  }, [stocks, variables]);
+  }, [effectiveStocksList, variables, extractTraceabilitiesFromStock, formatTraceabilityDropdownLabel]);
 
   // Auto-determination of selected DAE
   const [selectedDefibId, setSelectedDefibId] = useState(() => {
@@ -1141,6 +1273,43 @@ export default function GmaoCorrectionForm({
   });
   const [autreReference, setAutreReference] = useState(report?.autreReference || report?.customReference || '');
   const [isCreatingNewMaterial, setIsCreatingNewMaterial] = useState(false);
+
+  const isDefibElectrodeASecoursNon = useMemo(() => {
+    if (isCreatingNewMaterial) return false;
+    const targetDf = origDefib || (selectedDefibId || report?.defibIdentifiant || report?.defibSnapshot?.identifiant ? snapshot : null);
+    if (!targetDf) return false;
+    const anyDf = targetDf as any;
+    const explicitVal = String(targetDf.hasElectrodeASecours || anyDf.has_electrode_a_secours || '').trim().toLowerCase();
+    if (explicitVal === 'oui') return false;
+    if (explicitVal === 'non') return true;
+    const hasAnySecoursData = Boolean(
+      targetDf.modeleElectrodeASecoursId ||
+      anyDf.modele_secours_a ||
+      targetDf.lotElectrodeASecours ||
+      anyDf.lot_secours_a ||
+      targetDf.peremptionSecoursElectrodeA
+    );
+    return !hasAnySecoursData;
+  }, [origDefib, selectedDefibId, report, snapshot, isCreatingNewMaterial]);
+
+  const isDefibElectrodePSecoursNon = useMemo(() => {
+    if (isCreatingNewMaterial) return false;
+    const targetDf = origDefib || (selectedDefibId || report?.defibIdentifiant || report?.defibSnapshot?.identifiant ? snapshot : null);
+    if (!targetDf) return false;
+    const anyDf = targetDf as any;
+    const explicitVal = String(targetDf.hasElectrodePSecours || anyDf.has_electrode_p_secours || '').trim().toLowerCase();
+    if (explicitVal === 'oui') return false;
+    if (explicitVal === 'non') return true;
+    const hasAnySecoursData = Boolean(
+      targetDf.modeleElectrodePSecoursId ||
+      anyDf.modele_secours_p ||
+      targetDf.lotElectrodePSecours ||
+      anyDf.lot_secours_p ||
+      targetDf.peremptionSecoursElectrodeP
+    );
+    return !hasAnySecoursData;
+  }, [origDefib, selectedDefibId, report, snapshot, isCreatingNewMaterial]);
+
   const [isNewEquipmentDropdownOpen, setIsNewEquipmentDropdownOpen] = useState(false);
   const [missionConfirmModal, setMissionConfirmModal] = useState<'new_material' | 'select_equipment' | 'advanced_search' | null>(null);
   const [hasConfirmedMissionEquipmentSwitch, setHasConfirmedMissionEquipmentSwitch] = useState(false);
@@ -1176,9 +1345,15 @@ export default function GmaoCorrectionForm({
   // S1 Type de défibrillateur
   const normalizeTypeDefib = (rawVal?: string, deaFlag?: string): string => {
     const v = String(rawVal || '').trim();
-    if (v === 'Automatique (DEA)' || v.toUpperCase() === 'DEA') return 'Automatique (DEA)';
-    if (v === 'Semi-Automatique (DSA)' || v.toUpperCase() === 'DSA') return 'Semi-Automatique (DSA)';
-    if ( v ) return v;
+    const norm = v
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    if (norm && !norm.includes('non renseign')) {
+      if (norm.includes('semi') || norm.includes('dsa')) return 'Semi-Automatique (DSA)';
+      if (norm.includes('auto') || norm.includes('dea') || norm.includes('dae')) return 'Automatique (DEA)';
+      return v;
+    }
     if (deaFlag === 'Oui') return 'Automatique (DEA)';
     if (deaFlag === 'Non') return 'Semi-Automatique (DSA)';
     return '';
@@ -1189,6 +1364,66 @@ export default function GmaoCorrectionForm({
       report?.dea || (report?.defibSnapshot as any)?.dea
     )
   );
+  const [showMissingPinWarningPopup, setShowMissingPinWarningPopup] = useState(false);
+  const [hasShownMissingPinWarning, setHasShownMissingPinWarning] = useState(false);
+
+  const [autoPopulatedFields, setAutoPopulatedFields] = useState<{
+    lotA: boolean;
+    peremptionA: boolean;
+    lotP: boolean;
+    peremptionP: boolean;
+    lotB: boolean;
+    peremptionB: boolean;
+  }>({
+    lotA: false,
+    peremptionA: false,
+    lotP: false,
+    peremptionP: false,
+    lotB: false,
+    peremptionB: false,
+  });
+
+  const [pendingAutoPopulatedEdit, setPendingAutoPopulatedEdit] = useState<{
+    fieldKey: 'lotA' | 'peremptionA' | 'lotP' | 'peremptionP' | 'lotB' | 'peremptionB';
+    type: 'lot' | 'peremption';
+    action: 'focus' | 'clear' | 'scan';
+    inputId: string;
+  } | null>(null);
+
+  const applyReplacementPieceAutoPopulate = (
+    selectionId: string,
+    sectionType: 'A' | 'P' | 'B'
+  ) => {
+    const lotKey = sectionType === 'A' ? 'lotA' : sectionType === 'P' ? 'lotP' : 'lotB';
+    const perempKey = sectionType === 'A' ? 'peremptionA' : sectionType === 'P' ? 'peremptionP' : 'peremptionB';
+    const snapLotField = sectionType === 'A' ? 'lotElectrodeA' : sectionType === 'P' ? 'lotElectrodeP' : 'lotBatterie';
+    const snapPerempField = sectionType === 'A' ? 'peremptionElectrodeA' : sectionType === 'P' ? 'peremptionElectrodeP' : 'peremptionBatterie';
+
+    if (!selectionId || selectionId === 'Autre') {
+      setAutoPopulatedFields(prev => ({ ...prev, [lotKey]: false, [perempKey]: false }));
+      return;
+    }
+
+    const res = getTraceAndStock(selectionId);
+    const rawLot = String(res?.trace?.lotOrSerial || '').trim();
+    const validLot = (rawLot && rawLot !== '-' && rawLot !== '—' && rawLot.toLowerCase() !== 'non') ? rawLot : '';
+    const rawExp = String(res?.trace?.expirationDate || '').trim();
+    const validExp = (rawExp && rawExp !== '-' && rawExp !== '—' && rawExp.toLowerCase() !== 'non') ? toIsoDateStr(rawExp) : '';
+
+    if (validLot || validExp) {
+      setSnapshot(prev => ({
+        ...prev,
+        ...(validLot ? { [snapLotField]: validLot } : {}),
+        ...(validExp ? { [snapPerempField]: validExp } : {}),
+      }));
+    }
+
+    setAutoPopulatedFields(prev => ({
+      ...prev,
+      [lotKey]: Boolean(validLot),
+      [perempKey]: Boolean(validExp),
+    }));
+  };
 
   // S3 Alarme, Armoire & Remplacement Coffret
   const [coffretRemplace, setCoffretRemplace] = useState<'Oui' | 'Non'>(report?.coffretRemplace || 'Non');
@@ -1515,9 +1750,12 @@ export default function GmaoCorrectionForm({
 
   const adjustAutoTextareaHeight = (el: HTMLTextAreaElement | null) => {
     if (!el) return;
+    const minH = el.id === 'techCommentaireArrivee' ? 76 : 48;
     el.style.height = 'auto';
     if (el.scrollHeight > 0) {
-      el.style.height = `${Math.max(el.scrollHeight, 48)}px`;
+      el.style.height = `${Math.max(el.scrollHeight, minH)}px`;
+    } else {
+      el.style.height = `${minH}px`;
     }
   };
 
@@ -2300,6 +2538,9 @@ export default function GmaoCorrectionForm({
       setUploadError(`Erreur d'upload : ${err.message || err}`);
     } finally {
       setIsUploadingFiles(false);
+      if (e.target) {
+        e.target.value = '';
+      }
     }
   };
 
@@ -2361,10 +2602,24 @@ export default function GmaoCorrectionForm({
     if (isDefibrillator && (!typeDefibrillateur || !typeDefibrillateur.trim())) {
       errors.push("Le type de défibrillateur doit-être renseigné.");
     }
-    if (isDefibrillator && typeDefibrillateur && typeDefibrillateur.trim() && selectedModelVar) {
+    if (isDefibrillator && typeDefibrillateur && typeDefibrillateur.trim()) {
       const normEntered = normalizeTypeDefib(typeDefibrillateur).trim().toLowerCase();
-      const normModel = normalizeTypeDefib(selectedModelVar.typeDefibrillateur).trim().toLowerCase();
-      if (!normModel || normEntered !== normModel) {
+      const isValidKnownType =
+        normEntered === 'automatique (dea)' ||
+        normEntered === 'semi-automatique (dsa)';
+      const rawModelVar = (selectedModelVar || {}) as any;
+      const rawModelTypeVal = String(
+        rawModelVar.typeDefibrillateur ||
+        rawModelVar['Type de défibrillateur.'] ||
+        rawModelVar['Type de défibrillateur'] ||
+        rawModelVar['Type Défibrillateur.'] ||
+        rawModelVar['Type Défibrillateur'] ||
+        rawModelVar._rawSheetRow?.['Type de défibrillateur.'] ||
+        rawModelVar._rawSheetRow?.['Type de défibrillateur'] ||
+        ''
+      ).trim();
+      const normModel = normalizeTypeDefib(rawModelTypeVal).trim().toLowerCase();
+      if (!isValidKnownType || (normModel && normEntered !== normModel)) {
         errors.push("Le type de défibrillateur semble invalide.");
       }
     }
@@ -2702,7 +2957,10 @@ export default function GmaoCorrectionForm({
       errors.push("Il semble que vous avez installé deux pièces avec la même UGS/Catégorie, veuillez vérifier.");
     }
 
-    if (errors.length > 0) {
+    const isPinMissingNow = !clientPinCode.trim();
+    const shouldTriggerPinWarningOnce = isPinMissingNow && !hasShownMissingPinWarning;
+
+    if (errors.length > 0 || shouldTriggerPinWarningOnce) {
       setActiveSection(11);
       const scrollToAlertBox = () => {
         setTimeout(() => {
@@ -2713,11 +2971,18 @@ export default function GmaoCorrectionForm({
         }, 60);
       };
 
+      if (shouldTriggerPinWarningOnce) {
+        setShowMissingPinWarningPopup(true);
+        setHasShownMissingPinWarning(true);
+      }
+
       if (!hasClickedOnce) {
         playTechRefusalSound();
-        setAlertInfoErrors(errors);
+        if (errors.length > 0) {
+          setAlertInfoErrors(errors);
+          scrollToAlertBox();
+        }
         setHasClickedOnce(true);
-        scrollToAlertBox();
         return;
       } else {
         const hasBlocking = errors.some(err => {
@@ -2735,10 +3000,12 @@ export default function GmaoCorrectionForm({
             lower.includes("veuillez reprendre la photo")
           );
         });
-        if (hasBlocking) {
+        if (hasBlocking || shouldTriggerPinWarningOnce) {
           playTechRefusalSound();
-          setAlertInfoErrors(errors);
-          scrollToAlertBox();
+          if (errors.length > 0) {
+            setAlertInfoErrors(errors);
+            scrollToAlertBox();
+          }
           return;
         }
       }
@@ -2828,15 +3095,15 @@ export default function GmaoCorrectionForm({
     if (electrodeARemplacee === 'Oui') {
       processPieceSelection(selectionElectrodeARemplacee, customElectrodeARemplacee, 'electrodeA');
       if (selectionElectrodeARemplacee === 'Autre') {
-        finalSnapshot.lotElectrodeA = customElectrodeARemplacee;
+        finalSnapshot.lotElectrodeA = snapshot.lotElectrodeA || customElectrodeARemplacee;
         finalSnapshot.insertionElectrodeA = maintDate;
         finalSnapshot.situationElectrodeA = 'Vert';
       } else {
         const res = getTraceAndStock(selectionElectrodeARemplacee);
         if (res) {
           finalSnapshot.modeleElectrodeAId = res.stock.denominationPieceId;
-          finalSnapshot.lotElectrodeA = res.trace.lotOrSerial;
-          finalSnapshot.peremptionElectrodeA = res.trace.expirationDate || '';
+          finalSnapshot.lotElectrodeA = snapshot.lotElectrodeA || res.trace.lotOrSerial || '';
+          finalSnapshot.peremptionElectrodeA = toIsoDateStr(snapshot.peremptionElectrodeA) || res.trace.expirationDate || '';
           finalSnapshot.insertionElectrodeA = maintDate;
           finalSnapshot.situationElectrodeA = 'Vert';
         }
@@ -2860,15 +3127,15 @@ export default function GmaoCorrectionForm({
     if (electrodePRemplacee === 'Oui') {
       processPieceSelection(selectionElectrodePRemplacee, customElectrodePRemplacee, 'electrodeP');
       if (selectionElectrodePRemplacee === 'Autre') {
-        finalSnapshot.lotElectrodeP = customElectrodePRemplacee;
+        finalSnapshot.lotElectrodeP = snapshot.lotElectrodeP || customElectrodePRemplacee;
         finalSnapshot.insertionElectrodeP = maintDate;
         finalSnapshot.situationElectrodeP = 'Vert';
       } else {
         const res = getTraceAndStock(selectionElectrodePRemplacee);
         if (res) {
           finalSnapshot.modeleElectrodePId = res.stock.denominationPieceId;
-          finalSnapshot.lotElectrodeP = res.trace.lotOrSerial;
-          finalSnapshot.peremptionElectrodeP = res.trace.expirationDate || '';
+          finalSnapshot.lotElectrodeP = snapshot.lotElectrodeP || res.trace.lotOrSerial || '';
+          finalSnapshot.peremptionElectrodeP = toIsoDateStr(snapshot.peremptionElectrodeP) || res.trace.expirationDate || '';
           finalSnapshot.insertionElectrodeP = maintDate;
           finalSnapshot.situationElectrodeP = 'Vert';
         }
@@ -2892,7 +3159,7 @@ export default function GmaoCorrectionForm({
     if (batterieRemplacee === 'Oui') {
       processPieceSelection(selectionBatterieRemplacee, customBatterieRemplacee, 'batterie');
       if (selectionBatterieRemplacee === 'Autre') {
-        finalSnapshot.lotBatterie = customBatterieRemplacee;
+        finalSnapshot.lotBatterie = snapshot.lotBatterie || customBatterieRemplacee;
         finalSnapshot.insertionBatterie = maintDate;
         finalSnapshot.pourcentageBatterie = pourcentageChargeNouvelleBatterie || '100';
         finalSnapshot.situationBatterie = 'Vert';
@@ -2900,8 +3167,8 @@ export default function GmaoCorrectionForm({
         const res = getTraceAndStock(selectionBatterieRemplacee);
         if (res) {
           finalSnapshot.modeleBatterieId = res.stock.denominationPieceId;
-          finalSnapshot.lotBatterie = res.trace.lotOrSerial;
-          finalSnapshot.peremptionBatterie = res.trace.expirationDate || '';
+          finalSnapshot.lotBatterie = snapshot.lotBatterie || res.trace.lotOrSerial || '';
+          finalSnapshot.peremptionBatterie = toIsoDateStr(snapshot.peremptionBatterie) || res.trace.expirationDate || '';
           finalSnapshot.insertionBatterie = maintDate;
           finalSnapshot.pourcentageBatterie = pourcentageChargeNouvelleBatterie || '100';
           finalSnapshot.situationBatterie = 'Vert';
@@ -3423,7 +3690,7 @@ export default function GmaoCorrectionForm({
             box-sizing: border-box !important;
             box-shadow: none !important;
           }
-          #gmao-correction-form input:not([type="radio"]):not([type="checkbox"]),
+          #gmao-correction-form input:not([type="radio"]):not([type="checkbox"]):not([type="file"]),
           #gmao-correction-form select,
           #gmao-correction-form textarea {
             padding: 12px !important;
@@ -3441,8 +3708,8 @@ export default function GmaoCorrectionForm({
             min-width: 0 !important;
             max-width: 100% !important;
           }
-          #gmao-correction-form input:not([type="radio"]):not([type="checkbox"]):hover,
-          #gmao-correction-form input:not([type="radio"]):not([type="checkbox"]):focus,
+          #gmao-correction-form input:not([type="radio"]):not([type="checkbox"]):not([type="file"]):hover,
+          #gmao-correction-form input:not([type="radio"]):not([type="checkbox"]):not([type="file"]):focus,
           #gmao-correction-form select:hover,
           #gmao-correction-form select:focus,
           #gmao-correction-form textarea:hover,
@@ -3451,14 +3718,14 @@ export default function GmaoCorrectionForm({
             outline-offset: 2px !important;
             transition: all 0s !important;
           }
-          #gmao-correction-form input:not([type="radio"]):not([type="checkbox"])::placeholder,
+          #gmao-correction-form input:not([type="radio"]):not([type="checkbox"]):not([type="file"])::placeholder,
           #gmao-correction-form textarea::placeholder {
             color: #000000 !important;
             opacity: 1 !important;
             font-weight: 100 !important;
             font-family: "DefibeoMain", "Civilprom", sans-serif !important;
           }
-          #gmao-correction-form input:disabled,
+          #gmao-correction-form input:not([type="file"]):disabled,
           #gmao-correction-form select:disabled,
           #gmao-correction-form textarea:disabled {
             color: #000000 !important;
@@ -5371,17 +5638,43 @@ export default function GmaoCorrectionForm({
                   Lot A.
                 </label>
                 <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    id="snap-lotElectrodeA"
-                    value={snapshot.lotElectrodeA || ''}
-                    onChange={(e) => handleSnapshotChange('lotElectrodeA', e.target.value)}
-                    placeholder="Entrez une référence."
-                    className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
-                  />
+                  <div className="relative flex-1 flex items-center">
+                    <input
+                      type="text"
+                      id="snap-lotElectrodeA"
+                      value={snapshot.lotElectrodeA || ''}
+                      onChange={(e) => handleSnapshotChange('lotElectrodeA', e.target.value)}
+                      placeholder="Entrez une référence."
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                    />
+                    {autoPopulatedFields.lotA && (
+                      <div
+                        className="absolute inset-0 z-20 cursor-pointer"
+                        onClick={() =>
+                          setPendingAutoPopulatedEdit({
+                            fieldKey: 'lotA',
+                            type: 'lot',
+                            action: 'focus',
+                            inputId: 'snap-lotElectrodeA',
+                          })
+                        }
+                      />
+                    )}
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setIsLotAScannerOpen(true)}
+                    onClick={() => {
+                      if (autoPopulatedFields.lotA) {
+                        setPendingAutoPopulatedEdit({
+                          fieldKey: 'lotA',
+                          type: 'lot',
+                          action: 'scan',
+                          inputId: 'snap-lotElectrodeA',
+                        });
+                        return;
+                      }
+                      setIsLotAScannerOpen(true);
+                    }}
                     style={rowActionButton18Style}
                     className="shrink-0 transition-colors cursor-pointer font-sans"
                   >
@@ -5414,12 +5707,35 @@ export default function GmaoCorrectionForm({
                     onChange={(e) => handleSnapshotChange('peremptionElectrodeA', e.target.value)}
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                   />
+                  {autoPopulatedFields.peremptionA && (
+                    <div
+                      className="absolute inset-0 z-20 cursor-pointer"
+                      onClick={() =>
+                        setPendingAutoPopulatedEdit({
+                          fieldKey: 'peremptionA',
+                          type: 'peremption',
+                          action: 'focus',
+                          inputId: 'snap-peremptionElectrodeA',
+                        })
+                      }
+                    />
+                  )}
                   {snapshot.peremptionElectrodeA && (
                     <img
                       src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
                       alt="Effacer la date"
                       onClick={(e) => {
-                        const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                        if (autoPopulatedFields.peremptionA) {
+                          e.stopPropagation();
+                          setPendingAutoPopulatedEdit({
+                            fieldKey: 'peremptionA',
+                            type: 'peremption',
+                            action: 'clear',
+                            inputId: 'snap-peremptionElectrodeA',
+                          });
+                          return;
+                        }
+                        const inp = document.getElementById('snap-peremptionElectrodeA') as HTMLInputElement | null;
                         if (inp) inp.value = '';
                         handleSnapshotChange('peremptionElectrodeA', '');
                       }}
@@ -5432,7 +5748,7 @@ export default function GmaoCorrectionForm({
                         width: '34px',
                         objectFit: 'contain',
                         cursor: 'pointer',
-                        zIndex: 10,
+                        zIndex: 30,
                         userSelect: 'none',
                       }}
                     />
@@ -5472,80 +5788,82 @@ export default function GmaoCorrectionForm({
               </div>
             </div>
 
-            <div className="pt-3 mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
-              <div className="space-y-1">
-                <label htmlFor="snap-modeleElectrodeASecoursId" className="block text-[11px] font-bold text-black uppercase">
-                  Modèle d’électrode de secours.
-                </label>
-                <select
-                  id="snap-modeleElectrodeASecoursId"
-                  value={snapshot.modeleElectrodeASecoursId || ''}
-                  onChange={(e) => handleSnapshotChange('modeleElectrodeASecoursId', e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs cursor-pointer"
-                >
-                  <option value="">Sélectionnez un modèle de secours.</option>
-                  {variables.filter(v => v.category === 'Modèle Électrode').map(v => (
-                    <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
-                  ))}
-                </select>
-              </div>
-
-              {isVisibleLotPadPakA && (
+            {!isDefibElectrodeASecoursNon && (
+              <div className="pt-3 mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
                 <div className="space-y-1">
-                  <label htmlFor="snap-lotElectrodeASecours" className="block text-[11px] font-bold text-black uppercase">
-                    Lot de l’électrode de secours.
+                  <label htmlFor="snap-modeleElectrodeASecoursId" className="block text-[11px] font-bold text-black uppercase">
+                    Modèle d’électrode de secours.
                   </label>
-                  <input
-                    type="text"
-                    id="snap-lotElectrodeASecours"
-                    value={snapshot.lotElectrodeASecours || ''}
-                    onChange={(e) => handleSnapshotChange('lotElectrodeASecours', e.target.value)}
-                    placeholder="Numéro de lot"
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
-                  />
+                  <select
+                    id="snap-modeleElectrodeASecoursId"
+                    value={snapshot.modeleElectrodeASecoursId || ''}
+                    onChange={(e) => handleSnapshotChange('modeleElectrodeASecoursId', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs cursor-pointer"
+                  >
+                    <option value="">Sélectionnez un modèle de secours.</option>
+                    {variables.filter(v => v.category === 'Modèle Électrode').map(v => (
+                      <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
 
-              {isVisiblePeremptionPadPakA && (
-                <div className="space-y-1">
-                  <label htmlFor="snap-peremptionSecoursElectrodeA" className="block text-[11px] font-bold text-black uppercase">
-                    Péremption de l’électrode de secours.
-                  </label>
-                  <div className="relative flex items-center w-full">
+                {isVisibleLotPadPakA && (
+                  <div className="space-y-1">
+                    <label htmlFor="snap-lotElectrodeASecours" className="block text-[11px] font-bold text-black uppercase">
+                      Lot de l’électrode de secours.
+                    </label>
                     <input
-                      type="date"
-                      id="snap-peremptionSecoursElectrodeA"
-                      value={snapshot.peremptionSecoursElectrodeA || ''}
-                      onChange={(e) => handleSnapshotChange('peremptionSecoursElectrodeA', e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                      type="text"
+                      id="snap-lotElectrodeASecours"
+                      value={snapshot.lotElectrodeASecours || ''}
+                      onChange={(e) => handleSnapshotChange('lotElectrodeASecours', e.target.value)}
+                      placeholder="Numéro de lot"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
                     />
-                    {snapshot.peremptionSecoursElectrodeA && (
-                      <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                        alt="Effacer la date"
-                        onClick={(e) => {
-                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                          if (inp) inp.value = '';
-                          handleSnapshotChange('peremptionSecoursElectrodeA', '');
-                        }}
-                        style={{
-                          position: 'absolute',
-                          right: '8px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          height: '34px',
-                          width: '34px',
-                          objectFit: 'contain',
-                          cursor: 'pointer',
-                          zIndex: 10,
-                          userSelect: 'none',
-                        }}
-                      />
-                    )}
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+
+                {isVisiblePeremptionPadPakA && (
+                  <div className="space-y-1">
+                    <label htmlFor="snap-peremptionSecoursElectrodeA" className="block text-[11px] font-bold text-black uppercase">
+                      Péremption de l’électrode de secours.
+                    </label>
+                    <div className="relative flex items-center w-full">
+                      <input
+                        type="date"
+                        id="snap-peremptionSecoursElectrodeA"
+                        value={snapshot.peremptionSecoursElectrodeA || ''}
+                        onChange={(e) => handleSnapshotChange('peremptionSecoursElectrodeA', e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                      />
+                      {snapshot.peremptionSecoursElectrodeA && (
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                          alt="Effacer la date"
+                          onClick={(e) => {
+                            const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                            if (inp) inp.value = '';
+                            handleSnapshotChange('peremptionSecoursElectrodeA', '');
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '8px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            height: '34px',
+                            width: '34px',
+                            objectFit: 'contain',
+                            cursor: 'pointer',
+                            zIndex: 10,
+                            userSelect: 'none',
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Section 6 Extra Fields requested by User */}
             <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
@@ -5555,7 +5873,14 @@ export default function GmaoCorrectionForm({
                 </label>
                 <div className="flex gap-6 items-center pt-1 bg-white">
                   <FormRadio label="Oui" checked={electrodeARemplacee === 'Oui'} onChange={() => setElectrodeARemplacee('Oui')} />
-                  <FormRadio label="Non" checked={electrodeARemplacee === 'Non'} onChange={() => setElectrodeARemplacee('Non')} />
+                  <FormRadio
+                    label="Non"
+                    checked={electrodeARemplacee === 'Non'}
+                    onChange={() => {
+                      setElectrodeARemplacee('Non');
+                      setAutoPopulatedFields(prev => ({ ...prev, lotA: false, peremptionA: false }));
+                    }}
+                  />
                 </div>
               </div>
 
@@ -5580,10 +5905,12 @@ export default function GmaoCorrectionForm({
                     id="select-electrode-a-rempc"
                     value={selectionElectrodeARemplacee}
                     onChange={(e) => {
-                      setSelectionElectrodeARemplacee(e.target.value);
-                      if (e.target.value !== 'Autre') {
+                      const val = e.target.value;
+                      setSelectionElectrodeARemplacee(val);
+                      if (val !== 'Autre') {
                         setCustomElectrodeARemplacee('');
                       }
+                      applyReplacementPieceAutoPopulate(val, 'A');
                     }}
                     className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
                   >
@@ -5616,14 +5943,12 @@ export default function GmaoCorrectionForm({
                       if (matched) {
                         setSelectionElectrodeARemplacee(matched.traceId);
                         setCustomElectrodeARemplacee('');
-                        handleSnapshotChange('lotElectrodeA', matched.lotOrSerial);
-                        if (matched.expirationDate) {
-                          handleSnapshotChange('peremptionElectrodeA', matched.expirationDate);
-                        }
+                        applyReplacementPieceAutoPopulate(matched.traceId, 'A');
                       } else {
                         setSelectionElectrodeARemplacee('Autre');
                         setCustomElectrodeARemplacee(cleanText);
                         handleSnapshotChange('lotElectrodeA', cleanText);
+                        setAutoPopulatedFields(prev => ({ ...prev, lotA: true, peremptionA: false }));
                       }
                     }}
                   />
@@ -5894,17 +6219,43 @@ export default function GmaoCorrectionForm({
                     Lot P.
                   </label>
                   <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      id="snap-lotElectrodeP"
-                      value={snapshot.lotElectrodeP || ''}
-                      onChange={(e) => handleSnapshotChange('lotElectrodeP', e.target.value)}
-                      placeholder="Entrez une référence."
-                      className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
-                    />
+                    <div className="relative flex-1 flex items-center">
+                      <input
+                        type="text"
+                        id="snap-lotElectrodeP"
+                        value={snapshot.lotElectrodeP || ''}
+                        onChange={(e) => handleSnapshotChange('lotElectrodeP', e.target.value)}
+                        placeholder="Entrez une référence."
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                      />
+                      {autoPopulatedFields.lotP && (
+                        <div
+                          className="absolute inset-0 z-20 cursor-pointer"
+                          onClick={() =>
+                            setPendingAutoPopulatedEdit({
+                              fieldKey: 'lotP',
+                              type: 'lot',
+                              action: 'focus',
+                              inputId: 'snap-lotElectrodeP',
+                            })
+                          }
+                        />
+                      )}
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setIsLotPScannerOpen(true)}
+                      onClick={() => {
+                        if (autoPopulatedFields.lotP) {
+                          setPendingAutoPopulatedEdit({
+                            fieldKey: 'lotP',
+                            type: 'lot',
+                            action: 'scan',
+                            inputId: 'snap-lotElectrodeP',
+                          });
+                          return;
+                        }
+                        setIsLotPScannerOpen(true);
+                      }}
                       style={rowActionButton18Style}
                       className="shrink-0 transition-colors cursor-pointer font-sans"
                     >
@@ -5937,12 +6288,35 @@ export default function GmaoCorrectionForm({
                       onChange={(e) => handleSnapshotChange('peremptionElectrodeP', e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                     />
+                    {autoPopulatedFields.peremptionP && (
+                      <div
+                        className="absolute inset-0 z-20 cursor-pointer"
+                        onClick={() =>
+                          setPendingAutoPopulatedEdit({
+                            fieldKey: 'peremptionP',
+                            type: 'peremption',
+                            action: 'focus',
+                            inputId: 'snap-peremptionElectrodeP',
+                          })
+                        }
+                      />
+                    )}
                     {snapshot.peremptionElectrodeP && (
                       <img
                         src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
                         alt="Effacer la date"
                         onClick={(e) => {
-                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (autoPopulatedFields.peremptionP) {
+                            e.stopPropagation();
+                            setPendingAutoPopulatedEdit({
+                              fieldKey: 'peremptionP',
+                              type: 'peremption',
+                              action: 'clear',
+                              inputId: 'snap-peremptionElectrodeP',
+                            });
+                            return;
+                          }
+                          const inp = document.getElementById('snap-peremptionElectrodeP') as HTMLInputElement | null;
                           if (inp) inp.value = '';
                           handleSnapshotChange('peremptionElectrodeP', '');
                         }}
@@ -5955,7 +6329,7 @@ export default function GmaoCorrectionForm({
                           width: '34px',
                           objectFit: 'contain',
                           cursor: 'pointer',
-                          zIndex: 10,
+                          zIndex: 30,
                           userSelect: 'none',
                         }}
                       />
@@ -5993,80 +6367,82 @@ export default function GmaoCorrectionForm({
               </div>
             </div>
 
-            <div className="pt-3 mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
-              <div className="space-y-1">
-                <label htmlFor="snap-modeleElectrodePSecoursId" className="block text-[11px] font-bold text-black uppercase">
-                  Modèle d’électrode de secours.
-                </label>
-                <select
-                  id="snap-modeleElectrodePSecoursId"
-                  value={snapshot.modeleElectrodePSecoursId || ''}
-                  onChange={(e) => handleSnapshotChange('modeleElectrodePSecoursId', e.target.value)}
-                  className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs cursor-pointer"
-                >
-                  <option value="">Sélectionnez un modèle de secours.</option>
-                  {variables.filter(v => v.category === 'Modèle Électrode').map(v => (
-                    <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
-                  ))}
-                </select>
-              </div>
-
-              {isVisibleLotP && (
+            {!isDefibElectrodePSecoursNon && (
+              <div className="pt-3 mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
                 <div className="space-y-1">
-                  <label htmlFor="snap-lotElectrodePSecours" className="block text-[11px] font-bold text-black uppercase">
-                    Lot de l’électrode de secours.
+                  <label htmlFor="snap-modeleElectrodePSecoursId" className="block text-[11px] font-bold text-black uppercase">
+                    Modèle d’électrode de secours.
                   </label>
-                  <input
-                    type="text"
-                    id="snap-lotElectrodePSecours"
-                    value={snapshot.lotElectrodePSecours || ''}
-                    onChange={(e) => handleSnapshotChange('lotElectrodePSecours', e.target.value)}
-                    placeholder="Numéro de lot"
-                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
-                  />
+                  <select
+                    id="snap-modeleElectrodePSecoursId"
+                    value={snapshot.modeleElectrodePSecoursId || ''}
+                    onChange={(e) => handleSnapshotChange('modeleElectrodePSecoursId', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-800 rounded-lg text-xs cursor-pointer"
+                  >
+                    <option value="">Sélectionnez un modèle de secours.</option>
+                    {variables.filter(v => v.category === 'Modèle Électrode').map(v => (
+                      <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
+                    ))}
+                  </select>
                 </div>
-              )}
 
-              {isVisiblePeremptionPadPakP && (
-                <div className="space-y-1">
-                  <label htmlFor="snap-peremptionSecoursElectrodeP" className="block text-[11px] font-bold text-black uppercase">
-                    Péremption de l’électrode de secours.
-                  </label>
-                  <div className="relative flex items-center w-full">
+                {isVisibleLotP && (
+                  <div className="space-y-1">
+                    <label htmlFor="snap-lotElectrodePSecours" className="block text-[11px] font-bold text-black uppercase">
+                      Lot de l’électrode de secours.
+                    </label>
                     <input
-                      type="date"
-                      id="snap-peremptionSecoursElectrodeP"
-                      value={snapshot.peremptionSecoursElectrodeP || ''}
-                      onChange={(e) => handleSnapshotChange('peremptionSecoursElectrodeP', e.target.value)}
-                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                      type="text"
+                      id="snap-lotElectrodePSecours"
+                      value={snapshot.lotElectrodePSecours || ''}
+                      onChange={(e) => handleSnapshotChange('lotElectrodePSecours', e.target.value)}
+                      placeholder="Numéro de lot"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
                     />
-                    {snapshot.peremptionSecoursElectrodeP && (
-                      <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
-                        alt="Effacer la date"
-                        onClick={(e) => {
-                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
-                          if (inp) inp.value = '';
-                          handleSnapshotChange('peremptionSecoursElectrodeP', '');
-                        }}
-                        style={{
-                          position: 'absolute',
-                          right: '8px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          height: '34px',
-                          width: '34px',
-                          objectFit: 'contain',
-                          cursor: 'pointer',
-                          zIndex: 10,
-                          userSelect: 'none',
-                        }}
-                      />
-                    )}
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+
+                {isVisiblePeremptionPadPakP && (
+                  <div className="space-y-1">
+                    <label htmlFor="snap-peremptionSecoursElectrodeP" className="block text-[11px] font-bold text-black uppercase">
+                      Péremption de l’électrode de secours.
+                    </label>
+                    <div className="relative flex items-center w-full">
+                      <input
+                        type="date"
+                        id="snap-peremptionSecoursElectrodeP"
+                        value={snapshot.peremptionSecoursElectrodeP || ''}
+                        onChange={(e) => handleSnapshotChange('peremptionSecoursElectrodeP', e.target.value)}
+                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                      />
+                      {snapshot.peremptionSecoursElectrodeP && (
+                        <img
+                          src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
+                          alt="Effacer la date"
+                          onClick={(e) => {
+                            const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                            if (inp) inp.value = '';
+                            handleSnapshotChange('peremptionSecoursElectrodeP', '');
+                          }}
+                          style={{
+                            position: 'absolute',
+                            right: '8px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            height: '34px',
+                            width: '34px',
+                            objectFit: 'contain',
+                            cursor: 'pointer',
+                            zIndex: 10,
+                            userSelect: 'none',
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Section 7 Extra Fields requested by User */}
             <div className="pt-3 grid grid-cols-1 md:grid-cols-2 gap-4 bg-white">
@@ -6076,7 +6452,14 @@ export default function GmaoCorrectionForm({
                 </label>
                 <div className="flex gap-6 items-center pt-1 bg-white">
                   <FormRadio label="Oui" checked={electrodePRemplacee === 'Oui'} onChange={() => setElectrodePRemplacee('Oui')} />
-                  <FormRadio label="Non" checked={electrodePRemplacee === 'Non'} onChange={() => setElectrodePRemplacee('Non')} />
+                  <FormRadio
+                    label="Non"
+                    checked={electrodePRemplacee === 'Non'}
+                    onChange={() => {
+                      setElectrodePRemplacee('Non');
+                      setAutoPopulatedFields(prev => ({ ...prev, lotP: false, peremptionP: false }));
+                    }}
+                  />
                 </div>
               </div>
 
@@ -6101,10 +6484,12 @@ export default function GmaoCorrectionForm({
                     id="select-electrode-p-rempc"
                     value={selectionElectrodePRemplacee}
                     onChange={(e) => {
-                      setSelectionElectrodePRemplacee(e.target.value);
-                      if (e.target.value !== 'Autre') {
+                      const val = e.target.value;
+                      setSelectionElectrodePRemplacee(val);
+                      if (val !== 'Autre') {
                         setCustomElectrodePRemplacee('');
                       }
+                      applyReplacementPieceAutoPopulate(val, 'P');
                     }}
                     className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
                   >
@@ -6137,14 +6522,12 @@ export default function GmaoCorrectionForm({
                       if (matched) {
                         setSelectionElectrodePRemplacee(matched.traceId);
                         setCustomElectrodePRemplacee('');
-                        handleSnapshotChange('lotElectrodeP', matched.lotOrSerial);
-                        if (matched.expirationDate) {
-                          handleSnapshotChange('peremptionElectrodeP', matched.expirationDate);
-                        }
+                        applyReplacementPieceAutoPopulate(matched.traceId, 'P');
                       } else {
                         setSelectionElectrodePRemplacee('Autre');
                         setCustomElectrodePRemplacee(cleanText);
                         handleSnapshotChange('lotElectrodeP', cleanText);
+                        setAutoPopulatedFields(prev => ({ ...prev, lotP: true, peremptionP: false }));
                       }
                     }}
                   />
@@ -6433,17 +6816,43 @@ export default function GmaoCorrectionForm({
                   Lot B.
                 </label>
                 <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    id="snap-lotBatterie"
-                    value={snapshot.lotBatterie || ''}
-                    onChange={(e) => handleSnapshotChange('lotBatterie', e.target.value)}
-                    placeholder="Entrez une référence."
-                    className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
-                  />
+                  <div className="relative flex-1 flex items-center">
+                    <input
+                      type="text"
+                      id="snap-lotBatterie"
+                      value={snapshot.lotBatterie || ''}
+                      onChange={(e) => handleSnapshotChange('lotBatterie', e.target.value)}
+                      placeholder="Entrez une référence."
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800"
+                    />
+                    {autoPopulatedFields.lotB && (
+                      <div
+                        className="absolute inset-0 z-20 cursor-pointer"
+                        onClick={() =>
+                          setPendingAutoPopulatedEdit({
+                            fieldKey: 'lotB',
+                            type: 'lot',
+                            action: 'focus',
+                            inputId: 'snap-lotBatterie',
+                          })
+                        }
+                      />
+                    )}
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setIsLotBatScannerOpen(true)}
+                    onClick={() => {
+                      if (autoPopulatedFields.lotB) {
+                        setPendingAutoPopulatedEdit({
+                          fieldKey: 'lotB',
+                          type: 'lot',
+                          action: 'scan',
+                          inputId: 'snap-lotBatterie',
+                        });
+                        return;
+                      }
+                      setIsLotBatScannerOpen(true);
+                    }}
                     style={rowActionButton18Style}
                     className="shrink-0 transition-colors cursor-pointer font-sans"
                   >
@@ -6477,12 +6886,35 @@ export default function GmaoCorrectionForm({
                       onChange={(e) => handleSnapshotChange('peremptionBatterie', e.target.value)}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
                     />
+                    {autoPopulatedFields.peremptionB && (
+                      <div
+                        className="absolute inset-0 z-20 cursor-pointer"
+                        onClick={() =>
+                          setPendingAutoPopulatedEdit({
+                            fieldKey: 'peremptionB',
+                            type: 'peremption',
+                            action: 'focus',
+                            inputId: 'snap-peremptionBatterie',
+                          })
+                        }
+                      />
+                    )}
                     {snapshot.peremptionBatterie && (
                       <img
                         src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblack.svg"
                         alt="Effacer la date"
                         onClick={(e) => {
-                          const inp = e.currentTarget.previousElementSibling as HTMLInputElement | null;
+                          if (autoPopulatedFields.peremptionB) {
+                            e.stopPropagation();
+                            setPendingAutoPopulatedEdit({
+                              fieldKey: 'peremptionB',
+                              type: 'peremption',
+                              action: 'clear',
+                              inputId: 'snap-peremptionBatterie',
+                            });
+                            return;
+                          }
+                          const inp = document.getElementById('snap-peremptionBatterie') as HTMLInputElement | null;
                           if (inp) inp.value = '';
                           handleSnapshotChange('peremptionBatterie', '');
                         }}
@@ -6495,7 +6927,7 @@ export default function GmaoCorrectionForm({
                           width: '34px',
                           objectFit: 'contain',
                           cursor: 'pointer',
-                          zIndex: 10,
+                          zIndex: 30,
                           userSelect: 'none',
                         }}
                       />
@@ -6607,7 +7039,14 @@ export default function GmaoCorrectionForm({
                 </label>
                 <div className="flex gap-6 items-center pt-1 bg-white">
                   <FormRadio label="Oui" checked={batterieRemplacee === 'Oui'} onChange={() => setBatterieRemplacee('Oui')} />
-                  <FormRadio label="Non" checked={batterieRemplacee === 'Non'} onChange={() => setBatterieRemplacee('Non')} />
+                  <FormRadio
+                    label="Non"
+                    checked={batterieRemplacee === 'Non'}
+                    onChange={() => {
+                      setBatterieRemplacee('Non');
+                      setAutoPopulatedFields(prev => ({ ...prev, lotB: false, peremptionB: false }));
+                    }}
+                  />
                 </div>
               </div>
 
@@ -6632,10 +7071,12 @@ export default function GmaoCorrectionForm({
                     id="select-batterie-rempc"
                     value={selectionBatterieRemplacee}
                     onChange={(e) => {
-                      setSelectionBatterieRemplacee(e.target.value);
-                      if (e.target.value !== 'Autre') {
+                      const val = e.target.value;
+                      setSelectionBatterieRemplacee(val);
+                      if (val !== 'Autre') {
                         setCustomBatterieRemplacee('');
                       }
+                      applyReplacementPieceAutoPopulate(val, 'B');
                     }}
                     className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 cursor-pointer"
                   >
@@ -6668,14 +7109,12 @@ export default function GmaoCorrectionForm({
                       if (matched) {
                         setSelectionBatterieRemplacee(matched.traceId);
                         setCustomBatterieRemplacee('');
-                        handleSnapshotChange('lotBatterie', matched.lotOrSerial);
-                        if (matched.expirationDate) {
-                          handleSnapshotChange('peremptionBatterie', matched.expirationDate);
-                        }
+                        applyReplacementPieceAutoPopulate(matched.traceId, 'B');
                       } else {
                         setSelectionBatterieRemplacee('Autre');
                         setCustomBatterieRemplacee(cleanText);
                         handleSnapshotChange('lotBatterie', cleanText);
+                        setAutoPopulatedFields(prev => ({ ...prev, lotB: true, peremptionB: false }));
                       }
                     }}
                   />
@@ -6795,7 +7234,7 @@ export default function GmaoCorrectionForm({
                   </label>
                   <textarea
                     id="techCommentaireArrivee"
-                    rows={1}
+                    rows={2}
                     ref={(el) => {
                       if (el && el.offsetParent !== null) adjustAutoTextareaHeight(el);
                     }}
@@ -6805,7 +7244,7 @@ export default function GmaoCorrectionForm({
                       adjustAutoTextareaHeight(e.currentTarget);
                       setTechCommentaireArrivee(e.target.value);
                     }}
-                    style={{ overflow: 'hidden', resize: 'none', minHeight: '48px' }}
+                    style={{ overflow: 'hidden', resize: 'none', minHeight: '76px' }}
                     className="w-full px-3 py-1.5 bg-white border border-slate-200 text-slate-805 rounded-lg text-xs overflow-hidden resize-none"
                     placeholder="Saisissez un commentaire sur l'état constaté à votre arrivée..."
                   />
@@ -7301,19 +7740,27 @@ export default function GmaoCorrectionForm({
                   </div>
                 ) : (
                   <div className="space-y-3 bg-white">
+                    <input
+                      type="file"
+                      id="report-attachments-input"
+                      multiple
+                      disabled={attachments.length >= 3 || isUploadingFiles}
+                      onChange={handleAttachmentUpload}
+                      accept=".png,.jpg,.jpeg,.heic,.pdf,.csv,.zip"
+                      className="hidden"
+                      style={{ display: 'none' }}
+                    />
                     <div
-                      className="p-4 text-center cursor-pointer transition relative"
+                      onClick={() => {
+                        if (attachments.length >= 3 || isUploadingFiles) return;
+                        const fileInput = document.getElementById('report-attachments-input') as HTMLInputElement | null;
+                        if (fileInput) fileInput.click();
+                      }}
+                      className={`p-4 text-center transition relative ${
+                        attachments.length >= 3 || isUploadingFiles ? 'cursor-not-allowed' : 'cursor-pointer'
+                      }`}
                       style={{ border: 'none', borderRadius: '13px', backgroundColor: 'rgb(245, 247, 250)' }}
                     >
-                      <input
-                        type="file"
-                        id="report-attachments-input"
-                        multiple
-                        disabled={attachments.length >= 3 || isUploadingFiles}
-                        onChange={handleAttachmentUpload}
-                        accept=".png,.jpg,.jpeg,.heic,.pdf,.csv,.zip"
-                        className="absolute inset-0 opacity-0 cursor-pointer"
-                      />
                       <div className="font-medium">
                         {isUploadingFiles ? (
                           <span className="text-indigo-600 font-semibold animate-pulse text-sm">Upload sur Google Drive en cours...</span>
@@ -7323,9 +7770,11 @@ export default function GmaoCorrectionForm({
                           <span className="text-base text-black">Glissez-déposez vos fichiers ici, ou <strong className="text-indigo-600 hover:underline">parcourez</strong></span>
                         )}
                       </div>
-                      <div className="text-[10px] mt-1" style={{ color: '#000000' }}>
-                        Formats acceptés : PNG, JPEG, HEIC, PDF, CSV, ZIP
-                      </div>
+                      {!isUploadingFiles && (
+                        <div className="text-[10px] mt-1" style={{ color: '#000000' }}>
+                          Formats acceptés : PNG, JPEG, HEIC, PDF, CSV, ZIP
+                        </div>
+                      )}
                     </div>
 
                     {uploadError && (
@@ -8939,6 +9388,145 @@ export default function GmaoCorrectionForm({
         );
       })()}
         </>
+      )}
+
+      {showMissingPinWarningPopup && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 animate-fadeIn font-sans"
+          onClick={() => setShowMissingPinWarningPopup(false)}
+          id="missing-pin-warning-popup-modal"
+        >
+          <div
+            className="w-full max-w-md flex flex-col gap-5 p-6 shadow-2xl"
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '18px',
+              border: 'none',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              className="text-left font-normal leading-relaxed"
+              style={{
+                color: '#000000',
+                fontSize: '18px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+            >
+              Avertissement critique : vous n’avez pas saisi le code PIN du client pour sa signature électronique.
+            </p>
+            <button
+              type="button"
+              id="btn-close-missing-pin-warning-popup"
+              onClick={() => setShowMissingPinWarningPopup(false)}
+              style={{
+                width: '100%',
+                backgroundColor: 'rgb(210, 45, 11)',
+                color: '#ffffff',
+                fontSize: '18px',
+                fontWeight: 'bold',
+                padding: '13px 20px',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                border: 'none',
+                boxShadow: 'none',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+              className="w-full hover:opacity-90 active:scale-[0.99] transition-all text-center"
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {pendingAutoPopulatedEdit && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 animate-fadeIn font-sans"
+          onClick={() => setPendingAutoPopulatedEdit(null)}
+          id="auto-populated-field-warning-modal"
+        >
+          <div
+            className="w-full max-w-md flex flex-col gap-5 p-6 shadow-2xl"
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '18px',
+              border: 'none',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              className="text-left font-normal leading-relaxed"
+              style={{
+                color: '#000000',
+                fontSize: '18px',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+            >
+              {pendingAutoPopulatedEdit.type === 'lot'
+                ? 'Attention : ce numéro de lot ou de série correspond au nouvel accessoire sélectionné en remplacement. Souhaitez-vous vraiment le modifier ?'
+                : 'Attention : cette date de péremption correspond au nouvel accessoire sélectionné en remplacement. Souhaitez-vous vraiment le modifier ?'}
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setPendingAutoPopulatedEdit(null)}
+                style={{
+                  borderRadius: '13px',
+                  fontSize: '18px',
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+                className="flex-1 py-2.5 px-4 font-bold cursor-pointer hover:opacity-90 transition-opacity font-sans text-center"
+              >
+                Non
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const pending = pendingAutoPopulatedEdit;
+                  setPendingAutoPopulatedEdit(null);
+                  if (!pending) return;
+                  setAutoPopulatedFields(prev => ({ ...prev, [pending.fieldKey]: false }));
+                  if (pending.action === 'clear') {
+                    if (pending.fieldKey === 'peremptionA') handleSnapshotChange('peremptionElectrodeA', '');
+                    if (pending.fieldKey === 'peremptionP') handleSnapshotChange('peremptionElectrodeP', '');
+                    if (pending.fieldKey === 'peremptionB') handleSnapshotChange('peremptionBatterie', '');
+                  } else if (pending.action === 'scan') {
+                    if (pending.fieldKey === 'lotA') setIsLotAScannerOpen(true);
+                    if (pending.fieldKey === 'lotP') setIsLotPScannerOpen(true);
+                    if (pending.fieldKey === 'lotB') setIsLotBatScannerOpen(true);
+                  } else if (pending.action === 'focus') {
+                    setTimeout(() => {
+                      const el = document.getElementById(pending.inputId) as HTMLInputElement | null;
+                      if (el) {
+                        el.focus();
+                        if (el.type === 'date') {
+                          try {
+                            (el as any).showPicker?.();
+                          } catch (_) {}
+                        }
+                      }
+                    }, 50);
+                  }
+                }}
+                style={{
+                  borderRadius: '13px',
+                  fontSize: '18px',
+                  backgroundColor: 'rgb(46, 84, 255)',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+                className="flex-1 py-2.5 px-4 font-bold cursor-pointer hover:opacity-90 transition-opacity font-sans text-center"
+              >
+                Oui
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
