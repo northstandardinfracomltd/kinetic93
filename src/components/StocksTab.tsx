@@ -4192,7 +4192,7 @@ export default function StocksTab({
                 >
                   <div className="flex items-center justify-between gap-2 text-[18px] text-[#000] font-normal">
                     <div>
-                      UGS : <span className="font-semibold text-[#000]">{alert.ugs}</span>
+                      UGS ou SKU : <span className="font-semibold text-[#000]">{alert.ugs}</span>
                     </div>
                     {alert.horodatage && (
                       <div className="text-[18px] text-[#000] font-normal text-right shrink-0">

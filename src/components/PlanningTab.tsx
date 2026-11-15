@@ -22,6 +22,7 @@ export interface SpontaneousEvent {
   latitude?: number | string;
   longitude?: number | string;
   createdAt?: string;
+  _sheetRowNumber?: number;
 }
 
 const CRENEAU_OPTIONS = [
@@ -391,6 +392,8 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
             if (rawSaved) existingLocal = JSON.parse(rawSaved);
           } catch (_) {}
 
+          const rawAllMembers = (members && members.length > 0) ? members : (companyInfo?.members || []);
+
           const mapped: SpontaneousEvent[] = data.items
             .filter((it: any) => it && (it.date || it.intitule || it.creneau || it.techEmail || it.techName))
             .map((it: any, idx: number) => {
@@ -398,7 +401,18 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
               const creneauStr = String(it.creneau || '').trim();
               const intituleStr = String(it.intitule || '').trim();
               const techEmailStr = String(it.techEmail || '').trim();
-              const techNameStr = String(it.techName || it.techEmail || '').trim();
+              let techNameStr = String(it.techName || '').trim();
+              if ((!techNameStr || techNameStr.includes('@')) && techEmailStr) {
+                const matchedMember = rawAllMembers.find(
+                  (m: any) => m && m.email && String(m.email).trim().toLowerCase() === techEmailStr.toLowerCase()
+                );
+                if (matchedMember?.name) {
+                  techNameStr = String(matchedMember.name).trim();
+                }
+              }
+              if (!techNameStr) {
+                techNameStr = techEmailStr;
+              }
               const rawId = String(it.id || `spont_${tid}_${idx}`);
 
               const matchedExisting = existingLocal.find(
@@ -409,6 +423,10 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                       String(ex.creneau || '').trim().toLowerCase() === creneauStr.toLowerCase() &&
                       String(ex.intitule || '').trim().toLowerCase() === intituleStr.toLowerCase()))
               );
+
+              if (techNameStr.includes('@') && matchedExisting?.techName && !matchedExisting.techName.includes('@')) {
+                techNameStr = matchedExisting.techName;
+              }
 
               const rawTournee = String(
                 it.tournee ?? it['Tournée'] ?? it['Tournée.'] ?? matchedExisting?.tournee ?? ''
@@ -442,6 +460,10 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                 latitude: !isNaN(numLat) ? numLat : '',
                 longitude: !isNaN(numLng) ? numLng : '',
                 createdAt: it.createdAt || matchedExisting?.createdAt || '',
+                _sheetRowNumber:
+                  typeof it._sheetRowNumber === 'number'
+                    ? it._sheetRowNumber
+                    : matchedExisting?._sheetRowNumber,
               };
             });
           setSpontaneousEvents(mapped);
@@ -450,16 +472,10 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           return;
         }
       }
-      const remote = await fetchCollectionFromFirestore<SpontaneousEvent[]>('spontaneous_events');
-      if (remote && Array.isArray(remote)) {
-        setSpontaneousEvents(remote);
-        localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(remote));
-        localStorage.setItem('defib_spontaneous_events', JSON.stringify(remote));
-      }
     } catch (e) {
       console.error(e);
     }
-  }, [companyInfo, authenticatedUser]);
+  }, [companyInfo, authenticatedUser, members]);
 
   useEffect(() => {
     const loadEvents = async () => {
@@ -1062,12 +1078,17 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
         ''
     ).trim();
     const dateFr = getFormattedDateFR(formDate) || formDate;
+    const isoDateClean = toIsoDateStr(formDate) || formDate;
+    const rawSlug = `${resolvedTechEmail || techForEvent}_${isoDateClean}_${formCreneau}_${formIntitule.trim()}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+    const deterministicId = rawSlug ? `spont_${rawSlug}` : `spont_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     const newEvt: SpontaneousEvent = {
-      id: `spont_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      id: deterministicId,
       techName: techForEvent,
       techEmail: resolvedTechEmail,
-      date: formDate,
+      date: isoDateClean,
       creneau: formCreneau,
       intitule: formIntitule.trim(),
       commentaire: formCommentaire.trim(),
@@ -1080,7 +1101,8 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
       createdAt: new Date().toISOString()
     };
 
-    const updated = [...spontaneousEvents, newEvt];
+    const filteredPrev = spontaneousEvents.filter(e => e.id !== deterministicId);
+    const updated = [...filteredPrev, newEvt];
     saveSpontaneousEvents(updated);
 
     const tid = (
@@ -1119,7 +1141,26 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           },
         ],
       }),
-    }).catch(() => {});
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const json = await res.json().catch(() => null);
+          const savedRec = Array.isArray(json?.records) ? json.records[0] : null;
+          if (savedRec && typeof savedRec._sheetRowNumber === 'number') {
+            setSpontaneousEvents((prev) => {
+              const withRow = prev.map((ev) =>
+                ev.id === deterministicId ? { ...ev, _sheetRowNumber: savedRec._sheetRowNumber } : ev
+              );
+              try {
+                localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(withRow));
+                localStorage.setItem('defib_spontaneous_events', JSON.stringify(withRow));
+              } catch (_) {}
+              return withRow;
+            });
+          }
+        }
+      })
+      .catch(() => {});
 
     // Auto switch calendar month/year if needed
     if (formDate.includes('-')) {
@@ -1145,6 +1186,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   };
 
   const handleDeleteSpontaneousEvent = (id: string) => {
+    const evtToDelete = spontaneousEvents.find(e => e.id === id);
     const updated = spontaneousEvents.filter(e => e.id !== id);
     saveSpontaneousEvents(updated);
     const tid = (
@@ -1155,6 +1197,29 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     ).trim();
     const effectiveSheetUrl = autresEventsSheetUrl || resolveLocalAutresEventsUrl(companyInfo);
     const sessionTok = localStorage.getItem('defib_session_token') || '';
+
+    const deleteKeys: string[] = [id];
+    if (evtToDelete) {
+      if (typeof evtToDelete._sheetRowNumber === 'number' && evtToDelete._sheetRowNumber >= 2) {
+        deleteKeys.push(`row:${evtToDelete._sheetRowNumber}`);
+      }
+      const emailOrName = String(evtToDelete.techEmail || evtToDelete.techName || '').trim().toLowerCase();
+      const isoDt = toIsoDateStr(evtToDelete.date).toLowerCase();
+      const cr = String(evtToDelete.creneau || '').trim().toLowerCase();
+      const intit = String(evtToDelete.intitule || '').trim().toLowerCase();
+      if (emailOrName && isoDt && cr && intit) {
+        deleteKeys.push(`${emailOrName}@@${isoDt}@@${cr}@@${intit}`);
+        const slug = `${emailOrName}_${isoDt}_${cr}_${intit}`.replace(/[^a-z0-9]/g, '');
+        if (slug) deleteKeys.push(`spont_${slug}`);
+      }
+      const nameOnly = String(evtToDelete.techName || '').trim().toLowerCase();
+      if (nameOnly && nameOnly !== emailOrName && isoDt && cr && intit) {
+        deleteKeys.push(`${nameOnly}@@${isoDt}@@${cr}@@${intit}`);
+        const slugName = `${nameOnly}_${isoDt}_${cr}_${intit}`.replace(/[^a-z0-9]/g, '');
+        if (slugName) deleteKeys.push(`spont_${slugName}`);
+      }
+    }
+
     fetch('/api/sheets/delete', {
       method: 'POST',
       headers: {
@@ -1166,7 +1231,8 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
         tenantId: tid,
         type: 'autresEvents',
         spreadsheetUrl: effectiveSheetUrl,
-        ids: [id],
+        keys: Array.from(new Set(deleteKeys.filter(Boolean))),
+        ids: Array.from(new Set(deleteKeys.filter(Boolean))),
       }),
     }).catch(() => {});
   };
@@ -2039,9 +2105,11 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                         return daySpontaneousEvents.map((evt) => (
                           <div
                             key={evt.id}
-                            className="bg-white p-4 space-y-3"
+                            className="p-4 space-y-3"
                             style={{
-                              border: "1px solid rgb(201, 190, 205)",
+                              border: "none",
+                              backgroundColor: "rgb(255 240 207)",
+                              color: "rgb(142 122 72)",
                               borderRadius: "14px",
                             }}
                           >
@@ -2064,9 +2132,9 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                                 type="button"
                                 onClick={() => handleDeleteSpontaneousEvent(evt.id)}
                                 style={{
-                                  boxShadow: "rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.29) 0px 6px 12px inset",
-                                  color: "rgb(255, 255, 255)",
-                                  background: "rgb(212 10 10)",
+                                  boxShadow: "none",
+                                  color: "#FFF",
+                                  background: "rgb(210, 45, 11)",
                                   borderRadius: "13px",
                                   padding: "10px 18px",
                                   fontSize: "18px",
@@ -2085,7 +2153,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
                             </div>
 
                             {/* Details */}
-                            <div className="space-y-1.5 text-[16px] text-black pt-1" style={{ color: "#000", fontSize: "16px" }}>
+                            <div className="space-y-1.5 text-[16px] pt-1" style={{ color: "rgb(142 122 72)", fontSize: "16px" }}>
                               <div>
                                 <span className="font-bold">Intitulé : </span>
                                 <span>{evt.intitule}</span>
@@ -2139,6 +2207,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           clients={clients}
           defibrillateurs={defibrillateurs}
           otherEquipments={otherEquipments}
+          variables={variables}
           initialMonth={selectedMonth}
           initialYear={selectedYear}
           onUpdateSpontaneousEvents={(updated) => setSpontaneousEvents(updated)}

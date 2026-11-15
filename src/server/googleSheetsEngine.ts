@@ -489,6 +489,15 @@ function normalizeDateStr(val: any): string {
   return s;
 }
 
+function formatDateDisplay(val: any): string {
+  const iso = normalizeDateStr(val);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [yyyy, mm, dd] = iso.split('-');
+    return `${dd}/${mm}/${yyyy}`;
+  }
+  return String(val ?? '').trim();
+}
+
 // ==========================================
 // 1. DEFIBRILLATEURS MAPPING (GET & POST)
 // ==========================================
@@ -4236,6 +4245,25 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       sitLower === 'accepte client' ||
       sitLower === 'à faire' ||
       sitLower === 'a faire';
+    const rawPrio = String(
+      merged.priority ??
+        merged['Priorité'] ??
+        merged['Priorité.'] ??
+        merged.priorite ??
+        ''
+    ).trim();
+    const isLockedMission =
+      isAcceptedOrAFaire ||
+      rawPrio === '1' ||
+      rawPrio.toLowerCase() === 'true' ||
+      merged.isForced === true ||
+      merged.equipmentType === 'Formation' ||
+      String(merged.equipmentType || '').toLowerCase().includes('formation') ||
+      Boolean(merged.formationId);
+    merged.priority = isLockedMission ? '1' : '0';
+    merged.isForced = isLockedMission;
+    merged.isManualDate = isLockedMission;
+    merged.isManualSlot = isLockedMission;
     if (isAcceptedOrAFaire) {
       merged.rejectionReason = '';
       merged.raisonRejet = '';
@@ -7411,6 +7439,34 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       sitLower === 'accepte client' ||
       sitLower === 'à faire' ||
       sitLower === 'a faire';
+    const rawPrio = String(
+      enriched.priority ??
+        enriched['Priorité'] ??
+        enriched['Priorité.'] ??
+        enriched.priorite ??
+        ''
+    ).trim();
+    const isLockedMission =
+      isAcceptedOrAFaire ||
+      enriched.isForced === true ||
+      rawPrio === '1' ||
+      rawPrio.toLowerCase() === 'true' ||
+      (enriched.isForced !== false && rawPrio !== '0' && Boolean(enriched.isManualDate && enriched.isManualSlot)) ||
+      enriched.equipmentType === 'Formation' ||
+      String(enriched.equipmentType || '').toLowerCase().includes('formation') ||
+      Boolean(enriched.formationId);
+    enriched.priority = isLockedMission ? '1' : '0';
+    enriched['Priorité'] = enriched.priority;
+    enriched['Priorité.'] = enriched.priority;
+    enriched.isForced = isLockedMission;
+    enriched.isManualDate = isLockedMission;
+    enriched.isManualSlot = isLockedMission;
+    for (let hi = 0; hi < headers.length; hi++) {
+      const hNorm = String(headers[hi] || '').trim().toLowerCase();
+      if (hNorm === 'priorité' || hNorm === 'priorité.' || hNorm === 'priorite' || hNorm === 'priorite.') {
+        outRow[hi] = enriched.priority;
+      }
+    }
     if (isAcceptedOrAFaire) {
       enriched.rejectionReason = '';
       enriched.raisonRejet = '';
@@ -8771,6 +8827,8 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       }
     }
     enriched.techEmail = resolvedEmail || resolvedName;
+    enriched['Email (technicien).'] = enriched.techEmail;
+    enriched['Email (technicien)'] = enriched.techEmail;
     const rawDate = String(enriched.date ?? '').trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
       const [yyyy, mm, dd] = rawDate.split('-');
@@ -8778,11 +8836,23 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     } else {
       enriched.date = formatDateDisplay(rawDate) || rawDate;
     }
+    enriched['Date.'] = enriched.date;
+    enriched['Date'] = enriched.date;
     enriched.creneau = String(enriched.creneau ?? '').trim();
+    enriched['Créneau.'] = enriched.creneau;
+    enriched['Créneau'] = enriched.creneau;
     enriched.intitule = String(enriched.intitule ?? '').trim();
+    enriched['Intitulé.'] = enriched.intitule;
+    enriched['Intitulé'] = enriched.intitule;
     enriched.commentaire = String(enriched.commentaire ?? '').trim();
+    enriched['Commentaire.'] = enriched.commentaire;
+    enriched['Commentaire'] = enriched.commentaire;
     enriched.tournee = String(enriched.tournee ?? enriched['Tournée'] ?? enriched['Tournée.'] ?? '').trim();
+    enriched['Tournée'] = enriched.tournee;
+    enriched['Tournée.'] = enriched.tournee;
     enriched.voie = String(enriched.voie ?? enriched['Voie'] ?? enriched['Voie.'] ?? '').trim();
+    enriched['Voie'] = enriched.voie;
+    enriched['Voie.'] = enriched.voie;
     const rawLat = enriched.latitude ?? enriched['Latitude'] ?? enriched['Latitude.'];
     const rawLng = enriched.longitude ?? enriched['Longitude'] ?? enriched['Longitude.'];
     const numLat =
@@ -8795,6 +8865,10 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
         : NaN;
     enriched.latitude = !isNaN(numLat) ? numLat : '';
     enriched.longitude = !isNaN(numLng) ? numLng : '';
+    enriched['Latitude'] = enriched.latitude !== '' ? String(enriched.latitude) : '';
+    enriched['Latitude.'] = enriched.latitude !== '' ? String(enriched.latitude) : '';
+    enriched['Longitude'] = enriched.longitude !== '' ? String(enriched.longitude) : '';
+    enriched['Longitude.'] = enriched.longitude !== '' ? String(enriched.longitude) : '';
   } else if (tabType === 'groupesZones') {
     const serializeArray = (val: any): string => {
       if (Array.isArray(val)) {
@@ -9200,7 +9274,23 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
     const cr = String(item.creneau || '').trim().toLowerCase();
     const intit = String(item.intitule || '').trim().toLowerCase();
     const composite = email && dt && cr && intit ? `${email}@@${dt}@@${cr}@@${intit}` : '';
-    return [item.id, composite].filter(Boolean).map(s => String(s).trim().toLowerCase());
+    const slug =
+      email && dt && cr && intit
+        ? `spont_${`${email}_${dt}_${cr}_${intit}`.toLowerCase().replace(/[^a-z0-9]/g, '')}`
+        : '';
+    const prevId = item._previousId ? String(item._previousId).trim().toLowerCase() : '';
+    const prevComposite = item._previousCompositeKey ? String(item._previousCompositeKey).trim().toLowerCase() : '';
+    const rowKey =
+      typeof item._sheetRowNumber === 'number' && item._sheetRowNumber >= 2
+        ? `row:${item._sheetRowNumber}`
+        : '';
+    return Array.from(
+      new Set(
+        [item.id, slug, composite, prevId, prevComposite, rowKey]
+          .filter(Boolean)
+          .map(s => String(s).trim().toLowerCase())
+      )
+    );
   }
   if (tabType === 'groupesZones') {
     return [item.id, item.title].filter(Boolean).map(s => String(s).trim().toLowerCase());
@@ -10928,7 +11018,7 @@ async function fetchLightweightSheetContextForColdUpsert(
         if (csvRes.ok) {
           const csvText = await csvRes.text();
           if (csvText && !csvText.trim().startsWith('<!DOCTYPE') && !csvText.trim().startsWith('<html')) {
-            const parsedHeaderMatrix = parseCSVToMatrix(csvText);
+            const parsedHeaderMatrix = parseCsvText(csvText);
             if (parsedHeaderMatrix.length > 0 && parsedHeaderMatrix[0].length > 0) {
               const candidateHeaders = parsedHeaderMatrix[0].map((c: any) => String(c ?? '').trim());
               const nonEmpty = candidateHeaders.filter(Boolean);
@@ -11003,7 +11093,7 @@ async function fetchLightweightSheetContextForColdUpsert(
           for (let i = 0; i < idRows.length; i++) {
             const r = idRows[i];
             if (!r || r.length === 0) continue;
-            if (tabType === 'temps' || tabType === 'tournees') {
+            if (tabType === 'temps' || tabType === 'tournees' || tabType === 'autresEvents') {
               const mappedLead = mapSingleRow(r.map((c: any) => String(c ?? '').trim()), i + 2);
               const rowKeys = getRecordLookupKeys(mappedLead, tabType);
               if (rowKeys.some(rk => targetKeys.has(rk))) {
@@ -11160,6 +11250,22 @@ export async function upsertRecordsToTenantSheet(
       headers = lightCtx.headers;
       hasRemoteHeaders = lightCtx.hasRemoteHeaders;
       coldMatchedByRecordIdx = lightCtx.matchedByRecordIdx;
+    }
+
+    if (tabType === 'autresEvents') {
+      const canonicalAutresHeaders = getDefaultGenericHeaders('autresEvents');
+      const existingNorm = new Set(headers.map(h => normalizeHeaderKey(h)));
+      let addedHeader = false;
+      for (const ch of canonicalAutresHeaders) {
+        if (!existingNorm.has(normalizeHeaderKey(ch))) {
+          headers.push(ch);
+          existingNorm.add(normalizeHeaderKey(ch));
+          addedHeader = true;
+        }
+      }
+      if (addedHeader) {
+        hasRemoteHeaders = false;
+      }
     }
 
     const overlay = loadMirrorOverlay(tenantId, tabType, extracted.spreadsheetId);
@@ -11696,7 +11802,7 @@ export async function deleteRecordsFromTenantSheet(
         // Also scan live identifier columns A2:D50000 on Google Sheets so even if _sheetRowNumber was missing or shifted in cache,
         // the exact live row(s) matching normTargets are guaranteed to be found and deleted.
         try {
-          const idRange = encodeURIComponent(`${rangePrefix}A2:D50000`);
+          const idRange = encodeURIComponent(`${rangePrefix}A2:I50000`);
           const idRes = await fetch(
             `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(extracted.spreadsheetId)}/values/${idRange}`,
             {
@@ -11708,14 +11814,33 @@ export async function deleteRecordsFromTenantSheet(
             const idJson = await idRes.json();
             const idRows: any[][] = Array.isArray(idJson?.values) ? idJson.values : [];
             const liveMatchedRowSet = new Set<number>();
+            const headersForDelete =
+              currentData.headers && currentData.headers.length > 0
+                ? currentData.headers
+                : getDefaultGenericHeaders(tabType);
             for (let i = 0; i < idRows.length; i++) {
               const r = idRows[i];
               if (!r || r.length === 0) continue;
+              let matchedRow = false;
               for (let c = 0; c < r.length; c++) {
                 const cellVal = String(r[c] ?? '').trim().toLowerCase();
                 if (cellVal && normTargets.has(cellVal)) {
                   liveMatchedRowSet.add(i + 2);
+                  matchedRow = true;
                   break;
+                }
+              }
+              if (!matchedRow && (tabType === 'autresEvents' || tabType === 'temps')) {
+                const mappedRow = mapRowToGenericRecord(
+                  headersForDelete,
+                  r.map((c: any) => String(c ?? '').trim()),
+                  i,
+                  tenantId,
+                  tabType
+                );
+                const rowKeys = getRecordLookupKeys(mappedRow, tabType);
+                if (rowKeys.some(rk => normTargets.has(rk))) {
+                  liveMatchedRowSet.add(i + 2);
                 }
               }
             }

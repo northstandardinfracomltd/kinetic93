@@ -159,15 +159,62 @@ export function parseSlotToMinutes(slot: string): number {
   return hour * 60 + minute;
 }
 
+export function normalizeIsoDateStr(rawDate: any, fallbackIso?: string): string {
+  const s = String(rawDate ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+    const [d, m, y] = s.split('/');
+    return `${y}-${m}-${d}`;
+  }
+  if (s) {
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+      return formatDate(parsed);
+    }
+  }
+  const fb = String(fallbackIso ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(fb)) return fb;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(fb)) {
+    const [d, m, y] = fb.split('/');
+    return `${y}-${m}-${d}`;
+  }
+  return formatDate(new Date());
+}
+
+export function normalizeSlotString(rawSlot: any): string {
+  const s = String(rawSlot ?? '').trim();
+  if (!s || s === '--:--' || s.toLowerCase() === '-- non défini --' || s.toLowerCase() === 'non renseigné') {
+    return '8:00am';
+  }
+  const mins = parseSlotToMinutes(s);
+  const clamped = Math.max(480, Math.min(1140, Math.round(mins / 30) * 30));
+  return formatMinutesToSlot(clamped);
+}
+
 export function isMissionForcedSlotOrDate(m: any): boolean {
   if (!m) return false;
-  return Boolean(
-    m.isForced ||
-    (m.isManualDate && m.isManualSlot) ||
+  const sitNorm = String(m.status || m.situation || '').trim().toLowerCase();
+  const isLockedByStatus =
+    sitNorm === 'accepté client' ||
+    sitNorm === 'accepte client' ||
+    sitNorm === 'à faire' ||
+    sitNorm === 'a faire';
+  if (isLockedByStatus) return true;
+
+  const isFormation = Boolean(
     m.equipmentType === 'Formation' ||
     m.equipmentType?.toLowerCase().includes('formation') ||
-    m.formationId
+    m.formationId ||
+    m._isSpontaneousEvent
   );
+  if (isFormation) return true;
+
+  const rawPrio = String(m.priority ?? '').trim();
+  if (rawPrio === '1') return true;
+  if (m.isForced === true) return true;
+  if (m.isForced === false || rawPrio === '0') return false;
+
+  return Boolean(m.isManualDate && m.isManualSlot);
 }
 
 /**
@@ -206,15 +253,12 @@ export function sortMissionsByProximity(
   const forcedMissions = missions.filter(m => isMissionForcedSlotOrDate(m));
   const nonForcedMissions = missions.filter(m => !isMissionForcedSlotOrDate(m));
 
-  const baseDateStr =
-    (tourStartDate && /^\d{4}-\d{2}-\d{2}$/.test(tourStartDate.trim()))
-      ? tourStartDate.trim()
-      : new Date().toISOString().split('T')[0];
+  const baseDateStr = normalizeIsoDateStr(tourStartDate);
 
   // Sort forced missions chronologically by (estimatedDate, estimatedSlot)
   const sortedForced = [...forcedMissions].sort((a, b) => {
-    const dateA = (a.estimatedDate && String(a.estimatedDate).trim()) || baseDateStr;
-    const dateB = (b.estimatedDate && String(b.estimatedDate).trim()) || baseDateStr;
+    const dateA = normalizeIsoDateStr(a.estimatedDate, baseDateStr);
+    const dateB = normalizeIsoDateStr(b.estimatedDate, baseDateStr);
     if (dateA !== dateB) return dateA.localeCompare(dateB);
     const slotA = parseSlotToMinutes(a.estimatedSlot || '8:00am');
     const slotB = parseSlotToMinutes(b.estimatedSlot || '8:00am');
@@ -263,10 +307,10 @@ export function sortMissionsByProximity(
     durationMins: number,
     isFirstOfTour: boolean,
     candCoord?: Coordinate
-  ): { endDateStr: string; endMins: number } => {
-    let simDate = new Date(cDateStr);
+  ): { startDateStr: string; startMins: number; endDateStr: string; endMins: number } => {
+    let simDate = new Date(`${cDateStr}T00:00:00`);
     if (isNaN(simDate.getTime())) simDate = new Date();
-    let simMins = Math.max(480, cMins);
+    let simMins = Math.ceil(Math.max(480, cMins) / 30) * 30;
 
     if (isFirstOfTour && candCoord) {
       const distKm = getHaversineDistance(startCoord, candCoord);
@@ -290,14 +334,18 @@ export function sortMissionsByProximity(
       simMins = 480;
     }
 
+    const startDateStr = formatDate(simDate);
+    const nextSlotMins = Math.ceil((simMins + durationMins) / 30) * 30;
     return {
-      endDateStr: formatDate(simDate),
-      endMins: simMins + durationMins
+      startDateStr,
+      startMins: simMins,
+      endDateStr: startDateStr,
+      endMins: simMins + durationMins > nextSlotMins ? simMins + durationMins : nextSlotMins,
     };
   };
 
   for (const forcedM of sortedForced) {
-    const fDateStr = (forcedM.estimatedDate && String(forcedM.estimatedDate).trim()) || cursorDateStr;
+    const fDateStr = normalizeIsoDateStr(forcedM.estimatedDate, cursorDateStr);
     const fStartMins = parseSlotToMinutes(forcedM.estimatedSlot || '8:00am');
     const fDuration = getMissionDurationInMinutes(forcedM.reason || '', variables, forcedM);
 
@@ -312,13 +360,20 @@ export function sortMissionsByProximity(
 
       const fitsBeforeForced =
         sim.endDateStr < fDateStr ||
-        (sim.endDateStr === fDateStr && sim.endMins <= fStartMins);
+        (sim.endDateStr === fDateStr && sim.startMins + candDuration <= fStartMins);
 
       if (fitsBeforeForced) {
         unvisitedNonForced.splice(candIdx, 1);
         result.push(cand);
         cursorDateStr = sim.endDateStr;
-        cursorMins = sim.endMins;
+        cursorMins = Math.ceil((sim.startMins + candDuration) / 30) * 30;
+        if (cursorMins >= 1080) {
+          const nextDay = addDays(new Date(`${cursorDateStr}T00:00:00`), 1);
+          if (!isNaN(nextDay.getTime())) {
+            cursorDateStr = formatDate(nextDay);
+            cursorMins = 480;
+          }
+        }
         if (candCoord) {
           currentCoord = candCoord;
         }
@@ -333,11 +388,12 @@ export function sortMissionsByProximity(
     if (fCoord) {
       currentCoord = fCoord;
     }
-    if (fDateStr > cursorDateStr || (fDateStr === cursorDateStr && fStartMins + fDuration > cursorMins)) {
+    const fEndSlotMins = Math.ceil((fStartMins + fDuration) / 30) * 30;
+    if (fDateStr > cursorDateStr || (fDateStr === cursorDateStr && fEndSlotMins > cursorMins)) {
       cursorDateStr = fDateStr;
-      cursorMins = fStartMins + fDuration;
+      cursorMins = fEndSlotMins;
       if (cursorMins >= 1080) {
-        const nextDay = addDays(new Date(cursorDateStr), 1);
+        const nextDay = addDays(new Date(`${cursorDateStr}T00:00:00`), 1);
         if (!isNaN(nextDay.getTime())) {
           cursorDateStr = formatDate(nextDay);
           cursorMins = 480;
@@ -685,7 +741,8 @@ export function getMissionDurationInMinutes(reason: string, variables?: any[], m
  * Auto-schedules optimized tour missions sequentially.
  * Allocates time dynamically per mission based on the selected reason, plus 30 mins for travel.
  * Standard workhours: 08:00 to 18:00.
- * If manual overrides exist on date or slot, respects them and updates the scheduling cursor!
+ * If locked/forced overrides exist on date or slot (Verrouillage / Priorité '1' / Accepté Client / À faire),
+ * strictly preserves them and adjusts all non-locked missions around them!
  */
 export function scheduleMissions(
   missions: any[],
@@ -700,27 +757,53 @@ export function scheduleMissions(
   if (!missions || missions.length === 0) return [];
   const cttRules: CttGlobalRules = customCttRules || loadCttGlobalRules();
 
-  let currentCursorDate = new Date(tourStartDate || new Date().toISOString().split('T')[0]);
+  const baseTourDateIso = normalizeIsoDateStr(tourStartDate);
+  let currentCursorDate = new Date(`${baseTourDateIso}T00:00:00`);
   if (isNaN(currentCursorDate.getTime())) {
     currentCursorDate = new Date();
   }
   let currentCursorMinutes = 0;
 
-  // Find all forced mission indices
-  const forcedIndices = missions
-    .map((m, idx) => ((m.isForced || (m.isManualDate && m.isManualSlot) || m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) ? idx : -1))
-    .filter(idx => idx !== -1);
+  // Helper to test if a candidate slot on targetDate violates CTT rules or overlaps an already scheduled/locked mission
+  const checkCttCandidate = (
+    targetDateStr: string,
+    candStart: number,
+    duration: number,
+    prevScheduled: any[],
+    remainingLockedMissions: any[]
+  ) => {
+    let adjustedStart = Math.ceil(candStart / 30) * 30;
 
-  const result: any[] = new Array(missions.length);
+    // Rule 0: Avoid overlapping any already-scheduled mission or locked mission on targetDateStr
+    const sameDayFixed = [
+      ...prevScheduled.filter(m => m && m.estimatedDate === targetDateStr && m.estimatedSlot),
+      ...remainingLockedMissions.filter(
+        m => m && normalizeIsoDateStr(m.estimatedDate, baseTourDateIso) === targetDateStr && m.estimatedSlot
+      ),
+    ];
 
-  // Helper to test if a candidate slot on targetDate violates CTT rules
-  const checkCttCandidate = (targetDateStr: string, candStart: number, candEnd: number, prevScheduled: any[]) => {
+    let changedByCollision = true;
+    let safetyIter = 0;
+    while (changedByCollision && safetyIter < 30) {
+      changedByCollision = false;
+      safetyIter++;
+      for (const fixedM of sameDayFixed) {
+        const fStart = parseSlotToMinutes(fixedM.estimatedSlot || '8:00am');
+        const fDur = getMissionDurationInMinutes(fixedM.reason || '', variables, fixedM);
+        const fEnd = Math.ceil((fStart + fDur) / 30) * 30;
+        if (adjustedStart < fEnd && adjustedStart + duration > fStart) {
+          adjustedStart = fEnd;
+          changedByCollision = true;
+        }
+      }
+    }
+
     // Rule 1: Max daily amplitude
     if (cttRules.maxDailyAmplitudeEnabled && cttRules.maxDailyAmplitudeHours > 0) {
       const dayMissions = prevScheduled.filter(m => m && m.estimatedDate === targetDateStr && m.estimatedSlot);
       if (dayMissions.length > 0) {
         const earliest = Math.min(...dayMissions.map(m => parseSlotToMinutes(m.estimatedSlot)));
-        const amplitude = candEnd - earliest;
+        const amplitude = adjustedStart + duration - earliest;
         if (amplitude > cttRules.maxDailyAmplitudeHours * 60) {
           return { valid: false, reason: 'max_amplitude' };
         }
@@ -728,20 +811,21 @@ export function scheduleMissions(
     }
 
     // Rule 2: Min consecutive rest from day - 1
-    let adjustedStart = candStart;
     if (cttRules.minConsecutiveRestEnabled && cttRules.minConsecutiveRestHours > 0) {
-      const dTarget = new Date(targetDateStr);
+      const dTarget = new Date(`${targetDateStr}T00:00:00`);
       const yesterday = formatDate(addDays(dTarget, -1));
       let yesterdayMissions = prevScheduled.filter(m => m && m.estimatedDate === yesterday && m.estimatedSlot);
 
-      // Also check other tours for the same technician if prevScheduled has no missions yesterday
       if (yesterdayMissions.length === 0 && Array.isArray(allTours) && tech?.name) {
-        const otherTours = allTours.filter(ot =>
-          ot && ot.techName && String(ot.techName).trim().toLowerCase() === String(tech.name).trim().toLowerCase()
+        const otherTours = allTours.filter(
+          ot =>
+            ot &&
+            ot.techName &&
+            String(ot.techName).trim().toLowerCase() === String(tech.name).trim().toLowerCase()
         );
         for (const ot of otherTours) {
           const otActive = (ot.missions || []).filter((m: any) => {
-            const mDate = m?.estimatedDate || ot.startDate;
+            const mDate = normalizeIsoDateStr(m?.estimatedDate || ot.startDate, baseTourDateIso);
             return mDate === yesterday && m?.estimatedSlot;
           });
           if (otActive.length > 0) {
@@ -758,7 +842,7 @@ export function scheduleMissions(
           if (s + d > maxEndYesterday) maxEndYesterday = s + d;
         });
         if (maxEndYesterday !== -Infinity) {
-          const earliestAllowed = maxEndYesterday + (cttRules.minConsecutiveRestHours * 60) - 1440;
+          const earliestAllowed = Math.ceil((maxEndYesterday + cttRules.minConsecutiveRestHours * 60 - 1440) / 30) * 30;
           if (adjustedStart < earliestAllowed) {
             adjustedStart = earliestAllowed;
           }
@@ -771,7 +855,6 @@ export function scheduleMissions(
       const requiredBreak = cttRules.minBreakRestMinutes;
       const windowStart = 720; // 12h00
       const windowEnd = 840;   // 14h00
-      const duration = candEnd - candStart;
 
       const dayMissions = prevScheduled.filter(m => m && m.estimatedDate === targetDateStr && m.estimatedSlot);
       let maxPriorEnd = 0;
@@ -781,72 +864,83 @@ export function scheduleMissions(
         if (s + d > maxPriorEnd) maxPriorEnd = s + d;
       });
 
-      // Case A: Prior mission ended during lunch [12:00, 14:00]
       if (maxPriorEnd >= windowStart && maxPriorEnd < windowEnd) {
-        const breakEnd = maxPriorEnd + requiredBreak;
+        const breakEnd = Math.ceil((maxPriorEnd + requiredBreak) / 30) * 30;
         if (adjustedStart < breakEnd) {
           adjustedStart = breakEnd;
         }
-      }
-      // Case B: Prior mission ended before 12:00 (or no prior missions)
-      else if (maxPriorEnd < windowStart) {
-        // If candidate would start in the first portion of lunch
+      } else if (maxPriorEnd < windowStart) {
         if (adjustedStart >= windowStart && adjustedStart < windowStart + requiredBreak) {
-          adjustedStart = windowStart + requiredBreak;
+          adjustedStart = Math.ceil((windowStart + requiredBreak) / 30) * 30;
+        } else if (adjustedStart < windowStart && adjustedStart + duration > windowEnd - requiredBreak) {
+          adjustedStart = Math.ceil((windowStart + requiredBreak) / 30) * 30;
         }
-        // If candidate starts before 12:00, but ends after 14:00 - requiredBreak,
-        // it leaves less than requiredBreak free continuous minutes before 14:00
-        else if (adjustedStart < windowStart && (adjustedStart + duration) > (windowEnd - requiredBreak)) {
-          // If candidate cannot finish before 12:00, schedule break at 12:00 and push candidate after break
-          adjustedStart = windowStart + requiredBreak;
-        }
+      }
+    }
+
+    // Re-verify no collision after break/rest adjustments
+    for (const fixedM of sameDayFixed) {
+      const fStart = parseSlotToMinutes(fixedM.estimatedSlot || '8:00am');
+      const fDur = getMissionDurationInMinutes(fixedM.reason || '', variables, fixedM);
+      const fEnd = Math.ceil((fStart + fDur) / 30) * 30;
+      if (adjustedStart < fEnd && adjustedStart + duration > fStart) {
+        return { valid: false, reason: 'collision_after_adjustment' };
       }
     }
 
     return { valid: true, adjustedStart };
   };
 
-  let i = 0;
-  while (i < missions.length) {
-    const m = missions[i];
-    const isForced = !!(m.isForced || (m.isManualDate && m.isManualSlot) || m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId);
+  const pending: any[] = [...missions];
+  const scheduledResult: any[] = [];
+
+  while (pending.length > 0) {
+    const m = pending[0];
+    const isForced = isMissionForcedSlotOrDate(m);
 
     if (isForced) {
-      // 1. FORCED MISSION: Keep exact user-specified date and slot
-      const forcedDate = m.estimatedDate || tourStartDate;
-      const forcedSlot = m.estimatedSlot || '8:00am';
+      // 1. FORCED / LOCKED MISSION: Keep exact locked date and slot
+      const forcedDate = normalizeIsoDateStr(m.estimatedDate, baseTourDateIso);
+      const forcedSlot = normalizeSlotString(m.estimatedSlot || '8:00am');
       const duration = getMissionDurationInMinutes(m.reason || '', variables, m);
       const startMins = parseSlotToMinutes(forcedSlot);
+      const endMins = Math.ceil((startMins + duration) / 30) * 30;
 
-      result[i] = {
+      scheduledResult.push({
         ...m,
         estimatedDate: forcedDate,
         estimatedSlot: forcedSlot,
         isForced: true,
         isManualDate: true,
         isManualSlot: true,
-      };
+        priority: '1',
+      });
 
-      currentCursorDate = new Date(forcedDate);
-      if (isNaN(currentCursorDate.getTime())) {
-        currentCursorDate = new Date(tourStartDate);
+      const curDateStr = formatDate(currentCursorDate);
+      if (forcedDate > curDateStr || (forcedDate === curDateStr && endMins > currentCursorMinutes)) {
+        currentCursorDate = new Date(`${forcedDate}T00:00:00`);
+        if (isNaN(currentCursorDate.getTime())) {
+          currentCursorDate = new Date(`${baseTourDateIso}T00:00:00`);
+        }
+        currentCursorMinutes = endMins;
+        if (currentCursorMinutes >= 1080) {
+          currentCursorDate = addDays(currentCursorDate, 1);
+          currentCursorMinutes = 0;
+        }
       }
-      currentCursorMinutes = startMins + duration;
-      if (currentCursorMinutes >= 1440) {
-        currentCursorDate = addDays(currentCursorDate, 1);
-        currentCursorMinutes = 0;
-      }
-      i++;
+
+      pending.shift();
     } else {
-      // 2. NON-FORCED MISSION: Check if there is a next forced mission
-      const nextForcedIdx = forcedIndices.find(idx => idx > i);
+      // 2. NON-FORCED MISSION: Check if there is a forced mission ahead in pending
+      const nextForcedIdxInPending = pending.findIndex(item => isMissionForcedSlotOrDate(item));
+      const remainingLockedMissions = pending.filter(item => isMissionForcedSlotOrDate(item));
 
-      if (nextForcedIdx === undefined) {
+      if (nextForcedIdxInPending === -1) {
         // No remaining forced missions: standard forward scheduling
         const eq = equipmentDetails[m.defibIdentifiant];
         const duration = getMissionDurationInMinutes(m.reason || '', variables, m);
 
-        let assignedStartMinutes = 0;
+        let assignedStartMinutes = 480;
         let daysChecked = 0;
         while (true) {
           let intervals = getOverlappingIntervals(currentCursorDate, eq, tech);
@@ -857,19 +951,24 @@ export function scheduleMissions(
           const candDateStr = formatDate(currentCursorDate);
 
           for (const interval of intervals) {
-            let candidateStart = Math.max(currentCursorMinutes, interval.start);
+            let candidateStart = Math.ceil(Math.max(currentCursorMinutes, interval.start) / 30) * 30;
 
-            // SPECIAL RULE: For the first mission of the tour (i === 0), incorporate travel time from technician departure point
-            if (i === 0 && firstMissionTravelHours > 0) {
+            if (scheduledResult.length === 0 && firstMissionTravelHours > 0) {
               const techInts = getTechnicianIntervals(currentCursorDate, tech);
-              const dayTechStart = (techInts.length > 0 && techInts[0].start) ? techInts[0].start : 480;
-              const earliestArrival = dayTechStart + (firstMissionTravelHours * 60);
-              candidateStart = Math.max(earliestArrival, interval.start);
+              const dayTechStart = techInts.length > 0 && techInts[0].start ? techInts[0].start : 480;
+              const earliestArrival = dayTechStart + firstMissionTravelHours * 60;
+              candidateStart = Math.ceil(Math.max(candidateStart, earliestArrival, interval.start) / 30) * 30;
             }
 
-            const cttCheck = checkCttCandidate(candDateStr, candidateStart, candidateStart + duration, result.slice(0, i));
+            const cttCheck = checkCttCandidate(
+              candDateStr,
+              candidateStart,
+              duration,
+              scheduledResult,
+              remainingLockedMissions
+            );
             if (!cttCheck.valid) {
-              continue; // Exceeds max daily amplitude, cannot fit today
+              continue;
             }
             if (cttCheck.adjustedStart !== undefined && cttCheck.adjustedStart > candidateStart) {
               candidateStart = cttCheck.adjustedStart;
@@ -890,36 +989,36 @@ export function scheduleMissions(
         const assignedDate = formatDate(currentCursorDate);
         const assignedSlot = formatMinutesToSlot(assignedStartMinutes);
 
-        result[i] = {
+        scheduledResult.push({
           ...m,
           estimatedDate: assignedDate,
           estimatedSlot: assignedSlot,
-        };
+          isForced: false,
+          isManualDate: false,
+          isManualSlot: false,
+          priority: '0',
+        });
 
-        currentCursorMinutes = assignedStartMinutes + duration;
-        if (currentCursorMinutes >= 1440) {
+        currentCursorMinutes = Math.ceil((assignedStartMinutes + duration) / 30) * 30;
+        if (currentCursorMinutes >= 1080) {
           currentCursorDate = addDays(currentCursorDate, 1);
           currentCursorMinutes = 0;
         }
-        i++;
+        pending.shift();
       } else {
-        // There is a next forced mission at nextForcedIdx
-        const nextForcedMission = missions[nextForcedIdx];
-        const nextForcedDateStr = nextForcedMission.estimatedDate || tourStartDate;
-        const nextForcedSlotStr = nextForcedMission.estimatedSlot || '8:00am';
+        // There is a next forced mission at pending[nextForcedIdxInPending]
+        const nextForcedMission = pending[nextForcedIdxInPending];
+        const nextForcedDateStr = normalizeIsoDateStr(nextForcedMission.estimatedDate, baseTourDateIso);
+        const nextForcedSlotStr = normalizeSlotString(nextForcedMission.estimatedSlot || '8:00am');
         const nextForcedStartMins = parseSlotToMinutes(nextForcedSlotStr);
-
-        const nextForcedDateObj = new Date(nextForcedDateStr);
-        if (currentCursorDate > nextForcedDateObj) {
-          currentCursorDate = nextForcedDateObj;
-        }
 
         const eq = equipmentDetails[m.defibIdentifiant];
         const duration = getMissionDurationInMinutes(m.reason || '', variables, m);
 
-        let candidateStartMins = 0;
+        let candidateStartMins = 480;
         let daysChecked = 0;
         let candidateDate = new Date(currentCursorDate);
+        let tempCursorMins = currentCursorMinutes;
         let foundForward = false;
 
         while (daysChecked <= 30) {
@@ -932,19 +1031,25 @@ export function scheduleMissions(
           }
 
           for (const interval of intervals) {
-            let candStart = (candDateStr === formatDate(currentCursorDate))
-              ? Math.max(currentCursorMinutes, interval.start)
-              : interval.start;
+            let candStart =
+              candDateStr === formatDate(currentCursorDate)
+                ? Math.ceil(Math.max(tempCursorMins, interval.start) / 30) * 30
+                : Math.ceil(interval.start / 30) * 30;
 
-            // SPECIAL RULE: For the first mission of the tour (i === 0), incorporate travel time from technician departure point
-            if (i === 0 && firstMissionTravelHours > 0) {
+            if (scheduledResult.length === 0 && firstMissionTravelHours > 0) {
               const techInts = getTechnicianIntervals(candidateDate, tech);
-              const dayTechStart = (techInts.length > 0 && techInts[0].start) ? techInts[0].start : 480;
-              const earliestArrival = dayTechStart + (firstMissionTravelHours * 60);
-              candStart = Math.max(earliestArrival, interval.start);
+              const dayTechStart = techInts.length > 0 && techInts[0].start ? techInts[0].start : 480;
+              const earliestArrival = dayTechStart + firstMissionTravelHours * 60;
+              candStart = Math.ceil(Math.max(candStart, earliestArrival, interval.start) / 30) * 30;
             }
 
-            const cttCheck = checkCttCandidate(candDateStr, candStart, candStart + duration, result.slice(0, i));
+            const cttCheck = checkCttCandidate(
+              candDateStr,
+              candStart,
+              duration,
+              scheduledResult,
+              remainingLockedMissions
+            );
             if (!cttCheck.valid) {
               continue;
             }
@@ -971,7 +1076,7 @@ export function scheduleMissions(
 
           if (foundForward) break;
           candidateDate = addDays(candidateDate, 1);
-          currentCursorMinutes = 0;
+          tempCursorMins = 0;
           daysChecked++;
         }
 
@@ -979,67 +1084,33 @@ export function scheduleMissions(
           const assignedDate = formatDate(candidateDate);
           const assignedSlot = formatMinutesToSlot(candidateStartMins);
 
-          result[i] = {
+          scheduledResult.push({
             ...m,
             estimatedDate: assignedDate,
             estimatedSlot: assignedSlot,
-          };
+            isForced: false,
+            isManualDate: false,
+            isManualSlot: false,
+            priority: '0',
+          });
 
           currentCursorDate = candidateDate;
-          currentCursorMinutes = candidateStartMins + duration;
-          if (currentCursorMinutes >= 1440) {
+          currentCursorMinutes = Math.ceil((candidateStartMins + duration) / 30) * 30;
+          if (currentCursorMinutes >= 1080) {
             currentCursorDate = addDays(currentCursorDate, 1);
             currentCursorMinutes = 0;
           }
-          i++;
+          pending.shift();
         } else {
-          // Backward scheduling for all unassigned missions up to nextForcedIdx - 1
-          let limitDateObj = new Date(nextForcedDateStr);
-          let limitMins = nextForcedStartMins;
-
-          for (let k = nextForcedIdx - 1; k >= i; k--) {
-            const mK = missions[k];
-            const durK = getMissionDurationInMinutes(mK.reason || '', variables, mK);
-
-            let startMinsK = limitMins - durK;
-            if (cttRules.minBreakRestEnabled && cttRules.minBreakRestMinutes > 0) {
-              if (limitMins > 720 && limitMins <= 720 + cttRules.minBreakRestMinutes) {
-                limitMins = 720;
-                startMinsK = limitMins - durK;
-              }
-            }
-            if (startMinsK < 480) {
-              limitDateObj = addDays(limitDateObj, -1);
-              limitMins = 1080;
-              startMinsK = limitMins - durK;
-            }
-
-            if (k === 0 && firstMissionTravelHours > 0) {
-              const techInts = getTechnicianIntervals(limitDateObj, tech);
-              const dayTechStart = (techInts.length > 0 && techInts[0].start) ? techInts[0].start : 480;
-              const earliestArrival = dayTechStart + (firstMissionTravelHours * 60);
-              if (startMinsK < earliestArrival) {
-                startMinsK = earliestArrival;
-              }
-            }
-
-            const kDateStr = formatDate(limitDateObj);
-            const kSlotStr = formatMinutesToSlot(startMinsK);
-
-            result[k] = {
-              ...mK,
-              estimatedDate: kDateStr,
-              estimatedSlot: kSlotStr,
-            };
-
-            limitMins = startMinsK;
-          }
-
-          i = nextForcedIdx;
+          // Cannot fit this non-forced mission before nextForcedMission:
+          // Promote nextForcedMission to be scheduled immediately at its locked date/slot,
+          // and adjust this non-forced mission (and subsequent ones) after it!
+          const [promotedForced] = pending.splice(nextForcedIdxInPending, 1);
+          pending.unshift(promotedForced);
         }
       }
     }
   }
 
-  return result;
+  return scheduledResult;
 }

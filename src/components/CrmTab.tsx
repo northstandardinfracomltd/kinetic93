@@ -3721,6 +3721,23 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       padding: '20px',
                     }}
                   >
+                    <div className="mb-1 bg-transparent">
+                      <span
+                        className="px-3 py-1 inline-block font-sans"
+                        style={{
+                          backgroundColor: 'rgb(61 220 132)',
+                          color: '#115830',
+                          fontSize: '18px',
+                          borderRadius: '1000px',
+                          cursor: 'default',
+                          fontWeight: 100,
+                          textTransform: 'none',
+                        }}
+                      >
+                        Informations Ticket
+                      </span>
+                    </div>
+
                     <div className="grid grid-cols-3 gap-3">
                       <div>
                         <label>Référence.</label>
@@ -3835,17 +3852,34 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   </div>
                   </div>
 
-                  {/* 4. Section: Client ou Prospect, Email, Situation/Structure, Contact, Objet, Description (sans padding, border, ni shadow) */}
+                  {/* 4. Section: Client ou Prospect, Email, Situation/Structure, Contact, Objet, Description */}
                   <div 
                     className="space-y-4"
                     style={{
+                      backgroundColor: '#e9edf1',
                       border: 'none',
                       boxShadow: 'none',
-                      borderRadius: '0px',
-                      padding: '0px',
-                      backgroundColor: 'transparent'
+                      borderRadius: '14px',
+                      padding: '20px',
                     }}
                   >
+                    <div className="mb-1 bg-transparent">
+                      <span
+                        className="px-3 py-1 inline-block font-sans"
+                        style={{
+                          backgroundColor: 'rgb(61 220 132)',
+                          color: '#115830',
+                          fontSize: '18px',
+                          borderRadius: '1000px',
+                          cursor: 'default',
+                          fontWeight: 100,
+                          textTransform: 'none',
+                        }}
+                      >
+                        Interlocuteur
+                      </span>
+                    </div>
+
                     {/* Client ou Prospect */}
                     <div>
                       <div className="flex items-center justify-between mb-1">
@@ -4082,14 +4116,31 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <div 
                       className="space-y-4 animate-fadeIn"
                       style={{
+                        backgroundColor: '#e9edf1',
                         border: 'none',
                         boxShadow: 'none',
-                        borderRadius: '0px',
-                        padding: '0px',
-                        backgroundColor: 'transparent'
+                        borderRadius: '14px',
+                        padding: '20px',
                       }}
                       id="crm-commercial-section"
                     >
+                      <div className="mb-1 bg-transparent">
+                        <span
+                          className="px-3 py-1 inline-block font-sans"
+                          style={{
+                            backgroundColor: 'rgb(61 220 132)',
+                            color: '#115830',
+                            fontSize: '18px',
+                            borderRadius: '1000px',
+                            cursor: 'default',
+                            fontWeight: 100,
+                            textTransform: 'none',
+                          }}
+                        >
+                          Détails Suivi Commercial
+                        </span>
+                      </div>
+
                       {/* Marché Public (40%) & Situation Devis (60%) sur la même ligne (2 + 3 options = 5 options) */}
                       <div className="grid grid-cols-5 gap-x-6 gap-y-3">
                         {/* Marché Public (2 cols = 40%) */}
@@ -4681,13 +4732,30 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <div 
                       className="space-y-4 animate-fadeIn"
                       style={{
-                        backgroundColor: '#ffffff',
-                        border: '1px solid rgb(218, 218, 218)',
-                        boxShadow: 'rgba(0, 0, 0, 0.06) 0px 2px 8px -2px',
+                        backgroundColor: '#e9edf1',
+                        border: 'none',
+                        boxShadow: 'none',
                         borderRadius: '14px',
-                        padding: '20px'
+                        padding: '20px',
                       }}
                     >
+                      <div className="mb-1 bg-transparent">
+                        <span
+                          className="px-3 py-1 inline-block font-sans"
+                          style={{
+                            backgroundColor: 'rgb(61 220 132)',
+                            color: '#115830',
+                            fontSize: '18px',
+                            borderRadius: '1000px',
+                            cursor: 'default',
+                            fontWeight: 100,
+                            textTransform: 'none',
+                          }}
+                        >
+                          Détails Suivi Demande
+                        </span>
+                      </div>
+
                       <div className="flex items-center justify-between">
                         <label className="!mb-0" style={{ fontSize: '18px', fontWeight: 600, color: '#000000' }}>
                           Messages au client.
@@ -4851,10 +4919,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       fontSize: '18px',
                       fontWeight: 'bold',
                       border: 'none',
+                      boxShadow: 'none',
                       cursor: 'pointer',
                       flex: 1,
                     }}
-                    className="hover:opacity-90 transition-opacity shadow-lg"
+                    className="hover:opacity-90 transition-opacity"
                   >
                     Fermer
                   </button>
@@ -4869,10 +4938,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       fontSize: '18px',
                       fontWeight: 'bold',
                       border: 'none',
+                      boxShadow: 'none',
                       cursor: 'pointer',
                       flex: 1,
                     }}
-                    className="hover:bg-[#2b48cc] transition-colors shadow-lg"
+                    className="hover:bg-[#2b48cc] transition-colors"
                   >
                     Enregistrer
                   </button>

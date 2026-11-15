@@ -1794,22 +1794,28 @@ export default function SatisfactionTab({
                     className="pt-2 flex flex-col items-center justify-center text-center p-4 rounded-xl"
                     style={{ backgroundColor: '#ffffff', border: 'none' }}
                   >
+                    {perfNps.npsInt !== null && perfNps.npsInt !== 0 && perfNps.scoreDisplay && perfNps.scoreDisplay !== '-' && perfNps.scoreDisplay !== '0' && (
+                      <div 
+                        style={{ 
+                          fontSize: '44px', 
+                          fontWeight: 900, 
+                          color: '#000000', 
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          lineHeight: 1
+                        }}
+                      >
+                        {perfNps.scoreDisplay}
+                      </div>
+                    )}
                     <div 
-                      style={{ 
-                        fontSize: '44px', 
-                        fontWeight: 900, 
-                        color: perfNps.npsInt === null ? '#000000' : (perfNps.npsInt > 0 ? '#10b981' : (perfNps.npsInt < 0 ? '#ef4444' : '#000000')), 
-                        fontFamily: "'Gochi', cursive, sans-serif",
-                        lineHeight: 1
+                      className="mt-1"
+                      style={{
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        fontSize: '18px',
+                        color: '#000000',
                       }}
                     >
-                      {perfNps.scoreDisplay}
-                    </div>
-                    <div 
-                      className="text-xs text-slate-500 mt-1"
-                      style={{ fontFamily: "'DefibeoMain', 'Civilprom', sans-serif" }}
-                    >
-                      {perfNps.npsInt !== null ? `${t("Indice NPS")} (${perfNps.scoreDisplay})` : ''}
+                      {t("Indice NPS général.") || "Indice NPS général."}
                     </div>
                   </div>
                 )}

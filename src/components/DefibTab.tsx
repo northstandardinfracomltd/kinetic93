@@ -2346,7 +2346,8 @@ export default function DefibTab({
       reasons: [],
       requiredParts: [],
       status: 'Brouillon',
-      priority: 'Normale',
+      priority: '0',
+      isForced: false,
       time: '14:00'
     };
   };

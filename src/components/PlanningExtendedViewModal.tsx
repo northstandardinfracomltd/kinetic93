@@ -13,6 +13,7 @@ interface PlanningExtendedViewModalProps {
   clients?: any[];
   defibrillateurs?: any[];
   otherEquipments?: any[];
+  variables?: any[];
   initialMonth?: number;
   initialYear?: number;
   onUpdateSpontaneousEvents?: (events: SpontaneousEvent[]) => void;
@@ -166,11 +167,97 @@ const parseTimeInMinutes = (raw: any): number | null => {
 const getTimeOffsetPercent = (rawTime: any): number => {
   const mins = parseTimeInMinutes(rawTime);
   if (mins === null) return 0;
-  // Standard workday scale: 07:30 (450 mins) to 18:30 (1110 mins)
-  const startDayMins = 7.5 * 60; // 450
-  const endDayMins = 18.5 * 60;  // 1110
+  // Standard workday scale: 08:00 (480 mins) to 18:00 (1080 mins)
+  const startDayMins = 8 * 60;  // 480
+  const endDayMins = 18 * 60;   // 1080
   const clamped = Math.max(startDayMins, Math.min(endDayMins, mins));
   return (clamped - startDayMins) / (endDayMins - startDayMins); // 0 to 1
+};
+
+const BASE_MISSION_WIDTH_PX = 188;
+const MAX_MISSION_TIME_OFFSET_PX = 220;
+
+const getMissionHorizontalOffsetPx = (rawTime: any): number => {
+  const pct = getTimeOffsetPercent(rawTime);
+  return Math.round(pct * MAX_MISSION_TIME_OFFSET_PX);
+};
+
+const computeMissionDurationMinutes = (mission: any, variablesList: any[]): number => {
+  if (!mission) return 0;
+
+  const reasonsToCheck: string[] = [];
+  if (Array.isArray(mission.reasons) && mission.reasons.length > 0) {
+    mission.reasons.forEach((r: any) => {
+      const s = String(r || '').trim();
+      if (s) {
+        s.split(',')
+          .map((part) => part.trim())
+          .filter(Boolean)
+          .forEach((part) => reasonsToCheck.push(part));
+      }
+    });
+  } else {
+    const rawReason = String(
+      mission.reason || mission.motif || mission.typePrestation || ''
+    ).trim();
+    if (rawReason) {
+      rawReason
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((s) => reasonsToCheck.push(s));
+    }
+  }
+
+  let totalMinutes = 0;
+  let foundAny = false;
+
+  if (reasonsToCheck.length > 0 && Array.isArray(variablesList) && variablesList.length > 0) {
+    for (const r of reasonsToCheck) {
+      const rNorm = normalizeName(r);
+      const rLower = r.toLowerCase().trim();
+      const matchedVar = variablesList.find((v: any) => {
+        if (!v) return false;
+        if (v.category && v.category !== 'Modèle Raison Prestation') return false;
+        const vName = String(v.nom || v.title || v.label || '').trim();
+        return (
+          vName.toLowerCase() === rLower ||
+          (rNorm && normalizeName(vName) === rNorm) ||
+          String(v.id || '').trim() === r
+        );
+      });
+      if (
+        matchedVar &&
+        matchedVar.dureePrestation !== undefined &&
+        matchedVar.dureePrestation !== null &&
+        String(matchedVar.dureePrestation).trim() !== ''
+      ) {
+        const d = Number(matchedVar.dureePrestation);
+        if (!isNaN(d) && d > 0) {
+          totalMinutes += d;
+          foundAny = true;
+        }
+      }
+    }
+  }
+
+  if (!foundAny && mission.dureePrestation !== undefined && mission.dureePrestation !== null) {
+    const direct = Number(mission.dureePrestation);
+    if (!isNaN(direct) && direct > 0) {
+      totalMinutes = direct;
+      foundAny = true;
+    }
+  }
+
+  return foundAny && totalMinutes > 0 ? totalMinutes : 0;
+};
+
+const getMissionCardWidthPx = (durationMinutes: number): number => {
+  if (!durationMinutes || durationMinutes <= 0) {
+    return BASE_MISSION_WIDTH_PX;
+  }
+  const extraPx = Math.min(280, Math.round(durationMinutes * 1.5));
+  return BASE_MISSION_WIDTH_PX + extraPx;
 };
 
 type DraggedPlanningItem =
@@ -226,12 +313,25 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
   clients = [],
   defibrillateurs = [],
   otherEquipments = [],
+  variables = [],
   initialMonth,
   initialYear,
   onUpdateSpontaneousEvents,
   onUpdateTours,
   onConsultMission,
 }) => {
+  const effectiveVariables = useMemo(() => {
+    if (Array.isArray(variables) && variables.length > 0) return variables;
+    try {
+      const tid = localStorage.getItem('defib_tenant_id') || 'demo';
+      const raw = localStorage.getItem(`defib_${tid}_variables`) || localStorage.getItem('defib_variables');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  }, [variables]);
   const today = useMemo(() => new Date(), []);
   const [currentMonth, setCurrentMonth] = useState<number>(() => {
     return typeof initialMonth === 'number' ? initialMonth : today.getMonth();
@@ -406,7 +506,6 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(nextEvents));
             localStorage.setItem('defib_spontaneous_events', JSON.stringify(nextEvents));
             window.dispatchEvent(new Event('defib_spontaneous_events_updated'));
-            saveCollectionToFirestore('spontaneous_events', nextEvents).catch(() => {});
 
             const updatedEvt = nextEvents.find((e) => String(e.id) === String(eventId)) || {
               ...eventObj,
@@ -417,39 +516,46 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
             };
             const parts = targetIsoDate.split('-');
             const dateFr = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : targetIsoDate;
+            const prevEmailLower = String(eventObj?.techEmail || eventObj?.techName || '').trim().toLowerCase();
+            const prevIsoDate = String(eventObj?.date || '').trim();
+            const prevCreneauLower = String(eventObj?.creneau || '').trim().toLowerCase();
+            const prevIntituleLower = String(eventObj?.intitule || '').trim().toLowerCase();
+            const prevCompositeKey = `${prevEmailLower}@@${prevIsoDate}@@${prevCreneauLower}@@${prevIntituleLower}`;
+
             const sheetUrl = localStorage.getItem(`defib_${tid}_spreadsheet_autres_events`) || '';
             const sessionTok = localStorage.getItem('defib_session_token') || '';
-            if (sheetUrl) {
-              fetch('/api/sheets/upsert', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(sessionTok ? { 'x-defibeo-session': sessionTok } : {}),
-                  'x-defibeo-tenant': tid,
-                },
-                body: JSON.stringify({
-                  tenantId: tid,
-                  type: 'autresEvents',
-                  spreadsheetUrl: sheetUrl,
-                  records: [
-                    {
-                      ...updatedEvt,
-                      techEmail: updatedEvt.techEmail || targetTechName,
-                      date: dateFr,
-                      'Email (technicien).': updatedEvt.techEmail || targetTechName,
-                      'Date.': dateFr,
-                      'Créneau.': updatedEvt.creneau,
-                      'Intitulé.': updatedEvt.intitule || '',
-                      'Commentaire.': updatedEvt.commentaire || '',
-                      'Tournée': updatedEvt.tournee || '',
-                      'Voie': updatedEvt.voie || '',
-                      'Latitude': updatedEvt.latitude ?? '',
-                      'Longitude': updatedEvt.longitude ?? '',
-                    },
-                  ],
-                }),
-              }).catch(() => {});
-            }
+            fetch('/api/sheets/upsert', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(sessionTok ? { 'x-defibeo-session': sessionTok } : {}),
+                'x-defibeo-tenant': tid,
+              },
+              body: JSON.stringify({
+                tenantId: tid,
+                type: 'autresEvents',
+                ...(sheetUrl ? { spreadsheetUrl: sheetUrl } : {}),
+                records: [
+                  {
+                    ...updatedEvt,
+                    _sheetRowNumber: (eventObj as any)?._sheetRowNumber || (updatedEvt as any)?._sheetRowNumber,
+                    _previousId: eventObj?.id,
+                    _previousCompositeKey: prevCompositeKey,
+                    techEmail: updatedEvt.techEmail || targetTechName,
+                    date: dateFr,
+                    'Email (technicien).': updatedEvt.techEmail || targetTechName,
+                    'Date.': dateFr,
+                    'Créneau.': updatedEvt.creneau,
+                    'Intitulé.': updatedEvt.intitule || '',
+                    'Commentaire.': updatedEvt.commentaire || '',
+                    'Tournée': updatedEvt.tournee || '',
+                    'Voie': updatedEvt.voie || '',
+                    'Latitude': updatedEvt.latitude ?? '',
+                    'Longitude': updatedEvt.longitude ?? '',
+                  },
+                ],
+              }),
+            }).catch(() => {});
           } catch (_) {}
 
           if (onUpdateSpontaneousEvents) {
@@ -643,7 +749,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
         } catch (_) {}
       }
 
-      // 2. Refresh Spontaneous Events from local storage & firestore
+      // 2. Refresh Spontaneous Events from local storage & Spreadsheet Autres Events
       const savedEvents = localStorage.getItem(`defib_${tid}_spontaneous_events`) || localStorage.getItem('defib_spontaneous_events');
       if (savedEvents) {
         try {
@@ -653,11 +759,52 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
       }
 
       try {
-        const remoteEvts = await fetchCollectionFromFirestore<SpontaneousEvent[]>('spontaneous_events');
-        if (remoteEvts && Array.isArray(remoteEvts)) {
-          setLocalEvents(remoteEvts);
-          localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(remoteEvts));
-          if (onUpdateSpontaneousEvents) onUpdateSpontaneousEvents(remoteEvts);
+        const sheetUrl = localStorage.getItem(`defib_${tid}_spreadsheet_autres_events`) || '';
+        const sessionTok = localStorage.getItem('defib_session_token') || '';
+        const res = await fetch(
+          `/api/sheets/collection?tenantId=${encodeURIComponent(tid)}&type=autresEvents${sheetUrl ? `&spreadsheetUrl=${encodeURIComponent(sheetUrl)}` : ''}&forceRefresh=true`,
+          {
+            headers: {
+              ...(sessionTok ? { 'x-defibeo-session': sessionTok } : {}),
+              'x-defibeo-tenant': tid,
+            },
+          }
+        );
+        if (res.ok) {
+          const json = await res.json();
+          const rawItems = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : null;
+          if (rawItems) {
+            const normalized: SpontaneousEvent[] = rawItems.map((ev: any, idx: number) => {
+              let isoDate = String(ev.date || ev['Date.'] || '').trim();
+              if (/^\d{2}\/\d{2}\/\d{4}$/.test(isoDate)) {
+                const [dd, mm, yyyy] = isoDate.split('/');
+                isoDate = `${yyyy}-${mm}-${dd}`;
+              }
+              const email = String(ev.techEmail || ev['Email (technicien).'] || ev.email || '').trim();
+              const creneau = String(ev.creneau || ev['Créneau.'] || '').trim();
+              const intitule = String(ev.intitule || ev['Intitulé.'] || '').trim();
+              const deterministicId = `spont_${`${email.toLowerCase()}_${isoDate}_${creneau.toLowerCase()}_${intitule.toLowerCase()}`.replace(/[^a-z0-9_-]/g, '_')}`;
+              return {
+                ...ev,
+                id: ev.id || deterministicId || `spont_${idx}`,
+                _sheetRowNumber: ev._sheetRowNumber ? Number(ev._sheetRowNumber) : undefined,
+                techName: ev.techName || email,
+                techEmail: email,
+                date: isoDate,
+                creneau,
+                intitule,
+                commentaire: ev.commentaire || ev['Commentaire.'] || '',
+                tournee: ev.tournee || ev['Tournée'] || '',
+                voie: ev.voie || ev['Voie'] || '',
+                latitude: ev.latitude !== undefined && ev.latitude !== '' ? Number(ev.latitude) : undefined,
+                longitude: ev.longitude !== undefined && ev.longitude !== '' ? Number(ev.longitude) : undefined,
+              };
+            });
+            setLocalEvents(normalized);
+            localStorage.setItem(`defib_${tid}_spontaneous_events`, JSON.stringify(normalized));
+            localStorage.setItem('defib_spontaneous_events', JSON.stringify(normalized));
+            if (onUpdateSpontaneousEvents) onUpdateSpontaneousEvents(normalized);
+          }
         }
       } catch (_) {}
 
@@ -1472,7 +1619,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                     <th
                       key={`day-header-${d.isoDate}`}
                       id={d.isToday ? "extended-planning-today-col" : undefined}
-                      className={`relative border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none w-[200px] min-w-[200px] max-w-[200px] align-bottom ${
+                      className={`relative border-r border-neutral-200 px-1 py-1.5 text-center font-semibold select-none min-w-[200px] align-bottom ${
                         d.isToday
                           ? 'bg-pink-100/80 text-[#2e54ff] border-b-2 border-b-[#2e54ff]'
                           : d.isWeekend
@@ -1616,7 +1763,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   slotInfo.slotAmPm
                                 );
                               }}
-                              className={`relative border-r border-neutral-200 p-1 align-top w-[200px] min-w-[200px] max-w-[200px] min-h-[42px] transition-colors ${
+                              className={`relative border-r border-neutral-200 p-1 align-top min-w-[200px] min-h-[42px] transition-colors ${
                                 isDropTarget
                                   ? 'bg-blue-100/70 ring-2 ring-inset ring-[#2e54ff]'
                                   : cellBgColor
@@ -1756,7 +1903,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                     slotInfo.slotAmPm
                                   );
                                 }}
-                                className={`relative border-r border-neutral-200 p-1.5 align-top w-[200px] min-w-[200px] max-w-[200px] transition-colors ${
+                                className={`relative border-r border-neutral-200 p-1.5 align-top ${dayMissions.length > 0 ? 'min-w-[340px]' : 'min-w-[200px]'} transition-colors ${
                                   isDropTarget
                                     ? 'bg-blue-100/70 ring-2 ring-inset ring-[#2e54ff]'
                                     : cellBgColor
@@ -1864,6 +2011,9 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                       const formattedSlot = formatSlotToAmPm(details.creneau);
                                       const mStatus = String(m.status || m.statut || m.situation || 'À faire').trim() || 'À faire';
                                       const fullMissionText = `Client : ${details.clientName}. Ville : ${details.villePostcode}. Raison(s) : ${details.reasons}. Matériel : ${details.identifiant || 'NC'}.`;
+                                      const marginLeftPx = getMissionHorizontalOffsetPx(details.creneau);
+                                      const durationMinutes = computeMissionDurationMinutes(m, effectiveVariables);
+                                      const missionWidthPx = getMissionCardWidthPx(durationMinutes);
 
                                       return (
                                         <div
@@ -1891,9 +2041,12 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                           }}
                                           className="relative space-y-1 select-none cursor-grab active:cursor-grabbing"
                                           style={{
+                                            marginLeft: `${marginLeftPx}px`,
+                                            width: `${missionWidthPx}px`,
+                                            minWidth: `${BASE_MISSION_WIDTH_PX}px`,
                                             opacity: 1,
                                           }}
-                                          title={`${fullMissionText} — Glisser-déposer pour changer de jour, de technicien ou de créneau`}
+                                          title={`${fullMissionText}${durationMinutes > 0 ? ` (Durée estimée : ${durationMinutes} min)` : ''} — Glisser-déposer pour changer de jour, de technicien ou de créneau`}
                                         >
                                           <div className="flex items-center gap-2 flex-wrap">
                                             <span
@@ -2065,7 +2218,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                   slotInfo.slotAmPm
                                 );
                               }}
-                              className={`relative border-r border-neutral-200 p-1.5 align-top w-[200px] min-w-[200px] max-w-[200px] transition-colors ${
+                              className={`relative border-r border-neutral-200 p-1.5 align-top min-w-[200px] transition-colors ${
                                 isDropTarget
                                   ? 'bg-blue-100/70 ring-2 ring-inset ring-[#2e54ff]'
                                   : cellBgColor
@@ -2112,8 +2265,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                       .join(' - ');
                                     const line2 = evt.intitule || '';
                                     const line3 = evt.commentaire || '';
-                                    const timeOffset = getTimeOffsetPercent(evt.creneau);
-                                    const marginLeftPx = Math.round(timeOffset * 40);
+                                    const marginLeftPx = getMissionHorizontalOffsetPx(evt.creneau);
 
                                     return (
                                       <div

@@ -53,7 +53,15 @@ interface CanalMessagesSidePaneProps {
 
 export function getCanalMessageSignature(m: any): string {
   if (!m) return '';
-  return `${String(m.id || m._sheetRowNumber || '').trim()}::${String(m.authorEmail || m.authorName || '').trim().toLowerCase()}::${String(m.dateStr || '').trim()}::${String(m.content || '').trim()}`;
+  const ch = normalizeMessageChannel(m.tag || m.channel || m['Canal.'] || m['Canal']);
+  const author = String(
+    m.authorEmail || m['Nom Prénom (Username).'] || m['Nom Prénom (Username)'] || m.authorName || m.sender || ''
+  )
+    .trim()
+    .toLowerCase();
+  const dt = String(m.dateStr || m['Horodatage.'] || m['Horodatage'] || m.time || '').trim();
+  const content = String(m.content || m['Message.'] || m['Message'] || m.text || '').trim();
+  return `${ch}::${author}::${dt}::${content}`;
 }
 
 export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
@@ -113,10 +121,33 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     return () => clearLongPressTimer();
   }, []);
 
-  // Resolve current user's full name & email using members list and companyInfo
+  // Resolve current user's full name & email using members list, companyInfo, and localStorage fallbacks
   const resolvedCurrentUser = useMemo(() => {
-    const email = (currentUser?.email || '').trim();
+    let email = (currentUser?.email || '').trim();
     let name = (currentUser?.name || '').trim();
+
+    if (!email) {
+      try {
+        const savedAdmin = localStorage.getItem('defib_admin_logged_user');
+        if (savedAdmin) {
+          const parsed = JSON.parse(savedAdmin);
+          if (parsed?.email) email = String(parsed.email).trim();
+          if (parsed?.name && (!name || name === 'Membre' || name === 'Technicien')) {
+            name = String(parsed.name).trim();
+          }
+        }
+        if (!email) {
+          const savedTech = localStorage.getItem('defib_active_tech_session');
+          if (savedTech) {
+            const parsed = JSON.parse(savedTech);
+            if (parsed?.email) email = String(parsed.email).trim();
+            if (parsed?.name && (!name || name === 'Membre' || name === 'Technicien')) {
+              name = String(parsed.name).trim();
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     if (email && members.length > 0) {
       const matched = members.find(
@@ -147,8 +178,10 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
 
   // Helper to resolve any message's author display name and email
   const resolveMessageAuthor = (msg: TenantMessage) => {
-    const rawAuthorEmail = (msg.authorEmail || '').trim();
-    const rawAuthorName = (msg.authorName || '').trim();
+    const rawAuthorEmail = String(
+      msg.authorEmail || (msg as any)['Nom Prénom (Username).'] || (msg as any)['Nom Prénom (Username)'] || ''
+    ).trim();
+    const rawAuthorName = String(msg.authorName || (msg as any).sender || '').trim();
 
     let email = rawAuthorEmail;
     let name = rawAuthorName;
@@ -200,14 +233,29 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
         .join(' ') || email;
     }
 
+    const myEmailLower = resolvedCurrentUser.email ? resolvedCurrentUser.email.trim().toLowerCase() : '';
+    const myNameLower =
+      resolvedCurrentUser.name &&
+      resolvedCurrentUser.name !== 'Membre' &&
+      resolvedCurrentUser.name !== 'Technicien'
+        ? resolvedCurrentUser.name.trim().toLowerCase()
+        : '';
+
     const isMine = Boolean(
-      (resolvedCurrentUser.email &&
-        email &&
-        resolvedCurrentUser.email.trim().toLowerCase() === email.trim().toLowerCase()) ||
-        (resolvedCurrentUser.name &&
-          name &&
-          name !== 'Membre' &&
-          resolvedCurrentUser.name.trim().toLowerCase() === name.trim().toLowerCase())
+      (myEmailLower &&
+        ((email && myEmailLower === email.trim().toLowerCase()) ||
+          (rawAuthorEmail && myEmailLower === rawAuthorEmail.toLowerCase()) ||
+          (rawAuthorName && myEmailLower === rawAuthorName.toLowerCase()))) ||
+        (myNameLower &&
+          ((name &&
+            name !== 'Membre' &&
+            name !== 'Technicien' &&
+            myNameLower === name.trim().toLowerCase()) ||
+            (rawAuthorName &&
+              rawAuthorName !== 'Membre' &&
+              rawAuthorName !== 'Technicien' &&
+              myNameLower === rawAuthorName.toLowerCase()) ||
+            (rawAuthorEmail && myNameLower === rawAuthorEmail.toLowerCase())))
     );
 
     return {
@@ -378,12 +426,13 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     [messages, activeChannel]
   );
 
-  // Mark messages in the currently active channel as seen when viewing that channel
+  // Mark messages in the currently active channel (plus all own messages) as seen when viewing that channel
   useEffect(() => {
     if (!isOpen || !tenantId) return;
-    const channelSigs = displayedMessages.map((m) => getCanalMessageSignature(m)).filter(Boolean);
+    const ownMessages = messages.filter((m) => m && resolveMessageAuthor(m).isMine);
+    const msgsToMarkSeen = [...displayedMessages, ...ownMessages];
+    const channelSigs = msgsToMarkSeen.map((m) => getCanalMessageSignature(m)).filter(Boolean);
     setSeenSignatures((prev) => {
-      // If seenSignatures was never initialized in localStorage, seed with activeChannel messages
       const baseArr = Array.isArray(prev) ? prev : [];
       const prevSet = new Set(baseArr);
       const hasNew = prev === null || channelSigs.some((s) => !prevSet.has(s));
@@ -395,12 +444,12 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       } catch (_) {}
       return merged;
     });
-    if (onMessagesRead && displayedMessages.length > 0) {
-      onMessagesRead(displayedMessages);
+    if (onMessagesRead && msgsToMarkSeen.length > 0) {
+      onMessagesRead(msgsToMarkSeen);
     }
-  }, [isOpen, tenantId, activeChannel, displayedMessages, onMessagesRead]);
+  }, [isOpen, tenantId, activeChannel, displayedMessages, messages, onMessagesRead, resolvedCurrentUser]);
 
-  // Compute unread message count per channel
+  // Compute unread message count per channel (never counting messages sent by the logged-in user)
   const unreadCountByChannel = useMemo(() => {
     const counts: Record<MessageChannel, number> = {
       Général: 0,
@@ -413,6 +462,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     const seenSet = new Set(Array.isArray(seenSignatures) ? seenSignatures : []);
     messages.forEach((m) => {
       if (!m) return;
+      if (resolveMessageAuthor(m).isMine) return;
       const ch = normalizeMessageChannel(m.tag || (m as any).channel || (m as any)['Canal.'] || (m as any)['Canal']);
       if (isOpen && ch === activeChannel) return;
       const sig = getCanalMessageSignature(m);
@@ -421,7 +471,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       }
     });
     return counts;
-  }, [messages, seenSignatures, activeChannel, isOpen]);
+  }, [messages, seenSignatures, activeChannel, isOpen, resolvedCurrentUser, members, companyInfo]);
 
   // Scroll to bottom when new messages arrive or channel changes
   useEffect(() => {
@@ -462,6 +512,21 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       tenantId,
       envId: tenantId,
     };
+
+    const newSig = getCanalMessageSignature(newMsg);
+    if (newSig) {
+      setSeenSignatures((prev) => {
+        const baseArr = Array.isArray(prev) ? prev : [];
+        const merged = Array.from(new Set([...baseArr, newSig]));
+        try {
+          localStorage.setItem(`defib_${tenantId}_messages_seen_signatures`, JSON.stringify(merged));
+        } catch (_) {}
+        return merged;
+      });
+    }
+    if (onMessagesRead) {
+      onMessagesRead([newMsg]);
+    }
 
     const updated = [...messages, newMsg];
     setMessages(updated);
@@ -715,8 +780,8 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
           id="messages-channel-toggle-bar"
           className="relative grid grid-cols-5 w-full mb-2 p-1 rounded-2xl select-none overflow-hidden"
           style={{
-            backgroundColor: 'rgb(245, 247, 250)',
-            border: '1px solid #DCE1EA',
+            backgroundColor: 'rgb(245 247 250)',
+            border: 'none',
           }}
         >
           <div
@@ -730,7 +795,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
               width: 'calc((100% - 8px) / 5)',
               transform: `translateX(${Math.max(0, MESSAGE_CHANNELS.indexOf(activeChannel)) * 100}%)`,
               transition: 'transform 260ms cubic-bezier(0.22, 1, 0.36, 1)',
-              backgroundColor: 'rgb(46, 84, 255)',
+              backgroundColor: '#0f172a',
               borderRadius: '12px',
               zIndex: 0,
             }}
@@ -744,11 +809,11 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                 type="button"
                 onClick={() => setActiveChannel(canal)}
                 className={`relative z-10 w-full py-2 px-1 sm:px-2 rounded-xl inline-flex items-center justify-center gap-1.5 text-center truncate transition-colors duration-200 cursor-pointer ${
-                  isSelected ? 'font-bold text-white' : 'font-normal text-black hover:opacity-75'
+                  isSelected ? 'font-bold text-white' : 'font-normal hover:opacity-75'
                 }`}
                 style={{
-                  backgroundColor: 'transparent',
-                  color: isSelected ? '#ffffff' : '#000000',
+                  backgroundColor: isSelected ? '#0f172a' : 'transparent',
+                  color: isSelected ? '#ffffff' : 'rgb(80 97 122)',
                   fontSize: 'clamp(13px, 2vw, 18px)',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                   border: 'none',
@@ -761,12 +826,12 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
                   <span
                     className="inline-flex items-center justify-center rounded-full font-bold shrink-0 leading-none select-none"
                     style={{
-                      minWidth: '20px',
-                      height: '20px',
-                      padding: '0 6px',
-                      fontSize: '12px',
-                      backgroundColor: isSelected ? '#ffffff' : 'rgb(46, 84, 255)',
-                      color: isSelected ? 'rgb(46, 84, 255)' : '#ffffff',
+                      minWidth: '25px',
+                      height: '25px',
+                      padding: '0px 6px',
+                      fontSize: '16px',
+                      backgroundColor: 'rgb(210, 45, 11)',
+                      color: 'rgb(255, 255, 255)',
                       borderRadius: '9999px',
                     }}
                   >

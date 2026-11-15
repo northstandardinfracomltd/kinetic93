@@ -42,8 +42,10 @@ interface RouteMissionPoint {
   equipmentTypeLabel: string;
   clientLabel: string;
   addressQuery: string;
+  estimatedDateIso: string;
   estimatedDateFormatted: string;
   estimatedSlotLabel: string;
+  estimatedDurationLabel: string;
   isSpontaneousEvent?: boolean;
 }
 
@@ -56,6 +58,7 @@ interface TechStartPoint {
 
 interface RouteLegSegmentInfo {
   id: string;
+  dayLabel: string;
   fromLabel: string;
   toLabel: string;
   minutes: number;
@@ -106,6 +109,95 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+function normalizeDateToIso(raw?: any): string {
+  const s = String(raw || '').trim();
+  if (!s || s === 'A trier' || s === 'a-trier' || s === 'Non définie') return '';
+  if (s.includes('/')) {
+    const parts = s.split('/');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  }
+  if (s.includes('-')) {
+    const parts = s.split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+      if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+  }
+  return '';
+}
+
+function computeDayLabel(legDateIso: string, baseTourDateIso: string): string {
+  if (!legDateIso || !baseTourDateIso) return 'J1';
+  const dLeg = new Date(`${legDateIso}T00:00:00`);
+  const dBase = new Date(`${baseTourDateIso}T00:00:00`);
+  if (isNaN(dLeg.getTime()) || isNaN(dBase.getTime())) return 'J1';
+  const diffDays = Math.round((dLeg.getTime() - dBase.getTime()) / 86400000);
+  const dayNum = Math.max(1, diffDays + 1);
+  return `J${dayNum}`;
+}
+
+function computeMissionDurationFromVariables(mission: any, variables: Variable[]): string {
+  if (!mission || mission._isSpontaneousEvent) return '';
+  const reasonsToCheck: string[] = [];
+  if (Array.isArray(mission.reasons) && mission.reasons.length > 0) {
+    mission.reasons.forEach((r: any) => {
+      const s = String(r || '').trim();
+      if (s) reasonsToCheck.push(s);
+    });
+  } else {
+    const rawReason = String(
+      mission.reason || mission.motif || mission.typePrestation || ''
+    ).trim();
+    if (rawReason) {
+      rawReason
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .forEach(s => reasonsToCheck.push(s));
+    }
+  }
+
+  let totalMinutes = 0;
+  let foundAny = false;
+
+  if (reasonsToCheck.length > 0 && Array.isArray(variables) && variables.length > 0) {
+    for (const r of reasonsToCheck) {
+      const rNorm = r.toLowerCase().trim();
+      const matchedVar = variables.find(
+        (v: any) =>
+          v &&
+          v.category === 'Modèle Raison Prestation' &&
+          (String(v.nom || '').toLowerCase().trim() === rNorm || String(v.id || '').trim() === r)
+      );
+      if (
+        matchedVar &&
+        matchedVar.dureePrestation !== undefined &&
+        matchedVar.dureePrestation !== null &&
+        String(matchedVar.dureePrestation).trim() !== ''
+      ) {
+        const d = Number(matchedVar.dureePrestation);
+        if (!isNaN(d) && d > 0) {
+          totalMinutes += d;
+          foundAny = true;
+        }
+      }
+    }
+  }
+
+  if (!foundAny && mission.dureePrestation !== undefined && mission.dureePrestation !== null) {
+    const direct = Number(mission.dureePrestation);
+    if (!isNaN(direct) && direct > 0) {
+      totalMinutes = direct;
+      foundAny = true;
+    }
+  }
+
+  return foundAny && totalMinutes > 0 ? `${totalMinutes} min` : '';
+}
+
 function formatTimeAgo(updatedAt: number | undefined, now: number): string {
   if (!updatedAt || isNaN(updatedAt) || updatedAt <= 0) {
     return 'Position en direct';
@@ -146,7 +238,7 @@ function createMissionPassageIcon(bgColor: string, label: string | number): L.Di
         align-items: center;
         justify-content: center;
         border: none;
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+        box-shadow: none;
         cursor: pointer;
         user-select: none;
         box-sizing: border-box;
@@ -174,58 +266,62 @@ function createCheckerboardDepartureIcon(): L.DivIcon {
         background-image: repeating-conic-gradient(#000000 0% 25%, #ffffff 0% 50%);
         background-size: 14px 14px;
         background-position: center;
-        color: #ffffff;
-        font-family: 'DefibeoMain', 'Civilprom', sans-serif;
-        font-weight: 800;
-        font-size: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
         border: none;
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
-        cursor: pointer;
+        box-shadow: none;
         user-select: none;
         box-sizing: border-box;
-        text-shadow: 0 0 4px #000000, 0 0 6px #000000, 1px 1px 0 #000000, -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000;
-      ">
-        D
-      </div>
+      "></div>
     `,
     iconSize: [43, 43],
     iconAnchor: [21.5, 21.5],
-    popupAnchor: [0, -22],
   });
 }
 
-function createLegPillIcon(leg: RouteLegSegmentInfo, isWebapp: boolean): L.DivIcon {
+function createLegPillIcon(leg: RouteLegSegmentInfo): L.DivIcon {
+  const safeDay = escapeHtml(leg.dayLabel || 'J1');
   const text = `Temps estimé point ${escapeHtml(leg.fromLabel)} vers ${escapeHtml(leg.toLabel)}: ${leg.minutes} min(s) pour ${escapeHtml(leg.kmFormatted)} km(s).`;
-  const fontSize = isWebapp ? '11px' : '13px';
-  const padding = isWebapp ? '4px 9px' : '5px 12px';
 
   return L.divIcon({
     className: 'defibeo-tour-route-leg-pill-icon',
     html: `
       <div style="
         transform: translate(-50%, calc(-50% + ${leg.offsetY}px));
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        width: max-content;
         background-color: #ffffff;
         color: #000000;
         font-family: 'DefibeoMain', 'Civilprom', sans-serif;
-        font-size: ${fontSize};
+        font-size: 18px;
         font-weight: 600;
-        padding: ${padding};
+        padding: 6px 14px 6px 8px;
         border-radius: 9999px;
         border: none;
-        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
+        box-shadow: none;
         white-space: nowrap;
         pointer-events: none;
         user-select: none;
         line-height: 1.25;
       ">
-        ${text}
+        <span style="
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 34px;
+          height: 34px;
+          padding: 0 8px;
+          border-radius: 9999px;
+          background-color: #000000;
+          color: #ffffff;
+          font-size: 18px;
+          font-weight: 700;
+          line-height: 1;
+          flex-shrink: 0;
+        ">${safeDay}</span>
+        <span>${text}</span>
       </div>
     `,
-    iconSize: [0, 0],
-    iconAnchor: [0, 0],
   });
 }
 
@@ -240,6 +336,7 @@ function createLiveTechPinIcon(name: string, updatedAt: number | undefined, nowT
         display: flex;
         flex-direction: column;
         align-items: center;
+        width: max-content;
         transform: translate(-50%, calc(-100% + 7px));
         pointer-events: auto;
       ">
@@ -247,15 +344,15 @@ function createLiveTechPinIcon(name: string, updatedAt: number | undefined, nowT
           background-color: #ffffff;
           border: none;
           border-radius: 10px;
-          padding: 6px 10px;
+          padding: 8px 12px;
           font-family: 'DefibeoMain', 'Civilprom', sans-serif;
           white-space: nowrap;
           text-align: left;
           margin-bottom: 10px;
-          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
+          box-shadow: none;
         ">
-          <div style="font-size: 14px; font-weight: bold; color: #000000; line-height: 1.25;">${safeName}</div>
-          <div style="font-size: 13px; font-weight: 100; color: #000000; line-height: 1.25; margin-top: 1px;">${timeAgoLabel}</div>
+          <div style="font-size: 18px; font-weight: bold; color: #000000; line-height: 1.25;">${safeName}</div>
+          <div style="font-size: 18px; font-weight: 100; color: #000000; line-height: 1.25; margin-top: 2px;">${timeAgoLabel}</div>
         </div>
         <div style="
           width: 14px;
@@ -269,8 +366,6 @@ function createLiveTechPinIcon(name: string, updatedAt: number | undefined, nowT
         "></div>
       </div>
     `,
-    iconSize: [0, 0],
-    iconAnchor: [0, 0],
   });
 }
 
@@ -309,7 +404,7 @@ const animatedRunnerIcon = L.divIcon({
       border-radius: 9999px;
       background: #2e54ff;
       background-color: #2e54ff;
-      box-shadow: 0 0 0 5px rgba(46, 84, 255, 0.32), 0 2px 6px rgba(0, 0, 0, 0.35);
+      box-shadow: 0 0 0 5px rgba(46, 84, 255, 0.32);
       border: none;
       pointer-events: none;
     "></div>
@@ -320,7 +415,7 @@ const animatedRunnerIcon = L.divIcon({
 
 /**
  * Animates a point moving along the road polyline in a continuous loop
- * at a moderate, readable speed to show the direction of travel.
+ * at a slower, calm speed to show the direction of travel.
  */
 function AnimatedRouteDot({ roadPositions }: { roadPositions: [number, number][] }) {
   const map = useMap();
@@ -351,7 +446,8 @@ function AnimatedRouteDot({ roadPositions }: { roadPositions: [number, number][]
       zIndexOffset: 2000,
     }).addTo(map);
 
-    const DURATION_MS = Math.max(18000, Math.min(34000, Math.round(totalLen * 16000)));
+    // Slower speed along the route trace
+    const DURATION_MS = Math.max(36000, Math.min(72000, Math.round(totalLen * 32000)));
     const startTime = performance.now();
     let rafId = 0;
 
@@ -445,11 +541,15 @@ function AutoFitRouteBounds({
   return null;
 }
 
-function getPolylineMidpoint(path: [number, number][]): [number, number] {
+function getPointAlongPolyline(path: [number, number][], fraction = 0.5): [number, number] {
   if (path.length === 0) return [46.603354, 1.888334];
   if (path.length === 1) return path[0];
+  const clampedFraction = Math.max(0.15, Math.min(0.85, fraction));
   if (path.length === 2) {
-    return [(path[0][0] + path[1][0]) / 2, (path[0][1] + path[1][1]) / 2];
+    return [
+      path[0][0] + (path[1][0] - path[0][0]) * clampedFraction,
+      path[0][1] + (path[1][1] - path[0][1]) * clampedFraction,
+    ];
   }
 
   let total = 0;
@@ -462,12 +562,12 @@ function getPolylineMidpoint(path: [number, number][]): [number, number] {
     total += l;
   }
 
-  if (total <= 0) return path[Math.floor(path.length / 2)];
-  const half = total / 2;
+  if (total <= 0) return path[Math.floor(path.length * clampedFraction)];
+  const target = total * clampedFraction;
   let acc = 0;
   for (let i = 0; i < segs.length; i++) {
-    if (acc + segs[i] >= half) {
-      const r = segs[i] > 0 ? (half - acc) / segs[i] : 0.5;
+    if (acc + segs[i] >= target) {
+      const r = segs[i] > 0 ? (target - acc) / segs[i] : 0.5;
       return [
         path[i][0] + (path[i + 1][0] - path[i][0]) * r,
         path[i][1] + (path[i + 1][1] - path[i][1]) * r,
@@ -475,7 +575,7 @@ function getPolylineMidpoint(path: [number, number][]): [number, number] {
     }
     acc += segs[i];
   }
-  return path[Math.floor(path.length / 2)];
+  return path[Math.floor(path.length * clampedFraction)];
 }
 
 function formatKmValue(km: number): string {
@@ -485,7 +585,8 @@ function formatKmValue(km: number): string {
 }
 
 async function fetchRouteGeometryAndLegs(
-  waypoints: { coord: Coordinate; label: string }[]
+  waypoints: { coord: Coordinate; label: string; dateIso: string }[],
+  baseTourDateIso: string
 ): Promise<{
   roadPositions: [number, number][];
   legSegments: RouteLegSegmentInfo[];
@@ -498,9 +599,18 @@ async function fetchRouteGeometryAndLegs(
   }
 
   const fullPath: [number, number][] = [];
-  const legSegments: RouteLegSegmentInfo[] = [];
+  const rawLegs: {
+    id: string;
+    dayLabel: string;
+    fromLabel: string;
+    toLabel: string;
+    minutes: number;
+    kmFormatted: string;
+    legPath: [number, number][];
+    midpoint: [number, number];
+    offsetY: number;
+  }[] = [];
 
-  // Process in chunks of up to 25 waypoints (overlapping 1 waypoint between chunks)
   const CHUNK_SIZE = 25;
 
   for (let startIdx = 0; startIdx < waypoints.length - 1; startIdx += CHUNK_SIZE - 1) {
@@ -547,18 +657,20 @@ async function fetchRouteGeometryAndLegs(
         const wpB = chunk[j + 1];
         const osrmLeg = osrmLegs[j];
 
-        // Extract leg geometry from steps if available
-        const stepCoords: [number, number][] = [];
+        const stepCoords: [number, number][] = [[wpA.coord.lat, wpA.coord.lng]];
         if (osrmLeg && Array.isArray(osrmLeg.steps)) {
           osrmLeg.steps.forEach((st: any) => {
             const cList = st?.geometry?.coordinates;
             if (Array.isArray(cList)) {
               cList.forEach((p: [number, number]) => {
-                stepCoords.push([p[1], p[0]]);
+                if (Array.isArray(p) && p.length >= 2) {
+                  stepCoords.push([p[1], p[0]]);
+                }
               });
             }
           });
         }
+        stepCoords.push([wpB.coord.lat, wpB.coord.lng]);
 
         const legPath: [number, number][] =
           stepCoords.length >= 2
@@ -583,18 +695,23 @@ async function fetchRouteGeometryAndLegs(
                 )
               );
 
-        legSegments.push({
-          id: `leg_${startIdx + j}_${wpA.label}_${wpB.label}`,
+        const segmentDateIso = wpB.dateIso || wpA.dateIso || baseTourDateIso;
+        const dayLabel = computeDayLabel(segmentDateIso, baseTourDateIso);
+        const legIdx = startIdx + j;
+
+        rawLegs.push({
+          id: `leg_${legIdx}_${wpA.label}_${wpB.label}`,
+          dayLabel,
           fromLabel: wpA.label,
           toLabel: wpB.label,
           minutes: durationMins,
           kmFormatted: formatKmValue(distKm),
-          midpoint: getPolylineMidpoint(legPath),
+          legPath,
+          midpoint: getPointAlongPolyline(legPath, 0.5),
           offsetY: 0,
         });
       }
     } else {
-      // Fallback pair-by-pair
       for (let j = 0; j < chunk.length - 1; j++) {
         const wpA = chunk[j];
         const wpB = chunk[j + 1];
@@ -612,35 +729,68 @@ async function fetchRouteGeometryAndLegs(
         } else {
           fullPath.push(...seg);
         }
-        legSegments.push({
-          id: `leg_${startIdx + j}_${wpA.label}_${wpB.label}`,
+        const segmentDateIso = wpB.dateIso || wpA.dateIso || baseTourDateIso;
+        const dayLabel = computeDayLabel(segmentDateIso, baseTourDateIso);
+        const legIdx = startIdx + j;
+
+        rawLegs.push({
+          id: `leg_${legIdx}_${wpA.label}_${wpB.label}`,
+          dayLabel,
           fromLabel: wpA.label,
           toLabel: wpB.label,
           minutes: durationMins,
           kmFormatted: formatKmValue(distKm),
-          midpoint: getPolylineMidpoint(seg),
+          legPath: seg,
+          midpoint: getPointAlongPolyline(seg, 0.5),
           offsetY: 0,
         });
       }
     }
   }
 
-  // Offset overlapping leg midpoints (e.g. when outbound and return legs share the same road)
-  for (let i = 0; i < legSegments.length; i++) {
-    let overlapIdx = 0;
-    for (let k = 0; k < i; k++) {
-      const d = getHaversineDistance(
-        { lat: legSegments[i].midpoint[0], lng: legSegments[i].midpoint[1] },
-        { lat: legSegments[k].midpoint[0], lng: legSegments[k].midpoint[1] }
-      );
-      if (d < 0.8) {
-        overlapIdx++;
-      }
-    }
-    if (overlapIdx > 0) {
-      legSegments[i].offsetY = overlapIdx % 2 === 1 ? 26 * Math.ceil(overlapIdx / 2) : -26 * Math.ceil(overlapIdx / 2);
+  // Compute overall route bounding span to detect pills that would visually collide at initial zoom
+  let maxSpanKm = 10;
+  for (let i = 0; i < waypoints.length; i++) {
+    for (let k = i + 1; k < waypoints.length; k++) {
+      const d = getHaversineDistance(waypoints[i].coord, waypoints[k].coord);
+      if (d > maxSpanKm) maxSpanKm = d;
     }
   }
+  const collisionRadiusKm = Math.max(1.5, maxSpanKm * 0.16);
+
+  // Spread pills along their own segment path & vertical offset when two leg midpoints are close
+  const fractions = [0.5, 0.35, 0.65, 0.25, 0.75];
+  for (let i = 0; i < rawLegs.length; i++) {
+    let overlapCount = 0;
+    for (let k = 0; k < i; k++) {
+      const d = getHaversineDistance(
+        { lat: rawLegs[i].midpoint[0], lng: rawLegs[i].midpoint[1] },
+        { lat: rawLegs[k].midpoint[0], lng: rawLegs[k].midpoint[1] }
+      );
+      if (d < collisionRadiusKm) {
+        overlapCount++;
+      }
+    }
+    if (overlapCount > 0) {
+      const frac = fractions[overlapCount % fractions.length];
+      rawLegs[i].midpoint = getPointAlongPolyline(rawLegs[i].legPath, frac);
+      rawLegs[i].offsetY =
+        overlapCount % 2 === 1
+          ? 48 * Math.ceil(overlapCount / 2)
+          : -48 * Math.ceil(overlapCount / 2);
+    }
+  }
+
+  const legSegments: RouteLegSegmentInfo[] = rawLegs.map(l => ({
+    id: l.id,
+    dayLabel: l.dayLabel,
+    fromLabel: l.fromLabel,
+    toLabel: l.toLabel,
+    minutes: l.minutes,
+    kmFormatted: l.kmFormatted,
+    midpoint: l.midpoint,
+    offsetY: l.offsetY,
+  }));
 
   return { roadPositions: fullPath, legSegments };
 }
@@ -668,6 +818,9 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
   const [missionPoints, setMissionPoints] = useState<RouteMissionPoint[]>([]);
   const [roadPositions, setRoadPositions] = useState<[number, number][]>([]);
   const [legSegments, setLegSegments] = useState<RouteLegSegmentInfo[]>([]);
+
+  // Initially hidden legend + technician position overlay panel, toggled by "Infos Affichage"
+  const [showDisplayInfoPanel, setShowDisplayInfoPanel] = useState<boolean>(false);
 
   // Live technician position overlay toggle ("Superposer la position du technicien.")
   const [showLiveTechPosition, setShowLiveTechPosition] = useState<boolean>(false);
@@ -756,7 +909,6 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
         }
       }
 
-      // Fallback to technician's lastKnownLat/lastKnownLng or localStorage
       if (!found && technician.lastKnownLat !== undefined && technician.lastKnownLng !== undefined) {
         const mLat = Number(technician.lastKnownLat);
         const mLng = Number(technician.lastKnownLng);
@@ -991,26 +1143,6 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
           }
         } catch (_) {}
 
-        const normalizeEventDateIso = (raw: any): string => {
-          const s = String(raw || '').trim();
-          if (!s) return '';
-          if (s.includes('/')) {
-            const parts = s.split('/');
-            if (parts.length === 3) {
-              if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-              if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-            }
-          }
-          if (s.includes('-')) {
-            const parts = s.split('-');
-            if (parts.length === 3) {
-              if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-              if (parts[2].length === 4) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-            }
-          }
-          return s;
-        };
-
         const matchedSpontaneousEvents = allSpontaneousEvents.filter((ev: any) => {
           if (!ev) return false;
           const evTourVals = [
@@ -1043,7 +1175,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
           }
           if (coord) {
             equipmentCoords[spontKey] = coord;
-            const isoDt = normalizeEventDateIso(ev.date) || tour.startDate || '';
+            const isoDt = normalizeDateToIso(ev.date) || normalizeDateToIso(tour.startDate) || '';
             spontaneousRouteItems.push({
               id: spontKey,
               defibIdentifiant: spontKey,
@@ -1129,14 +1261,15 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
           const coord = equipmentCoords[key] || (ident ? equipmentCoords[ident] : undefined);
           if (!coord) return;
 
-          if (m._isSpontaneousEvent) {
-            const rawDate = m.estimatedDate || tour.startDate || '';
-            const estimatedDateFormatted = rawDate ? formatDateToFR(rawDate) : 'Non définie';
-            const estimatedSlotLabel =
-              m.estimatedSlot && String(m.estimatedSlot).trim() !== ''
-                ? String(m.estimatedSlot).trim()
-                : 'Non défini';
+          const rawDate = m.estimatedDate || tour.startDate || '';
+          const estimatedDateIso = normalizeDateToIso(rawDate);
+          const estimatedDateFormatted = rawDate ? formatDateToFR(rawDate) : 'Non définie';
+          const estimatedSlotLabel =
+            m.estimatedSlot && String(m.estimatedSlot).trim() !== ''
+              ? String(m.estimatedSlot).trim()
+              : 'Non défini';
 
+          if (m._isSpontaneousEvent) {
             builtPoints.push({
               mission: m,
               passageNumber: idx + 1,
@@ -1147,8 +1280,10 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
               equipmentTypeLabel: 'Événement spontané',
               clientLabel: String(m.commentaire || '—').trim(),
               addressQuery: String(m.address || '').trim(),
+              estimatedDateIso,
               estimatedDateFormatted,
               estimatedSlotLabel,
+              estimatedDurationLabel: '',
               isSpontaneousEvent: true,
             });
             return;
@@ -1190,12 +1325,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             : [m.address || m.lieu || m.nomSite, m.cp, m.ville, 'France'];
           const addressQuery = addrParts.filter(Boolean).join(', ').trim();
 
-          const rawDate = m.estimatedDate || tour.startDate || '';
-          const estimatedDateFormatted = rawDate ? formatDateToFR(rawDate) : 'Non définie';
-          const estimatedSlotLabel =
-            m.estimatedSlot && String(m.estimatedSlot).trim() !== ''
-              ? String(m.estimatedSlot).trim()
-              : 'Non défini';
+          const estimatedDurationLabel = computeMissionDurationFromVariables(m, variables);
 
           builtPoints.push({
             mission: m,
@@ -1207,8 +1337,10 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             equipmentTypeLabel,
             clientLabel,
             addressQuery,
+            estimatedDateIso,
             estimatedDateFormatted,
             estimatedSlotLabel,
+            estimatedDurationLabel,
           });
         });
 
@@ -1245,14 +1377,33 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
 
         setMissionPoints(builtPoints);
 
+        // Determine base tour start date (ISO YYYY-MM-DD) for J1, J2, ... calculation
+        let baseTourDateIso = normalizeDateToIso(tour.startDate);
+        const validMissionDates = builtPoints
+          .map(p => p.estimatedDateIso)
+          .filter(Boolean)
+          .sort();
+        if (!baseTourDateIso && validMissionDates.length > 0) {
+          baseTourDateIso = validMissionDates[0];
+        } else if (baseTourDateIso && validMissionDates.length > 0 && validMissionDates[0] < baseTourDateIso) {
+          baseTourDateIso = validMissionDates[0];
+        }
+
+        const firstDayIso = builtPoints[0]?.estimatedDateIso || baseTourDateIso;
+        const lastDayIso = builtPoints[builtPoints.length - 1]?.estimatedDateIso || baseTourDateIso;
+
         // 5. Fetch real road geometry and per-leg travel time & distance pills: D -> 1 -> ... -> N -> D
-        const orderedWaypoints: { coord: Coordinate; label: string }[] = [
-          { coord: startCoord, label: 'D' },
-          ...builtPoints.map(p => ({ coord: p.coord, label: String(p.passageNumber) })),
-          { coord: startCoord, label: 'D' },
+        const orderedWaypoints: { coord: Coordinate; label: string; dateIso: string }[] = [
+          { coord: startCoord, label: 'D', dateIso: firstDayIso },
+          ...builtPoints.map(p => ({
+            coord: p.coord,
+            label: String(p.passageNumber),
+            dateIso: p.estimatedDateIso || baseTourDateIso,
+          })),
+          { coord: startCoord, label: 'D', dateIso: lastDayIso },
         ];
         const { roadPositions: roadGeom, legSegments: computedLegs } =
-          await fetchRouteGeometryAndLegs(orderedWaypoints);
+          await fetchRouteGeometryAndLegs(orderedWaypoints, baseTourDateIso);
         if (!cancelled) {
           setRoadPositions(roadGeom);
           setLegSegments(computedLegs);
@@ -1287,18 +1438,26 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
         .defibeo-tour-route-live-tech-icon {
           background: transparent !important;
           border: none !important;
+          width: auto !important;
+          height: auto !important;
         }
         .defibeo-route-hover-popup .leaflet-popup-content-wrapper {
           background-color: #ffffff !important;
           border: none !important;
           border-radius: 16px !important;
-          box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14) !important;
+          box-shadow: none !important;
           padding: 0 !important;
+          height: auto !important;
+          max-height: none !important;
           color: #000000 !important;
           font-family: 'DefibeoMain', 'Civilprom', sans-serif !important;
         }
         .defibeo-route-hover-popup .leaflet-popup-content {
-          margin: 12px 16px !important;
+          margin: 0 !important;
+          padding: 18px !important;
+          height: auto !important;
+          max-height: none !important;
+          width: auto !important;
         }
         .defibeo-route-hover-popup .leaflet-popup-tip-container {
           display: none !important;
@@ -1317,140 +1476,177 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
       `}</style>
 
       <div className="relative w-full h-full flex-1">
-        {/* Top-Left Floating Sticky Legend + Technician Live Position Toggle */}
-        <div
-          className="absolute top-4 left-4 z-[4000] flex flex-col select-none pointer-events-auto"
-          style={{
-            gap: isWebapp ? '6px' : '10px',
-            maxWidth: isWebapp ? '215px' : '280px',
-          }}
-          id="tour-route-map-legend-panel"
-        >
-          {/* Legend Card */}
+        {/* Top-Left Floating Sticky Legend + Technician Live Position Toggle (Shown when "Infos Affichage" is clicked) */}
+        {showDisplayInfoPanel && (
           <div
+            className="absolute top-4 left-4 z-[4000] flex flex-col select-none pointer-events-auto"
             style={{
-              backgroundColor: '#ffffff',
-              borderRadius: isWebapp ? '12px' : '16px',
-              padding: isWebapp ? '8px 11px' : '12px 16px',
-              boxShadow: '0 6px 20px rgba(15, 23, 42, 0.12)',
-              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              gap: '10px',
+              maxWidth: '340px',
             }}
+            id="tour-route-map-legend-panel"
           >
+            {/* Legend Card */}
             <div
-              className="flex flex-col"
-              style={{ gap: isWebapp ? '4px' : '6px' }}
-            >
-              {MISSION_STATUS_LEGEND.map(item => (
-                <div
-                  key={item.label}
-                  className="flex items-center"
-                  style={{ gap: isWebapp ? '7px' : '10px' }}
-                >
-                  <span
-                    className="rounded-full shrink-0"
-                    style={{
-                      width: isWebapp ? '10px' : '14px',
-                      height: isWebapp ? '10px' : '14px',
-                      backgroundColor: item.color,
-                      display: 'inline-block',
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontSize: isWebapp ? '11.5px' : '14px',
-                      fontWeight: 600,
-                      color: '#000000',
-                      lineHeight: 1.2,
-                    }}
-                  >
-                    {item.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Toggle ON/OFF: Superposer la position du technicien. */}
-          <div
-            onClick={() => setShowLiveTechPosition(prev => !prev)}
-            style={{
-              backgroundColor: '#ffffff',
-              borderRadius: isWebapp ? '12px' : '16px',
-              padding: isWebapp ? '8px 11px' : '11px 15px',
-              boxShadow: '0 6px 20px rgba(15, 23, 42, 0.12)',
-              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              cursor: 'pointer',
-            }}
-            className="flex items-center justify-between gap-2.5"
-          >
-            <span
               style={{
-                fontSize: isWebapp ? '11.5px' : '14px',
-                fontWeight: 600,
-                color: '#000000',
-                lineHeight: 1.25,
-              }}
-            >
-              Superposer la position du technicien.
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={showLiveTechPosition}
-              onClick={e => {
-                e.stopPropagation();
-                setShowLiveTechPosition(prev => !prev);
-              }}
-              style={{
-                width: isWebapp ? '34px' : '40px',
-                height: isWebapp ? '19px' : '22px',
-                borderRadius: '9999px',
-                backgroundColor: showLiveTechPosition ? '#2e54ff' : '#cbd5e1',
-                position: 'relative',
-                transition: 'background-color 0.2s ease',
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                padding: '16px 18px',
+                boxShadow: 'none',
                 border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-                flexShrink: 0,
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
               }}
+            >
+              <div
+                style={{
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  color: '#000000',
+                  marginBottom: '10px',
+                  lineHeight: 1.25,
+                }}
+              >
+                Légende des couleurs:
+              </div>
+              <div
+                className="flex flex-col"
+                style={{ gap: '8px' }}
+              >
+                {MISSION_STATUS_LEGEND.map(item => (
+                  <div
+                    key={item.label}
+                    className="flex items-center"
+                    style={{ gap: '10px' }}
+                  >
+                    <span
+                      className="rounded-full shrink-0"
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        backgroundColor: item.color,
+                        display: 'inline-block',
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: '18px',
+                        fontWeight: 600,
+                        color: '#000000',
+                        lineHeight: 1.25,
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Toggle ON/OFF: Superposer la position du technicien. */}
+            <div
+              onClick={() => setShowLiveTechPosition(prev => !prev)}
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                padding: '14px 18px',
+                boxShadow: 'none',
+                border: 'none',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                cursor: 'pointer',
+              }}
+              className="flex items-center justify-between gap-3"
             >
               <span
                 style={{
-                  width: isWebapp ? '15px' : '18px',
-                  height: isWebapp ? '15px' : '18px',
-                  borderRadius: '50%',
-                  backgroundColor: '#ffffff',
-                  position: 'absolute',
-                  top: '2px',
-                  left: showLiveTechPosition ? (isWebapp ? '17px' : '20px') : '2px',
-                  transition: 'left 0.2s ease',
-                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
+                  fontSize: '18px',
+                  fontWeight: 600,
+                  color: '#000000',
+                  lineHeight: 1.25,
                 }}
-              />
-            </button>
+              >
+                Superposer la position du technicien.
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showLiveTechPosition}
+                onClick={e => {
+                  e.stopPropagation();
+                  setShowLiveTechPosition(prev => !prev);
+                }}
+                style={{
+                  width: '44px',
+                  height: '24px',
+                  borderRadius: '9999px',
+                  backgroundColor: showLiveTechPosition ? '#2e54ff' : '#cbd5e1',
+                  position: 'relative',
+                  transition: 'background-color 0.2s ease',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    backgroundColor: '#ffffff',
+                    position: 'absolute',
+                    top: '2px',
+                    left: showLiveTechPosition ? '22px' : '2px',
+                    transition: 'left 0.2s ease',
+                    boxShadow: 'none',
+                  }}
+                />
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Top-Center Loading Indicator while computing road trace */}
         {isLoadingRoute && (
           <div
-            className="absolute top-4 left-1/2 -translate-x-1/2 z-[4000] py-2.5 px-5 rounded-full flex items-center justify-center gap-2.5 pointer-events-none animate-fadeIn"
+            className="absolute top-4 left-1/2 -translate-x-1/2 z-[4000] py-2.5 px-5 rounded-full flex items-center justify-center pointer-events-none animate-fadeIn"
             style={{
               backgroundColor: '#2e54ff',
               color: '#ffffff',
               fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-              fontSize: '15px',
-              boxShadow: '0 4px 15px rgba(46, 84, 255, 0.35)',
+              fontSize: '18px',
+              boxShadow: 'none',
+              border: 'none',
             }}
           >
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-            <span>Calcul du parcours optimisé dans les voies...</span>
+            <span>Chargement du parcours.</span>
           </div>
         )}
 
-        {/* Close Button: Top-Right on Main Software, Floating Sticky Bottom Full-Width on Webapp */}
+        {/* Action Buttons ("Infos Affichage" on the left + "Fermer" on the right):
+            Top-Right on Main Software (50%/50% on mobile), Floating Sticky Bottom 50%/50% on Webapp */}
         {!isWebapp ? (
-          <div className="absolute top-4 right-4 z-[4000] flex items-center gap-3">
+          <div className="fixed bottom-0 left-0 right-0 p-4 sm:bottom-auto sm:left-auto sm:top-4 sm:right-4 sm:p-0 z-[4000] flex items-center gap-3 pointer-events-auto">
+            <button
+              type="button"
+              onClick={() => setShowDisplayInfoPanel(prev => !prev)}
+              id="btn-tour-route-map-info"
+              style={{
+                backgroundColor: '#2e54ff',
+                boxShadow: 'none',
+                borderRadius: '12px',
+                fontSize: '18px',
+                padding: '9px 19px',
+                fontWeight: 'normal',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                transition: 'all 0.1s ease-in-out',
+              }}
+              className="w-1/2 sm:w-auto hover:opacity-90 cursor-pointer select-none text-center"
+            >
+              Infos Affichage
+            </button>
             <button
               type="button"
               onClick={onClose}
@@ -1468,13 +1664,34 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                 fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                 transition: 'all 0.1s ease-in-out',
               }}
-              className="hover:opacity-90 cursor-pointer select-none"
+              className="w-1/2 sm:w-auto hover:opacity-90 cursor-pointer select-none text-center"
             >
               Fermer
             </button>
           </div>
         ) : (
-          <div className="fixed bottom-0 left-0 right-0 p-4 z-[4000] pointer-events-auto">
+          <div className="fixed bottom-0 left-0 right-0 p-4 z-[4000] flex items-center gap-3 pointer-events-auto">
+            <button
+              type="button"
+              onClick={() => setShowDisplayInfoPanel(prev => !prev)}
+              id="btn-tour-route-map-info-webapp"
+              style={{
+                backgroundColor: '#2e54ff',
+                boxShadow: 'none',
+                borderRadius: '14px',
+                fontSize: '18px',
+                padding: '14px 20px',
+                fontWeight: 'bold',
+                color: '#ffffff',
+                border: 'none',
+                cursor: 'pointer',
+                width: '50%',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+              }}
+              className="w-1/2 hover:opacity-90 active:scale-[0.99] transition-all cursor-pointer select-none text-center"
+            >
+              Infos Affichage
+            </button>
             <button
               type="button"
               onClick={onClose}
@@ -1489,10 +1706,10 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                 color: '#ffffff',
                 border: 'none',
                 cursor: 'pointer',
-                width: '100%',
+                width: '50%',
                 fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
               }}
-              className="w-full hover:opacity-90 active:scale-[0.99] transition-all cursor-pointer select-none text-center"
+              className="w-1/2 hover:opacity-90 active:scale-[0.99] transition-all cursor-pointer select-none text-center"
             >
               Fermer
             </button>
@@ -1541,7 +1758,7 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             <Marker
               key={leg.id}
               position={leg.midpoint}
-              icon={createLegPillIcon(leg, isWebapp)}
+              icon={createLegPillIcon(leg)}
               interactive={false}
             />
           ))}
@@ -1559,79 +1776,13 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
             />
           )}
 
-          {/* Technician Départ & Retour Point (Checkerboard 'D') */}
+          {/* Technician Départ & Retour Point (Checkerboard without 'D' and without hover popup) */}
           {techStartPoint && (
             <Marker
               position={techStartPoint.displayCoord}
               icon={createCheckerboardDepartureIcon()}
-              eventHandlers={{
-                mouseover: e => {
-                  e.target.openPopup();
-                },
-                click: e => {
-                  e.target.openPopup();
-                },
-              }}
-            >
-              <Popup closeButton={false} className="defibeo-route-hover-popup">
-                <div
-                  style={{
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    color: '#000000',
-                    lineHeight: '1.4',
-                    textAlign: 'left',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      fontSize: '17px',
-                      color: '#000000',
-                      marginBottom: '4px',
-                    }}
-                  >
-                    Départ &amp; Retour
-                  </div>
-                  <div style={{ marginBottom: '6px' }}>
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        borderRadius: '1000px',
-                        backgroundColor: 'rgb(210, 45, 11)',
-                        color: '#ffffff',
-                        fontSize: '14px',
-                        fontWeight: 700,
-                        padding: '3px 11px',
-                        lineHeight: '1.2',
-                      }}
-                    >
-                      Technicien
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '15px',
-                      fontWeight: 600,
-                      color: '#000000',
-                      marginBottom: '2px',
-                    }}
-                  >
-                    Nom : <span style={{ fontWeight: 400 }}>{techStartPoint.techName}</span>
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '15px',
-                      fontWeight: 600,
-                      color: '#000000',
-                    }}
-                  >
-                    Adresse : <span style={{ fontWeight: 400 }}>{techStartPoint.addressLabel}</span>
-                  </div>
-                </div>
-              </Popup>
-            </Marker>
+              interactive={false}
+            />
           )}
 
           {/* Mission Points (Status color circle + Passage number inside + Hover/Click Popup with 'Y aller') */}
@@ -1663,22 +1814,25 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                     style={{
                       fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                       color: '#000000',
-                      lineHeight: '1.4',
+                      fontSize: '18px',
+                      lineHeight: '1.45',
                       textAlign: 'left',
                       whiteSpace: 'nowrap',
+                      height: 'auto',
+                      maxHeight: 'none',
                     }}
                   >
                     <div
                       style={{
                         fontWeight: 700,
-                        fontSize: '17px',
+                        fontSize: '18px',
                         color: '#000000',
-                        marginBottom: '4px',
+                        marginBottom: '6px',
                       }}
                     >
                       {pt.equipmentIdentifiant}
                     </div>
-                    <div style={{ marginBottom: '6px' }}>
+                    <div style={{ marginBottom: '8px' }}>
                       <span
                         style={{
                           display: 'inline-flex',
@@ -1686,10 +1840,10 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                           borderRadius: '1000px',
                           backgroundColor: pt.isSpontaneousEvent ? '#000000' : 'rgb(61, 220, 132)',
                           color: pt.isSpontaneousEvent ? '#ffffff' : 'rgb(19, 100, 55)',
-                          fontSize: '14px',
+                          fontSize: '18px',
                           fontWeight: 700,
-                          padding: '3px 11px',
-                          lineHeight: '1.2',
+                          padding: '5px 14px',
+                          lineHeight: '1.25',
                         }}
                       >
                         {pt.equipmentTypeLabel}
@@ -1697,10 +1851,10 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                     </div>
                     <div
                       style={{
-                        fontSize: '15px',
+                        fontSize: '18px',
                         fontWeight: 600,
                         color: '#000000',
-                        marginBottom: '2px',
+                        marginBottom: '4px',
                       }}
                     >
                       {pt.isSpontaneousEvent ? 'Commentaire :' : 'Client :'}{' '}
@@ -1709,10 +1863,10 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                     {pt.isSpontaneousEvent && pt.addressQuery && (
                       <div
                         style={{
-                          fontSize: '15px',
+                          fontSize: '18px',
                           fontWeight: 600,
                           color: '#000000',
-                          marginBottom: '2px',
+                          marginBottom: '4px',
                         }}
                       >
                         Adresse : <span style={{ fontWeight: 400 }}>{pt.addressQuery}</span>
@@ -1720,23 +1874,36 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                     )}
                     <div
                       style={{
-                        fontSize: '15px',
+                        fontSize: '18px',
                         fontWeight: 600,
                         color: '#000000',
-                        marginBottom: '2px',
+                        marginBottom: '4px',
                       }}
                     >
                       Date estimée : <span style={{ fontWeight: 400 }}>{pt.estimatedDateFormatted}</span>
                     </div>
                     <div
                       style={{
-                        fontSize: '15px',
+                        fontSize: '18px',
                         fontWeight: 600,
                         color: '#000000',
-                        marginBottom: '10px',
+                        marginBottom: '4px',
                       }}
                     >
                       Créneau estimé : <span style={{ fontWeight: 400 }}>{pt.estimatedSlotLabel}</span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '18px',
+                        fontWeight: 600,
+                        color: '#000000',
+                        marginBottom: '12px',
+                      }}
+                    >
+                      Durée estimée :{' '}
+                      {pt.estimatedDurationLabel ? (
+                        <span style={{ fontWeight: 400 }}>{pt.estimatedDurationLabel}</span>
+                      ) : null}
                     </div>
                     <div>
                       <a
@@ -1751,12 +1918,13 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                           backgroundColor: '#2e54ff',
                           color: '#ffffff',
                           fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                          fontSize: '15px',
+                          fontSize: '18px',
                           fontWeight: 700,
-                          padding: '8px 16px',
-                          borderRadius: '11px',
+                          padding: '10px 18px',
+                          borderRadius: '12px',
                           textDecoration: 'none',
                           border: 'none',
+                          boxShadow: 'none',
                           cursor: 'pointer',
                         }}
                         className="hover:opacity-90 transition-opacity"

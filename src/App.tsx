@@ -1271,10 +1271,6 @@ export default function App() {
       a: "C’est recommandé, car un même matériel ne peut pas figurer dans deux tournées simultanément. Cependant, certains utilisateurs préfèrent conserver des tournées récurrentes (ex. : Trimestre 1 Bretagne 2026) et les réutiliser chaque année en y ajoutant ou retirant des visites. Vous êtes libre d’adapter cette gestion selon vos processus internes.",
     },
     {
-      q: "Comment afficher les statistiques des tournées et des missions ?",
-      a: "Cliquez sur l’icône des trois points verticaux (⋮) en haut de page, puis sélectionnez « Afficher les statistiques ».",
-    },
-    {
       q: "Comment consulter les compétences d’un technicien attribué ?",
       a: "Cliquez sur l’icône des trois points verticaux (⋮) en haut de page, puis choisissez « Afficher infos compétences techniciens ».",
     },
@@ -1675,10 +1671,18 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
   };
 
   const toggleFsmMissionExpanded = (missionKey: string) => {
-    setFsmExpandedMissions(prev => ({
-      ...prev,
-      [missionKey]: !prev[missionKey]
-    }));
+    setFsmExpandedMissions(prev => {
+      const willOpen = !prev[missionKey];
+      if (!willOpen) {
+        return {
+          ...prev,
+          [missionKey]: false
+        };
+      }
+      return {
+        [missionKey]: true
+      };
+    });
   };
 
   const [distributedStocks, setDistributedStocks] = useState<DistributedStockLocation[]>([]);
@@ -2753,10 +2757,67 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       img.src = url;
     });
   }, []);
-  const getMessageSignature = useCallback((m: any, idx?: number) => {
+  const getMessageSignature = useCallback((m: any) => {
     if (!m) return '';
-    return `${String(m.id || m._sheetRowNumber || (idx !== undefined ? idx : '') || '').trim()}::${String(m.authorEmail || m.authorName || '').trim().toLowerCase()}::${String(m.dateStr || '').trim()}::${String(m.content || '').trim()}`;
+    const rawCanal = String(m.tag || m.channel || m['Canal.'] || m['Canal'] || '').trim().toLowerCase();
+    let ch = 'Général';
+    if (rawCanal === 'exploitation') ch = 'Exploitation';
+    else if (rawCanal === 'ventes' || rawCanal === 'vente') ch = 'Ventes';
+    else if (rawCanal === 'logistique') ch = 'Logistique';
+    else if (rawCanal === 'techniciens' || rawCanal === 'technicien') ch = 'Techniciens';
+    const author = String(
+      m.authorEmail || m['Nom Prénom (Username).'] || m['Nom Prénom (Username)'] || m.authorName || m.sender || ''
+    )
+      .trim()
+      .toLowerCase();
+    const dt = String(m.dateStr || m['Horodatage.'] || m['Horodatage'] || m.time || '').trim();
+    const content = String(m.content || m['Message.'] || m['Message'] || m.text || '').trim();
+    return `${ch}::${author}::${dt}::${content}`;
   }, []);
+
+  const isOwnTenantMessage = useCallback(
+    (m: any) => {
+      if (!m) return false;
+      let myEmail = (loggedUser?.email || '').trim().toLowerCase();
+      let myName = (loggedUser?.name || '').trim().toLowerCase();
+      if (!myEmail) {
+        try {
+          const saved = localStorage.getItem('defib_admin_logged_user');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed?.email) myEmail = String(parsed.email).trim().toLowerCase();
+            if (parsed?.name && !myName) myName = String(parsed.name).trim().toLowerCase();
+          }
+        } catch (_) {}
+      }
+      if (myEmail && (!myName || myName === 'membre' || myName === 'technicien')) {
+        const matchedMember = (Array.isArray(members) ? members : []).find(
+          (mem) => mem?.email && mem.email.trim().toLowerCase() === myEmail
+        );
+        if (matchedMember?.name) {
+          myName = matchedMember.name.trim().toLowerCase();
+        } else if (
+          companyInfo?.adminEmail &&
+          companyInfo.adminEmail.trim().toLowerCase() === myEmail &&
+          companyInfo?.adminName
+        ) {
+          myName = companyInfo.adminName.trim().toLowerCase();
+        }
+      }
+      const msgEmail = String(
+        m.authorEmail || m['Nom Prénom (Username).'] || m['Nom Prénom (Username)'] || ''
+      )
+        .trim()
+        .toLowerCase();
+      const msgName = String(m.authorName || m.sender || '').trim().toLowerCase();
+      if (myEmail && (msgEmail === myEmail || msgName === myEmail)) return true;
+      if (myName && myName !== 'membre' && myName !== 'technicien' && (msgName === myName || msgEmail === myName)) {
+        return true;
+      }
+      return false;
+    },
+    [loggedUser?.email, loggedUser?.name, members, companyInfo?.adminEmail, companyInfo?.adminName]
+  );
 
   const tenantMessagesRef = useRef<TenantMessage[]>(tenantMessages);
   tenantMessagesRef.current = tenantMessages;
@@ -2820,7 +2881,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     if (!Array.isArray(tenantMessages)) return;
     if (seenMessageSignatures === null && tenantMessages.length > 0 && lastSeenMessageTime > 0) {
       const initialSigs = tenantMessages
-        .filter((m) => !m?.createdAt || m.createdAt <= lastSeenMessageTime)
+        .filter((m) => !m?.createdAt || m.createdAt <= lastSeenMessageTime || isOwnTenantMessage(m))
         .map((m) => getMessageSignature(m))
         .filter(Boolean);
       setSeenMessageSignatures(initialSigs);
@@ -2828,7 +2889,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         localStorage.setItem(`defib_${tenantId}_messages_seen_signatures`, JSON.stringify(initialSigs));
       } catch (_) {}
     }
-  }, [tenantMessages, seenMessageSignatures, lastSeenMessageTime, tenantId, getMessageSignature]);
+  }, [tenantMessages, seenMessageSignatures, lastSeenMessageTime, tenantId, getMessageSignature, isOwnTenantMessage]);
 
   const unreadMessagesCount = useMemo(() => {
     if (isCanalMessagesOpen || activeTab === 'messagerie') return 0;
@@ -2836,17 +2897,17 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     if (list.length === 0) return 0;
     if (Array.isArray(seenMessageSignatures)) {
       const seenSet = new Set(seenMessageSignatures);
-      return list.filter((m, idx) => {
+      return list.filter((m) => {
         if (!m) return false;
-        const sig = getMessageSignature(m, idx);
+        if (isOwnTenantMessage(m)) return false;
+        const sig = getMessageSignature(m);
         return Boolean(sig && !seenSet.has(sig));
       }).length;
     }
-    const myEmail = loggedUser?.email?.trim().toLowerCase() || '';
     return list.filter(
-      (m) => m && m.createdAt > lastSeenMessageTime && m.authorEmail?.trim().toLowerCase() !== myEmail
+      (m) => m && m.createdAt > lastSeenMessageTime && !isOwnTenantMessage(m)
     ).length;
-  }, [tenantMessages, seenMessageSignatures, lastSeenMessageTime, loggedUser?.email, isCanalMessagesOpen, activeTab, getMessageSignature]);
+  }, [tenantMessages, seenMessageSignatures, lastSeenMessageTime, isOwnTenantMessage, isCanalMessagesOpen, activeTab, getMessageSignature]);
 
   // Count sum of all messages from the last 3 hours (capped from 1 to 8, > 8 => '9+')
   const recentMessagesCount = useMemo(() => {
@@ -4543,8 +4604,23 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                     sitLower === 'accepte client' ||
                     sitLower === 'à faire' ||
                     sitLower === 'a faire';
+                  const rawPrio = String(
+                    sm.priority ?? sm['Priorité'] ?? sm['Priorité.'] ?? sm.priorite ?? ''
+                  ).trim();
+                  const isLockedMission =
+                    isAcceptedOrAFaire ||
+                    rawPrio === '1' ||
+                    rawPrio.toLowerCase() === 'true' ||
+                    sm.isForced === true ||
+                    sm.equipmentType === 'Formation' ||
+                    String(sm.equipmentType || '').toLowerCase().includes('formation') ||
+                    Boolean(sm.formationId);
                   if (isAcceptedOrAFaire) {
                     return {
+                      priority: '1',
+                      isForced: true,
+                      isManualDate: true,
+                      isManualSlot: true,
                       rejectionReason: '',
                       raisonRejet: '',
                       refusalComment: '',
@@ -4554,6 +4630,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                   }
                   const isRefused = sitLower.includes('refus');
                   return {
+                    priority: isLockedMission ? '1' : '0',
+                    isForced: isLockedMission,
+                    isManualDate: isLockedMission,
+                    isManualSlot: isLockedMission,
                     rejectionReason: isRefused ? '' : (sm.rejectionReason ?? sm.raisonRejet ?? ''),
                     refusalComment:
                       sm.refusalComment ||
@@ -5521,9 +5601,22 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             sitLower === 'accepte client' ||
             sitLower === 'à faire' ||
             sitLower === 'a faire';
+          const rawPrio = String(m.priority ?? '').trim();
+          const isLockedMission =
+            isAcceptedOrAFaire ||
+            m.isForced === true ||
+            rawPrio === '1' ||
+            (m.isForced !== false && rawPrio !== '0' && Boolean(m.isManualDate && m.isManualSlot)) ||
+            m.equipmentType === 'Formation' ||
+            String(m.equipmentType || '').toLowerCase().includes('formation') ||
+            Boolean(m.formationId);
           return {
             ...m,
             status: m.status || 'Brouillon',
+            priority: isLockedMission ? '1' : '0',
+            isForced: isLockedMission,
+            isManualDate: isLockedMission,
+            isManualSlot: isLockedMission,
             interventionReference: cleanRef,
             defibIdentifiant: eqIdent || m.defibIdentifiant || '',
             identifiant: eqIdent || m.defibIdentifiant || '',
@@ -5662,8 +5755,21 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                   sitLower === 'accepte client' ||
                   sitLower === 'à faire' ||
                   sitLower === 'a faire';
+                const rawPrio = String(m.priority ?? '').trim();
+                const isLockedMission =
+                  isAcceptedOrAFaire ||
+                  m.isForced === true ||
+                  rawPrio === '1' ||
+                  (m.isForced !== false && rawPrio !== '0' && Boolean(m.isManualDate && m.isManualSlot)) ||
+                  m.equipmentType === 'Formation' ||
+                  String(m.equipmentType || '').toLowerCase().includes('formation') ||
+                  Boolean(m.formationId);
                 if (isAcceptedOrAFaire) {
                   return {
+                    priority: '1',
+                    isForced: true,
+                    isManualDate: true,
+                    isManualSlot: true,
                     rejectionReason: '',
                     raisonRejet: '',
                     refusalComment: '',
@@ -5672,6 +5778,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                   };
                 }
                 return {
+                  priority: isLockedMission ? '1' : '0',
+                  isForced: isLockedMission,
+                  isManualDate: isLockedMission,
+                  isManualSlot: isLockedMission,
                   rejectionReason:
                     m.rejectionReason ??
                     m.raisonRejet ??
@@ -7216,7 +7326,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       reasons: [],
       requiredParts: [],
       status: 'Brouillon',
-      priority: 'Normale',
+      priority: '0',
+      isForced: false,
       time: '14:00',
       interventionReference: nextRef,
       autreReference: '',
@@ -7853,10 +7964,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
   };
 
   const updateFsmMission = (tourId: string, missionId: string, fields: any, markDirty: boolean = true) => {
+    const tour = fsmTours.find(t => t.id === tourId);
+    const currentMission = (tour?.missions || []).find((m: any) => m.id === missionId);
     if (fields.status === 'À faire' || fields.status === 'En cours' || fields.status === 'Effectué') {
-      const tour = fsmTours.find(t => t.id === tourId);
-      const mission = (tour?.missions || []).find((m: any) => m.id === missionId);
-      const target = { ...mission, ...fields };
+      const target = { ...currentMission, ...fields };
       if (!isMissionEstimatedDateFilled(target) || !isMissionEstimatedSlotFilled(target)) {
         showFsmSystemInfoMessage("Une ou plusieurs de vos missions n’ont pas de dates et créneaux renseignés.");
         return;
@@ -7864,27 +7975,42 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     }
 
     const extraFields: any = {};
-    if ('estimatedDate' in fields) {
-      extraFields.isManualDate = !!fields.estimatedDate && fields.estimatedDate !== '';
-    }
-    if ('estimatedSlot' in fields) {
-      extraFields.isManualSlot = !!fields.estimatedSlot && fields.estimatedSlot !== '';
-    }
-    if (fields.status) {
-      const sitNorm = String(fields.status).trim().toLowerCase();
-      if (
-        sitNorm === 'accepté client' ||
-        sitNorm === 'accepte client' ||
-        sitNorm === 'à faire' ||
-        sitNorm === 'a faire'
-      ) {
-        extraFields.commentaire = '';
-        extraFields.refusalComment = '';
-        extraFields.clientRefusalComment = '';
-        extraFields.rejectionReason = '';
-        extraFields.raisonRejet = '';
-        extraFields.raisonRejeteeMission = '';
-      }
+    const effectiveStatus = String(
+      fields.status !== undefined ? fields.status : (currentMission?.status || 'Brouillon')
+    ).trim().toLowerCase();
+    const isStatusLocked =
+      effectiveStatus === 'accepté client' ||
+      effectiveStatus === 'accepte client' ||
+      effectiveStatus === 'à faire' ||
+      effectiveStatus === 'a faire';
+
+    if (isStatusLocked) {
+      extraFields.isForced = true;
+      extraFields.isManualDate = true;
+      extraFields.isManualSlot = true;
+      extraFields.priority = '1';
+      extraFields.commentaire = '';
+      extraFields.refusalComment = '';
+      extraFields.clientRefusalComment = '';
+      extraFields.rejectionReason = '';
+      extraFields.raisonRejet = '';
+      extraFields.raisonRejeteeMission = '';
+    } else if ('isForced' in fields) {
+      const forcedBool = Boolean(fields.isForced);
+      extraFields.isForced = forcedBool;
+      extraFields.isManualDate = forcedBool;
+      extraFields.isManualSlot = forcedBool;
+      extraFields.priority = forcedBool ? '1' : '0';
+    } else {
+      const rawPrio = String(currentMission?.priority ?? '').trim();
+      const wasLocked =
+        currentMission?.isForced === true ||
+        rawPrio === '1' ||
+        (currentMission?.isForced !== false && rawPrio !== '0' && Boolean(currentMission?.isManualDate && currentMission?.isManualSlot));
+      extraFields.isForced = wasLocked;
+      extraFields.isManualDate = wasLocked;
+      extraFields.isManualSlot = wasLocked;
+      extraFields.priority = wasLocked ? '1' : '0';
     }
 
     const updatedTours = fsmTours.map(t => {
@@ -8069,11 +8195,29 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     };
   };
 
+  const isMissionEligibleForTourAvisage = (m: any): boolean => {
+    if (!m) return false;
+    const sitNorm = String(m.status || 'Brouillon')
+      .trim()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    if (sitNorm === 'accepte client' || sitNorm === 'a faire' || sitNorm === 'afaire') {
+      return false;
+    }
+    return (
+      sitNorm === 'brouillon' ||
+      sitNorm === 'attente client' ||
+      sitNorm === 'refuse client' ||
+      sitNorm === 'rejet client'
+    );
+  };
+
   const handleExecuteAvisage = async (tour: any) => {
     if (!tour) return;
     const companyName = (companyInfo.nomCommercial || companyInfo.name || '').trim() || 'Défibeo Solutions';
     const companyEmail = companyInfo.email || '';
-    const toursMissions = tour.missions || [];
+    const toursMissions = (tour.missions || []).filter((m: any) => isMissionEligibleForTourAvisage(m));
     let updatedClientsList = [...clients];
     let hasUpdatedClient = false;
 
@@ -8085,13 +8229,15 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       if (eq) {
         const index = updatedClientsList.findIndex(c =>
           c.id === eq.clientId ||
+          (m.clientId && c.id === m.clientId) ||
           (c.clientIdField && (c.clientIdField === eq.clientId || c.clientIdField === (eq as any).clientIdField)) ||
           c.denomination === eq.clientId ||
-          ((eq as any).denominationClient && c.denomination && c.denomination.trim().toLowerCase() === String((eq as any).denominationClient).trim().toLowerCase())
+          ((eq as any).denominationClient && c.denomination && c.denomination.trim().toLowerCase() === String((eq as any).denominationClient).trim().toLowerCase()) ||
+          (m.clientName && c.denomination && c.denomination.trim().toLowerCase() === String(m.clientName).trim().toLowerCase())
         );
         if (index !== -1) {
           const matchedClient = updatedClientsList[index];
-          const clientEmail = eq.emailSite || matchedClient.email || matchedClient.emailSite;
+          const clientEmail = eq.emailSite || m.email || m.emailSite || matchedClient.email || matchedClient.emailSite;
           if (clientEmail && clientEmail.trim()) {
             const pin = matchedClient.signaturePin || generateRandomPin();
             const newPins = [...(matchedClient.signaturePins || [])];
@@ -15699,15 +15845,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                               value=""
                               onChange={(e) => {
                                 const val = e.target.value;
-                                if (val === 'toggle-stats') {
-                                  setIsFsmStatsHidden(prev => {
-                                    const next = !prev;
-                                    try {
-                                      localStorage.setItem('defib_hide_fsm_stats', String(next));
-                                    } catch (_) {}
-                                    return next;
-                                  });
-                                } else if (val === 'toggle-tech-skills') {
+                                if (val === 'toggle-tech-skills') {
                                   setIsFsmTechSkillsHidden(prev => {
                                     const next = !prev;
                                     try {
@@ -15732,9 +15870,6 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                             >
                               <option value="" disabled>
                                 —
-                              </option>
-                              <option value="toggle-stats">
-                                {isFsmStatsHidden ? translate("Afficher les statistiques") : translate("Masquer les statistiques")}
                               </option>
                               <option value="toggle-tech-skills">
                                 {isFsmTechSkillsHidden ? translate("Afficher infos compétences techniciens") : translate("Masquer infos compétences techniciens")}
@@ -16111,10 +16246,9 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                               setFsmLastSelectedTourId(targetTourId);
                             }
                             if (mission?.id && targetTourId) {
-                              setFsmExpandedMissions((prev) => ({
-                                ...prev,
+                              setFsmExpandedMissions({
                                 [`${targetTourId}-${mission.id}`]: true,
-                              }));
+                              });
                             }
                             const tryScrollToMission = (attemptsLeft: number) => {
                               const el = mission?.id
@@ -17122,173 +17256,6 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                   ))}
                 </datalist>
 
-                {/* Statistiques FSM du mois : Sélecteur mois/année + 2 gélules (Temps moyen & CO2 préservé) */}
-                <div 
-                  id="fsm-stats-wrapper"
-                  className="pt-4 select-none flex flex-col gap-2 w-full"
-                  style={{
-                    width: '100%',
-                    maxWidth: '98%',
-                    margin: '0 auto',
-                    paddingLeft: 0,
-                    paddingRight: 0,
-                    backgroundColor: 'transparent',
-                    background: 'transparent',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  {!isFsmStatsHidden && (
-                    <div 
-                      id="fsm-stats-container"
-                      style={{
-                        display: 'flex',
-                        width: '100%',
-                        maxWidth: '100%',
-                        flexWrap: 'wrap',
-                        alignItems: 'center',
-                        gap: '12px',
-                        padding: '10px 14px',
-                        backgroundColor: 'rgb(245, 247, 250)',
-                        background: 'rgb(245, 247, 250)',
-                        border: 'none',
-                        borderRadius: '16px',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      {/* Bouton de choix de mois/année */}
-                      {(() => {
-                        const activeMonthObj = availableFsmMonths.find((m) => m.key === selectedFsmMonth);
-                        const activeMonthLabel = activeMonthObj ? activeMonthObj.label : (selectedFsmMonth || translate("Sélectionner le mois"));
-                        return (
-                          <div className="relative inline-flex items-center justify-center" style={{ width: 'auto' }}>
-                            <button
-                              type="button"
-                              id="btn-fsm-month-stats"
-                              onMouseDown={() => triggerFsmPillWave('fsm-month-stats-btn')}
-                              className={`relative overflow-hidden inline-flex items-center justify-center text-center select-none hover:opacity-90 transition-all ${fsmClickedPill?.id === 'fsm-month-stats-btn' ? 'sidebar-nav-click-shrink-wave' : ''}`}
-                              style={{
-                                backgroundColor: '#0f172a',
-                                border: 'none',
-                                borderRadius: '13px',
-                                padding: '9px 18px',
-                                fontSize: '18px',
-                                fontWeight: 600,
-                                color: '#ffffff',
-                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                textAlign: 'center',
-                                width: 'auto',
-                                whiteSpace: 'nowrap',
-                                cursor: 'pointer',
-                              }}
-                            >
-                              {activeMonthLabel}
-                            </button>
-                            <select
-                              id="select-fsm-month-stats"
-                              value={selectedFsmMonth}
-                              onMouseDown={() => triggerFsmPillWave('fsm-month-stats-btn')}
-                              onChange={(e) => setSelectedFsmMonth(e.target.value)}
-                              title={translate("Sélectionner le mois")}
-                              style={{
-                                position: 'absolute',
-                                inset: 0,
-                                width: '100%',
-                                height: '100%',
-                                opacity: 0,
-                                cursor: 'pointer',
-                                zIndex: 10,
-                                appearance: 'none',
-                                WebkitAppearance: 'none',
-                              }}
-                            >
-                              {availableFsmMonths.map((m) => (
-                                <option key={m.key} value={m.key}>
-                                  {m.label}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        );
-                      })()}
-
-                      {/* Gélule 1 : Temps moyen d’une intervention */}
-                      <div 
-                        id="fsm-avg-intervention-time-indicator"
-                        style={{
-                          padding: '9px 20px',
-                          backgroundColor: 'rgb(233, 235, 239)',
-                          background: 'rgb(233, 235, 239)',
-                          border: 'none',
-                          borderRadius: '1000px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          fontSize: '18px',
-                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          color: '#000000',
-                          cursor: 'default',
-                        }}
-                      >
-                        <span style={{ fontWeight: 400, color: '#000000', marginRight: '6px', fontSize: '18px' }}>
-                          {translate("Temps moyen d’une intervention :")}
-                        </span>
-                        <span style={{ fontWeight: 700, color: '#000000', fontSize: '18px' }}>
-                          {avgInterventionMinutesStr}
-                        </span>
-                      </div>
-
-                      {/* Gélule 2 : CO2 préservé */}
-                      <div 
-                        id="fsm-co2-preserved-indicator"
-                        style={{
-                          padding: '9px 20px',
-                          backgroundColor: 'rgb(233, 235, 239)',
-                          background: 'rgb(233, 235, 239)',
-                          border: 'none',
-                          borderRadius: '1000px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          fontSize: '18px',
-                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          color: '#000000',
-                          cursor: 'default',
-                        }}
-                      >
-                        <span style={{ fontWeight: 700, color: '#000000', marginRight: '6px', fontSize: '18px' }}>
-                          {formattedCo2Str} kg
-                        </span>
-                        <span style={{ fontWeight: 400, color: '#000000', fontSize: '18px' }}>
-                          {translate("Co2e d’émissions préservée(s)")}
-                        </span>
-                      </div>
-
-                      {/* Gélule 3 : Taux de complétion des missions */}
-                      <div 
-                        id="fsm-mission-completion-rate-indicator"
-                        style={{
-                          padding: '9px 20px',
-                          backgroundColor: 'rgb(233, 235, 239)',
-                          background: 'rgb(233, 235, 239)',
-                          border: 'none',
-                          borderRadius: '1000px',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          fontSize: '18px',
-                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          color: '#000000',
-                          cursor: 'default',
-                        }}
-                      >
-                        <span style={{ fontWeight: 400, color: '#000000', marginRight: '6px', fontSize: '18px' }}>
-                          {translate("Taux de complétion des missions :")}
-                        </span>
-                        <span style={{ fontWeight: 700, color: '#000000', fontSize: '18px' }}>
-                          {missionCompletionRateStr}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
                 {/* Info message système lors de la création d'une tournée */}
                 {fsmSystemInfoMessage && (
                   <div 
@@ -18025,13 +17992,26 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                         {/* Row 2: Client & Site & Identifiant & Localisation & Ref Int & Date Estimée & Créneau Estimé & Transférer (Montré si déroulé) */}
                                         {isExpanded && (() => {
                                           const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
-                                          const isMissionForced = !!(m.isForced || (m.isManualDate && m.isManualSlot));
+                                          const sitLowerATrier = String(m.status || 'Brouillon').trim().toLowerCase();
+                                          const isStatusLockedATrier =
+                                            sitLowerATrier === 'accepté client' ||
+                                            sitLowerATrier === 'accepte client' ||
+                                            sitLowerATrier === 'à faire' ||
+                                            sitLowerATrier === 'a faire';
+                                          const rawPrioATrier = String(m.priority ?? '').trim();
+                                          const isMissionForced =
+                                            isStatusLockedATrier ||
+                                            m.isForced === true ||
+                                            rawPrioATrier === '1' ||
+                                            (m.isForced !== false && rawPrioATrier !== '0' && Boolean(m.isManualDate && m.isManualSlot));
                                           const toggleForced = () => {
+                                            if (isStatusLockedATrier) return;
                                             const nextVal = !isMissionForced;
                                             updateFsmMission(t.id, m.id, {
                                               isForced: nextVal,
                                               isManualDate: nextVal,
-                                              isManualSlot: nextVal
+                                              isManualSlot: nextVal,
+                                              priority: nextVal ? '1' : '0'
                                             });
                                           };
                                           const estimatedDateValue = m.estimatedDate || '';
@@ -18399,10 +18379,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                         toggleForced();
                                                       }}
                                                       className={`inline-flex items-center gap-1.5 ${isEstimatedFieldsLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} focus:outline-none select-none`}
-                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Forcer la date et le créneau"}
+                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Verrouiller la date et le créneau"}
                                                     >
                                                       <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
-                                                        Forcer
+                                                        Verrouillage
                                                       </span>
                                                       <div
                                                         style={{
@@ -18468,10 +18448,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                         toggleForced();
                                                       }}
                                                       className={`inline-flex items-center gap-1.5 ${isEstimatedFieldsLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} focus:outline-none select-none`}
-                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Forcer la date et le créneau"}
+                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Verrouiller la date et le créneau"}
                                                     >
                                                       <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
-                                                        Forcer
+                                                        Verrouillage
                                                       </span>
                                                       <div
                                                         style={{
@@ -19719,7 +19699,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                     }}
                                     className={`relative overflow-hidden ${isVoirParcoursDisabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} shrink-0 ${!isVoirParcoursDisabled && fsmClickedPill?.id === `voir-parcours-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                   >
-                                    Voir Parcours
+                                    Parcours Map
                                   </button>
                                 );
                               })()}
@@ -19727,10 +19707,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                               {/* Avisage button */}
                               {(() => {
                                 const isTourUnsaved = !!dirtyFsmTourIds[t.id];
-                                const isAvisageEnabled = !isTourUnsaved && tourMissionsHaveDatesAndSlots(t) && (t.missions || []).some((m: any) => {
-                                  const sit = m.status || 'Brouillon';
-                                  return sit === 'Accepté Client' || sit === 'À faire' || sit === 'Attente';
-                                });
+                                const isAvisageEnabled = !isTourUnsaved && tourMissionsHaveDatesAndSlots(t) && (t.missions || []).some((m: any) => isMissionEligibleForTourAvisage(m));
                                 return (
                                   <button
                                     type="button"
@@ -21180,17 +21157,40 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                           {(() => {
                                             const isEstimatedFieldsLocked = !isTourStartDateValidForEstimatedFields(tourStartDate);
                                             const lockedEstimatedTooltip = "Une date de période indicative de début dans la tournée est requise pour débloquer ces champs.";
-                                            const isMissionForced = !!(m.isForced || (m.isManualDate && m.isManualSlot));
+                                            const sitLowerTourM = String(m.status || 'Brouillon').trim().toLowerCase();
+                                            const isStatusLockedTourM =
+                                              sitLowerTourM === 'accepté client' ||
+                                              sitLowerTourM === 'accepte client' ||
+                                              sitLowerTourM === 'à faire' ||
+                                              sitLowerTourM === 'a faire';
+                                            const rawPrioTourM = String(m.priority ?? '').trim();
+                                            const isMissionForced =
+                                              isStatusLockedTourM ||
+                                              m.isForced === true ||
+                                              rawPrioTourM === '1' ||
+                                              (m.isForced !== false && rawPrioTourM !== '0' && Boolean(m.isManualDate && m.isManualSlot));
                                             const toggleForced = () => {
                                               if (isEstimatedFieldsLocked) {
                                                 triggerShakeTourStartDate(t.id);
+                                                return;
+                                              }
+                                              if (isStatusLockedTourM) {
+                                                updateFsmMission(t.id, m.id, {
+                                                  isForced: true,
+                                                  isManualDate: true,
+                                                  isManualSlot: true,
+                                                  priority: '1',
+                                                  ...(estimatedDateValue && !m.estimatedDate ? { estimatedDate: estimatedDateValue } : {})
+                                                });
                                                 return;
                                               }
                                               const nextVal = !isMissionForced;
                                               updateFsmMission(t.id, m.id, {
                                                 isForced: nextVal,
                                                 isManualDate: nextVal,
-                                                isManualSlot: nextVal
+                                                isManualSlot: nextVal,
+                                                priority: nextVal ? '1' : '0',
+                                                ...(nextVal && estimatedDateValue && !m.estimatedDate ? { estimatedDate: estimatedDateValue } : {})
                                               });
                                             };
 
@@ -21204,10 +21204,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                       type="button"
                                                       onClick={toggleForced}
                                                       className={`inline-flex items-center gap-1.5 ${isEstimatedFieldsLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} focus:outline-none select-none`}
-                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Forcer la date et le créneau"}
+                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Verrouiller la date et le créneau"}
                                                     >
                                                       <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
-                                                        Forcer
+                                                        Verrouillage
                                                       </span>
                                                       <div
                                                         style={{
@@ -21275,10 +21275,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                       type="button"
                                                       onClick={toggleForced}
                                                       className={`inline-flex items-center gap-1.5 ${isEstimatedFieldsLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'} focus:outline-none select-none`}
-                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Forcer la date et le créneau"}
+                                                      title={isEstimatedFieldsLocked ? lockedEstimatedTooltip : "Verrouiller la date et le créneau"}
                                                     >
                                                       <span style={{ fontSize: '13px', fontWeight: 600, color: isMissionForced ? '#2e54ff' : '#000000' }}>
-                                                        Forcer
+                                                        Verrouillage
                                                       </span>
                                                       <div
                                                         style={{

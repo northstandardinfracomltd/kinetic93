@@ -1194,6 +1194,10 @@ export async function fetchCollectionFromFirestore<T>(
     importExportRecords: { type: 'exportations', localKey: 'spreadsheet_exportations', infoKey: 'spreadsheetExportations' },
     exportations: { type: 'exportations', localKey: 'spreadsheet_exportations', infoKey: 'spreadsheetExportations' },
     suspicious_activity_logs: { type: 'observateurActionsSuspectes', localKey: 'spreadsheet_observateur_actions_suspectes', infoKey: 'spreadsheetObservateurActionsSuspectes' },
+    spontaneous_events: { type: 'autresEvents', localKey: 'spreadsheet_autres_events', infoKey: 'spreadsheetAutresEvents' },
+    spontaneousEvents: { type: 'autresEvents', localKey: 'spreadsheet_autres_events', infoKey: 'spreadsheetAutresEvents' },
+    autresEvents: { type: 'autresEvents', localKey: 'spreadsheet_autres_events', infoKey: 'spreadsheetAutresEvents' },
+    autres_events: { type: 'autresEvents', localKey: 'spreadsheet_autres_events', infoKey: 'spreadsheetAutresEvents' },
   };
   const sheetInfo = sheetTabMap[collectionName];
   if (sheetInfo) {
@@ -2012,7 +2016,11 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
     collectionName === 'otherEquipments' ||
     collectionName === 'other_equipments' ||
     collectionName === 'autresMateriels' ||
-    collectionName === 'clients'
+    collectionName === 'clients' ||
+    collectionName === 'spontaneous_events' ||
+    collectionName === 'spontaneousEvents' ||
+    collectionName === 'autresEvents' ||
+    collectionName === 'autres_events'
   ) {
     // Handled exclusively by Google Sheets API (/api/sheets/upsert & /api/sheets/delete)
     return;

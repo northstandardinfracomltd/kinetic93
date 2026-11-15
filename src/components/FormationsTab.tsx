@@ -303,7 +303,7 @@ export default function FormationsTab({
       reasons: reasonsArray,
       requiredParts: [],
       status: 'Brouillon',
-      priority: 'Normale',
+      priority: '1',
       time: rawTime,
       estimatedDate: rawDate,
       estimatedSlot: rawSlot,

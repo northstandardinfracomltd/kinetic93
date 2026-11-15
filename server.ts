@@ -5574,7 +5574,11 @@ async function warmupDefibrillateursStore() {
           for (const mt of masterTenantsList) {
             if (!mt || typeof mt !== 'object') continue;
             const mtId = String(mt.id || '').trim().toLowerCase();
-            if (mtId && (tAliases.has(mtId) || candidateTenants.some(c => c.toLowerCase() === mtId))) {
+            const mtShort = String(mt.shortEnvId || mt.code || '').trim().toLowerCase();
+            if (
+              (mtId && (tAliases.has(mtId) || candidateTenants.some(c => c.toLowerCase() === mtId))) ||
+              (mtShort && (tAliases.has(mtShort) || candidateTenants.some(c => c.toLowerCase() === mtShort)))
+            ) {
               if (mt.spreadsheetUrls && typeof mt.spreadsheetUrls === 'object') {
                 masterSheetObjects.push(mt.spreadsheetUrls);
               }
@@ -7883,6 +7887,14 @@ async function warmupDefibrillateursStore() {
                     (tour.id !== 'a-trier' ? tour.tourIdentifiant || tour.id : ''),
                   status: newStatus,
                   situation: newStatus,
+                  ...(shouldClearComment
+                    ? {
+                        priority: '1',
+                        isForced: true,
+                        isManualDate: true,
+                        isManualSlot: true,
+                      }
+                    : {}),
                   refusalComment: resolvedComment,
                   clientRefusalComment: resolvedComment,
                   rejectionReason: shouldClearComment ? '' : (cleanComment !== undefined ? cleanComment : m.rejectionReason || ''),
@@ -7916,6 +7928,14 @@ async function warmupDefibrillateursStore() {
             ...sheetMissionMatch,
             status: newStatus,
             situation: newStatus,
+            ...(shouldClearComment
+              ? {
+                  priority: '1',
+                  isForced: true,
+                  isManualDate: true,
+                  isManualSlot: true,
+                }
+              : {}),
             refusalComment: resolvedComment,
             clientRefusalComment: resolvedComment,
             rejectionReason: shouldClearComment ? '' : (cleanComment !== undefined ? cleanComment : sheetMissionMatch.rejectionReason || ''),
@@ -8164,14 +8184,15 @@ async function warmupDefibrillateursStore() {
 
   app.post("/api/sheets/delete", async (req, res) => {
     try {
-      const { tenantId, type, keys, spreadsheetUrl: explicitUrl } = req.body || {};
+      const { tenantId, type, keys, ids, id, spreadsheetUrl: explicitUrl } = req.body || {};
       const rawTenant = String(tenantId || 'demo').trim();
       const tabType = (type || 'defibrillateurs') as SheetTabType;
       const sheetUrl = await resolveTenantSpreadsheetUrl(rawTenant, tabType, explicitUrl);
       if (!sheetUrl || !extractSpreadsheetIdAndGid(sheetUrl)) {
         return res.json({ status: 'no_spreadsheet', deletedCount: 0 });
       }
-      const keyList = Array.isArray(keys) ? keys : [keys].filter(Boolean);
+      const rawKeys = keys !== undefined ? keys : (ids !== undefined ? ids : id);
+      const keyList = (Array.isArray(rawKeys) ? rawKeys : [rawKeys]).filter(Boolean);
       const result = await deleteRecordsFromTenantSheet(sheetUrl, rawTenant, tabType, keyList);
       serverDefibVersion = Date.now();
       return res.json({ status: 'success', ...result });
