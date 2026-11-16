@@ -151,7 +151,6 @@ const translations = {
     ecosystemHeaderPrefix: "L’actualité de Defibeo.",
     ecosystemHeaderHide: "Non merci, masquer cela.",
     ecosystemItems: [
-      "Defibeo Lab : votre feedback pour 2027",
       "Abonnez-vous à Defibeo sur LinkedIn",
     ],
   },
@@ -255,7 +254,6 @@ const translations = {
     ecosystemHeaderPrefix: "L’actualité de Defibeo.",
     ecosystemHeaderHide: "No thanks, hide this.",
     ecosystemItems: [
-      "Defibeo Lab : votre feedback pour 2027",
       "Abonnez-vous à Defibeo sur LinkedIn",
     ],
   },
@@ -359,7 +357,6 @@ const translations = {
     ecosystemHeaderPrefix: "L’actualité de Defibeo.",
     ecosystemHeaderHide: "Nein danke, ausblenden.",
     ecosystemItems: [
-      "Defibeo Lab : votre feedback pour 2027",
       "Abonnez-vous à Defibeo sur LinkedIn",
     ],
   },
@@ -463,7 +460,6 @@ const translations = {
     ecosystemHeaderPrefix: "L’actualité de Defibeo.",
     ecosystemHeaderHide: "Não, obrigado, ocultar isto.",
     ecosystemItems: [
-      "Defibeo Lab : votre feedback pour 2027",
       "Abonnez-vous à Defibeo sur LinkedIn",
     ],
   },
@@ -567,7 +563,6 @@ const translations = {
     ecosystemHeaderPrefix: "L’actualité de Defibeo.",
     ecosystemHeaderHide: "No gracias, ocultar esto.",
     ecosystemItems: [
-      "Defibeo Lab : votre feedback pour 2027",
       "Abonnez-vous à Defibeo sur LinkedIn",
     ],
   }
@@ -619,6 +614,16 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   const [typedLine1, setTypedLine1] = useState('');
   const [typedLine2, setTypedLine2] = useState('');
+
+  const contactGreetings = ['Bonjour!', 'Hello!', 'Hallo!', 'Hola!'];
+  const [contactGreetingIndex, setContactGreetingIndex] = useState(0);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setContactGreetingIndex((prev) => (prev + 1) % 4);
+    }, 1000);
+    return () => clearInterval(intervalId);
+  }, []);
 
   useEffect(() => {
     if (isAuthCodeStep) return;
@@ -1257,11 +1262,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   const ecosystemLinks = [
     {
-      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfoslab.svg',
-      url: 'https://forms.gle/vociimrmY5xf7kG4A',
-    },
-    {
-      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeologininfosfire.svg',
+      icon: 'https://civilprom.s3.eu-north-1.amazonaws.com/linkedinv3.svg',
       url: 'https://www.linkedin.com/company/civilprom/',
     },
   ];
@@ -1594,7 +1595,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       }}
                     >
                       <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/contactergifx.gif"
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/gifcontacterv2.gif"
                         alt=""
                         loading="eager"
                         decoding="async"
@@ -1612,9 +1613,22 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                         className="absolute inset-0 pointer-events-none"
                         style={{
                           background:
-                            'linear-gradient(to top, #3ddc84 0%, rgba(61, 220, 132, 0.72) 28%, rgba(61, 220, 132, 0) 75%)',
+                            'linear-gradient(to top, rgb(61, 220, 132) 0%, rgb(61, 220, 132) 20%, rgb(61 220 132 / 69%) 48%, rgb(61 220 132 / 49%) 75%, rgb(61 220 132 / 56%) 95%)',
                         }}
                       />
+                      <div
+                        className="absolute inset-x-0 bottom-1.5 z-10 flex items-end justify-center pointer-events-none select-none"
+                        style={{
+                          color: '#156337',
+                          fontSize: '18px',
+                          lineHeight: '1.2',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        }}
+                      >
+                        <span key={contactGreetingIndex} className="login-greeting-bump">
+                          {contactGreetings[contactGreetingIndex]}
+                        </span>
+                      </div>
                     </div>
                     <div
                       className="flex-1 pr-9"
@@ -1693,7 +1707,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   >
                     <div className="relative h-[142px] w-[124px] shrink-0 select-none pointer-events-none flex items-center justify-start">
                       <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/devenirillustration.svg"
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/illustrationdevenirv2.svg"
                         alt=""
                         referrerPolicy="no-referrer"
                         draggable={false}
@@ -1748,7 +1762,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 }}
               >
                 <img
-                  src="https://civilprom.s3.eu-north-1.amazonaws.com/decouvririllustration.svg"
+                  src="https://civilprom.s3.eu-north-1.amazonaws.com/illustrationv2decouvrir.svg"
                   alt=""
                   referrerPolicy="no-referrer"
                   draggable={false}
