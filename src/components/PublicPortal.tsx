@@ -10514,7 +10514,7 @@ export default function PublicPortal({
                         >
                           <div
                             ref={tenantPillVisualRef}
-                            className="flex items-center justify-center rounded-full truncate pointer-events-none"
+                            className="webapp-tenant-pill-wave flex items-center justify-center rounded-full truncate pointer-events-none"
                             style={tenantPillStyle}
                           >
                             <span className="truncate">{commercialTenantName}</span>

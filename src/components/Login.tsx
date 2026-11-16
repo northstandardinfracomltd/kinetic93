@@ -142,8 +142,8 @@ const translations = {
     changeAccount: "Annuler",
     codeSentSuccess: "Code envoyé avec succès !",
     keepLoggedIn: "Maintenir la connexion.",
-    infoGreenCard: "Contacter Defibeo: cliquez ici pour afficher les coordonnées de contact de votre pays.",
-    infoBlueCard: "Devenir utilisateur: téléchargez la documentation du logiciel pour en savoir plus.",
+    infoGreenCard: "Contacter Defibeo: cliquez ici pour afficher les coordonnées de l’interlocuteur de votre pays.",
+    infoBlueCard: "Devenir utilisateur: téléchargez la documentation pour parcourir les fonctionnalités.",
     infoDarkCard: "Découvrir Defibeo: la solution métier dédiée à l'infogérance des défibrillateurs et équipements associés. Defibeo centralise la traçabilité des matériels et des pièces, la gestion de maintenance sur site (GMAO) ainsi que l'organisation des tournées (FSM).",
     infoGdpCard: "Le saviez-vous? Defibeo est une solution développée par Civilprom et en partenariat avec des experts du programme Google for Startups Accelerator (UK, Glasgow — Google Developer Program).",
     civilpromSolutionPill: "Une solution Civilprom",
@@ -1580,17 +1580,42 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {showLeftGreenCard && (
                   <div
-                    className="login-info-card-zoom relative flex items-center gap-4 rounded-[22px] p-5 cursor-pointer select-none"
+                    className="login-info-card-zoom relative flex items-center gap-4 rounded-[22px] p-4 sm:p-5 cursor-pointer select-none overflow-hidden"
                     style={{
                       backgroundColor: '#3ddc84',
                       minHeight: '176px',
                     }}
                   >
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeowebsite-illustrationgreen.svg"
-                      alt=""
-                      className="w-[96px] h-[126px] object-contain shrink-0 select-none pointer-events-none"
-                    />
+                    <div
+                      className="relative w-[102px] h-[138px] rounded-[14px] overflow-hidden shrink-0 select-none pointer-events-none"
+                      style={{
+                        transform: 'translateZ(0)',
+                        WebkitMaskImage: '-webkit-radial-gradient(white, black)',
+                      }}
+                    >
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/contactergifx.gif"
+                        alt=""
+                        loading="eager"
+                        decoding="async"
+                        fetchPriority="high"
+                        referrerPolicy="no-referrer"
+                        draggable={false}
+                        className="w-full h-full object-cover block select-none pointer-events-none"
+                        style={{
+                          transform: 'translateZ(0)',
+                          backfaceVisibility: 'hidden',
+                          WebkitBackfaceVisibility: 'hidden',
+                        }}
+                      />
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          background:
+                            'linear-gradient(to top, #3ddc84 0%, rgba(61, 220, 132, 0.72) 28%, rgba(61, 220, 132, 0) 75%)',
+                        }}
+                      />
+                    </div>
                     <div
                       className="flex-1 pr-9"
                       style={{
@@ -1660,17 +1685,28 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 {showLeftBlueCard && (
                   <div
                     onClick={() => window.open('https://defibeo.com/infos2026', '_blank', 'noopener,noreferrer')}
-                    className="login-info-card-zoom relative flex items-center gap-4 rounded-[22px] p-5 cursor-pointer select-none"
+                    className="login-info-card-zoom relative flex items-center gap-4 rounded-[22px] pl-0 pr-5 py-4 cursor-pointer select-none overflow-hidden"
                     style={{
                       backgroundColor: '#2546f0',
                       minHeight: '176px',
                     }}
                   >
-                    <img
-                      src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeowebsite-illustrationblue.svg"
-                      alt=""
-                      className="w-[104px] h-[126px] object-contain shrink-0 select-none pointer-events-none"
-                    />
+                    <div className="relative h-[142px] w-[124px] shrink-0 select-none pointer-events-none flex items-center justify-start">
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/devenirillustration.svg"
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        draggable={false}
+                        className="h-full w-full object-contain object-left block select-none pointer-events-none"
+                      />
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          background:
+                            'linear-gradient(to right, #2546f0 0%, rgba(37, 70, 240, 0.72) 28%, rgba(37, 70, 240, 0) 75%)',
+                        }}
+                      />
+                    </div>
                     <div
                       className="flex-1 pr-9"
                       style={{
@@ -1712,9 +1748,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 }}
               >
                 <img
-                  src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeowebsite-illustrationdarkblue.svg"
+                  src="https://civilprom.s3.eu-north-1.amazonaws.com/decouvririllustration.svg"
                   alt=""
-                  className="w-[96px] h-[134px] object-contain shrink-0 select-none pointer-events-none"
+                  referrerPolicy="no-referrer"
+                  draggable={false}
+                  className="w-[134px] h-[134px] object-contain shrink-0 select-none pointer-events-none"
                 />
                 <div
                   className="w-full sm:flex-1 sm:pr-10"

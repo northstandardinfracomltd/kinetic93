@@ -484,6 +484,24 @@ html.is-edge [style*="font-weight:100"] {
   animation: sidebarClickWaveOverlay 0.48s cubic-bezier(0.22, 1, 0.36, 1) 1 forwards;
 }
 
+#nav-tabs .sidebar-nav-click-shrink-wave::after {
+  background: linear-gradient(
+    90deg,
+    rgba(46, 84, 253, 0) 0%,
+    rgba(46, 84, 253, 0.85) 50%,
+    rgba(46, 84, 253, 0) 100%
+  );
+}
+
+#nav-tabs .webapp-tenant-pill-wave.sidebar-nav-click-shrink-wave::after {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 185, 0) 0%,
+    rgba(0, 0, 185, 0.85) 50%,
+    rgba(0, 0, 185, 0) 100%
+  );
+}
+
 button[style*="#0f172a"],
 button[style*="rgb(15, 23, 42)"],
 a[style*="#0f172a"],
