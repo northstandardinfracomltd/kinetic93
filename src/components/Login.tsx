@@ -1500,15 +1500,15 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         {/* Info Notification Cards */}
         {!isClientAccessSlug && (showLeftBlueCard || showLeftDarkCard) && (
           <div
-            className="relative lg:absolute lg:top-5 lg:left-5 lg:right-5 z-20 w-full lg:w-auto p-4 lg:p-0 pb-24 lg:pb-0 flex flex-col gap-4"
+            className="relative lg:absolute lg:top-5 lg:left-5 lg:right-5 z-20 w-full lg:w-auto p-4 lg:p-0 pb-24 lg:pb-0 flex flex-col lg:flex-row items-stretch gap-4"
             id="login-left-info-cards"
           >
             {showLeftBlueCard && (
               <div
                 onClick={() => window.open('https://defibeo.com/infos2026', '_blank', 'noopener,noreferrer')}
-                className="login-info-card-zoom relative w-full flex flex-col gap-3 rounded-[22px] pt-4 pb-5 cursor-pointer select-none overflow-hidden"
+                className="login-info-card-zoom relative w-full lg:w-[45%] flex flex-col justify-between gap-3 rounded-[22px] pt-4 pb-5 cursor-pointer select-none overflow-hidden"
                 style={{
-                  backgroundColor: '#2546f0',
+                  backgroundColor: '#4d6dff',
                   minHeight: '176px',
                 }}
               >
@@ -1525,12 +1525,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       className="absolute inset-0 pointer-events-none"
                       style={{
                         background:
-                          'linear-gradient(to right, #2546f0 0%, rgba(37, 70, 240, 0.72) 28%, rgba(37, 70, 240, 0) 75%)',
+                          'linear-gradient(to right, #4d6dff 0%, rgba(77, 109, 255, 0.72) 28%, rgba(77, 109, 255, 0) 75%)',
                       }}
                     />
                   </div>
                   <div
-                    className="flex-1 pr-9"
+                    className="flex-1"
                     style={{
                       color: '#ffffff',
                       fontSize: '18px',
@@ -1551,7 +1551,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     }}
                     className="w-full flex items-center justify-center text-center cursor-pointer transition-opacity hover:opacity-90"
                     style={{
-                      backgroundColor: '#1D0245',
+                      backgroundColor: 'rgb(54 81 204)',
                       color: '#ffffff',
                       borderRadius: '12px',
                       fontSize: '18px',
@@ -1564,35 +1564,19 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     En savoir plus
                   </button>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowLeftBlueCard(false);
-                  }}
-                  className="login-close-btn-zoom absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
-                  aria-label={t.close}
-                >
-                  <img
-                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblue.svg"
-                    alt={t.close}
-                    className="w-[38px] h-[38px] object-contain"
-                  />
-                </button>
               </div>
             )}
 
             {showLeftDarkCard && (
               <div
-                className="login-info-card-zoom relative w-full flex flex-col gap-4 rounded-[22px] p-5 lg:p-6 select-none"
+                className="login-info-card-zoom relative w-full lg:w-[55%] flex flex-col justify-between gap-4 rounded-[22px] p-5 lg:p-6 select-none"
                 style={{
-                  backgroundColor: '#2546f0',
+                  backgroundColor: 'rgb(26 47 155)',
                   minHeight: '176px',
                 }}
               >
                 <div
-                  className="w-full pr-10"
+                  className="w-full"
                   style={{
                     color: '#ffffff',
                     fontSize: '18px',
@@ -1610,7 +1594,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   <div
                     className="w-full flex items-center justify-center text-center pointer-events-none"
                     style={{
-                      backgroundColor: '#1D0245',
+                      backgroundColor: 'rgb(9 22 89)',
                       color: '#ffffff',
                       borderRadius: '12px',
                       fontSize: '18px',
@@ -1618,7 +1602,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                       padding: '12px 20px',
                     }}
                   >
-                    Contacter Defibeo
+                    Contactez votre interlocuteur
                   </div>
                   <select
                     aria-label={t.contactCoordsAria}
@@ -1660,22 +1644,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                     <option value="whatsapp">WhatsApp: +447723 501018</option>
                   </select>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowLeftDarkCard(false);
-                  }}
-                  className="login-close-btn-zoom absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
-                  aria-label={t.close}
-                >
-                  <img
-                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblue.svg"
-                    alt={t.close}
-                    className="w-[38px] h-[38px] object-contain"
-                  />
-                </button>
               </div>
             )}
           </div>
@@ -1687,7 +1655,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           id="login-left-logo-container"
         >
           {!isClientAccessSlug && (
-            <>
+            <div
+              className="flex flex-col items-center gap-2"
+              style={{
+                border: '1px solid #dadada',
+                borderRadius: '18px',
+                padding: '15px 12px',
+              }}
+            >
               <div
                 className="sidebar-nav-item-bounce relative inline-flex items-center justify-center shrink-0 cursor-default"
                 onMouseEnter={() => setIsLogoHovered(true)}
@@ -1782,7 +1757,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   by Civilprom
                 </span>
               </div>
-            </>
+            </div>
           )}
 
           <div
