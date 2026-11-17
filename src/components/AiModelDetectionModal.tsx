@@ -324,7 +324,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
 
     const preloadThumbnails = async () => {
       const modelsWithThumbnails = (availableModels || []).filter(
-        (m) => (!m.category || m.category === 'Modèle Défibrillateur') && getModelThumbnailUrl(m).length > 0
+        (m) => getModelThumbnailUrl(m).length > 0
       );
 
       const loaded = await Promise.all(modelsWithThumbnails.map((m) => loadModelDescriptor(m)));

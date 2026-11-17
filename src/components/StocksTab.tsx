@@ -2,12 +2,14 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { jsPDF } from 'jspdf';
 import { t } from '../utils/translate';
-import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, StockTraceability, Member, LogisticsNotification, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
+import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, ExpeditionRecord, Client, StockTraceability, Member, LogisticsNotification, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { getLocationCustomName, generateRandomShortCode, formatDateToFR } from '../utils';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { Check, X } from 'lucide-react';
 import { SearchSidePane, SearchSidePaneItem } from './SearchSidePane';
+import AchatsFournisseursTab from './AchatsFournisseursTab';
+import ExpeditionsTab from './ExpeditionsTab';
 import { logDeleteStockCenter } from '../services/suspiciousActivityService';
 import {
   openTechStockInventoryPdf,
@@ -124,6 +126,10 @@ interface StocksTabProps {
   setStockSearchQuery?: (q: string) => void;
   commercialDocs?: CommercialDoc[];
   achatsFournisseurs?: AchatFournisseur[];
+  saveAchatsFournisseurs?: (updated: AchatFournisseur[]) => void;
+  expeditions?: ExpeditionRecord[];
+  saveExpeditions?: (updated: ExpeditionRecord[]) => void;
+  clients?: Client[];
   setActiveTab?: (tab: any, bypassBlock?: boolean) => void;
   members?: Member[];
   saveDistributedStocks?: (updated: DistributedStockLocation[]) => void;
@@ -149,6 +155,10 @@ export default function StocksTab({
   setStockSearchQuery: externalSetStockSearchQuery,
   commercialDocs = [],
   achatsFournisseurs = [],
+  saveAchatsFournisseurs,
+  expeditions = [],
+  saveExpeditions,
+  clients = [],
   setActiveTab,
   members = [],
   saveDistributedStocks,
@@ -159,6 +169,7 @@ export default function StocksTab({
   companyInfo,
 }: StocksTabProps) {
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState<boolean>(false);
+  const [activeStocksSubSidePane, setActiveStocksSubSidePane] = useState<'achats-fournisseurs' | 'expeditions' | null>(null);
   const [isFilterSidePaneOpen, setIsFilterSidePaneOpen] = useState<boolean>(false);
   const [showStockValue, setShowStockValue] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -383,7 +394,7 @@ export default function StocksTab({
   const [selectedMovementId, setSelectedMovementId] = useState<string>('');
   const [lotOrSerial, setLotOrSerial] = useState<string>('');
   const [expirationDate, setExpirationDate] = useState<string>('');
-  const [situation, setSituation] = useState<'Disponible' | 'Utilisé' | 'Indisponible' | 'Signalé manquant' | 'Prêté'>('Disponible');
+  const [situation, setSituation] = useState<'Disponible' | 'Utilisé' | 'Indisponible' | 'Signalé manquant' | 'Prêté' | 'Expédié' | 'Aucune information'>('Disponible');
 
   // New States for Selected Traceabilities Distribution Form
   const [selectedTraceIds, setSelectedTraceIds] = useState<string[]>([]);
@@ -2411,6 +2422,74 @@ export default function StocksTab({
                   </select>
                 </div>
 
+                {/* Achats Fournisseurs Pill Button */}
+                <button
+                  type="button"
+                  id="btn-achats-fournisseurs-stocks"
+                  onClick={() => {
+                    setClickedPill('achats-fournisseurs-stocks');
+                    setTimeout(() => setClickedPill((prev) => (prev === 'achats-fournisseurs-stocks' ? null : prev)), 480);
+                    setActiveStocksSubSidePane('achats-fournisseurs');
+                  }}
+                  className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill === 'achats-fournisseurs-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                  style={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    borderRadius: '1000px',
+                    padding: '8px 16px',
+                    fontSize: '18px',
+                    fontWeight: 100,
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    backgroundColor: 'rgb(230, 197, 255)',
+                    color: 'rgb(89, 22, 144)',
+                    border: 'none',
+                    boxShadow: 'none',
+                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={t("Achats Fournisseurs")}
+                >
+                  <span>{t("Achats Fournisseurs")}</span>
+                </button>
+
+                {/* Expéditions Pill Button */}
+                <button
+                  type="button"
+                  id="btn-expeditions-stocks"
+                  onClick={() => {
+                    setClickedPill('expeditions-stocks');
+                    setTimeout(() => setClickedPill((prev) => (prev === 'expeditions-stocks' ? null : prev)), 480);
+                    setActiveStocksSubSidePane('expeditions');
+                  }}
+                  className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill === 'expeditions-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                  style={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    borderRadius: '1000px',
+                    padding: '8px 16px',
+                    fontSize: '18px',
+                    fontWeight: 100,
+                    cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    backgroundColor: 'rgb(247, 252, 192)',
+                    color: 'rgb(105, 114, 5)',
+                    border: 'none',
+                    boxShadow: 'none',
+                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    whiteSpace: 'nowrap',
+                  }}
+                  title={t("Expéditions")}
+                >
+                  <span>{t("Expéditions")}</span>
+                </button>
+
                 {/* Activité Pill Button */}
                 {(() => {
                   const activeCount = (logisticsNotifications || []).filter(
@@ -4025,6 +4104,8 @@ export default function StocksTab({
                                     <option value="Indisponible">Indisponible</option>
                                     <option value="Signalé Manquant">Signalé Manquant</option>
                                     <option value="Prêté">Prêté</option>
+                                    <option value="Expédié">Expédié</option>
+                                    <option value="Aucune information">Aucune information</option>
                                   </select>
                                 </div>
 
@@ -4948,6 +5029,51 @@ export default function StocksTab({
               >
                 Fermer
               </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 90%-width Right Side-Pane for Achats Fournisseurs or Expéditions */}
+      {activeStocksSubSidePane && createPortal(
+        <div
+          className="fixed inset-0 z-[9990] flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, height: '100vh', width: '100vw' }}
+          onClick={() => setActiveStocksSubSidePane(null)}
+        >
+          <div
+            className="relative h-full flex flex-col overflow-hidden animate-slideLeft bg-white"
+            style={{
+              width: '90%',
+              maxWidth: '90vw',
+              backgroundColor: '#ffffff',
+              boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-white">
+              {activeStocksSubSidePane === 'achats-fournisseurs' && (
+                <AchatsFournisseursTab
+                  achatsFournisseurs={achatsFournisseurs}
+                  saveAchatsFournisseurs={saveAchatsFournisseurs || (() => {})}
+                  variables={variables}
+                  companyInfo={companyInfo}
+                  onClose={() => setActiveStocksSubSidePane(null)}
+                />
+              )}
+              {activeStocksSubSidePane === 'expeditions' && (
+                <ExpeditionsTab
+                  expeditions={expeditions}
+                  saveExpeditions={saveExpeditions || (() => {})}
+                  stocks={stocks}
+                  variables={variables}
+                  members={members}
+                  clients={clients}
+                  companyInfo={companyInfo}
+                  onClose={() => setActiveStocksSubSidePane(null)}
+                />
+              )}
             </div>
           </div>
         </div>,

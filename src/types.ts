@@ -215,6 +215,8 @@ export interface Defibrillateur {
   derniereMaintenance: string;
   prochaineMaintenance?: string;
   sortieFabricant: string;
+  creationDefibeo?: string;
+  derniereModificationDefibeo?: string;
 
   // Section 6 - Électrode Mixte ou Adulte (A)
   hasElectrodeASecours?: 'Oui' | 'Non';
@@ -593,6 +595,8 @@ export interface CompanyInfo {
   spreadsheetGroupesZonesUrl?: string;
   spreadsheetLivetrack?: string;
   spreadsheetLivetrackUrl?: string;
+  spreadsheetExpeditions?: string;
+  spreadsheetExpeditionsUrl?: string;
 }
 
 export type SpreadsheetFieldKey =
@@ -630,7 +634,8 @@ export type SpreadsheetFieldKey =
   | 'spreadsheetExportations'
   | 'spreadsheetAutresEvents'
   | 'spreadsheetGroupesZones'
-  | 'spreadsheetLivetrack';
+  | 'spreadsheetLivetrack'
+  | 'spreadsheetExpeditions';
 
 export const EXTRA_SPREADSHEET_FIELDS: {
   key: SpreadsheetFieldKey;
@@ -669,6 +674,7 @@ export const EXTRA_SPREADSHEET_FIELDS: {
   { key: 'spreadsheetAutresEvents', urlKey: 'spreadsheetAutresEventsUrl', storageSuffix: 'spreadsheet_autres_events', label: 'Spreadsheet Autres Events.', id: 'settings-db-spreadsheet-autres-events' },
   { key: 'spreadsheetGroupesZones', urlKey: 'spreadsheetGroupesZonesUrl', storageSuffix: 'spreadsheet_groupes_zones', label: 'Spreadsheet Groupes et Zones.', id: 'settings-db-spreadsheet-groupes-zones' },
   { key: 'spreadsheetLivetrack', urlKey: 'spreadsheetLivetrackUrl', storageSuffix: 'spreadsheet_livetrack', label: 'Spreadsheet Livetrack.', id: 'settings-db-spreadsheet-livetrack' },
+  { key: 'spreadsheetExpeditions', urlKey: 'spreadsheetExpeditionsUrl', storageSuffix: 'spreadsheet_expeditions', label: 'Spreadsheet Expéditions.', id: 'settings-db-spreadsheet-expeditions' },
 ];
 
 export interface PointageLog {
@@ -760,7 +766,7 @@ export interface StockTraceability {
   lotOrSerial: string;
   expirationDate?: string;
   volume: number; // always 1
-  situation: 'Disponible' | 'Utilisé' | 'Indisponible' | 'Signalé Manquant' | 'Signalé manquant' | 'Prêté';
+  situation: 'Disponible' | 'Utilisé' | 'Indisponible' | 'Signalé Manquant' | 'Signalé manquant' | 'Prêté' | 'Expédié' | 'Aucune information';
   emplacement?: string;
   comment?: string;
   bonCommande?: string;
@@ -809,6 +815,39 @@ export interface StockRecord {
   fournisseur3?: string;
   referenceFournisseur3?: string;
   prixAchatFournisseur3?: string;
+}
+
+export interface ExpeditionColisageItem {
+  key: string;
+  stockId: string;
+  traceabilityId?: string;
+  format: 'A' | 'B';
+  title: string;
+  volume: number;
+  unitWeightKg: number;
+  unitTransportCostEur: number;
+}
+
+export interface ExpeditionRecord {
+  id: string;
+  reference: string;
+  contexte: string;
+  expediteur: string;
+  destinataire: string;
+  transporteur: string;
+  numeroSuivi: string;
+  codePostalDestinataire: string;
+  commentaire: string;
+  statut: string;
+  dateCreation: string;
+  dateActualise: string;
+  preparateur: string;
+  colisagePieces: string;
+  poidsKgEstim: string | number;
+  coutTransportEstim: string | number;
+  nombrePieces: string | number;
+  _sheetRowNumber?: number;
+  _fromSpreadsheet?: boolean;
 }
 
 export interface CommercialDocItem {

@@ -52,7 +52,8 @@ export type SheetTabType =
   | 'autresEvents'
   | 'groupesZones'
   | 'pointagesClient'
-  | 'livetrack';
+  | 'livetrack'
+  | 'expeditions';
 
 export const GLOBAL_CLIENT_POINTAGES_SPREADSHEET_URL =
   'https://docs.google.com/spreadsheets/d/1tF8Noeh19y5exfZx0QPRPsIe7UeJSB1GGfAYlBI9HVQ/edit?usp=sharing';
@@ -590,6 +591,8 @@ export const DEFIB_CANONICAL_HEADERS: Array<{ header: string; field: string; ali
   { header: 'Section 5 - Dernière maintenance.', field: 'derniereMaintenance', aliases: ['dernieremaintenance', 'datedernieremaintenance', 'dernierevisite', 'dermnt', 'datesdernieremaintenance'], type: 'date' },
   { header: "Section 5 - Sortie d'usine.", field: 'sortieFabricant', aliases: ['sortiedusine', 'sortiefabricant', 'datesortiefabricant', 'datessortiedusine'], type: 'date' },
   { header: 'Section 5 - Prochaine maintenance.', field: 'prochaineMaintenance', aliases: ['prochainemaintenance', 'prochainevisite', 'dateprochainemaintenance', 'prochainev', 'provisite', 'datesprochainemaintenance'], type: 'date' },
+  { header: 'Ajout Defibeo', field: 'creationDefibeo', aliases: ['ajoutdefibeo', 'creationdansdefibeo', 'creationdefibeo', 'dateajoutdefibeo', 'datecreationdefibeo', 'section5ajoutdefibeo', 'section5creationdansdefibeo'], type: 'date' },
+  { header: 'Modifié Defibeo', field: 'derniereModificationDefibeo', aliases: ['modifiedefibeo', 'dernieremodificationdansdefibeo', 'dernieremodificationdefibeo', 'datemodifiedefibeo', 'datemodificationdefibeo', 'section5modifiedefibeo', 'section5dernieremodificationdansdefibeo'], type: 'date' },
 
   // Section 6
   { header: 'Section 6 - Modèle A', field: 'modeleElectrodeAId', aliases: ['modelea', 'modeleelectrodea', 'electrodeamodele', 'modeleelectrodeaid', 'electrodeadulteoumixtemodele'] },
@@ -1954,6 +1957,25 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Date', field: 'date', aliases: ['date', 'datedecommande', 'datecommande', 'dateachat', 'createdat'], type: 'date' },
     { header: 'Fichier de la commande (PDF)', field: 'pdfFileName', aliases: ['fichierdelacommandepdf', 'fichiercommande', 'fichierpdf', 'nomdufichier', 'pdffilename', 'document'] },
     { header: 'URL du fichier', field: 'pdfDataUrl', aliases: ['urldufichier', 'urlfichier', 'lienpdf', 'pdfdataurl', 'urlpdf', 'fichierurl', 'lien'] },
+  ],
+  expeditions: [
+    { header: 'Référence.', field: 'reference', aliases: ['reference', 'ref', 'refexpedition', 'referenceexpedition'] },
+    { header: 'Contexte.', field: 'contexte', aliases: ['contexte', 'motif', 'typeexpedition'] },
+    { header: 'Expéditeur.', field: 'expediteur', aliases: ['expediteur', 'emetteur', 'origine'] },
+    { header: 'Destinataire.', field: 'destinataire', aliases: ['destinataire', 'destination', 'recepteur'] },
+    { header: 'Transporteur.', field: 'transporteur', aliases: ['transporteur', 'livreur', 'carrier'] },
+    { header: 'Numéro Suivi.', field: 'numeroSuivi', aliases: ['numerosuivi', 'numerodesuivi', 'tracking', 'suivi', 'numsuivi'] },
+    { header: 'Code Postal Destinataire.', field: 'codePostalDestinataire', aliases: ['codepostaldestinataire', 'cpdestinataire', 'codepostal', 'cp'] },
+    { header: 'Commentaire.', field: 'commentaire', aliases: ['commentaire', 'comment', 'notes', 'observation', 'remarques'] },
+    { header: 'Statut.', field: 'statut', aliases: ['statut', 'status', 'situation', 'etat'] },
+    { header: 'Date Création.', field: 'dateCreation', aliases: ['datecreation', 'datedecreation', 'ouverture', 'dateouverture', 'createdat'] },
+    { header: 'Date Actualisé.', field: 'dateActualise', aliases: ['dateactualise', 'dateactualisation', 'actualise', 'updatedat', 'datemodification'] },
+    { header: 'Préparateur.', field: 'preparateur', aliases: ['preparateur', 'preparepar', 'collaborateur', 'operateur'] },
+    { header: 'Colisage Pièce(s).', field: 'colisagePieces', aliases: ['colisagepieces', 'colisagepiece', 'colisage', 'pieces', 'articles', 'contenu'] },
+    { header: 'Poids KG estim.', field: 'poidsKgEstim', aliases: ['poidskgestim', 'poidsestime', 'poidskg', 'poids'] },
+    { header: 'Coût Transport estim.', field: 'coutTransportEstim', aliases: ['couttransportestim', 'couttransportestime', 'couttransport', 'fraistransport'] },
+    { header: 'Nombre pièces.', field: 'nombrePieces', aliases: ['nombrepieces', 'nbpieces', 'volume', 'quantitepieces', 'totalpieces'] },
+    { header: 'ID', field: 'id', aliases: ['id', 'identifiant', 'idexpedition'] },
   ],
   temps: [
     { header: 'Email (technicien).', field: 'techEmail', aliases: ['emailtechnicien', 'emaildutechnicien', 'technicienemail', 'mailtechnicien', 'email'] },
@@ -3566,8 +3588,12 @@ function getDefaultGenericHeaders(tabType: SheetTabType, sampleRecords: any[] = 
       tabType === 'pointagesClient' ||
       tabType === 'livetrack' ||
       tabType === 'variables' ||
-      tabType === 'reglages'
+      tabType === 'reglages' ||
+      tabType === 'expeditions'
     ) {
+      if (tabType === 'expeditions') {
+        return canonical.filter(c => c.field !== 'id' && !c.field.startsWith('_')).map(c => c.header);
+      }
       if (tabType === 'stocksGlobaux' || tabType === 'stocks') {
         return canonical
           .filter(c => {
@@ -5251,6 +5277,24 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.pdfName = merged.pdfName || merged.pdfFileName || '';
     merged.pdfDataUrl = merged.pdfDataUrl || merged.pdfUrl || '';
     merged.pdfUrl = merged.pdfUrl || merged.pdfDataUrl || '';
+  } else if (tabType === 'expeditions') {
+    merged.id = merged.id || merged.reference || merged.numeroSuivi || `exp_${rowIndexZeroBased + 2}`;
+    merged.reference = merged.reference || '';
+    merged.contexte = merged.contexte || '';
+    merged.expediteur = merged.expediteur || '';
+    merged.destinataire = merged.destinataire || '';
+    merged.transporteur = merged.transporteur || '';
+    merged.numeroSuivi = String(merged.numeroSuivi || '').replace(/[^a-zA-Z0-9]/g, '');
+    merged.codePostalDestinataire = String(merged.codePostalDestinataire || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    merged.commentaire = merged.commentaire || '';
+    merged.statut = merged.statut || 'Aucune information';
+    merged.dateCreation = merged.dateCreation || '';
+    merged.dateActualise = merged.dateActualise || merged.dateCreation || '';
+    merged.preparateur = merged.preparateur || '';
+    merged.colisagePieces = merged.colisagePieces || '';
+    merged.poidsKgEstim = merged.poidsKgEstim !== undefined && merged.poidsKgEstim !== null && merged.poidsKgEstim !== '' ? merged.poidsKgEstim : '0';
+    merged.coutTransportEstim = merged.coutTransportEstim !== undefined && merged.coutTransportEstim !== null && merged.coutTransportEstim !== '' ? merged.coutTransportEstim : '0';
+    merged.nombrePieces = merged.nombrePieces !== undefined && merged.nombrePieces !== null && merged.nombrePieces !== '' ? merged.nombrePieces : '0';
   } else if (tabType === 'temps') {
     const rawEmailCol = String(
       merged.techEmail ||
@@ -8307,6 +8351,24 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.date = enriched.date || enriched.dateStr || '';
     enriched.pdfFileName = enriched.pdfFileName || enriched.pdfName || '';
     enriched.pdfDataUrl = enriched.pdfDataUrl || enriched.pdfUrl || '';
+  } else if (tabType === 'expeditions') {
+    enriched.id = enriched.id || enriched.reference || '';
+    enriched.reference = enriched.reference || '';
+    enriched.contexte = enriched.contexte || '';
+    enriched.expediteur = enriched.expediteur || '';
+    enriched.destinataire = enriched.destinataire || '';
+    enriched.transporteur = enriched.transporteur || '';
+    enriched.numeroSuivi = String(enriched.numeroSuivi || '').replace(/[^a-zA-Z0-9]/g, '');
+    enriched.codePostalDestinataire = String(enriched.codePostalDestinataire || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    enriched.commentaire = enriched.commentaire || '';
+    enriched.statut = enriched.statut || 'Aucune information';
+    enriched.dateCreation = enriched.dateCreation || '';
+    enriched.dateActualise = enriched.dateActualise || enriched.dateCreation || '';
+    enriched.preparateur = enriched.preparateur || '';
+    enriched.colisagePieces = enriched.colisagePieces || '';
+    enriched.poidsKgEstim = enriched.poidsKgEstim !== undefined && enriched.poidsKgEstim !== null ? String(enriched.poidsKgEstim) : '0';
+    enriched.coutTransportEstim = enriched.coutTransportEstim !== undefined && enriched.coutTransportEstim !== null ? String(enriched.coutTransportEstim) : '0';
+    enriched.nombrePieces = enriched.nombrePieces !== undefined && enriched.nombrePieces !== null ? String(enriched.nombrePieces) : '0';
   } else if (tabType === 'crm') {
     enriched.type = enriched.type || 'Ticket';
     enriched.reference = enriched.reference || enriched.id || '';
@@ -9228,6 +9290,11 @@ function getRecordLookupKeys(item: any, tabType: SheetTabType): string[] {
   }
   if (tabType === 'formations' || tabType === 'stagiaires' || tabType === 'emargements') {
     return [item.identifiant, item.id, item.reference]
+      .filter(Boolean)
+      .map(s => String(s).trim().toLowerCase());
+  }
+  if (tabType === 'expeditions') {
+    return [item.id, item.reference, item.numeroSuivi]
       .filter(Boolean)
       .map(s => String(s).trim().toLowerCase());
   }
@@ -12063,6 +12130,8 @@ const MASTER_SHEET_SPREADSHEET_HEADER_TO_FIELD: Record<string, string> = {
   spreadsheetstocksactivites: 'spreadsheetStocksActivite',
   spreadsheetactivitestocks: 'spreadsheetStocksActivite',
   spreadsheetachatsfournisseurs: 'spreadsheetAchatsFournisseurs',
+  spreadsheetexpeditions: 'spreadsheetExpeditions',
+  spreadsheetexpedition: 'spreadsheetExpeditions',
   spreadsheettemps: 'spreadsheetTemps',
   spreadsheetreglagestemps: 'spreadsheetReglagesTemps',
   spreadsheetticketscaisse: 'spreadsheetTicketsCaisse',

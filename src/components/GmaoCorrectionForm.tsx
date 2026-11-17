@@ -1322,6 +1322,10 @@ export default function GmaoCorrectionForm({
   const [newMaterialType, setNewMaterialType] = useState('');
   const [isAiDetectionModalOpen, setIsAiDetectionModalOpen] = useState(false);
   const [aiDetectedModel, setAiDetectedModel] = useState<{ id: string; nom: string; marque: string } | null>(null);
+  const [aiDetectionTarget, setAiDetectionTarget] = useState<{
+    fieldKey: 'modeleCoffretId' | 'modeleElectrodeAId' | 'modeleElectrodeASecoursId' | 'modeleElectrodePId' | 'modeleElectrodePSecoursId' | 'modeleBatterieId';
+    category: 'Modèle Coffret' | 'Modèle Électrode' | 'Modèle Batterie';
+  } | null>(null);
   const [materielInterchangeClient, setMaterielInterchangeClient] = useState(report?.materielInterchangeClient || 'Non');
   const [commentaireChangement, setCommentaireChangement] = useState(report?.commentaireChangement || '');
   const [fournitureMaterielPret, setFournitureMaterielPret] = useState(report?.fournitureMaterielPret || 'Non');
@@ -4928,9 +4932,25 @@ export default function GmaoCorrectionForm({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label htmlFor="snap-modeleCoffretId" className="block text-[11px] font-bold text-black uppercase">
-                  Modèle de boîtier.
-                </label>
+                <div className="flex items-center justify-between">
+                  <label htmlFor="snap-modeleCoffretId" className="block text-[11px] font-bold text-black uppercase m-0">
+                    Modèle de boîtier.
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAiDetectionTarget({ fieldKey: 'modeleCoffretId', category: 'Modèle Coffret' })}
+                    id="btn-guess-coffret-model"
+                    style={{
+                      fontSize: '18px',
+                      fontWeight: 600,
+                      color: '#2e54ff',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    }}
+                    className="hover:underline cursor-pointer bg-transparent border-none p-0 font-sans select-none leading-none"
+                  >
+                    Deviner
+                  </button>
+                </div>
                 <select
                   id="snap-modeleCoffretId"
                   value={snapshot.modeleCoffretId || ''}
@@ -4942,6 +4962,16 @@ export default function GmaoCorrectionForm({
                     <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                   ))}
                 </select>
+                {aiDetectionTarget?.fieldKey === 'modeleCoffretId' && (
+                  <AiModelDetectionModal
+                    isOpen={true}
+                    onClose={() => setAiDetectionTarget(null)}
+                    availableModels={variables.filter(v => v.category === 'Modèle Coffret')}
+                    onDetected={(model) => {
+                      handleSnapshotChange('modeleCoffretId', model.id);
+                    }}
+                  />
+                )}
               </div>
 
               <div className="space-y-1">
@@ -5616,9 +5646,25 @@ export default function GmaoCorrectionForm({
           >
 
             <div className="space-y-1">
-              <label htmlFor="snap-modeleElectrodeAId" className="block text-[11px] font-bold text-black uppercase">
-                Modèle d’électrode A.
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="snap-modeleElectrodeAId" className="block text-[11px] font-bold text-black uppercase m-0">
+                  Modèle d’électrode A.
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setAiDetectionTarget({ fieldKey: 'modeleElectrodeAId', category: 'Modèle Électrode' })}
+                  id="btn-guess-electrode-a-model"
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 600,
+                    color: '#2e54ff',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                  className="hover:underline cursor-pointer bg-transparent border-none p-0 font-sans select-none leading-none"
+                >
+                  Deviner
+                </button>
+              </div>
               <select
                 id="snap-modeleElectrodeAId"
                 value={snapshot.modeleElectrodeAId || ''}
@@ -5630,6 +5676,16 @@ export default function GmaoCorrectionForm({
                   <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                 ))}
               </select>
+              {aiDetectionTarget?.fieldKey === 'modeleElectrodeAId' && (
+                <AiModelDetectionModal
+                  isOpen={true}
+                  onClose={() => setAiDetectionTarget(null)}
+                  availableModels={variables.filter(v => v.category === 'Modèle Électrode')}
+                  onDetected={(model) => {
+                    handleSnapshotChange('modeleElectrodeAId', model.id);
+                  }}
+                />
+              )}
             </div>
 
             {isVisibleLotPadPakA && (
@@ -5697,7 +5753,7 @@ export default function GmaoCorrectionForm({
             {isVisiblePeremptionPadPakA && (
               <div className="space-y-1">
                 <label htmlFor="snap-peremptionElectrodeA" className="block text-[11px] font-bold text-black uppercase">
-                  Péremption.
+                  Péremption A.
                 </label>
                 <div className="relative flex items-center w-full">
                   <input
@@ -5791,9 +5847,25 @@ export default function GmaoCorrectionForm({
             {!isDefibElectrodeASecoursNon && (
               <div className="pt-3 mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
                 <div className="space-y-1">
-                  <label htmlFor="snap-modeleElectrodeASecoursId" className="block text-[11px] font-bold text-black uppercase">
-                    Modèle d’électrode de secours.
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="snap-modeleElectrodeASecoursId" className="block text-[11px] font-bold text-black uppercase m-0">
+                      Modèle d’électrode de secours.
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setAiDetectionTarget({ fieldKey: 'modeleElectrodeASecoursId', category: 'Modèle Électrode' })}
+                      id="btn-guess-electrode-a-secours-model"
+                      style={{
+                        fontSize: '18px',
+                        fontWeight: 600,
+                        color: '#2e54ff',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                      className="hover:underline cursor-pointer bg-transparent border-none p-0 font-sans select-none leading-none"
+                    >
+                      Deviner
+                    </button>
+                  </div>
                   <select
                     id="snap-modeleElectrodeASecoursId"
                     value={snapshot.modeleElectrodeASecoursId || ''}
@@ -5805,6 +5877,16 @@ export default function GmaoCorrectionForm({
                       <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                     ))}
                   </select>
+                  {aiDetectionTarget?.fieldKey === 'modeleElectrodeASecoursId' && (
+                    <AiModelDetectionModal
+                      isOpen={true}
+                      onClose={() => setAiDetectionTarget(null)}
+                      availableModels={variables.filter(v => v.category === 'Modèle Électrode')}
+                      onDetected={(model) => {
+                        handleSnapshotChange('modeleElectrodeASecoursId', model.id);
+                      }}
+                    />
+                  )}
                 </div>
 
                 {isVisibleLotPadPakA && (
@@ -6196,9 +6278,25 @@ export default function GmaoCorrectionForm({
           >
 
             <div className="space-y-1">
-              <label htmlFor="snap-modeleElectrodePId" className="block text-[11px] font-bold text-black uppercase">
-                Modèle d’électrode P
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="snap-modeleElectrodePId" className="block text-[11px] font-bold text-black uppercase m-0">
+                  Modèle d’électrode P.
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setAiDetectionTarget({ fieldKey: 'modeleElectrodePId', category: 'Modèle Électrode' })}
+                  id="btn-guess-electrode-p-model"
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 600,
+                    color: '#2e54ff',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                  className="hover:underline cursor-pointer bg-transparent border-none p-0 font-sans select-none leading-none"
+                >
+                  Deviner
+                </button>
+              </div>
               <select
                 id="snap-modeleElectrodePId"
                 value={snapshot.modeleElectrodePId || ''}
@@ -6210,6 +6308,16 @@ export default function GmaoCorrectionForm({
                   <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                 ))}
               </select>
+              {aiDetectionTarget?.fieldKey === 'modeleElectrodePId' && (
+                <AiModelDetectionModal
+                  isOpen={true}
+                  onClose={() => setAiDetectionTarget(null)}
+                  availableModels={variables.filter(v => v.category === 'Modèle Électrode')}
+                  onDetected={(model) => {
+                    handleSnapshotChange('modeleElectrodePId', model.id);
+                  }}
+                />
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -6278,7 +6386,7 @@ export default function GmaoCorrectionForm({
               {isVisiblePeremptionPadPakP && (
                 <div className="space-y-1">
                   <label htmlFor="snap-peremptionElectrodeP" className="block text-[11px] font-bold text-black uppercase">
-                    Péremption.
+                    Péremption P.
                   </label>
                   <div className="relative flex items-center w-full">
                     <input
@@ -6370,9 +6478,25 @@ export default function GmaoCorrectionForm({
             {!isDefibElectrodePSecoursNon && (
               <div className="pt-3 mt-2 grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
                 <div className="space-y-1">
-                  <label htmlFor="snap-modeleElectrodePSecoursId" className="block text-[11px] font-bold text-black uppercase">
-                    Modèle d’électrode de secours.
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label htmlFor="snap-modeleElectrodePSecoursId" className="block text-[11px] font-bold text-black uppercase m-0">
+                      Modèle d’électrode de secours.
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setAiDetectionTarget({ fieldKey: 'modeleElectrodePSecoursId', category: 'Modèle Électrode' })}
+                      id="btn-guess-electrode-p-secours-model"
+                      style={{
+                        fontSize: '18px',
+                        fontWeight: 600,
+                        color: '#2e54ff',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      }}
+                      className="hover:underline cursor-pointer bg-transparent border-none p-0 font-sans select-none leading-none"
+                    >
+                      Deviner
+                    </button>
+                  </div>
                   <select
                     id="snap-modeleElectrodePSecoursId"
                     value={snapshot.modeleElectrodePSecoursId || ''}
@@ -6384,6 +6508,16 @@ export default function GmaoCorrectionForm({
                       <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                     ))}
                   </select>
+                  {aiDetectionTarget?.fieldKey === 'modeleElectrodePSecoursId' && (
+                    <AiModelDetectionModal
+                      isOpen={true}
+                      onClose={() => setAiDetectionTarget(null)}
+                      availableModels={variables.filter(v => v.category === 'Modèle Électrode')}
+                      onDetected={(model) => {
+                        handleSnapshotChange('modeleElectrodePSecoursId', model.id);
+                      }}
+                    />
+                  )}
                 </div>
 
                 {isVisibleLotP && (
@@ -6775,9 +6909,25 @@ export default function GmaoCorrectionForm({
           >
 
             <div className="space-y-1">
-              <label htmlFor="snap-modeleBatterieId" className="block text-[11px] font-bold text-black uppercase">
-                Modèle de batterie.
-              </label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="snap-modeleBatterieId" className="block text-[11px] font-bold text-black uppercase m-0">
+                  Modèle de batterie B.
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setAiDetectionTarget({ fieldKey: 'modeleBatterieId', category: 'Modèle Batterie' })}
+                  id="btn-guess-batterie-model"
+                  style={{
+                    fontSize: '18px',
+                    fontWeight: 600,
+                    color: '#2e54ff',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                  className="hover:underline cursor-pointer bg-transparent border-none p-0 font-sans select-none leading-none"
+                >
+                  Deviner
+                </button>
+              </div>
               <select
                 id="snap-modeleBatterieId"
                 value={snapshot.modeleBatterieId || ''}
@@ -6789,13 +6939,23 @@ export default function GmaoCorrectionForm({
                   <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                 ))}
               </select>
+              {aiDetectionTarget?.fieldKey === 'modeleBatterieId' && (
+                <AiModelDetectionModal
+                  isOpen={true}
+                  onClose={() => setAiDetectionTarget(null)}
+                  availableModels={variables.filter(v => v.category === 'Modèle Batterie')}
+                  onDetected={(model) => {
+                    handleSnapshotChange('modeleBatterieId', model.id);
+                  }}
+                />
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {isVisiblePourcentageBatterie && (
                 <div className="space-y-1">
                   <label htmlFor="snap-pourcentageBatterie" className="block text-[11px] font-bold text-black uppercase">
-                    Pourcentage de charge.
+                    Pourcentage de charge B.
                   </label>
                   <input
                     type="number"
@@ -6876,7 +7036,7 @@ export default function GmaoCorrectionForm({
               {isVisiblePeremptionBatterie && (
                 <div className="space-y-1 bg-white">
                   <label htmlFor="snap-peremptionBatterie" className="block text-[11px] font-bold text-black uppercase">
-                    Péremption.
+                    Péremption B.
                   </label>
                   <div className="relative flex items-center w-full">
                     <input
@@ -6939,7 +7099,7 @@ export default function GmaoCorrectionForm({
               {isVisibleFabricationBatterie && (
                 <div className="space-y-1 bg-white">
                   <label htmlFor="snap-fabricationBatterie" className="block text-[11px] font-bold text-black uppercase">
-                    Fabrication.
+                    Fabrication B.
                   </label>
                   <div className="relative flex items-center w-full">
                     <input
@@ -6979,7 +7139,7 @@ export default function GmaoCorrectionForm({
               {isVisibleInsertionBatterie && (
                 <div className="space-y-1 bg-white">
                   <label htmlFor="snap-insertionBatterie" className="block text-[11px] font-bold text-black uppercase">
-                    Insertion.
+                    Insertion B.
                   </label>
                   <div className="relative flex items-center w-full">
                     <input

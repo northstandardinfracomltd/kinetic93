@@ -1224,6 +1224,7 @@ async function startServer() {
       subPath === '/health' ||
       subPath === '/auth/verify-tenant-member' ||
       subPath.startsWith('/public/') ||
+      subPath.startsWith('/presence/') ||
       subPath === '/crm/embed-lead' ||
       subPath.startsWith('/v1/')
     ) {
@@ -1360,6 +1361,124 @@ async function startServer() {
     }
 
     return next();
+  });
+
+  // Real-time active presence sessions & tab/form conflict detection per tenant (Logiciel Principal)
+  interface ActivePresenceSession {
+    sessionId: string;
+    tenantId: string;
+    email: string;
+    name: string;
+    role: string;
+    tab: string;
+    formKey: string;
+    connectedAt: number;
+    lastSeen: number;
+  }
+  const activePresenceSessions = new Map<string, ActivePresenceSession>();
+  const PRESENCE_TTL_MS = 15000;
+
+  const pruneExpiredPresenceSessions = (now = Date.now()) => {
+    for (const [sid, sess] of activePresenceSessions.entries()) {
+      if (now - sess.lastSeen > PRESENCE_TTL_MS) {
+        activePresenceSessions.delete(sid);
+      }
+    }
+  };
+
+  const getActivePresenceSessionsForTenant = (tenantId: string, now = Date.now()): ActivePresenceSession[] => {
+    pruneExpiredPresenceSessions(now);
+    const cleanTenant = String(tenantId || 'demo').trim();
+    const tenantAliases = getTenantAliasesSync(cleanTenant);
+    tenantAliases.add(cleanTenant.toLowerCase());
+    const matched: ActivePresenceSession[] = [];
+    for (const sess of activePresenceSessions.values()) {
+      const sessLower = String(sess.tenantId || '').trim().toLowerCase();
+      if (tenantAliases.has(sessLower)) {
+        matched.push(sess);
+      }
+    }
+    matched.sort((a, b) => a.connectedAt - b.connectedAt);
+    return matched;
+  };
+
+  app.post('/api/presence/heartbeat', express.text({ type: '*/*' }), (req, res) => {
+    try {
+      let body: any = req.body;
+      if (typeof body === 'string' && body.trim()) {
+        try {
+          body = JSON.parse(body);
+        } catch (_) {
+          body = {};
+        }
+      }
+      const now = Date.now();
+      const sessionId = String(body?.sessionId || req.query.sessionId || '').trim();
+      const tenantId = String(body?.tenantId || req.query.tenantId || req.headers['x-defibeo-tenant'] || 'demo').trim();
+      const email = String(body?.email || req.headers['x-defibeo-email'] || '').trim().toLowerCase();
+      const name = String(body?.name || '').trim();
+      const role = String(body?.role || req.headers['x-defibeo-role'] || 'admin').trim();
+      const hasTabField = body && typeof body === 'object' && 'tab' in body;
+      const hasFormKeyField = body && typeof body === 'object' && 'formKey' in body;
+      const tab = hasTabField ? String(body.tab || '').trim() : undefined;
+      const formKey = hasFormKeyField ? String(body.formKey || '').trim().toLowerCase() : undefined;
+
+      if (sessionId && tenantId) {
+        const existing = activePresenceSessions.get(sessionId);
+        activePresenceSessions.set(sessionId, {
+          sessionId,
+          tenantId,
+          email: email || existing?.email || '',
+          name: name || existing?.name || email || 'Membre',
+          role: role || existing?.role || 'admin',
+          tab: tab !== undefined ? tab : (existing?.tab || ''),
+          formKey: formKey !== undefined ? formKey : (existing?.formKey || ''),
+          connectedAt: existing && existing.tenantId.toLowerCase() === tenantId.toLowerCase() ? existing.connectedAt : now,
+          lastSeen: now,
+        });
+      }
+
+      const sessions = getActivePresenceSessionsForTenant(tenantId, now);
+      const currentEntry = sessionId ? activePresenceSessions.get(sessionId) : undefined;
+      const effectiveTab = tab !== undefined ? tab : (currentEntry?.tab || '');
+      const effectiveFormKey = formKey !== undefined ? formKey : (currentEntry?.formKey || '');
+
+      let tabConflict = false;
+      let formConflict = false;
+      for (const entry of sessions) {
+        if (entry.sessionId === sessionId) continue;
+        if (effectiveTab && entry.tab === effectiveTab) {
+          tabConflict = true;
+        }
+        if (effectiveFormKey && entry.formKey && entry.formKey === effectiveFormKey) {
+          formConflict = true;
+        }
+      }
+
+      return res.json({ status: 'ok', sessions, tabConflict, formConflict });
+    } catch (err) {
+      return res.json({ status: 'ok', sessions: [], tabConflict: false, formConflict: false });
+    }
+  });
+
+  app.post('/api/presence/leave', express.text({ type: '*/*' }), (req, res) => {
+    try {
+      let body: any = req.body;
+      if (typeof body === 'string' && body.trim()) {
+        try {
+          body = JSON.parse(body);
+        } catch (_) {
+          body = {};
+        }
+      }
+      const sessionId = String(body?.sessionId || req.query.sessionId || '').trim();
+      if (sessionId) {
+        activePresenceSessions.delete(sessionId);
+      }
+      return res.json({ status: 'ok', ok: true });
+    } catch (_) {
+      return res.json({ status: 'ok', ok: true });
+    }
   });
 
   // Static sounds serving for zero-latency audio playback
@@ -2745,6 +2864,8 @@ function getCollectionNameAliases(collectionName: string): string[] {
     aliases.push('distributed_stocks', 'distributedStocks');
   } else if (collectionName === 'achats_fournisseurs' || collectionName === 'achatsFournisseurs') {
     aliases.push('achats_fournisseurs', 'achatsFournisseurs');
+  } else if (collectionName === 'expeditions') {
+    aliases.push('expeditions');
   } else if (collectionName === 'companyInfo' || collectionName === 'company_info') {
     aliases.push('companyInfo', 'company_info');
   } else if (collectionName === 'notifications' || collectionName === 'app_notifications') {
@@ -3082,6 +3203,8 @@ function formatDefibrillateurOutput(d: any): any {
   const fabrication = d.fabrication !== undefined ? d.fabrication : (d.date_fabrication || '');
   const miseEnService = d.miseEnService !== undefined ? d.miseEnService : (d.mise_en_service || '');
   const sortieFabricant = d.sortieFabricant !== undefined ? d.sortieFabricant : (d.sortie_fabricant || '');
+  const creationDefibeo = d.creationDefibeo !== undefined ? d.creationDefibeo : (d.ajout_defibeo || d.creation_defibeo || d['Ajout Defibeo'] || '');
+  const derniereModificationDefibeo = d.derniereModificationDefibeo !== undefined ? d.derniereModificationDefibeo : (d.modifie_defibeo || d.derniere_modification_defibeo || d['Modifié Defibeo'] || '');
 
   // Trousse de secours
   const peremptionTrousse = d.peremptionTrousse !== undefined ? d.peremptionTrousse : (d.peremption_trousse || d.date_peremption_trousse || '');
@@ -3264,6 +3387,8 @@ function formatDefibrillateurOutput(d: any): any {
     fabrication,
     miseEnService,
     sortieFabricant,
+    creationDefibeo,
+    derniereModificationDefibeo,
 
     // Trousse
     peremptionTrousse,
@@ -4149,6 +4274,7 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     historiqueNotifications: 'historiqueNotifications',
     achats_fournisseurs: 'achatsFournisseurs',
     achatsFournisseurs: 'achatsFournisseurs',
+    expeditions: 'expeditions',
     pointages: 'temps',
     pointages_history: 'temps',
     temps: 'temps',
@@ -4327,7 +4453,7 @@ async function fetchServerCollection(colName: string, tenantId: string, extraAli
     }
   }
 
-  if (isCompanyCol || isTenantDbCol) {
+  if (isCompanyCol || isTenantDbCol || colName === 'api_connectors') {
     try {
       await syncTenantConfigFromFirestore(activeTenant);
     } catch (_) {}
@@ -5352,6 +5478,7 @@ async function warmupDefibrillateursStore() {
     stocksDistribues: 'spreadsheetStocks',
     historiqueNotifications: 'spreadsheetStocksActivite',
     achatsFournisseurs: 'spreadsheetAchatsFournisseurs',
+    expeditions: 'spreadsheetExpeditions',
     temps: 'spreadsheetTemps',
     reglagesTemps: 'spreadsheetReglagesTemps',
     ticketsCaisse: 'spreadsheetTicketsCaisse',
@@ -5579,7 +5706,7 @@ async function warmupDefibrillateursStore() {
 
         const docKeysToFetch = new Set<string>();
         for (const cand of candidateTenants) {
-          for (const suffix of ['tenantDatabases', 'companyInfo', 'company_info']) {
+          for (const suffix of ['tenantDatabases', 'companyInfo', 'company_info', 'api_connectors']) {
             if (cand.toLowerCase() === 'demo') {
               docKeysToFetch.add(suffix);
               docKeysToFetch.add(`demo_${suffix}`);
@@ -5622,6 +5749,7 @@ async function warmupDefibrillateursStore() {
         const allSheetFieldKeys = Array.from(new Set(Object.values(SHEET_TAB_FIELD_MAP)));
         const mergedSheetUrls: Record<string, string> = {};
         let mergedCompanyProps: Record<string, any> = {};
+        const mergedConnectorsProps: Record<string, any> = {};
 
         // 0. Seed from Master Tenants Spreadsheet row for this tenant (complementary, non-destructive)
         const masterSheetObjects: any[] = [];
@@ -5644,6 +5772,7 @@ async function warmupDefibrillateursStore() {
 
         // 1. Seed from existing local memory / disk first
         const localSourceObjects: any[] = [];
+        const localConnectorObjects: any[] = [];
         for (const cand of candidateTenants) {
           for (const suffix of ['companyInfo', 'tenantDatabases', 'company_info']) {
             const k = cand.toLowerCase() === 'demo' ? suffix : `${cand}_${suffix}`;
@@ -5662,18 +5791,39 @@ async function warmupDefibrillateursStore() {
               } catch (_) {}
             }
           }
+          const connKey = cand.toLowerCase() === 'demo' ? 'api_connectors' : `${cand}_api_connectors`;
+          if (serverMemoryStore.has(connKey)) {
+            const mv = serverMemoryStore.get(connKey);
+            if (mv && typeof mv === 'object' && !Array.isArray(mv)) localConnectorObjects.push(mv);
+          }
+          const connDf = path.join(COLLECTIONS_DIR, `${connKey}.json`);
+          if (fs.existsSync(connDf)) {
+            try {
+              const dv = JSON.parse(fs.readFileSync(connDf, 'utf-8'));
+              const unwrapped = dv?.value !== undefined ? dv.value : dv;
+              if (unwrapped && typeof unwrapped === 'object' && !Array.isArray(unwrapped)) {
+                localConnectorObjects.push(unwrapped);
+              }
+            } catch (_) {}
+          }
         }
 
         // 2. Collect Firestore objects (sorted by updatedAt ascending so newest wins, while Master Sheet also complements any non-empty URL)
         const firestoreObjects: any[] = [];
+        const firestoreConnectorObjects: any[] = [];
         for (const { key, val } of fetchedResults) {
           if (!val) continue;
+          const isConnectorKey = key.toLowerCase().includes('api_connectors');
           if (Array.isArray(val)) {
             for (const item of val) {
               if (!item || typeof item !== 'object') continue;
               const tidStr = String(item.tenantId || item.envId || item.id || '').trim().toLowerCase();
               if (tidStr && (tAliases.has(tidStr) || candidateTenants.some(c => c.toLowerCase() === tidStr))) {
-                firestoreObjects.push(item);
+                if (isConnectorKey) {
+                  firestoreConnectorObjects.push(item);
+                } else {
+                  firestoreObjects.push(item);
+                }
               }
             }
           } else if (typeof val === 'object') {
@@ -5682,7 +5832,11 @@ async function warmupDefibrillateursStore() {
             if (explicitTid && !tAliases.has(explicitTid) && !candidateTenants.some(c => c.toLowerCase() === explicitTid)) {
               continue;
             }
-            firestoreObjects.push(val);
+            if (isConnectorKey) {
+              firestoreConnectorObjects.push(val);
+            } else {
+              firestoreObjects.push(val);
+            }
             firestoreDocCheckCacheMs.set(key, Date.now());
           }
         }
@@ -5692,6 +5846,27 @@ async function warmupDefibrillateursStore() {
           const tb = b?.updatedAt ? Date.parse(String(b.updatedAt)) || 0 : 0;
           return ta - tb;
         });
+
+        firestoreConnectorObjects.sort((a, b) => {
+          const ta = a?.updatedAt ? Date.parse(String(a.updatedAt)) || 0 : 0;
+          const tb = b?.updatedAt ? Date.parse(String(b.updatedAt)) || 0 : 0;
+          return ta - tb;
+        });
+
+        for (const cSrc of [...localConnectorObjects, ...firestoreConnectorObjects]) {
+          if (!cSrc || typeof cSrc !== 'object' || Array.isArray(cSrc)) continue;
+          const preserveActiveDrive =
+            (mergedConnectorsProps.googleDriveActive === true || Boolean(mergedConnectorsProps.googleDriveEmail)) &&
+            cSrc.googleDriveActive === false &&
+            !cSrc.explicitGoogleDriveToggle;
+          for (const [k, v] of Object.entries(cSrc)) {
+            if (v === undefined || v === null) continue;
+            if (preserveActiveDrive && (k === 'googleDriveActive' || k === 'googleDriveEmail' || k === 'googleDriveAccessToken' || k === 'googleDriveFolderId')) {
+              if (v === '' || v === false) continue;
+            }
+            mergedConnectorsProps[k] = v;
+          }
+        }
 
         for (const src of [...localSourceObjects, ...firestoreObjects]) {
           if (!src || typeof src !== 'object' || Array.isArray(src)) continue;
@@ -5718,6 +5893,28 @@ async function warmupDefibrillateursStore() {
           }
         }
 
+        // Cross-seed Google Drive connector state between companyInfo and api_connectors if present in either
+        if (mergedConnectorsProps.googleDriveActive === undefined && mergedCompanyProps.googleDriveActive !== undefined) {
+          mergedConnectorsProps.googleDriveActive = Boolean(mergedCompanyProps.googleDriveActive);
+        }
+        if (!mergedConnectorsProps.googleDriveEmail && mergedCompanyProps.googleDriveEmail) {
+          mergedConnectorsProps.googleDriveEmail = mergedCompanyProps.googleDriveEmail;
+        }
+        if (!mergedConnectorsProps.googleDriveAccessToken && mergedCompanyProps.googleDriveAccessToken) {
+          mergedConnectorsProps.googleDriveAccessToken = mergedCompanyProps.googleDriveAccessToken;
+        }
+        if (!mergedConnectorsProps.googleDriveFolderId && mergedCompanyProps.googleDriveFolderId) {
+          mergedConnectorsProps.googleDriveFolderId = mergedCompanyProps.googleDriveFolderId;
+        }
+        if (mergedConnectorsProps.googleDriveEmail && mergedConnectorsProps.googleDriveActive === undefined) {
+          mergedConnectorsProps.googleDriveActive = true;
+        }
+        if (mergedConnectorsProps.googleDriveActive !== undefined) {
+          mergedCompanyProps.googleDriveActive = Boolean(mergedConnectorsProps.googleDriveActive);
+          if (mergedConnectorsProps.googleDriveEmail) mergedCompanyProps.googleDriveEmail = mergedConnectorsProps.googleDriveEmail;
+          if (mergedConnectorsProps.googleDriveFolderId) mergedCompanyProps.googleDriveFolderId = mergedConnectorsProps.googleDriveFolderId;
+        }
+
         // 3. Apply Master Spreadsheet URLs in complement (fills in any URL configured in MEGA ADMIN without erasing Firestore URLs)
         for (const mSrc of masterSheetObjects) {
           if (!mSrc || typeof mSrc !== 'object') continue;
@@ -5735,7 +5932,7 @@ async function warmupDefibrillateursStore() {
           }
         }
 
-        if (Object.keys(mergedSheetUrls).length === 0 && Object.keys(mergedCompanyProps).length === 0) {
+        if (Object.keys(mergedSheetUrls).length === 0 && Object.keys(mergedCompanyProps).length === 0 && Object.keys(mergedConnectorsProps).length === 0) {
           return;
         }
 
@@ -5754,6 +5951,7 @@ async function warmupDefibrillateursStore() {
           const compKey = pfx.toLowerCase() === 'demo' ? 'companyInfo' : `${pfx}_companyInfo`;
           const compInfoAliasKey = pfx.toLowerCase() === 'demo' ? 'company_info' : `${pfx}_company_info`;
           const dbKey = pfx.toLowerCase() === 'demo' ? 'tenantDatabases' : `${pfx}_tenantDatabases`;
+          const connKey = pfx.toLowerCase() === 'demo' ? 'api_connectors' : `${pfx}_api_connectors`;
 
           const existingComp = serverMemoryStore.get(compKey);
           const safeComp = existingComp && typeof existingComp === 'object' && !Array.isArray(existingComp) ? existingComp : {};
@@ -5777,6 +5975,20 @@ async function warmupDefibrillateursStore() {
           serverMemoryStore.set(dbKey, nextDb);
           firestoreDocCheckCacheMs.set(dbKey, Date.now());
           persistSingleCollectionToDisk(dbKey, nextDb);
+
+          if (Object.keys(mergedConnectorsProps).length > 0) {
+            const existingConn = serverMemoryStore.get(connKey);
+            const safeConn = existingConn && typeof existingConn === 'object' && !Array.isArray(existingConn) ? existingConn : {};
+            const nextConn = {
+              ...safeConn,
+              ...mergedConnectorsProps,
+              tenantId: pfx,
+              envId: pfx,
+            };
+            serverMemoryStore.set(connKey, nextConn);
+            firestoreDocCheckCacheMs.set(connKey, Date.now());
+            persistSingleCollectionToDisk(connKey, nextConn);
+          }
         }
       } catch (err) {
         console.warn(`[syncTenantConfigFromFirestore] Warning syncing config for ${activeTenant}:`, err);
@@ -6030,96 +6242,6 @@ async function warmupDefibrillateursStore() {
       });
     } catch (err: any) {
       return res.status(500).json({ error: err.message });
-    }
-  });
-
-  // Real-time Tenant Tab & Form Presence Detection (across sessions/users of the same tenant)
-  interface TenantPresenceEntry {
-    sessionId: string;
-    tenantId: string;
-    tab: string;
-    formKey: string;
-    updatedAt: number;
-  }
-  const activeTenantPresenceMap = new Map<string, TenantPresenceEntry>();
-  const PRESENCE_TTL_MS = 12000;
-
-  const pruneStalePresence = (now: number) => {
-    for (const [k, entry] of activeTenantPresenceMap.entries()) {
-      if (now - entry.updatedAt > PRESENCE_TTL_MS) {
-        activeTenantPresenceMap.delete(k);
-      }
-    }
-  };
-
-  app.post("/api/presence/heartbeat", (req, res) => {
-    try {
-      const now = Date.now();
-      pruneStalePresence(now);
-
-      const body = req.body || {};
-      const sessionId = String(body.sessionId || '').trim();
-      const tenantId = String(body.tenantId || 'DEMO').trim().toUpperCase();
-      const tab = String(body.tab || '').trim();
-      const formKey = String(body.formKey || '').trim().toLowerCase();
-
-      if (!sessionId || !tenantId) {
-        return res.json({ tabConflict: false, formConflict: false });
-      }
-
-      const mapKey = `${tenantId}::${sessionId}`;
-      if (!tab && !formKey) {
-        activeTenantPresenceMap.delete(mapKey);
-        return res.json({ tabConflict: false, formConflict: false });
-      }
-
-      activeTenantPresenceMap.set(mapKey, {
-        sessionId,
-        tenantId,
-        tab,
-        formKey,
-        updatedAt: now,
-      });
-
-      let tabConflict = false;
-      let formConflict = false;
-
-      for (const entry of activeTenantPresenceMap.values()) {
-        if (entry.tenantId !== tenantId) continue;
-        if (entry.sessionId === sessionId) continue;
-        if (tab && entry.tab === tab) {
-          tabConflict = true;
-        }
-        if (formKey && entry.formKey && entry.formKey === formKey) {
-          formConflict = true;
-        }
-      }
-
-      return res.json({ tabConflict, formConflict });
-    } catch (err: any) {
-      return res.json({ tabConflict: false, formConflict: false });
-    }
-  });
-
-  app.post("/api/presence/leave", (req, res) => {
-    try {
-      const body = req.body || {};
-      const sessionId = String(body.sessionId || '').trim();
-      const tenantId = String(body.tenantId || '').trim().toUpperCase();
-      if (sessionId) {
-        if (tenantId) {
-          activeTenantPresenceMap.delete(`${tenantId}::${sessionId}`);
-        } else {
-          for (const [k, entry] of activeTenantPresenceMap.entries()) {
-            if (entry.sessionId === sessionId) {
-              activeTenantPresenceMap.delete(k);
-            }
-          }
-        }
-      }
-      return res.json({ ok: true });
-    } catch {
-      return res.json({ ok: true });
     }
   });
 
@@ -9189,6 +9311,7 @@ async function warmupDefibrillateursStore() {
             'spreadsheetStocks',
             'spreadsheetStocksActivite',
             'spreadsheetAchatsFournisseurs',
+            'spreadsheetExpeditions',
             'spreadsheetTemps',
             'spreadsheetReglagesTemps',
             'spreadsheetTicketsCaisse',
@@ -9373,14 +9496,65 @@ async function warmupDefibrillateursStore() {
             }
           }
         } else if (collectionName === 'api_connectors' && typeof value === 'object' && !Array.isArray(value)) {
-          const existingInMem = serverMemoryStore.get(collectionKey);
-          const safeExisting = (existingInMem && typeof existingInMem === 'object' && !Array.isArray(existingInMem)) ? existingInMem : {};
+          let safeExisting: Record<string, any> = {};
+          const candidateConnKeys = [
+            collectionKey,
+            ...Array.from(allTenantAliases)
+              .filter(a => /^d\d+$/i.test(a))
+              .map(a => `${a.toUpperCase()}_api_connectors`),
+          ];
+          for (const ck of candidateConnKeys) {
+            const mem = serverMemoryStore.get(ck);
+            if (mem && typeof mem === 'object' && !Array.isArray(mem)) {
+              safeExisting = { ...safeExisting, ...mem };
+            }
+          }
+          const preserveActiveDrive =
+            (safeExisting.googleDriveActive === true || Boolean(safeExisting.googleDriveEmail)) &&
+            value.googleDriveActive === false &&
+            !value.explicitGoogleDriveToggle;
+
           finalValueToStore = {
             ...safeExisting,
             ...value,
+            ...(preserveActiveDrive
+              ? {
+                  googleDriveActive: true,
+                  googleDriveEmail: value.googleDriveEmail || safeExisting.googleDriveEmail || '',
+                  googleDriveAccessToken: value.googleDriveAccessToken || safeExisting.googleDriveAccessToken || '',
+                  googleDriveFolderId: value.googleDriveFolderId || safeExisting.googleDriveFolderId || '',
+                }
+              : {}),
             tenantId: rawTenant,
             updatedAt: new Date().toISOString(),
           };
+
+          // Also mirror Google Drive connector state into companyInfo across all tenant aliases so it is backed up
+          const tenantTargets = Array.from(
+            new Set([
+              rawTenant,
+              rawTenant.toUpperCase(),
+              ...Array.from(allTenantAliases)
+                .filter(a => /^d\d+$/i.test(a))
+                .map(a => a.toUpperCase()),
+            ])
+          );
+          for (const tTarget of tenantTargets) {
+            const compKey = tTarget === 'demo' ? 'companyInfo' : `${tTarget}_companyInfo`;
+            const existingComp = serverMemoryStore.get(compKey);
+            if (existingComp && typeof existingComp === 'object' && !Array.isArray(existingComp)) {
+              const updatedComp = {
+                ...existingComp,
+                googleDriveActive: Boolean(finalValueToStore.googleDriveActive),
+                googleDriveEmail: finalValueToStore.googleDriveEmail || '',
+                googleDriveFolderId: finalValueToStore.googleDriveFolderId || existingComp.googleDriveFolderId || '',
+              };
+              serverMemoryStore.set(compKey, updatedComp);
+              try {
+                persistSingleCollectionToDisk(compKey, updatedComp);
+              } catch (_) {}
+            }
+          }
         }
 
         serverMemoryStore.set(collectionKey, finalValueToStore);
@@ -11091,6 +11265,12 @@ async function warmupDefibrillateursStore() {
           miseEnService: 'miseEnService',
           sortie_fabricant: 'sortieFabricant',
           sortieFabricant: 'sortieFabricant',
+          ajout_defibeo: 'creationDefibeo',
+          creation_defibeo: 'creationDefibeo',
+          creationDefibeo: 'creationDefibeo',
+          modifie_defibeo: 'derniereModificationDefibeo',
+          derniere_modification_defibeo: 'derniereModificationDefibeo',
+          derniereModificationDefibeo: 'derniereModificationDefibeo',
 
           // Contrat
           contrat: 'contrat',
@@ -11735,6 +11915,18 @@ async function warmupDefibrillateursStore() {
               updatedDefib.sortieFabricant = sfVal;
               updatedDefib.sortie_fabricant = sfVal;
               updatedFields.add('sortieFabricant');
+            }
+            if (body.creationDefibeo !== undefined || body.ajout_defibeo !== undefined || body.creation_defibeo !== undefined) {
+              const cdVal = String(body.creationDefibeo ?? body.ajout_defibeo ?? body.creation_defibeo).trim();
+              updatedDefib.creationDefibeo = cdVal;
+              updatedDefib.ajout_defibeo = cdVal;
+              updatedFields.add('creationDefibeo');
+            }
+            if (body.derniereModificationDefibeo !== undefined || body.modifie_defibeo !== undefined || body.derniere_modification_defibeo !== undefined) {
+              const dmdVal = String(body.derniereModificationDefibeo ?? body.modifie_defibeo ?? body.derniere_modification_defibeo).trim();
+              updatedDefib.derniereModificationDefibeo = dmdVal;
+              updatedDefib.modifie_defibeo = dmdVal;
+              updatedFields.add('derniereModificationDefibeo');
             }
 
             // Contrat

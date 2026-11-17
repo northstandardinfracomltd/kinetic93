@@ -26,9 +26,9 @@ import {
 } from 'lucide-react';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence, APP_THEMES, DEFAULT_THEME_COLOR, APP_FAVICONS, DEFAULT_FAVICON_URL, formatPdfHeaderText, EXTRA_SPREADSHEET_FIELDS, SpreadsheetFieldKey, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { uploadMediaToFirebase } from '../firebase';
-import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile, auth, findTenantInList, KNOWN_TENANTS_REGISTRY, ensureTenantMembersClient, ensureTenantCustomLocationNames } from '../firebase';
+import { getRegisteredTenants, fetchCollectionFromFirestore, saveCollectionToFirestore, checkIfEmailExistsAnywhere, updateTenantLanguage, updateTenantAdminProfile, auth, findTenantInList, KNOWN_TENANTS_REGISTRY, ensureTenantMembersClient, ensureTenantCustomLocationNames, getTenantAliases } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { fetchGoogleDriveStatus, ensureGoogleDriveFolderSetup } from '../utils/googleDrive';
+import { fetchGoogleDriveStatus, ensureGoogleDriveFolderSetup, getCachedGoogleDriveActiveSync } from '../utils/googleDrive';
 import { getAppsScriptUrl, saveAppsScriptUrl, triggerEmail2TechnicianConnexion, triggerEmail3AdminConnexion, triggerEmailNewMemberAdded, sendScriptEmail } from '../utils/emailService';
 import { setLanguage, t } from '../utils/translate';
 import { REGIONS_FRANCAISES, getLocationCustomName } from '../utils';
@@ -1828,9 +1828,10 @@ export default function SettingsModal({
         apiDefibeoActive: false,
         apiDefibeoApiKey: apiKey,
         apiDefibeoSecretKey: secretKey,
-        googleDriveActive,
-        googleDriveEmail,
-        googleDriveAccessToken,
+        googleDriveActive: existing.googleDriveActive !== undefined ? Boolean(existing.googleDriveActive) : googleDriveActive,
+        googleDriveEmail: existing.googleDriveEmail || googleDriveEmail,
+        googleDriveAccessToken: existing.googleDriveAccessToken || googleDriveAccessToken,
+        ...(existing.googleDriveFolderId ? { googleDriveFolderId: existing.googleDriveFolderId } : {}),
         updatedAt: new Date().toISOString()
       };
       await saveCollectionToFirestore('api_connectors', payload, tId);
@@ -2037,6 +2038,35 @@ export default function SettingsModal({
   const persistGoogleDriveForTenant = async (active: boolean, email: string, token: string, folderId?: string) => {
     const activeTid = propTenantId || myTenantId || localStorage.getItem('defib_tenant_id') || 'demo';
     try {
+      const tAliases = Array.from(
+        new Set([
+          activeTid,
+          activeTid.toUpperCase(),
+          activeTid.toLowerCase(),
+          ...Array.from(getTenantAliases(activeTid)).flatMap(a => [a, a.toUpperCase(), a.toLowerCase()]),
+        ])
+      ).filter(Boolean);
+      for (const ta of tAliases) {
+        try {
+          localStorage.setItem(`defib_${ta}_google_drive_active`, active ? 'true' : 'false');
+          if (email) {
+            localStorage.setItem(`defib_${ta}_google_drive_email`, email);
+          } else {
+            localStorage.removeItem(`defib_${ta}_google_drive_email`);
+          }
+          if (token) {
+            localStorage.setItem(`defib_${ta}_google_drive_token`, token);
+          } else {
+            localStorage.removeItem(`defib_${ta}_google_drive_token`);
+          }
+          if (folderId) {
+            localStorage.setItem(`defib_${ta}_google_drive_folder_id`, folderId);
+          } else if (!active) {
+            localStorage.removeItem(`defib_${ta}_google_drive_folder_id`);
+          }
+        } catch (_) {}
+      }
+
       const rawExisting = await fetchCollectionFromFirestore<any>('api_connectors', activeTid);
       const existing = Array.isArray(rawExisting) ? rawExisting[0] : rawExisting;
       const baseObj = existing && typeof existing === 'object' ? existing : {};
@@ -2046,12 +2076,19 @@ export default function SettingsModal({
         googleDriveActive: active,
         googleDriveEmail: email,
         googleDriveAccessToken: token,
+        explicitGoogleDriveToggle: true,
         updatedAt: new Date().toISOString(),
       };
       if (folderId !== undefined) {
         updatedConnectors.googleDriveFolderId = folderId;
       }
       await saveCollectionToFirestore('api_connectors', updatedConnectors, activeTid);
+      setLocalCompany(prev => ({
+        ...prev,
+        googleDriveActive: active,
+        googleDriveEmail: email,
+        ...(folderId !== undefined ? { googleDriveFolderId: folderId } : {}),
+      } as CompanyInfo));
       if (onConnectorsUpdated) {
         onConnectorsUpdated();
       }
@@ -2250,9 +2287,26 @@ export default function SettingsModal({
       setAtlasanteActive(localStorage.getItem(`defib_${activeTenant}_atlasante_active`) === 'true');
       setAtlasanteDeclarantId('');
       setAtlasanteUrlAuth('https://catalogue.atlasante.fr/api/login');
-      setGoogleDriveActive(localStorage.getItem(`defib_${activeTenant}_google_drive_active`) === 'true' || localStorage.getItem('defib_google_drive_active') === 'true');
-      setGoogleDriveEmail(localStorage.getItem(`defib_${activeTenant}_google_drive_email`) || localStorage.getItem('defib_google_drive_email') || '');
-      setGoogleDriveAccessToken(localStorage.getItem(`defib_${activeTenant}_google_drive_token`) || localStorage.getItem('defib_google_drive_token') || '');
+      const tAliases = Array.from(
+        new Set([
+          activeTenant,
+          activeTenant.toUpperCase(),
+          activeTenant.toLowerCase(),
+          ...Array.from(getTenantAliases(activeTenant)).flatMap(a => [a, a.toUpperCase(), a.toLowerCase()]),
+        ])
+      ).filter(Boolean);
+      const cachedEmail =
+        tAliases.map(ta => localStorage.getItem(`defib_${ta}_google_drive_email`)).find(Boolean) ||
+        localStorage.getItem('defib_google_drive_email') ||
+        '';
+      const cachedToken =
+        tAliases.map(ta => localStorage.getItem(`defib_${ta}_google_drive_token`)).find(Boolean) ||
+        localStorage.getItem('defib_google_drive_token') ||
+        '';
+
+      setGoogleDriveActive(getCachedGoogleDriveActiveSync(activeTenant));
+      setGoogleDriveEmail(cachedEmail);
+      setGoogleDriveAccessToken(cachedToken);
 
       fetchGoogleDriveStatus(activeTenant).then(status => {
         setGoogleDriveActive(status.active);
@@ -2311,28 +2365,36 @@ export default function SettingsModal({
             setAtlasanteUrlAuth('https://catalogue.atlasante.fr/api/login');
           }
 
-          if (data.googleDriveActive !== undefined) {
-            const gdActive = Boolean(data.googleDriveActive);
-            setGoogleDriveActive(gdActive);
+          const hasLinkedDriveInData = Boolean(data.googleDriveEmail || data.googleDriveAccessToken);
+          const gdActiveFromData = hasLinkedDriveInData
+            ? data.explicitGoogleDriveToggle && data.googleDriveActive === false
+              ? false
+              : true
+            : Boolean(data.googleDriveActive);
+
+          if (gdActiveFromData || (data.explicitGoogleDriveToggle && data.googleDriveActive === false)) {
+            setGoogleDriveActive(gdActiveFromData);
             try {
-              localStorage.setItem(`defib_${activeTenant}_google_drive_active`, gdActive ? 'true' : 'false');
+              for (const ta of tAliases) {
+                localStorage.setItem(`defib_${ta}_google_drive_active`, gdActiveFromData ? 'true' : 'false');
+              }
             } catch (_) {}
           }
-          if (data.googleDriveEmail !== undefined) {
-            setGoogleDriveEmail(data.googleDriveEmail || '');
-            if (data.googleDriveEmail) {
-              try {
-                localStorage.setItem(`defib_${activeTenant}_google_drive_email`, data.googleDriveEmail);
-              } catch (_) {}
-            }
+          if (data.googleDriveEmail) {
+            setGoogleDriveEmail(data.googleDriveEmail);
+            try {
+              for (const ta of tAliases) {
+                localStorage.setItem(`defib_${ta}_google_drive_email`, data.googleDriveEmail);
+              }
+            } catch (_) {}
           }
-          if (data.googleDriveAccessToken !== undefined) {
-            setGoogleDriveAccessToken(data.googleDriveAccessToken || '');
-            if (data.googleDriveAccessToken) {
-              try {
-                localStorage.setItem(`defib_${activeTenant}_google_drive_token`, data.googleDriveAccessToken);
-              } catch (_) {}
-            }
+          if (data.googleDriveAccessToken) {
+            setGoogleDriveAccessToken(data.googleDriveAccessToken);
+            try {
+              for (const ta of tAliases) {
+                localStorage.setItem(`defib_${ta}_google_drive_token`, data.googleDriveAccessToken);
+              }
+            } catch (_) {}
           }
         }
       }).catch(err => {

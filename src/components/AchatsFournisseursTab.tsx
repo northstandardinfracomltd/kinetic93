@@ -9,7 +9,8 @@ interface AchatsFournisseursTabProps {
   achatsFournisseurs: AchatFournisseur[];
   saveAchatsFournisseurs: (updated: AchatFournisseur[]) => void;
   variables: Variable[];
-  companyInfo?: CompanyInfo;
+  companyInfo?: Partial<CompanyInfo> | null;
+  onClose?: () => void;
 }
 
 export default function AchatsFournisseursTab({
@@ -17,6 +18,7 @@ export default function AchatsFournisseursTab({
   saveAchatsFournisseurs,
   variables,
   companyInfo,
+  onClose,
 }: AchatsFournisseursTabProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAchatId, setEditingAchatId] = useState<string | null>(null);
@@ -428,7 +430,24 @@ export default function AchatsFournisseursTab({
             }}
           >
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 flex-wrap bg-white">
-              <div />
+              <div className="flex items-center gap-3">
+                {onClose && (
+                  <button
+                    type="button"
+                    id="btn-close-achats-fournisseurs-sidepane"
+                    onClick={onClose}
+                    style={{
+                      ...customButtonStyle,
+                      backgroundColor: '#f5f7fa',
+                      color: '#000000',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#dadada')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#f5f7fa')}
+                  >
+                    {t("Fermer")}
+                  </button>
+                )}
+              </div>
 
               <div className="flex flex-wrap items-center gap-2.5 bg-white">
                 {/* 3 Dots More Options Dropdown */}

@@ -6350,6 +6350,221 @@ export default function PublicPortal({
     }
   }, [authenticatedUser, activeTab, members, resolvedLiveMember]);
 
+  // Real-time active technician sessions for the tenant (displayed in WebApp Technicien > Réglages)
+  const [otherTechPresenceSessions, setOtherTechPresenceSessions] = useState<
+    Array<{ sessionId: string; email: string; name: string; role: string; connectedAt: number }>
+  >([]);
+
+  useEffect(() => {
+    if (!authenticatedUser || typeof window === "undefined") {
+      setOtherTechPresenceSessions([]);
+      return;
+    }
+
+    const tabInstanceId = `tech_tab_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    let myTechSessionId = "";
+    try {
+      myTechSessionId = sessionStorage.getItem("defibeo_tech_presence_session_id") || "";
+      if (!myTechSessionId) {
+        myTechSessionId = `techpres_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+        sessionStorage.setItem("defibeo_tech_presence_session_id", myTechSessionId);
+      }
+    } catch {
+      myTechSessionId = `techpres_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    }
+
+    const activeTenant = String(techTenantId || localStorage.getItem("defib_tenant_id") || "demo").trim();
+    const techEmail = String(resolvedLiveMember?.email || authenticatedUser.email || "").trim().toLowerCase();
+    const techName = String(
+      resolvedLiveMember?.name || authenticatedUser.name || authenticatedUser.email || "Technicien"
+    ).trim();
+
+    let isCancelled = false;
+    let bc: BroadcastChannel | null = null;
+
+    const sendTechHeartbeat = async () => {
+      if (isCancelled || !myTechSessionId) return;
+      try {
+        const res = await fetch("/api/presence/heartbeat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: myTechSessionId,
+            tenantId: activeTenant,
+            email: techEmail,
+            name: techName,
+            role: "technicien",
+          }),
+        });
+        if (!res.ok || isCancelled) return;
+        const data = await res.json();
+        if (data && Array.isArray(data.sessions) && !isCancelled) {
+          const others = data.sessions.filter(
+            (s: any) => s && s.sessionId && s.sessionId !== myTechSessionId
+          );
+          setOtherTechPresenceSessions(others);
+        }
+      } catch {}
+    };
+
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        bc = new BroadcastChannel("defibeo_presence_channel");
+        bc.onmessage = (ev) => {
+          const msg = ev.data;
+          if (!msg || typeof msg !== "object") return;
+          if (
+            msg.type === "CHECK_DUPLICATE_SID" &&
+            msg.sid === myTechSessionId &&
+            msg.tabInstanceId !== tabInstanceId
+          ) {
+            bc?.postMessage({ type: "SID_IN_USE", sid: myTechSessionId, ownerTabId: tabInstanceId });
+          } else if (
+            msg.type === "SID_IN_USE" &&
+            msg.sid === myTechSessionId &&
+            msg.ownerTabId !== tabInstanceId
+          ) {
+            myTechSessionId = `techpres_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+            try {
+              sessionStorage.setItem("defibeo_tech_presence_session_id", myTechSessionId);
+            } catch {}
+            sendTechHeartbeat().then(() => {
+              bc?.postMessage({ type: "PRESENCE_UPDATED", tenantId: activeTenant });
+            });
+          } else if (
+            msg.type === "PRESENCE_UPDATED" &&
+            String(msg.tenantId || "").toLowerCase() === activeTenant.toLowerCase()
+          ) {
+            sendTechHeartbeat();
+          } else if (msg.type === "PRESENCE_LEAVE" && msg.sessionId) {
+            setOtherTechPresenceSessions((prev) =>
+              prev.filter((s) => s.sessionId !== msg.sessionId)
+            );
+          }
+        };
+        bc.postMessage({ type: "CHECK_DUPLICATE_SID", sid: myTechSessionId, tabInstanceId });
+      }
+    } catch {}
+
+    sendTechHeartbeat().then(() => {
+      try {
+        bc?.postMessage({ type: "PRESENCE_UPDATED", tenantId: activeTenant });
+      } catch {}
+    });
+
+    const intervalId = window.setInterval(sendTechHeartbeat, 4000);
+
+    const handlePageUnload = () => {
+      if (!myTechSessionId) return;
+      try {
+        bc?.postMessage({ type: "PRESENCE_LEAVE", sessionId: myTechSessionId });
+      } catch {}
+      try {
+        const payload = JSON.stringify({ sessionId: myTechSessionId });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon("/api/presence/leave", payload);
+        } else {
+          fetch("/api/presence/leave", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: payload,
+            keepalive: true,
+          }).catch(() => {});
+        }
+      } catch {}
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        sendTechHeartbeat();
+      }
+    };
+
+    window.addEventListener("pagehide", handlePageUnload);
+    window.addEventListener("beforeunload", handlePageUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      isCancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("pagehide", handlePageUnload);
+      window.removeEventListener("beforeunload", handlePageUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      try {
+        bc?.close();
+      } catch {}
+    };
+  }, [
+    authenticatedUser,
+    techTenantId,
+    resolvedLiveMember?.email,
+    resolvedLiveMember?.name,
+  ]);
+
+  const activeOtherTechnicianSessions = useMemo(() => {
+    const safeMembers = Array.isArray(members) ? members : [];
+    const checkIsTechMember = (m: any): boolean => {
+      if (!m) return false;
+      const rawRole = String(
+        (m.role && m.role !== "Collaborateur" ? m.role : "") ||
+          m.categorie ||
+          m.category ||
+          m["Catégorie."] ||
+          m["Catégorie"] ||
+          m.adminSubRole ||
+          m.metier ||
+          m["Métier."] ||
+          m["Métier"] ||
+          m.role ||
+          ""
+      )
+        .trim()
+        .toLowerCase();
+      const subRole = String(
+        m.adminSubRole || m.categorie || m.category || m["Catégorie."] || m["Catégorie"] || ""
+      )
+        .trim()
+        .toLowerCase();
+      return (
+        rawRole.includes("tech") ||
+        rawRole === "maintenance terrain" ||
+        subRole.includes("tech") ||
+        subRole === "maintenance terrain"
+      );
+    };
+
+    return otherTechPresenceSessions
+      .filter((s) => {
+        const sRole = String(s.role || "").trim().toLowerCase();
+        const sEmail = String(s.email || "").trim().toLowerCase();
+        const sName = String(s.name || "").trim().toLowerCase();
+        const matched = safeMembers.find(
+          (m) =>
+            m &&
+            ((sEmail && String(m.email || "").trim().toLowerCase() === sEmail) ||
+              (sName && String(m.name || "").trim().toLowerCase() === sName))
+        );
+        if (sRole.includes("tech") || sRole === "maintenance terrain") return true;
+        if (matched && checkIsTechMember(matched)) return true;
+        return false;
+      })
+      .map((s) => {
+        const sEmail = String(s.email || "").trim().toLowerCase();
+        const matched = sEmail
+          ? safeMembers.find((m) => m && String(m.email || "").trim().toLowerCase() === sEmail)
+          : null;
+        const displayName =
+          (matched?.name && String(matched.name).trim()) ||
+          (s.name && String(s.name).trim()) ||
+          sEmail ||
+          "Technicien";
+        return {
+          ...s,
+          displayName,
+        };
+      });
+  }, [otherTechPresenceSessions, members]);
+
   // Automatic real-time geolocation sharing on Webapp open/refresh and every 1 minute (60s)
   const latestLiveTrackMetaRef = useRef<{
     envId: string;
@@ -6891,6 +7106,22 @@ export default function PublicPortal({
   }, [pinDigits]);
 
   const handleLogout = () => {
+    try {
+      const sid = sessionStorage.getItem("defibeo_tech_presence_session_id");
+      if (sid) {
+        fetch("/api/presence/leave", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: sid }),
+          keepalive: true,
+        }).catch(() => {});
+        if (typeof BroadcastChannel !== "undefined") {
+          const bc = new BroadcastChannel("defibeo_presence_channel");
+          bc.postMessage({ type: "PRESENCE_LEAVE", sessionId: sid });
+          bc.close();
+        }
+      }
+    } catch {}
     setAuthenticatedUser(null);
     localStorage.removeItem("defib_active_tech_session");
     setCurrentScreen("landing");
@@ -16677,6 +16908,111 @@ export default function PublicPortal({
                       color: #BECADB !important;
                     }
                   `}</style>
+
+                  {/* Technicien(s) actif(s). (affiché uniquement si d'autres techniciens du tenant sont connectés) */}
+                  {activeOtherTechnicianSessions.length > 0 && (() => {
+                    const TECH_ICON_URLS = [
+                      "https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineuserpurple.svg",
+                      "https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineuserblue.svg",
+                      "https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineuserorange.svg",
+                    ];
+                    const visibleTechIcons = activeOtherTechnicianSessions.slice(0, 3);
+                    const otherTechCount = activeOtherTechnicianSessions.length;
+
+                    return (
+                      <div className="space-y-2.5 text-left presence-bar-enter">
+                        <div
+                          style={{
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontSize: "18px",
+                            fontWeight: 400,
+                            color: "#000000",
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          Technicien(s) actif(s).
+                        </div>
+                        <div
+                          className="relative inline-flex items-center flex-nowrap whitespace-nowrap select-none cursor-pointer"
+                          style={{
+                            backgroundColor: "rgb(245, 247, 250)",
+                            borderRadius: "16px",
+                            padding: "10px 18px",
+                            gap: "10px",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            fontSize: "18px",
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          {/* Fixed "Vous" icon + label */}
+                          <div className="inline-flex items-center gap-2.5 shrink-0 whitespace-nowrap pointer-events-none">
+                            <img
+                              src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineusergreen.svg"
+                              alt="Vous"
+                              className="w-[26px] h-[26px] object-contain shrink-0 select-none"
+                              referrerPolicy="no-referrer"
+                            />
+                            <span
+                              style={{
+                                color: "#000000",
+                                fontSize: "18px",
+                                fontWeight: 400,
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Vous
+                            </span>
+                          </div>
+
+                          {/* 1 to 3 other connected technicians icons */}
+                          <div className="inline-flex items-center gap-2 shrink-0 whitespace-nowrap pointer-events-none">
+                            {visibleTechIcons.map((sess, idx) => (
+                              <img
+                                key={sess.sessionId || `tech-online-${idx}`}
+                                src={TECH_ICON_URLS[idx] || TECH_ICON_URLS[0]}
+                                alt={sess.displayName}
+                                className="w-[26px] h-[26px] object-contain shrink-0 select-none"
+                                referrerPolicy="no-referrer"
+                              />
+                            ))}
+                          </div>
+
+                          {/* +n autre(s) */}
+                          <span
+                            className="shrink-0 whitespace-nowrap pointer-events-none"
+                            style={{
+                              color: "#000000",
+                              fontSize: "18px",
+                              fontWeight: 400,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {`+${otherTechCount} autre(s)`}
+                          </span>
+
+                          {/* Native system dropdown listing connected technicians' nom/prénom on click/tap */}
+                          <select
+                            aria-label="Technicien(s) actif(s)."
+                            value=""
+                            onChange={() => {}}
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                          >
+                            <option value="" disabled>
+                              Technicien(s) actif(s)
+                            </option>
+                            {activeOtherTechnicianSessions.map((sess, idx) => (
+                              <option
+                                key={sess.sessionId || `tech-opt-${idx}`}
+                                value={sess.displayName}
+                              >
+                                {sess.displayName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Button Cloud */}
                   <div className="space-y-4">

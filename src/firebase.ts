@@ -374,6 +374,8 @@ export function getCollectionNameAliases(collectionName: string): string[] {
     aliases.push('distributed_stocks', 'distributedStocks');
   } else if (collectionName === 'achats_fournisseurs' || collectionName === 'achatsFournisseurs') {
     aliases.push('achats_fournisseurs', 'achatsFournisseurs');
+  } else if (collectionName === 'expeditions') {
+    aliases.push('expeditions');
   } else if (collectionName === 'companyInfo' || collectionName === 'company_info') {
     aliases.push('companyInfo', 'company_info');
   } else if (collectionName === 'notifications' || collectionName === 'app_notifications') {
@@ -746,15 +748,20 @@ export function purgeAllLocalEnvironmentCaches(targetTenantId?: string): void {
 
       const lower = k.toLowerCase();
 
-      // CRITICAL: Preserve ONLY tenant-scoped spreadsheet URLs and database configurations (e.g. defib_D27_spreadsheet_*, fs_cache_D27_companyInfo).
-      // Any unprefixed global key (like defib_company_info, fs_cache_companyInfo, fs_cache_tenantDatabases) must be purged so it never leaks across tenants.
-      const isTenantScopedConfigKey = /^(defib|fs_cache)_(d\d+|demo)_/i.test(k) || /^d\d+_(companyinfo|company_info|tenantdatabases)$/i.test(k);
+      // CRITICAL: Preserve ONLY tenant-scoped spreadsheet URLs, database configurations, and connector states (e.g. defib_D27_spreadsheet_*, fs_cache_D27_companyInfo, defib_D26_google_drive_*).
+      // Any unprefixed global key (like defib_company_info, fs_cache_companyInfo, defib_google_drive_active) must be purged so it never leaks across tenants.
+      const isTenantScopedConfigKey =
+        /^(defib|fs_cache)_(d\d+|demo)_/i.test(k) ||
+        /^d\d+_(companyinfo|company_info|tenantdatabases|api_connectors)$/i.test(k);
       if (
         isTenantScopedConfigKey &&
         (lower.includes('spreadsheet_') ||
           lower.includes('tenantdatabases') ||
           lower.includes('company_info') ||
-          lower.includes('companyinfo'))
+          lower.includes('companyinfo') ||
+          lower.includes('api_connectors') ||
+          lower.includes('_google_drive_') ||
+          lower.includes('_atlasante_'))
       ) {
         continue;
       }
@@ -1178,6 +1185,7 @@ export async function fetchCollectionFromFirestore<T>(
     stocks: { type: 'stocksGlobaux', localKey: 'spreadsheet_stocks', infoKey: 'spreadsheetStocks' },
     logistics_notifications: { type: 'historiqueNotifications', localKey: 'spreadsheet_stocks_activite', infoKey: 'spreadsheetStocksActivite' },
     achats_fournisseurs: { type: 'achatsFournisseurs', localKey: 'spreadsheet_achats_fournisseurs', infoKey: 'spreadsheetAchatsFournisseurs' },
+    expeditions: { type: 'expeditions', localKey: 'spreadsheet_expeditions', infoKey: 'spreadsheetExpeditions' },
     pointages: { type: 'temps', localKey: 'spreadsheet_temps', infoKey: 'spreadsheetTemps' },
     pointages_history: { type: 'temps', localKey: 'spreadsheet_temps', infoKey: 'spreadsheetTemps' },
     expenses: { type: 'ticketsCaisse', localKey: 'spreadsheet_tickets_caisse', infoKey: 'spreadsheetTicketsCaisse' },
@@ -1530,6 +1538,34 @@ export async function fetchCollectionFromFirestore<T>(
           directFirestoreObjectCandidate = Object.assign({}, ...validDocs.slice().reverse(), directFirestoreSheetFields);
           persistDiscoveredSpreadsheetUrlsToLocal(directFirestoreSheetFields, activeTenantId);
         }
+      } else if (collectionName === 'api_connectors') {
+        const validConnectorDocs = metaSnaps
+          .filter(m => m.exists && m.value && typeof m.value === 'object' && !Array.isArray(m.value))
+          .map(m => m.value)
+          .sort((a: any, b: any) => {
+            const ta = a?.updatedAt ? Date.parse(String(a.updatedAt)) || 0 : 0;
+            const tb = b?.updatedAt ? Date.parse(String(b.updatedAt)) || 0 : 0;
+            return ta - tb;
+          });
+        if (validConnectorDocs.length > 0) {
+          const mergedConn: any = Object.assign({}, ...validConnectorDocs);
+          // Preserve linked Google Drive state if any candidate doc had it active and the newest wasn't an explicit toggle off
+          const activeDoc = [...validConnectorDocs].reverse().find((d: any) => d?.googleDriveActive === true || Boolean(d?.googleDriveEmail));
+          const latestDoc = validConnectorDocs[validConnectorDocs.length - 1];
+          if (activeDoc && !latestDoc?.explicitGoogleDriveToggle && mergedConn.googleDriveActive !== true) {
+            mergedConn.googleDriveActive = true;
+            if (!mergedConn.googleDriveEmail && activeDoc.googleDriveEmail) {
+              mergedConn.googleDriveEmail = activeDoc.googleDriveEmail;
+            }
+            if (!mergedConn.googleDriveAccessToken && activeDoc.googleDriveAccessToken) {
+              mergedConn.googleDriveAccessToken = activeDoc.googleDriveAccessToken;
+            }
+            if (!mergedConn.googleDriveFolderId && activeDoc.googleDriveFolderId) {
+              mergedConn.googleDriveFolderId = activeDoc.googleDriveFolderId;
+            }
+          }
+          directFirestoreObjectCandidate = mergedConn;
+        }
       }
 
       // 2. Check if any candidate has a populated array (excluding singleton object collections)
@@ -1838,22 +1874,50 @@ export async function fetchCollectionFromFirestore<T>(
                   ...combinedSheets,
                 };
                 persistDiscoveredSpreadsheetUrlsToLocal(finalObjVal, activeTenantId);
+              } else if (collectionName === 'api_connectors' && directFirestoreObjectCandidate) {
+                const srvObj = (val as any) || {};
+                const fsObj = directFirestoreObjectCandidate || {};
+                const srvTs = srvObj.updatedAt ? Date.parse(String(srvObj.updatedAt)) || 0 : 0;
+                const fsTs = fsObj.updatedAt ? Date.parse(String(fsObj.updatedAt)) || 0 : 0;
+                finalObjVal = fsTs >= srvTs ? { ...srvObj, ...fsObj } : { ...fsObj, ...srvObj };
+                if (
+                  (fsObj.googleDriveActive === true || srvObj.googleDriveActive === true || fsObj.googleDriveEmail || srvObj.googleDriveEmail) &&
+                  !srvObj.explicitGoogleDriveToggle &&
+                  !fsObj.explicitGoogleDriveToggle
+                ) {
+                  finalObjVal.googleDriveActive = true;
+                  finalObjVal.googleDriveEmail = finalObjVal.googleDriveEmail || fsObj.googleDriveEmail || srvObj.googleDriveEmail || '';
+                  finalObjVal.googleDriveAccessToken = finalObjVal.googleDriveAccessToken || fsObj.googleDriveAccessToken || srvObj.googleDriveAccessToken || '';
+                  finalObjVal.googleDriveFolderId = finalObjVal.googleDriveFolderId || fsObj.googleDriveFolderId || srvObj.googleDriveFolderId || '';
+                }
               }
               // Non-empty object (e.g. companyInfo, api_connectors, tenantDatabases)
               if (collectionName === 'api_connectors' && typeof window !== 'undefined' && window.localStorage) {
                 try {
                   const connObj = finalObjVal as any;
+                  const tAliases = Array.from(new Set([activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase(), ...Array.from(getTenantAliases(activeTenantId)).flatMap(a => [a, a.toUpperCase(), a.toLowerCase()])])).filter(Boolean);
                   if (connObj.googleDriveActive !== undefined) {
-                    localStorage.setItem(`defib_${activeTenantId}_google_drive_active`, String(Boolean(connObj.googleDriveActive)));
+                    for (const ta of tAliases) {
+                      localStorage.setItem(`defib_${ta}_google_drive_active`, String(Boolean(connObj.googleDriveActive)));
+                    }
                     localStorage.setItem('defib_google_drive_active', String(Boolean(connObj.googleDriveActive)));
                   }
                   if (connObj.googleDriveEmail) {
-                    localStorage.setItem(`defib_${activeTenantId}_google_drive_email`, String(connObj.googleDriveEmail));
+                    for (const ta of tAliases) {
+                      localStorage.setItem(`defib_${ta}_google_drive_email`, String(connObj.googleDriveEmail));
+                    }
                     localStorage.setItem('defib_google_drive_email', String(connObj.googleDriveEmail));
                   }
                   if (connObj.googleDriveAccessToken) {
-                    localStorage.setItem(`defib_${activeTenantId}_google_drive_token`, String(connObj.googleDriveAccessToken));
+                    for (const ta of tAliases) {
+                      localStorage.setItem(`defib_${ta}_google_drive_token`, String(connObj.googleDriveAccessToken));
+                    }
                     localStorage.setItem('defib_google_drive_token', String(connObj.googleDriveAccessToken));
+                  }
+                  if (connObj.googleDriveFolderId) {
+                    for (const ta of tAliases) {
+                      localStorage.setItem(`defib_${ta}_google_drive_folder_id`, String(connObj.googleDriveFolderId));
+                    }
                   }
                 } catch (_) {}
               }
@@ -1872,15 +1936,44 @@ export async function fetchCollectionFromFirestore<T>(
     }
   }
 
-  // If server relay was unreachable or empty, but direct Firestore found a valid object for companyInfo / tenantDatabases, return it!
-  if (isCompanyOrDbCol && (directFirestoreObjectCandidate || Object.keys(directFirestoreSheetFields).length > 0)) {
+  // If server relay was unreachable or empty, but direct Firestore found a valid object for companyInfo / tenantDatabases / api_connectors, return it!
+  if ((isCompanyOrDbCol || collectionName === 'api_connectors') && (directFirestoreObjectCandidate || Object.keys(directFirestoreSheetFields).length > 0)) {
     const mergedDirect = {
       ...(fallbackObjectVal || {}),
       ...(directFirestoreObjectCandidate || {}),
-      ...directFirestoreSheetFields,
+      ...(isCompanyOrDbCol ? directFirestoreSheetFields : {}),
     };
     delete mergedDirect._isDefaultFallback;
-    persistDiscoveredSpreadsheetUrlsToLocal(mergedDirect, activeTenantId);
+    if (isCompanyOrDbCol) {
+      persistDiscoveredSpreadsheetUrlsToLocal(mergedDirect, activeTenantId);
+    } else if (collectionName === 'api_connectors' && typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const tAliases = Array.from(new Set([activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase(), ...Array.from(getTenantAliases(activeTenantId)).flatMap(a => [a, a.toUpperCase(), a.toLowerCase()])])).filter(Boolean);
+        if (mergedDirect.googleDriveActive !== undefined) {
+          for (const ta of tAliases) {
+            localStorage.setItem(`defib_${ta}_google_drive_active`, String(Boolean(mergedDirect.googleDriveActive)));
+          }
+          localStorage.setItem('defib_google_drive_active', String(Boolean(mergedDirect.googleDriveActive)));
+        }
+        if (mergedDirect.googleDriveEmail) {
+          for (const ta of tAliases) {
+            localStorage.setItem(`defib_${ta}_google_drive_email`, String(mergedDirect.googleDriveEmail));
+          }
+          localStorage.setItem('defib_google_drive_email', String(mergedDirect.googleDriveEmail));
+        }
+        if (mergedDirect.googleDriveAccessToken) {
+          for (const ta of tAliases) {
+            localStorage.setItem(`defib_${ta}_google_drive_token`, String(mergedDirect.googleDriveAccessToken));
+          }
+          localStorage.setItem('defib_google_drive_token', String(mergedDirect.googleDriveAccessToken));
+        }
+        if (mergedDirect.googleDriveFolderId) {
+          for (const ta of tAliases) {
+            localStorage.setItem(`defib_${ta}_google_drive_folder_id`, String(mergedDirect.googleDriveFolderId));
+          }
+        }
+      } catch (_) {}
+    }
     const sanitizedDirect = filterCollectionForTenant(mergedDirect as T, collectionName, activeTenantId);
     idbSet(`${activeTenantId}_${collectionName}`, sanitizedDirect).catch(() => {});
     saveToLocalCache(`${activeTenantId}_${collectionName}`, sanitizedDirect);
@@ -2185,6 +2278,14 @@ export async function saveCollectionToFirestore<T>(collectionName: string, value
   if (isTenantConfigCollection && finalCleanValue !== undefined && finalCleanValue !== null) {
     try {
       const keysToPersist = new Set<string>([key, `${activeTenantId}_${collectionName}`]);
+      const tAliases = Array.from(getTenantAliases(activeTenantId)).filter(a => /^d\d+$/i.test(a));
+      for (const alias of tAliases) {
+        const up = alias.toUpperCase();
+        keysToPersist.add(`${up}_${collectionName}`);
+        keysToPersist.add(`defib_${up}_${collectionName}`);
+        saveToLocalCache(`${up}_${collectionName}`, finalCleanValue);
+        saveToLocalCache(`defib_${up}_${collectionName}`, finalCleanValue);
+      }
       if (collectionName === 'companyInfo' || collectionName === 'company_info' || collectionName === 'tenantDatabases') {
         keysToPersist.add(`${activeTenantId}_companyInfo`);
         keysToPersist.add(`${activeTenantId}_tenantDatabases`);
@@ -2290,7 +2391,7 @@ export async function fetchRawCollectionFromFirestore<T>(rawKey: string, timeout
   try {
     let tenantId = 'demo';
     let collectionName = rawKey;
-    const prefixMatch = rawKey.match(/^([a-zA-Z0-9_-]+)_(members|clients|defibrillateurs|tickets|generatedReports|fsmTours|companyInfo|company_info|variables|stocks|distributed_stocks|commercialDocs|gedDocs|customerReviews|expenses|veilles|notifications|pointages|pointagesAutoVigilance|memos|achats_fournisseurs)$/);
+    const prefixMatch = rawKey.match(/^([a-zA-Z0-9_-]+)_(members|clients|defibrillateurs|tickets|generatedReports|fsmTours|companyInfo|company_info|variables|stocks|distributed_stocks|commercialDocs|gedDocs|customerReviews|expenses|veilles|notifications|pointages|pointagesAutoVigilance|memos|achats_fournisseurs|expeditions)$/);
     if (prefixMatch) {
       tenantId = prefixMatch[1];
       collectionName = prefixMatch[2];
@@ -2493,7 +2594,8 @@ export async function registerNewTenant(tenantData: Omit<Tenant, 'id' | 'created
     'pointages',
     'pointagesAutoVigilance',
     'memos',
-    'achats_fournisseurs'
+    'achats_fournisseurs',
+    'expeditions'
   ];
 
   await Promise.all(
@@ -2537,6 +2639,7 @@ export async function registerNewTenant(tenantData: Omit<Tenant, 'id' | 'created
       window.localStorage.setItem(`defib_${tenantId}_pointages_history`, JSON.stringify([]));
       window.localStorage.setItem(`defib_${tenantId}_pointages_auto_vigilance`, JSON.stringify([]));
       window.localStorage.setItem(`defib_${tenantId}_achats_fournisseurs`, JSON.stringify([]));
+      window.localStorage.setItem(`defib_${tenantId}_expeditions`, JSON.stringify([]));
       window.localStorage.setItem(`defib_${tenantId}_veilles`, JSON.stringify([]));
       window.localStorage.setItem(`defib_${tenantId}_notifications`, JSON.stringify([welcomeNotification]));
       window.localStorage.setItem(`defib_${tenantId}_custom_location_names`, JSON.stringify({}));
@@ -2805,7 +2908,8 @@ export async function seedTenantDemoData(tenantId: string): Promise<void> {
     'pointages',
     'pointagesAutoVigilance',
     'memos',
-    'achats_fournisseurs'
+    'achats_fournisseurs',
+    'expeditions'
   ];
 
   await Promise.all(

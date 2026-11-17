@@ -1905,6 +1905,8 @@ export default function DefibTab({
         { header: 'Section 5 - Dernière maintenance.', field: 'derniereMaintenance', type: 'date' },
         { header: "Section 5 - Sortie d'usine.", field: 'sortieFabricant', type: 'date' },
         { header: 'Section 5 - Prochaine maintenance.', field: 'prochaineMaintenance', type: 'date' },
+        { header: 'Ajout Defibeo', field: 'creationDefibeo', type: 'date' },
+        { header: 'Modifié Defibeo', field: 'derniereModificationDefibeo', type: 'date' },
         { header: 'Section 6 - Modèle A', field: 'modeleElectrodeAId' },
         { header: 'Section 6 - Lot A', field: 'lotElectrodeA' },
         { header: 'Section 6 - Insertion A', field: 'insertionElectrodeA', type: 'date' },
@@ -2879,6 +2881,8 @@ export default function DefibTab({
   const [prochaineMaintenance, setProchaineMaintenance] = useState('');
   const isProchaineMaintenanceCustomRef = useRef(false);
   const [sortieFabricant, setSortieFabricant] = useState('');
+  const [creationDefibeo, setCreationDefibeo] = useState('');
+  const [derniereModificationDefibeo, setDerniereModificationDefibeo] = useState('');
 
   // Section 6 - Électrode Mixte ou Adulte (A)
   const [hasElectrodeASecours, setHasElectrodeASecours] = useState<'Oui' | 'Non'>('Non');
@@ -4599,6 +4603,8 @@ export default function DefibTab({
     setProchaineMaintenance('');
     isProchaineMaintenanceCustomRef.current = false;
     setSortieFabricant('');
+    setCreationDefibeo('');
+    setDerniereModificationDefibeo('');
 
     // Electrodes Mixed/Adult (A)
     setHasElectrodeASecours('Non');
@@ -4795,6 +4801,8 @@ export default function DefibTab({
       isProchaineMaintenanceCustomRef.current = false;
     }
     setSortieFabricant(toISODateOnly(df.sortieFabricant || anyDf.sortie_fabricant || anyDf.date_sortie_fabricant || ''));
+    setCreationDefibeo(toISODateOnly(df.creationDefibeo || anyDf.ajout_defibeo || anyDf.creation_defibeo || anyDf['Ajout Defibeo'] || ''));
+    setDerniereModificationDefibeo(toISODateOnly(df.derniereModificationDefibeo || anyDf.modifie_defibeo || anyDf.derniere_modification_defibeo || anyDf['Modifié Defibeo'] || ''));
 
     setHasElectrodeASecours(df.hasElectrodeASecours || anyDf.has_electrode_a_secours || (df.modeleElectrodeASecoursId || anyDf.modele_secours_a || df.lotElectrodeASecours || anyDf.lot_secours_a || df.peremptionSecoursElectrodeA ? 'Oui' : 'Non'));
     setModeleElectrodeAId(resolveModelSelectValue(df.modeleElectrodeAId || anyDf.modeleElectrodeA || anyDf.modele_electrode_a || anyDf.modele_a, modelesElectrode));
@@ -4913,6 +4921,8 @@ export default function DefibTab({
                 setProchaineMaintenance(toISODateOnly(fresh.prochaineMaintenance));
                 isProchaineMaintenanceCustomRef.current = true;
               }
+              if (fresh.creationDefibeo !== undefined) setCreationDefibeo(toISODateOnly(fresh.creationDefibeo));
+              if (fresh.derniereModificationDefibeo !== undefined) setDerniereModificationDefibeo(toISODateOnly(fresh.derniereModificationDefibeo));
             }
           }
         } catch (_) {}
@@ -5066,6 +5076,8 @@ export default function DefibTab({
       derniereMaintenance,
       prochaineMaintenance: prochaineMaintenance || (derniereMaintenance ? computeProchaineMaintenance(derniereMaintenance) : ''),
       sortieFabricant,
+      creationDefibeo,
+      derniereModificationDefibeo,
 
       modeleElectrodeAId,
       modeleElectrodeA: resolvedElecALabel,
@@ -8966,6 +8978,28 @@ export default function DefibTab({
                             setProchaineMaintenance(e.target.value);
                             isProchaineMaintenanceCustomRef.current = true;
                           }}
+                          className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs bg-white text-slate-700"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1">
+                        <label htmlFor="form-creation-defibeo" className="block text-[10px] font-bold text-slate-400 uppercase">Création dans Defibeo.</label>
+                        <SafeDateInput
+                          id="form-creation-defibeo"
+                          value={creationDefibeo}
+                          onChange={(e) => setCreationDefibeo(e.target.value)}
+                          className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs bg-white text-slate-700"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label htmlFor="form-derniere-modif-defibeo" className="block text-[10px] font-bold text-slate-400 uppercase">Dernière modification dans Defibeo.</label>
+                        <SafeDateInput
+                          id="form-derniere-modif-defibeo"
+                          value={derniereModificationDefibeo}
+                          onChange={(e) => setDerniereModificationDefibeo(e.target.value)}
                           className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs bg-white text-slate-700"
                         />
                       </div>
