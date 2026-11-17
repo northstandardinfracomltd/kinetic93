@@ -1497,281 +1497,104 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           }}
         />
 
-        {/* Top Ecosystem Pill (PC only) + 2+1 Info Notification Cards */}
-        {!isClientAccessSlug && ((showEcosystemPill && !isMobileOrTablet) || showLeftGreenCard || showLeftBlueCard || showLeftDarkCard) && (
+        {/* Info Notification Cards */}
+        {!isClientAccessSlug && (showLeftBlueCard || showLeftDarkCard) && (
           <div
             className="relative lg:absolute lg:top-5 lg:left-5 lg:right-5 z-20 w-full lg:w-auto p-4 lg:p-0 pb-24 lg:pb-0 flex flex-col gap-4"
             id="login-left-info-cards"
           >
-            {showEcosystemPill && !isMobileOrTablet && (
-              <div className="flex flex-col items-start gap-2.5 mb-1" id="login-ecosystem-pill-wrapper">
-                <div
-                  className="text-[15px] leading-snug select-none"
-                  style={{
-                    fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                    marginLeft: '4px',
-                  }}
-                >
-                  <span className="login-ecosystem-prefix">{t.ecosystemHeaderPrefix} </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowEcosystemPill(false)}
-                    className="login-ecosystem-hide-btn bg-transparent border-0 p-0 cursor-pointer no-underline"
+            {showLeftBlueCard && (
+              <div
+                onClick={() => window.open('https://defibeo.com/infos2026', '_blank', 'noopener,noreferrer')}
+                className="login-info-card-zoom relative w-full flex flex-col gap-3 rounded-[22px] pt-4 pb-5 cursor-pointer select-none overflow-hidden"
+                style={{
+                  backgroundColor: '#2546f0',
+                  minHeight: '176px',
+                }}
+              >
+                <div className="w-full flex items-center gap-4 pl-0 pr-5">
+                  <div className="relative h-[142px] w-[124px] shrink-0 select-none pointer-events-none flex items-center justify-start">
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/illustrationdevenirv2.svg"
+                      alt=""
+                      referrerPolicy="no-referrer"
+                      draggable={false}
+                      className="h-full w-full object-contain object-left block select-none pointer-events-none"
+                    />
+                    <div
+                      className="absolute inset-0 pointer-events-none"
+                      style={{
+                        background:
+                          'linear-gradient(to right, #2546f0 0%, rgba(37, 70, 240, 0.72) 28%, rgba(37, 70, 240, 0) 75%)',
+                      }}
+                    />
+                  </div>
+                  <div
+                    className="flex-1 pr-9"
                     style={{
-                      fontSize: '15px',
-                      textDecoration: 'none',
+                      color: '#ffffff',
+                      fontSize: '18px',
+                      lineHeight: '1.38',
                       fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
                     }}
                   >
-                    {t.ecosystemHeaderHide}
+                    {t.infoBlueCard}
+                  </div>
+                </div>
+
+                <div className="w-full px-5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open('https://defibeo.com/infos2026', '_blank', 'noopener,noreferrer');
+                    }}
+                    className="w-full flex items-center justify-center text-center cursor-pointer transition-opacity hover:opacity-90"
+                    style={{
+                      backgroundColor: '#1D0245',
+                      color: '#ffffff',
+                      borderRadius: '12px',
+                      fontSize: '18px',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      padding: '12px 20px',
+                      border: 'none',
+                      outline: 'none',
+                    }}
+                  >
+                    En savoir plus
                   </button>
                 </div>
 
-                <a
-                  href={ecosystemLinks[ecosystemIndex % ecosystemLinks.length].url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="login-info-card-zoom inline-flex items-center rounded-full cursor-pointer select-none no-underline overflow-hidden"
-                  style={{
-                    backgroundColor: '#27045b',
-                    color: '#ffffff',
-                    padding: '5px',
-                    minHeight: '48px',
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowLeftBlueCard(false);
                   }}
+                  className="login-close-btn-zoom absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
+                  aria-label={t.close}
                 >
-                  <div
-                    style={{
-                      maxWidth: ecosystemExpanded ? '720px' : '0px',
-                      opacity: ecosystemExpanded ? 1 : 0,
-                      paddingLeft: ecosystemExpanded ? '16px' : '0px',
-                      paddingRight: ecosystemExpanded ? '12px' : '0px',
-                      overflow: 'hidden',
-                      whiteSpace: 'nowrap',
-                      transition:
-                        'max-width 520ms cubic-bezier(0.4, 0, 0.2, 1), opacity 360ms ease, padding 520ms cubic-bezier(0.4, 0, 0.2, 1)',
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: '#ffffff',
-                        fontSize: '17px',
-                        fontWeight: 400,
-                        lineHeight: 1.2,
-                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                      }}
-                    >
-                      {t.ecosystemItems[ecosystemIndex % t.ecosystemItems.length]}
-                    </span>
-                  </div>
-
                   <img
-                    src={ecosystemLinks[ecosystemIndex % ecosystemLinks.length].icon}
-                    alt=""
-                    className="w-[38px] h-[38px] rounded-full object-contain shrink-0 select-none pointer-events-none"
-                    style={{
-                      transform: ecosystemExpanded ? 'rotate(360deg)' : 'rotate(0deg)',
-                      transition: 'transform 520ms cubic-bezier(0.4, 0, 0.2, 1)',
-                    }}
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblue.svg"
+                    alt={t.close}
+                    className="w-[38px] h-[38px] object-contain"
                   />
-                </a>
-              </div>
-            )}
-
-            {(showLeftGreenCard || showLeftBlueCard) && (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                {showLeftGreenCard && (
-                  <div
-                    className="login-info-card-zoom relative flex items-center gap-4 rounded-[22px] p-4 sm:p-5 cursor-pointer select-none overflow-hidden"
-                    style={{
-                      backgroundColor: '#3ddc84',
-                      minHeight: '176px',
-                    }}
-                  >
-                    <div
-                      className="relative w-[102px] h-[138px] rounded-[14px] overflow-hidden shrink-0 select-none pointer-events-none"
-                      style={{
-                        transform: 'translateZ(0)',
-                        WebkitMaskImage: '-webkit-radial-gradient(white, black)',
-                      }}
-                    >
-                      <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/gifcontacterv2.gif"
-                        alt=""
-                        loading="eager"
-                        decoding="async"
-                        fetchPriority="high"
-                        referrerPolicy="no-referrer"
-                        draggable={false}
-                        className="w-full h-full object-cover block select-none pointer-events-none"
-                        style={{
-                          transform: 'translateZ(0)',
-                          backfaceVisibility: 'hidden',
-                          WebkitBackfaceVisibility: 'hidden',
-                        }}
-                      />
-                      <div
-                        className="absolute inset-0 pointer-events-none"
-                        style={{
-                          background:
-                            'linear-gradient(to top, rgb(61, 220, 132) 0%, rgb(61, 220, 132) 20%, rgb(61 220 132 / 69%) 48%, rgb(61 220 132 / 49%) 75%, rgb(61 220 132 / 56%) 95%)',
-                        }}
-                      />
-                      <div
-                        className="absolute inset-x-0 bottom-1.5 z-10 flex items-end justify-center pointer-events-none select-none"
-                        style={{
-                          color: '#156337',
-                          fontSize: '18px',
-                          lineHeight: '1.2',
-                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                        }}
-                      >
-                        <span key={contactGreetingIndex} className="login-greeting-bump">
-                          {contactGreetings[contactGreetingIndex]}
-                        </span>
-                      </div>
-                    </div>
-                    <div
-                      className="flex-1 pr-9"
-                      style={{
-                        color: '#156337',
-                        fontSize: '18px',
-                        lineHeight: '1.38',
-                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                      }}
-                    >
-                      {t.infoGreenCard}
-                    </div>
-                    <select
-                      aria-label={t.contactCoordsAria}
-                      value=""
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        e.target.value = '';
-                        if (val === 'tel') {
-                          if (isMobileOrTablet) {
-                            window.location.href = 'tel:+33651517065';
-                          } else {
-                            const win = window.open('tel:+33651517065', '_blank');
-                            if (!win) window.location.href = 'tel:+33651517065';
-                          }
-                        } else if (val === 'mail') {
-                          if (isMobileOrTablet) {
-                            window.location.href = 'mailto:contact@defibeo.com';
-                          } else {
-                            const win = window.open('mailto:contact@defibeo.com', '_blank');
-                            if (!win) window.location.href = 'mailto:contact@defibeo.com';
-                          }
-                        } else if (val === 'whatsapp') {
-                          const url = 'https://wa.me/447723501018';
-                          const win = window.open(url, '_blank', 'noopener,noreferrer');
-                          if (!win) {
-                            window.location.href = url;
-                          }
-                        }
-                      }}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                    >
-                      <option value="" disabled hidden>
-                        {t.contactCoordsAria}
-                      </option>
-                      <option value="tel">Tel: +33 6 51 51 70 65</option>
-                      <option value="mail">Mail: contact@defibeo.com</option>
-                      <option value="whatsapp">WhatsApp: +447723 501018</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowLeftGreenCard(false);
-                      }}
-                      className="login-close-btn-zoom absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
-                      aria-label={t.close}
-                    >
-                      <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrggreen.svg"
-                        alt={t.close}
-                        className="w-[38px] h-[38px] object-contain"
-                      />
-                    </button>
-                  </div>
-                )}
-
-                {showLeftBlueCard && (
-                  <div
-                    onClick={() => window.open('https://defibeo.com/infos2026', '_blank', 'noopener,noreferrer')}
-                    className="login-info-card-zoom relative flex items-center gap-4 rounded-[22px] pl-0 pr-5 py-4 cursor-pointer select-none overflow-hidden"
-                    style={{
-                      backgroundColor: '#2546f0',
-                      minHeight: '176px',
-                    }}
-                  >
-                    <div className="relative h-[142px] w-[124px] shrink-0 select-none pointer-events-none flex items-center justify-start">
-                      <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/illustrationdevenirv2.svg"
-                        alt=""
-                        referrerPolicy="no-referrer"
-                        draggable={false}
-                        className="h-full w-full object-contain object-left block select-none pointer-events-none"
-                      />
-                      <div
-                        className="absolute inset-0 pointer-events-none"
-                        style={{
-                          background:
-                            'linear-gradient(to right, #2546f0 0%, rgba(37, 70, 240, 0.72) 28%, rgba(37, 70, 240, 0) 75%)',
-                        }}
-                      />
-                    </div>
-                    <div
-                      className="flex-1 pr-9"
-                      style={{
-                        color: '#ffffff',
-                        fontSize: '18px',
-                        lineHeight: '1.38',
-                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
-                      }}
-                    >
-                      {t.infoBlueCard}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowLeftBlueCard(false);
-                      }}
-                      className="login-close-btn-zoom absolute top-3.5 right-3.5 z-20 p-0 bg-transparent border-0 cursor-pointer flex items-center justify-center"
-                      aria-label={t.close}
-                    >
-                      <img
-                        src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblue.svg"
-                        alt={t.close}
-                        className="w-[38px] h-[38px] object-contain"
-                      />
-                    </button>
-                  </div>
-                )}
+                </button>
               </div>
             )}
 
             {showLeftDarkCard && (
               <div
-                onClick={() => window.open('https://defibeo.com/infos2026', '_blank', 'noopener,noreferrer')}
-                className="login-info-card-zoom relative flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5 rounded-[22px] p-5 lg:p-6 cursor-pointer select-none"
+                className="login-info-card-zoom relative w-full flex flex-col gap-4 rounded-[22px] p-5 lg:p-6 select-none"
                 style={{
-                  backgroundColor: '#050d26',
+                  backgroundColor: '#2546f0',
                   minHeight: '176px',
                 }}
               >
-                <img
-                  src="https://civilprom.s3.eu-north-1.amazonaws.com/illustrationv2decouvrir.svg"
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  draggable={false}
-                  className="w-[134px] h-[134px] object-contain shrink-0 select-none pointer-events-none"
-                />
                 <div
-                  className="w-full sm:flex-1 sm:pr-10"
+                  className="w-full pr-10"
                   style={{
-                    color: '#00e5ff',
+                    color: '#ffffff',
                     fontSize: '18px',
                     lineHeight: '1.42',
                     fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
@@ -1779,6 +1602,65 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 >
                   {t.infoDarkCard}
                 </div>
+
+                <div
+                  className="relative w-full transition-opacity hover:opacity-90"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div
+                    className="w-full flex items-center justify-center text-center pointer-events-none"
+                    style={{
+                      backgroundColor: '#1D0245',
+                      color: '#ffffff',
+                      borderRadius: '12px',
+                      fontSize: '18px',
+                      fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                      padding: '12px 20px',
+                    }}
+                  >
+                    Contacter Defibeo
+                  </div>
+                  <select
+                    aria-label={t.contactCoordsAria}
+                    value=""
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      const val = e.target.value;
+                      e.target.value = '';
+                      if (val === 'tel') {
+                        if (isMobileOrTablet) {
+                          window.location.href = 'tel:+33651517065';
+                        } else {
+                          const win = window.open('tel:+33651517065', '_blank');
+                          if (!win) window.location.href = 'tel:+33651517065';
+                        }
+                      } else if (val === 'mail') {
+                        if (isMobileOrTablet) {
+                          window.location.href = 'mailto:contact@defibeo.com';
+                        } else {
+                          const win = window.open('mailto:contact@defibeo.com', '_blank');
+                          if (!win) window.location.href = 'mailto:contact@defibeo.com';
+                        }
+                      } else if (val === 'whatsapp') {
+                        const url = 'https://wa.me/447723501018';
+                        const win = window.open(url, '_blank', 'noopener,noreferrer');
+                        if (!win) {
+                          window.location.href = url;
+                        }
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  >
+                    <option value="" disabled hidden>
+                      {t.contactCoordsAria}
+                    </option>
+                    <option value="tel">Tel: +33 6 51 51 70 65</option>
+                    <option value="mail">Mail: contact@defibeo.com</option>
+                    <option value="whatsapp">WhatsApp: +447723 501018</option>
+                  </select>
+                </div>
+
                 <button
                   type="button"
                   onClick={(e) => {
@@ -1789,7 +1671,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                   aria-label={t.close}
                 >
                   <img
-                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgdarkblue.svg"
+                    src="https://civilprom.s3.eu-north-1.amazonaws.com/xrgblue.svg"
                     alt={t.close}
                     className="w-[38px] h-[38px] object-contain"
                   />
