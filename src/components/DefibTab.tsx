@@ -588,6 +588,7 @@ export default function DefibTab({
   const [remoteFilteredTotal, setRemoteFilteredTotal] = useState<number | null>(null);
   const [fallbackSheetClients, setFallbackSheetClients] = useState<Client[]>([]);
   const [defibToConfirmDelete, setDefibToConfirmDelete] = useState<Defibrillateur | null>(null);
+  const [isAtlasanteCsvModalOpen, setIsAtlasanteCsvModalOpen] = useState(false);
   const [localSheetStats, setLocalSheetStats] = useState<any>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -2135,59 +2136,203 @@ export default function DefibTab({
 
   const handleExportToAtlasanteCSV = () => {
     const selectedDefibs = mergedDefibrillateurs.filter(d => selectedIdsSet.has(d.id));
-    const clientMap = new Map(clients.map(c => [c.id, c]));
-    const variableMap = new Map(variables.map(v => [v.id, v]));
+    const clientMap = new Map<string, Client>(clients.map((c: Client) => [c.id, c]));
+    const variableMap = new Map<string, Variable>(variables.map((v: Variable) => [v.id, v]));
 
     const headers = [
       'nom',
       'lat_coor1',
       'long_coor1',
+      'adr_num',
+      'adr_voie',
+      'com_cp',
+      'com_insee',
+      'com_nom',
       'acc',
       'acc_lib',
-      'disp_j',
-      'disp_h',
-      'tel_1',
+      'acc_pcsec',
+      'acc_acc',
+      'acc_etg',
+      'acc_complt',
+      'dispo_horaires',
+      'disp_complt',
+      'tel1',
+      'tel2',
+      'site_email',
+      'date_instal',
       'etat_fonct',
-      'fab_rais',
+      'id_euro',
       'modele',
-      'num_serie',
+      'ic_ped',
+      'dtpr_icped',
+      'dtpr_lcad',
+      'dtpr_bat',
+      'freq_mnt',
+      'dispsurv',
       'dermnt',
       'expt_siren',
-      'expt_rais',
-      'expt_tel1',
-      'expt_email'
+      'expt_rais'
     ];
 
-    let csvContent = '\uFEFF' + headers.join(';') + '\n';
+    const formatIsoDate = (dateStr: string | undefined): string => {
+      if (!dateStr) return '';
+      const trimmed = String(dateStr).trim();
+      if (!trimmed) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+      if (/^\d{4}-\d{2}-\d{2}T/.test(trimmed)) return trimmed.slice(0, 10);
+      const slashParts = trimmed.split('/');
+      if (slashParts.length === 3) {
+        const [d, m, y] = slashParts;
+        if (y && y.length === 4) {
+          return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+      }
+      const dashParts = trimmed.split('-');
+      if (dashParts.length === 3 && dashParts[2].length === 4) {
+        return `${dashParts[2]}-${dashParts[1].padStart(2, '0')}-${dashParts[0].padStart(2, '0')}`;
+      }
+      return '';
+    };
+
+    const formatPhonePlus33 = (rawPhone: string | undefined): string => {
+      if (!rawPhone) return '';
+      const cleaned = String(rawPhone).replace(/[\s.\-()]/g, '').trim();
+      if (!cleaned) return '';
+      if (cleaned.startsWith('+')) return cleaned;
+      if (cleaned.startsWith('0033')) return '+33' + cleaned.slice(4);
+      if (cleaned.startsWith('0') && cleaned.length === 10) return '+33' + cleaned.slice(1);
+      if (/^\d{9}$/.test(cleaned)) return '+33' + cleaned;
+      return cleaned;
+    };
+
+    const splitAddress = (rawAddr: string | undefined): { num: string; voie: string } => {
+      if (!rawAddr) return { num: '', voie: '' };
+      const trimmed = String(rawAddr).trim();
+      const match = trimmed.match(/^(\d+\s*(?:bis|ter|quater|[a-zA-Z])?)\s*[,\s]\s*(.+)$/i);
+      if (match) {
+        return { num: match[1].trim(), voie: match[2].trim() };
+      }
+      return { num: '', voie: trimmed };
+    };
+
+    const formatSiren9 = (rawSiretOrSiren: string | undefined): string => {
+      if (!rawSiretOrSiren) return '';
+      const digits = String(rawSiretOrSiren).replace(/\D/g, '');
+      if (!digits || /^0+$/.test(digits)) return '';
+      return digits.slice(0, 9);
+    };
+
+    const escapeCsvCell = (val: unknown): string => {
+      const str = val === null || val === undefined ? '' : String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    // Aucun caractère BOM (\uFEFF) en début de fichier conformément aux règles Géo'DAE / Atlasanté
+    let csvContent = headers.join(',') + '\n';
 
     selectedDefibs.forEach(df => {
       const cl = clientMap.get(df.clientId);
       const modDef = variableMap.get(df.modeleId);
 
-      const clientDenom = cl ? cl.denomination : '';
-      const identifiantVal = df.identifiant || '';
-      const nomVal = `${identifiantVal} ${clientDenom}`.trim();
+      const clientDenom = cl ? cl.denomination : (df.clientNom || '');
+      const identifiantVal = (df.identifiant || '').trim();
+      const nomVal = df.nomSite?.trim() || `${identifiantVal} ${clientDenom}`.trim() || identifiantVal || clientDenom;
+
+      const latVal = df.latitude ? String(df.latitude).trim().replace(',', '.') : '';
+      const longVal = df.longitude ? String(df.longitude).trim().replace(',', '.') : '';
+
+      const { num: adrNum, voie: adrVoie } = splitAddress(df.numVoie || cl?.adresse || '');
+      const comCp = (df.cp || cl?.codePostal || '').trim();
+      const comInsee = '';
+      const comNom = (df.ville || cl?.ville || '').trim();
+
+      const isExt = df.exterieur === true || String(df.installeExterieur || '').trim().toLowerCase() === 'oui';
+      const accVal = isExt ? 'Extérieur' : 'Intérieur';
+      const accLibVal = (df.acces247 || isExt) ? 'oui' : 'non';
+      const accPcsecVal = 'non';
+      const accAccVal = isExt ? 'non' : 'oui';
+      const accEtgVal = '0';
+      const accCompltVal = (df.commentaireAdresse || df.commentaire || '').trim();
+
+      const dispoHorairesVal = df.horaires && df.horaires.trim()
+        ? df.horaires.trim()
+        : (df.acces247 ? '24h/24 7j/7' : 'Lundi au vendredi : 08h30-18h00 (heures ouvrables)');
+      const dispCompltVal = '';
+
+      const primaryPhone = formatPhonePlus33(df.telephoneSite || cl?.telephoneSite || cl?.phone || companyInfo?.phone || '');
+      const secondaryPhone = formatPhonePlus33(df.telephoneSiteSecondaire || cl?.telephoneSite2 || companyInfo?.phone || primaryPhone || '');
+
+      const siteEmailVal = (df.emailSite || cl?.emailSite || cl?.email || companyInfo?.email || '').trim();
+      const dateInstalVal = formatIsoDate(df.miseEnService || df.fabrication);
+
+      let etatFonctVal = 'En fonctionnement';
+      if (String(df.archive || '').trim().toLowerCase() === 'oui') {
+        etatFonctVal = 'Supprimé définitivement';
+      } else if (String(df.conforme || '').trim().toLowerCase() === 'non') {
+        etatFonctVal = 'Hors service';
+      }
+
+      const idEuroVal = (df.numeroAtlasante || '').trim();
+      const modeleVal = modDef
+        ? (modDef.marque ? `${modDef.marque} ${modDef.nom}`.trim() : (modDef.nom || '').trim())
+        : '';
+
+      const hasPed = Boolean(
+        (df.modeleElectrodePId && df.modeleElectrodePId.trim()) ||
+        (df.lotElectrodeP && df.lotElectrodeP.trim()) ||
+        (df.peremptionElectrodeP && df.peremptionElectrodeP.trim()) ||
+        String(df.hasPadpakP || '').trim().toLowerCase() === 'oui'
+      );
+      const icPedVal = hasPed ? 'oui' : 'non';
+      const dtprIcpedVal = hasPed ? formatIsoDate(df.peremptionElectrodeP || df.peremptionPadpakP) : '';
+      const dtprLcadVal = formatIsoDate(df.peremptionElectrodeA || df.peremptionPadpakA);
+      const dtprBatVal = formatIsoDate(df.peremptionBatterie);
+
+      const freqMntVal = 'Annuelle';
+      const dispsurvVal = 'non';
+      const dermntVal = formatIsoDate(df.derniereMaintenance);
+      const exptSirenVal = formatSiren9(cl?.siret || companyInfo?.siret);
+      const exptRaisVal = (clientDenom || companyInfo?.name || '').trim();
 
       const row = [
         nomVal,
-        df.latitude || '',
-        df.longitude || '',
-        'Intérieur',
-        'Non',
-        'lundi',
-        'heures ouvrables',
-        cl ? cl.phone : (df.telephoneSite || ''),
-        'En fonctionnement',
-        clientDenom,
-        modDef ? modDef.nom : '',
-        df.numeroSerie || '',
-        df.derniereMaintenance || '',
-        '00000000000000',
-        companyInfo?.name || '',
-        companyInfo?.phone || '',
-        companyInfo?.email || ''
+        latVal,
+        longVal,
+        adrNum,
+        adrVoie,
+        comCp,
+        comInsee,
+        comNom,
+        accVal,
+        accLibVal,
+        accPcsecVal,
+        accAccVal,
+        accEtgVal,
+        accCompltVal,
+        dispoHorairesVal,
+        dispCompltVal,
+        primaryPhone,
+        secondaryPhone,
+        siteEmailVal,
+        dateInstalVal,
+        etatFonctVal,
+        idEuroVal,
+        modeleVal,
+        icPedVal,
+        dtprIcpedVal,
+        dtprLcadVal,
+        dtprBatVal,
+        freqMntVal,
+        dispsurvVal,
+        dermntVal,
+        exptSirenVal,
+        exptRaisVal
       ];
-      csvContent += row.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';') + '\n';
+
+      csvContent += row.map(escapeCsvCell).join(',') + '\n';
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -2205,8 +2350,8 @@ export default function DefibTab({
     setAtlasanteUploadResults([]);
 
     const selectedDefibs = mergedDefibrillateurs.filter(d => selectedIdsSet.has(d.id));
-    const clientMap = new Map(clients.map(c => [c.id, c]));
-    const variableMap = new Map(variables.map(v => [v.id, v]));
+    const clientMap = new Map<string, Client>(clients.map((c: Client) => [c.id, c]));
+    const variableMap = new Map<string, Variable>(variables.map((v: Variable) => [v.id, v]));
 
     const items = selectedDefibs.map(df => {
       const cl = clientMap.get(df.clientId);
@@ -5876,7 +6021,8 @@ export default function DefibTab({
                   </button>
                   {typeof window !== 'undefined' && ((localStorage.getItem('defib_lang') || 'Français, France') === 'Français, France' || localStorage.getItem('defib_lang') === 'Français') && (
                     <button
-                      onClick={handleExportToAtlasanteCSV}
+                      type="button"
+                      onClick={() => setIsAtlasanteCsvModalOpen(true)}
                       style={rowActionButton18Style}
                       className="cursor-pointer"
                     >
@@ -12926,6 +13072,220 @@ export default function DefibTab({
                 }}
               >
                 {t("Ouvrir (nouvel onglet)")}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* 📋 Popup Règles et correspondances CSV Atlasanté (Géo'DAE) 📋 */}
+      {isAtlasanteCsvModalOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          id="atlasante-csv-rules-popup-backdrop"
+          onClick={() => setIsAtlasanteCsvModalOpen(false)}
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn"
+        >
+          <div
+            id="atlasante-csv-rules-popup-card"
+            onClick={(e) => e.stopPropagation()}
+            className="p-6 w-full flex flex-col gap-5 text-left max-h-[90vh] overflow-hidden"
+            style={{
+              background: '#f5f7fa',
+              backgroundColor: '#f5f7fa',
+              borderRadius: '13px',
+              boxShadow: 'none',
+              textAlign: 'left',
+              maxWidth: '920px',
+            }}
+          >
+            <div className="flex flex-col gap-1">
+              <h3
+                className="m-0"
+                style={{
+                  color: '#000000',
+                  fontSize: '20px',
+                  fontWeight: 600,
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+              >
+                {t("Règles et correspondances — Export CSV Atlasanté (Géo'DAE)")}
+              </h3>
+              <p
+                className="m-0"
+                style={{
+                  color: '#475569',
+                  fontSize: '14px',
+                  fontWeight: 400,
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+              >
+                {t("Le fichier généré respecte les 32 colonnes figées du standard officiel Géo'DAE / Atlasanté (séparateur virgule, encodage UTF-8 sans BOM).")}
+              </p>
+            </div>
+
+            <div className="overflow-y-auto pr-1 flex flex-col gap-4" style={{ maxHeight: '62vh' }}>
+              <div className="overflow-x-auto rounded-[10px] border border-slate-200 bg-white">
+                <table className="w-full border-collapse text-left text-[13px]">
+                  <thead>
+                    <tr style={{ backgroundColor: '#132a54', color: '#ffffff' }}>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Nom du champ</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Statut</th>
+                      <th className="py-2.5 px-3 font-semibold whitespace-nowrap">Type / Format attendu</th>
+                      <th className="py-2.5 px-3 font-semibold">Règle & Correspondance appliquée</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-slate-800">
+                    <tr className="bg-white">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">nom</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Obligatoire</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Texte</td>
+                      <td className="py-2 px-3">Nom du site ou Identifiant + Client. Sans caractère invisible BOM (<code>\ufeff</code>) en début de fichier.</td>
+                    </tr>
+                    <tr className="bg-slate-50/70">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">lat_coor1</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Obligatoire</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Nombre décimal (WGS84)</td>
+                      <td className="py-2 px-3">Latitude avec séparateur décimal point (ex : <code>48.070684</code>).</td>
+                    </tr>
+                    <tr className="bg-white">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">long_coor1</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Obligatoire</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Nombre décimal (WGS84)</td>
+                      <td className="py-2 px-3">Longitude avec séparateur décimal point (ex : <code>-0.797127</code>).</td>
+                    </tr>
+                    <tr className="bg-slate-50/70">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">adr_num, adr_voie, com_cp, com_insee, com_nom</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Recommandé</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Texte / Code postal</td>
+                      <td className="py-2 px-3">Numéro de voie, nom de la voie, code postal, code INSEE et commune du site.</td>
+                    </tr>
+                    <tr className="bg-white">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">acc</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Obligatoire</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Intérieur | Extérieur</td>
+                      <td className="py-2 px-3">Uniquement l&apos;une de ces 2 valeurs exactes selon l&apos;installation du DAE.</td>
+                    </tr>
+                    <tr className="bg-slate-50/70">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">acc_lib</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Obligatoire</td>
+                      <td className="py-2 px-3 whitespace-nowrap">oui | non</td>
+                      <td className="py-2 px-3">Indique si l&apos;accès se fait sans personne habilitée (accès 24h/24 ou extérieur).</td>
+                    </tr>
+                    <tr className="bg-white">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">acc_pcsec, acc_acc, acc_etg, acc_complt</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Facultatif</td>
+                      <td className="py-2 px-3 whitespace-nowrap">oui | non / Étage / Texte</td>
+                      <td className="py-2 px-3">Poste de sécurité, présence d&apos;un accueil, étage (<code>0</code> par défaut) et complément d&apos;accès (commentaire adresse).</td>
+                    </tr>
+                    <tr className="bg-slate-50/70">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">dispo_horaires</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Obligatoire</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Texte</td>
+                      <td className="py-2 px-3">Remplace les anciens champs <code>disp_j</code> et <code>disp_h</code> (horaires d&apos;accessibilité ou <code>24h/24 7j/7</code>).</td>
+                    </tr>
+                    <tr className="bg-white">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">tel1</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Obligatoire</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Téléphone (+33...)</td>
+                      <td className="py-2 px-3">Remplace <code>tel_1</code> (sans underscore). Format international avec <code>+33</code>.</td>
+                    </tr>
+                    <tr className="bg-slate-50/70">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">tel2</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Obligatoire</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Téléphone (+33...)</td>
+                      <td className="py-2 px-3">Second numéro de contact au format <code>+33...</code> (téléphone site secondaire ou société).</td>
+                    </tr>
+                    <tr className="bg-white">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">site_email</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Facultatif</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Email</td>
+                      <td className="py-2 px-3">Remplace <code>expt_email</code> dans le schéma officiel Géo&apos;DAE (e-mail du site ou du client).</td>
+                    </tr>
+                    <tr className="bg-slate-50/70">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">date_instal</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Facultatif</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Date ISO (AAAA-MM-JJ)</td>
+                      <td className="py-2 px-3">Date de mise en service / installation du défibrillateur.</td>
+                    </tr>
+                    <tr className="bg-white">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">etat_fonct</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Obligatoire</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Énumération</td>
+                      <td className="py-2 px-3"><code>En fonctionnement</code> / <code>Hors service</code> / <code>Supprimé définitivement</code> / <code>Absent momentanément</code> / <code>Inconnu</code>.</td>
+                    </tr>
+                    <tr className="bg-slate-50/70">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">id_euro, modele</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Facultatif</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Texte</td>
+                      <td className="py-2 px-3">Identifiant unique / numéro Atlasanté et marque/modèle du DAE.</td>
+                    </tr>
+                    <tr className="bg-white">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">ic_ped, dtpr_icped, dtpr_lcad, dtpr_bat</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Facultatif</td>
+                      <td className="py-2 px-3 whitespace-nowrap">oui | non / Dates ISO</td>
+                      <td className="py-2 px-3">Présence d&apos;électrodes pédiatriques (<code>oui</code>/<code>non</code>) et dates de péremption (pédiatrique, adulte, batterie) au format <code>AAAA-MM-JJ</code>.</td>
+                    </tr>
+                    <tr className="bg-slate-50/70">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">freq_mnt, dispsurv, dermnt</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Obligatoire (dermnt)</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Texte / Date ISO (AAAA-MM-JJ)</td>
+                      <td className="py-2 px-3">Fréquence de maintenance (<code>Annuelle</code>), télésurveillance (<code>non</code>) et date de dernière maintenance (ex : <code>2026-11-14</code>).</td>
+                    </tr>
+                    <tr className="bg-white">
+                      <td className="py-2 px-3 font-mono font-semibold text-[#132a54]">expt_siren, expt_rais</td>
+                      <td className="py-2 px-3 whitespace-nowrap">Facultatif</td>
+                      <td className="py-2 px-3 whitespace-nowrap">9 chiffres / Texte</td>
+                      <td className="py-2 px-3">Numéro SIREN strictement sur 9 chiffres (extrait du SIRET, sans les 14 zéros) et raison sociale de l&apos;exploitant.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+              <button
+                type="button"
+                id="btn-close-atlasante-csv-modal"
+                onClick={() => setIsAtlasanteCsvModalOpen(false)}
+                className="flex-1 sm:flex-none text-center cursor-pointer outline-none hover:opacity-90 active:scale-[0.99] transition-all"
+                style={{
+                  padding: '11px 22px',
+                  color: '#000000',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                  background: '#e2e8f0',
+                  backgroundColor: '#e2e8f0',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
+              >
+                {t("Fermer")}
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-download-atlasante-csv"
+                onClick={() => {
+                  handleExportToAtlasanteCSV();
+                  setIsAtlasanteCsvModalOpen(false);
+                }}
+                className="flex-1 sm:flex-none text-center cursor-pointer outline-none hover:opacity-90 active:scale-[0.99] transition-all"
+                style={{
+                  padding: '11px 22px',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                  background: '#2e54ff',
+                  backgroundColor: '#2e54ff',
+                  border: 'none',
+                  borderRadius: '13px',
+                }}
+              >
+                {t("Télécharger CSV")}
               </button>
             </div>
           </div>
