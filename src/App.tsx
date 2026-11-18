@@ -1213,6 +1213,7 @@ export default function App() {
   const [isSidePaneFsmTourOpen, setIsSidePaneFsmTourOpen] = useState<boolean>(false);
   const [activeMissionReasonSidePane, setActiveMissionReasonSidePane] = useState<{ tourId: string; missionId: string } | null>(null);
   const [activeMissionPartsSidePane, setActiveMissionPartsSidePane] = useState<{ tourId: string; missionId: string; stockItems: any[] } | null>(null);
+  const [activeMissionExpeditionSidePane, setActiveMissionExpeditionSidePane] = useState<{ tourId: string; missionId: string; selectedValue: string } | null>(null);
   const fsmTourDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -15836,9 +15837,9 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
           </div>
         )}
         {/* Dashboard Workspace Viewports wrapper */}
-        <main className={`flex-1 w-full bg-white ${activeTab === 'messagerie' || activeTab === 'localisations' ? 'flex flex-col h-screen overflow-hidden' : ''}`} id="main-content">
+        <main className={`flex-1 min-w-0 max-w-full overflow-x-hidden w-full bg-white ${activeTab === 'messagerie' || activeTab === 'localisations' ? 'flex flex-col h-screen overflow-hidden' : ''}`} id="main-content">
           {/* Sub-component Active tab wrapper */}
-          <section className={`bg-white p-0 ${activeTab === 'messagerie' || activeTab === 'localisations' ? 'flex-1 flex flex-col h-full min-h-0 overflow-hidden pb-0' : 'pb-16'}`} id="active-tab-content-wrapper">
+          <section className={`bg-white p-0 min-w-0 max-w-full overflow-x-hidden ${activeTab === 'messagerie' || activeTab === 'localisations' ? 'flex-1 flex flex-col h-full min-h-0 overflow-hidden pb-0' : 'pb-16'}`} id="active-tab-content-wrapper">
           {activeTab === 'defibrillateurs' && (
             <DefibTab
               currentLang={currentLang}
@@ -16291,7 +16292,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             });
 
             return (
-              <div className="space-y-6 animate-fadeIn" id="fsm-tab-container">
+              <div className="space-y-6 animate-fadeIn min-w-0 max-w-full overflow-x-hidden" id="fsm-tab-container">
                 <style>{`
                   #fsm-tab-container input:not([type="radio"]):not([type="checkbox"]):not(#search-fsm-input),
                   #fsm-tab-container select:not(#select-fsm-tour-manage):not(#fsm-bulk-assign-tour-dropdown):not(.planning-side-select),
@@ -18103,6 +18104,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                               }}
                               style={{
                                 width: '100%',
+                                maxWidth: '100%',
+                                minWidth: 0,
                                 appearance: 'none',
                                 WebkitAppearance: 'none',
                                 MozAppearance: 'none',
@@ -18122,7 +18125,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                 boxShadow: 'none',
                                 boxSizing: 'border-box',
                               }}
-                              className={`w-full truncate focus:outline-none hover:opacity-85 transition-opacity ${fsmClickedPill?.id === 'select-fsm-tour-manage' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                              className={`w-full max-w-full min-w-0 truncate focus:outline-none hover:opacity-85 transition-opacity ${fsmClickedPill?.id === 'select-fsm-tour-manage' ? 'sidebar-nav-click-shrink-wave' : ''}`}
                             >
                               <option value="none">
                                 {translate("Aucune tournée sélectionnée")}
@@ -19522,6 +19525,22 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                               className="flex flex-col gap-1.5 shrink-0"
                                                               style={{ width: '230px', maxWidth: '250px' }}
                                                             >
+                                                              <div className="flex items-center justify-end">
+                                                                <button
+                                                                  type="button"
+                                                                  onClick={() =>
+                                                                    setActiveMissionExpeditionSidePane({
+                                                                      tourId: t.id,
+                                                                      missionId: m.id,
+                                                                      selectedValue: m.expedition || '',
+                                                                    })
+                                                                  }
+                                                                  className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                                                  style={{ textDecoration: 'none' }}
+                                                                >
+                                                                  Rechercher
+                                                                </button>
+                                                              </div>
                                                               <select
                                                                 value={m.expedition || ''}
                                                                 onChange={(e) => {
@@ -19580,11 +19599,11 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                                   }
                                                                   className="text-center cursor-pointer transition-opacity hover:opacity-95 focus:outline-none shrink-0"
                                                                   style={{
-                                                                    backgroundColor: '#2e54ff',
-                                                                    color: '#ffffff',
+                                                                    backgroundColor: 'rgb(140 24 91)',
+                                                                    color: 'rgb(245 203 255)',
                                                                     borderRadius: '13px',
-                                                                    padding: '6px 12px',
-                                                                    fontSize: '14px',
+                                                                    padding: '10px 12px',
+                                                                    fontSize: '18px',
                                                                     fontWeight: 'bold',
                                                                     border: 'none',
                                                                     width: '230px',
@@ -22469,6 +22488,22 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                       className="flex flex-col gap-1.5 shrink-0"
                                                       style={{ width: '230px', maxWidth: '250px' }}
                                                     >
+                                                      <div className="flex items-center justify-end">
+                                                        <button
+                                                          type="button"
+                                                          onClick={() =>
+                                                            setActiveMissionExpeditionSidePane({
+                                                              tourId: t.id,
+                                                              missionId: m.id,
+                                                              selectedValue: m.expedition || '',
+                                                            })
+                                                          }
+                                                          className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                                          style={{ textDecoration: 'none' }}
+                                                        >
+                                                          Rechercher
+                                                        </button>
+                                                      </div>
                                                       <select
                                                         value={m.expedition || ''}
                                                         onChange={(e) => {
@@ -22527,11 +22562,11 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                           }
                                                           className="text-center cursor-pointer transition-opacity hover:opacity-95 focus:outline-none shrink-0"
                                                           style={{
-                                                            backgroundColor: '#2e54ff',
-                                                            color: '#ffffff',
+                                                            backgroundColor: 'rgb(140 24 91)',
+                                                            color: 'rgb(245 203 255)',
                                                             borderRadius: '13px',
-                                                            padding: '6px 12px',
-                                                            fontSize: '14px',
+                                                            padding: '10px 12px',
+                                                            fontSize: '18px',
                                                             fontWeight: 'bold',
                                                             border: 'none',
                                                             width: '230px',
@@ -23273,6 +23308,46 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                     return l.includes(q) || s.includes(q) || b.includes(q);
                   }}
                 />
+
+                {/* 4. Side Pane Search for Mission Expédition */}
+                <SearchSidePane
+                  isOpen={!!activeMissionExpeditionSidePane}
+                  onClose={() => setActiveMissionExpeditionSidePane(null)}
+                  paneId="fsm-mission-expedition-search-side-pane"
+                  items={(expeditions || []).map((exp: any) => {
+                    const expKey = String(exp.reference || exp.id).trim();
+                    const label = `${expKey}${exp.statut ? ` — ${exp.statut}` : ''}${exp.destinataire ? ` (${exp.destinataire})` : ''}`;
+                    return {
+                      id: expKey,
+                      label,
+                      raw: exp,
+                    };
+                  })}
+                  selectedId={activeMissionExpeditionSidePane?.selectedValue || ''}
+                  onSelect={(item) => {
+                    if (!activeMissionExpeditionSidePane) return;
+                    const { tourId, missionId } = activeMissionExpeditionSidePane;
+                    updateFsmMission(tourId, missionId, { expedition: item.id });
+                  }}
+                  searchPlaceholder="Entrez votre recherche"
+                  searchFilter={(item, q) => {
+                    const l = (item.label || '').toLowerCase();
+                    const idStr = (item.id || '').toLowerCase();
+                    const exp = item.raw;
+                    const dest = String(exp?.destinataire || '').toLowerCase();
+                    const stat = String(exp?.statut || '').toLowerCase();
+                    const ctx = String(exp?.contexte || '').toLowerCase();
+                    const transp = String(exp?.transporteur || '').toLowerCase();
+                    return (
+                      l.includes(q) ||
+                      idStr.includes(q) ||
+                      dest.includes(q) ||
+                      stat.includes(q) ||
+                      ctx.includes(q) ||
+                      transp.includes(q)
+                    );
+                  }}
+                />
               </div>
             );
           })()}
@@ -23338,7 +23413,15 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
               width: '100%',
             };
 
-            const allDevisReports = (generatedReports || []).filter(r => r.demandeDevis === true || r.defibSnapshot?.demandeDevis === true);
+            const allDevisReports = (generatedReports || []).filter(r => {
+              if (r.demandeDevis === false || r.demandeDevis === 'Non') return false;
+              return (
+                r.demandeDevis === true ||
+                r.demandeDevis === 'Oui' ||
+                r.defibSnapshot?.demandeDevis === true ||
+                r.defibSnapshot?.demandeDevis === 'Oui'
+              );
+            });
             const pendingDevisCount = allDevisReports.filter(r => r.devisStatus !== 'termine' && !r.devisTermine).length;
 
             const normalizeDateForFilter = (dateStr?: string) => {
@@ -23391,12 +23474,15 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             };
 
             const handleDeleteDevisRequest = (reportId: string) => {
+              let updatedTargetReport: any = null;
               const updatedReports = generatedReports.map(rep => {
                 if (rep.id === reportId) {
                   const updatedDefibSnapshot = rep.defibSnapshot 
                     ? { 
                         ...rep.defibSnapshot, 
                         demandeDevis: false, 
+                        motifDemandeDevis: '',
+                        descriptionDemandeDevis: '',
                         devisStatus: undefined, 
                         devisTermine: undefined,
                         devisArticlesSelectionnes: [],
@@ -23404,9 +23490,11 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                         devisPriorite: undefined
                       } 
                     : undefined;
-                  return { 
+                  const nextRep = { 
                     ...rep, 
                     demandeDevis: false, 
+                    motifDemandeDevis: '',
+                    descriptionDemandeDevis: '',
                     devisStatus: undefined, 
                     devisTermine: undefined,
                     devisArticlesSelectionnes: [],
@@ -23414,10 +23502,59 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                     devisPriorite: undefined,
                     ...(updatedDefibSnapshot ? { defibSnapshot: updatedDefibSnapshot } : {}) 
                   };
+                  updatedTargetReport = nextRep;
+                  return nextRep;
                 }
                 return rep;
               });
               saveReports(updatedReports);
+
+              // Also explicitly update the report row in-place in Google Spreadsheets (unchecking Demande de devis without deleting the row)
+              if (updatedTargetReport) {
+                const activeTid = tenantId || localStorage.getItem('defib_tenant_id') || 'demo';
+                const rapportsPdfSheetUrl = getTenantSpreadsheetUrl('spreadsheetRapportsPdf', companyInfo);
+                const gererSheetUrl = getTenantSpreadsheetUrl('spreadsheetGestionApresIntervention', companyInfo);
+                const sheetPayloadRecord = {
+                  ...updatedTargetReport,
+                  demandeDevis: 'Non',
+                  motifDemandeDevis: '',
+                  descriptionDemandeDevis: '',
+                  devisPriorite: '',
+                  defibSnapshot: updatedTargetReport.defibSnapshot
+                    ? {
+                        ...updatedTargetReport.defibSnapshot,
+                        demandeDevis: 'Non',
+                        motifDemandeDevis: '',
+                        descriptionDemandeDevis: '',
+                        devisPriorite: '',
+                      }
+                    : undefined,
+                };
+                if (rapportsPdfSheetUrl) {
+                  fetch('/api/sheets/upsert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      tenantId: activeTid,
+                      type: 'rapportsPdf',
+                      records: [sheetPayloadRecord],
+                      spreadsheetUrl: rapportsPdfSheetUrl,
+                    }),
+                  }).catch(() => {});
+                }
+                if (gererSheetUrl) {
+                  fetch('/api/sheets/upsert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      tenantId: activeTid,
+                      type: 'gestionApresIntervention',
+                      records: [sheetPayloadRecord],
+                      spreadsheetUrl: gererSheetUrl,
+                    }),
+                  }).catch(() => {});
+                }
+              }
             };
 
             const handleCreateTicketFromDevis = (r: any) => {
@@ -24142,8 +24279,6 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                 } else if (val === 'open-filters') {
                                   setDraftGmaoFilters(activeGmaoFilters);
                                   setIsGmaoFilterPaneOpen(true);
-                                } else if (val === 'open-devis') {
-                                  setIsGmaoDevisPaneOpen(true);
                                 }
                               }}
                               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
@@ -24160,11 +24295,91 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                               <option value="open-filters">
                                 {t("Appliquer des filtres")}{activeGmaoFiltersCount > 0 ? ` (${activeGmaoFiltersCount})` : ''}
                               </option>
-                              <option value="open-devis">
-                                {t("Demandes de devis")}{pendingDevisCount > 0 ? ` (${pendingDevisCount})` : ''}
-                              </option>
                             </select>
                           </div>
+                        );
+                      })()}
+
+                      {/* Demande(s) Devis Pill Button */}
+                      {(() => {
+                        const badgeText = pendingDevisCount > 9 ? '9+' : String(Math.max(0, pendingDevisCount));
+                        return (
+                          <button
+                            type="button"
+                            id="btn-demandes-devis-rapports-pdf"
+                            onClick={() => {
+                              triggerFsmPillWave('demandes-devis-rapports-pdf');
+                              setIsGmaoDevisPaneOpen(true);
+                            }}
+                            className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${
+                              fsmClickedPill?.id === 'demandes-devis-rapports-pdf'
+                                ? 'sidebar-nav-click-shrink-wave'
+                                : ''
+                            }`}
+                            style={{
+                              position: 'relative',
+                              overflow: 'hidden',
+                              borderRadius: '1000px',
+                              padding: '9px 20px 9px 14px',
+                              fontSize: '18px',
+                              fontWeight: 100,
+                              cursor: 'pointer',
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              backgroundColor: '#ffd8ee',
+                              color: '#8e195c',
+                              border: 'none',
+                              boxShadow: 'none',
+                              transition: 'all 0.15s ease',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={t('Demande(s) Devis')}
+                          >
+                            <span
+                              style={{
+                                position: 'relative',
+                                width: '27px',
+                                height: '27px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <img
+                                src="https://civilprom.s3.eu-north-1.amazonaws.com/pastilleviolette.svg"
+                                alt=""
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'contain',
+                                  display: 'block',
+                                  pointerEvents: 'none',
+                                }}
+                                referrerPolicy="no-referrer"
+                              />
+                              <span
+                                style={{
+                                  position: 'absolute',
+                                  inset: 0,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  color: '#f1b3ff',
+                                  fontSize: badgeText.length > 1 ? '13px' : '15px',
+                                  fontWeight: 500,
+                                  lineHeight: 1,
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  pointerEvents: 'none',
+                                }}
+                              >
+                                {badgeText}
+                              </span>
+                            </span>
+                            <span>{t('Demande(s) Devis')}</span>
+                          </button>
                         );
                       })()}
 
@@ -25628,14 +25843,6 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                             {Array.isArray(managingReport.drapeaux) && managingReport.drapeaux.length > 0 ? (
                               <div className="flex flex-wrap gap-2.5 pt-1">
                                 {managingReport.drapeaux.map((flag: any, idx: number) => {
-                                  const matchedVar = variables.find(
-                                    (v: any) =>
-                                      (v.category === 'Drapeau GMAO' || v.category === 'Drapeau post-intervention') &&
-                                      ((flag?.id && v.id === flag.id) ||
-                                        (flag?.nom && String(v.nom || '').trim().toLowerCase() === String(flag.nom || '').trim().toLowerCase()))
-                                  );
-                                  const hex = flag.couleurHex?.trim() || matchedVar?.couleurHex?.trim();
-                                  const txtColor = hex ? getContrastingTextColor(hex) : '#0f172a';
                                   return (
                                     <span
                                       key={flag.id || idx}
@@ -25650,8 +25857,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                       }}
                                       className="flag-pill inline-flex items-center px-4 py-2 rounded-full text-[18px] font-medium cursor-pointer transition-colors select-none hover:!bg-[#851010] hover:!text-white"
                                       style={{
-                                        backgroundColor: hex || '#f1f5f9',
-                                        color: txtColor,
+                                        backgroundColor: 'rgb(247, 252, 192)',
+                                        color: 'rgb(105, 114, 5)',
                                         border: 'none',
                                       }}
                                       title="Cliquer pour supprimer"
@@ -25781,43 +25988,47 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                           )}
 
                           {/* 3. Field: Commentaire du technicien. (Disabled textarea showing technician comment from Spreadsheet Rapports PDF -> Section 12 - Commentaire interne) */}
-                          <div className="space-y-2 pt-1">
-                            <label className="block text-[18px] font-medium text-[#000000]" style={{ color: '#000000', fontSize: '18px' }}>
-                              Commentaire du technicien.
-                            </label>
-                            <textarea
-                              disabled
-                              rows={3}
-                              value={(() => {
-                                const stripModerationLines = (val: any): string => {
-                                  if (typeof val !== 'string' || !val.trim()) return '';
-                                  return val
-                                    .split(/\r?\n/)
-                                    .filter((line) => {
-                                      const t = line.trim();
-                                      if (!t) return true;
-                                      if (t.startsWith('— ')) return false;
-                                      if (t.startsWith('! ')) return false;
-                                      return true;
-                                    })
-                                    .join('\n')
-                                    .trim();
-                                };
-                                const rawFromSheet =
-                                  managingReport._rawSheetRow?.['Section 12 - Commentaire interne'] ??
-                                  managingReport._rawSheetRow?.['Section 11 - Commentaire interne.'] ??
-                                  managingReport._rawSheetRow?.['Section 11 - Commentaire interne'] ??
-                                  managingReport.internalComment ??
-                                  managingReport.commentaireInterne ??
-                                  managingReport.defibSnapshot?.commentaireInterne ??
-                                  managingReport.defibSnapshot?.internalComment ??
-                                  '';
-                                return stripModerationLines(String(rawFromSheet ?? ''));
-                              })()}
-                              style={{ borderColor: '#DCE1EA', fontSize: '18px', color: '#000000' }}
-                              className="w-full p-3 text-[18px] text-[#000] border border-[#DCE1EA] placeholder:text-[#BECADB] rounded-lg bg-slate-100 resize-y min-h-[90px] focus:outline-none cursor-not-allowed opacity-90"
-                            />
-                          </div>
+                          {(() => {
+                            const stripModerationLines = (val: any): string => {
+                              if (typeof val !== 'string' || !val.trim()) return '';
+                              return val
+                                .split(/\r?\n/)
+                                .filter((line) => {
+                                  const t = line.trim();
+                                  if (!t) return true;
+                                  if (t.startsWith('— ')) return false;
+                                  if (t.startsWith('! ')) return false;
+                                  return true;
+                                })
+                                .join('\n')
+                                .trim();
+                            };
+                            const rawFromSheet =
+                              managingReport._rawSheetRow?.['Section 12 - Commentaire interne'] ??
+                              managingReport._rawSheetRow?.['Section 11 - Commentaire interne.'] ??
+                              managingReport._rawSheetRow?.['Section 11 - Commentaire interne'] ??
+                              managingReport.internalComment ??
+                              managingReport.commentaireInterne ??
+                              managingReport.defibSnapshot?.commentaireInterne ??
+                              managingReport.defibSnapshot?.internalComment ??
+                              '';
+                            const techCommentValue = stripModerationLines(String(rawFromSheet ?? ''));
+                            if (!techCommentValue || !techCommentValue.trim()) return null;
+                            return (
+                              <div className="space-y-2 pt-1">
+                                <label className="block text-[18px] font-medium text-[#000000]" style={{ color: '#000000', fontSize: '18px' }}>
+                                  Commentaire du technicien.
+                                </label>
+                                <textarea
+                                  disabled
+                                  rows={3}
+                                  value={techCommentValue}
+                                  style={{ borderColor: '#DCE1EA', fontSize: '18px', color: '#000000' }}
+                                  className="w-full p-3 text-[18px] text-[#000] border border-[#DCE1EA] placeholder:text-[#BECADB] rounded-lg bg-slate-100 resize-y min-h-[90px] focus:outline-none cursor-not-allowed opacity-90"
+                                />
+                              </div>
+                            );
+                          })()}
 
                           {/* 4. Field: Commentaire interne (from Spreadsheet Gestion Après Intervention -> Commentaire interne.) */}
                           <div className="space-y-1.5 pt-1">
@@ -26977,13 +27188,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                           return (
                             <div 
                               key={r.id} 
-                              className={`p-4 rounded-xl transition-all space-y-3 shadow-xs ${
-                                isTermine 
-                                  ? 'bg-slate-100/80 opacity-80' 
-                                  : 'bg-white'
-                              }`}
+                              className="p-4 rounded-xl transition-all space-y-3 bg-white"
                               style={{
-                                border: '1px solid #dadada',
+                                backgroundColor: '#ffffff',
+                                border: 'none',
                               }}
                             >
                               {/* Ligne 1: Référence à gauche, Date - Rond priorité à droite */}
@@ -26991,7 +27199,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                 <span 
                                   className="tracking-tight"
                                   style={{
-                                    fontFamily: 'Alternative, sans-serif',
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                     fontSize: '22px',
                                     cursor: 'default',
                                     color: '#000000',
@@ -27029,9 +27237,9 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                         key={idx}
                                         className="inline-flex items-center rounded-full font-medium"
                                         style={{
-                                          background: '#e9edff',
+                                          backgroundColor: 'rgb(247, 252, 192)',
                                           border: 'none',
-                                          color: '#3557ec',
+                                          color: 'rgb(105, 114, 5)',
                                           fontSize: '16px',
                                           padding: '8px 16px',
                                           cursor: 'default',
@@ -27048,9 +27256,9 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                     <span 
                                       className="inline-flex items-center rounded-full font-medium"
                                       style={{
-                                        background: '#e9edff',
+                                        backgroundColor: 'rgb(247, 252, 192)',
                                         border: 'none',
-                                        color: '#3557ec',
+                                        color: 'rgb(105, 114, 5)',
                                         fontSize: '16px',
                                         padding: '8px 16px',
                                         cursor: 'default',
@@ -27079,10 +27287,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                 <p 
                                   className="font-sans whitespace-pre-wrap leading-relaxed m-0"
                                   style={{
-                                    background: '#fde6ff',
+                                    backgroundColor: 'rgb(255, 217, 239)',
                                     border: 'none',
-                                    color: '#6c2971',
-                                    fontSize: '16px',
+                                    color: 'rgb(142, 25, 92)',
+                                    fontSize: '18px',
                                     padding: '13px 16px',
                                     cursor: 'default',
                                     borderRadius: '14px',
@@ -27093,48 +27301,30 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                 </p>
                               </div>
 
-                              {/* Ligne 4: Bouton Terminé/Supprimer et Consulter Rapport */}
-                              <div className="pt-2 flex items-center gap-2.5 flex-wrap">
-                                {!isTermine ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleMarkDevisTermine(r.id)}
-                                    style={{
-                                      backgroundColor: '#2e54ff',
-                                      color: '#ffffff',
-                                      boxShadow: 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
-                                      borderRadius: '12px',
-                                      fontSize: '18px',
-                                      padding: '8px 18px',
-                                      fontWeight: 'bold',
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                    }}
-                                    className="cursor-pointer hover:opacity-90 active:scale-95 transition-all"
-                                  >
-                                    Terminé
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteDevisRequest(r.id)}
-                                    style={{
-                                      backgroundColor: '#0f172a',
-                                      color: '#ffffff',
-                                      borderRadius: '12px',
-                                      fontSize: '18px',
-                                      padding: '8px 18px',
-                                      fontWeight: 'bold',
-                                      border: 'none',
-                                      cursor: 'pointer',
-                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                    }}
-                                    className="cursor-pointer hover:bg-slate-800 active:scale-95 transition-all"
-                                  >
-                                    Supprimer
-                                  </button>
-                                )}
+                              {/* Ligne 4: 3 boutons sur la même ligne (Supprimer / Voir Rapport / Créer Ticket CRM) */}
+                              <div className="pt-2 flex items-center gap-2 flex-nowrap">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteDevisRequest(r.id)}
+                                  style={{
+                                    backgroundColor: 'rgb(46, 84, 255)',
+                                    color: '#ffffff',
+                                    boxShadow: 'none',
+                                    borderRadius: '12px',
+                                    fontSize: '16px',
+                                    padding: '8px 10px',
+                                    fontWeight: 'bold',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    flex: 1,
+                                    whiteSpace: 'nowrap',
+                                    textAlign: 'center',
+                                  }}
+                                  className="cursor-pointer hover:opacity-90 active:scale-95 transition-all"
+                                >
+                                  Supprimer
+                                </button>
 
                                 <button
                                   type="button"
@@ -27146,20 +27336,23 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                     setIsGmaoDevisPaneOpen(false);
                                   }}
                                   style={{
-                                    backgroundColor: '#0f172a',
+                                    backgroundColor: 'rgb(46, 84, 255)',
                                     color: '#ffffff',
+                                    boxShadow: 'none',
                                     borderRadius: '12px',
-                                    fontSize: '18px',
-                                    padding: '8px 18px',
+                                    fontSize: '16px',
+                                    padding: '8px 10px',
                                     fontWeight: 'bold',
                                     border: 'none',
                                     cursor: 'pointer',
                                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                    boxShadow: 'none',
+                                    flex: 1,
+                                    whiteSpace: 'nowrap',
+                                    textAlign: 'center',
                                   }}
                                   className="cursor-pointer hover:opacity-90 active:scale-95 transition-all"
                                 >
-                                  Consulter Rapport
+                                  Voir Rapport
                                 </button>
 
                                 <button
@@ -27167,23 +27360,24 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                   disabled={isTicketCrmCreated}
                                   onClick={() => handleCreateTicketFromDevis(r)}
                                   style={{
-                                    backgroundColor: isTicketCrmCreated ? '#e2e8f0' : '#2e54ff',
-                                    color: isTicketCrmCreated ? '#94a3b8' : '#ffffff',
+                                    backgroundColor: 'rgb(46, 84, 255)',
+                                    color: '#ffffff',
+                                    boxShadow: 'none',
                                     borderRadius: '12px',
-                                    fontSize: '18px',
-                                    padding: '8px 18px',
+                                    fontSize: '16px',
+                                    padding: '8px 10px',
                                     fontWeight: 'bold',
                                     border: 'none',
                                     cursor: isTicketCrmCreated ? 'not-allowed' : 'pointer',
                                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                    boxShadow: isTicketCrmCreated
-                                      ? 'none'
-                                      : 'rgba(255, 255, 255, 0.2) 0px 1px 1px inset, rgba(8, 8, 8, 0.2) 0px 1px 2px, rgba(8, 8, 8, 0.08) 0px 4px 4px, #2e54ff 0px 7px 0px -12px, rgba(255, 255, 255, 0.12) 0px 6px 12px inset',
+                                    flex: 1,
+                                    whiteSpace: 'nowrap',
+                                    textAlign: 'center',
                                   }}
                                   className={isTicketCrmCreated ? 'opacity-60 select-none' : 'cursor-pointer hover:opacity-90 active:scale-95 transition-all'}
                                   title={isTicketCrmCreated ? "Ticket CRM Commercial déjà créé" : "Créer un ticket CRM Commercial"}
                                 >
-                                  Ticket CRM Commercial
+                                  Créer Ticket CRM
                                 </button>
                               </div>
                             </div>
@@ -28991,7 +29185,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
 
           return (
             <>
-              <div className="fixed bottom-5 left-0 right-0 z-[1000000] flex justify-center pointer-events-none">
+              <div
+                className="fixed bottom-5 z-[1000000] flex justify-center pointer-events-none"
+                style={{ left: '50vw', transform: 'translateX(-50%)', width: 'max-content', maxWidth: '100vw' }}
+              >
                 <div
                   id="defibeo-online-members-bar"
                   key={`presence-bar-${presenceBumpTick}`}
@@ -29033,6 +29230,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                     fontSize: '18px',
                     lineHeight: 1.2,
+                    boxShadow: 'rgb(112 112 132 / 10%) 0px 1px 16px, rgb(120 120 156 / 5%) -1px 1px 32px',
                     transition: 'padding 0.28s cubic-bezier(0.22, 1, 0.36, 1)',
                   }}
                 >

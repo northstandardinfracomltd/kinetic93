@@ -10664,8 +10664,8 @@ export default function DefibTab({
               <button
                 type="button"
                 onClick={() => setIsMapPickerOpen(false)}
-                style={{ borderRadius: '13px', fontSize: '18px' }}
-                className="flex-1 py-3 bg-[#0f172a] hover:bg-neutral-900 text-white font-bold transition-all cursor-pointer font-sans"
+                style={{ borderRadius: '13px', fontSize: '18px', backgroundColor: 'rgb(210, 45, 11)' }}
+                className="flex-1 py-3 hover:opacity-90 text-white font-bold transition-all cursor-pointer font-sans"
               >
                 Annuler
               </button>
@@ -10679,7 +10679,7 @@ export default function DefibTab({
                 style={{ borderRadius: '13px', fontSize: '18px', backgroundColor: '#2563eb' }}
                 className="flex-1 py-3 hover:bg-blue-700 text-white font-bold transition-all cursor-pointer font-sans"
               >
-                Valider la position
+                Valider
               </button>
             </div>
           </div>

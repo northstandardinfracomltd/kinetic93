@@ -1630,8 +1630,18 @@ async function startServer() {
       const tenantId = String(req.query.tenantId || 'demo').trim() || 'demo';
       const forceRefresh = req.query.refresh === 'true' || req.query.refresh === '1';
       const querySheetUrl = String(req.query.spreadsheetUrl || '').trim();
-      const tenantAliases = getTenantAliasesSync(tenantId);
-      if (!tenantAliases.includes(tenantId)) tenantAliases.unshift(tenantId);
+      const rawAliases = Array.from(getTenantAliasesSync(tenantId));
+      const tenantAliases = Array.from(
+        new Set(
+          [
+            tenantId,
+            tenantId.toUpperCase(),
+            tenantId.toLowerCase(),
+            ...rawAliases,
+            ...rawAliases.map((a) => (/^d\d+$/i.test(a) ? a.toUpperCase() : a)),
+          ].filter(Boolean)
+        )
+      );
 
       const existing: Record<string, any> = {};
       for (const alias of tenantAliases) {
@@ -1639,11 +1649,14 @@ async function startServer() {
         if (aliasStore && typeof aliasStore === 'object') {
           for (const [k, v] of Object.entries(aliasStore)) {
             if (!v || typeof v !== 'object') continue;
+            const numLat = Number((v as any).lat);
+            const numLng = Number((v as any).lng);
+            if (!Number.isFinite(numLat) || !Number.isFinite(numLng) || (numLat === 0 && numLng === 0)) continue;
             const prev = existing[k];
             const vTs = Number((v as any).updatedAt) || 0;
             const prevTs = Number(prev?.updatedAt) || 0;
             if (!prev || vTs >= prevTs) {
-              existing[k] = { ...(v as any) };
+              existing[k] = { ...(v as any), lat: numLat, lng: numLng };
             }
           }
         }
@@ -1698,7 +1711,6 @@ async function startServer() {
               }
             }
 
-            const sheetKeys = new Set<string>(Object.keys(sheetBestByTech));
             for (const [normKey, bestItem] of Object.entries(sheetBestByTech)) {
               const cur = existing[normKey];
               const sheetTs = Number(bestItem.updatedAt) || 0;
@@ -1721,28 +1733,25 @@ async function startServer() {
               }
             }
 
-            if (forceRefresh && sheetKeys.size > 0) {
-              for (const k of Object.keys(existing)) {
-                if (!sheetKeys.has(k)) {
-                  delete existing[k];
-                  changed = true;
-                }
-              }
-            }
             if (changed) {
               for (const alias of tenantAliases) {
                 const aliasStoreKey = `${alias}_tech_locations`;
                 serverMemoryStore.set(aliasStoreKey, { ...existing });
-                persistSingleCollectionToDisk(aliasStoreKey, existing);
+                if (!/^\d+$/.test(alias) && !/^d\d+$/.test(alias)) {
+                  persistSingleCollectionToDisk(aliasStoreKey, existing);
+                }
               }
             }
           }
         }
-      } catch (_) {}
+      } catch (sheetErr) {
+        console.warn(`[Livetrack] Error reading livetrack sheet for ${tenantId}:`, sheetErr);
+      }
 
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       return res.json({ locations: existing });
     } catch (err) {
+      console.warn("[Livetrack] Error in GET /api/tech-locations:", err);
       return res.json({ locations: {} });
     }
   });
@@ -1759,8 +1768,18 @@ async function startServer() {
           ? sessionTenant
           : cleanRawTenant || sessionTenant || 'demo';
 
-      const tenantAliases = getTenantAliasesSync(tenantId);
-      if (!tenantAliases.includes(tenantId)) tenantAliases.unshift(tenantId);
+      const rawAliases = Array.from(getTenantAliasesSync(tenantId));
+      const tenantAliases = Array.from(
+        new Set(
+          [
+            tenantId,
+            tenantId.toUpperCase(),
+            tenantId.toLowerCase(),
+            ...rawAliases,
+            ...rawAliases.map((a) => (/^d\d+$/i.test(a) ? a.toUpperCase() : a)),
+          ].filter(Boolean)
+        )
+      );
 
       const cleanEmail = String(email || (req as any).authSession?.email || '').trim().toLowerCase();
       let techName = String(name || '').trim();
@@ -1781,11 +1800,14 @@ async function startServer() {
       }
       if (!Array.isArray(cachedMembers) || cachedMembers.length === 0) {
         try {
-          const memSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'membresEnvironnement');
-          if (memSheetUrl && extractSpreadsheetIdAndGid(memSheetUrl)) {
-            const memData = await fetchTenantSheetCollection(memSheetUrl, tenantId, 'membresEnvironnement', false);
-            if (Array.isArray(memData?.items) && memData.items.length > 0) {
-              cachedMembers = memData.items;
+          for (const alias of tenantAliases) {
+            const memSheetUrl = await resolveTenantSpreadsheetUrl(alias, 'membresEnvironnement');
+            if (memSheetUrl && extractSpreadsheetIdAndGid(memSheetUrl)) {
+              const memData = await fetchTenantSheetCollection(memSheetUrl, tenantId, 'membresEnvironnement', false);
+              if (Array.isArray(memData?.items) && memData.items.length > 0) {
+                cachedMembers = memData.items;
+                break;
+              }
             }
           }
         } catch (_) {}
@@ -1836,7 +1858,9 @@ async function startServer() {
         existing[normKey] = newLocEntry;
         serverMemoryStore.set(storeKey, existing);
         serverStoreTimestamps.set(storeKey, Date.now());
-        persistSingleCollectionToDisk(storeKey, existing);
+        if (!/^\d+$/.test(alias) && !/^d\d+$/.test(alias)) {
+          persistSingleCollectionToDisk(storeKey, existing);
+        }
       }
 
       // Also enrich cached members in memory if present
@@ -1862,7 +1886,9 @@ async function startServer() {
           });
           if (changed) {
             serverMemoryStore.set(membersKey, updatedMembers);
-            persistSingleCollectionToDisk(membersKey, updatedMembers);
+            if (!/^\d+$/.test(alias) && !/^d\d+$/.test(alias)) {
+              persistSingleCollectionToDisk(membersKey, updatedMembers);
+            }
           }
         }
       }
@@ -1870,19 +1896,16 @@ async function startServer() {
       // Persist last known position to the tenant's Spreadsheet Livetrack
       let syncedToRemoteSheet = false;
       try {
-        let sheetUrl = await resolveTenantSpreadsheetUrl(
-          tenantId,
-          'livetrack',
-          typeof bodySpreadsheetUrl === 'string' ? bodySpreadsheetUrl.trim() : undefined
-        );
-        if (!sheetUrl) {
-          for (const alias of tenantAliases) {
-            sheetUrl = await resolveTenantSpreadsheetUrl(alias, 'livetrack');
-            if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) break;
-          }
+        const cleanBodyUrl = typeof bodySpreadsheetUrl === 'string' ? bodySpreadsheetUrl.trim() : undefined;
+        let sheetUrl = '';
+        for (const alias of tenantAliases) {
+          sheetUrl = await resolveTenantSpreadsheetUrl(alias, 'livetrack', cleanBodyUrl);
+          if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) break;
         }
         if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
-          const upRes = await upsertRecordsToTenantSheet(sheetUrl, tenantId, 'livetrack', [
+          const canonicalTenant =
+            tenantAliases.find((a) => /^D\d+$/.test(a)) || tenantId;
+          const upRes = await upsertRecordsToTenantSheet(sheetUrl, canonicalTenant, 'livetrack', [
             {
               id: normKey,
               name: techName,
@@ -1900,6 +1923,7 @@ async function startServer() {
 
       return res.json({ ok: true, syncedToRemoteSheet, location: newLocEntry });
     } catch (err) {
+      console.warn("[Livetrack] Error in POST /api/tech-locations:", err);
       return res.status(500).json({ error: "Failed to save technician location" });
     }
   });

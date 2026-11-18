@@ -415,6 +415,7 @@ export default function StocksTab({
   const [selectedTraceIds, setSelectedTraceIds] = useState<string[]>([]);
   const [selectedTraceRowKeys, setSelectedTraceRowKeys] = useState<string[]>([]);
   const [showTraceExistingExpeditionDropdown, setShowTraceExistingExpeditionDropdown] = useState<boolean>(false);
+  const [activeTraceExpeditionSidePane, setActiveTraceExpeditionSidePane] = useState<{ traceIndex: number; selectedValue: string } | null>(null);
   const [distribEmplacement, setDistribEmplacement] = useState<string>('');
   const [distribDate, setDistribDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [distribSuiviColis, setDistribSuiviColis] = useState<string>('');
@@ -4788,21 +4789,37 @@ export default function StocksTab({
                                           <option value="Aucune information">Aucune information</option>
                                         </select>
                                         {isExpedieSit && (
-                                          <select
-                                            value={selectedExpVal}
-                                            onChange={(e) => {
-                                              const chosenExp = e.target.value;
-                                              const updated = [...traceabilities];
-                                              updated[idx] = {
-                                                ...updated[idx],
-                                                situation: chosenExp
-                                                  ? `Expédié - ${chosenExp}`
-                                                  : 'Expédié',
-                                              };
-                                              setTraceabilities(updated);
-                                            }}
-                                            className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs mt-1"
-                                          >
+                                          <>
+                                            <div className="flex items-center justify-end mt-1.5 mb-0.5">
+                                              <button
+                                                type="button"
+                                                onClick={() =>
+                                                  setActiveTraceExpeditionSidePane({
+                                                    traceIndex: idx,
+                                                    selectedValue: selectedExpVal,
+                                                  })
+                                                }
+                                                className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                                style={{ textDecoration: 'none' }}
+                                              >
+                                                Rechercher
+                                              </button>
+                                            </div>
+                                            <select
+                                              value={selectedExpVal}
+                                              onChange={(e) => {
+                                                const chosenExp = e.target.value;
+                                                const updated = [...traceabilities];
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  situation: chosenExp
+                                                    ? `Expédié - ${chosenExp}`
+                                                    : 'Expédié',
+                                                };
+                                                setTraceabilities(updated);
+                                              }}
+                                              className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs mt-1"
+                                            >
                                             <option value="">Sélectionnez une expédition.</option>
                                             {selectedExpVal &&
                                               !eligibleSituationExpeditions.some(
@@ -4832,7 +4849,8 @@ export default function StocksTab({
                                                 </option>
                                               );
                                             })}
-                                          </select>
+                                            </select>
+                                          </>
                                         )}
                                         {isExpedieSit && Boolean(selectedExpVal && selectedExpVal.trim()) && (
                                           <button
@@ -4857,11 +4875,11 @@ export default function StocksTab({
                                             }}
                                             className="w-full text-center cursor-pointer transition-opacity hover:opacity-95 mt-1"
                                             style={{
-                                              backgroundColor: '#2e54ff',
-                                              color: '#ffffff',
+                                              backgroundColor: 'rgb(140 24 91)',
+                                              color: 'rgb(245 203 255)',
                                               borderRadius: '13px',
-                                              padding: '8px 14px',
-                                              fontSize: '14px',
+                                              padding: '10px 12px',
+                                              fontSize: '18px',
                                               fontWeight: 'bold',
                                               border: 'none',
                                               fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
@@ -5232,6 +5250,65 @@ export default function StocksTab({
           const ref = (v?.reference || '').toLowerCase();
           const marque = (v?.marque || '').toLowerCase();
           return l.includes(q) || s.includes(q) || b.includes(q) || nom.includes(q) || ident.includes(q) || ref.includes(q) || marque.includes(q);
+        }}
+      />
+
+      {/* Side Pane Search for Traceability Expédition */}
+      <SearchSidePane
+        isOpen={!!activeTraceExpeditionSidePane}
+        onClose={() => setActiveTraceExpeditionSidePane(null)}
+        paneId="stocks-trace-expedition-search-side-pane"
+        items={(expeditions || [])
+          .filter((exp) => {
+            const st = String(exp.statut || 'Aucune information').trim().toLowerCase();
+            return (
+              st !== 'réceptionné' &&
+              st !== 'receptionne' &&
+              st !== 'réceptionné.' &&
+              st !== 'incident' &&
+              st !== 'incident.'
+            );
+          })
+          .map((exp) => {
+            const expKey = String(exp.reference || exp.id).trim();
+            const expLabel = [
+              exp.reference || exp.id,
+              exp.contexte,
+              exp.expediteur,
+              exp.dateCreation,
+              exp.transporteur,
+            ]
+              .map((v) => String(v || '').trim())
+              .filter(Boolean)
+              .join(', ');
+            return {
+              id: expKey,
+              label: expLabel || expKey,
+              raw: exp,
+            };
+          })}
+        selectedId={activeTraceExpeditionSidePane?.selectedValue || ''}
+        onSelect={(item) => {
+          if (!activeTraceExpeditionSidePane) return;
+          const idx = activeTraceExpeditionSidePane.traceIndex;
+          const chosenExp = item.id;
+          const updated = [...traceabilities];
+          if (updated[idx]) {
+            updated[idx] = {
+              ...updated[idx],
+              situation: chosenExp ? `Expédié - ${chosenExp}` : 'Expédié',
+            };
+            setTraceabilities(updated);
+          }
+        }}
+        searchPlaceholder="Entrez votre recherche"
+        searchFilter={(item, q) => {
+          const l = (item.label || '').toLowerCase();
+          const idStr = (item.id || '').toLowerCase();
+          const exp = item.raw;
+          const dest = String(exp?.destinataire || '').toLowerCase();
+          const stat = String(exp?.statut || '').toLowerCase();
+          return l.includes(q) || idStr.includes(q) || dest.includes(q) || stat.includes(q);
         }}
       />
 

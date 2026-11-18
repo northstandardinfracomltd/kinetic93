@@ -170,6 +170,111 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery || '');
   const [showForm, setShowForm] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const activeExpeditionsTenantId =
+    typeof window !== 'undefined' ? localStorage.getItem('defib_tenant_id') || 'demo' : 'demo';
+  const recentSearchesStorageKey = `defib_${activeExpeditionsTenantId}_recent_expeditions_searches`;
+
+  const readStoredRecentSearches = React.useCallback((tenantKey: string): string[] => {
+    if (typeof window === 'undefined') return [];
+    const candidateStores: Storage[] = [];
+    try {
+      if (window.localStorage) candidateStores.push(window.localStorage);
+    } catch (_) {}
+    try {
+      if (window.sessionStorage) candidateStores.push(window.sessionStorage);
+    } catch (_) {}
+
+    for (const store of candidateStores) {
+      try {
+        const raw =
+          store.getItem(tenantKey) ||
+          store.getItem('defib_recent_expeditions_searches');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const valid = parsed
+              .map((item) => String(item || '').trim())
+              .filter((item) => item.length >= 2)
+              .slice(0, 5);
+            if (valid.length > 0) return valid;
+          }
+        }
+      } catch (_) {}
+    }
+    return [];
+  }, []);
+
+  const persistRecentSearchesToCache = React.useCallback((tenantKey: string, list: string[]) => {
+    if (typeof window === 'undefined') return;
+    const serialized = JSON.stringify(list);
+    try {
+      window.sessionStorage?.setItem(tenantKey, serialized);
+      window.sessionStorage?.setItem('defib_recent_expeditions_searches', serialized);
+    } catch (_) {}
+    try {
+      window.localStorage?.setItem(tenantKey, serialized);
+      window.localStorage?.setItem('defib_recent_expeditions_searches', serialized);
+    } catch (_) {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < window.localStorage.length; i++) {
+          const k = window.localStorage.key(i);
+          if (
+            k &&
+            !k.includes('_recent_') &&
+            (k.includes('_cache') || k.includes('_sheet_') || k.includes('_defibs') || k.includes('_clients') || k.includes('_reports'))
+          ) {
+            keysToRemove.push(k);
+          }
+        }
+        keysToRemove.forEach((k) => {
+          try {
+            window.localStorage.removeItem(k);
+          } catch (_) {}
+        });
+        window.localStorage?.setItem(tenantKey, serialized);
+        window.localStorage?.setItem('defib_recent_expeditions_searches', serialized);
+      } catch (__) {}
+    }
+  }, []);
+
+  const [recentSearches, setRecentSearches] = useState<string[]>(() =>
+    readStoredRecentSearches(`defib_${activeExpeditionsTenantId}_recent_expeditions_searches`)
+  );
+
+  useEffect(() => {
+    setRecentSearches(readStoredRecentSearches(recentSearchesStorageKey));
+  }, [recentSearchesStorageKey, readStoredRecentSearches]);
+
+  const saveRecentSearch = React.useCallback(
+    (term: string) => {
+      const trimmed = String(term || '').trim();
+      if (trimmed.length < 2) return;
+      setRecentSearches((prev) => {
+        const currentStored = readStoredRecentSearches(recentSearchesStorageKey);
+        const mergedSource = prev.length >= currentStored.length ? prev : currentStored;
+        const filtered = mergedSource.filter(
+          (item) => item.trim().length >= 2 && item.toLowerCase() !== trimmed.toLowerCase()
+        );
+        const updated = [trimmed, ...filtered].slice(0, 5);
+        persistRecentSearchesToCache(recentSearchesStorageKey, updated);
+        return updated;
+      });
+    },
+    [recentSearchesStorageKey, readStoredRecentSearches, persistRecentSearchesToCache]
+  );
+
+  useEffect(() => {
+    const trimmed = String(searchQuery || '').trim();
+    if (trimmed.length < 2) return;
+    const timer = setTimeout(() => {
+      saveRecentSearch(trimmed);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [searchQuery, saveRecentSearch]);
 
   useEffect(() => {
     if (initialSearchQuery !== undefined && initialSearchQuery !== null) {
@@ -1086,6 +1191,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                 {/* Field recherche (Search input) */}
                 <div className="relative w-full sm:w-56 bg-white">
                   <input
+                    ref={searchInputRef}
                     type="text"
                     id="search-expeditions-input"
                     name="defib_quick_search_expeditions_no_autofill"
@@ -1098,6 +1204,26 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                     placeholder={t('Recherche rapide')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (searchQuery.trim()) {
+                          saveRecentSearch(searchQuery);
+                        }
+                        setIsSearchFocused(false);
+                        searchInputRef.current?.blur();
+                      } else if (e.key === 'Escape') {
+                        setIsSearchFocused(false);
+                        searchInputRef.current?.blur();
+                      }
+                    }}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => {
+                      if (searchQuery && searchQuery.trim()) {
+                        saveRecentSearch(searchQuery);
+                      }
+                      setIsSearchFocused(false);
+                    }}
                     className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
                     style={{
                       border: '1px solid #dedede',
@@ -1124,21 +1250,92 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                         top: '50%',
                         transform: 'translateY(-50%)',
                         background: 'transparent',
+                        backgroundColor: 'transparent',
                         border: 'none',
-                        padding: '2px 6px',
-                        cursor: 'pointer',
-                        color: '#64748b',
-                        fontSize: '18px',
-                        lineHeight: 1,
-                        display: 'flex',
+                        boxShadow: 'none',
+                        padding: '4px',
+                        margin: 0,
+                        display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        cursor: 'pointer',
+                        zIndex: 10,
                       }}
-                      title="Effacer la recherche"
-                      aria-label="Effacer la recherche"
+                      title={t('Vider la recherche')}
+                      aria-label={t('Vider la recherche')}
                     >
-                      ×
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
+                        alt=""
+                        style={{ width: '22px', height: '22px', objectFit: 'contain', display: 'block', pointerEvents: 'none' }}
+                        referrerPolicy="no-referrer"
+                      />
                     </button>
+                  )}
+                  {isSearchFocused && (
+                    <div
+                      id="search-expeditions-recent-dropdown"
+                      className="absolute left-0 top-full mt-1.5 bg-white z-50 py-2.5 font-sans animate-fadeIn"
+                      style={{
+                        width: '100%',
+                        minWidth: '100%',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        borderRadius: '13px',
+                        border: '1px solid #dedede',
+                        backgroundColor: '#ffffff',
+                        boxShadow: 'none',
+                      }}
+                    >
+                      <div
+                        className="px-4 pb-1.5 text-left select-none"
+                        style={{
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          color: '#000000',
+                          fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        }}
+                      >
+                        {t('Recherche(s) récente(s):')}
+                      </div>
+                      {recentSearches.length === 0 ? (
+                        <div
+                          className="px-4 py-1 text-left select-none"
+                          style={{
+                            fontSize: '18px',
+                            fontWeight: 100,
+                            color: 'rgb(190, 202, 219)',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                          }}
+                        >
+                          {t('Aucune recherche récente')}
+                        </div>
+                      ) : (
+                        recentSearches.slice(0, 5).map((item, idx) => (
+                          <button
+                            key={`${item}-${idx}`}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setSearchQuery(item);
+                              saveRecentSearch(item);
+                              setIsSearchFocused(false);
+                              searchInputRef.current?.blur();
+                            }}
+                            className="w-full text-left px-4 py-1.5 truncate cursor-pointer border-0 bg-transparent hover:text-[#2e54ff] transition-colors"
+                            style={{
+                              fontSize: '18px',
+                              fontWeight: 100,
+                              color: '#000000',
+                              fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            }}
+                            title={item}
+                          >
+                            {item}
+                          </button>
+                        ))
+                      )}
+                    </div>
                   )}
                 </div>
 

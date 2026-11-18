@@ -60,6 +60,78 @@ export default function AchatsFournisseursTab({
   const [supplierFilter, setSupplierFilter] = useState('');
   const [isSearchHovered, setIsSearchHovered] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const activeAchatsTenantId =
+    typeof window !== 'undefined'
+      ? (sessionStorage.getItem('defib_active_tenant_id') ||
+          localStorage.getItem('defib_active_tenant_id') ||
+          'default').trim()
+      : 'default';
+
+  const readStoredRecentSearches = (tId: string): string[] => {
+    try {
+      const tenantSpecificKey = `defib_${tId}_recent_achats_searches`;
+      const raw =
+        localStorage.getItem(tenantSpecificKey) ||
+        sessionStorage.getItem(tenantSpecificKey) ||
+        localStorage.getItem('defib_recent_achats_searches') ||
+        sessionStorage.getItem('defib_recent_achats_searches');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((s) => typeof s === 'string' && s.trim().length > 0).slice(0, 5);
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return [];
+  };
+
+  const persistRecentSearchesToCache = (list: string[], tId: string) => {
+    const serialized = JSON.stringify(list.slice(0, 5));
+    const tenantSpecificKey = `defib_${tId}_recent_achats_searches`;
+    try {
+      localStorage.setItem(tenantSpecificKey, serialized);
+      localStorage.setItem('defib_recent_achats_searches', serialized);
+    } catch {
+      // ignore quota/storage errors
+    }
+    try {
+      sessionStorage.setItem(tenantSpecificKey, serialized);
+      sessionStorage.setItem('defib_recent_achats_searches', serialized);
+    } catch {
+      // ignore sessionStorage errors
+    }
+  };
+
+  const [recentSearches, setRecentSearches] = useState<string[]>(() =>
+    readStoredRecentSearches(activeAchatsTenantId)
+  );
+
+  useEffect(() => {
+    setRecentSearches(readStoredRecentSearches(activeAchatsTenantId));
+  }, [activeAchatsTenantId]);
+
+  const saveRecentSearch = (term: string) => {
+    const trimmed = (term || '').trim();
+    if (!trimmed) return;
+    setRecentSearches((prev) => {
+      const next = [trimmed, ...prev.filter((s) => s.toLowerCase() !== trimmed.toLowerCase())].slice(0, 5);
+      persistRecentSearchesToCache(next, activeAchatsTenantId);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const trimmed = (search || '').trim();
+    if (trimmed.length < 2) return;
+    const timer = window.setTimeout(() => {
+      saveRecentSearch(trimmed);
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [search, activeAchatsTenantId]);
+
   const [clickedPill, setClickedPill] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -564,18 +636,155 @@ export default function AchatsFournisseursTab({
                 {/* Search query */}
                 <div className="relative bg-white">
                   <input
+                    ref={searchInputRef}
                     type="text"
                     id="search-achats-input"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder={t("Recherche rapide")}
                     className="w-48 sm:w-64 text-black outline-none"
-                    style={searchInputStyle}
+                    style={{
+                      ...searchInputStyle,
+                      paddingRight: search && search.length > 0 ? '36px' : searchInputStyle.paddingRight,
+                    }}
                     onMouseEnter={() => setIsSearchHovered(true)}
                     onMouseLeave={() => setIsSearchHovered(false)}
                     onFocus={() => setIsSearchFocused(true)}
-                    onBlur={() => setIsSearchFocused(false)}
+                    onBlur={() => {
+                      setIsSearchFocused(false);
+                      saveRecentSearch(search);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        saveRecentSearch(search);
+                      }
+                    }}
                   />
+                  {search && search.length > 0 && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        saveRecentSearch(search);
+                        setSearch('');
+                        searchInputRef.current?.focus();
+                      }}
+                      title={t("Effacer la recherche")}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: 0,
+                        margin: 0,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '22px',
+                        height: '22px',
+                      }}
+                    >
+                      <img
+                        src="https://civilprom.s3.eu-north-1.amazonaws.com/close-black.svg"
+                        alt="Effacer"
+                        style={{
+                          width: '22px',
+                          height: '22px',
+                          minWidth: '22px',
+                          minHeight: '22px',
+                          maxWidth: '22px',
+                          maxHeight: '22px',
+                          objectFit: 'contain',
+                          display: 'block',
+                        }}
+                      />
+                    </button>
+                  )}
+                  {isSearchFocused && (
+                    <div
+                      onMouseDown={(e) => e.preventDefault()}
+                      style={{
+                        position: 'absolute',
+                        top: 'calc(100% + 6px)',
+                        left: 0,
+                        width: '100%',
+                        minWidth: '240px',
+                        backgroundColor: 'rgb(245, 247, 250)',
+                        borderRadius: '13px',
+                        boxShadow:
+                          '0px 10px 30px rgba(15, 23, 42, 0.14), 0px 2px 8px rgba(15, 23, 42, 0.08)',
+                        padding: '10px 12px',
+                        zIndex: 99999999999999,
+                        border: '1px solid rgb(225, 231, 240)',
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: '13px',
+                          color: 'rgb(143, 159, 184)',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          marginBottom: recentSearches.length > 0 ? '6px' : '2px',
+                          fontWeight: 500,
+                        }}
+                      >
+                        {t("Recherche(s) récente(s):")}
+                      </div>
+                      {recentSearches.length === 0 ? (
+                        <div
+                          style={{
+                            fontSize: '14px',
+                            color: 'rgb(160, 174, 192)',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            padding: '4px 2px',
+                          }}
+                        >
+                          {t("Aucune recherche récente")}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-1">
+                          {recentSearches.slice(0, 5).map((item, idx) => (
+                            <button
+                              key={`${item}-${idx}`}
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                setSearch(item);
+                                saveRecentSearch(item);
+                                setIsSearchFocused(false);
+                                searchInputRef.current?.blur();
+                              }}
+                              style={{
+                                textAlign: 'left',
+                                fontSize: '16px',
+                                color: '#0f172a',
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                padding: '6px 8px',
+                                borderRadius: '8px',
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                width: '100%',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'rgb(233, 238, 246)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'transparent';
+                              }}
+                            >
+                              {item}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {(() => {

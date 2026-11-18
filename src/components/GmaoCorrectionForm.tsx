@@ -47,6 +47,7 @@ interface GmaoCorrectionFormProps {
   existingTours?: any[];
   existingReports?: any[];
   tenantId?: string;
+  onDraftChange?: (draftReport: any) => void;
 }
 
 const DEFAULT_DEFIB: Defibrillateur = {
@@ -376,7 +377,8 @@ export default function GmaoCorrectionForm({
   onToggleMinimize,
   existingTours,
   existingReports,
-  tenantId
+  tenantId,
+  onDraftChange
 }: GmaoCorrectionFormProps) {
   const shouldShowChronoAndReduce = isWebapp && !isMainSoftware && !hideReduceAndTimer;
   const shouldShowChrono = shouldShowChronoAndReduce && !hideTimer;
@@ -807,6 +809,13 @@ export default function GmaoCorrectionForm({
 
   const getInitialSnapshot = (): Defibrillateur => {
     const snapRaw = (report?.defibSnapshot || {}) as Record<string, any>;
+    if (report?._isRecoveredDraft && report?.defibSnapshot) {
+      return {
+        ...DEFAULT_DEFIB,
+        ...(origDefib ? origDefib : {}),
+        ...snapRaw,
+      } as Defibrillateur;
+    }
     const nonEmptySnap: Record<string, any> = {};
     Object.keys(snapRaw).forEach((k) => {
       const v = snapRaw[k];
@@ -1087,7 +1096,10 @@ export default function GmaoCorrectionForm({
   };
 
   // Active Section horizontal navigation bar on mobile
-  const [activeSection, setActiveSection] = useState<number>(0);
+  const [activeSection, setActiveSection] = useState<number>(() =>
+    typeof report?._draftActiveSection === 'number' ? report._draftActiveSection : 0
+  );
+  const lastScrollTopRef = useRef<number>(Number(report?._draftScrollTop || 0));
   const [previewModalPhoto, setPreviewModalPhoto] = useState<{ url: string; title: string } | null>(null);
   const pillsContainerRef = useRef<HTMLDivElement>(null);
 
@@ -1272,7 +1284,7 @@ export default function GmaoCorrectionForm({
     );
   });
   const [autreReference, setAutreReference] = useState(report?.autreReference || report?.customReference || '');
-  const [isCreatingNewMaterial, setIsCreatingNewMaterial] = useState(false);
+  const [isCreatingNewMaterial, setIsCreatingNewMaterial] = useState<boolean>(() => Boolean(report?.isCreatingNewMaterial));
 
   const isDefibElectrodeASecoursNon = useMemo(() => {
     if (isCreatingNewMaterial) return false;
@@ -1319,7 +1331,7 @@ export default function GmaoCorrectionForm({
   const [photo1LoadFailed, setPhoto1LoadFailed] = useState(false);
   const [photo2LoadFailed, setPhoto2LoadFailed] = useState(false);
   const [photo3LoadFailed, setPhoto3LoadFailed] = useState(false);
-  const [newMaterialType, setNewMaterialType] = useState('');
+  const [newMaterialType, setNewMaterialType] = useState<string>(() => report?.newMaterialType || '');
   const [isAiDetectionModalOpen, setIsAiDetectionModalOpen] = useState(false);
   const [aiDetectedModel, setAiDetectedModel] = useState<{ id: string; nom: string; marque: string } | null>(null);
   const [aiDetectionTarget, setAiDetectionTarget] = useState<{
@@ -1378,14 +1390,16 @@ export default function GmaoCorrectionForm({
     peremptionP: boolean;
     lotB: boolean;
     peremptionB: boolean;
-  }>({
-    lotA: false,
-    peremptionA: false,
-    lotP: false,
-    peremptionP: false,
-    lotB: false,
-    peremptionB: false,
-  });
+  }>(() =>
+    report?.autoPopulatedFields || {
+      lotA: false,
+      peremptionA: false,
+      lotP: false,
+      peremptionP: false,
+      lotB: false,
+      peremptionB: false,
+    }
+  );
 
   const [pendingAutoPopulatedEdit, setPendingAutoPopulatedEdit] = useState<{
     fieldKey: 'lotA' | 'peremptionA' | 'lotP' | 'peremptionP' | 'lotB' | 'peremptionB';
@@ -1481,13 +1495,13 @@ export default function GmaoCorrectionForm({
   // S9 Vérifications techniques
   const [techConformeArrivee, setTechConformeArrivee] = useState<'Oui' | 'Non' | ''>(report?.techConformeArrivee || '');
   const [techCommentaireArrivee, setTechCommentaireArrivee] = useState<string>(report?.techCommentaireArrivee || '');
-  const [techVoyantConforme, setTechVoyantConforme] = useState<'Oui' | 'Non' | ''>(isNew ? '' : (report?.techVoyantConforme || ''));
+  const [techVoyantConforme, setTechVoyantConforme] = useState<'Oui' | 'Non' | ''>((isNew && !report?._isRecoveredDraft) ? '' : (report?.techVoyantConforme || ''));
   const [techEquipeMessageNumerique, setTechEquipeMessageNumerique] = useState<'Oui' | 'Non' | ''>(report?.techEquipeMessageNumerique || 'Oui');
-  const [techMessageNumeroConforme, setTechMessageNumeroConforme] = useState<'Oui' | 'Non' | ''>(isNew ? '' : (report?.techMessageNumeroConforme || ''));
-  const [techGuidesVocauxConformes, setTechGuidesVocauxConformes] = useState<'Oui' | 'Non' | ''>(isNew ? '' : (report?.techGuidesVocauxConformes || ''));
-  const [techNettoyage, setTechNettoyage] = useState<'Oui' | 'Non' | ''>(isNew ? '' : (report?.techNettoyage || ''));
-  const [techBranchementElectrodesConforme, setTechBranchementElectrodesConforme] = useState<'Oui' | 'Non' | ''>(isNew ? '' : (report?.techBranchementElectrodesConforme || ''));
-  const [techDelivranceChocConforme, setTechDelivranceChocConforme] = useState<'Oui' | 'Non' | 'Non approprié' | ''>(isNew ? '' : (report?.techDelivranceChocConforme || ''));
+  const [techMessageNumeroConforme, setTechMessageNumeroConforme] = useState<'Oui' | 'Non' | ''>((isNew && !report?._isRecoveredDraft) ? '' : (report?.techMessageNumeroConforme || ''));
+  const [techGuidesVocauxConformes, setTechGuidesVocauxConformes] = useState<'Oui' | 'Non' | ''>((isNew && !report?._isRecoveredDraft) ? '' : (report?.techGuidesVocauxConformes || ''));
+  const [techNettoyage, setTechNettoyage] = useState<'Oui' | 'Non' | ''>((isNew && !report?._isRecoveredDraft) ? '' : (report?.techNettoyage || ''));
+  const [techBranchementElectrodesConforme, setTechBranchementElectrodesConforme] = useState<'Oui' | 'Non' | ''>((isNew && !report?._isRecoveredDraft) ? '' : (report?.techBranchementElectrodesConforme || ''));
+  const [techDelivranceChocConforme, setTechDelivranceChocConforme] = useState<'Oui' | 'Non' | 'Non approprié' | ''>((isNew && !report?._isRecoveredDraft) ? '' : (report?.techDelivranceChocConforme || ''));
   const [techResultatJoulesElectrodeA, setTechResultatJoulesElectrodeA] = useState<string>(report?.techResultatJoulesElectrodeA || '');
   const [techResultatJoulesElectrodeA2, setTechResultatJoulesElectrodeA2] = useState<string>(report?.techResultatJoulesElectrodeA2 || '');
 
@@ -1507,8 +1521,8 @@ export default function GmaoCorrectionForm({
   // S11 add-on
   const [fichierDonneesRecupere, setFichierDonneesRecupere] = useState<'Oui' | 'Non'>(report?.fichierDonneesRecupere || 'Non');
   
-  const [emettreFactureBrouillon, setEmettreFactureBrouillon] = useState<'Oui' | 'Non'>('Non');
-  const [serviceEmettreId, setServiceEmettreId] = useState<string>('');
+  const [emettreFactureBrouillon, setEmettreFactureBrouillon] = useState<'Oui' | 'Non'>(() => report?.emettreFactureBrouillon || 'Non');
+  const [serviceEmettreId, setServiceEmettreId] = useState<string>(() => report?.serviceEmettreId || '');
   const [isSaving, setIsSaving] = useState(false);
   const [searchModalMode, setSearchModalMode] = useState<'equipment' | 'loaner' | null>(null);
   const [advancedSearchQuery, setAdvancedSearchQuery] = useState<string>('');
@@ -1544,7 +1558,11 @@ export default function GmaoCorrectionForm({
   const isDrawing = useRef(false);
 
   const [currentTickTime, setCurrentTickTime] = useState(() => new Date());
-  const [formOpenTime] = useState(() => new Date());
+  const [formOpenTime] = useState(() =>
+    report?._draftElapsedMs && Number(report._draftElapsedMs) > 0
+      ? new Date(Date.now() - Number(report._draftElapsedMs))
+      : new Date()
+  );
 
   // Section 11 Clôture - Toggles & Demande de devis
   const [mesPhotosValides, setMesPhotosValides] = useState<boolean>(() => report?.mesPhotosValides ?? false);
@@ -1735,8 +1753,22 @@ export default function GmaoCorrectionForm({
       setCustomKitSecoursRemplace(report.customKitSecoursRemplace || '');
       setOrigineKitSecoursInstalle(report.origineKitSecoursInstalle || '');
       setFichierDonneesRecupere(report.fichierDonneesRecupere || 'Non');
-      setEmettreFactureBrouillon('Non');
-      setServiceEmettreId('');
+      setEmettreFactureBrouillon(report.emettreFactureBrouillon || 'Non');
+      setServiceEmettreId(report.serviceEmettreId || '');
+      if (report._isRecoveredDraft) {
+        if (typeof report._draftActiveSection === 'number') {
+          setActiveSection(report._draftActiveSection);
+        }
+        if (report.isCreatingNewMaterial !== undefined) {
+          setIsCreatingNewMaterial(Boolean(report.isCreatingNewMaterial));
+        }
+        if (report.newMaterialType !== undefined) {
+          setNewMaterialType(report.newMaterialType || '');
+        }
+        if (report.autoPopulatedFields) {
+          setAutoPopulatedFields(report.autoPopulatedFields);
+        }
+      }
       setTechSignature(report.techSignature || '');
       setEndTimeStamp(report.endTimeStamp || '');
       setMesPhotosValides(report.mesPhotosValides ?? false);
@@ -1751,6 +1783,273 @@ export default function GmaoCorrectionForm({
       setRecommandationPreconisationRemplacement(report.recommandationPreconisationRemplacement || report.defibSnapshot?.recommandationPreconisationRemplacement || '');
     }
   }, [report]);
+
+  // Restore scrollTop when reopening a recovered draft
+  useEffect(() => {
+    if (!isWebapp || !report?._isRecoveredDraft) return;
+    const savedScrollTop = Number(report._draftScrollTop || 0);
+    if (savedScrollTop <= 0) return;
+    lastScrollTopRef.current = savedScrollTop;
+    const applyScroll = () => {
+      const overlay = document.getElementById('report-form-overlay');
+      if (overlay) {
+        overlay.scrollTop = savedScrollTop;
+      }
+    };
+    const raf = window.requestAnimationFrame(applyScroll);
+    const t1 = window.setTimeout(applyScroll, 60);
+    const t2 = window.setTimeout(applyScroll, 220);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, []);
+
+  // Build and emit draft payload for crash/close recovery in WebApp
+  const buildDraftPayloadRef = useRef<() => any>(() => null);
+  buildDraftPayloadRef.current = () => {
+    const cleanIdent = String(
+      snapshot?.identifiant || report?.defibIdentifiant || report?.defibSnapshot?.identifiant || ''
+    ).trim();
+    return {
+      ...(report || {}),
+      id: report?.id || `DRAFT-${Date.now()}`,
+      _isRecoveredDraft: true,
+      _draftActiveSection: activeSection,
+      _draftScrollTop: lastScrollTopRef.current,
+      _draftElapsedMs: Math.max(0, Date.now() - formOpenTime.getTime()),
+      defibId: selectedDefibId || snapshot?.id || report?.defibId || '',
+      defibIdentifiant: cleanIdent,
+      identifiant: cleanIdent,
+      numeroSerie: snapshot?.numeroSerie || report?.numeroSerie || '',
+      defibSnapshot: {
+        ...snapshot,
+        identifiant: cleanIdent,
+      },
+      diagnosticCommentaire: snapshot?.commentaire || '',
+      commentaireInterne: snapshot?.commentaireInterne || '',
+      clientPinCode,
+      reportTitle,
+      title: reportTitle,
+      techName,
+      date: interventionDate,
+      siteMission: missionSite,
+      missionSite,
+      photoUrl,
+      photoArriereUrl,
+      photoResultatTestUrl,
+      interventionReference,
+      autreReference,
+      isCreatingNewMaterial,
+      newMaterialType,
+      autoPopulatedFields,
+      materielInterchangeClient,
+      commentaireChangement,
+      fournitureMaterielPret,
+      selectionMaterielPrete,
+      attachments,
+      kitPeremption,
+      typeDefibrillateur,
+      coffretRemplace,
+      selectionCoffretRemplace,
+      customCoffretRemplace,
+      origineCoffretInstalle,
+      equipeAlarme,
+      alarme,
+      armoireConnectee,
+      dispositifHandicap,
+      signaletiqueConforme,
+      installeExterieur,
+      electrodeARemplacee,
+      selectionElectrodeARemplacee,
+      customElectrodeARemplacee,
+      origineElectrodeAInstallee,
+      electrodeAConformeSante,
+      electrodeASecoursRemplacee,
+      selectionElectrodeASecoursRemplacee,
+      customElectrodeASecoursRemplacee,
+      origineElectrodeSecoursAInstallee,
+      electrodePRemplacee,
+      selectionElectrodePRemplacee,
+      customElectrodePRemplacee,
+      origineElectrodePInstallee,
+      electrodePConformeSante,
+      electrodePSecoursRemplacee,
+      selectionElectrodePSecoursRemplacee,
+      customElectrodePSecoursRemplacee,
+      origineElectrodeSecoursPInstallee,
+      batterieRemplacee,
+      selectionBatterieRemplacee,
+      customBatterieRemplacee,
+      origineBatterieInstallee,
+      pourcentageChargeNouvelleBatterie,
+      batterieConformeSante,
+      techConformeArrivee,
+      techCommentaireArrivee,
+      techVoyantConforme,
+      techEquipeMessageNumerique,
+      techMessageNumeroConforme,
+      techGuidesVocauxConformes,
+      techNettoyage,
+      techBranchementElectrodesConforme,
+      techDelivranceChocConforme,
+      techResultatJoulesElectrodeA,
+      techResultatJoulesElectrodeA2,
+      kitTrousseSecoursPresent,
+      kitCiseauxPresents,
+      kitMasquePresent,
+      kitPeremptionMasque,
+      kitServiettesPresentes,
+      kitPeremptionServiettes,
+      kitGantsPresents,
+      kitRasoirPresent,
+      kitSecoursRemplaceOuAjoute,
+      selectionKitSecoursRemplace,
+      customKitSecoursRemplace,
+      origineKitSecoursInstalle,
+      fichierDonneesRecupere,
+      emettreFactureBrouillon,
+      serviceEmettreId,
+      techSignature,
+      endTimeStamp,
+      mesPhotosValides,
+      etiquetteObligatoireConforme,
+      scelleConforme,
+      stickerEntrepriseApplique,
+      demandeDevis,
+      devisArticlesSelectionnes,
+      devisAutreInfo,
+      devisPriorite,
+      preconisationRemplacement,
+      recommandationPreconisationRemplacement,
+    };
+  };
+
+  useEffect(() => {
+    if (!isWebapp || !onDraftChange) return;
+    const payload = buildDraftPayloadRef.current();
+    if (payload) {
+      onDraftChange(payload);
+    }
+  }, [
+    isWebapp,
+    selectedDefibId,
+    snapshot,
+    activeSection,
+    clientPinCode,
+    reportTitle,
+    techName,
+    interventionDate,
+    missionSite,
+    photoUrl,
+    photoArriereUrl,
+    photoResultatTestUrl,
+    interventionReference,
+    autreReference,
+    isCreatingNewMaterial,
+    newMaterialType,
+    autoPopulatedFields,
+    materielInterchangeClient,
+    commentaireChangement,
+    fournitureMaterielPret,
+    selectionMaterielPrete,
+    attachments,
+    kitPeremption,
+    typeDefibrillateur,
+    coffretRemplace,
+    selectionCoffretRemplace,
+    customCoffretRemplace,
+    origineCoffretInstalle,
+    equipeAlarme,
+    alarme,
+    armoireConnectee,
+    dispositifHandicap,
+    signaletiqueConforme,
+    installeExterieur,
+    electrodeARemplacee,
+    selectionElectrodeARemplacee,
+    customElectrodeARemplacee,
+    origineElectrodeAInstallee,
+    electrodeAConformeSante,
+    electrodeASecoursRemplacee,
+    selectionElectrodeASecoursRemplacee,
+    customElectrodeASecoursRemplacee,
+    origineElectrodeSecoursAInstallee,
+    electrodePRemplacee,
+    selectionElectrodePRemplacee,
+    customElectrodePRemplacee,
+    origineElectrodePInstallee,
+    electrodePConformeSante,
+    electrodePSecoursRemplacee,
+    selectionElectrodePSecoursRemplacee,
+    customElectrodePSecoursRemplacee,
+    origineElectrodeSecoursPInstallee,
+    batterieRemplacee,
+    selectionBatterieRemplacee,
+    customBatterieRemplacee,
+    origineBatterieInstallee,
+    pourcentageChargeNouvelleBatterie,
+    batterieConformeSante,
+    techConformeArrivee,
+    techCommentaireArrivee,
+    techVoyantConforme,
+    techEquipeMessageNumerique,
+    techMessageNumeroConforme,
+    techGuidesVocauxConformes,
+    techNettoyage,
+    techBranchementElectrodesConforme,
+    techDelivranceChocConforme,
+    techResultatJoulesElectrodeA,
+    techResultatJoulesElectrodeA2,
+    kitTrousseSecoursPresent,
+    kitCiseauxPresents,
+    kitMasquePresent,
+    kitPeremptionMasque,
+    kitServiettesPresentes,
+    kitPeremptionServiettes,
+    kitGantsPresents,
+    kitRasoirPresent,
+    kitSecoursRemplaceOuAjoute,
+    selectionKitSecoursRemplace,
+    customKitSecoursRemplace,
+    origineKitSecoursInstalle,
+    fichierDonneesRecupere,
+    emettreFactureBrouillon,
+    serviceEmettreId,
+    techSignature,
+    endTimeStamp,
+    mesPhotosValides,
+    etiquetteObligatoireConforme,
+    scelleConforme,
+    stickerEntrepriseApplique,
+    demandeDevis,
+    devisArticlesSelectionnes,
+    devisAutreInfo,
+    devisPriorite,
+    preconisationRemplacement,
+    recommandationPreconisationRemplacement,
+  ]);
+
+  useEffect(() => {
+    if (!isWebapp || isReduced || !onDraftChange) return;
+    const overlay = document.getElementById('report-form-overlay');
+    if (!overlay) return;
+    let scrollTimer: number | null = null;
+    const handleOverlayScroll = () => {
+      lastScrollTopRef.current = overlay.scrollTop;
+      if (scrollTimer) window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(() => {
+        const payload = buildDraftPayloadRef.current();
+        if (payload) onDraftChange(payload);
+      }, 250);
+    };
+    overlay.addEventListener('scroll', handleOverlayScroll, { passive: true });
+    return () => {
+      overlay.removeEventListener('scroll', handleOverlayScroll);
+      if (scrollTimer) window.clearTimeout(scrollTimer);
+    };
+  }, [isWebapp, isReduced]);
 
   const adjustAutoTextareaHeight = (el: HTMLTextAreaElement | null) => {
     if (!el) return;

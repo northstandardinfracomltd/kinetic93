@@ -867,18 +867,29 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
   const openMobileChannelSystemDropdownAt = (clientX: number, clientY: number) => {
     if (!isTechWebapp) return;
     setMobileChannelDropdownPos({ x: clientX, y: clientY });
-    setShowMobileChannelDropdown(true);
-    setTimeout(() => {
-      const sel = mobileChannelSelectRef.current;
-      if (sel) {
+    const sel = mobileChannelSelectRef.current;
+    if (sel) {
+      sel.style.left = `${clientX}px`;
+      sel.style.top = `${clientY}px`;
+      try {
+        sel.focus({ preventScroll: true });
+      } catch (_) {
         try {
           sel.focus();
-          if (typeof (sel as any).showPicker === 'function') {
-            (sel as any).showPicker();
-          }
-        } catch (_) {}
+        } catch (__) {}
       }
-    }, 20);
+      try {
+        if (typeof (sel as any).showPicker === 'function') {
+          (sel as any).showPicker();
+          return;
+        }
+      } catch (_) {}
+      try {
+        sel.click();
+        const evt = new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window });
+        sel.dispatchEvent(evt);
+      } catch (_) {}
+    }
   };
 
   const isTargetExcludedFromDoubleTap = (target: EventTarget | null): boolean => {
@@ -907,12 +918,6 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
     if (dt > 30 && dt < 420 && dx < 65 && dy < 65) {
       lastTapRef.current = { time: 0, x: 0, y: 0 };
       openMobileChannelSystemDropdownAt(touch.clientX, touch.clientY);
-      try {
-        const sel = mobileChannelSelectRef.current;
-        if (sel && typeof (sel as any).showPicker === 'function') {
-          (sel as any).showPicker();
-        }
-      } catch (_) {}
     } else {
       lastTapRef.current = { time: now, x: touch.clientX, y: touch.clientY };
     }
@@ -1223,6 +1228,7 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
       {isTechWebapp && (
         <select
           ref={mobileChannelSelectRef}
+          id="mobile-channel-system-select"
           value={activeChannel}
           onChange={(e) => {
             setActiveChannel(e.target.value as MessageChannel);
@@ -1235,9 +1241,12 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             pointerEvents: 'none',
             width: '1px',
             height: '1px',
+            border: 'none',
+            padding: 0,
+            margin: 0,
             top: mobileChannelDropdownPos ? `${mobileChannelDropdownPos.y}px` : '50%',
             left: mobileChannelDropdownPos ? `${mobileChannelDropdownPos.x}px` : '50%',
-            zIndex: -1,
+            zIndex: 99999,
           }}
         >
           {MESSAGE_CHANNELS.map((canal) => (
@@ -1246,51 +1255,6 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             </option>
           ))}
         </select>
-      )}
-
-      {isTechWebapp && showMobileChannelDropdown && (
-        <div
-          id="mobile-channel-dropdown-container"
-          className="fixed inset-0 z-[99998] flex items-center justify-center p-4"
-          style={{ backgroundColor: 'rgba(15, 23, 42, 0.25)' }}
-          onClick={() => setShowMobileChannelDropdown(false)}
-        >
-          <div
-            ref={mobileChannelDropdownRef}
-            className="w-full max-w-[340px] rounded-2xl p-3 animate-scaleIn"
-            style={{
-              backgroundColor: '#f5f7fa',
-              border: 'none',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.16)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <select
-              id="mobile-channel-system-select"
-              value={activeChannel}
-              onChange={(e) => {
-                setActiveChannel(e.target.value as MessageChannel);
-                setShowMobileChannelDropdown(false);
-              }}
-              className="w-full outline-none cursor-pointer"
-              style={{
-                backgroundColor: '#ffffff',
-                color: '#000000',
-                fontSize: '18px',
-                padding: '12px 14px',
-                borderRadius: '13px',
-                border: 'none',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-              }}
-            >
-              {MESSAGE_CHANNELS.map((canal) => (
-                <option key={canal} value={canal}>
-                  {canal}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
       )}
 
       {/* ONBOARDING POPUP ("LE SAVIEZ-VOUS ?") ON OPENING MESSAGES TAB IN TECH WEBAPP */}

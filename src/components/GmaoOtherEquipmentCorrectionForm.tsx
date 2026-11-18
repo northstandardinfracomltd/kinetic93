@@ -23,6 +23,7 @@ interface GmaoOtherEquipmentCorrectionFormProps {
   onToggleMinimize?: () => void;
   isFromInterventionMission?: boolean;
   hideTimer?: boolean;
+  onDraftChange?: (draftOtherEq: any) => void;
 }
 
 const CODE39_PATTERNS: Record<string, string> = {
@@ -255,7 +256,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
   isMinimized,
   onToggleMinimize,
   isFromInterventionMission = false,
-  hideTimer = false
+  hideTimer = false,
+  onDraftChange
 }: GmaoOtherEquipmentCorrectionFormProps) {
   const [internalMinimized, setInternalMinimized] = useState(false);
   const isReduced = isMinimized !== undefined ? isMinimized : internalMinimized;
@@ -265,9 +267,14 @@ export default function GmaoOtherEquipmentCorrectionForm({
   const [hasConfirmedEquipmentSwitch, setHasConfirmedEquipmentSwitch] = useState(false);
   const [showSwitchEquipmentConfirmModal, setShowSwitchEquipmentConfirmModal] = useState(false);
   const otherEqSelectRef = useRef<HTMLSelectElement | null>(null);
+  const lastScrollTopRef = useRef<number>(Number(otherEquipment?._draftScrollTop || 0));
 
   const [currentTickTime, setCurrentTickTime] = useState(() => new Date());
-  const [formStartTime] = useState(() => new Date());
+  const [formStartTime] = useState(() =>
+    otherEquipment?._draftElapsedMs && Number(otherEquipment._draftElapsedMs) > 0
+      ? new Date(Date.now() - Number(otherEquipment._draftElapsedMs))
+      : new Date()
+  );
 
   useEffect(() => {
     if (!isWebapp) return;
@@ -448,6 +455,8 @@ export default function GmaoOtherEquipmentCorrectionForm({
       
       setExpirationGarantie(otherEquipment.expirationGarantie || '');
       setFabrication(otherEquipment.fabrication || '');
+      setPreconisationRemplacement(Boolean(otherEquipment.preconisationRemplacement));
+      setRecommandationPreconisationRemplacement(otherEquipment.recommandationPreconisationRemplacement || '');
       setMiseEnService(otherEquipment.miseEnService || '');
       setDerniereMaintenance(otherEquipment.derniereMaintenance || '');
       setSortieUsine(otherEquipment.sortieUsine || '');
@@ -464,6 +473,141 @@ export default function GmaoOtherEquipmentCorrectionForm({
       setEndTimeStamp(otherEquipment.endTimeStamp || '');
     }
   }, [otherEquipment, clients]);
+
+  useEffect(() => {
+    if (!isWebapp || !otherEquipment?._isRecoveredDraft) return;
+    const savedScrollTop = Number(otherEquipment._draftScrollTop || 0);
+    if (savedScrollTop <= 0) return;
+    lastScrollTopRef.current = savedScrollTop;
+    const applyScroll = () => {
+      const overlay = document.getElementById('report-form-overlay');
+      if (overlay) {
+        overlay.scrollTop = savedScrollTop;
+      }
+    };
+    const raf = window.requestAnimationFrame(applyScroll);
+    const t1 = window.setTimeout(applyScroll, 60);
+    const t2 = window.setTimeout(applyScroll, 220);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, []);
+
+  const buildOtherEqDraftRef = useRef<() => any>(() => null);
+  buildOtherEqDraftRef.current = () => ({
+    ...(otherEquipment || {}),
+    _isRecoveredDraft: true,
+    _draftScrollTop: lastScrollTopRef.current,
+    _draftElapsedMs: Math.max(0, Date.now() - formStartTime.getTime()),
+    clientId,
+    nomPrenomSite,
+    telephoneSite,
+    emailSite,
+    contrat,
+    nomContrat,
+    referenceContrat,
+    debutContrat,
+    finContrat,
+    numeroVoie,
+    ville,
+    codePostal,
+    region,
+    pays,
+    latitude,
+    longitude,
+    aideAcces,
+    accesPermanent,
+    accesJoursOuvres,
+    accesWeekend,
+    installeExterieur,
+    expirationGarantie,
+    fabrication,
+    preconisationRemplacement,
+    recommandationPreconisationRemplacement,
+    miseEnService,
+    derniereMaintenance,
+    sortieUsine,
+    prochaineMaintenance,
+    categorie,
+    identifiant: (categorie === 'Purificateur d’air' && specifiques.serie) ? specifiques.serie : (identifiant || otherEquipment?.identifiant || ''),
+    specifiques,
+    photoUrl,
+    photoGlobaleUrl,
+    photoArriereUrl,
+    photoLedsUrl,
+    techSignature,
+    endTimeStamp,
+  });
+
+  useEffect(() => {
+    if (!isWebapp || !onDraftChange) return;
+    const payload = buildOtherEqDraftRef.current();
+    if (payload) {
+      onDraftChange(payload);
+    }
+  }, [
+    isWebapp,
+    clientId,
+    nomPrenomSite,
+    telephoneSite,
+    emailSite,
+    contrat,
+    nomContrat,
+    referenceContrat,
+    debutContrat,
+    finContrat,
+    numeroVoie,
+    ville,
+    codePostal,
+    region,
+    pays,
+    latitude,
+    longitude,
+    aideAcces,
+    accesPermanent,
+    accesJoursOuvres,
+    accesWeekend,
+    installeExterieur,
+    expirationGarantie,
+    fabrication,
+    preconisationRemplacement,
+    recommandationPreconisationRemplacement,
+    miseEnService,
+    derniereMaintenance,
+    sortieUsine,
+    prochaineMaintenance,
+    categorie,
+    identifiant,
+    specifiques,
+    photoUrl,
+    photoGlobaleUrl,
+    photoArriereUrl,
+    photoLedsUrl,
+    techSignature,
+    endTimeStamp,
+  ]);
+
+  useEffect(() => {
+    if (!isWebapp || isReduced || !onDraftChange) return;
+    const overlay = document.getElementById('report-form-overlay');
+    if (!overlay) return;
+    let scrollTimer: number | null = null;
+    const handleOverlayScroll = () => {
+      lastScrollTopRef.current = overlay.scrollTop;
+      if (scrollTimer) window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(() => {
+        const payload = buildOtherEqDraftRef.current();
+        if (payload) onDraftChange(payload);
+      }, 250);
+    };
+    overlay.addEventListener('scroll', handleOverlayScroll, { passive: true });
+    return () => {
+      overlay.removeEventListener('scroll', handleOverlayScroll);
+      if (scrollTimer) window.clearTimeout(scrollTimer);
+    };
+  }, [isWebapp, isReduced]);
 
   const handleEqLookupChange = (val: string) => {
     setErrorText('');

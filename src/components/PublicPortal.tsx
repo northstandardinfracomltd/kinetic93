@@ -71,7 +71,7 @@ import { getCarrierTrackingUrl } from "./ExpeditionsTab";
 import EmargementsTab from "./EmargementsTab";
 import { REGIONS_FRANCAISES, INITIAL_TENANT_MESSAGES, getLocationCustomName } from "../utils";
 import { CanalMessagesSidePane } from "./CanalMessagesSidePane";
-import { idbSet } from "../idb";
+import { idbSet, idbGet, idbDelete } from "../idb";
 import { getRegionsForCountry } from "../utils/regions";
 import { getLanguage, t } from "../utils/translate";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
@@ -94,6 +94,7 @@ import { PlanningTab } from "./PlanningTab";
 import { getMonthlyWorkingDaysData, generateMonthlyPDFHTML } from "./TempsTab";
 import HelpBubble from "./HelpBubble";
 import TopBarProgress from "./TopBarProgress";
+import { SearchSidePane } from "./SearchSidePane";
 import { useNetworkStatus } from "../utils/useNetworkStatus";
 import {
   preloadSounds,
@@ -2824,6 +2825,12 @@ export default function PublicPortal({
     });
   }, [effectiveTechExpeditionsList]);
 
+  const [activeTechTraceExpeditionSidePane, setActiveTechTraceExpeditionSidePane] = useState<
+    | { mode: "new"; traceIndex: number; effLoc: string; selectedValue: string }
+    | { mode: "existing"; traceId: string; selectedValue: string }
+    | null
+  >(null);
+
   const eligibleTechExistingExpeditions = useMemo(() => {
     return (effectiveTechExpeditionsList || []).filter((exp) => {
       const st = String(exp.statut || "Aucune information").trim().toLowerCase();
@@ -4900,6 +4907,175 @@ export default function PublicPortal({
   const [selectedOtherEquipmentUnique, setSelectedOtherEquipmentUnique] =
     useState<any | null>(null);
   const [reportToEdit, setReportToEdit] = useState<GeneratedReport | null>(null);
+
+  // Recoverable in-progress report draft (single latest report across Interventions & Rapports PDF)
+  const GENERIC_REPORT_DRAFT_KEY = "defib_active_tech_report_draft";
+  const getReportDraftCacheKey = () => {
+    const tid =
+      propTenantId ||
+      authenticatedUser?.envId ||
+      (authenticatedUser as any)?.tenantId ||
+      (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+      "demo";
+    const techId = (authenticatedUser?.email || authenticatedUser?.name || "tech")
+      .trim()
+      .toLowerCase();
+    return `defib_${tid}_tech_report_draft_${techId}`;
+  };
+
+  const [recoverableReportDraft, setRecoverableReportDraft] = useState<any | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const tid =
+        propTenantId ||
+        (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+        "demo";
+      let techId = "tech";
+      const sessionRaw = localStorage.getItem("defib_active_tech_session");
+      if (sessionRaw) {
+        const parsedSession = JSON.parse(sessionRaw);
+        techId = (parsedSession?.email || parsedSession?.name || "tech").trim().toLowerCase();
+      }
+      const specificRaw = localStorage.getItem(`defib_${tid}_tech_report_draft_${techId}`);
+      if (specificRaw) return JSON.parse(specificRaw);
+      const genericRaw = localStorage.getItem(GENERIC_REPORT_DRAFT_KEY);
+      if (genericRaw) return JSON.parse(genericRaw);
+    } catch (_) {}
+    return null;
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadDraftFromCache = async () => {
+      try {
+        const specificKey = getReportDraftCacheKey();
+        let localDraft: any = null;
+        try {
+          const raw =
+            localStorage.getItem(specificKey) ||
+            localStorage.getItem(GENERIC_REPORT_DRAFT_KEY);
+          if (raw) localDraft = JSON.parse(raw);
+        } catch (_) {}
+
+        const idbSpecific = await idbGet<any>(specificKey);
+        const idbGeneric = await idbGet<any>(GENERIC_REPORT_DRAFT_KEY);
+        const idbDraft =
+          idbSpecific && idbGeneric
+            ? (idbSpecific.updatedAt || 0) >= (idbGeneric.updatedAt || 0)
+              ? idbSpecific
+              : idbGeneric
+            : idbSpecific || idbGeneric;
+
+        const chosen =
+          idbDraft && localDraft
+            ? (idbDraft.updatedAt || 0) >= (localDraft.updatedAt || 0)
+              ? idbDraft
+              : localDraft
+            : idbDraft || localDraft || null;
+
+        if (!cancelled && chosen) {
+          setRecoverableReportDraft(chosen);
+        }
+      } catch (_) {}
+    };
+    loadDraftFromCache();
+    return () => {
+      cancelled = true;
+    };
+  }, [authenticatedUser?.email, authenticatedUser?.name, propTenantId]);
+
+  const saveReportDraftToCache = (draftPayload: any) => {
+    setRecoverableReportDraft(draftPayload);
+    const specificKey = getReportDraftCacheKey();
+    idbSet(specificKey, draftPayload).catch(() => {});
+    idbSet(GENERIC_REPORT_DRAFT_KEY, draftPayload).catch(() => {});
+    try {
+      const serialized = JSON.stringify(draftPayload);
+      localStorage.setItem(specificKey, serialized);
+      localStorage.setItem(GENERIC_REPORT_DRAFT_KEY, serialized);
+    } catch (_) {
+      // Fallback without heavy base64 photos if localStorage quota is exceeded (full data remains in IndexedDB)
+      try {
+        const lightPayload = {
+          ...draftPayload,
+          reportData: draftPayload.reportData
+            ? {
+                ...draftPayload.reportData,
+                photoAvantUrl: "",
+                photoApresUrl: "",
+                photo1Url: "",
+                photo2Url: "",
+              }
+            : null,
+        };
+        const lightSerialized = JSON.stringify(lightPayload);
+        localStorage.setItem(specificKey, lightSerialized);
+        localStorage.setItem(GENERIC_REPORT_DRAFT_KEY, lightSerialized);
+      } catch (_) {}
+    }
+  };
+
+  const clearReportDraftFromCache = () => {
+    setRecoverableReportDraft(null);
+    const specificKey = getReportDraftCacheKey();
+    idbDelete(specificKey).catch(() => {});
+    idbDelete(GENERIC_REPORT_DRAFT_KEY).catch(() => {});
+    try {
+      localStorage.removeItem(specificKey);
+      localStorage.removeItem(GENERIC_REPORT_DRAFT_KEY);
+    } catch (_) {}
+  };
+
+  const formatDraftDateDdMmYyyy = (rawDate?: string, fallbackTs?: number): string => {
+    if (rawDate && typeof rawDate === "string") {
+      const trimmed = rawDate.trim();
+      const slashMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if (slashMatch) return `${slashMatch[1]}/${slashMatch[2]}/${slashMatch[3]}`;
+      const dashMatch = trimmed.match(/^(\d{2})-(\d{2})-(\d{4})/);
+      if (dashMatch) return `${dashMatch[1]}/${dashMatch[2]}/${dashMatch[3]}`;
+      const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+    }
+    const d = fallbackTs ? new Date(fallbackTs) : new Date();
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  const handleResumeRecoverableReportDraft = () => {
+    if (!recoverableReportDraft) return;
+    playTechTapSound();
+    setIsEditingFromRapportsPdf(Boolean(recoverableReportDraft.isEditingFromRapportsPdf));
+    setReportActiveTourId(recoverableReportDraft.reportActiveTourId || "");
+    setReportActivePassageNum(recoverableReportDraft.reportActivePassageNum ?? null);
+
+    if (recoverableReportDraft.isOtherEquipment && recoverableReportDraft.otherEquipmentData) {
+      setSelectedOtherEquipmentUnique({
+        ...recoverableReportDraft.otherEquipmentData,
+        _isRecoveredDraft: true,
+      });
+      setReportToEdit(recoverableReportDraft.reportData || null);
+      setSelectedDefibId("");
+    } else {
+      setSelectedOtherEquipmentUnique(null);
+      const defibId =
+        recoverableReportDraft.selectedDefibId ||
+        recoverableReportDraft.reportData?.defibId ||
+        "";
+      setSelectedDefibId(defibId);
+      if (defibId) {
+        const found = defibrillateurs.find((d) => d.id === defibId);
+        if (found) setSelectedDefibData(found);
+      }
+      setReportToEdit({
+        ...(recoverableReportDraft.reportData || {}),
+        _isRecoveredDraft: true,
+      });
+    }
+    setIsReportOverlayMinimized(false);
+    setIsReportOverlayOpen(true);
+  };
   const [isLotScannerOpen, setIsLotScannerOpen] = useState(false);
   const [isSerieScannerOpen, setIsSerieScannerOpen] = useState(false);
   const [isLotAScannerOpen, setIsLotAScannerOpen] = useState(false);
@@ -9536,7 +9712,29 @@ export default function PublicPortal({
                     onSelectOtherEquipment={(otherEq) => {
                       setSelectedOtherEquipmentUnique(otherEq);
                     }}
+                    onDraftChange={(draftOtherEq) => {
+                      const ident = String(
+                        draftOtherEq?.identifiant ||
+                          selectedOtherEquipmentUnique?.identifiant ||
+                          ""
+                      ).trim();
+                      saveReportDraftToCache({
+                        isOtherEquipment: true,
+                        otherEquipmentData: draftOtherEq,
+                        reportData: reportToEdit,
+                        selectedDefibId: "",
+                        isEditingFromRapportsPdf,
+                        reportActiveTourId,
+                        reportActivePassageNum,
+                        identifiantMateriel: ident,
+                        dateStr:
+                          draftOtherEq?.derniereMaintenance ||
+                          new Date().toLocaleDateString("fr-FR"),
+                        updatedAt: Date.now(),
+                      });
+                    }}
                     onCancel={() => {
+                      clearReportDraftFromCache();
                       setIsReportOverlayOpen(false);
                       setIsReportOverlayMinimized(false);
                       setIsEditingFromRapportsPdf(false);
@@ -9545,6 +9743,7 @@ export default function PublicPortal({
                       setReportActivePassageNum(null);
                     }}
                     onSave={(updatedReport) => {
+                      clearReportDraftFromCache();
                       const reportId = "REP-" + Date.now();
                       const activeTidForRef =
                         techTenantId ||
@@ -9675,7 +9874,36 @@ export default function PublicPortal({
                       localStorage.getItem("defib_tenant_id") ||
                       "demo"
                     }
+                    onDraftChange={(draftReport) => {
+                      const matchedDefib = defibrillateurs.find(
+                        (d) => d.id === (draftReport?.defibId || selectedDefibId)
+                      );
+                      const ident = String(
+                        draftReport?.defibSnapshot?.identifiant ||
+                          draftReport?.defibIdentifiant ||
+                          draftReport?.identifiant ||
+                          matchedDefib?.identifiant ||
+                          reportToEdit?.defibSnapshot?.identifiant ||
+                          ""
+                      ).trim();
+                      saveReportDraftToCache({
+                        isOtherEquipment: false,
+                        otherEquipmentData: null,
+                        reportData: draftReport,
+                        selectedDefibId: draftReport?.defibId || selectedDefibId || "",
+                        isEditingFromRapportsPdf,
+                        reportActiveTourId,
+                        reportActivePassageNum,
+                        identifiantMateriel: ident,
+                        dateStr:
+                          draftReport?.date ||
+                          reportToEdit?.date ||
+                          new Date().toLocaleDateString("fr-FR"),
+                        updatedAt: Date.now(),
+                      });
+                    }}
                     onCancel={() => {
+                      clearReportDraftFromCache();
                       setIsReportOverlayOpen(false);
                       setIsReportOverlayMinimized(false);
                       setIsEditingFromRapportsPdf(false);
@@ -9686,6 +9914,7 @@ export default function PublicPortal({
                       setReportActivePassageNum(null);
                     }}
                     onSave={(updatedReport) => {
+                      clearReportDraftFromCache();
                       const activeTidForRef =
                         techTenantId ||
                         authenticatedUser?.envId ||
@@ -11756,6 +11985,42 @@ export default function PublicPortal({
                 {t("Vous n’avez pas de pointage en cours.")}
               </div>
             )}
+
+            {/* Recovery banner when an unsubmitted report draft is cached and the report overlay is not currently open */}
+            {!isReportOverlayOpen && recoverableReportDraft && (() => {
+              const identifiantMateriel =
+                String(
+                  recoverableReportDraft.identifiantMateriel ||
+                    recoverableReportDraft.reportData?.defibSnapshot?.identifiant ||
+                    recoverableReportDraft.reportData?.defibIdentifiant ||
+                    recoverableReportDraft.otherEquipmentData?.identifiant ||
+                    defibrillateurs.find((d) => d.id === recoverableReportDraft.selectedDefibId)?.identifiant ||
+                    "sans identifiant"
+                ).trim() || "sans identifiant";
+              const formattedDate = formatDraftDateDdMmYyyy(
+                recoverableReportDraft.dateStr || recoverableReportDraft.reportData?.date,
+                recoverableReportDraft.updatedAt
+              );
+              return (
+                <div
+                  onClick={handleResumeRecoverableReportDraft}
+                  className="text-white text-center font-semibold select-none shadow-xs font-sans shrink-0 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+                  style={{
+                    background: "rgb(210 45 12)",
+                    color: "#ffffff",
+                    fontSize: "14px",
+                    padding: "12px 0px",
+                    cursor: "pointer",
+                    borderTop: "1px solid white",
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  title={t("Reprendre le rapport en cours d’édition")}
+                >
+                  {`Reprendre le rapport ${identifiantMateriel} ${formattedDate}.`}
+                </div>
+              );
+            })()}
 
             {/* Top Single-Line Horizontally Scrollable Header with Tenant Pill and Icon Nav Bar */}
             {(() => {
@@ -16795,8 +17060,8 @@ export default function PublicPortal({
                                   </span>
                                 </div>
 
-                                <div className="flex flex-wrap items-center gap-2.5">
-                                  <div className="relative inline-flex">
+                                <div className="flex flex-wrap items-center gap-2.5 min-w-0 max-w-full w-full">
+                                  <div className="relative inline-flex shrink-0">
                                     <button
                                       type="button"
                                       style={{
@@ -16853,6 +17118,7 @@ export default function PublicPortal({
                                           );
                                         }
                                       }}
+                                      className="w-full max-w-full min-w-0 truncate"
                                       style={{
                                         padding: "9px 16px",
                                         borderRadius: "13px",
@@ -16862,6 +17128,13 @@ export default function PublicPortal({
                                         fontSize: "18px",
                                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                         cursor: "pointer",
+                                        width: "100%",
+                                        maxWidth: "100%",
+                                        minWidth: 0,
+                                        boxSizing: "border-box",
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
                                       }}
                                     >
                                       <option value="">
@@ -17101,64 +17374,116 @@ export default function PublicPortal({
                                                 </option>
                                               </select>
                                               {isExpedieSit && (
-                                                <select
-                                                  value={selectedExpVal}
-                                                  onChange={(e) => {
-                                                    const chosenExp = e.target.value;
-                                                    const updated = [
-                                                      ...pendingNewDistribTraceabilities,
-                                                    ];
-                                                    updated[idx] = {
-                                                      ...updated[idx],
-                                                      emplacement: effLoc,
-                                                      situation: (chosenExp
-                                                        ? `Expédié - ${chosenExp}`
-                                                        : "Expédié") as any,
-                                                    };
-                                                    setPendingNewDistribTraceabilities(updated);
-                                                  }}
-                                                  style={{
-                                                    backgroundColor: "#ffffff",
-                                                    color: "#000000",
-                                                    fontSize: "18px",
-                                                    borderRadius: "13px",
-                                                    border: "none",
-                                                    padding: "10px 12px",
-                                                    textAlign: "center",
-                                                    textAlignLast: "center",
-                                                    width: "100%",
-                                                    boxSizing: "border-box",
-                                                    appearance: "none",
-                                                    WebkitAppearance: "none",
-                                                    MozAppearance: "none",
-                                                  }}
-                                                  className="w-full bg-white text-black font-sans mt-1"
-                                                >
-                                                  <option value="">
-                                                    Sélectionnez une expédition.
-                                                  </option>
-                                                  {selectedExpVal &&
-                                                    !eligibleTechSituationExpeditions.some(
-                                                      (exp) =>
-                                                        String(
-                                                          exp.reference || exp.id,
-                                                        ).trim() === selectedExpVal,
-                                                    ) && (
-                                                      <option value={selectedExpVal}>
-                                                        {selectedExpVal}
-                                                      </option>
-                                                    )}
-                                                  {eligibleTechSituationExpeditions.map((exp) => {
-                                                    const refVal = String(
-                                                      exp.reference || exp.id,
-                                                    ).trim();
-                                                    return (
-                                                      <option key={exp.id} value={refVal}>
-                                                        {refVal}
-                                                      </option>
-                                                    );
-                                                  })}
-                                                </select>
+                                                <>
+                                                  <div className="flex items-center justify-end mt-1.5 mb-0.5">
+                                                    <button
+                                                      type="button"
+                                                      onClick={() =>
+                                                        setActiveTechTraceExpeditionSidePane({
+                                                          mode: "new",
+                                                          traceIndex: idx,
+                                                          effLoc,
+                                                          selectedValue: selectedExpVal,
+                                                        })
+                                                      }
+                                                      className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                                      style={{ textDecoration: "none" }}
+                                                    >
+                                                      Rechercher
+                                                    </button>
+                                                  </div>
+                                                  <select
+                                                    value={selectedExpVal}
+                                                    onChange={(e) => {
+                                                      const chosenExp = e.target.value;
+                                                      const updated = [
+                                                        ...pendingNewDistribTraceabilities,
+                                                      ];
+                                                      updated[idx] = {
+                                                        ...updated[idx],
+                                                        emplacement: effLoc,
+                                                        situation: (chosenExp
+                                                          ? `Expédié - ${chosenExp}`
+                                                          : "Expédié") as any,
+                                                      };
+                                                      setPendingNewDistribTraceabilities(updated);
+                                                    }}
+                                                    style={{
+                                                      backgroundColor: "#ffffff",
+                                                      color: "#000000",
+                                                      fontSize: "18px",
+                                                      borderRadius: "13px",
+                                                      border: "none",
+                                                      padding: "10px 12px",
+                                                      textAlign: "center",
+                                                      textAlignLast: "center",
+                                                      width: "100%",
+                                                      maxWidth: "100%",
+                                                      minWidth: 0,
+                                                      boxSizing: "border-box",
+                                                      overflow: "hidden",
+                                                      textOverflow: "ellipsis",
+                                                      whiteSpace: "nowrap",
+                                                      appearance: "none",
+                                                      WebkitAppearance: "none",
+                                                      MozAppearance: "none",
+                                                    }}
+                                                    className="w-full max-w-full min-w-0 truncate bg-white text-black font-sans mt-1"
+                                                  >
+                                                    <option value="">
+                                                      Sélectionnez une expédition.
+                                                    </option>
+                                                    {selectedExpVal &&
+                                                      !eligibleTechSituationExpeditions.some(
+                                                        (exp) =>
+                                                          String(
+                                                            exp.reference || exp.id,
+                                                          ).trim() === selectedExpVal,
+                                                      ) && (() => {
+                                                        const matchedExp = (effectiveTechExpeditionsList || []).find(
+                                                          (exp) =>
+                                                            String(exp.reference || exp.id).trim() === selectedExpVal,
+                                                        );
+                                                        const fallbackLabel = matchedExp
+                                                          ? [
+                                                              matchedExp.reference || matchedExp.id,
+                                                              matchedExp.contexte,
+                                                              matchedExp.expediteur,
+                                                              matchedExp.dateCreation,
+                                                              matchedExp.transporteur,
+                                                            ]
+                                                              .map((v) => String(v || "").trim())
+                                                              .filter(Boolean)
+                                                              .join(", ")
+                                                          : selectedExpVal;
+                                                        return (
+                                                          <option value={selectedExpVal}>
+                                                            {fallbackLabel || selectedExpVal}
+                                                          </option>
+                                                        );
+                                                      })()}
+                                                    {eligibleTechSituationExpeditions.map((exp) => {
+                                                      const refVal = String(
+                                                        exp.reference || exp.id,
+                                                      ).trim();
+                                                      const expLabel = [
+                                                        exp.reference || exp.id,
+                                                        exp.contexte,
+                                                        exp.expediteur,
+                                                        exp.dateCreation,
+                                                        exp.transporteur,
+                                                      ]
+                                                        .map((v) => String(v || "").trim())
+                                                        .filter(Boolean)
+                                                        .join(", ");
+                                                      return (
+                                                        <option key={exp.id || refVal} value={refVal}>
+                                                          {expLabel || refVal}
+                                                        </option>
+                                                      );
+                                                    })}
+                                                  </select>
+                                                </>
                                               )}
                                             </>
                                           );
@@ -17998,8 +18323,8 @@ export default function PublicPortal({
                                     </span>
                                   </div>
 
-                                  <div className="flex flex-wrap items-center gap-2.5">
-                                    <div className="relative inline-flex">
+                                  <div className="flex flex-wrap items-center gap-2.5 min-w-0 max-w-full w-full">
+                                    <div className="relative inline-flex shrink-0">
                                       <button
                                         type="button"
                                         style={{
@@ -18058,6 +18383,7 @@ export default function PublicPortal({
                                             );
                                           }
                                         }}
+                                        className="w-full max-w-full min-w-0 truncate"
                                         style={{
                                           padding: "9px 16px",
                                           borderRadius: "13px",
@@ -18067,6 +18393,13 @@ export default function PublicPortal({
                                           fontSize: "18px",
                                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                           cursor: "pointer",
+                                          width: "100%",
+                                          maxWidth: "100%",
+                                          minWidth: 0,
+                                          boxSizing: "border-box",
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
                                         }}
                                       >
                                         <option value="">
@@ -18294,58 +18627,109 @@ export default function PublicPortal({
                                                   </option>
                                                 </select>
                                                 {isExpedieSit && (
-                                                  <select
-                                                    value={selectedExpVal}
-                                                    onChange={(e) => {
-                                                      const chosenExp = e.target.value;
-                                                      handleUpdateTraceability(trace.id, {
-                                                        situation: (chosenExp
-                                                          ? `Expédié - ${chosenExp}`
-                                                          : "Expédié") as any,
-                                                      });
-                                                    }}
-                                                    style={{
-                                                      backgroundColor: "#ffffff",
-                                                      color: "#000000",
-                                                      fontSize: "18px",
-                                                      borderRadius: "13px",
-                                                      border: "none",
-                                                      padding: "10px 12px",
-                                                      textAlign: "center",
-                                                      textAlignLast: "center",
-                                                      width: "100%",
-                                                      boxSizing: "border-box",
-                                                      appearance: "none",
-                                                      WebkitAppearance: "none",
-                                                      MozAppearance: "none",
-                                                    }}
-                                                    className="w-full bg-white text-black font-sans mt-1"
-                                                  >
-                                                    <option value="">
-                                                      Sélectionnez une expédition.
-                                                    </option>
-                                                    {selectedExpVal &&
-                                                      !eligibleTechSituationExpeditions.some(
-                                                        (exp) =>
-                                                          String(
-                                                            exp.reference || exp.id,
-                                                          ).trim() === selectedExpVal,
-                                                      ) && (
-                                                        <option value={selectedExpVal}>
-                                                          {selectedExpVal}
-                                                        </option>
-                                                      )}
-                                                    {eligibleTechSituationExpeditions.map((exp) => {
-                                                      const refVal = String(
-                                                        exp.reference || exp.id,
-                                                      ).trim();
-                                                      return (
-                                                        <option key={exp.id} value={refVal}>
-                                                          {refVal}
-                                                        </option>
-                                                      );
-                                                    })}
-                                                  </select>
+                                                  <>
+                                                    <div className="flex items-center justify-end mt-1.5 mb-0.5">
+                                                      <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                          setActiveTechTraceExpeditionSidePane({
+                                                            mode: "existing",
+                                                            traceId: trace.id,
+                                                            selectedValue: selectedExpVal,
+                                                          })
+                                                        }
+                                                        className="text-[16px] font-bold text-blue-600 hover:text-blue-800 cursor-pointer normal-case no-underline hover:no-underline"
+                                                        style={{ textDecoration: "none" }}
+                                                      >
+                                                        Rechercher
+                                                      </button>
+                                                    </div>
+                                                    <select
+                                                      value={selectedExpVal}
+                                                      onChange={(e) => {
+                                                        const chosenExp = e.target.value;
+                                                        handleUpdateTraceability(trace.id, {
+                                                          situation: (chosenExp
+                                                            ? `Expédié - ${chosenExp}`
+                                                            : "Expédié") as any,
+                                                        });
+                                                      }}
+                                                      style={{
+                                                        backgroundColor: "#ffffff",
+                                                        color: "#000000",
+                                                        fontSize: "18px",
+                                                        borderRadius: "13px",
+                                                        border: "none",
+                                                        padding: "10px 12px",
+                                                        textAlign: "center",
+                                                        textAlignLast: "center",
+                                                        width: "100%",
+                                                        maxWidth: "100%",
+                                                        minWidth: 0,
+                                                        boxSizing: "border-box",
+                                                        overflow: "hidden",
+                                                        textOverflow: "ellipsis",
+                                                        whiteSpace: "nowrap",
+                                                        appearance: "none",
+                                                        WebkitAppearance: "none",
+                                                        MozAppearance: "none",
+                                                      }}
+                                                      className="w-full max-w-full min-w-0 truncate bg-white text-black font-sans mt-1"
+                                                    >
+                                                      <option value="">
+                                                        Sélectionnez une expédition.
+                                                      </option>
+                                                      {selectedExpVal &&
+                                                        !eligibleTechSituationExpeditions.some(
+                                                          (exp) =>
+                                                            String(
+                                                              exp.reference || exp.id,
+                                                            ).trim() === selectedExpVal,
+                                                        ) && (() => {
+                                                          const matchedExp = (effectiveTechExpeditionsList || []).find(
+                                                            (exp) =>
+                                                              String(exp.reference || exp.id).trim() === selectedExpVal,
+                                                          );
+                                                          const fallbackLabel = matchedExp
+                                                            ? [
+                                                                matchedExp.reference || matchedExp.id,
+                                                                matchedExp.contexte,
+                                                                matchedExp.expediteur,
+                                                                matchedExp.dateCreation,
+                                                                matchedExp.transporteur,
+                                                              ]
+                                                                .map((v) => String(v || "").trim())
+                                                                .filter(Boolean)
+                                                                .join(", ")
+                                                            : selectedExpVal;
+                                                          return (
+                                                            <option value={selectedExpVal}>
+                                                              {fallbackLabel || selectedExpVal}
+                                                            </option>
+                                                          );
+                                                        })()}
+                                                      {eligibleTechSituationExpeditions.map((exp) => {
+                                                        const refVal = String(
+                                                          exp.reference || exp.id,
+                                                        ).trim();
+                                                        const expLabel = [
+                                                          exp.reference || exp.id,
+                                                          exp.contexte,
+                                                          exp.expediteur,
+                                                          exp.dateCreation,
+                                                          exp.transporteur,
+                                                        ]
+                                                          .map((v) => String(v || "").trim())
+                                                          .filter(Boolean)
+                                                          .join(", ");
+                                                        return (
+                                                          <option key={exp.id || refVal} value={refVal}>
+                                                            {expLabel || refVal}
+                                                          </option>
+                                                        );
+                                                      })}
+                                                    </select>
+                                                  </>
                                                 )}
                                               </>
                                             );
@@ -22907,6 +23291,60 @@ export default function PublicPortal({
             />
           );
         })()}
+
+        <SearchSidePane
+          isOpen={!!activeTechTraceExpeditionSidePane}
+          onClose={() => setActiveTechTraceExpeditionSidePane(null)}
+          paneId="tech-trace-expedition-search-side-pane"
+          items={eligibleTechSituationExpeditions.map((exp) => {
+            const refVal = String(exp.reference || exp.id).trim();
+            const expLabel = [
+              exp.reference || exp.id,
+              exp.contexte,
+              exp.expediteur,
+              exp.dateCreation,
+              exp.transporteur,
+            ]
+              .map((v) => String(v || "").trim())
+              .filter(Boolean)
+              .join(", ");
+            return {
+              id: refVal,
+              label: expLabel || refVal,
+              raw: exp,
+            };
+          })}
+          selectedId={activeTechTraceExpeditionSidePane?.selectedValue || ""}
+          onSelect={(item) => {
+            if (!activeTechTraceExpeditionSidePane) return;
+            const chosenExp = item.id;
+            if (activeTechTraceExpeditionSidePane.mode === "new") {
+              const { traceIndex, effLoc } = activeTechTraceExpeditionSidePane;
+              const updated = [...pendingNewDistribTraceabilities];
+              if (updated[traceIndex]) {
+                updated[traceIndex] = {
+                  ...updated[traceIndex],
+                  emplacement: effLoc,
+                  situation: (chosenExp ? `Expédié - ${chosenExp}` : "Expédié") as any,
+                };
+                setPendingNewDistribTraceabilities(updated);
+              }
+            } else {
+              handleUpdateTraceability(activeTechTraceExpeditionSidePane.traceId, {
+                situation: (chosenExp ? `Expédié - ${chosenExp}` : "Expédié") as any,
+              });
+            }
+          }}
+          searchPlaceholder="Entrez votre recherche"
+          searchFilter={(item, q) => {
+            const l = (item.label || "").toLowerCase();
+            const idStr = (item.id || "").toLowerCase();
+            const exp = item.raw;
+            const dest = String(exp?.destinataire || "").toLowerCase();
+            const stat = String(exp?.statut || "").toLowerCase();
+            return l.includes(q) || idStr.includes(q) || dest.includes(q) || stat.includes(q);
+          }}
+        />
       </div>
     </div>
   );
