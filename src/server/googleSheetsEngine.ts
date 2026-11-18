@@ -4604,10 +4604,22 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
 
     merged.conforme = normalizeYesNo(merged.conforme ?? (merged.isConforme === false ? 'Non' : 'Oui'), 'Oui');
     merged.isConforme = merged.conforme === 'Oui';
-    merged.status = merged.status || merged.statut || (merged.validated ? 'Validé' : 'En modération');
-    merged.statut = merged.statut || merged.status;
-    merged.validated = Boolean(merged.validated || /^valid[eé]/i.test(String(merged.status || '')));
-    merged.isUpcoming = Boolean(merged.isUpcoming || merged.status === 'À venir');
+    const rawDateLower = String(merged.date || '').trim().toLowerCase();
+    const isUnexecutedPlaceholderRow =
+      (rawDateLower === 'à venir' || rawDateLower === 'a venir' || rawDateLower === 'a trier' || rawDateLower === 'à trier') &&
+      !String(merged.endTimeStamp || '').trim() &&
+      !String(merged.techSignature || '').trim().startsWith('data:image');
+    if (isUnexecutedPlaceholderRow) {
+      merged.status = 'À venir';
+      merged.statut = 'À venir';
+      merged.validated = false;
+      merged.isUpcoming = true;
+    } else {
+      merged.status = merged.status || merged.statut || (merged.validated ? 'Validé' : 'En modération');
+      merged.statut = merged.statut || merged.status;
+      merged.validated = Boolean(merged.validated || /^valid[eé]/i.test(String(merged.status || '')));
+      merged.isUpcoming = Boolean(merged.isUpcoming || merged.status === 'À venir');
+    }
 
     if (Array.isArray(merged.drapeaux)) {
       merged.drapeaux = merged.drapeaux;
@@ -11536,6 +11548,27 @@ export async function upsertRecordsToTenantSheet(
     const updatedItemsList = warmCached ? warmCached.items : [];
     // If intituleEmplacements is passed as a single config object but the target sheet uses the 2-column vertical format (Emplacement | Intitulé), expand into 20 rows
     let effectiveRecords = records;
+    if (tabType === 'rapportsPdf') {
+      effectiveRecords = records.filter((rec: any) => {
+        if (!rec || typeof rec !== 'object') return false;
+        if (rec.isUpcoming === true || rec.upcoming === true || rec.isFuture === true) return false;
+        if (String(rec.id || '').startsWith('REP-UPCOMING-')) return false;
+        const stLower = String(rec.status || rec.statut || '').trim().toLowerCase();
+        if (stLower === 'à venir' || stLower === 'a venir' || stLower === 'upcoming') return false;
+        const dtLower = String(rec.date || rec.dateStr || rec.interventionDate || '').trim().toLowerCase();
+        if (
+          (dtLower === 'à venir' || dtLower === 'a venir' || dtLower === 'a trier' || dtLower === 'à trier') &&
+          !String(rec.endTimeStamp || '').trim() &&
+          !String(rec.techSignature || '').trim().startsWith('data:image')
+        ) {
+          return false;
+        }
+        return true;
+      });
+      if (effectiveRecords.length === 0) {
+        return { success: true, count: 0, syncedToRemoteSheet: false, records: [] };
+      }
+    }
     if (
       tabType === 'intituleEmplacements' &&
       records.length === 1 &&

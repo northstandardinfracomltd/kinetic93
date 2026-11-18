@@ -9744,22 +9744,55 @@ export default function PublicPortal({
                     }}
                     onSave={(updatedReport) => {
                       clearReportDraftFromCache();
-                      const reportId = "REP-" + Date.now();
                       const activeTidForRef =
                         techTenantId ||
                         authenticatedUser?.envId ||
                         (authenticatedUser as any)?.tenantId ||
                         localStorage.getItem("defib_tenant_id") ||
                         "demo";
-                      const cleanInterventionRef =
+                      const rawCandidateRef = String(
                         updatedReport.interventionReference ||
-                        updatedReport.reportNumber ||
-                        computeNextInterventionReference(
-                          collectLocalInterventionReferences(activeTidForRef, tours, generatedReports)
-                        );
+                          reportToEdit?.interventionReference ||
+                          updatedReport.reportNumber ||
+                          reportToEdit?.reportNumber ||
+                          ""
+                      ).trim();
+                      const isValidCanonicalRef = /^INT-\d{4}-\d+$/i.test(rawCandidateRef);
+                      const cleanInterventionRef = isValidCanonicalRef
+                        ? rawCandidateRef.toUpperCase()
+                        : computeNextInterventionReference(
+                            collectLocalInterventionReferences(activeTidForRef, tours, generatedReports)
+                          );
+                      const targetMissionId = updatedReport.missionId || reportToEdit?.missionId || "";
+                      const targetIdent = String(
+                        updatedReport.defibIdentifiant ||
+                          updatedReport.identifiant ||
+                          reportToEdit?.defibIdentifiant ||
+                          selectedOtherEquipmentUnique?.identifiant ||
+                          ""
+                      ).trim();
+                      const existingMatch = generatedReports.find(
+                        (r: any) =>
+                          (reportToEdit?.id && r.id === reportToEdit.id) ||
+                          (targetMissionId && r.missionId === targetMissionId) ||
+                          (cleanInterventionRef &&
+                            (r.interventionReference === cleanInterventionRef ||
+                              r.reportNumber === cleanInterventionRef)) ||
+                          (targetIdent &&
+                            (r.defibIdentifiant === targetIdent || r.identifiant === targetIdent) &&
+                            (r.isUpcoming || r.status === "À venir" || r.date === "À venir"))
+                      );
+                      const reportId = existingMatch?.id && !String(existingMatch.id).startsWith("REP-UPCOMING-")
+                        ? existingMatch.id
+                        : "REP-" + Date.now();
+                      const rawDateStr = String(updatedReport.date || "").trim();
+                      const isPlaceholderDate = !rawDateStr || /^(à venir|a venir|a trier|à trier|a-trier|-|—)$/i.test(rawDateStr);
                       const submission = {
+                        ...(existingMatch || {}),
+                        ...(reportToEdit || {}),
                         ...updatedReport,
                         id: reportId,
+                        missionId: targetMissionId || existingMatch?.missionId,
                         interventionReference: cleanInterventionRef,
                         reportNumber: cleanInterventionRef,
                         isUpcoming: false,
@@ -9770,13 +9803,29 @@ export default function PublicPortal({
                         missionStatus: "Effectué",
                         techName:
                           authenticatedUser?.name || "Technicien connecté",
-                        date:
-                          updatedReport.date ||
-                          new Date().toLocaleString("fr-FR"),
+                        date: !isPlaceholderDate
+                          ? rawDateStr
+                          : new Date().toLocaleString("fr-FR"),
                         validated: false, // Explicitly false so it requires validation from GMAO
                       };
 
-                      saveReports([submission, ...generatedReports]);
+                      const filteredExisting = generatedReports.filter((r: any) => {
+                        if (!r) return false;
+                        if (existingMatch && r.id === existingMatch.id) return false;
+                        if (reportToEdit?.id && r.id === reportToEdit.id) return false;
+                        if (targetMissionId && r.missionId === targetMissionId) return false;
+                        if (cleanInterventionRef && (r.interventionReference === cleanInterventionRef || r.reportNumber === cleanInterventionRef)) return false;
+                        if (
+                          targetIdent &&
+                          (r.defibIdentifiant === targetIdent || r.identifiant === targetIdent) &&
+                          (r.isUpcoming || r.status === "À venir" || r.date === "À venir" || String(r.id || "").startsWith("REP-UPCOMING-"))
+                        ) {
+                          return false;
+                        }
+                        return true;
+                      });
+
+                      saveReports([submission, ...filteredExisting]);
 
                       const activeTid =
                         techTenantId ||
@@ -9921,14 +9970,48 @@ export default function PublicPortal({
                         (authenticatedUser as any)?.tenantId ||
                         localStorage.getItem("defib_tenant_id") ||
                         "demo";
-                      const cleanInterventionRef =
+                      const targetMissionId = updatedReport.missionId || reportToEdit?.missionId || "";
+                      const targetIdent = String(
+                        updatedReport.defibIdentifiant ||
+                          updatedReport.defibSnapshot?.identifiant ||
+                          reportToEdit?.defibIdentifiant ||
+                          ""
+                      ).trim();
+                      const targetAutreRef = String(
+                        updatedReport.autreReference ||
+                          reportToEdit?.autreReference ||
+                          ""
+                      ).trim();
+
+                      // Resolve canonical INT-YYYY-NNNNN reference if a matching mission or upcoming report already has one
+                      let rawCandidateRef = String(
                         updatedReport.interventionReference ||
-                        reportToEdit?.interventionReference ||
-                        updatedReport.reportNumber ||
-                        reportToEdit?.reportNumber ||
-                        computeNextInterventionReference(
-                          collectLocalInterventionReferences(activeTidForRef, tours, generatedReports)
-                        );
+                          reportToEdit?.interventionReference ||
+                          updatedReport.reportNumber ||
+                          reportToEdit?.reportNumber ||
+                          ""
+                      ).trim();
+                      if (!/^INT-\d{4}-\d+$/i.test(rawCandidateRef)) {
+                        for (const tr of (tours || [])) {
+                          for (const ps of (tr?.passages || [])) {
+                            if (
+                              (targetMissionId && String(ps.id) === String(targetMissionId)) ||
+                              (targetIdent && ps.identifiant === targetIdent && (!targetAutreRef || ps.autreReference === targetAutreRef))
+                            ) {
+                              if (ps.interventionReference && /^INT-\d{4}-\d+$/i.test(String(ps.interventionReference).trim())) {
+                                rawCandidateRef = String(ps.interventionReference).trim().toUpperCase();
+                                break;
+                              }
+                            }
+                          }
+                        }
+                      }
+                      const cleanInterventionRef =
+                        rawCandidateRef && !rawCandidateRef.startsWith("fsm-m-")
+                          ? rawCandidateRef
+                          : computeNextInterventionReference(
+                              collectLocalInterventionReferences(activeTidForRef, tours, generatedReports)
+                            );
 
                       const matchingExistingIndex = generatedReports.findIndex(
                         (r) =>
@@ -9937,8 +10020,10 @@ export default function PublicPortal({
                           (cleanInterventionRef &&
                             (r.interventionReference === cleanInterventionRef ||
                               r.reportNumber === cleanInterventionRef)) ||
-                          ((updatedReport.missionId || reportToEdit?.missionId) &&
-                            r.missionId === (updatedReport.missionId || reportToEdit?.missionId)),
+                          (targetMissionId && r.missionId === targetMissionId) ||
+                          (targetIdent &&
+                            (r.defibIdentifiant === targetIdent || r.defibSnapshot?.identifiant === targetIdent) &&
+                            (r.isUpcoming || r.status === "À venir" || r.date === "À venir" || String(r.id || "").startsWith("REP-UPCOMING-"))),
                       );
 
                       let updatedReportsList = [...generatedReports];
@@ -10082,6 +10167,37 @@ export default function PublicPortal({
                           ...buildFlatAlertFields(mergedAlertsNew),
                         };
                         updatedReportsList = [submission, ...generatedReports];
+                      }
+
+                      // Remove any leftover duplicate upcoming placeholder reports for the same mission / reference / equipment
+                      if (submission) {
+                        updatedReportsList = updatedReportsList.filter((r, idx) => {
+                          if (!r) return false;
+                          if (r === submission) return true;
+                          if (matchingExistingIndex !== -1 && idx === matchingExistingIndex) return true;
+                          const isPlaceholderRep =
+                            r.isUpcoming ||
+                            r.status === "À venir" ||
+                            r.date === "À venir" ||
+                            String(r.id || "").startsWith("REP-UPCOMING-");
+                          if (isPlaceholderRep) {
+                            if (targetMissionId && r.missionId === targetMissionId) return false;
+                            if (
+                              cleanInterventionRef &&
+                              (r.interventionReference === cleanInterventionRef || r.reportNumber === cleanInterventionRef)
+                            ) {
+                              return false;
+                            }
+                            if (
+                              targetIdent &&
+                              (r.defibIdentifiant === targetIdent || r.defibSnapshot?.identifiant === targetIdent) &&
+                              (!targetAutreRef || !r.autreReference || r.autreReference === targetAutreRef)
+                            ) {
+                              return false;
+                            }
+                          }
+                          return true;
+                        });
                       }
 
                       saveReports(updatedReportsList);
@@ -13196,6 +13312,33 @@ export default function PublicPortal({
                                               }
                                               return;
                                             }
+                                            const existingUpcomingForPassage = generatedReports.find(
+                                              (r: any) =>
+                                                r &&
+                                                ((p.id && r.missionId === p.id) ||
+                                                  (p.interventionReference && r.interventionReference === p.interventionReference) ||
+                                                  (p.identifiant &&
+                                                    (r.defibIdentifiant === p.identifiant || r.defibSnapshot?.identifiant === p.identifiant) &&
+                                                    (r.isUpcoming || r.status === "À venir" || r.date === "À venir")))
+                                            );
+                                            const activeTidForMissionRef =
+                                              techTenantId ||
+                                              authenticatedUser?.envId ||
+                                              (authenticatedUser as any)?.tenantId ||
+                                              localStorage.getItem("defib_tenant_id") ||
+                                              "demo";
+                                            const rawMissionRef = String(
+                                              p.interventionReference ||
+                                                existingUpcomingForPassage?.interventionReference ||
+                                                ""
+                                            ).trim();
+                                            const resolvedMissionRef =
+                                              rawMissionRef && !rawMissionRef.startsWith("fsm-m-")
+                                                ? rawMissionRef
+                                                : computeNextInterventionReference(
+                                                    collectLocalInterventionReferences(activeTidForMissionRef, tours, generatedReports)
+                                                  );
+
                                             const matchedOther =
                                               otherEquipments?.find(
                                                 (o) =>
@@ -13206,6 +13349,18 @@ export default function PublicPortal({
                                               setSelectedOtherEquipmentUnique(
                                                 matchedOther,
                                               );
+                                              setReportToEdit({
+                                                ...(existingUpcomingForPassage || {}),
+                                                id: existingUpcomingForPassage?.id || `REP-${Date.now()}`,
+                                                defibId: matchedOther.id,
+                                                defibIdentifiant: p.identifiant,
+                                                interventionReference: resolvedMissionRef,
+                                                autreReference: p.autreReference || existingUpcomingForPassage?.autreReference || "",
+                                                siteMission: "DÉPLACEMENT",
+                                                title: "RAPPORT D’INTERVENTION",
+                                                missionId: p.id,
+                                                tourId: t.id,
+                                              });
                                               setReportActiveTourId(t.id);
                                               setReportActivePassageNum(p.num);
                                               setIsEditingFromRapportsPdf(false);
@@ -13235,11 +13390,12 @@ export default function PublicPortal({
                                                   p.num,
                                                 );
                                                 setReportToEdit({
-                                                  id: `REP-${Date.now()}`,
+                                                  ...(existingUpcomingForPassage || {}),
+                                                  id: existingUpcomingForPassage?.id || `REP-${Date.now()}`,
                                                   defibId: matched.id,
                                                   defibIdentifiant: p.identifiant,
-                                                  interventionReference: p.interventionReference || "",
-                                                  autreReference: p.autreReference || "",
+                                                  interventionReference: resolvedMissionRef,
+                                                  autreReference: p.autreReference || existingUpcomingForPassage?.autreReference || "",
                                                   siteMission: "DÉPLACEMENT",
                                                   title: "RAPPORT D’INTERVENTION",
                                                   missionId: p.id,

@@ -2331,6 +2331,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
   };
   
   // Custom states added for Public Portal & CRM Incident Ticketing
+  const [isCrmFormPaneOpen, setIsCrmFormPaneOpen] = useState(false);
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
     name: "Défibeo Solutions",
     logo: "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?w=80&auto=format&fit=crop",
@@ -6087,12 +6088,29 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     };
   }, [activeTab, gmaoIsTableFitView, gmaoFilter, gmaoSearchQuery, gmaoIncludeAutresMateriels, generatedReports]);
 
+  const isUpcomingPlaceholderReport = (r: any): boolean => {
+    if (!r) return true;
+    if (r.isUpcoming || r.upcoming || r.isFuture) return true;
+    const st = String(r.status || r.statut || '').trim().toLowerCase();
+    if (st === 'à venir' || st === 'a venir' || st === 'upcoming') return true;
+    if (String(r.id || '').startsWith('REP-UPCOMING-')) return true;
+    const dt = String(r.date || r.dateStr || r.interventionDate || '').trim().toLowerCase();
+    if (dt === 'à venir' || dt === 'a venir' || dt === 'a trier' || dt === 'à trier') {
+      const hasRealExec = Boolean(
+        (r.endTimeStamp && String(r.endTimeStamp).trim()) ||
+        (r.techSignature && String(r.techSignature).trim().startsWith('data:image'))
+      );
+      if (!hasRealExec) return true;
+    }
+    return false;
+  };
+
   const saveReports = (updated: any[]) => {
     const oldReal = (Array.isArray(generatedReports) ? generatedReports : []).filter(
-      (r: any) => r && !r.isUpcoming && r.status !== 'À venir'
+      (r: any) => r && !isUpcomingPlaceholderReport(r)
     );
     const newReal = (Array.isArray(updated) ? updated : []).filter(
-      (r: any) => r && !r.isUpcoming && r.status !== 'À venir'
+      (r: any) => r && !isUpcomingPlaceholderReport(r)
     );
     syncCompartmentToGoogleSheets(
       'rapportsPdf',
@@ -6458,8 +6476,26 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     // 3. Synchronize generatedReports array
     let reportsChanged = false;
     const safeGeneratedReports = Array.isArray(generatedReports) ? generatedReports : [];
-    
-    // Filter out Formation mission reports and orphaned pending upcoming reports
+    const executedReportsList = safeGeneratedReports.filter((r) => r && !isUpcomingPlaceholderReport(r));
+
+    const matchesExecutedReport = (placeholder: any, execRep: any): boolean => {
+      if (!placeholder || !execRep || placeholder === execRep) return false;
+      if (placeholder.missionId && execRep.missionId && placeholder.missionId === execRep.missionId) return true;
+      const pRef = String(placeholder.interventionReference || '').trim().toUpperCase();
+      const eRef = String(execRep.interventionReference || '').trim().toUpperCase();
+      if (pRef && eRef && pRef === eRef) return true;
+      const pIdent = String(placeholder.defibIdentifiant || placeholder.identifiant || placeholder.defibSnapshot?.identifiant || '').trim().toUpperCase();
+      const eIdent = String(execRep.defibIdentifiant || execRep.identifiant || execRep.defibSnapshot?.identifiant || '').trim().toUpperCase();
+      if (pIdent && eIdent && pIdent === eIdent) {
+        const pAutre = String(placeholder.autreReference || '').trim().toLowerCase();
+        const eAutre = String(execRep.autreReference || '').trim().toLowerCase();
+        if (pAutre && eAutre && pAutre === eAutre) return true;
+        if (eRef.startsWith(`${eIdent}_`)) return true;
+      }
+      return false;
+    };
+
+    // Filter out Formation mission reports, orphaned pending upcoming reports, and phantom "À venir" duplicates of already-executed reports
     let updatedReports = safeGeneratedReports.filter((rep) => {
       const matchedMissionObj = 
         (rep.missionId && activeMissionsMap.get(rep.missionId)?.mission) ||
@@ -6479,8 +6515,32 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         return false; // Do NOT create or keep record/report in RAPPORT PDF for Formation missions
       }
 
-      const isUpcoming = rep.isUpcoming || rep.status === 'À venir';
+      const isUpcoming = isUpcomingPlaceholderReport(rep);
       if (isUpcoming) {
+        // If a real executed report already exists for this exact mission/equipment, remove the phantom "À venir" duplicate
+        const duplicateOfExecuted = executedReportsList.find((execRep) => matchesExecutedReport(rep, execRep));
+        if (duplicateOfExecuted) {
+          reportsChanged = true;
+          // If the phantom "À venir" row was previously written to the rapportsPdf Google Sheet, delete that phantom row
+          if (typeof rep._sheetRowNumber === 'number' && rep._sheetRowNumber >= 2 && rapportsSheetUrl) {
+            const delKey = `row:${rep._sheetRowNumber}`;
+            if (!deletedReportKeysRef.current.has(delKey)) {
+              deletedReportKeysRef.current.add(delKey);
+              fetch('/api/sheets/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  tenantId: tenantId || 'demo',
+                  type: 'rapportsPdf',
+                  spreadsheetUrl: rapportsSheetUrl,
+                  keys: [delKey],
+                }),
+              }).catch(() => {});
+            }
+          }
+          return false;
+        }
+
         const existsInTours = 
           (rep.missionId && activeMissionsMap.has(rep.missionId)) || 
           (rep.interventionReference && activeMissionsMap.has(rep.interventionReference));
@@ -6505,14 +6565,41 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
           return;
         }
 
-        const existingReportIndex = updatedReports.findIndex(r => 
-          (m.id && r.missionId === m.id) || 
-          (m.interventionReference && r.interventionReference === m.interventionReference)
-        );
+        const mIdentUpper = String(m.defibIdentifiant || m.identifiant || '').trim().toUpperCase();
+        const mAutreLower = String(m.autreReference || '').trim().toLowerCase();
+        const mSitLower = String(m.status || 'Brouillon').trim().toLowerCase();
+        const isMissionAlreadyDone =
+          mSitLower === 'effectué' ||
+          mSitLower === 'effectue' ||
+          mSitLower === 'exécutée' ||
+          mSitLower === 'executee' ||
+          mSitLower === 'terminé' ||
+          mSitLower === 'termine' ||
+          mSitLower === 'validé' ||
+          mSitLower === 'valide';
+
+        const existingReportIndex = updatedReports.findIndex((r) => {
+          if (!r) return false;
+          if (m.id && r.missionId === m.id) return true;
+          if (m.interventionReference && r.interventionReference === m.interventionReference) return true;
+          const rIdentUpper = String(r.defibIdentifiant || r.identifiant || r.defibSnapshot?.identifiant || '').trim().toUpperCase();
+          if (mIdentUpper && rIdentUpper === mIdentUpper) {
+            const rAutreLower = String(r.autreReference || '').trim().toLowerCase();
+            if (mAutreLower && rAutreLower && mAutreLower === rAutreLower) return true;
+            const rRefUpper = String(r.interventionReference || '').trim().toUpperCase();
+            if (rRefUpper.startsWith(`${mIdentUpper}_`)) return true;
+            if (isMissionAlreadyDone && !isUpcomingPlaceholderReport(r)) return true;
+          }
+          return false;
+        });
 
         const tourOrigin = `${tour.startDate || tour.date || ''} ${tour.title || tour.name || ''}`.trim();
 
         if (existingReportIndex === -1) {
+          // Never create a phantom "À venir" placeholder if the mission is already marked as Effectué/Exécutée
+          if (isMissionAlreadyDone) {
+            return;
+          }
           // Pre-create pending report line in Rapports PDF
           reportsChanged = true;
           const upcomingRep = {
@@ -6553,7 +6640,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
           updatedReports.push(applyGestionApresToReport(upcomingRep));
         } else {
           const existing = updatedReports[existingReportIndex];
-          if (existing.isUpcoming) {
+          if (isUpcomingPlaceholderReport(existing)) {
             const sitLower = String(m.status || 'Brouillon').trim().toLowerCase();
             const isAcceptedOrAFaire =
               sitLower === 'accepté client' ||
@@ -6577,6 +6664,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
               reportsChanged = true;
               updatedReports[existingReportIndex] = {
                 ...existing,
+                isUpcoming: true,
+                status: 'À venir',
                 missionStatus: m.status || 'Brouillon',
                 rejectionReason: nextRejectionReason,
                 techName: tour.techName || 'Non assigné',
@@ -6589,6 +6678,37 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                 autreReference: m.autreReference || '',
                 defibSnapshot: { ...existing.defibSnapshot, identifiant: m.defibIdentifiant }
               };
+            }
+          } else {
+            // Link missionId and normalize legacy <IDENTIFIANT>_<DDMMYYYY> reference to the mission's canonical INT-YYYY-NNNNN reference
+            const rRefUpper = String(existing.interventionReference || '').trim().toUpperCase();
+            const mCanonicalRef = String(m.interventionReference || '').trim();
+            const shouldNormalizeLegacyRef =
+              mIdentUpper &&
+              rRefUpper.startsWith(`${mIdentUpper}_`) &&
+              /^INT-\d{4}-\d+$/i.test(mCanonicalRef);
+            if ((!existing.missionId && m.id) || shouldNormalizeLegacyRef) {
+              reportsChanged = true;
+              const nextCanonicalRef = shouldNormalizeLegacyRef ? mCanonicalRef.toUpperCase() : existing.interventionReference;
+              const updatedExecRep = {
+                ...existing,
+                missionId: existing.missionId || m.id,
+                interventionReference: nextCanonicalRef,
+                reportNumber: shouldNormalizeLegacyRef ? nextCanonicalRef : (existing.reportNumber || nextCanonicalRef),
+              };
+              updatedReports[existingReportIndex] = updatedExecRep;
+              if (shouldNormalizeLegacyRef && typeof existing._sheetRowNumber === 'number' && existing._sheetRowNumber >= 2 && rapportsSheetUrl) {
+                fetch('/api/sheets/upsert', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    tenantId: tenantId || 'demo',
+                    type: 'rapportsPdf',
+                    records: [updatedExecRep],
+                    spreadsheetUrl: rapportsSheetUrl,
+                  }),
+                }).catch(() => {});
+              }
             }
           }
         }
@@ -23844,13 +23964,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                 if (isOtherEquipment) return false;
               }
 
-              const isEffectue = 
-                rep.missionStatus === 'Effectué' ||
-                rep.conforme === 'Conforme' ||
-                rep.conforme === 'Non Conforme' ||
-                rep.conforme === 'Intervention impossible';
-
-              const isUpcoming = !isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture);
+              const isUpcoming = isUpcomingPlaceholderReport(rep);
 
               if (gmaoFilter === 'upcoming') {
                 if (!isUpcoming) return false;
@@ -24659,13 +24773,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                         <tbody className="text-slate-700 text-xs">
                           {paginatedReports.map((rep) => {
                             const isConforme = (rep.defibSnapshot?.conforme || 'Oui') === 'Oui';
-                            const isEffectue = 
-                              rep.missionStatus === 'Effectué' ||
-                              rep.conforme === 'Conforme' ||
-                              rep.conforme === 'Non Conforme' ||
-                              rep.conforme === 'Intervention impossible';
-
-                            const isUpcoming = gmaoFilter === 'upcoming' || (!isEffectue && (rep.isUpcoming || rep.status === 'À venir' || rep.status === 'upcoming' || rep.upcoming || rep.isFuture));
+                            const isUpcoming = gmaoFilter === 'upcoming' || isUpcomingPlaceholderReport(rep);
                             const isValidated = gmaoFilter === 'validated' || !!rep.validated;
                             const isModeration = gmaoFilter === 'moderation' || (!isUpcoming && !isValidated);
 
@@ -27451,6 +27559,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
               onRefreshData={handleManualRefreshCrm}
               isRefreshing={isRefreshingCrm}
               setActiveTab={setActiveTab}
+              onFormPaneOpenChange={setIsCrmFormPaneOpen}
               t={t}
             />
           )}
@@ -29157,6 +29266,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         !isClientPortalOpen &&
         !isCanalMessagesOpen &&
         activeTab !== 'messagerie' &&
+        !(activeTab === 'crm' && isCrmFormPaneOpen) &&
         !(showEnvLoading || !isFirebaseLoaded || minEnvLoading) &&
         displayedOtherSessions.length > 0 &&
         (() => {

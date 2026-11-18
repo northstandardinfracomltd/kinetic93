@@ -100,6 +100,7 @@ export function getActiveTenantCommercialName(fallbackCompanyName?: string): str
     const clean = val.trim().toLowerCase();
     return (
       !clean ||
+      clean.includes('@') ||
       clean === 'defibeo' ||
       clean === 'défibeo' ||
       clean === 'defibeo suite' ||
@@ -108,6 +109,10 @@ export function getActiveTenantCommercialName(fallbackCompanyName?: string): str
       clean === 'default'
     );
   };
+
+  if (!isGeneric(fallbackCompanyName)) {
+    return fallbackCompanyName!.trim();
+  }
 
   try {
     const tenantId = (localStorage.getItem('defib_tenant_id') || 'demo').trim();
@@ -224,6 +229,13 @@ export async function sendScriptEmail(payload: {
       senderName: resolvedSenderName,
       fromName: resolvedSenderName,
       displayName: resolvedSenderName,
+      nomCommercial: resolvedSenderName,
+      companyName: resolvedSenderName,
+      from: `${resolvedSenderName} <${payload.replyTo || 'defibeo@gmail.com'}>`,
+      options: {
+        name: resolvedSenderName,
+        replyTo: payload.replyTo || 'defibeo@gmail.com',
+      },
       scriptUrl
     };
 
@@ -863,11 +875,14 @@ export async function triggerEmailClientSignaturePin(
  *     var body = data.body;
  *     var replyTo = data.replyTo || "support@defibeo.com";
  *     
+ *     var senderName = data.name || data.senderName || data.fromName || "Défibeo Solutions";
  *     MailApp.sendEmail({
  *       to: to,
  *       subject: subject,
  *       body: body,
- *       replyTo: replyTo
+ *       htmlBody: data.htmlBody || undefined,
+ *       replyTo: replyTo,
+ *       name: senderName
  *     });
  *     
  *     return ContentService.createTextOutput(JSON.stringify({ status: "success" }))

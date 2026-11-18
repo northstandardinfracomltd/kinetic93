@@ -155,6 +155,7 @@ interface CrmTabProps {
   onRefreshData?: () => Promise<void> | void;
   isRefreshing?: boolean;
   setActiveTab?: (tab: string) => void;
+  onFormPaneOpenChange?: (isOpen: boolean) => void;
   t: (key: string) => string;
 }
 
@@ -168,6 +169,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   onRefreshData,
   isRefreshing,
   setActiveTab,
+  onFormPaneOpenChange,
   t
 }) => {
   const [isHelpFaqOpen, setIsHelpFaqOpen] = useState(false);
@@ -494,6 +496,20 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
   // Side-pane drawer state
   const [isPaneOpen, setIsPaneOpen] = useState(false);
+  useEffect(() => {
+    onFormPaneOpenChange?.(isPaneOpen);
+    return () => {
+      onFormPaneOpenChange?.(false);
+    };
+  }, [isPaneOpen, onFormPaneOpenChange]);
+
+  const nonTechMembers = useMemo(() => {
+    return (members || []).filter((m) => {
+      const roleStr = String((m as any).role || (m as any).categorie || (m as any).type || '').trim().toLowerCase();
+      return !roleStr.includes('technicien') && !roleStr.includes('maintenance terrain') && roleStr !== 'tech';
+    });
+  }, [members]);
+
   const [editingTicketId, setEditingTicketId] = useState<string | null>(null);
   const [isSettingsPaneOpen, setIsSettingsPaneOpen] = useState(false);
   const [isPerformancePaneOpen, setIsPerformancePaneOpen] = useState(false);
@@ -757,6 +773,36 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     }
   }, [activeTenant, crmSettingsSheetUrl]);
 
+  // Auto-resize helper for the 4 settings textareas (Relance 1, 2, 3 & Support email)
+  const adjustSettingsTextareasHeight = React.useCallback(() => {
+    if (typeof document === 'undefined') return;
+    const ids = [
+      'crm-relance-email-textarea',
+      'crm-relance-email-textarea-2',
+      'crm-relance-email-textarea-3',
+      'crm-support-email-textarea',
+    ];
+    for (const id of ids) {
+      const el = document.getElementById(id) as HTMLTextAreaElement | null;
+      if (el) {
+        el.style.height = 'auto';
+        el.style.height = `${Math.max(el.scrollHeight, 60)}px`;
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isSettingsPaneOpen) {
+      adjustSettingsTextareasHeight();
+      const t1 = setTimeout(adjustSettingsTextareasHeight, 20);
+      const t2 = setTimeout(adjustSettingsTextareasHeight, 120);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
+  }, [isSettingsPaneOpen, relanceEmailBody, relanceEmailBody2, relanceEmailBody3, supportEmailBody, adjustSettingsTextareasHeight]);
+
   // Also refresh CRM settings from spreadsheet whenever the side-pane "Modifier les réglages" is opened
   useEffect(() => {
     if (isSettingsPaneOpen && activeTenant) {
@@ -907,12 +953,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [formSituationDevis, setFormSituationDevis] = useState<'Gagné' | 'Perdu' | 'Non renseigné'>('Non renseigné');
   const [formScoreConversion, setFormScoreConversion] = useState<number | null>(null);
   const [formReferenceDevis, setFormReferenceDevis] = useState('');
-  const [formCategorieDevis, setFormCategorieDevis] = useState<'Défibrillateur' | 'Maintenance' | 'Consommable(s)' | 'Formation' | 'Grand compte' | 'Revendeur' | 'Autres' | string>('Défibrillateur');
-  const [formIndicateurTempsDevis, setFormIndicateurTempsDevis] = useState<'Validation de budget' | 'Vente via revendeur' | 'Plateforme d’achat' | 'Autre' | string>('Validation de budget');
+  const [formCategorieDevis, setFormCategorieDevis] = useState<'Défibrillateur' | 'Maintenance' | 'Consommable(s)' | 'Formation' | 'Grand compte' | 'Revendeur' | 'Autres' | string>('');
+  const [formIndicateurTempsDevis, setFormIndicateurTempsDevis] = useState<'Validation de budget' | 'Vente via revendeur' | 'Plateforme d’achat' | 'Autre' | string>('');
   const [formTotalAffaireHT, setFormTotalAffaireHT] = useState('');
   const [formFamille, setFormFamille] = useState('');
   const [formIndicatifPostal, setFormIndicatifPostal] = useState('');
-  const [formOrigineLead, setFormOrigineLead] = useState<'Service Client' | 'Direct' | 'Internet' | 'Planification' | 'Autre' | string>('Service Client');
+  const [formOrigineLead, setFormOrigineLead] = useState<'Service Client' | 'Direct' | 'Internet' | 'Planification' | 'Autre' | string>('');
   const [formDescriptionOffreDevis, setFormDescriptionOffreDevis] = useState('');
   const [formTypeVente, setFormTypeVente] = useState('');
   const [formDateDevis, setFormDateDevis] = useState('');
@@ -950,11 +996,19 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const [isSendingSupportMessage, setIsSendingSupportMessage] = useState(false);
   const [supportMessageSentToast, setSupportMessageSentToast] = useState<string | null>(null);
 
-  // Auto-expand vertical textarea ref for Description
+  // Auto-expand vertical textarea ref for Description & Support Message
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const supportMessageTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const adjustDescriptionHeight = () => {
     const el = descriptionTextareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.max(el.scrollHeight, 44)}px`;
+  };
+
+  const adjustSupportMessageHeight = () => {
+    const el = supportMessageTextareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.max(el.scrollHeight, 44)}px`;
@@ -971,6 +1025,40 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       };
     }
   }, [formDescription, isPaneOpen]);
+
+  useEffect(() => {
+    if (isPaneOpen && isNewMessageOpen) {
+      adjustSupportMessageHeight();
+      const t1 = setTimeout(adjustSupportMessageHeight, 20);
+      const t2 = setTimeout(adjustSupportMessageHeight, 100);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+      };
+    }
+  }, [newMessageBody, isNewMessageOpen, isPaneOpen]);
+
+  const formatDatePrincipaleInput = (raw: string, prev: string): string => {
+    const prevSlashes = (prev.match(/\//g) || []).length;
+    const rawSlashes = (raw.match(/\//g) || []).length;
+    const prevDigits = prev.replace(/\D/g, '');
+    let digits = raw.replace(/\D/g, '').slice(0, 8);
+
+    // If user explicitly pressed Backspace/Delete on a slash character, keep the slashes intact
+    if (raw.length < prev.length && rawSlashes < prevSlashes && digits === prevDigits) {
+      return prev;
+    }
+
+    if (digits.length === 0) return '';
+    if (digits.length <= 2) {
+      return digits.length === 2 && raw.length > prev.length ? `${digits}/` : digits;
+    }
+    if (digits.length <= 4) {
+      const base = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+      return digits.length === 4 && raw.length > prev.length ? `${base}/` : base;
+    }
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+  };
 
   const getTodayFormatted = (): string => {
     const d = new Date();
@@ -1053,7 +1141,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormOuverture(today);
     setFormDerActual(today);
     setFormObjet('');
-    setFormCollaborateur(members.length > 0 ? members[0].name : 'Non attribué');
+    setFormCollaborateur(nonTechMembers.length > 0 ? nonTechMembers[0].name : 'Non attribué');
     setFormClientSelect('Autre');
     setFormCustomClientName('');
     setFormPayeurId('');
@@ -1073,12 +1161,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormSituationDevis('Non renseigné');
     setFormScoreConversion(null);
     setFormReferenceDevis('');
-    setFormCategorieDevis('Défibrillateur');
-    setFormIndicateurTempsDevis('Validation de budget');
+    setFormCategorieDevis('');
+    setFormIndicateurTempsDevis('');
     setFormTotalAffaireHT('');
     setFormFamille('');
     setFormIndicatifPostal('');
-    setFormOrigineLead('Service Client');
+    setFormOrigineLead('');
     setFormDescriptionOffreDevis('');
     setFormTypeVente('');
     setFormDateDevis('');
@@ -1115,7 +1203,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormOuverture(ticket.dateOuverture || ticket.date || getTodayFormatted());
     setFormDerActual(ticket.dateDerniereActualisation || ticket.dateOuverture || ticket.date || getTodayFormatted());
     setFormObjet(ticket.objet || '');
-    setFormCollaborateur(ticket.collaborateur || (members.length > 0 ? members[0].name : 'Non attribué'));
+    setFormCollaborateur(ticket.collaborateur || (nonTechMembers.length > 0 ? nonTechMembers[0].name : 'Non attribué'));
 
     // Handle Client selection vs Autre
     const currentClientVal = ticket.client || '';
@@ -1161,14 +1249,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     setFormSituationDevis(ticket.situationDevis || 'Non renseigné');
     setFormScoreConversion(typeof ticket.scorePotentielConversion === 'number' && ticket.scorePotentielConversion >= 1 && ticket.scorePotentielConversion <= 5 ? ticket.scorePotentielConversion : null);
     setFormReferenceDevis(ticket.referenceDevis || '');
-    setFormCategorieDevis(ticket.categorieDevis || 'Défibrillateur');
-    setFormIndicateurTempsDevis(ticket.indicateurTempsDevis || 'Validation de budget');
+    setFormCategorieDevis(ticket.categorieDevis && ticket.categorieDevis !== 'Non renseigné.' && ticket.categorieDevis !== 'Non renseigné' ? ticket.categorieDevis : '');
+    setFormIndicateurTempsDevis(ticket.indicateurTempsDevis && ticket.indicateurTempsDevis !== 'Non renseigné.' && ticket.indicateurTempsDevis !== 'Non renseigné' ? ticket.indicateurTempsDevis : '');
     setFormTotalAffaireHT(ticket.totalAffaireHT !== undefined && ticket.totalAffaireHT !== null ? String(ticket.totalAffaireHT) : '');
     setFormFamille(ticket.famille || '');
     setFormIndicatifPostal(ticket.indicatifPostal || '');
-    setFormOrigineLead(ticket.origineLead || 'Service Client');
+    setFormOrigineLead(ticket.origineLead && ticket.origineLead !== 'Non renseigné.' && ticket.origineLead !== 'Non renseigné' ? ticket.origineLead : '');
     setFormDescriptionOffreDevis(ticket.descriptionOffreDevis || '');
-    setFormTypeVente(ticket.typeVente || '');
+    setFormTypeVente(ticket.typeVente && ticket.typeVente !== 'Non renseigné.' && ticket.typeVente !== 'Non renseigné' ? ticket.typeVente : '');
     setFormDateDevis(toHtmlDateInputValue(ticket.dateDevis));
     setFormDateDerniereRelance(toHtmlDateInputValue(ticket.dateDerniereRelance));
     setFormDateProchaineRelance(toHtmlDateInputValue(ticket.dateProchaineRelance));
@@ -1205,17 +1293,70 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     try {
       const arrayBuffer = await file.arrayBuffer();
       const uint8 = new Uint8Array(arrayBuffer);
-      const latin1 = new TextDecoder('latin1').decode(uint8.slice(0, 500000));
-      combinedText += '\n' + latin1;
+      const latin1 = new TextDecoder('latin1').decode(uint8.slice(0, 5000000));
+
+      const decodePdfLiteral = (s: string): string => {
+        return s
+          .replace(/\\(\d{1,3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
+          .replace(/\\n/g, '\n')
+          .replace(/\\r/g, '\r')
+          .replace(/\\t/g, ' ')
+          .replace(/\\\(/g, '(')
+          .replace(/\\\)/g, ')')
+          .replace(/\\\\/g, '\\');
+      };
+
+      const cmap = new Map<number, string>();
+      const decodeHexToUnicode = (hexStr: string): string => {
+        const cleanHex = hexStr.replace(/\s+/g, '');
+        if (!cleanHex) return '';
+        if (cleanHex.length >= 4 && cleanHex.length % 4 === 0) {
+          let allAsciiZeroHigh = true;
+          let hasCmapHit = false;
+          for (let i = 0; i < cleanHex.length; i += 4) {
+            const code = parseInt(cleanHex.slice(i, i + 4), 16);
+            if (cmap.has(code)) hasCmapHit = true;
+            if ((code >> 8) !== 0) allAsciiZeroHigh = false;
+          }
+          if (hasCmapHit || allAsciiZeroHigh) {
+            let out = '';
+            for (let i = 0; i < cleanHex.length; i += 4) {
+              const code = parseInt(cleanHex.slice(i, i + 4), 16);
+              if (cmap.has(code)) {
+                out += cmap.get(code)!;
+              } else if (code >= 0x20 && code <= 0x7e) {
+                out += String.fromCharCode(code);
+              } else if (code >= 0xa0 && code <= 0xff) {
+                out += String.fromCharCode(code);
+              } else if (code === 0x20ac) {
+                out += '€';
+              }
+            }
+            if (out.trim()) return out;
+          }
+        }
+        let out = '';
+        for (let i = 0; i + 1 < cleanHex.length; i += 2) {
+          const code = parseInt(cleanHex.slice(i, i + 2), 16);
+          if (cmap.has(code)) {
+            out += cmap.get(code)!;
+          } else if (code >= 0x20) {
+            out += String.fromCharCode(code);
+          }
+        }
+        return out;
+      };
+
+      const decompressedStreams: string[] = [];
 
       if (typeof DecompressionStream !== 'undefined') {
-        const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
+        const streamRegex = /stream(?:\r\n|\n|\r)([\s\S]*?)(?:\r\n|\n|\r)?endstream/g;
         let match: RegExpExecArray | null;
         let streamCount = 0;
-        while ((match = streamRegex.exec(latin1)) !== null && streamCount < 25) {
+        while ((match = streamRegex.exec(latin1)) !== null && streamCount < 160) {
           streamCount++;
           const rawStr = match[1];
-          if (rawStr.length > 2 && rawStr.length < 150000) {
+          if (rawStr.length > 2 && rawStr.length < 600000) {
             const bytes = new Uint8Array(rawStr.length);
             for (let i = 0; i < rawStr.length; i++) {
               bytes[i] = rawStr.charCodeAt(i) & 0xff;
@@ -1228,12 +1369,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 writer.close().catch(() => {});
                 const decompressedBuf = await new Response(ds.readable).arrayBuffer();
                 const decompressedStr = new TextDecoder('latin1').decode(decompressedBuf);
-                const textTokens = decompressedStr.match(/\(([^()]+)\)/g);
-                if (textTokens) {
-                  combinedText += '\n' + textTokens.map(t => t.slice(1, -1)).join(' ');
-                } else {
-                  combinedText += '\n' + decompressedStr;
-                }
+                decompressedStreams.push(decompressedStr);
                 break;
               } catch {
                 // ignore non-deflate streams
@@ -1242,11 +1378,103 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           }
         }
       }
+
+      // First pass: extract any ToUnicode CMap mappings (beginbfchar / beginbfrange)
+      for (const s of [latin1, ...decompressedStreams]) {
+        if (s.includes('beginbfchar')) {
+          const bfCharBlocks = s.match(/beginbfchar[\s\S]*?endbfchar/g) || [];
+          for (const block of bfCharBlocks) {
+            const pairRe = /<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g;
+            let pm: RegExpExecArray | null;
+            while ((pm = pairRe.exec(block)) !== null) {
+              const srcCode = parseInt(pm[1], 16);
+              const dstHex = pm[2];
+              let str = '';
+              for (let i = 0; i + 3 < dstHex.length; i += 4) {
+                str += String.fromCharCode(parseInt(dstHex.slice(i, i + 4), 16));
+              }
+              if (str) cmap.set(srcCode, str);
+            }
+          }
+        }
+        if (s.includes('beginbfrange')) {
+          const bfRangeBlocks = s.match(/beginbfrange[\s\S]*?endbfrange/g) || [];
+          for (const block of bfRangeBlocks) {
+            const rangeRe = /<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g;
+            let rm: RegExpExecArray | null;
+            while ((rm = rangeRe.exec(block)) !== null) {
+              const startCode = parseInt(rm[1], 16);
+              const endCode = parseInt(rm[2], 16);
+              const targetStart = parseInt(rm[3], 16);
+              if (!isNaN(startCode) && !isNaN(endCode) && endCode >= startCode && endCode - startCode < 512) {
+                for (let c = startCode; c <= endCode; c++) {
+                  cmap.set(c, String.fromCharCode(targetStart + (c - startCode)));
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Second pass: reconstruct text from PDF content streams (handling TJ kerning arrays, Tj strings, and hex strings)
+      const extractStreamText = (streamStr: string): string => {
+        const chunks: string[] = [];
+        const opRegex = /\[([\s\S]*?)\]\s*TJ|\((?:\\.|[^\\()])*\)\s*(?:Tj|'|")|<([0-9A-Fa-f\s]+)>\s*Tj/g;
+        let m: RegExpExecArray | null;
+        while ((m = opRegex.exec(streamStr)) !== null) {
+          if (m[1] !== undefined) {
+            // TJ array: concatenate inner strings without artificial spaces unless kerning offset < -120
+            let tjText = '';
+            const itemRe = /\(((?:\\.|[^\\()])*)\)|<([0-9A-Fa-f\s]+)>|(-?\d+(?:\.\d+)?)/g;
+            let im: RegExpExecArray | null;
+            while ((im = itemRe.exec(m[1])) !== null) {
+              if (im[1] !== undefined) {
+                tjText += decodePdfLiteral(im[1]);
+              } else if (im[2] !== undefined) {
+                tjText += decodeHexToUnicode(im[2]);
+              } else if (im[3] !== undefined) {
+                const kern = parseFloat(im[3]);
+                if (kern < -120) tjText += ' ';
+              }
+            }
+            if (tjText) chunks.push(tjText);
+          } else if (m[2] !== undefined) {
+            const hexDecoded = decodeHexToUnicode(m[2]);
+            if (hexDecoded) chunks.push(hexDecoded);
+          } else {
+            const litMatch = m[0].match(/^\(((?:\\.|[^\\()])*)\)/);
+            if (litMatch) {
+              chunks.push(decodePdfLiteral(litMatch[1]));
+            }
+          }
+        }
+        if (chunks.length > 0) {
+          return chunks.join(' ');
+        }
+        const fallbackParens = streamStr.match(/\(((?:\\.|[^\\()])+)\)/g);
+        if (fallbackParens) {
+          return fallbackParens.map(t => decodePdfLiteral(t.slice(1, -1))).join('');
+        }
+        return '';
+      };
+
+      for (const ds of decompressedStreams) {
+        const extracted = extractStreamText(ds);
+        if (extracted) {
+          combinedText += '\n' + extracted;
+        }
+      }
+      const rawExtracted = extractStreamText(latin1);
+      if (rawExtracted) {
+        combinedText += '\n' + rawExtracted;
+      }
     } catch {
       // Fallback to filename only
     }
 
-    const cleanText = combinedText.replace(/\\(\d{3})/g, ' ').replace(/\s+/g, ' ');
+    const cleanText = combinedText
+      .replace(/[\u00A0\u202F\u2007\u2009]/g, ' ')
+      .replace(/\s+/g, ' ');
 
     let detectedRef: string | undefined;
     const refPatterns = [
@@ -1270,18 +1498,46 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     }
 
     let detectedHt: string | undefined;
+    const parseAmountCandidate = (rawVal: string): string | undefined => {
+      if (!rawVal) return undefined;
+      const cleaned = rawVal.replace(/[\s\u00A0\u202F]/g, '').replace(',', '.');
+      const parsed = parseFloat(cleaned);
+      if (!isNaN(parsed) && parsed > 0 && parsed < 100000000) {
+        return parsed.toFixed(2).replace(/\.00$/, '');
+      }
+      return undefined;
+    };
+
     const htPatterns = [
-      /(?:total\s*(?:général\s*|net\s*)?h\.?t\.?|montant\s*(?:total\s*|net\s*)?h\.?t\.?|net\s*h\.?t\.?|sous[\-\s]*total\s*h\.?t\.?)\s*[:\-€]?\s*(\d{1,3}(?:[\s\u00A0.]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2})?)/i,
-      /(\d{1,3}(?:[\s\u00A0.]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))\s*€?\s*h\.?t\.?\b/i,
+      /(?:total\s*(?:général\s*|net\s*|de\s*la\s*facture\s*|du\s*devis\s*)?h\.?\s*t\.?(?:va)?|montant\s*(?:total\s*|net\s*)?h\.?\s*t\.?|net\s*h\.?\s*t\.?|sous[\-\s]*total\s*h\.?\s*t\.?|base\s*h\.?\s*t\.?)\s*(?:en\s*€|eur|€|:|\-|\.)*\s*(\d{1,3}(?:[\s.]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))/gi,
+      /(?:total\s*(?:général\s*|net\s*)?h\.?\s*t\.?|montant\s*(?:total\s*|net\s*)?h\.?\s*t\.?|net\s*h\.?\s*t\.?|sous[\-\s]*total\s*h\.?\s*t\.?)\s*[:\-€]?\s*(\d{1,6}(?:[.,]\d{1,2})?)/gi,
+      /(\d{1,3}(?:[\s.]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))\s*(?:€|eur)?\s*h\.?\s*t\.?\b/gi,
     ];
+
     for (const pat of htPatterns) {
-      const m = cleanText.match(pat);
-      if (m && m[1]) {
-        const normalizedNum = m[1].replace(/[\s\u00A0]/g, '').replace(',', '.');
-        const parsed = parseFloat(normalizedNum);
-        if (!isNaN(parsed) && parsed > 0) {
-          detectedHt = parsed.toFixed(2).replace(/\.00$/, '');
-          break;
+      const matches = Array.from(cleanText.matchAll(pat));
+      if (matches.length > 0) {
+        // Use the last matched Total HT in the document (usually the invoice summary footer)
+        for (let i = matches.length - 1; i >= 0; i--) {
+          const candidate = parseAmountCandidate(matches[i][1]);
+          if (candidate) {
+            detectedHt = candidate;
+            break;
+          }
+        }
+        if (detectedHt) break;
+      }
+    }
+
+    // Fallback for multi-column summary tables where labels ("Total HT", "TVA", "Total TTC") precede the numbers
+    if (!detectedHt) {
+      const tableSummaryMatch = cleanText.match(/total\s*(?:général\s*|net\s*)?h\.?\s*t\.?[\s\S]{0,160}/i);
+      if (tableSummaryMatch) {
+        const snippet = tableSummaryMatch[0];
+        const decimalNums = Array.from(snippet.matchAll(/(\d{1,3}(?:[\s.]\d{3})*[.,]\d{2}|\d+[.,]\d{2})(?!\s*%)/g))
+          .map(m => m[1]);
+        if (decimalNums.length > 0) {
+          detectedHt = parseAmountCandidate(decimalNums[0]);
         }
       }
     }
@@ -1471,14 +1727,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         : null;
       const effectiveReplyTo = (latestSheetSettings?.supportEmailReplyTo ?? supportEmailReplyTo).trim();
       const replyTo = effectiveReplyTo || companyInfo?.email || 'contact@defibeo.com';
-      const senderName = getActiveTenantCommercialName(companyInfo?.name);
+      const senderName = getActiveTenantCommercialName((companyInfo as any)?.nomCommercial || companyInfo?.name);
       await sendScriptEmail({
         to: targetEmail,
         subject: newMessageObjet.trim(),
         body: newMessageBody.trim(),
         replyTo,
         name: senderName,
-        senderName
+        senderName,
+        fromName: senderName,
+        displayName: senderName,
       });
 
       const now = new Date();
@@ -1741,7 +1999,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
       const subject = `Relance - ${refDevis}`;
       const replyTo = chosenReplyTo.trim() || companyInfo?.email || 'contact@defibeo.com';
-      const senderName = getActiveTenantCommercialName(companyInfo?.name);
+      const senderName = getActiveTenantCommercialName((companyInfo as any)?.nomCommercial || companyInfo?.name);
 
       try {
         const ok = await sendScriptEmail({
@@ -1750,7 +2008,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           body: bodyText,
           replyTo,
           name: senderName,
-          senderName
+          senderName,
+          fromName: senderName,
+          displayName: senderName,
         });
         if (ok !== false) {
           sentCount++;
@@ -2156,7 +2416,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   const dealsPerdus = commercialDeals.filter(t => t.situationDevis === 'Perdu').length;
   const totalDeals = dealsGagnes + dealsPerdus;
   const scoreClosingVal = totalDeals > 0 ? (dealsGagnes / totalDeals) * 10 : null;
-  const scoreClosingText = scoreClosingVal !== null ? `${scoreClosingVal.toFixed(1)}/10` : '—/10';
+  const scoreClosingText = scoreClosingVal !== null ? String(Number(scoreClosingVal.toFixed(1))) : '—';
 
   // Helper to parse any CRM date string (DD/MM/YYYY or YYYY-MM-DD) into a midnight timestamp
   const parseCrmDateToMidnightTs = (raw?: string | number | null): number | null => {
@@ -2290,10 +2550,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     csvContent += `Employé sélectionné;${perfCollaborateur};;;;;;;;;;;;;;;\n`;
     csvContent += `Tickets ouverts;${statTicketsOuverts};;;;;;;;;;;;;;;\n`;
     csvContent += `Tickets fermés;${statTicketsFermes};;;;;;;;;;;;;;;\n`;
-    csvContent += `Volume affaires;${statVolumeAffaires.toFixed(2)} €;;;;;;;;;;;;;;;\n`;
-    csvContent += `Score closing;${scoreClosingText};;;;;;;;;;;;;;;\n`;
-    csvContent += `Temps closing;${statTempsClosingText};;;;;;;;;;;;;;;\n`;
-    csvContent += `Meilleur Closer;${statMeilleurCloserText};;;;;;;;;;;;;;;\n`;
+    csvContent += `Volume affaires;${statVolumeAffaires >= 1000 ? `${Math.floor(statVolumeAffaires / 1000)}k` : Math.floor(statVolumeAffaires)} €;;;;;;;;;;;;;;;\n`;
+    csvContent += `Score closing (/10);${scoreClosingText};;;;;;;;;;;;;;;\n`;
+    csvContent += `Temps moyen closing;${statTempsClosingText};;;;;;;;;;;;;;;\n`;
+    csvContent += `Meilleur membre;${statMeilleurCloserText};;;;;;;;;;;;;;;\n`;
     csvContent += ';;;;;;;;;;;;;;;\n';
 
     // Detailed table header
@@ -2505,9 +2765,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         fetch('${typeof window !== 'undefined' ? window.location.origin : ''}/api/crm/embed-lead', {
           method: 'POST',
           headers: {
+            'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: params
+          body: JSON.stringify({
+            tenantId: tenantId,
+            email: email,
+            message: message
+          })
         })
         .then(function(res) { return res.json(); })
         .then(function(data) {
@@ -2563,10 +2828,20 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           transition: all 0s !important;
           width: 100% !important;
         }
+        #crm-tab-container select.crm-select-placeholder {
+          color: #BECADB !important;
+        }
+        #crm-tab-container select.crm-select-placeholder option {
+          color: #000000 !important;
+        }
+        #crm-tab-container select.crm-select-placeholder option[value=""] {
+          color: #BECADB !important;
+        }
         #crm-tab-container select.crm-file-type-select {
           width: auto !important;
-          min-width: 130px !important;
-          padding: 6px 12px !important;
+          min-width: 104px !important;
+          height: 38px !important;
+          padding: 0 10px !important;
           border: 1px solid #DCE1EA !important;
           border-radius: 10px !important;
           font-size: 18px !important;
@@ -2585,6 +2860,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           -moz-text-align-last: center !important;
           outline: none !important;
           box-shadow: none !important;
+          box-sizing: border-box !important;
         }
         #crm-tab-container select.crm-file-type-select option {
           text-align: center !important;
@@ -2696,8 +2972,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         #crm-tab-container input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled):not(#search-crm-input),
         #crm-tab-container select:not(#crm-more-options-dropdown):hover:not(:disabled),
         #crm-tab-container select:not(#crm-more-options-dropdown):focus:not(:disabled),
-        #crm-tab-container textarea:not(#crm-embed-textarea):hover:not(:disabled),
-        #crm-tab-container textarea:not(#crm-embed-textarea):focus:not(:disabled),
+        #crm-tab-container textarea:not(#crm-embed-textarea):not(#crm-relance-email-textarea):not(.crm-event-textarea):hover:not(:disabled),
+        #crm-tab-container textarea:not(#crm-embed-textarea):not(#crm-relance-email-textarea):not(.crm-event-textarea):focus:not(:disabled),
+        #crm-tab-container #crm-form-description-textarea:hover:not(:disabled),
+        #crm-tab-container #crm-form-description-textarea:focus:not(:disabled),
         #crm-tab-container #search-crm-input:hover,
         #crm-tab-container #search-crm-input:focus {
           outline: 2.5px solid #2e54ff !important;
@@ -3560,44 +3838,55 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             }}
                             className="hover:bg-[#2b48cc] transition-colors"
                           >
-                            Gérer
+                            Modifier
                           </button>
-                          {String(t.categorie || '').trim().toLowerCase() === 'commercial' && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleQuickSituationDevis(t.id, 'Gagné');
-                                }}
-                                style={{
-                                  ...rowActionButtonStyle,
-                                  backgroundColor: t.situationDevis === 'Gagné' ? '#16a34a' : '#0f172a',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                }}
-                                className="hover:opacity-90 transition-colors"
-                              >
-                                Gagné
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleQuickSituationDevis(t.id, 'Perdu');
-                                }}
-                                style={{
-                                  ...rowActionButtonStyle,
-                                  backgroundColor: 'rgb(210, 45, 11)',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                }}
-                                className="hover:opacity-90 transition-colors"
-                              >
-                                Perdu
-                              </button>
-                            </>
-                          )}
+                          {String(t.categorie || '').trim().toLowerCase() === 'commercial' && (() => {
+                            const isDevisDecided = t.situationDevis === 'Gagné' || t.situationDevis === 'Perdu';
+                            return (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={isDevisDecided}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isDevisDecided) return;
+                                    handleQuickSituationDevis(t.id, 'Gagné');
+                                  }}
+                                  style={{
+                                    ...rowActionButtonStyle,
+                                    backgroundColor: '#0f172a',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    cursor: isDevisDecided ? 'not-allowed' : 'pointer',
+                                    opacity: isDevisDecided ? 0.45 : 1,
+                                  }}
+                                  className={isDevisDecided ? 'transition-colors' : 'hover:opacity-90 transition-colors'}
+                                >
+                                  Gagné
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isDevisDecided}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isDevisDecided) return;
+                                    handleQuickSituationDevis(t.id, 'Perdu');
+                                  }}
+                                  style={{
+                                    ...rowActionButtonStyle,
+                                    backgroundColor: 'rgb(210, 45, 11)',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    cursor: isDevisDecided ? 'not-allowed' : 'pointer',
+                                    opacity: isDevisDecided ? 0.45 : 1,
+                                  }}
+                                  className={isDevisDecided ? 'transition-colors' : 'hover:opacity-90 transition-colors'}
+                                >
+                                  Perdu
+                                </button>
+                              </>
+                            );
+                          })()}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -3629,18 +3918,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         id="crm-tab-total-summary"
       >
         <div style={{ fontSize: '18px', color: '#000000', fontWeight: 'bold', cursor: 'default' }}>
-          {(() => {
-            const totalVolume = filteredTickets.reduce((acc, item) => {
-              const raw = item.totalAffaireHT;
-              if (raw === undefined || raw === null || String(raw).trim() === '') return acc;
-              const num = parseFloat(String(raw).replace(/\s/g, '').replace(',', '.'));
-              return isNaN(num) ? acc : acc + num;
-            }, 0);
-            const formattedVol = Number.isInteger(totalVolume)
-              ? totalVolume.toLocaleString('fr-FR')
-              : totalVolume.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            return `Nombre de ligne(s): ${filteredTickets.length}. Volume Affaire(s) HT: ${formattedVol}.`;
-          })()}
+          {`Nombre de ligne(s): ${filteredTickets.length}.`}
         </div>
       </div>
 
@@ -3737,7 +4015,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           backgroundColor: 'rgb(61 220 132)',
                           color: '#115830',
                           fontSize: '18px',
-                          padding: '9px 18px',
+                          padding: '8px 17px',
                           borderRadius: '1000px',
                           cursor: 'default',
                           fontWeight: 100,
@@ -3761,13 +4039,20 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       </div>
 
                       <div>
-                        <label>Ouverture.</label>
+                        <label>Date Principale.</label>
                         <div className="relative flex items-center">
                           <input
                             type="text"
+                            maxLength={10}
                             value={formOuverture}
-                            onChange={(e) => setFormOuverture(e.target.value)}
-                            placeholder="DD/MM/YYYY"
+                            onChange={(e) => setFormOuverture(formatDatePrincipaleInput(e.target.value, formOuverture))}
+                            onBlur={() => {
+                              const digits = formOuverture.replace(/\D/g, '');
+                              if (digits.length === 8) {
+                                setFormOuverture(`${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`);
+                              }
+                            }}
+                            placeholder="dd/mm/yyyy"
                             style={{
                               fontSize: '18px',
                               backgroundColor: '#ffffff',
@@ -3801,7 +4086,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       </div>
 
                       <div>
-                        <label>Actualisation.</label>
+                        <label>Date Modification.</label>
                         <input
                           type="text"
                           value={formDerActual}
@@ -3853,7 +4138,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         className="text-center"
                       >
                         <option value="Non attribué">Non attribué</option>
-                        {members.map((m) => (
+                        {nonTechMembers.map((m) => (
                           <option key={m.id || m.email || m.name} value={m.name}>
                             {m.name}
                           </option>
@@ -3881,7 +4166,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           backgroundColor: 'rgb(61 220 132)',
                           color: '#115830',
                           fontSize: '18px',
-                          padding: '9px 18px',
+                          padding: '8px 17px',
                           borderRadius: '1000px',
                           cursor: 'default',
                           fontWeight: 100,
@@ -3981,8 +4266,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               <div
                                 key={sit}
                                 onClick={() => setFormSituationInterlocuteur(sit)}
-                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
-                                style={{ border: '1px solid #DCE1EA' }}
+                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white transition-colors"
+                                style={{ border: 'none' }}
                               >
                                 <span 
                                   className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
@@ -3999,7 +4284,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     <span className="rounded-full bg-[#2e54ff]" style={{ width: '8px', height: '8px' }} />
                                   )}
                                 </span>
-                                <span className="text-[18px] font-medium cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px', color: isSelected ? '#000000' : '#50617A' }}>
+                                <span className="text-[18px] font-medium cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px', color: '#000000' }}>
                                   {sit}
                                 </span>
                               </div>
@@ -4023,8 +4308,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     setFormMarchePublic('Oui');
                                   }
                                 }}
-                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
-                                style={{ border: '1px solid #DCE1EA' }}
+                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white transition-colors"
+                                style={{ border: 'none' }}
                               >
                                 <span 
                                   className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
@@ -4041,7 +4326,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     <span className="rounded-full bg-[#2e54ff]" style={{ width: '8px', height: '8px' }} />
                                   )}
                                 </span>
-                                <span className="text-[18px] font-medium cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px', color: isSelected ? '#000000' : '#50617A' }}>
+                                <span className="text-[18px] font-medium cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px', color: '#000000' }}>
                                   {typ}
                                 </span>
                               </div>
@@ -4123,8 +4408,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     </div>
                   </div>
 
-                  {/* 5. SPECIFIC FIELDS WHEN CATEGORY IS « Commercial » */}
-                  {formCategorie === 'Commercial' && (
+                  {/* 5. SPECIFIC FIELDS WHEN CATEGORY IS « Commercial » (hidden on ticket creation before save) */}
+                  {Boolean(editingTicketId) && formCategorie === 'Commercial' && (
                     <div 
                       className="space-y-4 animate-fadeIn"
                       style={{
@@ -4143,7 +4428,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             backgroundColor: 'rgb(61 220 132)',
                             color: '#115830',
                             fontSize: '18px',
-                            padding: '9px 18px',
+                            padding: '8px 17px',
                             borderRadius: '1000px',
                             cursor: 'default',
                             fontWeight: 100,
@@ -4166,8 +4451,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 <div
                                   key={opt}
                                   onClick={() => setFormMarchePublic(opt)}
-                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
-                                  style={{ border: '1px solid #DCE1EA' }}
+                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white transition-colors"
+                                  style={{ border: 'none' }}
                                 >
                                   <span 
                                     className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
@@ -4184,7 +4469,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                       <span className="rounded-full bg-[#2e54ff]" style={{ width: '8px', height: '8px' }} />
                                     )}
                                   </span>
-                                  <span className="text-[18px] font-medium cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px', color: isSelected ? '#000000' : '#50617A' }}>
+                                  <span className="text-[18px] font-medium cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px', color: '#000000' }}>
                                     {opt}
                                   </span>
                                 </div>
@@ -4203,8 +4488,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 <div
                                   key={sitDevis}
                                   onClick={() => setFormSituationDevis(sitDevis)}
-                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white hover:border-slate-300 transition-colors"
-                                  style={{ border: '1px solid #DCE1EA' }}
+                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white transition-colors"
+                                  style={{ border: 'none' }}
                                 >
                                   <span 
                                     className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
@@ -4221,7 +4506,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                       <span className="rounded-full bg-[#2e54ff]" style={{ width: '8px', height: '8px' }} />
                                     )}
                                   </span>
-                                  <span className="text-[18px] font-medium cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px', color: isSelected ? '#000000' : '#50617A' }}>
+                                  <span className="text-[18px] font-medium cursor-pointer select-none font-sans whitespace-nowrap" style={{ fontSize: '18px', color: '#000000' }}>
                                     {sitDevis}
                                   </span>
                                 </div>
@@ -4245,20 +4530,20 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                   type="button"
                                   onClick={() => setFormScoreConversion(prev => prev === scoreNum ? null : scoreNum)}
                                   style={{
-                                    width: '38px',
-                                    height: '38px',
+                                    width: '42px',
+                                    height: '42px',
                                     borderRadius: '50%',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    fontSize: '18px',
+                                    fontSize: '20px',
                                     fontWeight: 600,
                                     cursor: 'pointer',
                                     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                    backgroundColor: isSelected ? '#0f172a' : '#ffffff',
-                                    color: isSelected ? '#ffffff' : '#50617A',
-                                    border: isSelected ? '1px solid #000000' : '1px solid #DCE1EA',
-                                    boxShadow: isSelected ? '0 2px 6px rgba(0,0,0,0.2)' : 'none',
+                                    backgroundColor: isSelected ? '#f63a08' : 'rgb(245, 247, 250)',
+                                    color: isSelected ? '#ffd462' : 'rgb(0, 0, 0)',
+                                    border: 'none',
+                                    boxShadow: 'none',
                                     transition: 'all 0.15s ease'
                                   }}
                                   className="hover:scale-105 active:scale-95 transition-transform"
@@ -4289,8 +4574,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             value={formTypeVente}
                             onChange={(e) => setFormTypeVente(e.target.value)}
                             style={selectStyle}
+                            className={!formTypeVente ? 'crm-select-placeholder' : ''}
                           >
-                            <option value="">Sélectionner...</option>
+                            <option value="">Non renseigné.</option>
                             <option value="Achat">Achat</option>
                             <option value="Location">Location</option>
                             <option value="Revendeur">Revendeur</option>
@@ -4306,7 +4592,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             value={formCategorieDevis}
                             onChange={(e) => setFormCategorieDevis(e.target.value)}
                             style={selectStyle}
+                            className={!formCategorieDevis ? 'crm-select-placeholder' : ''}
                           >
+                            <option value="">Non renseigné.</option>
                             <option value="Défibrillateur">Défibrillateur</option>
                             <option value="Maintenance">Maintenance</option>
                             <option value="Consommable(s)">Consommable(s)</option>
@@ -4323,7 +4611,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             value={formIndicateurTempsDevis}
                             onChange={(e) => setFormIndicateurTempsDevis(e.target.value)}
                             style={selectStyle}
+                            className={!formIndicateurTempsDevis ? 'crm-select-placeholder' : ''}
                           >
+                            <option value="">Non renseigné.</option>
                             <option value="Validation de budget">Validation de budget</option>
                             <option value="Vente via revendeur">Vente via revendeur</option>
                             <option value="Plateforme d’achat">Plateforme d’achat</option>
@@ -4459,19 +4749,15 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         {formFichiersDevis.length > 0 && (
                           <div className="space-y-2 pt-1">
                             {formFichiersDevis.map((f, idx) => {
-                              const displayName = f.name.length > 15 ? `${f.name.slice(0, 15)}...` : f.name;
                               return (
                                 <div 
                                   key={idx}
-                                  className="flex items-center justify-between gap-3 p-3 bg-white rounded-xl flex-wrap"
-                                  style={{ border: '1px solid #DCE1EA', boxShadow: 'none' }}
+                                  className="flex items-center justify-between gap-3 p-3 rounded-xl flex-wrap"
+                                  style={{ border: 'none', backgroundColor: 'rgb(233, 235, 239)', boxShadow: 'none' }}
                                 >
-                                  <div className="flex items-center gap-4 text-[16px] text-black font-sans">
-                                    <span className="font-semibold text-black whitespace-nowrap">
+                                  <div className="flex items-center gap-4 text-black font-sans" style={{ fontSize: '18px' }}>
+                                    <span className="font-semibold text-black whitespace-nowrap" style={{ fontSize: '18px' }}>
                                       {f.dateAjout}
-                                    </span>
-                                    <span className="font-medium text-black whitespace-nowrap" title={f.name}>
-                                      {displayName}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -4486,6 +4772,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                       }}
                                       style={{
                                         fontSize: '18px',
+                                        height: '38px',
                                         textAlign: 'center',
                                         textAlignLast: 'center',
                                         appearance: 'none',
@@ -4508,9 +4795,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                         backgroundColor: '#0f172a',
                                         color: '#ffffff',
                                         borderRadius: '10px',
-                                        fontSize: '14px',
+                                        fontSize: '18px',
                                         fontWeight: 600,
-                                        padding: '6px 14px',
+                                        height: '38px',
+                                        padding: '0 14px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
                                         border: 'none',
                                         cursor: 'pointer',
                                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
@@ -4528,9 +4819,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                         backgroundColor: 'rgb(203, 20, 20)',
                                         color: '#ffffff',
                                         borderRadius: '10px',
-                                        fontSize: '14px',
+                                        fontSize: '18px',
                                         fontWeight: 600,
-                                        padding: '6px 14px',
+                                        height: '38px',
+                                        padding: '0 14px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
                                         border: 'none',
                                         cursor: 'pointer',
                                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
@@ -4562,7 +4857,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       {/* Total Affaire / Famille / Indicatif Postal / Origine Lead (4 cols équitables sur la même ligne) */}
                       <div className="grid grid-cols-4 gap-3">
                         <div>
-                          <label>Total Affaire HT.</label>
+                          <label>Total Affaire HT. (€)</label>
                           <div className="relative flex items-center">
                             <input
                               type="number"
@@ -4571,11 +4866,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               placeholder="0.00"
                               value={formTotalAffaireHT}
                               onChange={(e) => setFormTotalAffaireHT(e.target.value)}
-                              style={{ paddingRight: '48px' }}
                             />
-                            <span className="absolute right-3 text-xs font-semibold font-sans pointer-events-none" style={{ color: '#000000' }}>
-                              € HT
-                            </span>
                           </div>
                         </div>
 
@@ -4587,7 +4878,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             placeholder="Ex: A."
                             value={formFamille}
                             onChange={(e) => setFormFamille(e.target.value.slice(0, 1).toUpperCase())}
-                            style={{ textTransform: 'uppercase', textAlign: 'center', fontSize: '18px', fontWeight: 600 }}
+                            style={{ textAlign: 'center', fontSize: '18px', fontWeight: 600 }}
                           />
                         </div>
 
@@ -4609,7 +4900,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             value={formOrigineLead}
                             onChange={(e) => setFormOrigineLead(e.target.value)}
                             style={selectStyle}
+                            className={!formOrigineLead ? 'crm-select-placeholder' : ''}
                           >
+                            <option value="">Non renseigné.</option>
                             <option value="Service Client">Service Client</option>
                             <option value="Direct">Direct</option>
                             <option value="Internet">Internet</option>
@@ -4751,8 +5044,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     </div>
                   )}
 
-                  {/* 5-bis. SPECIFIC BLOCK WHEN CATEGORY IS TECHNIQUE / RÉCLAMATION / SANS CATÉGORIE: ENVOI DE MESSAGE AU CLIENT & HISTORIQUE */}
-                  {formCategorie !== 'Commercial' && (
+                  {/* 5-bis. SPECIFIC BLOCK WHEN CATEGORY IS TECHNIQUE / RÉCLAMATION / SANS CATÉGORIE: ENVOI DE MESSAGE AU CLIENT & HISTORIQUE (hidden on ticket creation before save) */}
+                  {Boolean(editingTicketId) && formCategorie !== 'Commercial' && (
                     <div 
                       className="space-y-4 animate-fadeIn"
                       style={{
@@ -4770,7 +5063,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             backgroundColor: 'rgb(61 220 132)',
                             color: '#115830',
                             fontSize: '18px',
-                            padding: '9px 18px',
+                            padding: '8px 17px',
                             borderRadius: '1000px',
                             cursor: 'default',
                             fontWeight: 100,
@@ -4781,14 +5074,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         </span>
                       </div>
 
-                      <div className="flex items-center justify-between">
-                        <label className="!mb-0" style={{ fontSize: '18px', fontWeight: 600, color: '#000000' }}>
-                          Messages au client.
-                        </label>
+                      <div className="flex items-center justify-end">
                         <button
                           type="button"
                           onClick={handleOpenNewMessage}
-                          disabled={!isNewMessageOpen && formSupportMessages.length >= 5}
+                          disabled={isNewMessageOpen || formSupportMessages.length >= 5}
                           style={{
                             backgroundColor: '#0f172a',
                             color: '#ffffff',
@@ -4796,13 +5086,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             fontSize: '18px',
                             padding: '8px 16px',
                             border: 'none',
-                            cursor: !isNewMessageOpen && formSupportMessages.length >= 5 ? 'not-allowed' : 'pointer',
-                            opacity: !isNewMessageOpen && formSupportMessages.length >= 5 ? 0.45 : 1,
+                            cursor: isNewMessageOpen || formSupportMessages.length >= 5 ? 'not-allowed' : 'pointer',
+                            opacity: isNewMessageOpen || formSupportMessages.length >= 5 ? 0.45 : 1,
                             fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                           }}
-                          className={!isNewMessageOpen && formSupportMessages.length >= 5 ? 'transition-colors' : 'hover:bg-zinc-800 transition-colors'}
+                          className={isNewMessageOpen || formSupportMessages.length >= 5 ? 'transition-colors' : 'hover:bg-zinc-800 transition-colors'}
                         >
-                          {isNewMessageOpen ? 'Fermer le formulaire' : 'Nouveau message'}
+                          Nouveau message
                         </button>
                       </div>
 
@@ -4815,10 +5105,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       {/* Sub-form: Nouveau message */}
                       {isNewMessageOpen && (
                         <div 
-                          className="p-4 rounded-xl space-y-3.5 shadow-xs animate-fadeIn"
+                          className="p-4 rounded-xl space-y-3.5 animate-fadeIn"
                           style={{
-                            backgroundColor: '#ffffff',
-                            border: '1px solid #dadada',
+                            backgroundColor: 'rgb(245, 247, 250)',
+                            border: 'none',
+                            boxShadow: 'none',
                           }}
                         >
                           <div>
@@ -4840,17 +5131,25 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           <div>
                             <label className="text-xs !font-semibold text-slate-600 !mb-1">Message.</label>
                             <textarea
-                              rows={5}
+                              ref={supportMessageTextareaRef}
+                              rows={1}
                               value={newMessageBody}
-                              onChange={(e) => setNewMessageBody(e.target.value)}
+                              onInput={adjustSupportMessageHeight}
+                              onChange={(e) => {
+                                setNewMessageBody(e.target.value);
+                                adjustSupportMessageHeight();
+                              }}
                               placeholder="Ex: Entrez un message."
                               style={{
                                 fontSize: '15px !important',
                                 padding: '10px 12px !important',
                                 borderRadius: '8px !important',
-                                resize: 'vertical',
+                                resize: 'none',
+                                overflow: 'hidden',
+                                minHeight: '44px',
                                 width: '100%',
-                                lineHeight: '1.5'
+                                lineHeight: '1.5',
+                                display: 'block',
                               }}
                             />
                           </div>
@@ -4860,7 +5159,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               type="button"
                               onClick={() => setIsNewMessageOpen(false)}
                               style={{
-                                backgroundColor: '#0f172a',
+                                backgroundColor: 'rgb(210, 45, 11)',
                                 color: '#ffffff',
                                 borderRadius: '12px',
                                 padding: '8px 18px',
@@ -4870,7 +5169,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 cursor: 'pointer',
                                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                               }}
-                              className="hover:bg-zinc-800 transition-colors shadow-xs"
+                              className="hover:opacity-90 transition-opacity"
                             >
                               Annuler
                             </button>
@@ -4889,7 +5188,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 cursor: isSendingSupportMessage ? 'wait' : 'pointer',
                                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                               }}
-                              className="hover:bg-[#2b48cc] transition-colors shadow-xs"
+                              className="hover:bg-[#2b48cc] transition-colors"
                             >
                               {isSendingSupportMessage ? 'Envoi en cours...' : 'Envoyer'}
                             </button>
@@ -4905,19 +5204,19 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               key={msg.id} 
                               className="p-3.5 rounded-xl space-y-2 transition-colors"
                               style={{
-                                backgroundColor: '#ffffff',
-                                border: '1px solid #dadada',
+                                backgroundColor: 'rgb(245, 247, 250)',
+                                border: 'none',
                               }}
                             >
-                              <div className="font-sans font-medium" style={{ fontSize: '16px', color: '#000000' }}>
+                              <div className="font-sans font-medium" style={{ fontSize: '18px', color: '#000000' }}>
                                 {msg.date} à {msg.heure}
                               </div>
 
-                              <div className="font-sans font-bold" style={{ fontSize: '16px', color: '#000000' }}>
+                              <div className="font-sans font-bold" style={{ fontSize: '18px', color: '#000000' }}>
                                 {msg.objet}
                               </div>
 
-                              <div className="font-sans whitespace-pre-wrap leading-relaxed" style={{ fontSize: '16px', color: '#000000' }}>
+                              <div className="font-sans whitespace-pre-wrap leading-relaxed" style={{ fontSize: '18px', color: '#000000' }}>
                                 {msg.message}
                               </div>
                             </div>
@@ -5359,7 +5658,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       }}
                     >
                       <option value="Tous">Tous</option>
-                      {members.map((m) => (
+                      {nonTechMembers.map((m) => (
                         <option key={m.id || m.name} value={m.name}>
                           {m.name}
                         </option>
@@ -5479,7 +5778,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         className="flex items-baseline justify-center gap-1 font-sans"
                       >
                         <span>
-                          {statVolumeAffaires.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          {statVolumeAffaires >= 1000 ? `${Math.floor(statVolumeAffaires / 1000)}k` : Math.floor(statVolumeAffaires)}
                         </span>
                         <span style={{ fontSize: '22px', marginLeft: '-3px' }}>
                           €
@@ -5487,7 +5786,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       </div>
                     </div>
 
-                    {/* Bloc stat 4: « Score closing » */}
+                    {/* Bloc stat 4: « Score closing (/10) » */}
                     <div 
                       className="p-4 rounded-2xl text-center flex flex-col items-center justify-center space-y-2"
                       style={{
@@ -5507,7 +5806,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         }}
                         className="font-sans block"
                       >
-                        Score closing
+                        Score closing (/10)
                       </span>
                       <div 
                         style={{
@@ -5524,7 +5823,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       </div>
                     </div>
 
-                    {/* Bloc stat 5: « Temps closing » */}
+                    {/* Bloc stat 5: « Temps moyen closing » */}
                     <div 
                       className="p-4 rounded-2xl text-center flex flex-col items-center justify-center space-y-2"
                       style={{
@@ -5544,7 +5843,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         }}
                         className="font-sans block"
                       >
-                        Temps closing
+                        Temps moyen closing
                       </span>
                       <div 
                         style={{
@@ -5561,7 +5860,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       </div>
                     </div>
 
-                    {/* Bloc stat 6: « Meilleur Closer » */}
+                    {/* Bloc stat 6: « Meilleur membre » */}
                     <div 
                       className="p-4 rounded-2xl text-center flex flex-col items-center justify-center space-y-2"
                       style={{
@@ -5581,7 +5880,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         }}
                         className="font-sans block"
                       >
-                        Meilleur Closer
+                        Meilleur membre
                       </span>
                       <div 
                         style={{
@@ -5752,9 +6051,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       {/* Multiline textarea */}
                       <textarea
                         id={tpl.idx === 1 ? "crm-relance-email-textarea" : `crm-relance-email-textarea-${tpl.idx}`}
-                        rows={7}
+                        rows={1}
                         value={tpl.body}
-                        onChange={(e) => tpl.setBody(e.target.value)}
+                        onInput={adjustSettingsTextareasHeight}
+                        onChange={(e) => {
+                          tpl.setBody(e.target.value);
+                          adjustSettingsTextareasHeight();
+                        }}
                         placeholder="Écrivez le modèle d'email de relance..."
                         style={{
                           width: '100%',
@@ -5762,10 +6065,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           border: '1px solid #dadada',
                           borderRadius: '13px',
                           fontSize: '16px',
+                          backgroundColor: '#ffffff',
                           color: '#000000',
                           boxSizing: 'border-box',
                           outline: 'none',
-                          resize: 'vertical',
+                          resize: 'none',
+                          overflow: 'hidden',
+                          minHeight: '60px',
                           lineHeight: '1.5',
                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                         }}
@@ -5875,9 +6181,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     {/* Multiline textarea */}
                     <textarea
                       id="crm-support-email-textarea"
-                      rows={7}
+                      rows={1}
                       value={supportEmailBody}
-                      onChange={(e) => setSupportEmailBody(e.target.value)}
+                      onInput={adjustSettingsTextareasHeight}
+                      onChange={(e) => {
+                        setSupportEmailBody(e.target.value);
+                        adjustSettingsTextareasHeight();
+                      }}
                       placeholder="Écrivez le modèle d'email initial de support..."
                       style={{
                         width: '100%',
@@ -5885,10 +6195,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         border: '1px solid #dadada',
                         borderRadius: '13px',
                         fontSize: '16px',
+                        backgroundColor: '#ffffff',
                         color: '#000000',
                         boxSizing: 'border-box',
                         outline: 'none',
-                        resize: 'vertical',
+                        resize: 'none',
+                        overflow: 'hidden',
+                        minHeight: '60px',
                         lineHeight: '1.5',
                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif'
                       }}
@@ -5939,7 +6252,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       readOnly
                       value={embedCode}
                       style={{
-                        backgroundColor: '#3b1e62',
+                        backgroundColor: '#000000',
                         color: '#ffffff',
                         fontFamily: "'Civilprom', sans-serif",
                         fontSize: '16px',
@@ -5981,20 +6294,6 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       {copiedEmbed ? "Copié !" : "Copier le code"}
                     </button>
                   </div>
-                </div>
-
-                {/* Section 3: Recommandations */}
-                <div 
-                  className="rounded-2xl p-5 space-y-3 text-left"
-                  style={{ backgroundColor: 'rgb(245, 247, 250)', border: 'none' }}
-                  id="crm-settings-section-recommendations"
-                >
-                  <p 
-                    className="text-black font-sans leading-relaxed"
-                    style={{ fontSize: '18px', color: '#000000', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                  >
-                    Les clients existants peuvent envoyer leurs demandes directement depuis leur espace client. Nous vous recommandons de créer une page de contact sur votre site web et d’y intégrer le formulaire à l'aide du code prêt à coller ci-dessus. Les demandes envoyées via ce formulaire arriveront également automatiquement dans votre CRM.
-                  </p>
                 </div>
               </div>
 

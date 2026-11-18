@@ -905,7 +905,9 @@ export default function GmaoCorrectionForm({
     base.modeleBatterieId = resolveModelVarId(base.modeleBatterieId || (base as any).modeleBatterie, 'Modèle Batterie');
     base.modeleBatterieSecoursId = resolveModelVarId(base.modeleBatterieSecoursId || (base as any).modeleBatterieSecours, 'Modèle Batterie');
 
-    base.derniereMaintenance = toIsoDateStr(base.derniereMaintenance || report?.date);
+    const rawRepDate = String(report?.date || '').trim();
+    const isPlaceholderRepDate = /^(à venir|a venir|a trier|à trier|a-trier|-|—)$/i.test(rawRepDate);
+    base.derniereMaintenance = toIsoDateStr(base.derniereMaintenance || (!isPlaceholderRepDate ? rawRepDate : ''));
     base.prochaineMaintenance = toIsoDateStr(base.prochaineMaintenance);
     base.sortieFabricant = toIsoDateStr(base.sortieFabricant);
     base.fabrication = toIsoDateStr(base.fabrication);
@@ -959,8 +961,14 @@ export default function GmaoCorrectionForm({
     } catch (e) {}
     return 'Technicien connecté';
   });
+  const isPlaceholderDateValue = (val: any): boolean => {
+    const s = String(val ?? '').trim();
+    if (!s) return true;
+    return /^(à venir|a venir|a trier|à trier|a-trier|-|—)$/i.test(s);
+  };
   const [interventionDate, setInterventionDate] = useState(() => {
-    if (report?.date || report?.dateStr || report?.interventionDate) return report.date || report.dateStr || report.interventionDate;
+    const candidateDate = report?.date || report?.dateStr || report?.interventionDate;
+    if (candidateDate && !isPlaceholderDateValue(candidateDate)) return candidateDate;
     const now = new Date();
     const day = String(now.getDate()).padStart(2, '0');
     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -1666,12 +1674,14 @@ export default function GmaoCorrectionForm({
           : rawRepTitle;
       setReportTitle(normRepTitle);
       if (report.techName) setTechName(report.techName);
-      if (report.date) setInterventionDate(report.date);
+      if (report.date && !isPlaceholderDateValue(report.date)) setInterventionDate(report.date);
       if (report.siteMission) setMissionSite(report.siteMission === 'ATELIER SAV' ? 'ATELIER SAV' : 'DÉPLACEMENT');
       setPhotoUrl(prev => (isSameReportSession && prev) ? prev : (report.photoUrl || report.defibSnapshot?.photoUrl || ''));
       setPhotoArriereUrl(prev => (isSameReportSession && prev) ? prev : (report.photoArriereUrl || ''));
       setPhotoResultatTestUrl(prev => (isSameReportSession && prev) ? prev : (report.photoResultatTestUrl || ''));
-      setInterventionReference(report.interventionReference || '');
+      if (report.interventionReference && String(report.interventionReference).trim()) {
+        setInterventionReference(String(report.interventionReference).trim());
+      }
       setAutreReference(report.autreReference || report.customReference || '');
       setMaterielInterchangeClient(report.materielInterchangeClient || 'Non');
       setCommentaireChangement(report.commentaireChangement || '');
@@ -3315,9 +3325,9 @@ export default function GmaoCorrectionForm({
     }
 
     const nowFormatted = new Date().toLocaleString('fr-FR');
-    const finalIntervDate = interventionDate || nowFormatted;
+    const finalIntervDate = (!isPlaceholderDateValue(interventionDate) ? interventionDate : '') || nowFormatted;
     const finalEndTimeStamp = endTimeStamp || nowFormatted;
-    if (!interventionDate) setInterventionDate(finalIntervDate);
+    if (!interventionDate || isPlaceholderDateValue(interventionDate)) setInterventionDate(finalIntervDate);
     if (!endTimeStamp) setEndTimeStamp(finalEndTimeStamp);
 
     const todayStr = new Date().toISOString().split('T')[0];

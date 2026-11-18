@@ -10193,74 +10193,175 @@ async function warmupDefibrillateursStore() {
     }
   });
 
-  app.post("/api/crm/embed-lead", async (req, res) => {
+  app.options("/api/crm/embed-lead", (_req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept");
+    return res.sendStatus(204);
+  });
+
+  app.post("/api/crm/embed-lead", express.text({ type: ["text/plain"] }), async (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept");
     try {
-      const { tenantId, name, email, message, redirectUrl } = req.body;
-      
+      let bodyObj: any = req.body;
+      if (typeof bodyObj === "string") {
+        try {
+          bodyObj = JSON.parse(bodyObj);
+        } catch {
+          const sp = new URLSearchParams(bodyObj);
+          bodyObj = Object.fromEntries(sp.entries());
+        }
+      }
+      const { tenantId, name, email, message, redirectUrl } = bodyObj || {};
+
       if (!email || !message) {
         const errMsg = "Tous les champs (email, message) sont obligatoires.";
         return res.status(400).json({ success: false, error: errMsg });
       }
-      
+
       // Sanitize tenantId (alphanumeric, underscore, hyphen only)
       const rawTenantId = (tenantId || "demo").toString().trim();
-      const sanitizedTenantId = rawTenantId.replace(/[^a-zA-Z0-9_-]/g, '');
+      const sanitizedTenantId = rawTenantId.replace(/[^a-zA-Z0-9_-]/g, "") || "demo";
 
-      // Verify if target tenant exists in Database or fallback to 'demo'
+      // Resolve target tenant across registered tenants and aliases without losing valid tenant IDs (e.g. D67)
       const tenants = await getRegisteredTenantsFromDb();
-      const matchedTenant = sanitizedTenantId === "demo" ? true : tenants.find(t => t.id === sanitizedTenantId || t.shortEnvId === sanitizedTenantId);
-      const targetTenantId = matchedTenant ? (matchedTenant === true ? "demo" : matchedTenant.id) : "demo";
-      
-      const collectionKey = targetTenantId === "demo" ? "tickets" : `${targetTenantId}_tickets`;
-      
-      // Fetch existing tickets from server memory store first, with Firestore fallback
-      let tickets: any[] = [];
-      const cachedTickets = serverMemoryStore.get(collectionKey);
-      if (Array.isArray(cachedTickets)) {
-        tickets = [...cachedTickets];
-      } else if (!isServerFirestoreQuotaExhausted()) {
+      const lowerSanitized = sanitizedTenantId.toLowerCase();
+      const matchedTenant =
+        lowerSanitized === "demo"
+          ? null
+          : tenants.find(
+              (t: any) =>
+                String(t?.id || "").toLowerCase() === lowerSanitized ||
+                String(t?.shortEnvId || "").toLowerCase() === lowerSanitized ||
+                String(t?.code || "").toLowerCase() === lowerSanitized
+            );
+
+      const targetTenantId =
+        lowerSanitized === "demo"
+          ? "demo"
+          : matchedTenant?.shortEnvId ||
+            matchedTenant?.id ||
+            (/^d\d+$/i.test(sanitizedTenantId) ? sanitizedTenantId.toUpperCase() : sanitizedTenantId);
+
+      const rawAliases = Array.from(getTenantAliasesSync(targetTenantId));
+      const tenantAliases = Array.from(
+        new Set(
+          [
+            targetTenantId,
+            targetTenantId.toUpperCase(),
+            targetTenantId.toLowerCase(),
+            matchedTenant?.id,
+            matchedTenant?.shortEnvId,
+            ...rawAliases,
+          ].filter(Boolean)
+        )
+      ) as string[];
+
+      const crmSheetUrl = await resolveTenantSpreadsheetUrl(targetTenantId, "crm");
+
+      // Fetch existing tickets from server collection & CRM spreadsheet (if available) to generate next reference
+      let tickets: any[] = await fetchServerCollection("tickets", targetTenantId, tenantAliases);
+      if (!Array.isArray(tickets)) tickets = [];
+
+      if (crmSheetUrl && extractSpreadsheetIdAndGid(crmSheetUrl)) {
         try {
-          const docRef = doc(db, 'appData', collectionKey);
-          const snap = await withTimeout(getDoc(docRef), 2500, null);
-          if (snap && snap.exists()) {
-            tickets = snap.data().value || [];
+          const sheetData = await fetchTenantSheetCollection(crmSheetUrl, targetTenantId, "crm", false);
+          if (Array.isArray(sheetData?.items) && sheetData.items.length > 0) {
+            const byId = new Map<string, any>();
+            for (const item of [...sheetData.items, ...tickets]) {
+              const k = String(item?.id || item?.reference || "").trim();
+              if (k) byId.set(k, item);
+            }
+            tickets = Array.from(byId.values());
           }
         } catch (_) {}
       }
-      
+
       // Sanitize input values to prevent XSS
-      const cleanMessage = String(message).replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const cleanName = String(name || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const cleanMessage = String(message).replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
+      const cleanName = String(name || "").replace(/</g, "&lt;").replace(/>/g, "&gt;").trim();
       const cleanEmail = String(email).trim();
 
-      const randomId = `#${Math.floor(100000 + Math.random() * 900000)}`;
+      const now = new Date();
+      const dd = String(now.getDate()).padStart(2, "0");
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      const yyyy = now.getFullYear();
+      const yy = String(yyyy).slice(-2);
+      const todayFormatted = `${dd}/${mm}/${yyyy}`;
+
+      let envCode = /^D\d+$/i.test(targetTenantId)
+        ? targetTenantId.toUpperCase()
+        : matchedTenant?.shortEnvId && /^D\d+$/i.test(matchedTenant.shortEnvId)
+        ? matchedTenant.shortEnvId.toUpperCase()
+        : "D18";
+      for (const t of tickets) {
+        const refStr = String(t?.reference || t?.id || "").trim();
+        const m = refStr.match(/^\d{1,5}-(D\d+)-\d{4}$/i);
+        if (m && m[1]) {
+          envCode = m[1].toUpperCase();
+          break;
+        }
+      }
+
+      let maxNum = 0;
+      for (const t of tickets) {
+        const refStr = String(t?.reference || t?.id || "").trim();
+        const m = refStr.match(/^(\d{1,5})(?=-)/);
+        if (m) {
+          const parsed = parseInt(m[1], 10);
+          if (!isNaN(parsed) && parsed > maxNum) {
+            maxNum = parsed;
+          }
+        }
+      }
+      const nextRef = `${String(maxNum + 1).padStart(5, "0")}-${envCode}-${mm}${yy}`;
+
       const newTicket = {
-        id: randomId,
-        identifiant: "",
-        objet: cleanName ? `Formulaire intégré (${cleanName})` : "Formulaire intégré",
-        message: `[Message depuis le site web]\n${cleanMessage}`,
-        email: cleanEmail,
-        phone: "-",
-        date: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        id: nextRef,
+        reference: nextRef,
+        identifiant: nextRef,
+        categorie: "Sans Catégorie",
+        situation: "Nouveau",
         status: "Nouveau",
+        criticite: "Non renseigné",
+        dateOuverture: todayFormatted,
+        dateDerniereActualisation: todayFormatted,
+        date: todayFormatted,
+        objet: cleanName ? `Formulaire intégré (${cleanName})` : "Formulaire intégré",
+        collaborateur: "Non attribué",
+        client: cleanName || "Autre",
+        isCustomClient: true,
+        customClientName: cleanName || "",
+        email: cleanEmail,
+        phone: "",
+        telephone: "",
+        situationInterlocuteur: "Prospect",
+        typeStructure: "Entreprise",
+        description: cleanMessage,
+        message: cleanMessage,
         envId: targetTenantId,
-        tenantId: targetTenantId
+        tenantId: targetTenantId,
       };
-      
-      tickets.unshift(newTicket);
-      serverMemoryStore.set(collectionKey, tickets);
-      try {
-        persistSingleCollectionToDisk(collectionKey, tickets);
-      } catch (_) {}
-      upsertRecordsToTenantSheet(targetTenantId, 'crm', [newTicket]).catch(() => {});
-      await safeServerSetDoc(doc(db, 'appData', collectionKey), { value: tickets });
-      
+
+      if (crmSheetUrl && extractSpreadsheetIdAndGid(crmSheetUrl)) {
+        try {
+          await upsertRecordsToTenantSheet(crmSheetUrl, targetTenantId, "crm", [newTicket]);
+        } catch (sheetErr) {
+          console.error("[CRM Embed Lead] Error upserting ticket to CRM spreadsheet:", sheetErr);
+        }
+      }
+
+      tickets = [newTicket, ...tickets.filter((t: any) => t && t.id !== nextRef)];
+      await saveServerCollection("tickets", targetTenantId, tickets, tenantAliases);
+
       // If redirectUrl is supplied, redirect there if it's a valid relative or https URL
-      if (redirectUrl && (redirectUrl.startsWith('/') || redirectUrl.startsWith('http://') || redirectUrl.startsWith('https://'))) {
+      if (redirectUrl && (redirectUrl.startsWith("/") || redirectUrl.startsWith("http://") || redirectUrl.startsWith("https://"))) {
         return res.redirect(redirectUrl);
       }
-      
-      return res.json({ success: true, message: "Message envoyé avec succès." });
+
+      return res.json({ success: true, message: "Message envoyé avec succès.", ticket: newTicket });
     } catch (error: any) {
       console.error("Error saving embed lead:", error);
       const errMsg = error.message || "Une erreur est survenue lors de l'envoi du message.";
@@ -10340,9 +10441,9 @@ async function warmupDefibrillateursStore() {
       if (Array.isArray(attachments) && attachments.length > 0) {
         payload.attachments = attachments;
       }
-      let resolvedSenderName = (name || senderName || req.body.fromName || req.body.displayName || '').trim();
+      let resolvedSenderName = (name || senderName || req.body.fromName || req.body.displayName || req.body.nomCommercial || req.body.companyName || '').trim();
       const isSystemAuth = req.body.isSystemAuthEmail === true;
-      if (!resolvedSenderName || resolvedSenderName.toLowerCase() === 'defibeo' || resolvedSenderName.toLowerCase() === 'défibeo') {
+      if (!resolvedSenderName || resolvedSenderName.includes('@') || resolvedSenderName.toLowerCase() === 'defibeo' || resolvedSenderName.toLowerCase() === 'défibeo') {
         resolvedSenderName = isSystemAuth ? 'Défibeo' : 'Défibeo Solutions';
       }
 
@@ -10350,6 +10451,12 @@ async function warmupDefibrillateursStore() {
       payload.senderName = resolvedSenderName;
       payload.fromName = resolvedSenderName;
       payload.displayName = resolvedSenderName;
+      payload.nomCommercial = resolvedSenderName;
+      payload.companyName = resolvedSenderName;
+      payload.options = {
+        name: resolvedSenderName,
+        replyTo: payload.replyTo,
+      };
 
       console.log(`[API /api/send-email] Dispatching email to "${payload.to}" with subject "${payload.subject}" (sender: "${payload.name || 'default'}") via Apps Script: ${targetUrl}`);
 
