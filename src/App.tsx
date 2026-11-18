@@ -2777,13 +2777,19 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
   const [isSidebarMoreOpen, setIsSidebarMoreOpen] = useState(false);
   const [hoveredSidebarItem, setHoveredSidebarItem] = useState<{ id: string; label: string; centerY: number } | null>(null);
 
-  // Real-time active tenant sessions (floating bottom-right bar in Logiciel Principal)
+  // Real-time active tenant sessions (floating bottom-center bar in Logiciel Principal)
   const [otherPresenceSessions, setOtherPresenceSessions] = useState<Array<{ sessionId: string; email: string; name: string; connectedAt: number }>>([]);
   const [displayedOtherSessions, setDisplayedOtherSessions] = useState<Array<{ sessionId: string; email: string; name: string; displayName: string; connectedAt: number }>>([]);
   const [isPresenceBarExiting, setIsPresenceBarExiting] = useState(false);
   const [presenceBumpTick, setPresenceBumpTick] = useState(0);
   const [hoveredPresenceIconIdx, setHoveredPresenceIconIdx] = useState<number | null>(null);
+  const [isPresenceBarHovered, setIsPresenceBarHovered] = useState(false);
   const [presenceBarMousePos, setPresenceBarMousePos] = useState<{ x: number; y: number } | null>(null);
+  const presenceBarLeaveTimeoutRef = useRef<number | null>(null);
+  const presenceIconLeaveTimeoutRef = useRef<number | null>(null);
+  const presenceSessionsCacheRef = useRef<
+    Map<string, { sessionId: string; email: string; name: string; role?: string; connectedAt: number; lastSeenAt: number }>
+  >(new Map());
 
   useEffect(() => {
     const preloadUrls = [
@@ -2803,10 +2809,12 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
 
   useEffect(() => {
     if (!isLoggedIn || isPublicPortalOpen || isClientPortalOpen || typeof window === 'undefined') {
+      presenceSessionsCacheRef.current.clear();
       setOtherPresenceSessions([]);
       return;
     }
 
+    const PRESENCE_CACHE_RETENTION_MS = 125000; // >= 120 seconds retention cache
     const tabInstanceId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     let mySessionId = '';
     try {
@@ -2820,16 +2828,119 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     }
 
     const activeTenant = (tenantId || localStorage.getItem('defib_tenant_id') || 'demo').trim();
+    const cacheStorageKey = `defib_${activeTenant.toLowerCase()}_presence_cache_v1`;
+
+    const isGenericPresenceName = (val?: string | null): boolean => {
+      const s = String(val || '').trim();
+      if (!s) return true;
+      const lower = s.toLowerCase();
+      return lower === 'membre' || lower === 'utilisateur' || lower === 'administrateur' || lower === 'technicien' || s.includes('@');
+    };
+
+    const syncCacheToState = (now = Date.now()) => {
+      const cacheMap = presenceSessionsCacheRef.current;
+      for (const [sid, entry] of cacheMap.entries()) {
+        if (sid === mySessionId || now - entry.lastSeenAt > PRESENCE_CACHE_RETENTION_MS) {
+          cacheMap.delete(sid);
+        }
+      }
+      const list = Array.from(cacheMap.values()).sort((a, b) => a.connectedAt - b.connectedAt);
+      try {
+        localStorage.setItem(cacheStorageKey, JSON.stringify(list));
+      } catch (_) {}
+      setOtherPresenceSessions((prev) => {
+        if (
+          prev.length === list.length &&
+          prev.every(
+            (p, idx) =>
+              p.sessionId === list[idx].sessionId &&
+              p.name === list[idx].name &&
+              p.email === list[idx].email
+          )
+        ) {
+          return prev;
+        }
+        return list;
+      });
+    };
+
+    // Hydrate initial 120s cache from localStorage so page/tab switches never flicker
+    try {
+      const rawCache = localStorage.getItem(cacheStorageKey);
+      if (rawCache) {
+        const parsed = JSON.parse(rawCache);
+        const now = Date.now();
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item: any) => {
+            if (
+              item &&
+              typeof item.sessionId === 'string' &&
+              item.sessionId !== mySessionId &&
+              typeof item.lastSeenAt === 'number' &&
+              now - item.lastSeenAt <= PRESENCE_CACHE_RETENTION_MS
+            ) {
+              presenceSessionsCacheRef.current.set(item.sessionId, {
+                sessionId: item.sessionId,
+                email: String(item.email || ''),
+                name: String(item.name || 'Membre'),
+                role: String(item.role || 'admin'),
+                connectedAt: Number(item.connectedAt || item.lastSeenAt || now),
+                lastSeenAt: Number(item.lastSeenAt),
+              });
+            }
+          });
+          syncCacheToState(now);
+        }
+      }
+    } catch (_) {}
+
     const userEmail = (loggedUser?.email || '').trim().toLowerCase();
-    const safeMembers = Array.isArray(members) ? members : [];
+    const getStoredMembersFallback = (): any[] => {
+      if (Array.isArray(members) && members.length > 0) return members;
+      try {
+        const raw =
+          localStorage.getItem(`defib_${activeTenant}_members`) ||
+          localStorage.getItem(`defib_${activeTenant.toUpperCase()}_members`) ||
+          localStorage.getItem(`defib_${activeTenant.toLowerCase()}_members`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (_) {}
+      return [];
+    };
+    const extractFullMemberName = (m: any): string => {
+      if (!m || typeof m !== 'object') return '';
+      const raw = String(
+        m.name ||
+          m.nomPrenom ||
+          m['Nom et prénom.'] ||
+          m['Nom et prénom'] ||
+          m['Nom Prénom'] ||
+          m.nom ||
+          ''
+      ).trim();
+      const lower = raw.toLowerCase();
+      if (!raw || lower === 'membre' || lower === 'utilisateur' || lower === 'administrateur' || raw.includes('@')) {
+        return '';
+      }
+      return raw;
+    };
+    const safeMembers = getStoredMembersFallback();
     const matchedMember = safeMembers.find(
-      (m) => m && userEmail && String(m.email || '').trim().toLowerCase() === userEmail
+      (m) => m && userEmail && String(m.email || m['Email.'] || m['Email'] || '').trim().toLowerCase() === userEmail
     );
+    const nonGenericLoggedName = (() => {
+      const n = String(loggedUser?.name || '').trim();
+      const l = n.toLowerCase();
+      return n && l !== 'membre' && l !== 'utilisateur' && l !== 'administrateur' && !n.includes('@') ? n : '';
+    })();
     const resolvedMyName =
-      (matchedMember?.name && String(matchedMember.name).trim()) ||
-      (currentLoggedInMember?.name && String(currentLoggedInMember.name).trim()) ||
-      (loggedUser?.name && String(loggedUser.name).trim()) ||
+      extractFullMemberName(matchedMember) ||
+      extractFullMemberName(currentLoggedInMember) ||
+      nonGenericLoggedName ||
       (companyInfo?.adminName && String(companyInfo.adminName).trim()) ||
+      (safeMembers.length === 1 ? extractFullMemberName(safeMembers[0]) : '') ||
       userEmail ||
       'Membre';
     const userRole = (localStorage.getItem('defib_logged_user_role') || 'admin').trim();
@@ -2851,13 +2962,42 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             role: userRole,
           }),
         });
-        if (!res.ok || isCancelled) return;
+        if (!res.ok || isCancelled) {
+          syncCacheToState(Date.now());
+          return;
+        }
         const data = await res.json();
         if (data && Array.isArray(data.sessions) && !isCancelled) {
+          const now = Date.now();
           const others = data.sessions.filter((s: any) => s && s.sessionId && s.sessionId !== mySessionId);
-          setOtherPresenceSessions(others);
+          for (const s of others) {
+            const sid = String(s.sessionId);
+            const prev = presenceSessionsCacheRef.current.get(sid);
+            const incomingName = String(s.name || '').trim();
+            const bestName = !isGenericPresenceName(incomingName)
+              ? incomingName
+              : prev && !isGenericPresenceName(prev.name)
+              ? prev.name
+              : incomingName || prev?.name || 'Membre';
+            const bestEmail = String(s.email || prev?.email || '').trim().toLowerCase();
+            const serverLastSeen = typeof s.lastSeen === 'number' && s.lastSeen > 0 ? s.lastSeen : now;
+            const effectiveLastSeen = prev ? Math.max(prev.lastSeenAt, serverLastSeen) : serverLastSeen;
+            presenceSessionsCacheRef.current.set(sid, {
+              sessionId: sid,
+              email: bestEmail,
+              name: bestName,
+              role: String(s.role || prev?.role || 'admin'),
+              connectedAt: Number(s.connectedAt || prev?.connectedAt || now),
+              lastSeenAt: effectiveLastSeen,
+            });
+          }
+          syncCacheToState(now);
         }
-      } catch (_) {}
+      } catch (_) {
+        if (!isCancelled) {
+          syncCacheToState(Date.now());
+        }
+      }
     };
 
     try {
@@ -2874,13 +3014,12 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             try {
               sessionStorage.setItem('defibeo_presence_session_id', mySessionId);
             } catch (_) {}
+            presenceSessionsCacheRef.current.delete(mySessionId);
             sendHeartbeat().then(() => {
               bc?.postMessage({ type: 'PRESENCE_UPDATED', tenantId: activeTenant });
             });
           } else if (msg.type === 'PRESENCE_UPDATED' && String(msg.tenantId || '').toLowerCase() === activeTenant.toLowerCase()) {
             sendHeartbeat();
-          } else if (msg.type === 'PRESENCE_LEAVE' && msg.sessionId) {
-            setOtherPresenceSessions((prev) => prev.filter((s) => s.sessionId !== msg.sessionId));
           }
         };
         bc.postMessage({ type: 'CHECK_DUPLICATE_SID', sid: mySessionId, tabInstanceId });
@@ -2897,9 +3036,6 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
 
     const handlePageUnload = () => {
       if (!mySessionId) return;
-      try {
-        bc?.postMessage({ type: 'PRESENCE_LEAVE', sessionId: mySessionId });
-      } catch (_) {}
       try {
         const payload = JSON.stringify({ sessionId: mySessionId });
         if (navigator.sendBeacon) {
@@ -2948,7 +3084,39 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
   ]);
 
   const enrichedOtherPresenceSessions = useMemo(() => {
-    const safeMembers = Array.isArray(members) ? members : [];
+    const activeTenant = (tenantId || localStorage.getItem('defib_tenant_id') || 'demo').trim();
+    let safeMembers: any[] = Array.isArray(members) && members.length > 0 ? members : [];
+    if (safeMembers.length === 0 && typeof window !== 'undefined') {
+      try {
+        const raw =
+          localStorage.getItem(`defib_${activeTenant}_members`) ||
+          localStorage.getItem(`defib_${activeTenant.toUpperCase()}_members`) ||
+          localStorage.getItem(`defib_${activeTenant.toLowerCase()}_members`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) safeMembers = parsed;
+        }
+      } catch (_) {}
+    }
+
+    const extractFullMemberName = (m: any): string => {
+      if (!m || typeof m !== 'object') return '';
+      const raw = String(
+        m.name ||
+          m.nomPrenom ||
+          m['Nom et prénom.'] ||
+          m['Nom et prénom'] ||
+          m['Nom Prénom'] ||
+          m.nom ||
+          ''
+      ).trim();
+      const lower = raw.toLowerCase();
+      if (!raw || lower === 'membre' || lower === 'utilisateur' || lower === 'administrateur' || raw.includes('@')) {
+        return '';
+      }
+      return raw;
+    };
+
     const checkIsTech = (m: any): boolean => {
       if (!m) return false;
       const rawRole = String(
@@ -2968,6 +3136,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       return rawRole.includes('tech') || rawRole === 'maintenance terrain' || subRole.includes('tech') || subRole === 'maintenance terrain';
     };
 
+    const nonTechMembers = safeMembers.filter((m) => m && !checkIsTech(m));
+
     return otherPresenceSessions
       .filter((s: any) => {
         const sRole = String(s?.role || '').trim().toLowerCase();
@@ -2977,20 +3147,41 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         const matched = safeMembers.find(
           (m) =>
             m &&
-            ((sEmail && String(m.email || '').trim().toLowerCase() === sEmail) ||
-              (sName && String(m.name || '').trim().toLowerCase() === sName))
+            ((sEmail && String(m.email || m['Email.'] || m['Email'] || '').trim().toLowerCase() === sEmail) ||
+              (sName && extractFullMemberName(m).toLowerCase() === sName))
         );
         if (matched && checkIsTech(matched)) return false;
         return true;
       })
       .map((s) => {
         const sEmail = String(s.email || '').trim().toLowerCase();
+        const rawSName = String(s.name || '').trim();
+        const isGenericSName =
+          !rawSName ||
+          ['membre', 'utilisateur', 'administrateur', 'technicien'].includes(rawSName.toLowerCase()) ||
+          rawSName.includes('@');
         const matched = sEmail
-          ? safeMembers.find((m) => m && String(m.email || '').trim().toLowerCase() === sEmail)
+          ? safeMembers.find(
+              (m) => m && String(m.email || m['Email.'] || m['Email'] || '').trim().toLowerCase() === sEmail
+            )
+          : !isGenericSName
+          ? safeMembers.find((m) => m && extractFullMemberName(m).toLowerCase() === rawSName.toLowerCase())
           : null;
+        const matchedFullName = extractFullMemberName(matched);
+        const currentLoggedFullName =
+          extractFullMemberName(currentLoggedInMember) ||
+          (loggedUser?.name && !['membre', 'utilisateur', 'administrateur'].includes(loggedUser.name.trim().toLowerCase())
+            ? loggedUser.name.trim()
+            : '');
+        const singleTenantMemberFallback =
+          nonTechMembers.length === 1 ? extractFullMemberName(nonTechMembers[0]) : '';
         const displayName =
-          (matched?.name && String(matched.name).trim()) ||
-          (s.name && String(s.name).trim()) ||
+          matchedFullName ||
+          (!isGenericSName ? rawSName : '') ||
+          (sEmail && loggedUser?.email && sEmail === loggedUser.email.trim().toLowerCase() ? currentLoggedFullName : '') ||
+          singleTenantMemberFallback ||
+          (companyInfo?.adminName && String(companyInfo.adminName).trim()) ||
+          currentLoggedFullName ||
           sEmail ||
           'Membre';
         return {
@@ -2998,7 +3189,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
           displayName,
         };
       });
-  }, [otherPresenceSessions, members]);
+  }, [otherPresenceSessions, members, tenantId, currentLoggedInMember, loggedUser, companyInfo?.adminName]);
 
   useEffect(() => {
     if (enrichedOtherPresenceSessions.length > 0) {
@@ -3011,7 +3202,16 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       });
     } else if (displayedOtherSessions.length > 0) {
       setIsPresenceBarExiting(true);
+      if (presenceBarLeaveTimeoutRef.current) {
+        window.clearTimeout(presenceBarLeaveTimeoutRef.current);
+        presenceBarLeaveTimeoutRef.current = null;
+      }
+      if (presenceIconLeaveTimeoutRef.current) {
+        window.clearTimeout(presenceIconLeaveTimeoutRef.current);
+        presenceIconLeaveTimeoutRef.current = null;
+      }
       setHoveredPresenceIconIdx(null);
+      setIsPresenceBarHovered(false);
       setPresenceBarMousePos(null);
       const timer = window.setTimeout(() => {
         setDisplayedOtherSessions([]);
@@ -8399,6 +8599,30 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     }
 
     saveFsmTours(updatedTours, !markDirty);
+  };
+
+  const [pendingOpenExpeditionRef, setPendingOpenExpeditionRef] = useState<string | null>(null);
+
+  const handleConsultMissionExpedition = (tourId: string, missionId: string, rawExpVal: string) => {
+    const cleanVal = String(rawExpVal || '').trim();
+    if (!cleanVal) return;
+    const matchedExp = (expeditions || []).find(
+      (exp: any) =>
+        String(exp.reference || exp.id).trim() === cleanVal ||
+        String(exp.id).trim() === cleanVal
+    );
+    const refToSearch = String(matchedExp?.reference || cleanVal).trim();
+
+    if (tourId) {
+      setDirtyFsmTourIds((prev) => {
+        const next = { ...prev };
+        delete next[tourId];
+        return next;
+      });
+    }
+    saveFsmTours(fsmTours, true);
+    setPendingOpenExpeditionRef(refToSearch);
+    setActiveTab('stocks', true);
   };
 
   const resolveMissionAvisageInfo = (m: any, defibObj?: any, otherEqObj?: any, clientObj?: any) => {
@@ -14798,6 +15022,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         onUpdateStocks={saveStocks}
         distributedStocks={distributedStocks}
         onUpdateDistributedStocks={saveDistributedStocks}
+        expeditions={expeditions}
+        onUpdateExpeditions={saveExpeditions}
         fsmTours={fsmTours}
         onUpdateFsmTours={saveFsmTours}
         otherEquipments={otherEquipments}
@@ -14916,6 +15142,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         onUpdateStocks={saveStocks}
         distributedStocks={distributedStocks}
         onUpdateDistributedStocks={saveDistributedStocks}
+        expeditions={expeditions}
+        onUpdateExpeditions={saveExpeditions}
         fsmTours={fsmTours}
         onUpdateFsmTours={saveFsmTours}
         otherEquipments={otherEquipments}
@@ -15087,7 +15315,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                 label: t('Tournées & Missions'),
                 iconGris: 'https://civilprom.s3.eu-north-1.amazonaws.com/tourneesgris.svg',
                 iconNoir: 'https://civilprom.s3.eu-north-1.amazonaws.com/tourneesnoir.svg',
-                isActive: activeTab === 'fsm' && !isCanalMessagesOpen,
+                isActive: (activeTab === 'fsm' || activeTab === 'localisations') && !isCanalMessagesOpen,
                 onClick: () => {
                   setIsCanalMessagesOpen(false);
                   setIsSidebarMoreOpen(false);
@@ -19290,52 +19518,85 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                           </button>
 
                                                           {isSent && (
-                                                            <select
-                                                              value={m.expedition || ''}
-                                                              onChange={(e) => {
-                                                                updateFsmMission(t.id, m.id, { expedition: e.target.value });
-                                                              }}
-                                                              className="font-sans cursor-pointer focus:outline-none shrink-0"
-                                                              style={{
-                                                                border: '1px solid #DCE1EA',
-                                                                borderRadius: '13px',
-                                                                padding: '6px 12px',
-                                                                fontSize: '14px',
-                                                                fontWeight: 100,
-                                                                color: m.expedition ? '#000000' : '#BECADB',
-                                                                backgroundColor: '#ffffff',
-                                                                width: '230px',
-                                                                maxWidth: '250px',
-                                                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                                              }}
+                                                            <div
+                                                              className="flex flex-col gap-1.5 shrink-0"
+                                                              style={{ width: '230px', maxWidth: '250px' }}
                                                             >
-                                                              <option value="" style={{ color: '#BECADB' }}>
-                                                                Sélectionnez une expédition.
-                                                              </option>
-                                                              {m.expedition &&
-                                                                !(expeditions || []).some(
-                                                                  (exp: any) =>
-                                                                    String(exp.reference || exp.id).trim() === m.expedition
-                                                                ) && (
-                                                                  <option value={m.expedition} style={{ color: '#000000' }}>
-                                                                    {m.expedition}
-                                                                  </option>
-                                                                )}
-                                                              {(expeditions || []).map((exp: any) => {
-                                                                const expKey = String(exp.reference || exp.id).trim();
-                                                                return (
-                                                                  <option
-                                                                    key={exp.id || expKey}
-                                                                    value={expKey}
-                                                                    style={{ color: '#000000' }}
-                                                                  >
-                                                                    {expKey}
-                                                                    {exp.statut ? ` — ${exp.statut}` : ''}
-                                                                    {exp.destinataire ? ` (${exp.destinataire})` : ''}
-                                                                  </option>
-                                                                );
-                                                              })}
-                                                            </select>
+                                                              <select
+                                                                value={m.expedition || ''}
+                                                                onChange={(e) => {
+                                                                  updateFsmMission(t.id, m.id, { expedition: e.target.value });
+                                                                }}
+                                                                className="font-sans cursor-pointer focus:outline-none shrink-0"
+                                                                style={{
+                                                                  border: '1px solid #DCE1EA',
+                                                                  borderRadius: '13px',
+                                                                  padding: '6px 12px',
+                                                                  fontSize: '14px',
+                                                                  fontWeight: 100,
+                                                                  color: m.expedition ? '#000000' : '#BECADB',
+                                                                  backgroundColor: '#ffffff',
+                                                                  width: '230px',
+                                                                  maxWidth: '250px',
+                                                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                                                }}
+                                                              >
+                                                                <option value="" style={{ color: '#BECADB' }}>
+                                                                  Sélectionnez une expédition.
+                                                                </option>
+                                                                {m.expedition &&
+                                                                  !(expeditions || []).some(
+                                                                    (exp: any) =>
+                                                                      String(exp.reference || exp.id).trim() === m.expedition
+                                                                  ) && (
+                                                                    <option value={m.expedition} style={{ color: '#000000' }}>
+                                                                      {m.expedition}
+                                                                    </option>
+                                                                  )}
+                                                                {(expeditions || []).map((exp: any) => {
+                                                                  const expKey = String(exp.reference || exp.id).trim();
+                                                                  return (
+                                                                    <option
+                                                                      key={exp.id || expKey}
+                                                                      value={expKey}
+                                                                      style={{ color: '#000000' }}
+                                                                    >
+                                                                      {expKey}
+                                                                      {exp.statut ? ` — ${exp.statut}` : ''}
+                                                                      {exp.destinataire ? ` (${exp.destinataire})` : ''}
+                                                                    </option>
+                                                                  );
+                                                                })}
+                                                              </select>
+                                                              {Boolean(m.expedition && String(m.expedition).trim()) && (
+                                                                <button
+                                                                  type="button"
+                                                                  onClick={() =>
+                                                                    handleConsultMissionExpedition(
+                                                                      t.id,
+                                                                      m.id,
+                                                                      String(m.expedition).trim()
+                                                                    )
+                                                                  }
+                                                                  className="text-center cursor-pointer transition-opacity hover:opacity-95 focus:outline-none shrink-0"
+                                                                  style={{
+                                                                    backgroundColor: '#2e54ff',
+                                                                    color: '#ffffff',
+                                                                    borderRadius: '13px',
+                                                                    padding: '6px 12px',
+                                                                    fontSize: '14px',
+                                                                    fontWeight: 'bold',
+                                                                    border: 'none',
+                                                                    width: '230px',
+                                                                    maxWidth: '250px',
+                                                                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                                                    boxShadow: 'none',
+                                                                  }}
+                                                                >
+                                                                  Consulter l’expédition
+                                                                </button>
+                                                              )}
+                                                            </div>
                                                           )}
 
                                                           {/* Toggle ON/OFF Fourniture par le client */}
@@ -22204,52 +22465,85 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                   </button>
 
                                                   {isSent && (
-                                                    <select
-                                                      value={m.expedition || ''}
-                                                      onChange={(e) => {
-                                                        updateFsmMission(t.id, m.id, { expedition: e.target.value });
-                                                      }}
-                                                      className="font-sans cursor-pointer focus:outline-none shrink-0"
-                                                      style={{
-                                                        border: '1px solid #DCE1EA',
-                                                        borderRadius: '13px',
-                                                        padding: '6px 12px',
-                                                        fontSize: '14px',
-                                                        fontWeight: 100,
-                                                        color: m.expedition ? '#000000' : '#BECADB',
-                                                        backgroundColor: '#ffffff',
-                                                        width: '230px',
-                                                        maxWidth: '250px',
-                                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                                                      }}
+                                                    <div
+                                                      className="flex flex-col gap-1.5 shrink-0"
+                                                      style={{ width: '230px', maxWidth: '250px' }}
                                                     >
-                                                      <option value="" style={{ color: '#BECADB' }}>
-                                                        Sélectionnez une expédition.
-                                                      </option>
-                                                      {m.expedition &&
-                                                        !(expeditions || []).some(
-                                                          (exp: any) =>
-                                                            String(exp.reference || exp.id).trim() === m.expedition
-                                                        ) && (
-                                                          <option value={m.expedition} style={{ color: '#000000' }}>
-                                                            {m.expedition}
-                                                          </option>
-                                                        )}
-                                                      {(expeditions || []).map((exp: any) => {
-                                                        const expKey = String(exp.reference || exp.id).trim();
-                                                        return (
-                                                          <option
-                                                            key={exp.id || expKey}
-                                                            value={expKey}
-                                                            style={{ color: '#000000' }}
-                                                          >
-                                                            {expKey}
-                                                            {exp.statut ? ` — ${exp.statut}` : ''}
-                                                            {exp.destinataire ? ` (${exp.destinataire})` : ''}
-                                                          </option>
-                                                        );
-                                                      })}
-                                                    </select>
+                                                      <select
+                                                        value={m.expedition || ''}
+                                                        onChange={(e) => {
+                                                          updateFsmMission(t.id, m.id, { expedition: e.target.value });
+                                                        }}
+                                                        className="font-sans cursor-pointer focus:outline-none shrink-0"
+                                                        style={{
+                                                          border: '1px solid #DCE1EA',
+                                                          borderRadius: '13px',
+                                                          padding: '6px 12px',
+                                                          fontSize: '14px',
+                                                          fontWeight: 100,
+                                                          color: m.expedition ? '#000000' : '#BECADB',
+                                                          backgroundColor: '#ffffff',
+                                                          width: '230px',
+                                                          maxWidth: '250px',
+                                                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                                        }}
+                                                      >
+                                                        <option value="" style={{ color: '#BECADB' }}>
+                                                          Sélectionnez une expédition.
+                                                        </option>
+                                                        {m.expedition &&
+                                                          !(expeditions || []).some(
+                                                            (exp: any) =>
+                                                              String(exp.reference || exp.id).trim() === m.expedition
+                                                          ) && (
+                                                            <option value={m.expedition} style={{ color: '#000000' }}>
+                                                              {m.expedition}
+                                                            </option>
+                                                          )}
+                                                        {(expeditions || []).map((exp: any) => {
+                                                          const expKey = String(exp.reference || exp.id).trim();
+                                                          return (
+                                                            <option
+                                                              key={exp.id || expKey}
+                                                              value={expKey}
+                                                              style={{ color: '#000000' }}
+                                                            >
+                                                              {expKey}
+                                                              {exp.statut ? ` — ${exp.statut}` : ''}
+                                                              {exp.destinataire ? ` (${exp.destinataire})` : ''}
+                                                            </option>
+                                                          );
+                                                        })}
+                                                      </select>
+                                                      {Boolean(m.expedition && String(m.expedition).trim()) && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() =>
+                                                            handleConsultMissionExpedition(
+                                                              t.id,
+                                                              m.id,
+                                                              String(m.expedition).trim()
+                                                            )
+                                                          }
+                                                          className="text-center cursor-pointer transition-opacity hover:opacity-95 focus:outline-none shrink-0"
+                                                          style={{
+                                                            backgroundColor: '#2e54ff',
+                                                            color: '#ffffff',
+                                                            borderRadius: '13px',
+                                                            padding: '6px 12px',
+                                                            fontSize: '14px',
+                                                            fontWeight: 'bold',
+                                                            border: 'none',
+                                                            width: '230px',
+                                                            maxWidth: '250px',
+                                                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                                            boxShadow: 'none',
+                                                          }}
+                                                        >
+                                                          Consulter l’expédition
+                                                        </button>
+                                                      )}
+                                                    </div>
                                                   )}
 
                                                   {/* Toggle ON/OFF Fourniture par le client */}
@@ -28193,6 +28487,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
               isDeveloper={isDeveloper}
               isReadOnly={isDeveloper}
               companyInfo={companyInfo}
+              pendingOpenExpeditionRef={pendingOpenExpeditionRef}
+              onClearPendingOpenExpeditionRef={() => setPendingOpenExpeditionRef(null)}
             />
           )}
 
@@ -28305,6 +28601,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             <LocalisationsTab
               members={members}
               tenantId={tenantId}
+              companyInfo={companyInfo}
               onClose={() => setActiveTab(previousTabBeforeLocalisationsRef.current || 'fsm')}
             />
           )}
@@ -28660,165 +28957,210 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         </div>
       )}
 
-      {/* Floating Active Sessions Bar (Bottom-Right, Top Level, Logiciel Principal) */}
-      {isLoggedIn && !isPublicPortalOpen && !isClientPortalOpen && !(showEnvLoading || !isFirebaseLoaded || minEnvLoading) && displayedOtherSessions.length > 0 && (() => {
-        const OTHER_MEMBER_ICON_SLOTS = [
-          {
-            iconUrl: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineuserpurple.svg',
-            textColor: '#8e195c',
-          },
-          {
-            iconUrl: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineuserblue.svg',
-            textColor: '#0000ff',
-          },
-          {
-            iconUrl: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineuserorange.svg',
-            textColor: '#f63a08',
-          },
-        ];
-        const visibleIcons = displayedOtherSessions.slice(0, 3);
-        const otherCount = displayedOtherSessions.length;
-        const isBarHovered = presenceBarMousePos !== null;
-        const showExtraMouseHelp = otherCount >= 4 && isBarHovered;
-        const trailingHoverLabel =
-          otherCount >= 4
-            ? `+ ${otherCount - 3} autre(s) membre(s) connecté(s)`
-            : 'membre(s) connecté(s)';
+      {/* Floating Active Sessions Bar (Bottom-Center, Top Level, Logiciel Principal, hidden on MESSAGES tab) */}
+      {isLoggedIn &&
+        !isPublicPortalOpen &&
+        !isClientPortalOpen &&
+        !isCanalMessagesOpen &&
+        activeTab !== 'messagerie' &&
+        !(showEnvLoading || !isFirebaseLoaded || minEnvLoading) &&
+        displayedOtherSessions.length > 0 &&
+        (() => {
+          const OTHER_MEMBER_ICON_SLOTS = [
+            {
+              iconUrl: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineuserpurple.svg',
+              textColor: '#8e195c',
+            },
+            {
+              iconUrl: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineuserblue.svg',
+              textColor: '#0000ff',
+            },
+            {
+              iconUrl: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineuserorange.svg',
+              textColor: '#f63a08',
+            },
+          ];
+          const visibleIcons = displayedOtherSessions.slice(0, 3);
+          const otherCount = displayedOtherSessions.length;
+          const isBarHovered = isPresenceBarHovered || presenceBarMousePos !== null;
+          const showExtraMouseHelp = otherCount >= 4 && presenceBarMousePos !== null;
+          const trailingHoverLabel =
+            otherCount >= 4
+              ? `+ ${otherCount - 3} autre(s) membre(s) connecté(s)`
+              : 'membre(s) connecté(s)';
 
-        return (
-          <>
-            <div
-              id="defibeo-online-members-bar"
-              key={`presence-bar-${presenceBumpTick}`}
-              onMouseEnter={(e) => {
-                setPresenceBarMousePos({ x: e.clientX, y: e.clientY });
-              }}
-              onMouseMove={(e) => {
-                setPresenceBarMousePos({ x: e.clientX, y: e.clientY });
-              }}
-              onMouseLeave={() => {
-                setHoveredPresenceIconIdx(null);
-                setPresenceBarMousePos(null);
-              }}
-              className={`fixed bottom-5 right-6 z-[1000000] inline-flex items-center flex-nowrap whitespace-nowrap select-none cursor-default ${
-                isPresenceBarExiting ? 'presence-bar-exit' : 'presence-bar-enter'
-              }`}
-              style={{
-                backgroundColor: 'rgb(245, 247, 250)',
-                borderRadius: '16px',
-                padding: '10px 18px',
-                gap: '10px',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                fontSize: '18px',
-                lineHeight: 1.2,
-                transition: 'padding 0.28s cubic-bezier(0.22, 1, 0.36, 1)',
-              }}
-            >
-              {/* Fixed "Vous" icon + label */}
-              <div className="inline-flex items-center gap-2.5 shrink-0 whitespace-nowrap">
-                <img
-                  src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineusergreen.svg"
-                  alt="Vous"
-                  className="w-[26px] h-[26px] object-contain shrink-0 select-none pointer-events-none"
-                  referrerPolicy="no-referrer"
-                />
-                <span
+          return (
+            <>
+              <div className="fixed bottom-5 left-0 right-0 z-[1000000] flex justify-center pointer-events-none">
+                <div
+                  id="defibeo-online-members-bar"
+                  key={`presence-bar-${presenceBumpTick}`}
+                  onMouseEnter={(e) => {
+                    if (presenceBarLeaveTimeoutRef.current) {
+                      window.clearTimeout(presenceBarLeaveTimeoutRef.current);
+                      presenceBarLeaveTimeoutRef.current = null;
+                    }
+                    setIsPresenceBarHovered(true);
+                    setPresenceBarMousePos({ x: e.clientX, y: e.clientY });
+                  }}
+                  onMouseMove={(e) => {
+                    if (presenceBarLeaveTimeoutRef.current) {
+                      window.clearTimeout(presenceBarLeaveTimeoutRef.current);
+                      presenceBarLeaveTimeoutRef.current = null;
+                    }
+                    setIsPresenceBarHovered(true);
+                    setPresenceBarMousePos({ x: e.clientX, y: e.clientY });
+                  }}
+                  onMouseLeave={() => {
+                    setPresenceBarMousePos(null);
+                    if (presenceBarLeaveTimeoutRef.current) {
+                      window.clearTimeout(presenceBarLeaveTimeoutRef.current);
+                    }
+                    presenceBarLeaveTimeoutRef.current = window.setTimeout(() => {
+                      setIsPresenceBarHovered(false);
+                      setHoveredPresenceIconIdx(null);
+                      presenceBarLeaveTimeoutRef.current = null;
+                    }, 2000);
+                  }}
+                  className={`pointer-events-auto inline-flex items-center flex-nowrap whitespace-nowrap select-none cursor-default ${
+                    isPresenceBarExiting ? 'presence-bar-exit' : 'presence-bar-enter'
+                  }`}
                   style={{
-                    color: '#000000',
+                    backgroundColor: 'rgb(245, 247, 250)',
+                    borderRadius: '16px',
+                    padding: '10px 18px',
+                    gap: '10px',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                     fontSize: '18px',
-                    fontWeight: 400,
+                    lineHeight: 1.2,
+                    transition: 'padding 0.28s cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}
+                >
+                  {/* Fixed "Vous &" icon + label */}
+                  <div className="inline-flex items-center gap-2.5 shrink-0 whitespace-nowrap">
+                    <img
+                      src="https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineusergreen.svg"
+                      alt="Vous &"
+                      className="w-[26px] h-[26px] object-contain shrink-0 select-none pointer-events-none"
+                      referrerPolicy="no-referrer"
+                    />
+                    <span
+                      style={{
+                        color: '#000000',
+                        fontSize: '18px',
+                        fontWeight: 400,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Vous &amp;
+                    </span>
+                  </div>
+
+                  {/* 1 to 3 other connected members icons */}
+                  <div className="inline-flex items-center gap-2 shrink-0 whitespace-nowrap">
+                    {visibleIcons.map((sess, idx) => {
+                      const slot = OTHER_MEMBER_ICON_SLOTS[idx] || OTHER_MEMBER_ICON_SLOTS[0];
+                      const isHovered = hoveredPresenceIconIdx === idx;
+                      return (
+                        <div
+                          key={sess.sessionId || `other-mem-${idx}`}
+                          onMouseEnter={() => {
+                            if (presenceIconLeaveTimeoutRef.current) {
+                              window.clearTimeout(presenceIconLeaveTimeoutRef.current);
+                              presenceIconLeaveTimeoutRef.current = null;
+                            }
+                            if (presenceBarLeaveTimeoutRef.current) {
+                              window.clearTimeout(presenceBarLeaveTimeoutRef.current);
+                              presenceBarLeaveTimeoutRef.current = null;
+                            }
+                            setIsPresenceBarHovered(true);
+                            setHoveredPresenceIconIdx(idx);
+                          }}
+                          onMouseLeave={() => {
+                            if (presenceIconLeaveTimeoutRef.current) {
+                              window.clearTimeout(presenceIconLeaveTimeoutRef.current);
+                            }
+                            presenceIconLeaveTimeoutRef.current = window.setTimeout(() => {
+                              setHoveredPresenceIconIdx((prev) => (prev === idx ? null : prev));
+                              presenceIconLeaveTimeoutRef.current = null;
+                            }, 2000);
+                          }}
+                          className="sidebar-nav-item-bounce inline-flex items-center shrink-0 cursor-default whitespace-nowrap"
+                        >
+                          <img
+                            src={slot.iconUrl}
+                            alt={sess.displayName}
+                            className="sidebar-nav-icon-bounce w-[26px] h-[26px] object-contain shrink-0 select-none"
+                            referrerPolicy="no-referrer"
+                          />
+                          <span
+                            className="overflow-hidden inline-flex items-center whitespace-nowrap"
+                            style={{
+                              color: slot.textColor,
+                              fontSize: '18px',
+                              fontWeight: 400,
+                              whiteSpace: 'nowrap',
+                              maxWidth: isHovered ? '240px' : '0px',
+                              opacity: isHovered ? 1 : 0,
+                              marginLeft: isHovered ? '8px' : '0px',
+                              transform: isHovered ? 'translateX(0px) scale(1)' : 'translateX(-4px) scale(0.95)',
+                              transition:
+                                'max-width 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease, margin-left 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                            }}
+                          >
+                            {sess.displayName}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Trailing status phrase: hidden initially, revealed smoothly on hover over the bar and retained for 2s */}
+                  <span
+                    className="overflow-hidden inline-flex items-center shrink-0 whitespace-nowrap"
+                    style={{
+                      color: '#000000',
+                      fontSize: '18px',
+                      fontWeight: 400,
+                      whiteSpace: 'nowrap',
+                      maxWidth: isBarHovered ? '340px' : '0px',
+                      opacity: isBarHovered ? 1 : 0,
+                      marginLeft: isBarHovered ? '0px' : '-10px',
+                      transform: isBarHovered ? 'translateX(0px) scale(1)' : 'translateX(-4px) scale(0.96)',
+                      transition:
+                        'max-width 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease, margin-left 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    }}
+                  >
+                    {trailingHoverLabel}
+                  </span>
+                </div>
+              </div>
+
+              {/* Texthelpinfo next to cursor when >= 4 other connected members */}
+              {showExtraMouseHelp && presenceBarMousePos && (
+                <div
+                  style={{
+                    position: 'fixed',
+                    left: `${Math.max(12, Math.min(presenceBarMousePos.x + 14, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 280))}px`,
+                    top: `${Math.max(12, presenceBarMousePos.y - 34)}px`,
+                    zIndex: 1000001,
+                    pointerEvents: 'none',
+                    color: '#000000',
+                    backgroundColor: 'rgb(245, 247, 250)',
+                    padding: '6px 12px',
+                    borderRadius: '10px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  Vous
-                </span>
-              </div>
-
-              {/* 1 to 3 other connected members icons */}
-              <div className="inline-flex items-center gap-2 shrink-0 whitespace-nowrap">
-                {visibleIcons.map((sess, idx) => {
-                  const slot = OTHER_MEMBER_ICON_SLOTS[idx] || OTHER_MEMBER_ICON_SLOTS[0];
-                  const isHovered = hoveredPresenceIconIdx === idx;
-                  return (
-                    <div
-                      key={sess.sessionId || `other-mem-${idx}`}
-                      onMouseEnter={() => setHoveredPresenceIconIdx(idx)}
-                      onMouseLeave={() => setHoveredPresenceIconIdx((prev) => (prev === idx ? null : prev))}
-                      className="sidebar-nav-item-bounce inline-flex items-center shrink-0 cursor-default whitespace-nowrap"
-                    >
-                      <img
-                        src={slot.iconUrl}
-                        alt={sess.displayName}
-                        className="sidebar-nav-icon-bounce w-[26px] h-[26px] object-contain shrink-0 select-none"
-                        referrerPolicy="no-referrer"
-                      />
-                      <span
-                        className="overflow-hidden inline-flex items-center whitespace-nowrap"
-                        style={{
-                          color: slot.textColor,
-                          fontSize: '18px',
-                          fontWeight: 400,
-                          whiteSpace: 'nowrap',
-                          maxWidth: isHovered ? '240px' : '0px',
-                          opacity: isHovered ? 1 : 0,
-                          marginLeft: isHovered ? '8px' : '0px',
-                          transform: isHovered ? 'translateX(0px) scale(1)' : 'translateX(-4px) scale(0.95)',
-                          transition:
-                            'max-width 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease, margin-left 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                        }}
-                      >
-                        {sess.displayName}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Trailing status phrase: hidden initially, revealed smoothly on hover over the bar */}
-              <span
-                className="overflow-hidden inline-flex items-center shrink-0 whitespace-nowrap"
-                style={{
-                  color: '#000000',
-                  fontSize: '18px',
-                  fontWeight: 400,
-                  whiteSpace: 'nowrap',
-                  maxWidth: isBarHovered ? '340px' : '0px',
-                  opacity: isBarHovered ? 1 : 0,
-                  marginLeft: isBarHovered ? '0px' : '-10px',
-                  transform: isBarHovered ? 'translateX(0px) scale(1)' : 'translateX(-4px) scale(0.96)',
-                  transition:
-                    'max-width 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease, margin-left 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                }}
-              >
-                {trailingHoverLabel}
-              </span>
-            </div>
-
-            {/* Texthelpinfo next to cursor when >= 4 other connected members */}
-            {showExtraMouseHelp && presenceBarMousePos && (
-              <div
-                style={{
-                  position: 'fixed',
-                  left: `${Math.max(12, Math.min(presenceBarMousePos.x + 14, (typeof window !== 'undefined' ? window.innerWidth : 1200) - 280))}px`,
-                  top: `${Math.max(12, presenceBarMousePos.y - 34)}px`,
-                  zIndex: 1000001,
-                  pointerEvents: 'none',
-                  color: '#000000',
-                  backgroundColor: 'rgb(245, 247, 250)',
-                  padding: '6px 12px',
-                  borderRadius: '10px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {displayedOtherSessions.map((s) => s.displayName).join(', ')}
-              </div>
-            )}
-          </>
-        );
-      })()}
+                  {displayedOtherSessions.map((s) => s.displayName).join(', ')}
+                </div>
+              )}
+            </>
+          );
+        })()}
     </div>
   );
 }

@@ -2232,11 +2232,17 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
 
       {/* Floating Button "Remonter" when header is not visible (>200px scroll) */}
       {showScrollTop && (
-        <div className="fixed bottom-4 right-4 sm:bottom-4 sm:right-6 z-40 animate-fade-in flex items-center gap-2.5 sm:gap-3">
+        <div
+          className={
+            !enableExtendedView
+              ? "fixed bottom-2 left-3 right-3 sm:left-4 sm:right-4 max-w-4xl mx-auto z-40 animate-fade-in flex items-center"
+              : "fixed bottom-4 right-4 sm:bottom-4 sm:right-6 z-40 animate-fade-in flex items-center gap-2.5 sm:gap-3"
+          }
+        >
           <button
             type="button"
             onClick={handleScrollToTop}
-            className="text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none hover:opacity-95 active:scale-95"
+            className={`${!enableExtendedView ? "w-full " : ""}text-white font-bold transition-all duration-150 focus:outline-none text-center cursor-pointer flex items-center justify-center select-none hover:opacity-95 active:scale-95`}
             style={{
               backgroundColor: "rgb(46, 84, 255)",
               boxShadow: "none",
@@ -2244,6 +2250,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
               padding: "10px 20px",
               fontSize: "18px",
               border: "none",
+              ...(!enableExtendedView ? { width: "100%" } : {}),
             }}
           >
             {t("Remonter")}

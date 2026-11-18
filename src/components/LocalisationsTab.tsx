@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Member } from '../types';
+import { Member, CompanyInfo } from '../types';
 
 interface LocalisationsTabProps {
   members: Member[];
   tenantId?: string;
+  companyInfo?: CompanyInfo;
   onClose?: () => void;
 }
 
@@ -16,6 +17,15 @@ interface TechLiveLocation {
   lat: number;
   lng: number;
   updatedAt?: number;
+  horodatage?: string;
+}
+
+function normalizeTechKey(str: string | undefined | null): string {
+  return String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
 }
 
 function formatTimeAgo(updatedAt: number | undefined, now: number): string {
@@ -50,12 +60,15 @@ function escapeHtml(str: string): string {
 function AutoFitTechBounds({
   points,
   mapRef,
+  fitTrigger,
 }: {
   points: TechLiveLocation[];
   mapRef: React.MutableRefObject<L.Map | null>;
+  fitTrigger: number;
 }) {
   const map = useMap();
   const hasFittedRef = useRef<boolean>(false);
+  const lastFitTriggerRef = useRef<number>(0);
 
   useEffect(() => {
     mapRef.current = map;
@@ -68,22 +81,25 @@ function AutoFitTechBounds({
   }, [map, mapRef]);
 
   useEffect(() => {
-    if (hasFittedRef.current || points.length === 0) return;
+    if (points.length === 0) return;
+    const isManualTrigger = fitTrigger > lastFitTriggerRef.current;
+    if (hasFittedRef.current && !isManualTrigger) return;
     hasFittedRef.current = true;
+    lastFitTriggerRef.current = fitTrigger;
     try {
       if (points.length === 1) {
-        map.setView([points[0].lat, points[0].lng], 12, { animate: false });
+        map.setView([points[0].lat, points[0].lng], Math.max(map.getZoom(), 12), { animate: isManualTrigger });
       } else {
         const bounds = L.latLngBounds(points.map((p) => [p.lat, p.lng] as [number, number]));
-        map.fitBounds(bounds, { padding: [70, 70], maxZoom: 13, animate: false });
+        map.fitBounds(bounds, { padding: [70, 70], maxZoom: 13, animate: isManualTrigger });
       }
     } catch (_) {}
-  }, [points, map]);
+  }, [points, map, fitTrigger]);
 
   return null;
 }
 
-export default function LocalisationsTab({ members, tenantId, onClose }: LocalisationsTabProps) {
+export default function LocalisationsTab({ members, tenantId, companyInfo, onClose }: LocalisationsTabProps) {
   const mapRef = useRef<L.Map | null>(null);
 
   const effectiveTenantId = useMemo(() => {
@@ -98,6 +114,7 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
   const [serverLocations, setServerLocations] = useState<Record<string, TechLiveLocation>>({});
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [fitTrigger, setFitTrigger] = useState<number>(0);
 
   const fetchLocations = React.useCallback(
     async (forceRefresh = false) => {
@@ -108,20 +125,33 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
         let livetrackSheetUrl = '';
         try {
           livetrackSheetUrl =
+            companyInfo?.spreadsheetLivetrack ||
             localStorage.getItem(`defib_${effectiveTenantId}_spreadsheet_livetrack`) ||
             localStorage.getItem(`defib_${effectiveTenantId.toUpperCase()}_spreadsheet_livetrack`) ||
             localStorage.getItem(`defib_${effectiveTenantId.toLowerCase()}_spreadsheet_livetrack`) ||
             '';
         } catch (_) {}
-        const params = new URLSearchParams({ tenantId: effectiveTenantId });
+        const params = new URLSearchParams({
+          tenantId: effectiveTenantId,
+          _: String(Date.now()),
+        });
         if (forceRefresh) params.set('refresh', 'true');
         if (livetrackSheetUrl) params.set('spreadsheetUrl', livetrackSheetUrl);
 
-        const res = await fetch(`/api/tech-locations?${params.toString()}`);
+        const res = await fetch(`/api/tech-locations?${params.toString()}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            Pragma: 'no-cache',
+          },
+        });
         if (res.ok) {
           const data = await res.json();
           if (data && typeof data.locations === 'object' && data.locations !== null) {
-            setServerLocations(data.locations);
+            setServerLocations({ ...data.locations });
+            if (forceRefresh) {
+              setFitTrigger((prev) => prev + 1);
+            }
           }
         }
       } catch (_) {
@@ -132,11 +162,11 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
         }
       }
     },
-    [effectiveTenantId]
+    [effectiveTenantId, companyInfo]
   );
 
   useEffect(() => {
-    fetchLocations(false);
+    fetchLocations(true);
     const intervalId = setInterval(() => fetchLocations(false), 15000);
     return () => {
       clearInterval(intervalId);
@@ -152,18 +182,40 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
   const technicianPoints = useMemo<TechLiveLocation[]>(() => {
     const techMembers = (members || []).filter(isTechnician);
     const results: TechLiveLocation[] = [];
-    const seenKeys = new Set<string>();
+    const matchedServerKeys = new Set<string>();
+
+    const serverEntries = Object.entries(serverLocations || {});
 
     for (const m of techMembers) {
       const name = String(m.name || '').trim();
       if (!name) continue;
-      const normKey = name.toLowerCase();
-      seenKeys.add(normKey);
+      const normName = normalizeTechKey(name);
+      const normEmail = normalizeTechKey(m.email);
 
-      const srv = serverLocations[normKey];
-      let lat: number | undefined = srv?.lat;
-      let lng: number | undefined = srv?.lng;
-      let updatedAt: number | undefined = srv?.updatedAt;
+      let srv: TechLiveLocation | undefined = serverLocations[name.toLowerCase()];
+      if (srv) {
+        matchedServerKeys.add(name.toLowerCase());
+      } else {
+        for (const [sKey, rawVal] of serverEntries) {
+          const sVal = rawVal as TechLiveLocation | undefined;
+          if (!sVal) continue;
+          const sNormKey = normalizeTechKey(sKey);
+          const sNormName = normalizeTechKey(sVal.name);
+          const sNormEmail = normalizeTechKey(sVal.email);
+          if (
+            (normName && (sNormKey === normName || sNormName === normName)) ||
+            (normEmail && sNormEmail && sNormEmail === normEmail)
+          ) {
+            srv = sVal;
+            matchedServerKeys.add(sKey);
+            break;
+          }
+        }
+      }
+
+      let lat: number | undefined = srv?.lat !== undefined ? Number(srv.lat) : undefined;
+      let lng: number | undefined = srv?.lng !== undefined ? Number(srv.lng) : undefined;
+      let updatedAt: number | undefined = srv?.updatedAt ? Number(srv.updatedAt) : undefined;
 
       if ((lat === undefined || isNaN(lat) || lng === undefined || isNaN(lng)) && m.lastKnownLat !== undefined && m.lastKnownLng !== undefined) {
         const mLat = Number(m.lastKnownLat);
@@ -191,26 +243,31 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
       if (lat !== undefined && !isNaN(lat) && lng !== undefined && !isNaN(lng) && (lat !== 0 || lng !== 0)) {
         results.push({
           name,
-          email: m.email,
+          email: m.email || srv?.email,
           lat,
           lng,
           updatedAt,
+          horodatage: srv?.horodatage,
         });
       }
     }
 
     // Include any live technician position reported to server / Livetrack spreadsheet even if not yet in filtered local list
-    for (const [key, rawSrv] of Object.entries(serverLocations)) {
+    for (const [key, rawSrv] of serverEntries) {
+      if (matchedServerKeys.has(key)) continue;
       const srv = rawSrv as TechLiveLocation | undefined;
       const sLat = Number(srv?.lat);
       const sLng = Number(srv?.lng);
-      if (!seenKeys.has(key) && srv && !isNaN(sLat) && !isNaN(sLng) && (sLat !== 0 || sLng !== 0)) {
+      if (srv && !isNaN(sLat) && !isNaN(sLng) && (sLat !== 0 || sLng !== 0)) {
+        const candidateNorm = normalizeTechKey(srv.name || key);
+        if (results.some((r) => normalizeTechKey(r.name) === candidateNorm)) continue;
         results.push({
           name: srv.name || key,
           email: srv.email,
           lat: sLat,
           lng: sLng,
           updatedAt: srv.updatedAt,
+          horodatage: srv.horodatage,
         });
       }
     }
@@ -348,7 +405,7 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
           maxZoom={19}
         />
 
-        <AutoFitTechBounds points={technicianPoints} mapRef={mapRef} />
+        <AutoFitTechBounds points={technicianPoints} mapRef={mapRef} fitTrigger={fitTrigger} />
 
         {technicianPoints.map((pt) => {
           const safeName = escapeHtml(pt.name);
@@ -393,9 +450,16 @@ export default function LocalisationsTab({ members, tenantId, onClose }: Localis
             iconAnchor: [0, 0],
           });
 
-          return <Marker key={pt.name} position={[pt.lat, pt.lng]} icon={icon} />;
+          return (
+            <Marker
+              key={`${pt.name}_${pt.lat}_${pt.lng}_${pt.updatedAt || 0}_${timeAgoLabel}`}
+              position={[pt.lat, pt.lng]}
+              icon={icon}
+            />
+          );
         })}
       </MapContainer>
     </div>
   );
 }
+

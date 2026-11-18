@@ -2569,16 +2569,25 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           padding: 6px 12px !important;
           border: 1px solid #DCE1EA !important;
           border-radius: 10px !important;
-          font-size: 14px !important;
+          font-size: 18px !important;
           font-weight: 600 !important;
           background-color: #ffffff !important;
+          background-image: none !important;
           color: #0f172a !important;
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
           cursor: pointer !important;
-          appearance: auto !important;
-          -webkit-appearance: menulist !important;
-          -moz-appearance: menulist !important;
+          appearance: none !important;
+          -webkit-appearance: none !important;
+          -moz-appearance: none !important;
+          text-align: center !important;
+          text-align-last: center !important;
+          -webkit-text-align-last: center !important;
+          -moz-text-align-last: center !important;
           outline: none !important;
+          box-shadow: none !important;
+        }
+        #crm-tab-container select.crm-file-type-select option {
+          text-align: center !important;
         }
         #crm-tab-container select#crm-more-options-dropdown {
           width: 100% !important;
@@ -3362,8 +3371,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 <span 
                                   style={{ 
                                     ...geluleStyle,
-                                    backgroundColor: '#3ddc84',
-                                    color: '#156337',
+                                    backgroundColor: 'rgb(0, 0, 255)',
+                                    color: 'rgb(5, 240, 255)',
                                     border: 'none',
                                     marginLeft: '10px',
                                     padding: '5px 10px',
@@ -3667,7 +3676,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     style={{
                       border: 'none',
                       borderRadius: '15px',
-                      backgroundColor: '#d5e3ff'
+                      backgroundColor: 'rgb(255, 216, 238)'
                     }}
                   >
                     {/* Animated sliding bar */}
@@ -3679,7 +3688,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         bottom: '4px',
                         left: '4px',
                         width: 'calc((100% - 8px) / 3)',
-                        backgroundColor: '#2e54ff',
+                        backgroundColor: 'rgb(142, 25, 92)',
                         borderRadius: '11px',
                         transform: `translateX(${Math.max(0, (['Nouveau', 'En cours', 'Terminé'] as const).indexOf(formSituation)) * 100}%)`,
                         transition: 'transform 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -3698,8 +3707,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           className="relative z-10 py-2.5 px-3 font-bold cursor-pointer flex items-center justify-center text-center transition-colors duration-150"
                           style={{
                             fontSize: '18px',
-                            backgroundColor: isSelected ? '#2e54ff' : 'transparent',
-                            color: isSelected ? 'rgb(255 255 255)' : 'rgb(46 84 255)',
+                            backgroundColor: isSelected ? 'rgb(142, 25, 92)' : 'transparent',
+                            color: isSelected ? '#FFF' : 'rgb(142, 25, 92)',
                             border: 'none',
                             borderRadius: '11px',
                             fontFamily: 'DefibeoMain, Civilprom, sans-serif',
@@ -3711,11 +3720,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     })}
                   </div>
 
-                  {/* 2 & 3. Référence, Dates & Catégorie, Criticité, Collaborateur: Unifiées dans une div #e9edf1 sans border ni divider */}
+                  {/* 2 & 3. Référence, Dates & Catégorie, Criticité, Collaborateur: Unifiées dans une div #FFF sans border ni divider */}
                   <div
                     className="flex flex-col gap-4"
                     style={{
-                      backgroundColor: '#e9edf1',
+                      backgroundColor: '#FFF',
                       border: 'none',
                       borderRadius: '14px',
                       padding: '20px',
@@ -3723,11 +3732,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   >
                     <div className="mb-1 bg-transparent">
                       <span
-                        className="px-3 py-1 inline-block font-sans"
+                        className="inline-block font-sans"
                         style={{
                           backgroundColor: 'rgb(61 220 132)',
                           color: '#115830',
                           fontSize: '18px',
+                          padding: '9px 18px',
                           borderRadius: '1000px',
                           cursor: 'default',
                           fontWeight: 100,
@@ -3769,8 +3779,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                             <div 
                               className="absolute right-2 flex items-center justify-center rounded-full font-bold font-sans pointer-events-none select-none shrink-0"
                               style={{
-                                background: '#3ddc84',
-                                color: '#156337',
+                                background: 'rgb(0, 0, 255)',
+                                backgroundColor: 'rgb(0, 0, 255)',
+                                color: 'rgb(5, 240, 255)',
                                 fontSize: '16px',
                                 padding: '0 8px',
                                 minWidth: '38px',
@@ -3856,7 +3867,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   <div 
                     className="space-y-4"
                     style={{
-                      backgroundColor: '#e9edf1',
+                      backgroundColor: '#FFF',
                       border: 'none',
                       boxShadow: 'none',
                       borderRadius: '14px',
@@ -3865,11 +3876,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                   >
                     <div className="mb-1 bg-transparent">
                       <span
-                        className="px-3 py-1 inline-block font-sans"
+                        className="inline-block font-sans"
                         style={{
                           backgroundColor: 'rgb(61 220 132)',
                           color: '#115830',
                           fontSize: '18px',
+                          padding: '9px 18px',
                           borderRadius: '1000px',
                           cursor: 'default',
                           fontWeight: 100,
@@ -4116,7 +4128,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <div 
                       className="space-y-4 animate-fadeIn"
                       style={{
-                        backgroundColor: '#e9edf1',
+                        backgroundColor: '#FFF',
                         border: 'none',
                         boxShadow: 'none',
                         borderRadius: '14px',
@@ -4126,11 +4138,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     >
                       <div className="mb-1 bg-transparent">
                         <span
-                          className="px-3 py-1 inline-block font-sans"
+                          className="inline-block font-sans"
                           style={{
                             backgroundColor: 'rgb(61 220 132)',
                             color: '#115830',
                             fontSize: '18px',
+                            padding: '9px 18px',
                             borderRadius: '1000px',
                             cursor: 'default',
                             fontWeight: 100,
@@ -4349,7 +4362,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           }}
                           style={{
                             border: 'none',
-                            backgroundColor: 'rgb(233, 235, 239)',
+                            backgroundColor: 'rgb(255, 216, 238)',
+                            color: 'rgb(142, 25, 92)',
                             borderRadius: '14px',
                             padding: '22px 16px',
                             textAlign: 'center',
@@ -4366,8 +4380,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                           }
                         >
                           <div
-                            className="font-sans font-semibold text-slate-900 select-none"
-                            style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                            className="font-sans font-semibold select-none"
+                            style={{ fontSize: '18px', color: 'rgb(142, 25, 92)', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
                           >
                             {isUploadingFile
                               ? 'Téléchargement en cours...'
@@ -4393,7 +4407,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 width: '42px',
                                 height: '24px',
                                 borderRadius: '9999px',
-                                backgroundColor: isAutreFichierToggle ? '#2e54ff' : '#cbd5e1',
+                                backgroundColor: isAutreFichierToggle ? 'rgb(142, 25, 92)' : 'rgb(235 190 216)',
                                 position: 'relative',
                                 border: 'none',
                                 cursor: 'pointer',
@@ -4424,7 +4438,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               style={{
                                 fontSize: '15px',
                                 fontWeight: 500,
-                                color: '#334155',
+                                color: 'rgb(142, 25, 92)',
                                 cursor: 'pointer',
                                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                               }}
@@ -4449,8 +4463,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               return (
                                 <div 
                                   key={idx}
-                                  className="flex items-center justify-between gap-3 p-3 bg-white rounded-xl shadow-xs flex-wrap"
-                                  style={{ border: '1px solid #DCE1EA' }}
+                                  className="flex items-center justify-between gap-3 p-3 bg-white rounded-xl flex-wrap"
+                                  style={{ border: '1px solid #DCE1EA', boxShadow: 'none' }}
                                 >
                                   <div className="flex items-center gap-4 text-[16px] text-black font-sans">
                                     <span className="font-semibold text-black whitespace-nowrap">
@@ -4462,13 +4476,23 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <select
-                                      className="crm-file-type-select"
+                                      className="crm-file-type-select text-center"
                                       value={f.typeFichier || ''}
                                       onChange={(e) => {
                                         const newType = e.target.value as CommercialFileAttachment['typeFichier'];
                                         setFormFichiersDevis(prev =>
                                           prev.map((item, i) => (i === idx ? { ...item, typeFichier: newType } : item))
                                         );
+                                      }}
+                                      style={{
+                                        fontSize: '18px',
+                                        textAlign: 'center',
+                                        textAlignLast: 'center',
+                                        appearance: 'none',
+                                        WebkitAppearance: 'none',
+                                        MozAppearance: 'none',
+                                        backgroundImage: 'none',
+                                        boxShadow: 'none',
                                       }}
                                     >
                                       <option value="" disabled hidden>Type Fichier.</option>
@@ -4732,7 +4756,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     <div 
                       className="space-y-4 animate-fadeIn"
                       style={{
-                        backgroundColor: '#e9edf1',
+                        backgroundColor: '#FFF',
                         border: 'none',
                         boxShadow: 'none',
                         borderRadius: '14px',
@@ -4741,11 +4765,12 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                     >
                       <div className="mb-1 bg-transparent">
                         <span
-                          className="px-3 py-1 inline-block font-sans"
+                          className="inline-block font-sans"
                           style={{
                             backgroundColor: 'rgb(61 220 132)',
                             color: '#115830',
                             fontSize: '18px',
+                            padding: '9px 18px',
                             borderRadius: '1000px',
                             cursor: 'default',
                             fontWeight: 100,

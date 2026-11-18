@@ -22,6 +22,7 @@ interface ExpeditionsTabProps {
   clients: Client[];
   companyInfo?: Partial<CompanyInfo> | null;
   onClose?: () => void;
+  initialSearchQuery?: string;
 }
 
 const CONTEXTE_OPTIONS = [
@@ -165,9 +166,19 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
   clients,
   companyInfo,
   onClose,
+  initialSearchQuery,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery || '');
   const [showForm, setShowForm] = useState(false);
+
+  useEffect(() => {
+    if (initialSearchQuery !== undefined && initialSearchQuery !== null) {
+      setSearchQuery(String(initialSearchQuery));
+      if (String(initialSearchQuery).trim() !== '') {
+        setShowForm(false);
+      }
+    }
+  }, [initialSearchQuery]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [clickedPill, setClickedPill] = useState<string | null>(null);
@@ -205,6 +216,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
   const [contexte, setContexte] = useState('');
   const [expediteur, setExpediteur] = useState('');
   const [destinataire, setDestinataire] = useState('');
+  const [destinataireValue, setDestinataireValue] = useState('');
   const [reference, setReference] = useState('');
   const [preparateurCategory, setPreparateurCategory] = useState('');
   const [preparateurValue, setPreparateurValue] = useState('');
@@ -347,21 +359,56 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
     };
   }, [catalogItems, selectedColisageMap]);
 
-  // Member lists for Préparateur lookup
+  // Member lists for Préparateur & Destinataire lookup
+  const isMemberTechnician = (m: any): boolean => {
+    if (!m || m.role === 'Inactif') return false;
+    const rawRole = String(
+      (m.role && m.role !== 'Collaborateur' ? m.role : '') ||
+        m.categorie ||
+        m.category ||
+        m['Catégorie.'] ||
+        m['Catégorie'] ||
+        m.adminSubRole ||
+        m.metier ||
+        m['Métier.'] ||
+        m['Métier'] ||
+        m.role ||
+        ''
+    )
+      .trim()
+      .toLowerCase();
+    const subRole = String(
+      m.adminSubRole || m.categorie || m.category || m['Catégorie.'] || m['Catégorie'] || ''
+    )
+      .trim()
+      .toLowerCase();
+    return (
+      rawRole.includes('tech') ||
+      rawRole === 'maintenance terrain' ||
+      subRole.includes('tech') ||
+      subRole === 'maintenance terrain'
+    );
+  };
+
+  const getMemberDisplayLabel = (m: any): string => {
+    if (!m) return '';
+    return String(
+      m.name ||
+        m.nomPrenom ||
+        m['Nom et prénom.'] ||
+        m['Nom et prénom'] ||
+        m['Nom Prénom'] ||
+        m.email ||
+        ''
+    ).trim();
+  };
+
   const nonTechnicianMembers = useMemo(() => {
-    return (members || []).filter((m) => {
-      if (!m || m.role === 'Inactif') return false;
-      const r = String(m.role || '').toLowerCase();
-      return !r.includes('technicien') && !r.includes('maintenance terrain');
-    });
+    return (members || []).filter((m) => m && m.role !== 'Inactif' && !isMemberTechnician(m));
   }, [members]);
 
   const technicianMembers = useMemo(() => {
-    return (members || []).filter((m) => {
-      if (!m || m.role === 'Inactif') return false;
-      const r = String(m.role || '').toLowerCase();
-      return r.includes('technicien') || r.includes('maintenance terrain');
-    });
+    return (members || []).filter((m) => isMemberTechnician(m));
   }, [members]);
 
   const clientOptions = useMemo(() => {
@@ -372,6 +419,32 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
     }
     return Array.from(names).sort((a, b) => a.localeCompare(b, 'fr'));
   }, [clients]);
+
+  const supplierOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const v of variables || []) {
+      if (v && v.category === 'Fournisseur' && v.nom) {
+        const label = String(v.nom).trim();
+        if (label) names.add(label);
+      }
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'fr'));
+  }, [variables]);
+
+  const parseDestinataireString = (raw: string): { category: string; value: string } => {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return { category: '', value: '' };
+    for (const cat of EXPEDITEUR_DESTINATAIRE_OPTIONS) {
+      if (trimmed === cat) return { category: cat, value: '' };
+      if (trimmed.startsWith(`${cat} - `)) {
+        return { category: cat, value: trimmed.slice(`${cat} - `.length).trim() };
+      }
+      if (trimmed.startsWith(`${cat}: `)) {
+        return { category: cat, value: trimmed.slice(`${cat}: `.length).trim() };
+      }
+    }
+    return { category: 'Autre', value: trimmed };
+  };
 
   const parsePreparateurString = (raw: string): { category: string; value: string } => {
     const trimmed = String(raw || '').trim();
@@ -460,6 +533,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
     setContexte('');
     setExpediteur('');
     setDestinataire('');
+    setDestinataireValue('');
     setReference('');
     setPreparateurCategory('');
     setPreparateurValue('');
@@ -483,9 +557,14 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
     setEditingId(exp.id);
     setContexte(exp.contexte || '');
     setExpediteur(exp.expediteur || '');
-    setDestinataire(
-      exp.destinataire && exp.destinataire !== exp.expediteur ? exp.destinataire : ''
-    );
+    const parsedDest = parseDestinataireString(exp.destinataire || '');
+    if (parsedDest.category && parsedDest.category !== exp.expediteur) {
+      setDestinataire(parsedDest.category);
+      setDestinataireValue(parsedDest.value);
+    } else {
+      setDestinataire('');
+      setDestinataireValue('');
+    }
     setReference(exp.reference || '');
     const parsedPrep = parsePreparateurString(exp.preparateur);
     setPreparateurCategory(parsedPrep.category);
@@ -505,7 +584,14 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!reference.trim()) return;
     const nowStr = new Date().toLocaleDateString('fr-FR');
+    const formattedDestinataire =
+      destinataire && destinataire !== expediteur
+        ? destinataireValue.trim()
+          ? `${destinataire} - ${destinataireValue.trim()}`
+          : destinataire
+        : '';
     const formattedPreparateur = preparateurCategory
       ? preparateurValue.trim()
         ? `${preparateurCategory} - ${preparateurValue.trim()}`
@@ -525,7 +611,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
           reference: reference.trim(),
           contexte,
           expediteur,
-          destinataire: destinataire === expediteur ? '' : destinataire,
+          destinataire: formattedDestinataire,
           transporteur,
           numeroSuivi: cleanTracking,
           codePostalDestinataire: cleanPostal,
@@ -547,7 +633,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
         reference: reference.trim(),
         contexte,
         expediteur,
-        destinataire: destinataire === expediteur ? '' : destinataire,
+        destinataire: formattedDestinataire,
         transporteur,
         numeroSuivi: cleanTracking,
         codePostalDestinataire: cleanPostal,
@@ -1315,6 +1401,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                   onChange={(e) => setReference(e.target.value)}
                   placeholder={t('Entrez une référence.')}
                   className="w-full"
+                  required
                 />
               </div>
 
@@ -1328,6 +1415,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                     setExpediteur(nextExp);
                     if (nextExp && destinataire === nextExp) {
                       setDestinataire('');
+                      setDestinataireValue('');
                     }
                   }}
                   className="w-full"
@@ -1342,24 +1430,95 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
               </div>
 
               {/* Destinataire. */}
-              <div>
-                <label className="block mb-1.5 expeditions-label-style">{t('Destinataire.')}</label>
-                <select
-                  value={destinataire}
-                  onChange={(e) => setDestinataire(e.target.value)}
-                  className="w-full"
-                >
-                  <option value="">{t('Sélectionnez un destinataire.')}</option>
-                  {EXPEDITEUR_DESTINATAIRE_OPTIONS.map((opt) => (
-                    <option
-                      key={opt}
-                      value={opt}
-                      disabled={Boolean(expediteur && opt === expediteur)}
+              <div className="space-y-3">
+                <div>
+                  <label className="block mb-1.5 expeditions-label-style">{t('Destinataire.')}</label>
+                  <select
+                    value={destinataire}
+                    onChange={(e) => {
+                      setDestinataire(e.target.value);
+                      setDestinataireValue('');
+                    }}
+                    className="w-full"
+                  >
+                    <option value="">{t('Sélectionnez un destinataire.')}</option>
+                    {EXPEDITEUR_DESTINATAIRE_OPTIONS.map((opt) => (
+                      <option
+                        key={opt}
+                        value={opt}
+                        disabled={Boolean(expediteur && opt === expediteur)}
+                      >
+                        {t(opt)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {destinataire === 'Technicien' && (
+                  <div>
+                    <select
+                      value={destinataireValue}
+                      onChange={(e) => setDestinataireValue(e.target.value)}
+                      className="w-full"
                     >
-                      {t(opt)}
-                    </option>
-                  ))}
-                </select>
+                      <option value="">{t('Sélectionnez un technicien.')}</option>
+                      {technicianMembers.map((m) => {
+                        const label = getMemberDisplayLabel(m);
+                        return (
+                          <option key={m.id || label} value={label}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+
+                {destinataire === 'Client' && (
+                  <div>
+                    <select
+                      value={destinataireValue}
+                      onChange={(e) => setDestinataireValue(e.target.value)}
+                      className="w-full"
+                    >
+                      <option value="">{t('Sélectionnez un client.')}</option>
+                      {clientOptions.map((cName) => (
+                        <option key={cName} value={cName}>
+                          {cName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {destinataire === 'Fournisseur' && (
+                  <div>
+                    <select
+                      value={destinataireValue}
+                      onChange={(e) => setDestinataireValue(e.target.value)}
+                      className="w-full"
+                    >
+                      <option value="">{t('Sélectionnez un fournisseur.')}</option>
+                      {supplierOptions.map((sName) => (
+                        <option key={sName} value={sName}>
+                          {sName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {destinataire === 'Autre' && (
+                  <div>
+                    <input
+                      type="text"
+                      value={destinataireValue}
+                      onChange={(e) => setDestinataireValue(e.target.value)}
+                      placeholder={t('Entrez un destinataire.')}
+                      className="w-full"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Colisage Pièce(s). */}
@@ -1417,7 +1576,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                     >
                       <option value="">{t('Sélectionnez un collaborateur.')}</option>
                       {nonTechnicianMembers.map((m) => {
-                        const label = m.name || m.email;
+                        const label = getMemberDisplayLabel(m);
                         return (
                           <option key={m.id || label} value={label}>
                             {label}
@@ -1437,7 +1596,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                     >
                       <option value="">{t('Sélectionnez un technicien.')}</option>
                       {technicianMembers.map((m) => {
-                        const label = m.name || m.email;
+                        const label = getMemberDisplayLabel(m);
                         return (
                           <option key={m.id || label} value={label}>
                             {label}

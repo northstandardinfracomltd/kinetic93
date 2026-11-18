@@ -237,16 +237,63 @@ export function useTenantPresence({
     }
 
     let isCancelled = false;
+    const resolveLocalUserIdentity = () => {
+      let email = '';
+      let name = '';
+      let role = 'admin';
+      try {
+        role = String(localStorage.getItem('defib_logged_user_role') || 'admin').trim();
+        const rawUser = localStorage.getItem('defib_admin_logged_user');
+        if (rawUser) {
+          const parsed = JSON.parse(rawUser);
+          if (parsed && typeof parsed === 'object') {
+            email = String(parsed.email || '').trim().toLowerCase();
+            name = String(parsed.name || '').trim();
+          }
+        }
+        if (email && (!name || name === 'Membre' || name === 'Utilisateur' || name === 'Administrateur' || name.includes('@'))) {
+          const rawMembers =
+            localStorage.getItem(`defib_${normTenantId}_members`) ||
+            localStorage.getItem(`defib_${normTenantId.toLowerCase()}_members`);
+          if (rawMembers) {
+            const membersList = JSON.parse(rawMembers);
+            if (Array.isArray(membersList)) {
+              const matched = membersList.find(
+                (m: any) => m && String(m.email || '').trim().toLowerCase() === email
+              );
+              const candidateName = String(
+                matched?.name ||
+                  matched?.nomPrenom ||
+                  matched?.['Nom et prénom.'] ||
+                  matched?.['Nom et prénom'] ||
+                  ''
+              ).trim();
+              if (candidateName) {
+                name = candidateName;
+              }
+            }
+          }
+        }
+      } catch {}
+      return { email, name, role };
+    };
+
     const sendHeartbeat = async () => {
+      const currentSid = getOrCreatePresenceSessionId();
+      sessionIdRef.current = currentSid;
       broadcastState('HEARTBEAT');
       recomputeLocalConflicts();
+      const { email, name, role } = resolveLocalUserIdentity();
       try {
         const res = await fetch('/api/presence/heartbeat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            sessionId: myId,
+            sessionId: currentSid,
             tenantId: normTenantId,
+            email,
+            name,
+            role,
             tab: normTab,
             formKey: normFormKey,
           }),
@@ -264,10 +311,12 @@ export function useTenantPresence({
     const intervalId = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
 
     const handleLeave = () => {
+      const currentSid = getOrCreatePresenceSessionId();
+      sessionIdRef.current = currentSid;
       broadcastState('LEAVE');
       try {
         const payload = JSON.stringify({
-          sessionId: myId,
+          sessionId: currentSid,
           tenantId: normTenantId,
         });
         if (navigator.sendBeacon) {
@@ -298,12 +347,17 @@ export function useTenantPresence({
           channel.close();
         } catch {}
       }
+      const currentSid = getOrCreatePresenceSessionId();
+      const { email, name, role } = resolveLocalUserIdentity();
       fetch('/api/presence/heartbeat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sessionId: myId,
+          sessionId: currentSid,
           tenantId: normTenantId,
+          email,
+          name,
+          role,
           tab: '',
           formKey: '',
         }),

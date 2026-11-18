@@ -138,6 +138,8 @@ interface StocksTabProps {
   isDeveloper?: boolean;
   isReadOnly?: boolean;
   companyInfo?: Partial<CompanyInfo> | null;
+  pendingOpenExpeditionRef?: string | null;
+  onClearPendingOpenExpeditionRef?: () => void;
 }
 
 export default function StocksTab({
@@ -167,10 +169,23 @@ export default function StocksTab({
   isDeveloper = false,
   isReadOnly = false,
   companyInfo,
+  pendingOpenExpeditionRef,
+  onClearPendingOpenExpeditionRef,
 }: StocksTabProps) {
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState<boolean>(false);
   const [activeStocksSubSidePane, setActiveStocksSubSidePane] = useState<'achats-fournisseurs' | 'expeditions' | null>(null);
+  const [expeditionsInitialSearch, setExpeditionsInitialSearch] = useState<string>('');
   const [isFilterSidePaneOpen, setIsFilterSidePaneOpen] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (pendingOpenExpeditionRef && String(pendingOpenExpeditionRef).trim() !== '') {
+      setExpeditionsInitialSearch(String(pendingOpenExpeditionRef).trim());
+      setActiveStocksSubSidePane('expeditions');
+      if (onClearPendingOpenExpeditionRef) {
+        onClearPendingOpenExpeditionRef();
+      }
+    }
+  }, [pendingOpenExpeditionRef, onClearPendingOpenExpeditionRef]);
   const [showStockValue, setShowStockValue] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [clickedPill, setClickedPill] = useState<string | null>(null);
@@ -2571,7 +2586,7 @@ export default function StocksTab({
                           position: 'relative',
                           overflow: 'hidden',
                           borderRadius: '1000px',
-                          padding: '6px 16px 6px 9px',
+                          padding: '9px 20px 9px 14px',
                           fontSize: '18px',
                           fontWeight: 100,
                           cursor: !hasAchatsFournisseursSpreadsheet ? 'not-allowed' : 'pointer',
@@ -2612,6 +2627,7 @@ export default function StocksTab({
                               ),
                             480
                           );
+                          setExpeditionsInitialSearch('');
                           setActiveStocksSubSidePane('expeditions');
                         }}
                         className={`relative overflow-hidden transition-all select-none ${
@@ -2627,7 +2643,7 @@ export default function StocksTab({
                           position: 'relative',
                           overflow: 'hidden',
                           borderRadius: '1000px',
-                          padding: '6px 16px 6px 9px',
+                          padding: '9px 20px 9px 14px',
                           fontSize: '18px',
                           fontWeight: 100,
                           cursor: !hasExpeditionsSpreadsheet ? 'not-allowed' : 'pointer',
@@ -2675,7 +2691,7 @@ export default function StocksTab({
                           position: 'relative',
                           overflow: 'hidden',
                           borderRadius: '1000px',
-                          padding: '6px 16px 6px 9px',
+                          padding: '9px 20px 9px 14px',
                           fontSize: '18px',
                           fontWeight: 100,
                           cursor: 'pointer',
@@ -4818,6 +4834,43 @@ export default function StocksTab({
                                             })}
                                           </select>
                                         )}
+                                        {isExpedieSit && Boolean(selectedExpVal && selectedExpVal.trim()) && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const targetExp = (expeditions || []).find(
+                                                (exp) =>
+                                                  String(exp.reference || exp.id).trim() ===
+                                                    selectedExpVal.trim() ||
+                                                  String(exp.id).trim() === selectedExpVal.trim()
+                                              );
+                                              const refToSearch = String(
+                                                targetExp?.reference || selectedExpVal
+                                              ).trim();
+                                              if (newDenomStr && (newUgs || '').trim() && !isDeveloper && !isReadOnly) {
+                                                handleAddStockSubmit({ preventDefault: () => {} } as any);
+                                              }
+                                              setShowStockForm(false);
+                                              setEditingStockId(null);
+                                              setExpeditionsInitialSearch(refToSearch);
+                                              setActiveStocksSubSidePane('expeditions');
+                                            }}
+                                            className="w-full text-center cursor-pointer transition-opacity hover:opacity-95 mt-1"
+                                            style={{
+                                              backgroundColor: '#2e54ff',
+                                              color: '#ffffff',
+                                              borderRadius: '13px',
+                                              padding: '8px 14px',
+                                              fontSize: '14px',
+                                              fontWeight: 'bold',
+                                              border: 'none',
+                                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                              boxShadow: 'none',
+                                            }}
+                                          >
+                                            Consulter l’expédition
+                                          </button>
+                                        )}
                                       </>
                                     );
                                   })()}
@@ -5761,7 +5814,7 @@ export default function StocksTab({
             className="relative h-full flex flex-col overflow-hidden animate-slideLeft bg-white"
             style={{
               width: '90%',
-              maxWidth: '90vw',
+              maxWidth: '1200px',
               backgroundColor: '#ffffff',
               boxShadow: '-4px 0 24px rgba(0,0,0,0.18)',
             }}
@@ -5776,6 +5829,10 @@ export default function StocksTab({
                   expeditions={expeditions}
                   companyInfo={companyInfo}
                   onClose={() => setActiveStocksSubSidePane(null)}
+                  onOpenExpeditionByRef={(ref) => {
+                    setExpeditionsInitialSearch(ref);
+                    setActiveStocksSubSidePane('expeditions');
+                  }}
                 />
               )}
               {activeStocksSubSidePane === 'expeditions' && (
@@ -5787,7 +5844,11 @@ export default function StocksTab({
                   members={members}
                   clients={clients}
                   companyInfo={companyInfo}
-                  onClose={() => setActiveStocksSubSidePane(null)}
+                  onClose={() => {
+                    setExpeditionsInitialSearch('');
+                    setActiveStocksSubSidePane(null);
+                  }}
+                  initialSearchQuery={expeditionsInitialSearch}
                 />
               )}
             </div>

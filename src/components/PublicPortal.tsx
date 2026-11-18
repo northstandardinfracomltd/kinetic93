@@ -54,6 +54,7 @@ import {
   StockMovement,
   VeilleRecord,
   StockTraceability,
+  ExpeditionRecord,
   LogisticsNotification,
   EmargementRecord,
   StagiaireRecord,
@@ -65,6 +66,8 @@ import {
   CttModelSetting,
   TenantMessage,
 } from "../types";
+import { createPortal } from "react-dom";
+import { getCarrierTrackingUrl } from "./ExpeditionsTab";
 import EmargementsTab from "./EmargementsTab";
 import { REGIONS_FRANCAISES, INITIAL_TENANT_MESSAGES, getLocationCustomName } from "../utils";
 import { CanalMessagesSidePane } from "./CanalMessagesSidePane";
@@ -252,6 +255,8 @@ interface PublicPortalProps {
   onUpdateStocks?: (updatedStocks: StockRecord[], tenantIdOverride?: string) => void | Promise<void>;
   distributedStocks?: DistributedStockLocation[];
   onUpdateDistributedStocks?: (updated: DistributedStockLocation[], tenantIdOverride?: string) => void | Promise<void>;
+  expeditions?: ExpeditionRecord[];
+  onUpdateExpeditions?: (updated: ExpeditionRecord[]) => void | Promise<void>;
   commercialDocs?: CommercialDoc[];
   onUpdateCommercialDocs?: (updatedDocs: CommercialDoc[]) => void;
   fsmTours?: any[];
@@ -320,6 +325,8 @@ export default function PublicPortal({
   onUpdateStocks,
   distributedStocks = [],
   onUpdateDistributedStocks,
+  expeditions: propExpeditions = [],
+  onUpdateExpeditions,
   commercialDocs = [],
   onUpdateCommercialDocs,
   fsmTours,
@@ -1161,24 +1168,98 @@ export default function PublicPortal({
         setWebappGreenBarMetrics(null);
         return;
       }
-      const containerRect = containerEl.getBoundingClientRect();
-      const iconRect = iconEl.getBoundingClientRect();
+
+      // Compute layout offset relative to containerEl (immune to CSS scale/bounce transforms)
+      let layoutLeft = 0;
+      let curr: HTMLElement | null = iconEl;
+      let reachedContainer = false;
+      while (curr && curr !== containerEl) {
+        layoutLeft += curr.offsetLeft;
+        curr = curr.offsetParent as HTMLElement | null;
+        if (curr === containerEl) {
+          reachedContainer = true;
+          break;
+        }
+      }
+
+      const iconWidth = iconEl.offsetWidth || 28;
+      let iconCenter: number;
+      if (reachedContainer) {
+        iconCenter = layoutLeft + iconWidth / 2;
+      } else {
+        const containerRect = containerEl.getBoundingClientRect();
+        const iconRect = iconEl.getBoundingClientRect();
+        iconCenter = iconRect.left - containerRect.left + iconRect.width / 2;
+      }
+
       const barWidth = isMoreTab ? 28 : 38;
-      const iconCenter = iconRect.left - containerRect.left + iconRect.width / 2;
-      setWebappGreenBarMetrics({
-        left: Math.max(4, iconCenter - barWidth / 2),
-        width: barWidth,
+      const nextLeft = Math.max(4, Math.round((iconCenter - barWidth / 2) * 10) / 10);
+
+      setWebappGreenBarMetrics((prev) => {
+        if (prev && Math.abs(prev.left - nextLeft) < 0.2 && prev.width === barWidth) {
+          return prev;
+        }
+        return {
+          left: nextLeft,
+          width: barWidth,
+        };
       });
     };
 
     updateGreenBarPosition();
     const rafId = window.requestAnimationFrame(updateGreenBarPosition);
+    const t1 = window.setTimeout(updateGreenBarPosition, 60);
+    const t2 = window.setTimeout(updateGreenBarPosition, 250);
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => {
+        updateGreenBarPosition();
+      });
+      if (webappNavContainerRef.current) {
+        ro.observe(webappNavContainerRef.current);
+      }
+      if (tenantPillVisualRef.current) {
+        ro.observe(tenantPillVisualRef.current);
+      }
+      const isMoreTab = ["planning", "veille", "frais"].includes(activeTab);
+      const targetKey = isMoreTab ? "more" : activeTab;
+      const activeIconEl = webappNavIconRefs.current[targetKey];
+      if (activeIconEl) {
+        ro.observe(activeIconEl);
+        if (activeIconEl.parentElement) {
+          ro.observe(activeIconEl.parentElement);
+        }
+      }
+    }
+
+    if (typeof document !== "undefined" && (document as any).fonts?.ready) {
+      (document as any).fonts.ready.then(() => {
+        updateGreenBarPosition();
+      }).catch(() => {});
+    }
+
     window.addEventListener("resize", updateGreenBarPosition);
+    window.addEventListener("orientationchange", updateGreenBarPosition);
     return () => {
       window.cancelAnimationFrame(rafId);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      if (ro) {
+        ro.disconnect();
+      }
       window.removeEventListener("resize", updateGreenBarPosition);
+      window.removeEventListener("orientationchange", updateGreenBarPosition);
     };
-  }, [activeTab, hidePointage, isStocksHidden]);
+  }, [
+    activeTab,
+    hidePointage,
+    isStocksHidden,
+    isFraisHidden,
+    companyInfo?.nomLogiciel,
+    companyInfo?.name,
+    companyInfo?.hiddenTabs,
+  ]);
 
   // Selected tour ID for mobile view
   const [selectedTourId, setSelectedTourId] = useState<string>(() => {
@@ -1650,6 +1731,118 @@ export default function PublicPortal({
       .slice(0, 50000);
   };
 
+  const [techCachedExpeditions, setTechCachedExpeditions] = useState<ExpeditionRecord[]>(() => {
+    if (Array.isArray(propExpeditions) && propExpeditions.length > 0) return propExpeditions;
+    try {
+      const tid =
+        propTenantId ||
+        (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+        "demo";
+      const raw =
+        localStorage.getItem(`defib_${tid}_expeditions`) ||
+        localStorage.getItem(`defib_${tid.toUpperCase()}_expeditions`) ||
+        localStorage.getItem(`defib_${tid.toLowerCase()}_expeditions`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return [];
+  });
+
+  useEffect(() => {
+    if (Array.isArray(propExpeditions) && propExpeditions.length > 0) {
+      setTechCachedExpeditions(propExpeditions);
+    }
+  }, [propExpeditions]);
+
+  const effectiveTechExpeditionsList = useMemo(() => {
+    return techCachedExpeditions.length > 0 ? techCachedExpeditions : (propExpeditions || []);
+  }, [techCachedExpeditions, propExpeditions]);
+
+  // Technician Expeditions & Traceability Selection States
+  const [showTechExpeditionsSection, setShowTechExpeditionsSection] = useState<boolean>(false);
+  const [showNewTechExpeditionForm, setShowNewTechExpeditionForm] = useState<boolean>(false);
+  const [selectedTechTraceRowKeys, setSelectedTechTraceRowKeys] = useState<string[]>([]);
+  const [showTechTraceExistingExpDropdown, setShowTechTraceExistingExpDropdown] = useState<boolean>(false);
+  const [selectedNewDistribTraceRowKeys, setSelectedNewDistribTraceRowKeys] = useState<string[]>([]);
+  const [showNewDistribTraceExistingExpDropdown, setShowNewDistribTraceExistingExpDropdown] = useState<boolean>(false);
+
+  // Draft edits for existing technician expeditions (keyed by exp.id) so editing Préparateur/Destinataire doesn't hide the card before saving
+  const [techExpEditsMap, setTechExpEditsMap] = useState<Record<string, Partial<ExpeditionRecord>>>({});
+  const [techExpErrorById, setTechExpErrorById] = useState<Record<string, string>>({});
+  const [techExpSuccessById, setTechExpSuccessById] = useState<Record<string, string>>({});
+  const [isSavingTechExpeditionId, setIsSavingTechExpeditionId] = useState<string | null>(null);
+
+  // New Technician Expedition Form State
+  const [newTechExpContexte, setNewTechExpContexte] = useState<string>("");
+  const [newTechExpReference, setNewTechExpReference] = useState<string>("");
+  const [newTechExpExpediteur, setNewTechExpExpediteur] = useState<string>("");
+  const [newTechExpDestinataireCat, setNewTechExpDestinataireCat] = useState<string>("");
+  const [newTechExpDestinataireVal, setNewTechExpDestinataireVal] = useState<string>("");
+  const [newTechExpPreparateurCat, setNewTechExpPreparateurCat] = useState<string>("Technicien");
+  const [newTechExpPreparateurVal, setNewTechExpPreparateurVal] = useState<string>("");
+  const [newTechExpTransporteur, setNewTechExpTransporteur] = useState<string>("");
+  const [newTechExpNumeroSuivi, setNewTechExpNumeroSuivi] = useState<string>("");
+  const [newTechExpCodePostal, setNewTechExpCodePostal] = useState<string>("");
+  const [newTechExpStatut, setNewTechExpStatut] = useState<string>("Aucune information");
+  const [newTechExpCommentaire, setNewTechExpCommentaire] = useState<string>("");
+  const [newTechExpColisagePieces, setNewTechExpColisagePieces] = useState<string>("");
+  const [newTechExpPoidsKgEstim, setNewTechExpPoidsKgEstim] = useState<string>("0");
+  const [newTechExpCoutTransportEstim, setNewTechExpCoutTransportEstim] = useState<string>("0");
+  const [newTechExpNombrePieces, setNewTechExpNombrePieces] = useState<string>("0");
+  const [newTechExpError, setNewTechExpError] = useState<string>("");
+
+  // Colisage side-pane modal for Technician WebApp Expeditions ("NEW" or exp.id)
+  const [activeTechColisageTargetId, setActiveTechColisageTargetId] = useState<string | null>(null);
+  const [techColisageSearch, setTechColisageSearch] = useState<string>("");
+  const [techSelectedColisageMap, setTechSelectedColisageMap] = useState<
+    Record<
+      string,
+      {
+        checked: boolean;
+        volume: number;
+        title: string;
+        unitWeightKg: number;
+        unitTransportCostEur: number;
+      }
+    >
+  >({});
+
+  const refreshTechExpeditionsFromSpreadsheet = async (forceRefresh = true) => {
+    const effTenant =
+      techTenantId ||
+      (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+      "demo";
+    const sheetUrl = getTenantSpreadsheetUrl("spreadsheetExpeditions", companyInfo, effTenant);
+    try {
+      const res = await fetch(
+        `/api/sheets/collection?tenantId=${encodeURIComponent(effTenant)}&type=expeditions&refresh=${forceRefresh}${
+          sheetUrl ? `&spreadsheetUrl=${encodeURIComponent(sheetUrl)}` : ""
+        }&_t=${Date.now()}`,
+        { cache: "no-store" },
+      );
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.fromSpreadsheet && Array.isArray(data.items)) {
+          setTechCachedExpeditions(data.items);
+          const tenantKeys = [effTenant, effTenant.toUpperCase(), effTenant.toLowerCase()];
+          for (const tk of Array.from(new Set(tenantKeys.filter(Boolean)))) {
+            try {
+              localStorage.setItem(`defib_${tk}_expeditions`, JSON.stringify(data.items));
+              localStorage.setItem(`fs_cache_${tk}_expeditions`, JSON.stringify(data.items));
+              idbSet(`defib_${tk}_expeditions`, data.items).catch(() => {});
+            } catch (_) {}
+          }
+          return data.items as ExpeditionRecord[];
+        }
+      }
+    } catch (err) {
+      console.warn("Could not refresh tech expeditions from spreadsheet:", err);
+    }
+    return null;
+  };
+
   const refreshTechStocksFromSpreadsheet = async (forceRefresh = true) => {
     const effTenant =
       techTenantId ||
@@ -1688,6 +1881,7 @@ export default function PublicPortal({
   useEffect(() => {
     if (activeTab === "stocks" && prevActiveTabForStocksRef.current !== "stocks") {
       refreshTechStocksFromSpreadsheet(true);
+      refreshTechExpeditionsFromSpreadsheet(true);
     }
     prevActiveTabForStocksRef.current = activeTab;
   }, [activeTab, techTenantId]);
@@ -2336,6 +2530,936 @@ export default function PublicPortal({
         console.warn("Direct sheet upsert warning for tech stocks:", err);
       }
     }
+  };
+
+  const updateLocalTechExpeditionsCache = (updatedExpeditions: ExpeditionRecord[]) => {
+    setTechCachedExpeditions(updatedExpeditions);
+    const effTenant =
+      techTenantId ||
+      (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+      "demo";
+    const tenantKeys = [effTenant, effTenant.toUpperCase(), effTenant.toLowerCase()];
+    if (/^d\d+$/i.test(effTenant) || /^\d+$/.test(effTenant)) {
+      const numOnly = effTenant.replace(/^d/i, "");
+      tenantKeys.push(`D${numOnly}`, `d${numOnly}`, numOnly);
+    }
+    for (const tk of Array.from(new Set(tenantKeys.filter(Boolean)))) {
+      try {
+        localStorage.setItem(`defib_${tk}_expeditions`, JSON.stringify(updatedExpeditions));
+        localStorage.setItem(`fs_cache_${tk}_expeditions`, JSON.stringify(updatedExpeditions));
+        idbSet(`defib_${tk}_expeditions`, updatedExpeditions).catch(() => {});
+      } catch (_) {}
+    }
+    return updatedExpeditions;
+  };
+
+  const persistUpdatedExpeditionsList = async (
+    updatedExpeditions: ExpeditionRecord[],
+    directSheetUpsert = true,
+  ) => {
+    const normalized = updateLocalTechExpeditionsCache(updatedExpeditions);
+    const effTenant =
+      techTenantId ||
+      (typeof window !== "undefined" ? localStorage.getItem("defib_tenant_id") : null) ||
+      "demo";
+    if (onUpdateExpeditions) {
+      await onUpdateExpeditions(normalized);
+    }
+    try {
+      saveCollectionToFirestore("expeditions", normalized, effTenant).catch(() => {});
+    } catch (_) {}
+    if (directSheetUpsert) {
+      try {
+        const sheetUrl = getTenantSpreadsheetUrl("spreadsheetExpeditions", companyInfo, effTenant);
+        await fetch("/api/sheets/upsert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tenantId: effTenant,
+            type: "expeditions",
+            spreadsheetUrl: sheetUrl || undefined,
+            records: normalized,
+          }),
+        });
+      } catch (err) {
+        console.warn("Direct sheet upsert warning for tech expeditions:", err);
+      }
+    }
+  };
+
+  const TECH_EXP_CONTEXTE_OPTIONS = [
+    "Fourniture au client",
+    "Fourniture au technicien",
+    "Retour au fournisseur",
+    "Retour du client",
+    "Retour du technicien",
+    "Réception approvisionnement",
+    "Autre",
+  ];
+
+  const TECH_EXP_EXPEDITEUR_DESTINATAIRE_OPTIONS = [
+    "Centrale des stocks",
+    "Technicien",
+    "Client",
+    "Fournisseur",
+    "Autre",
+  ];
+
+  const TECH_EXP_PREPARATEUR_CATEGORIES = [
+    "Administrateur",
+    "Client",
+    "Technicien",
+    "Autre",
+  ];
+
+  const TECH_EXP_TRANSPORTEUR_OPTIONS = [
+    "DHL Express",
+    "Fedex",
+    "Laposte",
+    "GLS",
+    "UPS",
+    "Mondial Relay",
+    "SEUR",
+    "Geodis",
+    "Nacex",
+    "Correos Express",
+    "XPO Logistics",
+    "DB Schenker",
+    "Kuehne+Nagel",
+    "GXO Logistics",
+    "Hapag-Lloyd",
+    "CTT Express",
+    "Autre",
+  ];
+
+  const TECH_EXP_STATUT_OPTIONS = [
+    "Aucune information",
+    "En attente",
+    "Préparation",
+    "Envoyé",
+    "Réceptionné",
+    "Incident",
+  ];
+
+  const isTechMemberTechnician = (m: any): boolean => {
+    if (!m || m.role === "Inactif") return false;
+    const rawRole = String(
+      (m.role && m.role !== "Collaborateur" ? m.role : "") ||
+        m.categorie ||
+        m.category ||
+        m["Catégorie."] ||
+        m["Catégorie"] ||
+        m.adminSubRole ||
+        m.metier ||
+        m["Métier."] ||
+        m["Métier"] ||
+        m.role ||
+        "",
+    )
+      .trim()
+      .toLowerCase();
+    const subRole = String(
+      m.adminSubRole || m.categorie || m.category || m["Catégorie."] || m["Catégorie"] || "",
+    )
+      .trim()
+      .toLowerCase();
+    return (
+      rawRole.includes("tech") ||
+      rawRole === "maintenance terrain" ||
+      subRole.includes("tech") ||
+      subRole === "maintenance terrain"
+    );
+  };
+
+  const getTechMemberDisplayLabel = (m: any): string => {
+    if (!m) return "";
+    return String(
+      m.name ||
+        m.nomPrenom ||
+        m["Nom et prénom."] ||
+        m["Nom et prénom"] ||
+        m["Nom Prénom"] ||
+        m.email ||
+        "",
+    ).trim();
+  };
+
+  const loggedTechDisplayName = useMemo(() => {
+    return String(
+      getTechMemberDisplayLabel(resolvedLiveMember) ||
+        authenticatedUser?.name ||
+        "",
+    ).trim();
+  }, [resolvedLiveMember, authenticatedUser]);
+
+  const loggedTechEmail = useMemo(() => {
+    return String(
+      resolvedLiveMember?.email ||
+        authenticatedUser?.email ||
+        "",
+    )
+      .trim()
+      .toLowerCase();
+  }, [resolvedLiveMember, authenticatedUser]);
+
+  const techNonTechnicianMembers = useMemo(() => {
+    return (effectiveMembers || []).filter(
+      (m) => m && m.role !== "Inactif" && !isTechMemberTechnician(m),
+    );
+  }, [effectiveMembers]);
+
+  const techTechnicianMembers = useMemo(() => {
+    const list = (effectiveMembers || []).filter((m) => isTechMemberTechnician(m));
+    if (loggedTechDisplayName) {
+      const exists = list.some(
+        (m) =>
+          getTechMemberDisplayLabel(m).toLowerCase() ===
+          loggedTechDisplayName.toLowerCase(),
+      );
+      if (!exists && (resolvedLiveMember || authenticatedUser)) {
+        return [
+          ...list,
+          (resolvedLiveMember || authenticatedUser) as Member,
+        ];
+      }
+    }
+    return list;
+  }, [effectiveMembers, loggedTechDisplayName, resolvedLiveMember, authenticatedUser]);
+
+  const techClientOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const c of clients || []) {
+      const label = String(c.denomination || (c as any).nomSite || c.id || "").trim();
+      if (label) names.add(label);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "fr"));
+  }, [clients]);
+
+  const techSupplierOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const v of variables || []) {
+      if (v && v.category === "Fournisseur" && v.nom) {
+        const label = String(v.nom).trim();
+        if (label) names.add(label);
+      }
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "fr"));
+  }, [variables]);
+
+  const parseTechDestinataireString = (raw: string): { category: string; value: string } => {
+    const trimmed = String(raw || "").trim();
+    if (!trimmed) return { category: "", value: "" };
+    for (const cat of TECH_EXP_EXPEDITEUR_DESTINATAIRE_OPTIONS) {
+      if (trimmed === cat) return { category: cat, value: "" };
+      if (trimmed.startsWith(`${cat} - `)) {
+        return { category: cat, value: trimmed.slice(`${cat} - `.length).trim() };
+      }
+      if (trimmed.startsWith(`${cat}: `)) {
+        return { category: cat, value: trimmed.slice(`${cat}: `.length).trim() };
+      }
+    }
+    return { category: "Autre", value: trimmed };
+  };
+
+  const parseTechPreparateurString = (raw: string): { category: string; value: string } => {
+    const trimmed = String(raw || "").trim();
+    if (!trimmed) return { category: "", value: "" };
+    for (const cat of TECH_EXP_PREPARATEUR_CATEGORIES) {
+      if (trimmed === cat) return { category: cat, value: "" };
+      if (trimmed.startsWith(`${cat} - `)) {
+        return { category: cat, value: trimmed.slice(`${cat} - `.length).trim() };
+      }
+      if (trimmed.startsWith(`${cat}: `)) {
+        return { category: cat, value: trimmed.slice(`${cat}: `.length).trim() };
+      }
+    }
+    return { category: "Autre", value: trimmed };
+  };
+
+  const isSubValueMatchingLoggedTech = (subVal: string): boolean => {
+    const cleanVal = String(subVal || "").trim().toLowerCase();
+    if (!cleanVal) return false;
+    const targetName = loggedTechDisplayName.toLowerCase();
+    const targetEmail = loggedTechEmail.toLowerCase();
+    const authName = String(authenticatedUser?.name || "").trim().toLowerCase();
+    if (targetName && cleanVal === targetName) return true;
+    if (targetEmail && cleanVal === targetEmail) return true;
+    if (authName && cleanVal === authName) return true;
+    return false;
+  };
+
+  const isTechRoleSelectionMatchingLoggedTech = (category: string, subVal: string): boolean => {
+    return String(category || "").trim() === "Technicien" && isSubValueMatchingLoggedTech(subVal);
+  };
+
+  const doesExpeditionBelongToLoggedTech = (exp: ExpeditionRecord): boolean => {
+    if (!exp) return false;
+    const parsedPrep = parseTechPreparateurString(exp.preparateur || "");
+    const parsedDest = parseTechDestinataireString(exp.destinataire || "");
+    return (
+      isTechRoleSelectionMatchingLoggedTech(parsedPrep.category, parsedPrep.value) ||
+      isTechRoleSelectionMatchingLoggedTech(parsedDest.category, parsedDest.value)
+    );
+  };
+
+  const techFilteredExpeditions = useMemo(() => {
+    return (effectiveTechExpeditionsList || []).filter((exp) =>
+      doesExpeditionBelongToLoggedTech(exp),
+    );
+  }, [effectiveTechExpeditionsList, loggedTechDisplayName, loggedTechEmail, authenticatedUser]);
+
+  const eligibleTechSituationExpeditions = useMemo(() => {
+    return (effectiveTechExpeditionsList || []).filter((exp) => {
+      const st = String(exp.statut || "Aucune information").trim().toLowerCase();
+      return (
+        st === "" ||
+        st === "aucune information" ||
+        st === "aucune information." ||
+        st === "en attente" ||
+        st === "préparation" ||
+        st === "preparation" ||
+        st === "envoyé" ||
+        st === "envoye"
+      );
+    });
+  }, [effectiveTechExpeditionsList]);
+
+  const eligibleTechExistingExpeditions = useMemo(() => {
+    return (effectiveTechExpeditionsList || []).filter((exp) => {
+      const st = String(exp.statut || "Aucune information").trim().toLowerCase();
+      return (
+        st === "" ||
+        st === "aucune information" ||
+        st === "aucune information." ||
+        st === "en attente" ||
+        st === "préparation" ||
+        st === "preparation"
+      );
+    });
+  }, [effectiveTechExpeditionsList]);
+
+  const formatTechCleanNum = (n: number): string => {
+    if (!Number.isFinite(n) || n === 0) return "0";
+    return Number(n.toFixed(2)).toString();
+  };
+
+  const parseTechNumericAmount = (val: any): number => {
+    if (val === undefined || val === null || val === "") return 0;
+    const cleaned = String(val).replace(",", ".").replace(/[^0-9.-]/g, "");
+    const parsed = parseFloat(cleaned);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  };
+
+  const techColisageCatalogItems = useMemo(() => {
+    const list: {
+      key: string;
+      stockId: string;
+      traceabilityId?: string;
+      format: "A" | "B";
+      title: string;
+      defaultVolume: number;
+      unitWeightKg: number;
+      unitTransportCostEur: number;
+    }[] = [];
+    for (const st of effectiveTechStocksList || []) {
+      if (!st) continue;
+      const ugs = String(st.ugs || st.id || "SANS-UGS").trim();
+      const matchedVar = findStockVariable(st.denominationPieceId);
+      const pieceTitle = String(
+        matchedVar?.nom || st.denominationPieceId || "Pièce sans titre",
+      ).trim();
+      const unitWeightKg = parseTechNumericAmount(st.poidsNet);
+      const unitTransportCostEur = parseTechNumericAmount(st.fraisFixeCoutTransport);
+
+      if (st.traceabilityEnabled) {
+        const traces = Array.isArray(st.traceabilities) ? st.traceabilities : [];
+        traces.forEach((tr, idx) => {
+          const sit = String(tr?.situation || "").trim().toLowerCase();
+          if (sit === "disponible") {
+            const emp = String(tr.emplacement || "Non renseigné").trim();
+            const lot = String(
+              tr.lotOrSerial || (tr as any).lotNumber || "Non renseigné",
+            ).trim();
+            const title = `${ugs} - ${pieceTitle} - Emplacement: ${emp} - Lot/Série: ${lot}`;
+            const key = `B__${st.id}__${tr.id || idx}__${lot}`;
+            list.push({
+              key,
+              stockId: st.id,
+              traceabilityId: tr.id || String(idx),
+              format: "B",
+              title,
+              defaultVolume: 1,
+              unitWeightKg,
+              unitTransportCostEur,
+            });
+          }
+        });
+      } else {
+        const title = `${ugs} - ${pieceTitle}`;
+        const key = `A__${st.id}`;
+        list.push({
+          key,
+          stockId: st.id,
+          format: "A",
+          title,
+          defaultVolume: 0,
+          unitWeightKg,
+          unitTransportCostEur,
+        });
+      }
+    }
+    return list;
+  }, [effectiveTechStocksList, variables]);
+
+  const parseTechColisageStringToMap = (raw: string) => {
+    const map: Record<
+      string,
+      {
+        checked: boolean;
+        volume: number;
+        title: string;
+        unitWeightKg: number;
+        unitTransportCostEur: number;
+      }
+    > = {};
+    const trimmed = String(raw || "").trim();
+    if (!trimmed) return map;
+    const segments = trimmed
+      .split(/\s*\|\s*|\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    segments.forEach((seg, idx) => {
+      let vol = 1;
+      let titleText = seg;
+      const matchQte = seg.match(/^\[Qté:\s*(\d+(?:[.,]\d+)?)\]\s*(.+)$/i);
+      const matchX = seg.match(/^(\d+(?:[.,]\d+)?)\s*x\s+(.+)$/i);
+      if (matchQte) {
+        vol = parseFloat(matchQte[1].replace(",", ".")) || 0;
+        titleText = matchQte[2].trim();
+      } else if (matchX) {
+        vol = parseFloat(matchX[1].replace(",", ".")) || 0;
+        titleText = matchX[2].trim();
+      }
+      const foundCatalog = techColisageCatalogItems.find(
+        (c) => c.title.toLowerCase() === titleText.toLowerCase(),
+      );
+      if (foundCatalog) {
+        map[foundCatalog.key] = {
+          checked: true,
+          volume: vol,
+          title: foundCatalog.title,
+          unitWeightKg: foundCatalog.unitWeightKg,
+          unitTransportCostEur: foundCatalog.unitTransportCostEur,
+        };
+      } else {
+        const ugsPrefix = titleText.split(" - ")[0]?.trim().toLowerCase() || "";
+        const matchedStock = ugsPrefix
+          ? (effectiveTechStocksList || []).find(
+              (s) =>
+                s &&
+                (String(s.ugs || "").trim().toLowerCase() === ugsPrefix ||
+                  String(s.id || "").trim().toLowerCase() === ugsPrefix),
+            )
+          : undefined;
+        map[`LEGACY__${idx}__${titleText}`] = {
+          checked: true,
+          volume: vol,
+          title: titleText,
+          unitWeightKg: matchedStock ? parseTechNumericAmount(matchedStock.poidsNet) : 0,
+          unitTransportCostEur: matchedStock
+            ? parseTechNumericAmount(matchedStock.fraisFixeCoutTransport)
+            : 0,
+        };
+      }
+    });
+    return map;
+  };
+
+  const computeTechColisageStatsFromMap = (
+    map: Record<
+      string,
+      {
+        checked: boolean;
+        volume: number;
+        title: string;
+        unitWeightKg: number;
+        unitTransportCostEur: number;
+      }
+    >,
+  ) => {
+    let checkedItemsCount = 0;
+    let totalPiecesVolume = 0;
+    let totalWeightKg = 0;
+    let totalTransportCostEur = 0;
+    const serializedParts: string[] = [];
+
+    for (const item of techColisageCatalogItems) {
+      const entry = map[item.key];
+      if (entry && entry.checked) {
+        checkedItemsCount += 1;
+        const vol =
+          Number.isFinite(entry.volume) && entry.volume >= 0
+            ? entry.volume
+            : item.defaultVolume;
+        totalPiecesVolume += vol;
+        totalWeightKg += (item.unitWeightKg || 0) * vol;
+        totalTransportCostEur += (item.unitTransportCostEur || 0) * vol;
+        serializedParts.push(`[Qté: ${vol}] ${item.title}`);
+      }
+    }
+
+    for (const k of Object.keys(map)) {
+      const entry = map[k];
+      if (entry && entry.checked && !techColisageCatalogItems.some((c) => c.key === k)) {
+        checkedItemsCount += 1;
+        const vol = Number.isFinite(entry.volume) && entry.volume >= 0 ? entry.volume : 1;
+        totalPiecesVolume += vol;
+        totalWeightKg += (entry.unitWeightKg || 0) * vol;
+        totalTransportCostEur += (entry.unitTransportCostEur || 0) * vol;
+        serializedParts.push(`[Qté: ${vol}] ${entry.title}`);
+      }
+    }
+
+    return {
+      checkedItemsCount,
+      totalPiecesVolume,
+      totalWeightKg,
+      totalTransportCostEur,
+      serializedString: serializedParts.join(" | "),
+    };
+  };
+
+  const countColisageItemsInString = (raw?: string): number => {
+    const trimmed = String(raw || "").trim();
+    if (!trimmed) return 0;
+    return trimmed
+      .split(/\s*\|\s*|\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean).length;
+  };
+
+  const handleOpenTechColisageModal = (targetId: string, initialColisageString: string) => {
+    setTechSelectedColisageMap(parseTechColisageStringToMap(initialColisageString));
+    setTechColisageSearch("");
+    setActiveTechColisageTargetId(targetId);
+  };
+
+  const handleSaveTechColisageModal = () => {
+    if (!activeTechColisageTargetId) return;
+    const stats = computeTechColisageStatsFromMap(techSelectedColisageMap);
+    if (activeTechColisageTargetId === "NEW") {
+      setNewTechExpColisagePieces(stats.serializedString);
+      setNewTechExpPoidsKgEstim(formatTechCleanNum(stats.totalWeightKg));
+      setNewTechExpCoutTransportEstim(formatTechCleanNum(stats.totalTransportCostEur));
+      setNewTechExpNombrePieces(String(stats.totalPiecesVolume));
+    } else {
+      const expId = activeTechColisageTargetId;
+      setTechExpEditsMap((prev) => ({
+        ...prev,
+        [expId]: {
+          ...(prev[expId] || {}),
+          colisagePieces: stats.serializedString,
+          poidsKgEstim: formatTechCleanNum(stats.totalWeightKg),
+          coutTransportEstim: formatTechCleanNum(stats.totalTransportCostEur),
+          nombrePieces: String(stats.totalPiecesVolume),
+        },
+      }));
+    }
+    setActiveTechColisageTargetId(null);
+  };
+
+  const TECH_EXP_OWNERSHIP_ERROR_MSG =
+    "Erreur : Vous devez être Préparateur ou Destinataire de l’expédition. Corrigez, et essayez à nouveau.";
+
+  const handleCreateNewTechExpedition = async () => {
+    playTechTapSound();
+    if (!newTechExpReference.trim()) {
+      setNewTechExpError("Erreur : Le champ Référence. est obligatoire.");
+      return;
+    }
+    const isPrepLoggedTech = isTechRoleSelectionMatchingLoggedTech(
+      newTechExpPreparateurCat,
+      newTechExpPreparateurVal,
+    );
+    const isDestLoggedTech = isTechRoleSelectionMatchingLoggedTech(
+      newTechExpDestinataireCat,
+      newTechExpDestinataireVal,
+    );
+    if (!isPrepLoggedTech && !isDestLoggedTech) {
+      setNewTechExpError(TECH_EXP_OWNERSHIP_ERROR_MSG);
+      return;
+    }
+
+    setNewTechExpError("");
+    const nowStr = new Date().toLocaleDateString("fr-FR");
+    const formattedDest =
+      newTechExpDestinataireCat && newTechExpDestinataireCat !== newTechExpExpediteur
+        ? newTechExpDestinataireVal.trim()
+          ? `${newTechExpDestinataireCat} - ${newTechExpDestinataireVal.trim()}`
+          : newTechExpDestinataireCat
+        : "";
+    const formattedPrep = newTechExpPreparateurCat
+      ? newTechExpPreparateurVal.trim()
+        ? `${newTechExpPreparateurCat} - ${newTechExpPreparateurVal.trim()}`
+        : newTechExpPreparateurCat
+      : "";
+
+    const newRec: ExpeditionRecord = {
+      id: `EXP-${Date.now()}`,
+      reference: newTechExpReference.trim(),
+      contexte: newTechExpContexte,
+      expediteur: newTechExpExpediteur,
+      destinataire: formattedDest,
+      transporteur: newTechExpTransporteur,
+      numeroSuivi: String(newTechExpNumeroSuivi || "").replace(/[^a-zA-Z0-9]/g, ""),
+      codePostalDestinataire: String(newTechExpCodePostal || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, ""),
+      commentaire: newTechExpCommentaire.trim(),
+      statut: newTechExpStatut || "Aucune information",
+      dateCreation: nowStr,
+      dateActualise: nowStr,
+      preparateur: formattedPrep,
+      colisagePieces: newTechExpColisagePieces,
+      poidsKgEstim: newTechExpPoidsKgEstim || "0",
+      coutTransportEstim: newTechExpCoutTransportEstim || "0",
+      nombrePieces: newTechExpNombrePieces || "0",
+    };
+
+    setIsSavingTechExpeditionId("NEW");
+    try {
+      await persistUpdatedExpeditionsList([newRec, ...effectiveTechExpeditionsList], true);
+      setShowNewTechExpeditionForm(false);
+      setNewTechExpContexte("");
+      setNewTechExpReference("");
+      setNewTechExpExpediteur("");
+      setNewTechExpDestinataireCat("");
+      setNewTechExpDestinataireVal("");
+      setNewTechExpPreparateurCat("Technicien");
+      setNewTechExpPreparateurVal(loggedTechDisplayName || "");
+      setNewTechExpTransporteur("");
+      setNewTechExpNumeroSuivi("");
+      setNewTechExpCodePostal("");
+      setNewTechExpStatut("Aucune information");
+      setNewTechExpCommentaire("");
+      setNewTechExpColisagePieces("");
+      setNewTechExpPoidsKgEstim("0");
+      setNewTechExpCoutTransportEstim("0");
+      setNewTechExpNombrePieces("0");
+    } finally {
+      setIsSavingTechExpeditionId(null);
+    }
+  };
+
+  const handleSaveExistingTechExpedition = async (exp: ExpeditionRecord) => {
+    playTechTapSound();
+    const draft = techExpEditsMap[exp.id] || {};
+    const merged: ExpeditionRecord = { ...exp, ...draft };
+    if (!String(merged.reference || "").trim()) {
+      setTechExpErrorById((prev) => ({
+        ...prev,
+        [exp.id]: "Erreur : Le champ Référence. est obligatoire.",
+      }));
+      return;
+    }
+
+    const parsedPrep = parseTechPreparateurString(merged.preparateur || "");
+    const parsedDest = parseTechDestinataireString(merged.destinataire || "");
+    const isPrepLoggedTech = isTechRoleSelectionMatchingLoggedTech(
+      parsedPrep.category,
+      parsedPrep.value,
+    );
+    const isDestLoggedTech = isTechRoleSelectionMatchingLoggedTech(
+      parsedDest.category,
+      parsedDest.value,
+    );
+
+    if (!isPrepLoggedTech && !isDestLoggedTech) {
+      setTechExpErrorById((prev) => ({
+        ...prev,
+        [exp.id]: TECH_EXP_OWNERSHIP_ERROR_MSG,
+      }));
+      setTechExpSuccessById((prev) => {
+        const next = { ...prev };
+        delete next[exp.id];
+        return next;
+      });
+      return;
+    }
+
+    setTechExpErrorById((prev) => {
+      const next = { ...prev };
+      delete next[exp.id];
+      return next;
+    });
+
+    const nowStr = new Date().toLocaleDateString("fr-FR");
+    const updatedRecord: ExpeditionRecord = {
+      ...merged,
+      reference: String(merged.reference || "").trim(),
+      numeroSuivi: String(merged.numeroSuivi || "").replace(/[^a-zA-Z0-9]/g, ""),
+      codePostalDestinataire: String(merged.codePostalDestinataire || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, ""),
+      commentaire: String(merged.commentaire || "").trim(),
+      statut: merged.statut || "Aucune information",
+      dateCreation: merged.dateCreation || nowStr,
+      dateActualise: nowStr,
+    };
+
+    const nextList = effectiveTechExpeditionsList.map((item) =>
+      item.id === exp.id ? updatedRecord : item,
+    );
+
+    setIsSavingTechExpeditionId(exp.id);
+    try {
+      await persistUpdatedExpeditionsList(nextList, true);
+      setTechExpEditsMap((prev) => {
+        const next = { ...prev };
+        delete next[exp.id];
+        return next;
+      });
+      setTechExpSuccessById((prev) => ({
+        ...prev,
+        [exp.id]: "Expédition enregistrée avec succès.",
+      }));
+      setTimeout(() => {
+        setTechExpSuccessById((prev) => {
+          const next = { ...prev };
+          delete next[exp.id];
+          return next;
+        });
+      }, 3000);
+    } finally {
+      setIsSavingTechExpeditionId(null);
+    }
+  };
+
+  const buildTechTraceColisageData = (
+    stockRec: StockRecord | null | undefined,
+    tracesList: StockTraceability[],
+    selectedRowKeys: string[],
+  ) => {
+    const ugs = String(stockRec?.ugs || stockRec?.id || "SANS-UGS").trim();
+    const matchedVar = findStockVariable(stockRec?.denominationPieceId);
+    const pieceTitle = String(
+      matchedVar?.nom || stockRec?.denominationPieceId || "Pièce sans titre",
+    ).trim();
+    const unitWeightKg = parseTechNumericAmount(stockRec?.poidsNet);
+    const unitTransportCostEur = parseTechNumericAmount(stockRec?.fraisFixeCoutTransport);
+    const effLoc = techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
+
+    const parts: string[] = [];
+    let addedVolume = 0;
+    let addedWeightKg = 0;
+    let addedTransportCostEur = 0;
+
+    tracesList.forEach((tr, idx) => {
+      const key = String(tr.id || idx);
+      if (!selectedRowKeys.includes(key)) return;
+      const emp = String(tr.emplacement || effLoc || "Non renseigné").trim();
+      const lot = String(tr.lotOrSerial || "Non renseigné").trim();
+      const vol =
+        tr.volume !== undefined && tr.volume !== null && String(tr.volume).trim() !== ""
+          ? Math.max(0, Number(tr.volume) || 1)
+          : 1;
+      parts.push(
+        `[Qté: ${vol}] ${ugs} - ${pieceTitle} - Emplacement: ${emp} - Lot/Série: ${lot}`,
+      );
+      addedVolume += vol;
+      addedWeightKg += unitWeightKg * vol;
+      addedTransportCostEur += unitTransportCostEur * vol;
+    });
+
+    return {
+      parts,
+      serializedString: parts.join(" | "),
+      addedVolume,
+      addedWeightKg,
+      addedTransportCostEur,
+      unitWeightKg,
+      unitTransportCostEur,
+    };
+  };
+
+  const handleCreateNewExpeditionFromTechTraces = async (mode: "existingStock" | "newStock") => {
+    playTechTapSound();
+    const isExisting = mode === "existingStock";
+    const targetStock = isExisting
+      ? matchedStockRecord
+      : effectiveTechStocksList.find((s) => s.id === newDistribStockId);
+    const traceList = isExisting ? filteredTraceabilities : pendingNewDistribTraceabilities;
+    const selectedKeys = isExisting ? selectedTechTraceRowKeys : selectedNewDistribTraceRowKeys;
+    if (selectedKeys.length === 0) return;
+
+    const colisageData = buildTechTraceColisageData(targetStock, traceList, selectedKeys);
+    const expRef = "Expédition Brouillon";
+    const newSitVal = `Expédié - ${expRef}`;
+
+    if (isExisting && matchedStockRecord) {
+      const selectedIdSet = new Set(selectedKeys);
+      const updatedTraceabilities = (matchedStockRecord.traceabilities || []).map((tr, i) => {
+        const k = String(tr.id || i);
+        if (selectedIdSet.has(k)) {
+          return { ...tr, situation: newSitVal as any };
+        }
+        return tr;
+      });
+      const updatedStocks = effectiveTechStocksList.map((st) =>
+        st.id === matchedStockRecord.id
+          ? {
+              ...st,
+              traceabilityEnabled: true,
+              traceabilities: updatedTraceabilities,
+              inventaire: serializeStockTraceabilities(updatedTraceabilities),
+            }
+          : st,
+      );
+      await persistUpdatedStocksList(updatedStocks, true);
+      setSelectedTechTraceRowKeys([]);
+      setShowTechTraceExistingExpDropdown(false);
+    } else {
+      const selectedIdSet = new Set(selectedKeys);
+      const updatedPending = pendingNewDistribTraceabilities.map((tr, i) => {
+        const k = String(tr.id || i);
+        if (selectedIdSet.has(k)) {
+          return { ...tr, situation: newSitVal as any };
+        }
+        return tr;
+      });
+      setPendingNewDistribTraceabilities(updatedPending);
+      setSelectedNewDistribTraceRowKeys([]);
+      setShowNewDistribTraceExistingExpDropdown(false);
+    }
+
+    const nowStr = new Date().toLocaleDateString("fr-FR");
+    const defaultPrep = loggedTechDisplayName
+      ? `Technicien - ${loggedTechDisplayName}`
+      : "Technicien";
+    const newExp: ExpeditionRecord = {
+      id: `EXP-${Date.now()}`,
+      reference: expRef,
+      contexte: "",
+      expediteur: "",
+      destinataire: "",
+      transporteur: "",
+      numeroSuivi: "",
+      codePostalDestinataire: "",
+      commentaire: "",
+      statut: "Aucune information",
+      dateCreation: nowStr,
+      dateActualise: nowStr,
+      preparateur: defaultPrep,
+      colisagePieces: colisageData.serializedString,
+      poidsKgEstim: formatTechCleanNum(colisageData.addedWeightKg),
+      coutTransportEstim: formatTechCleanNum(colisageData.addedTransportCostEur),
+      nombrePieces: String(colisageData.addedVolume),
+    };
+
+    await persistUpdatedExpeditionsList([newExp, ...effectiveTechExpeditionsList], true);
+  };
+
+  const handleAddTechTracesToExistingExpedition = async (
+    targetExpId: string,
+    mode: "existingStock" | "newStock",
+  ) => {
+    if (!targetExpId) return;
+    playTechTapSound();
+    const isExisting = mode === "existingStock";
+    const targetStock = isExisting
+      ? matchedStockRecord
+      : effectiveTechStocksList.find((s) => s.id === newDistribStockId);
+    const traceList = isExisting ? filteredTraceabilities : pendingNewDistribTraceabilities;
+    const selectedKeys = isExisting ? selectedTechTraceRowKeys : selectedNewDistribTraceRowKeys;
+    if (selectedKeys.length === 0) return;
+
+    const colisageData = buildTechTraceColisageData(targetStock, traceList, selectedKeys);
+    const matchedTargetExp = effectiveTechExpeditionsList.find((e) => e.id === targetExpId);
+    const linkedRef = matchedTargetExp
+      ? String(matchedTargetExp.reference || matchedTargetExp.id).trim()
+      : "";
+    const newSitVal = linkedRef ? `Expédié - ${linkedRef}` : "Expédié";
+
+    if (isExisting && matchedStockRecord) {
+      const selectedIdSet = new Set(selectedKeys);
+      const updatedTraceabilities = (matchedStockRecord.traceabilities || []).map((tr, i) => {
+        const k = String(tr.id || i);
+        if (selectedIdSet.has(k)) {
+          return { ...tr, situation: newSitVal as any };
+        }
+        return tr;
+      });
+      const updatedStocks = effectiveTechStocksList.map((st) =>
+        st.id === matchedStockRecord.id
+          ? {
+              ...st,
+              traceabilityEnabled: true,
+              traceabilities: updatedTraceabilities,
+              inventaire: serializeStockTraceabilities(updatedTraceabilities),
+            }
+          : st,
+      );
+      await persistUpdatedStocksList(updatedStocks, true);
+      setSelectedTechTraceRowKeys([]);
+      setShowTechTraceExistingExpDropdown(false);
+    } else {
+      const selectedIdSet = new Set(selectedKeys);
+      const updatedPending = pendingNewDistribTraceabilities.map((tr, i) => {
+        const k = String(tr.id || i);
+        if (selectedIdSet.has(k)) {
+          return { ...tr, situation: newSitVal as any };
+        }
+        return tr;
+      });
+      setPendingNewDistribTraceabilities(updatedPending);
+      setSelectedNewDistribTraceRowKeys([]);
+      setShowNewDistribTraceExistingExpDropdown(false);
+    }
+
+    const nowStr = new Date().toLocaleDateString("fr-FR");
+    const updatedExpeditions = effectiveTechExpeditionsList.map((exp) => {
+      if (exp.id !== targetExpId) return exp;
+      const existingColisage = String(exp.colisagePieces || "").trim();
+      const existingSegments = existingColisage
+        ? existingColisage
+            .split(/\s*\|\s*|\r?\n/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
+      const mergedSegments = [...existingSegments];
+      let newlyAddedVol = 0;
+      let newlyAddedWeight = 0;
+      let newlyAddedCost = 0;
+
+      colisageData.parts.forEach((part) => {
+        const alreadyExists = mergedSegments.some(
+          (seg) => seg.toLowerCase() === part.toLowerCase(),
+        );
+        if (!alreadyExists) {
+          mergedSegments.push(part);
+          const m = part.match(/^\[Qté:\s*(\d+(?:[.,]\d+)?)\]/i);
+          const v = m ? parseFloat(m[1].replace(",", ".")) || 1 : 1;
+          newlyAddedVol += v;
+          newlyAddedWeight += colisageData.unitWeightKg * v;
+          newlyAddedCost += colisageData.unitTransportCostEur * v;
+        }
+      });
+
+      const prevPieces = parseFloat(String(exp.nombrePieces || "0").replace(",", ".")) || 0;
+      const prevWeight = parseFloat(String(exp.poidsKgEstim || "0").replace(",", ".")) || 0;
+      const prevCost = parseFloat(String(exp.coutTransportEstim || "0").replace(",", ".")) || 0;
+
+      return {
+        ...exp,
+        colisagePieces: mergedSegments.join(" | "),
+        nombrePieces: String(prevPieces + newlyAddedVol),
+        poidsKgEstim: formatTechCleanNum(prevWeight + newlyAddedWeight),
+        coutTransportEstim: formatTechCleanNum(prevCost + newlyAddedCost),
+        dateActualise: nowStr,
+      };
+    });
+
+    await persistUpdatedExpeditionsList(updatedExpeditions, true);
   };
 
   const handleSaveTechStockChanges = async () => {
@@ -3679,6 +4803,7 @@ export default function PublicPortal({
             }
           }),
         refreshTechStocksFromSpreadsheet(true),
+        refreshTechExpeditionsFromSpreadsheet(true),
         refreshTechMembersAndLocationsFromSpreadsheet(true),
       ]);
       window.dispatchEvent(new CustomEvent("defib_refresh_webapp_data", { detail: { tenantId: tid } }));
@@ -12968,13 +14093,31 @@ export default function PublicPortal({
                   <CanalMessagesSidePane
                     isOpen={true}
                     embedded={true}
+                    isTechWebapp={true}
                     onClose={() => setActiveTab("interventions")}
                     tenantId={techTenantId}
-                    currentUser={techCurrentUser}
+                    currentUser={{
+                      email:
+                        resolvedLiveMember?.email ||
+                        authenticatedUser?.email ||
+                        techCurrentUser.email ||
+                        "",
+                      name:
+                        (resolvedLiveMember?.name &&
+                        resolvedLiveMember.name !== "Technicien"
+                          ? resolvedLiveMember.name
+                          : "") ||
+                        (authenticatedUser?.name &&
+                        authenticatedUser.name !== "Technicien"
+                          ? authenticatedUser.name
+                          : "") ||
+                        techCurrentUser.name ||
+                        "",
+                    }}
                     messages={tenantMessages}
                     setMessages={setTenantMessages}
                     companyInfo={companyInfo}
-                    members={members}
+                    members={effectiveMembers}
                     extraBottomSpacing={isReportOverlayOpen && isReportOverlayMinimized ? 124 : 0}
                   />
                 </div>
@@ -12983,7 +14126,7 @@ export default function PublicPortal({
               {/* ----------------- TAB: PLANNING ----------------- */}
               {activeTab === "planning" && (
                 <div
-                  className="space-y-4 pb-16 animate-fadeIn px-1 py-2 sm:px-2"
+                  className="space-y-4 pb-6 animate-fadeIn px-1 py-2 sm:px-2"
                   id="tab-planning-screen"
                 >
                   <PlanningTab
@@ -13139,6 +14282,9 @@ export default function PublicPortal({
                       setSelectedTechDistributedStockId(e.target.value);
                       setShowRapatriementForm(false);
                       setShowNewDistribStockForm(false);
+                      setShowTechExpeditionsSection(false);
+                      setSelectedTechTraceRowKeys([]);
+                      setShowTechTraceExistingExpDropdown(false);
                     }}
                     style={{
                       color: "#000000",
@@ -13180,6 +14326,7 @@ export default function PublicPortal({
                         playTechTapSound();
                         const nextOpen = !showNewDistribStockForm;
                         setShowNewDistribStockForm(nextOpen);
+                        setShowTechExpeditionsSection(false);
                         setSelectedTechDistributedStockId("");
                         setShowRapatriementForm(false);
                         if (nextOpen) {
@@ -13187,6 +14334,8 @@ export default function PublicPortal({
                           setNewDistribCommentaire("");
                           setNewDistribTraceabilityEnabled(false);
                           setPendingNewDistribTraceabilities([]);
+                          setSelectedNewDistribTraceRowKeys([]);
+                          setShowNewDistribTraceExistingExpDropdown(false);
                           setTechBottomInfoMessage(
                             "Rappel: pour être sélectionnée, une pièce doit exister (être référencée) dans les stocks de l’administrateur, et ne pas déjà être existante dans votre emplacement technicien."
                           );
@@ -13207,6 +14356,42 @@ export default function PublicPortal({
                       className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 font-bold mb-2"
                     >
                       Nouveau stock
+                    </button>
+                  )}
+
+                  {/* Button: Expédition(s) */}
+                  {!selectedTechStock && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playTechTapSound();
+                        const nextOpen = !showTechExpeditionsSection;
+                        setShowTechExpeditionsSection(nextOpen);
+                        setShowNewDistribStockForm(false);
+                        setSelectedTechDistributedStockId("");
+                        setShowRapatriementForm(false);
+                        if (nextOpen) {
+                          refreshTechExpeditionsFromSpreadsheet(true);
+                        } else {
+                          setShowNewTechExpeditionForm(false);
+                          setNewTechExpError("");
+                        }
+                      }}
+                      style={{
+                        backgroundColor: "rgb(46, 84, 255)",
+                        color: "#ffffff",
+                        fontSize: "18px",
+                        fontWeight: "bold",
+                        borderRadius: "12px",
+                        padding: "14px 20px",
+                        border: "none",
+                        boxShadow: "none",
+                        cursor: "pointer",
+                        width: "100%",
+                      }}
+                      className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 font-bold mb-2"
+                    >
+                      Expédition(s)
                     </button>
                   )}
 
@@ -13286,6 +14471,1959 @@ export default function PublicPortal({
                   >
                     {isSavingTechStockChanges ? t("Enregistrement...") : t("Enregistrer")}
                   </button>
+
+                  {/* Section Expédition(s) Technicien (inspirée de l'inventaire de traçabilité sur webapp) */}
+                  {showTechExpeditionsSection && !selectedTechStock && (
+                    <div
+                      className="tech-inventaire-tracabilite-card p-4 rounded-[14px] flex flex-col gap-4 my-4 animate-fadeIn"
+                      style={{
+                        backgroundColor: "#f5f7fa",
+                        border: "none",
+                        boxShadow: "none",
+                        width: "100%",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <div className="flex justify-between items-center mt-2 mb-1 select-none w-full">
+                        <span
+                          className="tech-inventaire-tracabilite-pill inline-flex items-center px-4 py-1.5 rounded-full font-semibold font-sans"
+                          style={{
+                            color: "rgb(21 99 55)",
+                            backgroundColor: "rgb(61 220 132)",
+                            fontSize: "18px",
+                            border: "none",
+                            textTransform: "none",
+                            letterSpacing: "normal",
+                          }}
+                        >
+                          {t("Expédition(s)")}
+                        </span>
+                      </div>
+
+                      {/* Bouton full-width Nouvelle Expédition */}
+                      <div className="flex items-center justify-between flex-wrap gap-2 w-full">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playTechTapSound();
+                            const nextOpen = !showNewTechExpeditionForm;
+                            setShowNewTechExpeditionForm(nextOpen);
+                            setNewTechExpError("");
+                            if (nextOpen) {
+                              setNewTechExpContexte("");
+                              setNewTechExpReference("");
+                              setNewTechExpExpediteur("");
+                              setNewTechExpDestinataireCat("");
+                              setNewTechExpDestinataireVal("");
+                              setNewTechExpPreparateurCat("Technicien");
+                              setNewTechExpPreparateurVal(loggedTechDisplayName || "");
+                              setNewTechExpTransporteur("");
+                              setNewTechExpNumeroSuivi("");
+                              setNewTechExpCodePostal("");
+                              setNewTechExpStatut("Aucune information");
+                              setNewTechExpCommentaire("");
+                              setNewTechExpColisagePieces("");
+                              setNewTechExpPoidsKgEstim("0");
+                              setNewTechExpCoutTransportEstim("0");
+                              setNewTechExpNombrePieces("0");
+                            }
+                          }}
+                          style={{
+                            backgroundColor: "#0f172a",
+                            color: "#ffffff",
+                            padding: "10px 20px",
+                            fontSize: "18px",
+                            borderRadius: "13px",
+                            cursor: "pointer",
+                            border: "none",
+                            boxShadow: "none",
+                            width: "100%",
+                          }}
+                          className="w-full font-sans font-bold active:scale-95 transition-all border-0 text-white text-center"
+                        >
+                          Nouvelle Expédition
+                        </button>
+                      </div>
+
+                      {/* Sub-form vertical de création d'une Nouvelle Expédition */}
+                      {showNewTechExpeditionForm && (
+                        <div
+                          className="flex flex-col gap-4 p-4 rounded-xl animate-fadeIn"
+                          style={{
+                            backgroundColor: "#ECEFF4",
+                            border: "none",
+                            boxShadow: "none",
+                          }}
+                        >
+                          {/* 1. Contexte. */}
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
+                              Contexte.
+                            </label>
+                            <select
+                              value={newTechExpContexte}
+                              onChange={(e) => setNewTechExpContexte(e.target.value)}
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                textAlignLast: "center",
+                                width: "100%",
+                                boxSizing: "border-box",
+                                appearance: "none",
+                                WebkitAppearance: "none",
+                                MozAppearance: "none",
+                              }}
+                              className="w-full bg-white text-black font-sans"
+                            >
+                              <option value="">Sélectionnez un contexte.</option>
+                              {TECH_EXP_CONTEXTE_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* 2. Référence. (required) */}
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
+                              Référence. *
+                            </label>
+                            <input
+                              type="text"
+                              value={newTechExpReference}
+                              onChange={(e) => setNewTechExpReference(e.target.value)}
+                              placeholder="Entrez une référence."
+                              required
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                width: "100%",
+                                boxSizing: "border-box",
+                              }}
+                              className="w-full bg-white text-black font-sans"
+                            />
+                          </div>
+
+                          {/* 3. Expéditeur. */}
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
+                              Expéditeur.
+                            </label>
+                            <select
+                              value={newTechExpExpediteur}
+                              onChange={(e) => {
+                                const nextExp = e.target.value;
+                                setNewTechExpExpediteur(nextExp);
+                                if (nextExp && newTechExpDestinataireCat === nextExp) {
+                                  setNewTechExpDestinataireCat("");
+                                  setNewTechExpDestinataireVal("");
+                                }
+                              }}
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                textAlignLast: "center",
+                                width: "100%",
+                                boxSizing: "border-box",
+                                appearance: "none",
+                                WebkitAppearance: "none",
+                                MozAppearance: "none",
+                              }}
+                              className="w-full bg-white text-black font-sans"
+                            >
+                              <option value="">Sélectionnez un expéditeur.</option>
+                              {TECH_EXP_EXPEDITEUR_DESTINATAIRE_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* 4. Destinataire. */}
+                          <div className="flex flex-col gap-2 min-w-0">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
+                              Destinataire.
+                            </label>
+                            <select
+                              value={newTechExpDestinataireCat}
+                              onChange={(e) => {
+                                const nextCat = e.target.value;
+                                setNewTechExpDestinataireCat(nextCat);
+                                setNewTechExpDestinataireVal(
+                                  nextCat === "Technicien" ? loggedTechDisplayName || "" : "",
+                                );
+                              }}
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                textAlignLast: "center",
+                                width: "100%",
+                                boxSizing: "border-box",
+                                appearance: "none",
+                                WebkitAppearance: "none",
+                                MozAppearance: "none",
+                              }}
+                              className="w-full bg-white text-black font-sans"
+                            >
+                              <option value="">Sélectionnez un destinataire.</option>
+                              {TECH_EXP_EXPEDITEUR_DESTINATAIRE_OPTIONS.map((opt) => (
+                                <option
+                                  key={opt}
+                                  value={opt}
+                                  disabled={Boolean(newTechExpExpediteur && opt === newTechExpExpediteur)}
+                                >
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+
+                            {newTechExpDestinataireCat === "Technicien" && (
+                              <select
+                                value={newTechExpDestinataireVal}
+                                onChange={(e) => setNewTechExpDestinataireVal(e.target.value)}
+                                style={{
+                                  backgroundColor: "#ffffff",
+                                  color: "#000000",
+                                  fontSize: "18px",
+                                  borderRadius: "13px",
+                                  border: "none",
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  textAlignLast: "center",
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  appearance: "none",
+                                  WebkitAppearance: "none",
+                                  MozAppearance: "none",
+                                }}
+                                className="w-full bg-white text-black font-sans"
+                              >
+                                <option value="">Sélectionnez un technicien.</option>
+                                {techTechnicianMembers.map((m) => {
+                                  const label = getTechMemberDisplayLabel(m);
+                                  return (
+                                    <option key={m.id || label} value={label}>
+                                      {label}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            )}
+
+                            {newTechExpDestinataireCat === "Client" && (
+                              <select
+                                value={newTechExpDestinataireVal}
+                                onChange={(e) => setNewTechExpDestinataireVal(e.target.value)}
+                                style={{
+                                  backgroundColor: "#ffffff",
+                                  color: "#000000",
+                                  fontSize: "18px",
+                                  borderRadius: "13px",
+                                  border: "none",
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  textAlignLast: "center",
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  appearance: "none",
+                                  WebkitAppearance: "none",
+                                  MozAppearance: "none",
+                                }}
+                                className="w-full bg-white text-black font-sans"
+                              >
+                                <option value="">Sélectionnez un client.</option>
+                                {techClientOptions.map((cName) => (
+                                  <option key={cName} value={cName}>
+                                    {cName}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            {newTechExpDestinataireCat === "Fournisseur" && (
+                              <select
+                                value={newTechExpDestinataireVal}
+                                onChange={(e) => setNewTechExpDestinataireVal(e.target.value)}
+                                style={{
+                                  backgroundColor: "#ffffff",
+                                  color: "#000000",
+                                  fontSize: "18px",
+                                  borderRadius: "13px",
+                                  border: "none",
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  textAlignLast: "center",
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  appearance: "none",
+                                  WebkitAppearance: "none",
+                                  MozAppearance: "none",
+                                }}
+                                className="w-full bg-white text-black font-sans"
+                              >
+                                <option value="">Sélectionnez un fournisseur.</option>
+                                {techSupplierOptions.map((sName) => (
+                                  <option key={sName} value={sName}>
+                                    {sName}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            {newTechExpDestinataireCat === "Autre" && (
+                              <input
+                                type="text"
+                                value={newTechExpDestinataireVal}
+                                onChange={(e) => setNewTechExpDestinataireVal(e.target.value)}
+                                placeholder="Entrez un destinataire."
+                                style={{
+                                  backgroundColor: "#ffffff",
+                                  color: "#000000",
+                                  fontSize: "18px",
+                                  borderRadius: "13px",
+                                  border: "none",
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                }}
+                                className="w-full bg-white text-black font-sans"
+                              />
+                            )}
+                          </div>
+
+                          {/* 5. Colisage Pièce(s). */}
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
+                              Colisage Pièce(s).
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleOpenTechColisageModal("NEW", newTechExpColisagePieces)
+                              }
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                width: "100%",
+                                boxSizing: "border-box",
+                                cursor: "pointer",
+                              }}
+                              className="w-full bg-white text-black font-sans"
+                            >
+                              {`Colisage de l’expédition (${countColisageItemsInString(
+                                newTechExpColisagePieces,
+                              )}).`}
+                            </button>
+                          </div>
+
+                          {/* 6. Préparateur. */}
+                          <div className="flex flex-col gap-2 min-w-0">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
+                              Préparateur.
+                            </label>
+                            <select
+                              value={newTechExpPreparateurCat}
+                              onChange={(e) => {
+                                const nextCat = e.target.value;
+                                setNewTechExpPreparateurCat(nextCat);
+                                setNewTechExpPreparateurVal(
+                                  nextCat === "Technicien" ? loggedTechDisplayName || "" : "",
+                                );
+                              }}
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                textAlignLast: "center",
+                                width: "100%",
+                                boxSizing: "border-box",
+                                appearance: "none",
+                                WebkitAppearance: "none",
+                                MozAppearance: "none",
+                              }}
+                              className="w-full bg-white text-black font-sans"
+                            >
+                              <option value="">Sélectionnez un préparateur.</option>
+                              {TECH_EXP_PREPARATEUR_CATEGORIES.map((cat) => (
+                                <option key={cat} value={cat}>
+                                  {cat}
+                                </option>
+                              ))}
+                            </select>
+
+                            {newTechExpPreparateurCat === "Administrateur" && (
+                              <select
+                                value={newTechExpPreparateurVal}
+                                onChange={(e) => setNewTechExpPreparateurVal(e.target.value)}
+                                style={{
+                                  backgroundColor: "#ffffff",
+                                  color: "#000000",
+                                  fontSize: "18px",
+                                  borderRadius: "13px",
+                                  border: "none",
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  textAlignLast: "center",
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  appearance: "none",
+                                  WebkitAppearance: "none",
+                                  MozAppearance: "none",
+                                }}
+                                className="w-full bg-white text-black font-sans"
+                              >
+                                <option value="">Sélectionnez un collaborateur.</option>
+                                {techNonTechnicianMembers.map((m) => {
+                                  const label = getTechMemberDisplayLabel(m);
+                                  return (
+                                    <option key={m.id || label} value={label}>
+                                      {label}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            )}
+
+                            {newTechExpPreparateurCat === "Technicien" && (
+                              <select
+                                value={newTechExpPreparateurVal}
+                                onChange={(e) => setNewTechExpPreparateurVal(e.target.value)}
+                                style={{
+                                  backgroundColor: "#ffffff",
+                                  color: "#000000",
+                                  fontSize: "18px",
+                                  borderRadius: "13px",
+                                  border: "none",
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  textAlignLast: "center",
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  appearance: "none",
+                                  WebkitAppearance: "none",
+                                  MozAppearance: "none",
+                                }}
+                                className="w-full bg-white text-black font-sans"
+                              >
+                                <option value="">Sélectionnez un technicien.</option>
+                                {techTechnicianMembers.map((m) => {
+                                  const label = getTechMemberDisplayLabel(m);
+                                  return (
+                                    <option key={m.id || label} value={label}>
+                                      {label}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            )}
+
+                            {newTechExpPreparateurCat === "Client" && (
+                              <select
+                                value={newTechExpPreparateurVal}
+                                onChange={(e) => setNewTechExpPreparateurVal(e.target.value)}
+                                style={{
+                                  backgroundColor: "#ffffff",
+                                  color: "#000000",
+                                  fontSize: "18px",
+                                  borderRadius: "13px",
+                                  border: "none",
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  textAlignLast: "center",
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  appearance: "none",
+                                  WebkitAppearance: "none",
+                                  MozAppearance: "none",
+                                }}
+                                className="w-full bg-white text-black font-sans"
+                              >
+                                <option value="">Sélectionnez un client.</option>
+                                {techClientOptions.map((cName) => (
+                                  <option key={cName} value={cName}>
+                                    {cName}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            {newTechExpPreparateurCat === "Autre" && (
+                              <input
+                                type="text"
+                                value={newTechExpPreparateurVal}
+                                onChange={(e) => setNewTechExpPreparateurVal(e.target.value)}
+                                placeholder="Entrez un préparateur."
+                                style={{
+                                  backgroundColor: "#ffffff",
+                                  color: "#000000",
+                                  fontSize: "18px",
+                                  borderRadius: "13px",
+                                  border: "none",
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                }}
+                                className="w-full bg-white text-black font-sans"
+                              />
+                            )}
+                          </div>
+
+                          {/* 7. Transporteur. + Ouvrir le suivi */}
+                          <div className="flex flex-col gap-2 min-w-0">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
+                              Transporteur.
+                            </label>
+                            <select
+                              value={newTechExpTransporteur}
+                              onChange={(e) => setNewTechExpTransporteur(e.target.value)}
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                textAlignLast: "center",
+                                width: "100%",
+                                boxSizing: "border-box",
+                                appearance: "none",
+                                WebkitAppearance: "none",
+                                MozAppearance: "none",
+                              }}
+                              className="w-full bg-white text-black font-sans"
+                            >
+                              <option value="">Sélectionnez un transporteur.</option>
+                              {TECH_EXP_TRANSPORTEUR_OPTIONS.map((tr) => (
+                                <option key={tr} value={tr}>
+                                  {tr}
+                                </option>
+                              ))}
+                            </select>
+                            {(() => {
+                              const trackUrl = getCarrierTrackingUrl(
+                                newTechExpTransporteur,
+                                newTechExpNumeroSuivi,
+                              );
+                              return (
+                                <button
+                                  type="button"
+                                  disabled={!trackUrl}
+                                  onClick={() => {
+                                    if (trackUrl) {
+                                      const a = document.createElement("a");
+                                      a.href = trackUrl;
+                                      a.target = "_blank";
+                                      a.rel = "noopener noreferrer";
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      document.body.removeChild(a);
+                                    }
+                                  }}
+                                  style={{
+                                    backgroundColor: "rgb(46, 84, 255)",
+                                    color: "#ffffff",
+                                    padding: "10px 14px",
+                                    fontSize: "18px",
+                                    borderRadius: "13px",
+                                    border: "none",
+                                    boxShadow: "none",
+                                    opacity: trackUrl ? 1 : 0.45,
+                                    cursor: trackUrl ? "pointer" : "not-allowed",
+                                    width: "100%",
+                                  }}
+                                  className="w-full font-sans font-bold active:scale-95 transition-all"
+                                >
+                                  Ouvrir le suivi
+                                </button>
+                              );
+                            })()}
+                          </div>
+
+                          {/* 8. Numéro Suivi. */}
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
+                              Numéro Suivi.
+                            </label>
+                            <input
+                              type="text"
+                              value={newTechExpNumeroSuivi}
+                              onChange={(e) =>
+                                setNewTechExpNumeroSuivi(
+                                  e.target.value.replace(/[^a-zA-Z0-9]/g, ""),
+                                )
+                              }
+                              placeholder="Entrez un numéro de suivi."
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                width: "100%",
+                                boxSizing: "border-box",
+                              }}
+                              className="w-full bg-white text-black font-sans"
+                            />
+                          </div>
+
+                          {/* 9. Code Postal Destinataire. */}
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
+                              Code Postal Destinataire.
+                            </label>
+                            <input
+                              type="text"
+                              value={newTechExpCodePostal}
+                              onChange={(e) =>
+                                setNewTechExpCodePostal(
+                                  e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                                )
+                              }
+                              placeholder="Ex: 01234."
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                width: "100%",
+                                boxSizing: "border-box",
+                              }}
+                              className="w-full bg-white text-black font-sans"
+                            />
+                          </div>
+
+                          {/* 10. Statut. */}
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
+                              Statut.
+                            </label>
+                            <select
+                              value={newTechExpStatut}
+                              onChange={(e) => setNewTechExpStatut(e.target.value)}
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                textAlignLast: "center",
+                                width: "100%",
+                                boxSizing: "border-box",
+                                appearance: "none",
+                                WebkitAppearance: "none",
+                                MozAppearance: "none",
+                              }}
+                              className="w-full bg-white text-black font-sans"
+                            >
+                              <option value="">Sélectionnez un statut.</option>
+                              {TECH_EXP_STATUT_OPTIONS.map((st) => (
+                                <option key={st} value={st}>
+                                  {st}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* 11. Commentaire. */}
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <label
+                              className="font-bold font-sans normal-case stocks-label-style"
+                              style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                            >
+                              Commentaire.
+                            </label>
+                            <input
+                              type="text"
+                              value={newTechExpCommentaire}
+                              onChange={(e) => setNewTechExpCommentaire(e.target.value)}
+                              placeholder="Entrez un commentaire."
+                              style={{
+                                backgroundColor: "#ffffff",
+                                color: "#000000",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                padding: "10px 12px",
+                                textAlign: "center",
+                                width: "100%",
+                                boxSizing: "border-box",
+                              }}
+                              className="w-full bg-white text-black font-sans"
+                            />
+                          </div>
+
+                          {newTechExpError && (
+                            <div
+                              className="p-3 rounded-xl text-center font-sans font-bold"
+                              style={{
+                                backgroundColor: "#fee2e2",
+                                color: "#b91c1c",
+                                fontSize: "16px",
+                              }}
+                            >
+                              {newTechExpError}
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-3 w-full pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowNewTechExpeditionForm(false);
+                                setNewTechExpError("");
+                              }}
+                              style={{
+                                backgroundColor: "#D22D0B",
+                                color: "#ffffff",
+                                padding: "12px 14px",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                boxShadow: "none",
+                                cursor: "pointer",
+                                width: "50%",
+                              }}
+                              className="flex-1 font-sans font-bold active:scale-95 transition-all"
+                            >
+                              Annuler
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSavingTechExpeditionId === "NEW"}
+                              onClick={handleCreateNewTechExpedition}
+                              style={{
+                                backgroundColor: "rgb(46, 84, 255)",
+                                color: "#ffffff",
+                                padding: "12px 14px",
+                                fontSize: "18px",
+                                borderRadius: "13px",
+                                border: "none",
+                                boxShadow: "none",
+                                cursor: "pointer",
+                                width: "50%",
+                              }}
+                              className="flex-1 font-sans font-bold active:scale-95 transition-all"
+                            >
+                              {isSavingTechExpeditionId === "NEW"
+                                ? "Enregistrement..."
+                                : "Enregistrer"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Liste des expéditions du technicien (en sub-forms éditables) */}
+                      {techFilteredExpeditions.length > 0 && (
+                        <div className="flex flex-col gap-3">
+                          {techFilteredExpeditions.map((exp) => {
+                            const draft = techExpEditsMap[exp.id] || {};
+                            const currentExp: ExpeditionRecord = { ...exp, ...draft };
+                            const parsedDest = parseTechDestinataireString(
+                              currentExp.destinataire || "",
+                            );
+                            const parsedPrep = parseTechPreparateurString(
+                              currentExp.preparateur || "",
+                            );
+                            const trackUrl = getCarrierTrackingUrl(
+                              currentExp.transporteur || "",
+                              currentExp.numeroSuivi || "",
+                            );
+                            const errMsg = techExpErrorById[exp.id];
+                            const okMsg = techExpSuccessById[exp.id];
+
+                            const updateDraft = (updates: Partial<ExpeditionRecord>) => {
+                              setTechExpEditsMap((prev) => ({
+                                ...prev,
+                                [exp.id]: {
+                                  ...(prev[exp.id] || {}),
+                                  ...updates,
+                                },
+                              }));
+                            };
+
+                            return (
+                              <div
+                                key={exp.id}
+                                className="flex flex-col gap-4 p-4 rounded-xl"
+                                style={{
+                                  backgroundColor: "#ECEFF4",
+                                  border: "none",
+                                  boxShadow: "none",
+                                }}
+                              >
+                                {/* 1. Contexte. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label
+                                    className="font-bold font-sans normal-case stocks-label-style"
+                                    style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                  >
+                                    Contexte.
+                                  </label>
+                                  <select
+                                    value={currentExp.contexte || ""}
+                                    onChange={(e) => updateDraft({ contexte: e.target.value })}
+                                    style={{
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      padding: "10px 12px",
+                                      textAlign: "center",
+                                      textAlignLast: "center",
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      appearance: "none",
+                                      WebkitAppearance: "none",
+                                      MozAppearance: "none",
+                                    }}
+                                    className="w-full bg-white text-black font-sans"
+                                  >
+                                    <option value="">Sélectionnez un contexte.</option>
+                                    {TECH_EXP_CONTEXTE_OPTIONS.map((opt) => (
+                                      <option key={opt} value={opt}>
+                                        {opt}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* 2. Référence. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label
+                                    className="font-bold font-sans normal-case stocks-label-style"
+                                    style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                  >
+                                    Référence. *
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={currentExp.reference || ""}
+                                    onChange={(e) => updateDraft({ reference: e.target.value })}
+                                    placeholder="Entrez une référence."
+                                    required
+                                    style={{
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      padding: "10px 12px",
+                                      textAlign: "center",
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                    }}
+                                    className="w-full bg-white text-black font-sans"
+                                  />
+                                </div>
+
+                                {/* 3. Expéditeur. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label
+                                    className="font-bold font-sans normal-case stocks-label-style"
+                                    style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                  >
+                                    Expéditeur.
+                                  </label>
+                                  <select
+                                    value={currentExp.expediteur || ""}
+                                    onChange={(e) => {
+                                      const nextExp = e.target.value;
+                                      const patch: Partial<ExpeditionRecord> = {
+                                        expediteur: nextExp,
+                                      };
+                                      if (nextExp && parsedDest.category === nextExp) {
+                                        patch.destinataire = "";
+                                      }
+                                      updateDraft(patch);
+                                    }}
+                                    style={{
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      padding: "10px 12px",
+                                      textAlign: "center",
+                                      textAlignLast: "center",
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      appearance: "none",
+                                      WebkitAppearance: "none",
+                                      MozAppearance: "none",
+                                    }}
+                                    className="w-full bg-white text-black font-sans"
+                                  >
+                                    <option value="">Sélectionnez un expéditeur.</option>
+                                    {TECH_EXP_EXPEDITEUR_DESTINATAIRE_OPTIONS.map((opt) => (
+                                      <option key={opt} value={opt}>
+                                        {opt}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* 4. Destinataire. */}
+                                <div className="flex flex-col gap-2 min-w-0">
+                                  <label
+                                    className="font-bold font-sans normal-case stocks-label-style"
+                                    style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                  >
+                                    Destinataire.
+                                  </label>
+                                  <select
+                                    value={parsedDest.category}
+                                    onChange={(e) => {
+                                      const nextCat = e.target.value;
+                                      if (!nextCat) {
+                                        updateDraft({ destinataire: "" });
+                                      } else if (nextCat === "Technicien" && loggedTechDisplayName) {
+                                        updateDraft({
+                                          destinataire: `Technicien - ${loggedTechDisplayName}`,
+                                        });
+                                      } else {
+                                        updateDraft({ destinataire: nextCat });
+                                      }
+                                    }}
+                                    style={{
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      padding: "10px 12px",
+                                      textAlign: "center",
+                                      textAlignLast: "center",
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      appearance: "none",
+                                      WebkitAppearance: "none",
+                                      MozAppearance: "none",
+                                    }}
+                                    className="w-full bg-white text-black font-sans"
+                                  >
+                                    <option value="">Sélectionnez un destinataire.</option>
+                                    {TECH_EXP_EXPEDITEUR_DESTINATAIRE_OPTIONS.map((opt) => (
+                                      <option
+                                        key={opt}
+                                        value={opt}
+                                        disabled={Boolean(
+                                          currentExp.expediteur && opt === currentExp.expediteur,
+                                        )}
+                                      >
+                                        {opt}
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  {parsedDest.category === "Technicien" && (
+                                    <select
+                                      value={parsedDest.value}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        updateDraft({
+                                          destinataire: v ? `Technicien - ${v}` : "Technicien",
+                                        });
+                                      }}
+                                      style={{
+                                        backgroundColor: "#ffffff",
+                                        color: "#000000",
+                                        fontSize: "18px",
+                                        borderRadius: "13px",
+                                        border: "none",
+                                        padding: "10px 12px",
+                                        textAlign: "center",
+                                        textAlignLast: "center",
+                                        width: "100%",
+                                        boxSizing: "border-box",
+                                        appearance: "none",
+                                        WebkitAppearance: "none",
+                                        MozAppearance: "none",
+                                      }}
+                                      className="w-full bg-white text-black font-sans"
+                                    >
+                                      <option value="">Sélectionnez un technicien.</option>
+                                      {techTechnicianMembers.map((m) => {
+                                        const label = getTechMemberDisplayLabel(m);
+                                        return (
+                                          <option key={m.id || label} value={label}>
+                                            {label}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                  )}
+
+                                  {parsedDest.category === "Client" && (
+                                    <select
+                                      value={parsedDest.value}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        updateDraft({
+                                          destinataire: v ? `Client - ${v}` : "Client",
+                                        });
+                                      }}
+                                      style={{
+                                        backgroundColor: "#ffffff",
+                                        color: "#000000",
+                                        fontSize: "18px",
+                                        borderRadius: "13px",
+                                        border: "none",
+                                        padding: "10px 12px",
+                                        textAlign: "center",
+                                        textAlignLast: "center",
+                                        width: "100%",
+                                        boxSizing: "border-box",
+                                        appearance: "none",
+                                        WebkitAppearance: "none",
+                                        MozAppearance: "none",
+                                      }}
+                                      className="w-full bg-white text-black font-sans"
+                                    >
+                                      <option value="">Sélectionnez un client.</option>
+                                      {techClientOptions.map((cName) => (
+                                        <option key={cName} value={cName}>
+                                          {cName}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+
+                                  {parsedDest.category === "Fournisseur" && (
+                                    <select
+                                      value={parsedDest.value}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        updateDraft({
+                                          destinataire: v ? `Fournisseur - ${v}` : "Fournisseur",
+                                        });
+                                      }}
+                                      style={{
+                                        backgroundColor: "#ffffff",
+                                        color: "#000000",
+                                        fontSize: "18px",
+                                        borderRadius: "13px",
+                                        border: "none",
+                                        padding: "10px 12px",
+                                        textAlign: "center",
+                                        textAlignLast: "center",
+                                        width: "100%",
+                                        boxSizing: "border-box",
+                                        appearance: "none",
+                                        WebkitAppearance: "none",
+                                        MozAppearance: "none",
+                                      }}
+                                      className="w-full bg-white text-black font-sans"
+                                    >
+                                      <option value="">Sélectionnez un fournisseur.</option>
+                                      {techSupplierOptions.map((sName) => (
+                                        <option key={sName} value={sName}>
+                                          {sName}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+
+                                  {parsedDest.category === "Autre" && (
+                                    <input
+                                      type="text"
+                                      value={parsedDest.value}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        updateDraft({
+                                          destinataire: v ? `Autre - ${v}` : "Autre",
+                                        });
+                                      }}
+                                      placeholder="Entrez un destinataire."
+                                      style={{
+                                        backgroundColor: "#ffffff",
+                                        color: "#000000",
+                                        fontSize: "18px",
+                                        borderRadius: "13px",
+                                        border: "none",
+                                        padding: "10px 12px",
+                                        textAlign: "center",
+                                        width: "100%",
+                                        boxSizing: "border-box",
+                                      }}
+                                      className="w-full bg-white text-black font-sans"
+                                    />
+                                  )}
+                                </div>
+
+                                {/* 5. Colisage Pièce(s). */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label
+                                    className="font-bold font-sans normal-case stocks-label-style"
+                                    style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                  >
+                                    Colisage Pièce(s).
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleOpenTechColisageModal(
+                                        exp.id,
+                                        currentExp.colisagePieces || "",
+                                      )
+                                    }
+                                    style={{
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      padding: "10px 12px",
+                                      textAlign: "center",
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      cursor: "pointer",
+                                    }}
+                                    className="w-full bg-white text-black font-sans"
+                                  >
+                                    {`Colisage de l’expédition (${countColisageItemsInString(
+                                      currentExp.colisagePieces,
+                                    )}).`}
+                                  </button>
+                                </div>
+
+                                {/* 6. Préparateur. */}
+                                <div className="flex flex-col gap-2 min-w-0">
+                                  <label
+                                    className="font-bold font-sans normal-case stocks-label-style"
+                                    style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                  >
+                                    Préparateur.
+                                  </label>
+                                  <select
+                                    value={parsedPrep.category}
+                                    onChange={(e) => {
+                                      const nextCat = e.target.value;
+                                      if (!nextCat) {
+                                        updateDraft({ preparateur: "" });
+                                      } else if (nextCat === "Technicien" && loggedTechDisplayName) {
+                                        updateDraft({
+                                          preparateur: `Technicien - ${loggedTechDisplayName}`,
+                                        });
+                                      } else {
+                                        updateDraft({ preparateur: nextCat });
+                                      }
+                                    }}
+                                    style={{
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      padding: "10px 12px",
+                                      textAlign: "center",
+                                      textAlignLast: "center",
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      appearance: "none",
+                                      WebkitAppearance: "none",
+                                      MozAppearance: "none",
+                                    }}
+                                    className="w-full bg-white text-black font-sans"
+                                  >
+                                    <option value="">Sélectionnez un préparateur.</option>
+                                    {TECH_EXP_PREPARATEUR_CATEGORIES.map((cat) => (
+                                      <option key={cat} value={cat}>
+                                        {cat}
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  {parsedPrep.category === "Administrateur" && (
+                                    <select
+                                      value={parsedPrep.value}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        updateDraft({
+                                          preparateur: v
+                                            ? `Administrateur - ${v}`
+                                            : "Administrateur",
+                                        });
+                                      }}
+                                      style={{
+                                        backgroundColor: "#ffffff",
+                                        color: "#000000",
+                                        fontSize: "18px",
+                                        borderRadius: "13px",
+                                        border: "none",
+                                        padding: "10px 12px",
+                                        textAlign: "center",
+                                        textAlignLast: "center",
+                                        width: "100%",
+                                        boxSizing: "border-box",
+                                        appearance: "none",
+                                        WebkitAppearance: "none",
+                                        MozAppearance: "none",
+                                      }}
+                                      className="w-full bg-white text-black font-sans"
+                                    >
+                                      <option value="">Sélectionnez un collaborateur.</option>
+                                      {techNonTechnicianMembers.map((m) => {
+                                        const label = getTechMemberDisplayLabel(m);
+                                        return (
+                                          <option key={m.id || label} value={label}>
+                                            {label}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                  )}
+
+                                  {parsedPrep.category === "Technicien" && (
+                                    <select
+                                      value={parsedPrep.value}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        updateDraft({
+                                          preparateur: v ? `Technicien - ${v}` : "Technicien",
+                                        });
+                                      }}
+                                      style={{
+                                        backgroundColor: "#ffffff",
+                                        color: "#000000",
+                                        fontSize: "18px",
+                                        borderRadius: "13px",
+                                        border: "none",
+                                        padding: "10px 12px",
+                                        textAlign: "center",
+                                        textAlignLast: "center",
+                                        width: "100%",
+                                        boxSizing: "border-box",
+                                        appearance: "none",
+                                        WebkitAppearance: "none",
+                                        MozAppearance: "none",
+                                      }}
+                                      className="w-full bg-white text-black font-sans"
+                                    >
+                                      <option value="">Sélectionnez un technicien.</option>
+                                      {techTechnicianMembers.map((m) => {
+                                        const label = getTechMemberDisplayLabel(m);
+                                        return (
+                                          <option key={m.id || label} value={label}>
+                                            {label}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                  )}
+
+                                  {parsedPrep.category === "Client" && (
+                                    <select
+                                      value={parsedPrep.value}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        updateDraft({
+                                          preparateur: v ? `Client - ${v}` : "Client",
+                                        });
+                                      }}
+                                      style={{
+                                        backgroundColor: "#ffffff",
+                                        color: "#000000",
+                                        fontSize: "18px",
+                                        borderRadius: "13px",
+                                        border: "none",
+                                        padding: "10px 12px",
+                                        textAlign: "center",
+                                        textAlignLast: "center",
+                                        width: "100%",
+                                        boxSizing: "border-box",
+                                        appearance: "none",
+                                        WebkitAppearance: "none",
+                                        MozAppearance: "none",
+                                      }}
+                                      className="w-full bg-white text-black font-sans"
+                                    >
+                                      <option value="">Sélectionnez un client.</option>
+                                      {techClientOptions.map((cName) => (
+                                        <option key={cName} value={cName}>
+                                          {cName}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  )}
+
+                                  {parsedPrep.category === "Autre" && (
+                                    <input
+                                      type="text"
+                                      value={parsedPrep.value}
+                                      onChange={(e) => {
+                                        const v = e.target.value;
+                                        updateDraft({
+                                          preparateur: v ? `Autre - ${v}` : "Autre",
+                                        });
+                                      }}
+                                      placeholder="Entrez un préparateur."
+                                      style={{
+                                        backgroundColor: "#ffffff",
+                                        color: "#000000",
+                                        fontSize: "18px",
+                                        borderRadius: "13px",
+                                        border: "none",
+                                        padding: "10px 12px",
+                                        textAlign: "center",
+                                        width: "100%",
+                                        boxSizing: "border-box",
+                                      }}
+                                      className="w-full bg-white text-black font-sans"
+                                    />
+                                  )}
+                                </div>
+
+                                {/* 7. Transporteur. + Ouvrir le suivi */}
+                                <div className="flex flex-col gap-2 min-w-0">
+                                  <label
+                                    className="font-bold font-sans normal-case stocks-label-style"
+                                    style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                  >
+                                    Transporteur.
+                                  </label>
+                                  <select
+                                    value={currentExp.transporteur || ""}
+                                    onChange={(e) =>
+                                      updateDraft({ transporteur: e.target.value })
+                                    }
+                                    style={{
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      padding: "10px 12px",
+                                      textAlign: "center",
+                                      textAlignLast: "center",
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      appearance: "none",
+                                      WebkitAppearance: "none",
+                                      MozAppearance: "none",
+                                    }}
+                                    className="w-full bg-white text-black font-sans"
+                                  >
+                                    <option value="">Sélectionnez un transporteur.</option>
+                                    {TECH_EXP_TRANSPORTEUR_OPTIONS.map((tr) => (
+                                      <option key={tr} value={tr}>
+                                        {tr}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    disabled={!trackUrl}
+                                    onClick={() => {
+                                      if (trackUrl) {
+                                        const a = document.createElement("a");
+                                        a.href = trackUrl;
+                                        a.target = "_blank";
+                                        a.rel = "noopener noreferrer";
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        document.body.removeChild(a);
+                                      }
+                                    }}
+                                    style={{
+                                      backgroundColor: "rgb(46, 84, 255)",
+                                      color: "#ffffff",
+                                      padding: "10px 14px",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      boxShadow: "none",
+                                      opacity: trackUrl ? 1 : 0.45,
+                                      cursor: trackUrl ? "pointer" : "not-allowed",
+                                      width: "100%",
+                                    }}
+                                    className="w-full font-sans font-bold active:scale-95 transition-all"
+                                  >
+                                    Ouvrir le suivi
+                                  </button>
+                                </div>
+
+                                {/* 8. Numéro Suivi. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label
+                                    className="font-bold font-sans normal-case stocks-label-style"
+                                    style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                  >
+                                    Numéro Suivi.
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={currentExp.numeroSuivi || ""}
+                                    onChange={(e) =>
+                                      updateDraft({
+                                        numeroSuivi: e.target.value.replace(
+                                          /[^a-zA-Z0-9]/g,
+                                          "",
+                                        ),
+                                      })
+                                    }
+                                    placeholder="Entrez un numéro de suivi."
+                                    style={{
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      padding: "10px 12px",
+                                      textAlign: "center",
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                    }}
+                                    className="w-full bg-white text-black font-sans"
+                                  />
+                                </div>
+
+                                {/* 9. Code Postal Destinataire. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label
+                                    className="font-bold font-sans normal-case stocks-label-style"
+                                    style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                  >
+                                    Code Postal Destinataire.
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={currentExp.codePostalDestinataire || ""}
+                                    onChange={(e) =>
+                                      updateDraft({
+                                        codePostalDestinataire: e.target.value
+                                          .toUpperCase()
+                                          .replace(/[^A-Z0-9]/g, ""),
+                                      })
+                                    }
+                                    placeholder="Ex: 01234."
+                                    style={{
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      padding: "10px 12px",
+                                      textAlign: "center",
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                    }}
+                                    className="w-full bg-white text-black font-sans"
+                                  />
+                                </div>
+
+                                {/* 10. Statut. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label
+                                    className="font-bold font-sans normal-case stocks-label-style"
+                                    style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                  >
+                                    Statut.
+                                  </label>
+                                  <select
+                                    value={currentExp.statut || "Aucune information"}
+                                    onChange={(e) => updateDraft({ statut: e.target.value })}
+                                    style={{
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      padding: "10px 12px",
+                                      textAlign: "center",
+                                      textAlignLast: "center",
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      appearance: "none",
+                                      WebkitAppearance: "none",
+                                      MozAppearance: "none",
+                                    }}
+                                    className="w-full bg-white text-black font-sans"
+                                  >
+                                    <option value="">Sélectionnez un statut.</option>
+                                    {TECH_EXP_STATUT_OPTIONS.map((st) => (
+                                      <option key={st} value={st}>
+                                        {st}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* 11. Commentaire. */}
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <label
+                                    className="font-bold font-sans normal-case stocks-label-style"
+                                    style={{ fontSize: "18px", color: "#000000", textTransform: "none", letterSpacing: "normal" }}
+                                  >
+                                    Commentaire.
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={currentExp.commentaire || ""}
+                                    onChange={(e) =>
+                                      updateDraft({ commentaire: e.target.value })
+                                    }
+                                    placeholder="Entrez un commentaire."
+                                    style={{
+                                      backgroundColor: "#ffffff",
+                                      color: "#000000",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      padding: "10px 12px",
+                                      textAlign: "center",
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                    }}
+                                    className="w-full bg-white text-black font-sans"
+                                  />
+                                </div>
+
+                                {errMsg && (
+                                  <div
+                                    className="p-3 rounded-xl text-center font-sans font-bold"
+                                    style={{
+                                      backgroundColor: "#fee2e2",
+                                      color: "#b91c1c",
+                                      fontSize: "16px",
+                                    }}
+                                  >
+                                    {errMsg}
+                                  </div>
+                                )}
+
+                                {okMsg && (
+                                  <div
+                                    className="p-3 rounded-xl text-center font-sans font-bold"
+                                    style={{
+                                      backgroundColor: "#dcfce7",
+                                      color: "#166534",
+                                      fontSize: "16px",
+                                    }}
+                                  >
+                                    {okMsg}
+                                  </div>
+                                )}
+
+                                <button
+                                  type="button"
+                                  disabled={isSavingTechExpeditionId === exp.id}
+                                  onClick={() => handleSaveExistingTechExpedition(exp)}
+                                  style={{
+                                    backgroundColor: "rgb(46, 84, 255)",
+                                    color: "#ffffff",
+                                    padding: "12px 14px",
+                                    fontSize: "18px",
+                                    borderRadius: "13px",
+                                    border: "none",
+                                    boxShadow: "none",
+                                    cursor: "pointer",
+                                    width: "100%",
+                                  }}
+                                  className="w-full font-sans font-bold active:scale-95 transition-all"
+                                >
+                                  {isSavingTechExpeditionId === exp.id
+                                    ? "Enregistrement..."
+                                    : "Enregistrer"}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Side-pane modal Colisage Pièce(s) pour WebApp Technicien */}
+                  {activeTechColisageTargetId &&
+                    typeof document !== "undefined" &&
+                    createPortal(
+                      <div
+                        className="fixed inset-0 flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+                        style={{
+                          position: "fixed",
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          width: "100vw",
+                          height: "100vh",
+                          minHeight: "100dvh",
+                          maxHeight: "100dvh",
+                          zIndex: 99999,
+                        }}
+                        onClick={() => setActiveTechColisageTargetId(null)}
+                      >
+                        <div
+                          className="relative w-full sm:w-[580px] shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out"
+                          style={{
+                            height: "100vh",
+                            minHeight: "100dvh",
+                            maxHeight: "100dvh",
+                            borderLeft: "none",
+                            backgroundColor: "rgb(245, 247, 250)",
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {(() => {
+                            const modalStats = computeTechColisageStatsFromMap(
+                              techSelectedColisageMap,
+                            );
+                            const q = techColisageSearch.toLowerCase().trim();
+                            const combined = [...techColisageCatalogItems];
+                            for (const k of Object.keys(techSelectedColisageMap)) {
+                              const entry = techSelectedColisageMap[k];
+                              if (
+                                entry &&
+                                entry.checked &&
+                                !combined.some((c) => c.key === k)
+                              ) {
+                                combined.push({
+                                  key: k,
+                                  stockId: "",
+                                  format: "A",
+                                  title: entry.title,
+                                  defaultVolume: entry.volume || 1,
+                                  unitWeightKg: entry.unitWeightKg || 0,
+                                  unitTransportCostEur: entry.unitTransportCostEur || 0,
+                                });
+                              }
+                            }
+                            const filteredItems = q
+                              ? combined.filter((item) =>
+                                  item.title.toLowerCase().includes(q),
+                                )
+                              : combined;
+                            const sortedItems = [...filteredItems].sort((a, b) => {
+                              const aChecked = Boolean(
+                                techSelectedColisageMap[a.key]?.checked,
+                              );
+                              const bChecked = Boolean(
+                                techSelectedColisageMap[b.key]?.checked,
+                              );
+                              if (aChecked && !bChecked) return -1;
+                              if (!aChecked && bChecked) return 1;
+                              return a.title.localeCompare(b.title, "fr");
+                            });
+
+                            return (
+                              <>
+                                <div
+                                  className="px-4 pt-5 pb-2 grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0"
+                                  style={{ backgroundColor: "rgb(245, 247, 250)" }}
+                                >
+                                  <div
+                                    className="p-3 bg-white"
+                                    style={{ borderRadius: "13px", border: "none" }}
+                                  >
+                                    <div style={{ fontSize: "15px", color: "#000000" }}>
+                                      Poids Net (Kilogramme) Estimé:
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "20px",
+                                        color: "#000000",
+                                        marginTop: "2px",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {`${formatTechCleanNum(modalStats.totalWeightKg)}kg`}
+                                    </div>
+                                  </div>
+                                  <div
+                                    className="p-3 bg-white"
+                                    style={{ borderRadius: "13px", border: "none" }}
+                                  >
+                                    <div style={{ fontSize: "15px", color: "#000000" }}>
+                                      Coût Transport Estimé:
+                                    </div>
+                                    <div
+                                      style={{
+                                        fontSize: "20px",
+                                        color: "#000000",
+                                        marginTop: "2px",
+                                        fontWeight: 600,
+                                      }}
+                                    >
+                                      {`${formatTechCleanNum(
+                                        modalStats.totalTransportCostEur,
+                                      )}€`}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div
+                                  className="px-4 pt-2 pb-3 shrink-0"
+                                  style={{ backgroundColor: "rgb(245, 247, 250)" }}
+                                >
+                                  <input
+                                    type="text"
+                                    value={techColisageSearch}
+                                    onChange={(e) => setTechColisageSearch(e.target.value)}
+                                    placeholder="Entrez votre recherche"
+                                    style={{
+                                      width: "100%",
+                                      boxSizing: "border-box",
+                                      padding: "13px 18px",
+                                      borderRadius: "13px",
+                                      border: "1px solid #DCE1EA",
+                                      fontSize: "18px",
+                                      color: "#000000",
+                                      outline: "none",
+                                      backgroundColor: "#ffffff",
+                                    }}
+                                  />
+                                </div>
+
+                                <div
+                                  className="flex-1 overflow-y-auto px-4 pb-24 space-y-2"
+                                  style={{ backgroundColor: "rgb(245, 247, 250)" }}
+                                >
+                                  {sortedItems.map((item) => {
+                                    const st = techSelectedColisageMap[item.key];
+                                    const isChecked = Boolean(st?.checked);
+                                    const volVal =
+                                      st?.volume !== undefined
+                                        ? st.volume
+                                        : item.defaultVolume;
+                                    const toggleItem = () => {
+                                      setTechSelectedColisageMap((prev) => {
+                                        const existing = prev[item.key];
+                                        const nextChecked = !existing?.checked;
+                                        const defVol = item.format === "B" ? 1 : 0;
+                                        const curVol =
+                                          existing?.volume !== undefined
+                                            ? existing.volume
+                                            : defVol;
+                                        return {
+                                          ...prev,
+                                          [item.key]: {
+                                            checked: nextChecked,
+                                            volume: nextChecked ? curVol : defVol,
+                                            title: item.title,
+                                            unitWeightKg: item.unitWeightKg,
+                                            unitTransportCostEur: item.unitTransportCostEur,
+                                          },
+                                        };
+                                      });
+                                    };
+                                    return (
+                                      <div
+                                        key={item.key}
+                                        onClick={toggleItem}
+                                        className="flex items-center justify-between gap-4 p-3.5 rounded-xl transition-all cursor-pointer bg-white"
+                                        style={{ backgroundColor: "#ffffff", border: "none" }}
+                                      >
+                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              toggleItem();
+                                            }}
+                                            className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                                            style={{
+                                              border: isChecked
+                                                ? "1px solid #2e54ff"
+                                                : "1px solid #cbd5e1",
+                                              backgroundColor: "#ffffff",
+                                              padding: 0,
+                                            }}
+                                          >
+                                            {isChecked && (
+                                              <span
+                                                className="w-2.5 h-2.5 rounded-full block"
+                                                style={{ backgroundColor: "#2e54ff" }}
+                                              />
+                                            )}
+                                          </button>
+                                          <span
+                                            className="break-words"
+                                            style={{
+                                              fontSize: "17px",
+                                              color: "#000000",
+                                              lineHeight: 1.35,
+                                            }}
+                                          >
+                                            {item.title}
+                                          </span>
+                                        </div>
+                                        <div
+                                          className="shrink-0 flex items-center gap-2"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            value={volVal}
+                                            onChange={(e) => {
+                                              const cleaned = e.target.value.replace(
+                                                /[^0-9]/g,
+                                                "",
+                                              );
+                                              const num =
+                                                cleaned === "" ? 0 : parseInt(cleaned, 10);
+                                              setTechSelectedColisageMap((prev) => {
+                                                const ex = prev[item.key];
+                                                return {
+                                                  ...prev,
+                                                  [item.key]: {
+                                                    checked: ex ? ex.checked : num > 0,
+                                                    volume: num,
+                                                    title: item.title,
+                                                    unitWeightKg: item.unitWeightKg,
+                                                    unitTransportCostEur:
+                                                      item.unitTransportCostEur,
+                                                  },
+                                                };
+                                              });
+                                            }}
+                                            style={{
+                                              width: "54px",
+                                              height: "38px",
+                                              backgroundColor: "#ffffff",
+                                              border: "1px solid #DCE1EA",
+                                              borderRadius: "10px",
+                                              fontSize: "17px",
+                                              color: "#000000",
+                                              padding: "0 4px",
+                                              textAlign: "center",
+                                              outline: "none",
+                                            }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+
+                                <div
+                                  className="p-4 flex items-center gap-3"
+                                  style={{
+                                    position: "absolute",
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    backgroundColor: "transparent",
+                                    pointerEvents: "none",
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveTechColisageTargetId(null)}
+                                    style={{
+                                      backgroundColor: "rgb(210, 45, 11)",
+                                      color: "#ffffff",
+                                      padding: "9px 19px",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      flex: 1,
+                                      width: "50%",
+                                      pointerEvents: "auto",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Fermer
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleSaveTechColisageModal}
+                                    style={{
+                                      backgroundColor: "rgb(46, 84, 255)",
+                                      color: "#ffffff",
+                                      padding: "9px 19px",
+                                      fontSize: "18px",
+                                      borderRadius: "13px",
+                                      border: "none",
+                                      flex: 1,
+                                      width: "50%",
+                                      pointerEvents: "auto",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    Enregistrer
+                                  </button>
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>,
+                      document.body,
+                    )}
 
                   {/* Form for Nouveau stock distribué */}
                   {showNewDistribStockForm && !selectedTechStock && (
@@ -13621,6 +16759,139 @@ export default function PublicPortal({
                               </button>
                             </div>
 
+                            {/* Barre d'action Expédition affichée quand au moins 1 item de traçabilité est sélectionné */}
+                            {selectedNewDistribTraceRowKeys.length >= 1 && (
+                              <div
+                                className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-white"
+                                style={{ border: "none" }}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      width: "28px",
+                                      height: "28px",
+                                      borderRadius: "9999px",
+                                      backgroundColor: "#2e54ff",
+                                      color: "#ffffff",
+                                      fontSize: "15px",
+                                      fontWeight: 600,
+                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    }}
+                                  >
+                                    {selectedNewDistribTraceRowKeys.length}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: "18px",
+                                      color: "#000000",
+                                      fontWeight: 100,
+                                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                    }}
+                                  >
+                                    Sélectionné(s)
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2.5">
+                                  <div className="relative inline-flex">
+                                    <button
+                                      type="button"
+                                      style={{
+                                        backgroundColor: "#0f172a",
+                                        color: "#ffffff",
+                                        padding: "9px 19px",
+                                        fontSize: "18px",
+                                        borderRadius: "13px",
+                                        border: "none",
+                                        boxShadow: "none",
+                                        cursor: "pointer",
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                      }}
+                                    >
+                                      Expédition
+                                    </button>
+                                    <select
+                                      aria-label="Expédition"
+                                      value=""
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === "new") {
+                                          setShowNewDistribTraceExistingExpDropdown(false);
+                                          handleCreateNewExpeditionFromTechTraces("newStock");
+                                        } else if (val === "existing") {
+                                          setShowNewDistribTraceExistingExpDropdown(true);
+                                        }
+                                      }}
+                                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                                      style={{
+                                        WebkitAppearance: "menulist-button",
+                                        appearance: "auto",
+                                        border: "none",
+                                        outline: "none",
+                                      }}
+                                    >
+                                      <option value="" disabled>
+                                        —
+                                      </option>
+                                      <option value="new">Nouvelle Expédition</option>
+                                      <option value="existing">Expédition Existante</option>
+                                    </select>
+                                  </div>
+
+                                  {showNewDistribTraceExistingExpDropdown && (
+                                    <select
+                                      value=""
+                                      onChange={(e) => {
+                                        const targetId = e.target.value;
+                                        if (targetId) {
+                                          handleAddTechTracesToExistingExpedition(
+                                            targetId,
+                                            "newStock",
+                                          );
+                                        }
+                                      }}
+                                      style={{
+                                        padding: "9px 16px",
+                                        borderRadius: "13px",
+                                        border: "1px solid #DCE1EA",
+                                        backgroundColor: "#ffffff",
+                                        color: "#000000",
+                                        fontSize: "18px",
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                        cursor: "pointer",
+                                      }}
+                                    >
+                                      <option value="">
+                                        {eligibleTechExistingExpeditions.length === 0
+                                          ? "Aucune expédition éligible"
+                                          : "Sélectionnez une expédition existante..."}
+                                      </option>
+                                      {eligibleTechExistingExpeditions.map((exp) => {
+                                        const expLabel = [
+                                          exp.reference || exp.id,
+                                          exp.contexte,
+                                          exp.expediteur,
+                                          exp.dateCreation,
+                                          exp.transporteur,
+                                        ]
+                                          .map((v) => String(v || "").trim())
+                                          .filter(Boolean)
+                                          .join(", ");
+                                        return (
+                                          <option key={exp.id} value={exp.id}>
+                                            {expLabel || exp.reference || exp.id}
+                                          </option>
+                                        );
+                                      })}
+                                    </select>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
                             {pendingNewDistribTraceabilities.length > 0 && (
                               <div className="flex flex-col gap-3">
                                 {pendingNewDistribTraceabilities.map((trace, idx) => {
@@ -13628,6 +16899,9 @@ export default function PublicPortal({
                                   const isLotFilled = Boolean(currentLot);
                                   const effLoc =
                                     techLocationLink || authenticatedUser?.locationLink || "Véhicule A";
+                                  const rowKey = String(trace.id || idx);
+                                  const isRowSelected =
+                                    selectedNewDistribTraceRowKeys.includes(rowKey);
 
                                   return (
                                     <div
@@ -13639,6 +16913,36 @@ export default function PublicPortal({
                                         boxShadow: "none",
                                       }}
                                     >
+                                      {/* 0. Radio-check de sélection */}
+                                      <div className="flex items-center justify-start">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSelectedNewDistribTraceRowKeys((prev) =>
+                                              prev.includes(rowKey)
+                                                ? prev.filter((k) => k !== rowKey)
+                                                : [...prev, rowKey],
+                                            );
+                                          }}
+                                          aria-label="Sélectionner la pièce"
+                                          className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                                          style={{
+                                            border: isRowSelected
+                                              ? "1px solid #2e54ff"
+                                              : "1px solid #cbd5e1",
+                                            backgroundColor: "#ffffff",
+                                            padding: 0,
+                                          }}
+                                        >
+                                          {isRowSelected && (
+                                            <span
+                                              className="w-2.5 h-2.5 rounded-full block"
+                                              style={{ backgroundColor: "#2e54ff" }}
+                                            />
+                                          )}
+                                        </button>
+                                      </div>
+
                                       {/* 1. Emplacement. (disabled & hidden, auto-set to logged technician's location) */}
                                       <div className="hidden" style={{ display: "none" }}>
                                         <label
@@ -13735,44 +17039,130 @@ export default function PublicPortal({
                                         >
                                           Situation.
                                         </label>
-                                        <select
-                                          value={
+                                        {(() => {
+                                          const rawSit = String(
                                             trace.situation === "Signalé manquant"
                                               ? "Signalé Manquant"
-                                              : trace.situation || "Disponible"
-                                          }
-                                          onChange={(e) => {
-                                            const updated = [...pendingNewDistribTraceabilities];
-                                            updated[idx] = {
-                                              ...updated[idx],
-                                              emplacement: effLoc,
-                                              situation: e.target.value as any,
-                                            };
-                                            setPendingNewDistribTraceabilities(updated);
-                                          }}
-                                          style={{
-                                            backgroundColor: "#ffffff",
-                                            color: "#000000",
-                                            fontSize: "18px",
-                                            borderRadius: "13px",
-                                            border: "none",
-                                            padding: "10px 12px",
-                                            textAlign: "center",
-                                            textAlignLast: "center",
-                                            width: "100%",
-                                            boxSizing: "border-box",
-                                            appearance: "none",
-                                            WebkitAppearance: "none",
-                                            MozAppearance: "none",
-                                          }}
-                                          className="w-full bg-white text-black font-sans"
-                                        >
-                                          <option value="Disponible">Disponible</option>
-                                          <option value="Utilisé">Utilisé</option>
-                                          <option value="Indisponible">Indisponible</option>
-                                          <option value="Signalé Manquant">Signalé Manquant</option>
-                                          <option value="Prêté">Prêté</option>
-                                        </select>
+                                              : trace.situation || "Disponible",
+                                          ).trim();
+                                          const isExpedieSit =
+                                            rawSit === "Expédié" ||
+                                            rawSit.startsWith("Expédié - ") ||
+                                            rawSit.startsWith("Expédié : ");
+                                          const mainSitVal = isExpedieSit ? "Expédié" : rawSit;
+                                          const selectedExpVal = rawSit.startsWith("Expédié - ")
+                                            ? rawSit.slice("Expédié - ".length).trim()
+                                            : rawSit.startsWith("Expédié : ")
+                                              ? rawSit.slice("Expédié : ".length).trim()
+                                              : "";
+
+                                          return (
+                                            <>
+                                              <select
+                                                value={mainSitVal}
+                                                onChange={(e) => {
+                                                  const updated = [
+                                                    ...pendingNewDistribTraceabilities,
+                                                  ];
+                                                  updated[idx] = {
+                                                    ...updated[idx],
+                                                    emplacement: effLoc,
+                                                    situation: e.target.value as any,
+                                                  };
+                                                  setPendingNewDistribTraceabilities(updated);
+                                                }}
+                                                style={{
+                                                  backgroundColor: "#ffffff",
+                                                  color: "#000000",
+                                                  fontSize: "18px",
+                                                  borderRadius: "13px",
+                                                  border: "none",
+                                                  padding: "10px 12px",
+                                                  textAlign: "center",
+                                                  textAlignLast: "center",
+                                                  width: "100%",
+                                                  boxSizing: "border-box",
+                                                  appearance: "none",
+                                                  WebkitAppearance: "none",
+                                                  MozAppearance: "none",
+                                                }}
+                                                className="w-full bg-white text-black font-sans"
+                                              >
+                                                <option value="Disponible">Disponible</option>
+                                                <option value="Utilisé">Utilisé</option>
+                                                <option value="Indisponible">Indisponible</option>
+                                                <option value="Signalé Manquant">
+                                                  Signalé Manquant
+                                                </option>
+                                                <option value="Prêté">Prêté</option>
+                                                <option value="Expédié">Expédié</option>
+                                                <option value="Aucune information">
+                                                  Aucune information
+                                                </option>
+                                              </select>
+                                              {isExpedieSit && (
+                                                <select
+                                                  value={selectedExpVal}
+                                                  onChange={(e) => {
+                                                    const chosenExp = e.target.value;
+                                                    const updated = [
+                                                      ...pendingNewDistribTraceabilities,
+                                                    ];
+                                                    updated[idx] = {
+                                                      ...updated[idx],
+                                                      emplacement: effLoc,
+                                                      situation: (chosenExp
+                                                        ? `Expédié - ${chosenExp}`
+                                                        : "Expédié") as any,
+                                                    };
+                                                    setPendingNewDistribTraceabilities(updated);
+                                                  }}
+                                                  style={{
+                                                    backgroundColor: "#ffffff",
+                                                    color: "#000000",
+                                                    fontSize: "18px",
+                                                    borderRadius: "13px",
+                                                    border: "none",
+                                                    padding: "10px 12px",
+                                                    textAlign: "center",
+                                                    textAlignLast: "center",
+                                                    width: "100%",
+                                                    boxSizing: "border-box",
+                                                    appearance: "none",
+                                                    WebkitAppearance: "none",
+                                                    MozAppearance: "none",
+                                                  }}
+                                                  className="w-full bg-white text-black font-sans mt-1"
+                                                >
+                                                  <option value="">
+                                                    Sélectionnez une expédition.
+                                                  </option>
+                                                  {selectedExpVal &&
+                                                    !eligibleTechSituationExpeditions.some(
+                                                      (exp) =>
+                                                        String(
+                                                          exp.reference || exp.id,
+                                                        ).trim() === selectedExpVal,
+                                                    ) && (
+                                                      <option value={selectedExpVal}>
+                                                        {selectedExpVal}
+                                                      </option>
+                                                    )}
+                                                  {eligibleTechSituationExpeditions.map((exp) => {
+                                                    const refVal = String(
+                                                      exp.reference || exp.id,
+                                                    ).trim();
+                                                    return (
+                                                      <option key={exp.id} value={refVal}>
+                                                        {refVal}
+                                                      </option>
+                                                    );
+                                                  })}
+                                                </select>
+                                              )}
+                                            </>
+                                          );
+                                        })()}
                                       </div>
 
                                       {/* 5. Infos réservation. */}
@@ -14572,6 +17962,141 @@ export default function PublicPortal({
                                 </button>
                               </div>
 
+                              {/* Barre d'action Expédition affichée quand au moins 1 item de traçabilité est sélectionné */}
+                              {selectedTechTraceRowKeys.length >= 1 && (
+                                <div
+                                  className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-white"
+                                  style={{ border: "none" }}
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <span
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        width: "28px",
+                                        height: "28px",
+                                        borderRadius: "9999px",
+                                        backgroundColor: "#2e54ff",
+                                        color: "#ffffff",
+                                        fontSize: "15px",
+                                        fontWeight: 600,
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                      }}
+                                    >
+                                      {selectedTechTraceRowKeys.length}
+                                    </span>
+                                    <span
+                                      style={{
+                                        fontSize: "18px",
+                                        color: "#000000",
+                                        fontWeight: 100,
+                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                      }}
+                                    >
+                                      Sélectionné(s)
+                                    </span>
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-2.5">
+                                    <div className="relative inline-flex">
+                                      <button
+                                        type="button"
+                                        style={{
+                                          backgroundColor: "#0f172a",
+                                          color: "#ffffff",
+                                          padding: "9px 19px",
+                                          fontSize: "18px",
+                                          borderRadius: "13px",
+                                          border: "none",
+                                          boxShadow: "none",
+                                          cursor: "pointer",
+                                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                        }}
+                                      >
+                                        Expédition
+                                      </button>
+                                      <select
+                                        aria-label="Expédition"
+                                        value=""
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          if (val === "new") {
+                                            setShowTechTraceExistingExpDropdown(false);
+                                            handleCreateNewExpeditionFromTechTraces(
+                                              "existingStock",
+                                            );
+                                          } else if (val === "existing") {
+                                            setShowTechTraceExistingExpDropdown(true);
+                                          }
+                                        }}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                                        style={{
+                                          WebkitAppearance: "menulist-button",
+                                          appearance: "auto",
+                                          border: "none",
+                                          outline: "none",
+                                        }}
+                                      >
+                                        <option value="" disabled>
+                                          —
+                                        </option>
+                                        <option value="new">Nouvelle Expédition</option>
+                                        <option value="existing">Expédition Existante</option>
+                                      </select>
+                                    </div>
+
+                                    {showTechTraceExistingExpDropdown && (
+                                      <select
+                                        value=""
+                                        onChange={(e) => {
+                                          const targetId = e.target.value;
+                                          if (targetId) {
+                                            handleAddTechTracesToExistingExpedition(
+                                              targetId,
+                                              "existingStock",
+                                            );
+                                          }
+                                        }}
+                                        style={{
+                                          padding: "9px 16px",
+                                          borderRadius: "13px",
+                                          border: "1px solid #DCE1EA",
+                                          backgroundColor: "#ffffff",
+                                          color: "#000000",
+                                          fontSize: "18px",
+                                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                          cursor: "pointer",
+                                        }}
+                                      >
+                                        <option value="">
+                                          {eligibleTechExistingExpeditions.length === 0
+                                            ? "Aucune expédition éligible"
+                                            : "Sélectionnez une expédition existante..."}
+                                        </option>
+                                        {eligibleTechExistingExpeditions.map((exp) => {
+                                          const expLabel = [
+                                            exp.reference || exp.id,
+                                            exp.contexte,
+                                            exp.expediteur,
+                                            exp.dateCreation,
+                                            exp.transporteur,
+                                          ]
+                                            .map((v) => String(v || "").trim())
+                                            .filter(Boolean)
+                                            .join(", ");
+                                          return (
+                                            <option key={exp.id} value={exp.id}>
+                                              {expLabel || exp.reference || exp.id}
+                                            </option>
+                                          );
+                                        })}
+                                      </select>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
                               {filteredTraceabilities.length > 0 && (
                                 <div className="flex flex-col gap-3">
                                   {filteredTraceabilities.map((trace, idx) => {
@@ -14581,6 +18106,9 @@ export default function PublicPortal({
                                       techLocationLink ||
                                       authenticatedUser?.locationLink ||
                                       "Véhicule A";
+                                    const rowKey = String(trace.id || idx);
+                                    const isRowSelected =
+                                      selectedTechTraceRowKeys.includes(rowKey);
 
                                     return (
                                       <div
@@ -14592,6 +18120,36 @@ export default function PublicPortal({
                                           boxShadow: "none",
                                         }}
                                       >
+                                        {/* 0. Radio-check de sélection */}
+                                        <div className="flex items-center justify-start">
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedTechTraceRowKeys((prev) =>
+                                                prev.includes(rowKey)
+                                                  ? prev.filter((k) => k !== rowKey)
+                                                  : [...prev, rowKey],
+                                              );
+                                            }}
+                                            aria-label="Sélectionner la pièce"
+                                            className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                                            style={{
+                                              border: isRowSelected
+                                                ? "1px solid #2e54ff"
+                                                : "1px solid #cbd5e1",
+                                              backgroundColor: "#ffffff",
+                                              padding: 0,
+                                            }}
+                                          >
+                                            {isRowSelected && (
+                                              <span
+                                                className="w-2.5 h-2.5 rounded-full block"
+                                                style={{ backgroundColor: "#2e54ff" }}
+                                              />
+                                            )}
+                                          </button>
+                                        </div>
+
                                         {/* 1. Emplacement. (disabled & hidden, auto-set to logged technician's location) */}
                                         <div className="hidden" style={{ display: "none" }}>
                                           <label
@@ -14680,40 +18238,118 @@ export default function PublicPortal({
                                           >
                                             Situation.
                                           </label>
-                                          <select
-                                            value={
+                                          {(() => {
+                                            const rawSit = String(
                                               trace.situation === "Signalé manquant"
                                                 ? "Signalé Manquant"
-                                                : trace.situation || "Disponible"
-                                            }
-                                            onChange={(e) => {
-                                              handleUpdateTraceability(trace.id, {
-                                                situation: e.target.value as any,
-                                              });
-                                            }}
-                                            style={{
-                                              backgroundColor: "#ffffff",
-                                              color: "#000000",
-                                              fontSize: "18px",
-                                              borderRadius: "13px",
-                                              border: "none",
-                                              padding: "10px 12px",
-                                              textAlign: "center",
-                                              textAlignLast: "center",
-                                              width: "100%",
-                                              boxSizing: "border-box",
-                                              appearance: "none",
-                                              WebkitAppearance: "none",
-                                              MozAppearance: "none",
-                                            }}
-                                            className="w-full bg-white text-black font-sans"
-                                          >
-                                            <option value="Disponible">Disponible</option>
-                                            <option value="Utilisé">Utilisé</option>
-                                            <option value="Indisponible">Indisponible</option>
-                                            <option value="Signalé Manquant">Signalé Manquant</option>
-                                            <option value="Prêté">Prêté</option>
-                                          </select>
+                                                : trace.situation || "Disponible",
+                                            ).trim();
+                                            const isExpedieSit =
+                                              rawSit === "Expédié" ||
+                                              rawSit.startsWith("Expédié - ") ||
+                                              rawSit.startsWith("Expédié : ");
+                                            const mainSitVal = isExpedieSit ? "Expédié" : rawSit;
+                                            const selectedExpVal = rawSit.startsWith("Expédié - ")
+                                              ? rawSit.slice("Expédié - ".length).trim()
+                                              : rawSit.startsWith("Expédié : ")
+                                                ? rawSit.slice("Expédié : ".length).trim()
+                                                : "";
+
+                                            return (
+                                              <>
+                                                <select
+                                                  value={mainSitVal}
+                                                  onChange={(e) => {
+                                                    handleUpdateTraceability(trace.id, {
+                                                      situation: e.target.value as any,
+                                                    });
+                                                  }}
+                                                  style={{
+                                                    backgroundColor: "#ffffff",
+                                                    color: "#000000",
+                                                    fontSize: "18px",
+                                                    borderRadius: "13px",
+                                                    border: "none",
+                                                    padding: "10px 12px",
+                                                    textAlign: "center",
+                                                    textAlignLast: "center",
+                                                    width: "100%",
+                                                    boxSizing: "border-box",
+                                                    appearance: "none",
+                                                    WebkitAppearance: "none",
+                                                    MozAppearance: "none",
+                                                  }}
+                                                  className="w-full bg-white text-black font-sans"
+                                                >
+                                                  <option value="Disponible">Disponible</option>
+                                                  <option value="Utilisé">Utilisé</option>
+                                                  <option value="Indisponible">Indisponible</option>
+                                                  <option value="Signalé Manquant">
+                                                    Signalé Manquant
+                                                  </option>
+                                                  <option value="Prêté">Prêté</option>
+                                                  <option value="Expédié">Expédié</option>
+                                                  <option value="Aucune information">
+                                                    Aucune information
+                                                  </option>
+                                                </select>
+                                                {isExpedieSit && (
+                                                  <select
+                                                    value={selectedExpVal}
+                                                    onChange={(e) => {
+                                                      const chosenExp = e.target.value;
+                                                      handleUpdateTraceability(trace.id, {
+                                                        situation: (chosenExp
+                                                          ? `Expédié - ${chosenExp}`
+                                                          : "Expédié") as any,
+                                                      });
+                                                    }}
+                                                    style={{
+                                                      backgroundColor: "#ffffff",
+                                                      color: "#000000",
+                                                      fontSize: "18px",
+                                                      borderRadius: "13px",
+                                                      border: "none",
+                                                      padding: "10px 12px",
+                                                      textAlign: "center",
+                                                      textAlignLast: "center",
+                                                      width: "100%",
+                                                      boxSizing: "border-box",
+                                                      appearance: "none",
+                                                      WebkitAppearance: "none",
+                                                      MozAppearance: "none",
+                                                    }}
+                                                    className="w-full bg-white text-black font-sans mt-1"
+                                                  >
+                                                    <option value="">
+                                                      Sélectionnez une expédition.
+                                                    </option>
+                                                    {selectedExpVal &&
+                                                      !eligibleTechSituationExpeditions.some(
+                                                        (exp) =>
+                                                          String(
+                                                            exp.reference || exp.id,
+                                                          ).trim() === selectedExpVal,
+                                                      ) && (
+                                                        <option value={selectedExpVal}>
+                                                          {selectedExpVal}
+                                                        </option>
+                                                      )}
+                                                    {eligibleTechSituationExpeditions.map((exp) => {
+                                                      const refVal = String(
+                                                        exp.reference || exp.id,
+                                                      ).trim();
+                                                      return (
+                                                        <option key={exp.id} value={refVal}>
+                                                          {refVal}
+                                                        </option>
+                                                      );
+                                                    })}
+                                                  </select>
+                                                )}
+                                              </>
+                                            );
+                                          })()}
                                         </div>
 
                                         {/* 5. Infos réservation. */}

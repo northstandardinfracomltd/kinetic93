@@ -12,6 +12,7 @@ interface AchatsFournisseursTabProps {
   expeditions?: ExpeditionRecord[];
   companyInfo?: Partial<CompanyInfo> | null;
   onClose?: () => void;
+  onOpenExpeditionByRef?: (expeditionRef: string) => void;
 }
 
 export default function AchatsFournisseursTab({
@@ -21,6 +22,7 @@ export default function AchatsFournisseursTab({
   expeditions = [],
   companyInfo,
   onClose,
+  onOpenExpeditionByRef,
 }: AchatsFournisseursTabProps) {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAchatId, setEditingAchatId] = useState<string | null>(null);
@@ -921,6 +923,43 @@ export default function AchatsFournisseursTab({
                   })}
                 </select>
               </div>
+              {Boolean(expedition && expedition.trim()) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetExp = (expeditions || []).find(
+                      (exp) =>
+                        String(exp.reference || exp.id).trim() === expedition.trim() ||
+                        String(exp.id).trim() === expedition.trim()
+                    );
+                    const refToSearch = String(targetExp?.reference || expedition).trim();
+                    if (editingAchatId && supplierId) {
+                      handleSaveAchat({ preventDefault: () => {} } as any);
+                    } else if (!editingAchatId && orderReference.trim() && supplierId) {
+                      handleSaveAchat({ preventDefault: () => {} } as any);
+                    } else {
+                      setIsFormOpen(false);
+                    }
+                    if (onOpenExpeditionByRef) {
+                      onOpenExpeditionByRef(refToSearch);
+                    }
+                  }}
+                  className="w-full text-center cursor-pointer transition-opacity hover:opacity-95 mt-1"
+                  style={{
+                    backgroundColor: '#2e54ff',
+                    color: '#ffffff',
+                    borderRadius: '13px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    padding: '11px 22px',
+                    border: 'none',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    boxShadow: 'none',
+                  }}
+                >
+                  {t("Consulter l’expédition")}
+                </button>
+              )}
             </div>
 
             {/* Comment */}

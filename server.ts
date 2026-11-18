@@ -1376,7 +1376,8 @@ async function startServer() {
     lastSeen: number;
   }
   const activePresenceSessions = new Map<string, ActivePresenceSession>();
-  const PRESENCE_TTL_MS = 15000;
+  const PRESENCE_TTL_MS = 125000; // Maintain connected members in presence cache for at least 120 seconds
+  const CONFLICT_ACTIVE_TTL_MS = 25000; // Tab/form conflict banner only considers recently active heartbeats
 
   const pruneExpiredPresenceSessions = (now = Date.now()) => {
     for (const [sid, sess] of activePresenceSessions.entries()) {
@@ -1402,7 +1403,79 @@ async function startServer() {
     return matched;
   };
 
-  app.post('/api/presence/heartbeat', express.text({ type: '*/*' }), (req, res) => {
+  const isGenericMemberName = (val?: string | null): boolean => {
+    const s = String(val || '').trim();
+    if (!s) return true;
+    const lower = s.toLowerCase();
+    return lower === 'membre' || lower === 'utilisateur' || lower === 'administrateur' || lower === 'technicien' || s.includes('@');
+  };
+
+  const resolveMemberFullNameForTenant = async (tenantId: string, email: string, fallbackName: string): Promise<string> => {
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanFallback = String(fallbackName || '').trim();
+    if (!isGenericMemberName(cleanFallback)) {
+      return cleanFallback;
+    }
+
+    const extractMemberName = (m: any): string => {
+      if (!m || typeof m !== 'object') return '';
+      const raw = String(
+        m.name ||
+          m.nomPrenom ||
+          m['Nom et prénom.'] ||
+          m['Nom et prénom'] ||
+          m['Nom Prénom'] ||
+          m.nom ||
+          ''
+      ).trim();
+      return !isGenericMemberName(raw) ? raw : '';
+    };
+
+    const tenantAliases = Array.from(getTenantAliasesSync(tenantId));
+    if (!tenantAliases.includes(tenantId)) tenantAliases.unshift(tenantId);
+
+    for (const tid of tenantAliases) {
+      const memStore =
+        serverMemoryStore.get(`${tid}_members`) ||
+        serverMemoryStore.get(`${tid.toUpperCase()}_members`) ||
+        serverMemoryStore.get(`${tid.toLowerCase()}_members`);
+      if (Array.isArray(memStore) && memStore.length > 0) {
+        if (cleanEmail) {
+          const found = memStore.find((m: any) => m && String(m.email || '').trim().toLowerCase() === cleanEmail);
+          const foundName = extractMemberName(found);
+          if (foundName) return foundName;
+        }
+        if (memStore.length === 1) {
+          const singleName = extractMemberName(memStore[0]);
+          if (singleName) return singleName;
+        }
+      }
+    }
+
+    try {
+      const memSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'membresEnvironnement');
+      if (memSheetUrl && extractSpreadsheetIdAndGid(memSheetUrl)) {
+        const memData = await fetchTenantSheetCollection(memSheetUrl, tenantId, 'membresEnvironnement', false);
+        if (Array.isArray(memData?.items) && memData.items.length > 0) {
+          if (cleanEmail) {
+            const found = memData.items.find(
+              (m: any) => m && String(m.email || m['Email.'] || m['Email'] || '').trim().toLowerCase() === cleanEmail
+            );
+            const foundName = extractMemberName(found);
+            if (foundName) return foundName;
+          }
+          if (!cleanEmail && memData.items.length === 1) {
+            const singleName = extractMemberName(memData.items[0]);
+            if (singleName) return singleName;
+          }
+        }
+      }
+    } catch (_) {}
+
+    return cleanFallback || cleanEmail || 'Membre';
+  };
+
+  app.post('/api/presence/heartbeat', express.text({ type: '*/*' }), async (req, res) => {
     try {
       let body: any = req.body;
       if (typeof body === 'string' && body.trim()) {
@@ -1415,8 +1488,8 @@ async function startServer() {
       const now = Date.now();
       const sessionId = String(body?.sessionId || req.query.sessionId || '').trim();
       const tenantId = String(body?.tenantId || req.query.tenantId || req.headers['x-defibeo-tenant'] || 'demo').trim();
-      const email = String(body?.email || req.headers['x-defibeo-email'] || '').trim().toLowerCase();
-      const name = String(body?.name || '').trim();
+      const rawEmail = String(body?.email || req.headers['x-defibeo-email'] || (req as any).authSession?.email || '').trim().toLowerCase();
+      const rawName = String(body?.name || '').trim();
       const role = String(body?.role || req.headers['x-defibeo-role'] || 'admin').trim();
       const hasTabField = body && typeof body === 'object' && 'tab' in body;
       const hasFormKeyField = body && typeof body === 'object' && 'formKey' in body;
@@ -1425,11 +1498,19 @@ async function startServer() {
 
       if (sessionId && tenantId) {
         const existing = activePresenceSessions.get(sessionId);
+        const effectiveEmail = rawEmail || existing?.email || '';
+        const candidateName = !isGenericMemberName(rawName)
+          ? rawName
+          : !isGenericMemberName(existing?.name)
+          ? existing!.name
+          : rawName || existing?.name || '';
+        const resolvedName = await resolveMemberFullNameForTenant(tenantId, effectiveEmail, candidateName);
+
         activePresenceSessions.set(sessionId, {
           sessionId,
           tenantId,
-          email: email || existing?.email || '',
-          name: name || existing?.name || email || 'Membre',
+          email: effectiveEmail,
+          name: resolvedName,
           role: role || existing?.role || 'admin',
           tab: tab !== undefined ? tab : (existing?.tab || ''),
           formKey: formKey !== undefined ? formKey : (existing?.formKey || ''),
@@ -1439,6 +1520,15 @@ async function startServer() {
       }
 
       const sessions = getActivePresenceSessionsForTenant(tenantId, now);
+      for (const s of sessions) {
+        if (isGenericMemberName(s.name)) {
+          const enrichedName = await resolveMemberFullNameForTenant(tenantId, s.email, s.name);
+          if (enrichedName && enrichedName !== s.name) {
+            s.name = enrichedName;
+          }
+        }
+      }
+
       const currentEntry = sessionId ? activePresenceSessions.get(sessionId) : undefined;
       const effectiveTab = tab !== undefined ? tab : (currentEntry?.tab || '');
       const effectiveFormKey = formKey !== undefined ? formKey : (currentEntry?.formKey || '');
@@ -1447,6 +1537,7 @@ async function startServer() {
       let formConflict = false;
       for (const entry of sessions) {
         if (entry.sessionId === sessionId) continue;
+        if (now - entry.lastSeen > CONFLICT_ACTIVE_TTL_MS) continue;
         if (effectiveTab && entry.tab === effectiveTab) {
           tabConflict = true;
         }
@@ -1473,7 +1564,12 @@ async function startServer() {
       }
       const sessionId = String(body?.sessionId || req.query.sessionId || '').trim();
       if (sessionId) {
-        activePresenceSessions.delete(sessionId);
+        const existing = activePresenceSessions.get(sessionId);
+        if (existing) {
+          // Clear tab/form locks immediately, but keep the member session cached until PRESENCE_TTL_MS (125s) expires
+          existing.tab = '';
+          existing.formKey = '';
+        }
       }
       return res.json({ status: 'ok', ok: true });
     } catch (_) {
@@ -1534,20 +1630,39 @@ async function startServer() {
       const tenantId = String(req.query.tenantId || 'demo').trim() || 'demo';
       const forceRefresh = req.query.refresh === 'true' || req.query.refresh === '1';
       const querySheetUrl = String(req.query.spreadsheetUrl || '').trim();
-      const storeKey = `${tenantId}_tech_locations`;
-      const existing: Record<string, any> =
-        serverMemoryStore.get(storeKey) && typeof serverMemoryStore.get(storeKey) === 'object'
-          ? { ...serverMemoryStore.get(storeKey) }
-          : {};
+      const tenantAliases = getTenantAliasesSync(tenantId);
+      if (!tenantAliases.includes(tenantId)) tenantAliases.unshift(tenantId);
+
+      const existing: Record<string, any> = {};
+      for (const alias of tenantAliases) {
+        const aliasStore = serverMemoryStore.get(`${alias}_tech_locations`);
+        if (aliasStore && typeof aliasStore === 'object') {
+          for (const [k, v] of Object.entries(aliasStore)) {
+            if (!v || typeof v !== 'object') continue;
+            const prev = existing[k];
+            const vTs = Number((v as any).updatedAt) || 0;
+            const prevTs = Number(prev?.updatedAt) || 0;
+            if (!prev || vTs >= prevTs) {
+              existing[k] = { ...(v as any) };
+            }
+          }
+        }
+      }
 
       // Also check tenant's Spreadsheet Livetrack if configured
       try {
-        const sheetUrl = querySheetUrl || (await resolveTenantSpreadsheetUrl(tenantId, 'livetrack'));
+        let sheetUrl = querySheetUrl;
+        if (!sheetUrl) {
+          for (const alias of tenantAliases) {
+            sheetUrl = await resolveTenantSpreadsheetUrl(alias, 'livetrack');
+            if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) break;
+          }
+        }
         if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
           const sheetData = await fetchTenantSheetCollection(sheetUrl, tenantId, 'livetrack', forceRefresh);
           if (sheetData?.fromSpreadsheet && Array.isArray(sheetData.items)) {
             let changed = false;
-            const sheetKeys = new Set<string>();
+            const sheetBestByTech: Record<string, any> = {};
             for (const item of sheetData.items) {
               const name = String(item?.name || item?.['Nom Prénom Technicien'] || item?.['Nom Prénom Technicien.'] || '').trim();
               const rawLat = String(item?.lat ?? item?.['Latitude'] ?? item?.['Latitude.'] ?? '').replace(',', '.').trim();
@@ -1557,28 +1672,56 @@ async function startServer() {
               const numLng = parseFloat(rawLng);
               if (!Number.isFinite(numLat) || !Number.isFinite(numLng) || (numLat === 0 && numLng === 0)) continue;
               const normKey = name.toLowerCase();
-              sheetKeys.add(normKey);
               const sheetTs = Number(item?.updatedAt) || 0;
+              const rowNum = Number(item?._sheetRowNumber) || 0;
+              const prevSheet = sheetBestByTech[normKey];
+              const isNewerInSheet =
+                !prevSheet ||
+                (sheetTs > 0 && prevSheet.updatedAt > 0
+                  ? sheetTs >= prevSheet.updatedAt
+                  : sheetTs > 0
+                  ? true
+                  : prevSheet.updatedAt > 0
+                  ? false
+                  : rowNum >= (prevSheet._sheetRowNumber || 0));
+
+              if (isNewerInSheet) {
+                sheetBestByTech[normKey] = {
+                  name,
+                  email: item?.email || prevSheet?.email || '',
+                  lat: numLat,
+                  lng: numLng,
+                  updatedAt: sheetTs || prevSheet?.updatedAt || undefined,
+                  horodatage: item?.horodatage || prevSheet?.horodatage || '',
+                  _sheetRowNumber: rowNum,
+                };
+              }
+            }
+
+            const sheetKeys = new Set<string>(Object.keys(sheetBestByTech));
+            for (const [normKey, bestItem] of Object.entries(sheetBestByTech)) {
               const cur = existing[normKey];
+              const sheetTs = Number(bestItem.updatedAt) || 0;
+              const curTs = Number(cur?.updatedAt) || 0;
               if (
                 !cur ||
                 forceRefresh ||
-                cur.lat !== numLat ||
-                cur.lng !== numLng ||
-                (sheetTs > 0 && (!cur.updatedAt || sheetTs >= cur.updatedAt))
+                sheetTs >= curTs ||
+                cur.lat !== bestItem.lat ||
+                cur.lng !== bestItem.lng
               ) {
+                const { _sheetRowNumber: _ignoreRow, ...cleanBest } = bestItem;
                 existing[normKey] = {
-                  name,
-                  email: cur?.email || '',
-                  lat: numLat,
-                  lng: numLng,
-                  updatedAt: sheetTs || cur?.updatedAt || undefined,
-                  horodatage: item?.horodatage || cur?.horodatage || '',
+                  ...cleanBest,
+                  email: cleanBest.email || cur?.email || '',
+                  updatedAt: sheetTs || curTs || undefined,
+                  horodatage: cleanBest.horodatage || cur?.horodatage || '',
                 };
                 changed = true;
               }
             }
-            if (forceRefresh) {
+
+            if (forceRefresh && sheetKeys.size > 0) {
               for (const k of Object.keys(existing)) {
                 if (!sheetKeys.has(k)) {
                   delete existing[k];
@@ -1587,13 +1730,17 @@ async function startServer() {
               }
             }
             if (changed) {
-              serverMemoryStore.set(storeKey, existing);
-              persistSingleCollectionToDisk(storeKey, existing);
+              for (const alias of tenantAliases) {
+                const aliasStoreKey = `${alias}_tech_locations`;
+                serverMemoryStore.set(aliasStoreKey, { ...existing });
+                persistSingleCollectionToDisk(aliasStoreKey, existing);
+              }
             }
           }
         }
       } catch (_) {}
 
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       return res.json({ locations: existing });
     } catch (err) {
       return res.json({ locations: {} });
@@ -1612,6 +1759,9 @@ async function startServer() {
           ? sessionTenant
           : cleanRawTenant || sessionTenant || 'demo';
 
+      const tenantAliases = getTenantAliasesSync(tenantId);
+      if (!tenantAliases.includes(tenantId)) tenantAliases.unshift(tenantId);
+
       const cleanEmail = String(email || (req as any).authSession?.email || '').trim().toLowerCase();
       let techName = String(name || '').trim();
       const numLat = Number(lat);
@@ -1621,8 +1771,14 @@ async function startServer() {
       }
 
       // Resolve canonical technician full name from members if possible (e.g. when initial reload only had email prefix)
-      const membersKey = `${tenantId}_members`;
-      let cachedMembers = serverMemoryStore.get(membersKey);
+      let cachedMembers: any[] | undefined;
+      for (const alias of tenantAliases) {
+        const mems = serverMemoryStore.get(`${alias}_members`);
+        if (Array.isArray(mems) && mems.length > 0) {
+          cachedMembers = mems;
+          break;
+        }
+      }
       if (!Array.isArray(cachedMembers) || cachedMembers.length === 0) {
         try {
           const memSheetUrl = await resolveTenantSpreadsheetUrl(tenantId, 'membresEnvironnement');
@@ -1661,13 +1817,8 @@ async function startServer() {
       const hhVal = getPart('hour') === '24' ? '00' : getPart('hour');
       const horodatageStr = `${getPart('day')}/${getPart('month')}/${getPart('year')} ${hhVal}:${getPart('minute')}:${getPart('second')}`;
 
-      const storeKey = `${tenantId}_tech_locations`;
-      const existing: Record<string, any> =
-        serverMemoryStore.get(storeKey) && typeof serverMemoryStore.get(storeKey) === 'object'
-          ? { ...serverMemoryStore.get(storeKey) }
-          : {};
       const normKey = techName.toLowerCase();
-      existing[normKey] = {
+      const newLocEntry = {
         name: techName,
         email: cleanEmail,
         lat: numLat,
@@ -1675,42 +1826,61 @@ async function startServer() {
         updatedAt: ts,
         horodatage: horodatageStr,
       };
-      serverMemoryStore.set(storeKey, existing);
-      serverStoreTimestamps.set(storeKey, Date.now());
-      persistSingleCollectionToDisk(storeKey, existing);
+
+      for (const alias of tenantAliases) {
+        const storeKey = `${alias}_tech_locations`;
+        const existing: Record<string, any> =
+          serverMemoryStore.get(storeKey) && typeof serverMemoryStore.get(storeKey) === 'object'
+            ? { ...serverMemoryStore.get(storeKey) }
+            : {};
+        existing[normKey] = newLocEntry;
+        serverMemoryStore.set(storeKey, existing);
+        serverStoreTimestamps.set(storeKey, Date.now());
+        persistSingleCollectionToDisk(storeKey, existing);
+      }
 
       // Also enrich cached members in memory if present
-      if (Array.isArray(cachedMembers)) {
-        let changed = false;
-        const updatedMembers = cachedMembers.map((m: any) => {
-          const mNameLower = String(m?.name || '').trim().toLowerCase();
-          const mEmailLower = String(m?.email || '').trim().toLowerCase();
-          if (m && (mNameLower === normKey || (cleanEmail && mEmailLower === cleanEmail))) {
-            changed = true;
-            return {
-              ...m,
-              lastKnownLat: numLat,
-              lastKnownLng: numLng,
-              lastKnownLocationAt: ts,
-              gpsSharingLink: 'Partagé',
-            };
+      for (const alias of tenantAliases) {
+        const membersKey = `${alias}_members`;
+        const aliasMembers = serverMemoryStore.get(membersKey);
+        if (Array.isArray(aliasMembers)) {
+          let changed = false;
+          const updatedMembers = aliasMembers.map((m: any) => {
+            const mNameLower = String(m?.name || '').trim().toLowerCase();
+            const mEmailLower = String(m?.email || '').trim().toLowerCase();
+            if (m && (mNameLower === normKey || (cleanEmail && mEmailLower === cleanEmail))) {
+              changed = true;
+              return {
+                ...m,
+                lastKnownLat: numLat,
+                lastKnownLng: numLng,
+                lastKnownLocationAt: ts,
+                gpsSharingLink: 'Partagé',
+              };
+            }
+            return m;
+          });
+          if (changed) {
+            serverMemoryStore.set(membersKey, updatedMembers);
+            persistSingleCollectionToDisk(membersKey, updatedMembers);
           }
-          return m;
-        });
-        if (changed) {
-          serverMemoryStore.set(membersKey, updatedMembers);
-          persistSingleCollectionToDisk(membersKey, updatedMembers);
         }
       }
 
       // Persist last known position to the tenant's Spreadsheet Livetrack
       let syncedToRemoteSheet = false;
       try {
-        const sheetUrl = await resolveTenantSpreadsheetUrl(
+        let sheetUrl = await resolveTenantSpreadsheetUrl(
           tenantId,
           'livetrack',
           typeof bodySpreadsheetUrl === 'string' ? bodySpreadsheetUrl.trim() : undefined
         );
+        if (!sheetUrl) {
+          for (const alias of tenantAliases) {
+            sheetUrl = await resolveTenantSpreadsheetUrl(alias, 'livetrack');
+            if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) break;
+          }
+        }
         if (sheetUrl && extractSpreadsheetIdAndGid(sheetUrl)) {
           const upRes = await upsertRecordsToTenantSheet(sheetUrl, tenantId, 'livetrack', [
             {
@@ -1728,7 +1898,7 @@ async function startServer() {
         console.warn(`[Livetrack] Could not sync tech location to spreadsheet for ${tenantId}:`, sheetErr);
       }
 
-      return res.json({ ok: true, syncedToRemoteSheet, location: existing[normKey] });
+      return res.json({ ok: true, syncedToRemoteSheet, location: newLocEntry });
     } catch (err) {
       return res.status(500).json({ error: "Failed to save technician location" });
     }

@@ -7339,44 +7339,54 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.regions = parseStringArray(merged.regions ?? rawByHeader['regions'] ?? rawByHeader['Regions']);
   } else if (tabType === 'livetrack') {
     const rawName = String(
-      merged.name ??
-        rawByHeader['Nom Prénom Technicien'] ??
+      rawByHeader['Nom Prénom Technicien'] ??
         rawByHeader['Nom Prénom Technicien.'] ??
         rawByHeader['Technicien'] ??
         rawByHeader['Nom et prénom'] ??
+        merged.name ??
+        row[0] ??
         ''
     ).trim();
     const rawHorodatage = String(
-      merged.horodatage ??
-        rawByHeader['Horodatage'] ??
+      rawByHeader['Horodatage'] ??
         rawByHeader['Horodatage.'] ??
         rawByHeader['Date'] ??
+        merged.horodatage ??
+        row[1] ??
         ''
     ).trim();
     const rawLatStr = String(
-      merged.lat ??
-        rawByHeader['Latitude'] ??
+      rawByHeader['Latitude'] ??
         rawByHeader['Latitude.'] ??
+        merged.lat ??
+        row[2] ??
         ''
-    ).replace(',', '.').trim();
+    )
+      .replace(',', '.')
+      .trim();
     const rawLngStr = String(
-      merged.lng ??
-        rawByHeader['Longitude'] ??
+      rawByHeader['Longitude'] ??
         rawByHeader['Longitude.'] ??
+        merged.lng ??
+        row[3] ??
         ''
-    ).replace(',', '.').trim();
+    )
+      .replace(',', '.')
+      .trim();
 
     const parsedLat = parseFloat(rawLatStr);
     const parsedLng = parseFloat(rawLngStr);
 
-    let parsedTs = Number(merged.updatedAt) || 0;
-    if (!parsedTs && rawHorodatage) {
+    let parsedTs = 0;
+    if (rawHorodatage) {
       if (/^\d{10,13}$/.test(rawHorodatage)) {
         const n = Number(rawHorodatage);
         parsedTs = rawHorodatage.length === 10 ? n * 1000 : n;
       } else {
         // Parse DD/MM/YYYY HH:mm(:ss) in Europe/Paris timezone or ISO
-        const frMatch = rawHorodatage.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[\sTà]+(\d{1,2})[:h](\d{1,2})(?:[:m](\d{1,2}))?)?/i);
+        const frMatch = rawHorodatage.match(
+          /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[\sTà,;\-]+(\d{1,2})[:h](\d{1,2})(?:[:m](\d{1,2}))?)?/i
+        );
         if (frMatch) {
           const dd = parseInt(frMatch[1], 10);
           const mm = parseInt(frMatch[2], 10) - 1;
@@ -7414,6 +7424,9 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
           if (!isNaN(d.getTime())) parsedTs = d.getTime();
         }
       }
+    }
+    if (!parsedTs && merged.updatedAt) {
+      parsedTs = Number(merged.updatedAt) || 0;
     }
 
     merged.id = rawName ? rawName.toLowerCase() : `livetrack_${rowIndexZeroBased + 2}`;
@@ -10242,7 +10255,7 @@ export async function fetchTenantSheetCollection(
       if (tabType === 'defibrillateurs' || tabType === 'autresMateriels') {
         cached.stats = computeSheetCollectionStats(cached.items, tabType);
       }
-      const staleMs = tabType === 'messagesInternes' ? 4000 : 120000;
+      const staleMs = tabType === 'livetrack' ? 0 : tabType === 'messagesInternes' ? 4000 : 120000;
       if (Date.now() - cached.fetchedAt > staleMs && !inFlightSheetFetches.has(cacheKey)) {
         setImmediate(() => {
           fetchTenantSheetCollection(spreadsheetUrl, tenantId, tabType, true, true).catch(() => {});
@@ -10570,13 +10583,14 @@ export async function fetchTenantSheetCollection(
         tabType === 'apparenceRapportsPdf' ||
         tabType === 'intituleEmplacements' ||
         tabType === 'communicationPortailClient' ||
-        tabType === 'membresEnvironnement';
+        tabType === 'membresEnvironnement' ||
+        tabType === 'livetrack';
 
       // Explicit manual refresh ("Actualiser les données" button): spreadsheet data takes 100% priority.
       // Automatic background revalidation / normal reads: protect recent app edits for 5 minutes (300,000ms)
       // so background polling or cached CSV exports never cause saved fields (sites, expiry dates) to jump.
       const isExplicitManualRefresh = Boolean(forceRefresh && !isBackgroundRevalidate);
-      const recentRetentionMs = tabType === 'messagesInternes' ? 45000 : 300000;
+      const recentRetentionMs = tabType === 'livetrack' ? 0 : tabType === 'messagesInternes' ? 45000 : 300000;
       const recentMap = recentSheetUpserts.get(cacheKey);
       const isRecentOverlay =
         !isExplicitManualRefresh &&
