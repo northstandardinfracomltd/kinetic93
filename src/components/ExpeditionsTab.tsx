@@ -173,6 +173,34 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
   const [clickedPill, setClickedPill] = useState<string | null>(null);
   const [isRefreshingLocal, setIsRefreshingLocal] = useState(false);
 
+  // Table fit view ("Minimiser et ajuster l’affichage") state & refs
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [isTableFitView, setIsTableFitView] = useState<boolean>(false);
+  const [tableFitScale, setTableFitScale] = useState<number>(1);
+  const naturalTableWidthRef = useRef<number>(1300);
+
+  const toggleTableFitView = () => {
+    setIsTableFitView((prev) => {
+      const next = !prev;
+      if (next) {
+        if (tableContainerRef.current) {
+          const sWidth = tableContainerRef.current.scrollWidth;
+          if (sWidth > 500) {
+            naturalTableWidthRef.current = sWidth;
+          }
+          const clientW = tableContainerRef.current.clientWidth;
+          const naturalW = naturalTableWidthRef.current || 1300;
+          const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
+          setTableFitScale(scale);
+        }
+      } else {
+        setTableFitScale(1);
+      }
+      return next;
+    });
+  };
+
   // Form states
   const [contexte, setContexte] = useState('');
   const [expediteur, setExpediteur] = useState('');
@@ -688,7 +716,9 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
     fontSize: '16px',
     fontWeight: 100,
     color: '#000000',
+    whiteSpace: 'nowrap',
     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+    cursor: 'pointer',
   };
 
   const thStyle: React.CSSProperties = {
@@ -699,6 +729,8 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
     letterSpacing: 'normal',
     textTransform: 'none',
+    whiteSpace: 'nowrap',
+    cursor: 'default',
   };
 
   return (
@@ -807,9 +839,33 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
           letter-spacing: normal !important;
           text-transform: none !important;
+          white-space: nowrap !important;
         }
         #expeditions-tab-container-harmonized #expeditions-record-table tbody tr:hover {
           background-color: #f5f7fa !important;
+        }
+        #expeditions-colisage-side-pane #colisage-search-input::placeholder {
+          color: #BECADB !important;
+          opacity: 1 !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+        }
+        #expeditions-colisage-side-pane #colisage-search-input::-webkit-input-placeholder {
+          color: #BECADB !important;
+          opacity: 1 !important;
+        }
+        #expeditions-colisage-side-pane #colisage-search-input::-moz-placeholder {
+          color: #BECADB !important;
+          opacity: 1 !important;
+        }
+        #expeditions-colisage-side-pane .colisage-vol-input::-webkit-outer-spin-button,
+        #expeditions-colisage-side-pane .colisage-vol-input::-webkit-inner-spin-button {
+          -webkit-appearance: none !important;
+          margin: 0 !important;
+        }
+        #expeditions-colisage-side-pane .colisage-vol-input {
+          -moz-appearance: textfield !important;
+          text-align: center !important;
         }
       `}</style>
 
@@ -869,7 +925,9 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                     value=""
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (val === 'spreadsheet') {
+                      if (val === 'fit-view') {
+                        toggleTableFitView();
+                      } else if (val === 'spreadsheet') {
                         const url = getTenantSpreadsheetUrl('spreadsheetExpeditions', companyInfo);
                         if (url) openTenantSpreadsheetUrl(url);
                       }
@@ -878,6 +936,9 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                     style={{ WebkitAppearance: 'menulist-button', appearance: 'auto', border: 'none', outline: 'none' }}
                   >
                     <option value="" disabled hidden></option>
+                    <option value="fit-view">
+                      {isTableFitView ? t('Retourner l’affichage standard') : t('Minimiser et ajuster l’affichage')}
+                    </option>
                     <option
                       value="spreadsheet"
                       disabled={!getTenantSpreadsheetUrl('spreadsheetExpeditions', companyInfo)}
@@ -1030,36 +1091,53 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
           </div>
 
           {/* Table View */}
-          <div
-            className="bg-white overflow-hidden"
-            style={{
-              borderRadius: '0px',
-              maxWidth: '98%',
-              margin: 'auto',
-              border: 'none',
-              backgroundColor: 'rgb(255, 255, 255)',
-            }}
-          >
-            <div className="overflow-x-auto bg-white">
-              <table className="w-full text-left border-collapse bg-white" id="expeditions-record-table">
+          <div className="bg-white overflow-hidden mt-6 rounded-none">
+            <div
+              ref={tableContainerRef}
+              className={isTableFitView ? 'overflow-x-hidden bg-white' : 'overflow-x-auto bg-white'}
+              style={isTableFitView ? { width: '100%', overflowX: 'hidden' } : undefined}
+            >
+              <table
+                ref={tableRef}
+                className="w-full text-left font-sans border-collapse text-xs bg-white"
+                id="expeditions-record-table"
+                style={{
+                  border: '0px solid transparent',
+                  ...(isTableFitView
+                    ? {
+                        zoom: tableFitScale,
+                        width: `${naturalTableWidthRef.current || 1300}px`,
+                        minWidth: `${naturalTableWidthRef.current || 1300}px`,
+                        transition: 'zoom 0.15s ease',
+                      }
+                    : {
+                        width: '100%',
+                      }),
+                }}
+              >
                 <thead>
                   <tr className="bg-white text-slate-600">
-                    <th className="px-4 py-3.5" style={thStyle}>{t('Volume.')}</th>
-                    <th className="px-4 py-3.5" style={thStyle}>{t('Poids Estimé.')}</th>
-                    <th className="px-4 py-3.5" style={thStyle}>{t('Ouverture.')}</th>
-                    <th className="px-4 py-3.5" style={thStyle}>{t('Actualisé.')}</th>
-                    <th className="px-4 py-3.5" style={thStyle}>{t('Contexte.')}</th>
-                    <th className="px-4 py-3.5" style={thStyle}>{t('Préparateur.')}</th>
-                    <th className="px-4 py-3.5" style={thStyle}>{t('Destinataire.')}</th>
-                    <th className="px-4 py-3.5" style={thStyle}>{t('Transporteur.')}</th>
-                    <th className="px-4 py-3.5" style={thStyle}>{t('Numéro Suivi.')}</th>
-                    <th className="px-4 py-3.5" style={thStyle}>{t('Statut.')}</th>
-                    <th className="px-4 py-3.5 text-right" style={thStyle}></th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t('Référence.')}</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t('Volume.')}</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t('Poids Estimé.')}</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t('Ouverture.')}</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t('Actualisé.')}</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t('Contexte.')}</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t('Préparateur.')}</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t('Destinataire.')}</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t('Transporteur.')}</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t('Numéro Suivi.')}</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap" style={thStyle}>{t('Statut.')}</th>
+                    <th className="px-4 py-3.5 text-right whitespace-nowrap" style={thStyle}></th>
                   </tr>
                 </thead>
                 <tbody className="bg-white">
                   {filteredExpeditions.length === 0 ? (
-                    <EmptyTablePlaceholder />
+                    <tr>
+                      <td colSpan={12} className="bg-white">
+                        <EmptyTablePlaceholder className="py-16 text-center font-sans lg:py-24" />
+                      </td>
+                    </tr>
                   ) : (
                     filteredExpeditions.map((exp) => {
                       const trackingUrl = getCarrierTrackingUrl(
@@ -1067,7 +1145,18 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                         exp.numeroSuivi
                       );
                       return (
-                        <tr key={exp.id} className="bg-white transition-colors">
+                        <tr
+                          key={exp.id}
+                          className="group bg-white hover:bg-[#f5f7fa] transition-colors cursor-pointer"
+                          style={{ cursor: 'pointer' }}
+                          onClick={(e) => {
+                            if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
+                            handleEdit(exp);
+                          }}
+                        >
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellStyle}>
+                            {exp.reference || '-'}
+                          </td>
                           <td className="px-4 py-4 whitespace-nowrap" style={cellStyle}>
                             {exp.nombrePieces !== undefined && exp.nombrePieces !== ''
                               ? exp.nombrePieces
@@ -1146,17 +1235,17 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
           className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto py-4"
           id="expeditions-form-overlay"
         >
-          {/* Header Box styled exactly like DefibTab / StocksTab / AchatsFournisseursTab Form Header */}
+          {/* Header Box without grey background */}
           <div
             className="flex items-center bg-white"
             style={{
-              borderRadius: '18px',
-              width: '100%',
-              maxWidth: '100%',
+              borderRadius: '0px',
+              width: '98%',
+              maxWidth: '98%',
               margin: 'auto',
-              padding: '20px',
+              padding: '10px 0px',
               border: 'none',
-              backgroundColor: 'rgb(245, 247, 250)',
+              backgroundColor: 'rgb(255, 255, 255)',
             }}
             id="expeditions-form-header-box"
           >
@@ -1194,6 +1283,9 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
               backgroundColor: 'rgb(245, 247, 250)',
               borderRadius: '18px',
               border: 'none',
+              width: '98%',
+              maxWidth: '98%',
+              margin: 'auto',
             }}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1529,22 +1621,22 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                   className="p-3 bg-white"
                   style={{ borderRadius: '13px', border: 'none' }}
                 >
-                  <div style={{ fontSize: '15px', color: '#50617a' }}>
+                  <div style={{ fontSize: '15px', color: '#000000' }}>
                     {t('Poids Net (Kilogramme) Estimé:')}
                   </div>
                   <div style={{ fontSize: '20px', color: '#000000', marginTop: '2px', fontWeight: 600 }}>
-                    {`${formatNumberClean(colisageStats.totalWeightKg)} kg`}
+                    {`${formatNumberClean(colisageStats.totalWeightKg)}kg`}
                   </div>
                 </div>
                 <div
                   className="p-3 bg-white"
                   style={{ borderRadius: '13px', border: 'none' }}
                 >
-                  <div style={{ fontSize: '15px', color: '#50617a' }}>
+                  <div style={{ fontSize: '15px', color: '#000000' }}>
                     {t('Coût Transport Estimé:')}
                   </div>
                   <div style={{ fontSize: '20px', color: '#000000', marginTop: '2px', fontWeight: 600 }}>
-                    {`${formatNumberClean(colisageStats.totalTransportCostEur)} €`}
+                    {`${formatNumberClean(colisageStats.totalTransportCostEur)}€`}
                   </div>
                 </div>
               </div>
@@ -1555,10 +1647,12 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                 style={{ backgroundColor: 'rgb(245, 247, 250)' }}
               >
                 <input
+                  id="colisage-search-input"
                   type="text"
                   value={colisageSearch}
                   onChange={(e) => setColisageSearch(e.target.value)}
                   placeholder={t('Entrez votre recherche')}
+                  className="placeholder:text-[#BECADB]"
                   style={{
                     width: '100%',
                     maxWidth: '100%',
@@ -1581,105 +1675,107 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                 className="flex-1 overflow-y-auto px-4 pb-24 space-y-2"
                 style={{ backgroundColor: 'rgb(245, 247, 250)' }}
               >
-                {sidePaneDisplayItems.length === 0 ? (
-                  <div
-                    className="text-center py-12"
-                    style={{ color: '#50617a', fontSize: '18px' }}
-                  >
-                    {t('Aucune pièce disponible dans les stocks.')}
-                  </div>
-                ) : (
-                  sidePaneDisplayItems.map((item) => {
-                    const state = selectedColisageMap[item.key];
-                    const isChecked = Boolean(state?.checked);
-                    const volumeVal =
-                      state?.volume !== undefined ? state.volume : item.defaultVolume;
+                {sidePaneDisplayItems.length === 0
+                  ? null
+                  : sidePaneDisplayItems.map((item) => {
+                      const state = selectedColisageMap[item.key];
+                      const isChecked = Boolean(state?.checked);
+                      const volumeVal =
+                        state?.volume !== undefined ? state.volume : item.defaultVolume;
 
-                    return (
-                      <div
-                        key={item.key}
-                        onClick={() => toggleColisageItem(item)}
-                        className="flex items-center justify-between gap-4 p-3.5 rounded-xl transition-all cursor-pointer bg-white"
-                        style={{
-                          backgroundColor: '#ffffff',
-                          border: 'none',
-                        }}
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          {/* Radio-check with center dot when checked (no check icon) */}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleColisageItem(item);
-                            }}
-                            className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-                            style={{
-                              border: isChecked
-                                ? '2px solid #2e54ff'
-                                : '1.5px solid #cbd5e1',
-                              backgroundColor: '#ffffff',
-                              padding: 0,
-                            }}
-                          >
-                            {isChecked && (
-                              <span
-                                className="w-2.5 h-2.5 rounded-full block"
-                                style={{ backgroundColor: '#2e54ff' }}
-                              />
-                            )}
-                          </button>
-
-                          {/* Full Title (Format A or B) */}
-                          <span
-                            className="break-words"
-                            style={{
-                              fontSize: '17px',
-                              color: '#000000',
-                              lineHeight: 1.35,
-                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            }}
-                          >
-                            {item.title}
-                          </span>
-                        </div>
-
-                        {/* Short input field for volume */}
+                      return (
                         <div
-                          className="shrink-0 flex items-center gap-2"
-                          onClick={(e) => e.stopPropagation()}
+                          key={item.key}
+                          onClick={() => toggleColisageItem(item)}
+                          className="flex items-center justify-between gap-4 p-3.5 rounded-xl transition-all cursor-pointer bg-white"
+                          style={{
+                            backgroundColor: '#ffffff',
+                            border: 'none',
+                          }}
                         >
-                          <input
-                            type="number"
-                            min={0}
-                            value={volumeVal}
-                            onChange={(e) =>
-                              updateColisageItemVolume(item, e.target.value)
-                            }
-                            className="colisage-vol-input text-center"
-                            style={{
-                              width: '72px',
-                              height: '38px',
-                              backgroundColor: '#ffffff',
-                              border: '1px solid #DCE1EA',
-                              borderRadius: '10px',
-                              fontSize: '17px',
-                              color: '#000000',
-                              padding: '0 8px',
-                              outline: 'none',
-                            }}
-                          />
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            {/* Radio-check with 1px border and center dot when checked */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleColisageItem(item);
+                              }}
+                              className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                              style={{
+                                border: isChecked
+                                  ? '1px solid #2e54ff'
+                                  : '1px solid #cbd5e1',
+                                backgroundColor: '#ffffff',
+                                padding: 0,
+                              }}
+                            >
+                              {isChecked && (
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full block"
+                                  style={{ backgroundColor: '#2e54ff' }}
+                                />
+                              )}
+                            </button>
+
+                            {/* Full Title (Format A or B) */}
+                            <span
+                              className="break-words"
+                              style={{
+                                fontSize: '17px',
+                                color: '#000000',
+                                lineHeight: 1.35,
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              }}
+                            >
+                              {item.title}
+                            </span>
+                          </div>
+
+                          {/* Short input field for volume */}
+                          <div
+                            className="shrink-0 flex items-center gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="number"
+                              min={0}
+                              value={volumeVal}
+                              onChange={(e) =>
+                                updateColisageItemVolume(item, e.target.value)
+                              }
+                              className="colisage-vol-input text-center"
+                              style={{
+                                width: '54px',
+                                height: '38px',
+                                backgroundColor: '#ffffff',
+                                border: '1px solid #DCE1EA',
+                                borderRadius: '10px',
+                                fontSize: '17px',
+                                color: '#000000',
+                                padding: '0 4px',
+                                textAlign: 'center',
+                                outline: 'none',
+                              }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })
-                )}
+                      );
+                    })}
               </div>
 
-              {/* Side-pane footer: 50% / 50% Fermer (red) & Enregistrer (blue), no total pieces count */}
+              {/* Side-pane floating footer: 50% / 50% Fermer (red) & Enregistrer (blue), transparent background */}
               <div
-                className="p-4 flex items-center gap-3 shrink-0"
-                style={{ backgroundColor: 'rgb(245, 247, 250)' }}
+                className="p-4 flex items-center gap-3"
+                style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  backgroundColor: 'transparent',
+                  background: 'transparent',
+                  pointerEvents: 'none',
+                }}
               >
                 <button
                   type="button"
@@ -1688,6 +1784,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                     ...smallRedButtonStyle,
                     flex: 1,
                     width: '50%',
+                    pointerEvents: 'auto',
                   }}
                 >
                   {t('Fermer')}
@@ -1699,6 +1796,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                     ...smallBlueButtonStyle,
                     flex: 1,
                     width: '50%',
+                    pointerEvents: 'auto',
                   }}
                 >
                   {t('Enregistrer')}

@@ -2436,141 +2436,270 @@ export default function StocksTab({
                   </select>
                 </div>
 
-                {/* Achats Fournisseurs Pill Button */}
+                {/* Achat(s) Fournisseur(s), Expédition(s) & Activité(s) Pill Buttons */}
                 {(() => {
+                  const isEligibleExpeditionStatus = (rawStatut?: string): boolean => {
+                    const norm = String(rawStatut || 'Aucune information')
+                      .trim()
+                      .toLowerCase()
+                      .replace(/\.$/, '')
+                      .normalize('NFD')
+                      .replace(/[\u0300-\u036f]/g, '');
+                    return (
+                      norm === '' ||
+                      norm === 'aucune information' ||
+                      norm === 'en attente' ||
+                      norm === 'preparation' ||
+                      norm === 'envoye'
+                    );
+                  };
+
+                  const eligibleExpeditionsList = (expeditions || []).filter(
+                    (exp) => exp && isEligibleExpeditionStatus(exp.statut)
+                  );
+
+                  const eligibleExpeditionKeys = new Set<string>();
+                  for (const exp of eligibleExpeditionsList) {
+                    const refKey = String(exp.reference || '').trim().toLowerCase();
+                    const idKey = String(exp.id || '').trim().toLowerCase();
+                    if (refKey) eligibleExpeditionKeys.add(refKey);
+                    if (idKey) eligibleExpeditionKeys.add(idKey);
+                  }
+
+                  const achatsEligibleCount = (achatsFournisseurs || []).filter((achat) => {
+                    if (!achat) return false;
+                    const linkedExp = String(achat.expedition || '').trim().toLowerCase();
+                    if (!linkedExp) return false;
+                    return eligibleExpeditionKeys.has(linkedExp);
+                  }).length;
+
+                  const expeditionsEligibleCount = eligibleExpeditionsList.length;
+
+                  const activeNotifCount = (logisticsNotifications || []).filter(
+                    (alert) => String(alert.statut || '').trim().toLowerCase() !== 'delete'
+                  ).length;
+
+                  const formatBadgeCount = (n: number): string => (n > 9 ? '9+' : String(Math.max(0, n)));
+
+                  const renderPastilleBadge = (
+                    count: number,
+                    svgUrl: string,
+                    textColor: string
+                  ) => {
+                    const badgeText = formatBadgeCount(count);
+                    return (
+                      <span
+                        style={{
+                          position: 'relative',
+                          width: '27px',
+                          height: '27px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <img
+                          src={svgUrl}
+                          alt=""
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                            display: 'block',
+                            pointerEvents: 'none',
+                          }}
+                          referrerPolicy="no-referrer"
+                        />
+                        <span
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: textColor,
+                            fontSize: badgeText.length > 1 ? '13px' : '15px',
+                            fontWeight: 500,
+                            lineHeight: 1,
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            pointerEvents: 'none',
+                          }}
+                        >
+                          {badgeText}
+                        </span>
+                      </span>
+                    );
+                  };
+
                   const hasAchatsFournisseursSpreadsheet = Boolean(
                     getTenantSpreadsheetUrl('spreadsheetAchatsFournisseurs', companyInfo)
                   );
-                  return (
-                    <button
-                      type="button"
-                      id="btn-achats-fournisseurs-stocks"
-                      disabled={!hasAchatsFournisseursSpreadsheet}
-                      onClick={() => {
-                        if (!hasAchatsFournisseursSpreadsheet) return;
-                        setClickedPill('achats-fournisseurs-stocks');
-                        setTimeout(() => setClickedPill((prev) => (prev === 'achats-fournisseurs-stocks' ? null : prev)), 480);
-                        setActiveStocksSubSidePane('achats-fournisseurs');
-                      }}
-                      className={`relative overflow-hidden transition-all select-none ${
-                        !hasAchatsFournisseursSpreadsheet
-                          ? 'cursor-not-allowed'
-                          : `hover:opacity-80 cursor-pointer ${clickedPill === 'achats-fournisseurs-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`
-                      }`}
-                      style={{
-                        position: 'relative',
-                        overflow: 'hidden',
-                        borderRadius: '1000px',
-                        padding: '8px 16px',
-                        fontSize: '18px',
-                        fontWeight: 100,
-                        cursor: !hasAchatsFournisseursSpreadsheet ? 'not-allowed' : 'pointer',
-                        opacity: !hasAchatsFournisseursSpreadsheet ? 0.45 : 1,
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        backgroundColor: 'rgb(230, 197, 255)',
-                        color: 'rgb(89, 22, 144)',
-                        border: 'none',
-                        boxShadow: 'none',
-                        transition: 'all 0.15s ease',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={t("Achats Fournisseurs")}
-                    >
-                      <span>{t("Achats Fournisseurs")}</span>
-                    </button>
-                  );
-                })()}
-
-                {/* Expéditions Pill Button */}
-                {(() => {
                   const hasExpeditionsSpreadsheet = Boolean(
                     getTenantSpreadsheetUrl('spreadsheetExpeditions', companyInfo)
                   );
-                  return (
-                    <button
-                      type="button"
-                      id="btn-expeditions-stocks"
-                      disabled={!hasExpeditionsSpreadsheet}
-                      onClick={() => {
-                        if (!hasExpeditionsSpreadsheet) return;
-                        setClickedPill('expeditions-stocks');
-                        setTimeout(() => setClickedPill((prev) => (prev === 'expeditions-stocks' ? null : prev)), 480);
-                        setActiveStocksSubSidePane('expeditions');
-                      }}
-                      className={`relative overflow-hidden transition-all select-none ${
-                        !hasExpeditionsSpreadsheet
-                          ? 'cursor-not-allowed'
-                          : `hover:opacity-80 cursor-pointer ${clickedPill === 'expeditions-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`
-                      }`}
-                      style={{
-                        position: 'relative',
-                        overflow: 'hidden',
-                        borderRadius: '1000px',
-                        padding: '8px 16px',
-                        fontSize: '18px',
-                        fontWeight: 100,
-                        cursor: !hasExpeditionsSpreadsheet ? 'not-allowed' : 'pointer',
-                        opacity: !hasExpeditionsSpreadsheet ? 0.45 : 1,
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        backgroundColor: 'rgb(247, 252, 192)',
-                        color: 'rgb(105, 114, 5)',
-                        border: 'none',
-                        boxShadow: 'none',
-                        transition: 'all 0.15s ease',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={t("Expéditions")}
-                    >
-                      <span>{t("Expéditions")}</span>
-                    </button>
-                  );
-                })()}
 
-                {/* Activité Pill Button */}
-                {(() => {
-                  const activeCount = (logisticsNotifications || []).filter(
-                    (alert) => String(alert.statut || '').trim().toLowerCase() !== 'delete'
-                  ).length;
-                  const labelText = activeCount >= 1 ? `${activeCount} ${t("activité(s)")}` : t("Activité");
                   return (
-                    <button
-                      type="button"
-                      id="btn-activity-notifications-stocks"
-                      onClick={() => {
-                        setClickedPill('activity-stocks');
-                        setTimeout(() => setClickedPill((prev) => (prev === 'activity-stocks' ? null : prev)), 480);
-                        setIsNotifDrawerOpen(true);
-                      }}
-                      className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill === 'activity-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`}
-                      style={{
-                        position: 'relative',
-                        overflow: 'hidden',
-                        borderRadius: '1000px',
-                        padding: '8px 16px',
-                        fontSize: '18px',
-                        fontWeight: 100,
-                        cursor: 'pointer',
-                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                        backgroundColor: 'rgb(255, 217, 239)',
-                        color: 'rgb(142, 25, 92)',
-                        border: 'none',
-                        boxShadow: 'none',
-                        transition: 'all 0.15s ease',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={labelText}
-                    >
-                      <span>{labelText}</span>
-                    </button>
+                    <>
+                      {/* Achat(s) Fournisseur(s) Pill Button */}
+                      <button
+                        type="button"
+                        id="btn-achats-fournisseurs-stocks"
+                        disabled={!hasAchatsFournisseursSpreadsheet}
+                        onClick={() => {
+                          if (!hasAchatsFournisseursSpreadsheet) return;
+                          setClickedPill('achats-fournisseurs-stocks');
+                          setTimeout(
+                            () =>
+                              setClickedPill((prev) =>
+                                prev === 'achats-fournisseurs-stocks' ? null : prev
+                              ),
+                            480
+                          );
+                          setActiveStocksSubSidePane('achats-fournisseurs');
+                        }}
+                        className={`relative overflow-hidden transition-all select-none ${
+                          !hasAchatsFournisseursSpreadsheet
+                            ? 'cursor-not-allowed'
+                            : `hover:opacity-80 cursor-pointer ${
+                                clickedPill === 'achats-fournisseurs-stocks'
+                                  ? 'sidebar-nav-click-shrink-wave'
+                                  : ''
+                              }`
+                        }`}
+                        style={{
+                          position: 'relative',
+                          overflow: 'hidden',
+                          borderRadius: '1000px',
+                          padding: '6px 16px 6px 9px',
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          cursor: !hasAchatsFournisseursSpreadsheet ? 'not-allowed' : 'pointer',
+                          opacity: !hasAchatsFournisseursSpreadsheet ? 0.45 : 1,
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          backgroundColor: '#ffd8ee',
+                          color: '#8e195c',
+                          border: 'none',
+                          boxShadow: 'none',
+                          transition: 'all 0.15s ease',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={t('Achat(s) Fournisseur(s)')}
+                      >
+                        {renderPastilleBadge(
+                          achatsEligibleCount,
+                          'https://civilprom.s3.eu-north-1.amazonaws.com/pastilleviolette.svg',
+                          '#f1b3ff'
+                        )}
+                        <span>{t('Achat(s) Fournisseur(s)')}</span>
+                      </button>
+
+                      {/* Expédition(s) Pill Button */}
+                      <button
+                        type="button"
+                        id="btn-expeditions-stocks"
+                        disabled={!hasExpeditionsSpreadsheet}
+                        onClick={() => {
+                          if (!hasExpeditionsSpreadsheet) return;
+                          setClickedPill('expeditions-stocks');
+                          setTimeout(
+                            () =>
+                              setClickedPill((prev) =>
+                                prev === 'expeditions-stocks' ? null : prev
+                              ),
+                            480
+                          );
+                          setActiveStocksSubSidePane('expeditions');
+                        }}
+                        className={`relative overflow-hidden transition-all select-none ${
+                          !hasExpeditionsSpreadsheet
+                            ? 'cursor-not-allowed'
+                            : `hover:opacity-80 cursor-pointer ${
+                                clickedPill === 'expeditions-stocks'
+                                  ? 'sidebar-nav-click-shrink-wave'
+                                  : ''
+                              }`
+                        }`}
+                        style={{
+                          position: 'relative',
+                          overflow: 'hidden',
+                          borderRadius: '1000px',
+                          padding: '6px 16px 6px 9px',
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          cursor: !hasExpeditionsSpreadsheet ? 'not-allowed' : 'pointer',
+                          opacity: !hasExpeditionsSpreadsheet ? 0.45 : 1,
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          backgroundColor: '#e1e1ff',
+                          color: '#0000ff',
+                          border: 'none',
+                          boxShadow: 'none',
+                          transition: 'all 0.15s ease',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={t('Expédition(s)')}
+                      >
+                        {renderPastilleBadge(
+                          expeditionsEligibleCount,
+                          'https://civilprom.s3.eu-north-1.amazonaws.com/pastillebleue.svg',
+                          '#05f0ff'
+                        )}
+                        <span>{t('Expédition(s)')}</span>
+                      </button>
+
+                      {/* Activité(s) Pill Button */}
+                      <button
+                        type="button"
+                        id="btn-activity-notifications-stocks"
+                        onClick={() => {
+                          setClickedPill('activity-stocks');
+                          setTimeout(
+                            () =>
+                              setClickedPill((prev) =>
+                                prev === 'activity-stocks' ? null : prev
+                              ),
+                            480
+                          );
+                          setIsNotifDrawerOpen(true);
+                        }}
+                        className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${
+                          clickedPill === 'activity-stocks' ? 'sidebar-nav-click-shrink-wave' : ''
+                        }`}
+                        style={{
+                          position: 'relative',
+                          overflow: 'hidden',
+                          borderRadius: '1000px',
+                          padding: '6px 16px 6px 9px',
+                          fontSize: '18px',
+                          fontWeight: 100,
+                          cursor: 'pointer',
+                          fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          backgroundColor: '#ffddd4',
+                          color: '#f63a08',
+                          border: 'none',
+                          boxShadow: 'none',
+                          transition: 'all 0.15s ease',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={t('Activité(s)')}
+                      >
+                        {renderPastilleBadge(
+                          activeNotifCount,
+                          'https://civilprom.s3.eu-north-1.amazonaws.com/pastilleorange.svg',
+                          '#ffd461'
+                        )}
+                        <span>{t('Activité(s)')}</span>
+                      </button>
+                    </>
                   );
                 })()}
 
@@ -4385,12 +4514,19 @@ export default function StocksTab({
                                     : 'Sélectionnez une expédition existante...'}
                                 </option>
                                 {eligibleExistingExpeditions.map((exp) => {
-                                  const refLabel = exp.reference || exp.id;
-                                  const statLabel = exp.statut || 'Aucune information';
-                                  const destLabel = exp.destinataire ? ` • ${exp.destinataire}` : '';
+                                  const expLabel = [
+                                    exp.reference || exp.id,
+                                    exp.contexte,
+                                    exp.expediteur,
+                                    exp.dateCreation,
+                                    exp.transporteur,
+                                  ]
+                                    .map((v) => String(v || '').trim())
+                                    .filter(Boolean)
+                                    .join(', ');
                                   return (
                                     <option key={exp.id} value={exp.id}>
-                                      {`${refLabel} (${statLabel})${destLabel}`}
+                                      {expLabel || exp.reference || exp.id}
                                     </option>
                                   );
                                 })}
@@ -4664,10 +4800,19 @@ export default function StocksTab({
                                               )}
                                             {eligibleSituationExpeditions.map((exp) => {
                                               const expKey = String(exp.reference || exp.id).trim();
+                                              const expLabel = [
+                                                exp.reference || exp.id,
+                                                exp.contexte,
+                                                exp.expediteur,
+                                                exp.dateCreation,
+                                                exp.transporteur,
+                                              ]
+                                                .map((v) => String(v || '').trim())
+                                                .filter(Boolean)
+                                                .join(', ');
                                               return (
                                                 <option key={exp.id || expKey} value={expKey}>
-                                                  {expKey} — {exp.statut || 'Aucune information'}
-                                                  {exp.destinataire ? ` (${exp.destinataire})` : ''}
+                                                  {expLabel || expKey}
                                                 </option>
                                               );
                                             })}

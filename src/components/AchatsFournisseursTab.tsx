@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AchatFournisseur, Variable, CompanyInfo, ExpeditionRecord, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { ShoppingBag, Eye, Trash2, Edit, Plus, FileText, Upload, Search, X } from 'lucide-react';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
@@ -60,6 +60,34 @@ export default function AchatsFournisseursTab({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [clickedPill, setClickedPill] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Table fit view ("Minimiser et ajuster l’affichage") state & refs
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [isTableFitView, setIsTableFitView] = useState<boolean>(false);
+  const [tableFitScale, setTableFitScale] = useState<number>(1);
+  const naturalTableWidthRef = useRef<number>(1300);
+
+  const toggleTableFitView = () => {
+    setIsTableFitView((prev) => {
+      const next = !prev;
+      if (next) {
+        if (tableContainerRef.current) {
+          const sWidth = tableContainerRef.current.scrollWidth;
+          if (sWidth > 500) {
+            naturalTableWidthRef.current = sWidth;
+          }
+          const clientW = tableContainerRef.current.clientWidth;
+          const naturalW = naturalTableWidthRef.current || 1300;
+          const scale = Math.min(1, Math.max(0.1, (clientW - 2) / naturalW));
+          setTableFitScale(scale);
+        }
+      } else {
+        setTableFitScale(1);
+      }
+      return next;
+    });
+  };
 
   const handleRefreshAchats = () => {
     if (isRefreshing) return;
@@ -317,7 +345,7 @@ export default function AchatsFournisseursTab({
     color: '#000000',
     whiteSpace: 'nowrap',
     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-    cursor: 'default',
+    cursor: 'pointer',
   };
 
   return (
@@ -478,7 +506,9 @@ export default function AchatsFournisseursTab({
                     value=""
                     onChange={(e) => {
                       const val = e.target.value;
-                      if (val === 'spreadsheet') {
+                      if (val === 'fit-view') {
+                        toggleTableFitView();
+                      } else if (val === 'spreadsheet') {
                         const url = getTenantSpreadsheetUrl('spreadsheetAchatsFournisseurs', companyInfo);
                         if (url) openTenantSpreadsheetUrl(url);
                       }
@@ -487,6 +517,9 @@ export default function AchatsFournisseursTab({
                     style={{ WebkitAppearance: 'menulist-button', appearance: 'auto', border: 'none', outline: 'none' }}
                   >
                     <option value="" disabled hidden></option>
+                    <option value="fit-view">
+                      {isTableFitView ? t("Retourner l’affichage standard") : t("Minimiser et ajuster l’affichage")}
+                    </option>
                     <option value="spreadsheet" disabled={!getTenantSpreadsheetUrl('spreadsheetAchatsFournisseurs', companyInfo)}>
                       {t("Ouvrir l’éditeur Spreadsheets")}
                     </option>
@@ -572,11 +605,26 @@ export default function AchatsFournisseursTab({
 
           {/* MAIN RECORDS TABLE */}
           <div className="bg-white overflow-hidden mt-6 rounded-none">
-            <div className="overflow-x-auto">
+            <div
+              ref={tableContainerRef}
+              className={isTableFitView ? 'overflow-x-hidden' : 'overflow-x-auto'}
+              style={isTableFitView ? { width: '100%', overflowX: 'hidden' } : undefined}
+            >
               <table
+                ref={tableRef}
                 className="w-full text-left font-sans border-collapse text-xs"
                 style={{
                   border: '0px solid transparent',
+                  ...(isTableFitView
+                    ? {
+                        zoom: tableFitScale,
+                        width: `${naturalTableWidthRef.current || 1300}px`,
+                        minWidth: `${naturalTableWidthRef.current || 1300}px`,
+                        transition: 'zoom 0.15s ease',
+                      }
+                    : {
+                        width: '100%',
+                      }),
                 }}
               >
                 <thead>
@@ -614,6 +662,7 @@ export default function AchatsFournisseursTab({
                         <tr
                           key={achat.id}
                           className="group hover:bg-[#f5f7fa] transition-all cursor-pointer"
+                          style={{ cursor: 'pointer' }}
                           onClick={(e) => {
                             if ((e.target as HTMLElement).closest('button, a, input, select, option')) return;
                             startEditAchat(achat);
@@ -854,11 +903,19 @@ export default function AchatsFournisseursTab({
                     )}
                   {(expeditions || []).map((exp) => {
                     const expKey = String(exp.reference || exp.id).trim();
+                    const expLabel = [
+                      exp.reference || exp.id,
+                      exp.contexte,
+                      exp.expediteur,
+                      exp.dateCreation,
+                      exp.transporteur,
+                    ]
+                      .map((v) => String(v || '').trim())
+                      .filter(Boolean)
+                      .join(', ');
                     return (
                       <option key={exp.id || expKey} value={expKey} style={{ color: '#000000' }}>
-                        {expKey}
-                        {exp.statut ? ` — ${exp.statut}` : ''}
-                        {exp.destinataire ? ` (${exp.destinataire})` : ''}
+                        {expLabel || expKey}
                       </option>
                     );
                   })}
