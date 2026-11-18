@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AchatFournisseur, Variable, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
+import { AchatFournisseur, Variable, CompanyInfo, ExpeditionRecord, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
 import { ShoppingBag, Eye, Trash2, Edit, Plus, FileText, Upload, Search, X } from 'lucide-react';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 import { t } from '../utils/translate';
@@ -9,6 +9,7 @@ interface AchatsFournisseursTabProps {
   achatsFournisseurs: AchatFournisseur[];
   saveAchatsFournisseurs: (updated: AchatFournisseur[]) => void;
   variables: Variable[];
+  expeditions?: ExpeditionRecord[];
   companyInfo?: Partial<CompanyInfo> | null;
   onClose?: () => void;
 }
@@ -17,6 +18,7 @@ export default function AchatsFournisseursTab({
   achatsFournisseurs,
   saveAchatsFournisseurs,
   variables,
+  expeditions = [],
   companyInfo,
   onClose,
 }: AchatsFournisseursTabProps) {
@@ -27,6 +29,7 @@ export default function AchatsFournisseursTab({
   const [reference, setReference] = useState('');
   const [orderReference, setOrderReference] = useState('');
   const [supplierId, setSupplierId] = useState('');
+  const [expedition, setExpedition] = useState('');
   const [comment, setComment] = useState('');
   const [pdfUrl, setPdfUrl] = useState<string | undefined>(undefined);
   const [pdfName, setPdfName] = useState<string | undefined>(undefined);
@@ -100,6 +103,7 @@ export default function AchatsFournisseursTab({
     setReference(nextRef);
     setOrderReference('');
     setSupplierId('');
+    setExpedition('');
     setComment('');
     setPdfUrl(undefined);
     setPdfName(undefined);
@@ -111,6 +115,7 @@ export default function AchatsFournisseursTab({
     setReference(achat.reference);
     setOrderReference(achat.orderReference || achat.orderRef || '');
     setSupplierId(achat.supplierId);
+    setExpedition(achat.expedition || '');
     setComment(achat.comment);
     setPdfUrl(achat.pdfUrl || achat.pdfDataUrl);
     setPdfName(achat.pdfName || achat.pdfFileName);
@@ -168,6 +173,7 @@ export default function AchatsFournisseursTab({
               orderRef: orderReference,
               supplierId,
               supplierName,
+              expedition: expedition || '',
               comment,
               pdfUrl,
               pdfDataUrl: pdfUrl,
@@ -185,6 +191,7 @@ export default function AchatsFournisseursTab({
         orderRef: orderReference,
         supplierId,
         supplierName,
+        expedition: expedition || '',
         comment,
         pdfUrl,
         pdfDataUrl: pdfUrl,
@@ -438,11 +445,9 @@ export default function AchatsFournisseursTab({
                     onClick={onClose}
                     style={{
                       ...customButtonStyle,
-                      backgroundColor: '#f5f7fa',
-                      color: '#000000',
+                      backgroundColor: 'rgb(210, 45, 11)',
+                      color: '#ffffff',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#dadada')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#f5f7fa')}
                   >
                     {t("Fermer")}
                   </button>
@@ -818,6 +823,47 @@ export default function AchatsFournisseursTab({
                   </select>
                 </div>
               )}
+            </div>
+
+            {/* Expédition Selection */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-bold text-slate-700 uppercase tracking-wider achats-label-style">
+                {t("Expédition.")}
+              </label>
+              <div className="relative">
+                <select
+                  value={expedition}
+                  onChange={(e) => setExpedition(e.target.value)}
+                  className={`w-full pr-10 cursor-pointer ${!expedition ? 'is-placeholder-select' : ''}`}
+                  style={{
+                    fontSize: '18px',
+                    borderColor: '#DCE1EA',
+                    color: expedition ? '#000000' : '#BECADB',
+                  }}
+                >
+                  <option value="" style={{ color: '#BECADB' }}>
+                    {t("Sélectionnez une expédition.")}
+                  </option>
+                  {expedition &&
+                    !(expeditions || []).some(
+                      (exp) => String(exp.reference || exp.id).trim() === expedition
+                    ) && (
+                      <option value={expedition} style={{ color: '#000000' }}>
+                        {expedition}
+                      </option>
+                    )}
+                  {(expeditions || []).map((exp) => {
+                    const expKey = String(exp.reference || exp.id).trim();
+                    return (
+                      <option key={exp.id || expKey} value={expKey} style={{ color: '#000000' }}>
+                        {expKey}
+                        {exp.statut ? ` — ${exp.statut}` : ''}
+                        {exp.destinataire ? ` (${exp.destinataire})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
             </div>
 
             {/* Comment */}

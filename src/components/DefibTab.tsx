@@ -4603,8 +4603,9 @@ export default function DefibTab({
     setProchaineMaintenance('');
     isProchaineMaintenanceCustomRef.current = false;
     setSortieFabricant('');
-    setCreationDefibeo('');
-    setDerniereModificationDefibeo('');
+    const todayIso = new Date().toISOString().split('T')[0];
+    setCreationDefibeo(todayIso);
+    setDerniereModificationDefibeo(todayIso);
 
     // Electrodes Mixed/Adult (A)
     setHasElectrodeASecours('Non');
@@ -5076,8 +5077,10 @@ export default function DefibTab({
       derniereMaintenance,
       prochaineMaintenance: prochaineMaintenance || (derniereMaintenance ? computeProchaineMaintenance(derniereMaintenance) : ''),
       sortieFabricant,
-      creationDefibeo,
-      derniereModificationDefibeo,
+      creationDefibeo: editingDefib
+        ? (creationDefibeo || toISODateOnly((editingDefib as any)?.creationDefibeo || '') || new Date().toISOString().split('T')[0])
+        : (creationDefibeo || new Date().toISOString().split('T')[0]),
+      derniereModificationDefibeo: new Date().toISOString().split('T')[0],
 
       modeleElectrodeAId,
       modeleElectrodeA: resolvedElecALabel,
@@ -8989,8 +8992,10 @@ export default function DefibTab({
                         <SafeDateInput
                           id="form-creation-defibeo"
                           value={creationDefibeo}
+                          disabled
+                          readOnly
                           onChange={(e) => setCreationDefibeo(e.target.value)}
-                          className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs bg-white text-slate-700"
+                          className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs bg-slate-100 text-slate-500 cursor-not-allowed opacity-75"
                         />
                       </div>
 
@@ -8999,8 +9004,10 @@ export default function DefibTab({
                         <SafeDateInput
                           id="form-derniere-modif-defibeo"
                           value={derniereModificationDefibeo}
+                          disabled
+                          readOnly
                           onChange={(e) => setDerniereModificationDefibeo(e.target.value)}
-                          className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs bg-white text-slate-700"
+                          className="w-full px-2.5 py-1 border border-slate-200 rounded text-xs bg-slate-100 text-slate-500 cursor-not-allowed opacity-75"
                         />
                       </div>
                     </div>

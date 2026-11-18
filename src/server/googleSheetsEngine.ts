@@ -1957,6 +1957,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Date', field: 'date', aliases: ['date', 'datedecommande', 'datecommande', 'dateachat', 'createdat'], type: 'date' },
     { header: 'Fichier de la commande (PDF)', field: 'pdfFileName', aliases: ['fichierdelacommandepdf', 'fichiercommande', 'fichierpdf', 'nomdufichier', 'pdffilename', 'document'] },
     { header: 'URL du fichier', field: 'pdfDataUrl', aliases: ['urldufichier', 'urlfichier', 'lienpdf', 'pdfdataurl', 'urlpdf', 'fichierurl', 'lien'] },
+    { header: 'Expedition.', field: 'expedition', aliases: ['expedition', 'expeditions', 'refexpedition', 'referenceexpedition'] },
   ],
   expeditions: [
     { header: 'Référence.', field: 'reference', aliases: ['reference', 'ref', 'refexpedition', 'referenceexpedition'] },
@@ -5277,6 +5278,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.pdfName = merged.pdfName || merged.pdfFileName || '';
     merged.pdfDataUrl = merged.pdfDataUrl || merged.pdfUrl || '';
     merged.pdfUrl = merged.pdfUrl || merged.pdfDataUrl || '';
+    merged.expedition = merged.expedition || '';
   } else if (tabType === 'expeditions') {
     merged.id = merged.id || merged.reference || merged.numeroSuivi || `exp_${rowIndexZeroBased + 2}`;
     merged.reference = merged.reference || '';
@@ -8351,6 +8353,7 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.date = enriched.date || enriched.dateStr || '';
     enriched.pdfFileName = enriched.pdfFileName || enriched.pdfName || '';
     enriched.pdfDataUrl = enriched.pdfDataUrl || enriched.pdfUrl || '';
+    enriched.expedition = enriched.expedition || '';
   } else if (tabType === 'expeditions') {
     enriched.id = enriched.id || enriched.reference || '';
     enriched.reference = enriched.reference || '';

@@ -28045,6 +28045,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
               achatsFournisseurs={achatsFournisseurs}
               saveAchatsFournisseurs={saveAchatsFournisseurs}
               variables={variables}
+              expeditions={expeditions}
               companyInfo={companyInfo}
             />
           )}
@@ -28478,7 +28479,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       )}
 
       {/* Floating Active Sessions Bar (Bottom-Right, Top Level, Logiciel Principal) */}
-      {isLoggedIn && !isPublicPortalOpen && !isClientPortalOpen && displayedOtherSessions.length > 0 && (() => {
+      {isLoggedIn && !isPublicPortalOpen && !isClientPortalOpen && !(showEnvLoading || !isFirebaseLoaded || minEnvLoading) && displayedOtherSessions.length > 0 && (() => {
         const OTHER_MEMBER_ICON_SLOTS = [
           {
             iconUrl: 'https://civilprom.s3.eu-north-1.amazonaws.com/defibeoonlineuserpurple.svg',
@@ -28495,7 +28496,12 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
         ];
         const visibleIcons = displayedOtherSessions.slice(0, 3);
         const otherCount = displayedOtherSessions.length;
-        const showExtraMouseHelp = otherCount >= 4 && presenceBarMousePos !== null;
+        const isBarHovered = presenceBarMousePos !== null;
+        const showExtraMouseHelp = otherCount >= 4 && isBarHovered;
+        const trailingHoverLabel =
+          otherCount >= 4
+            ? `+ ${otherCount - 3} autre(s) membre(s) connecté(s)`
+            : 'membre(s) connecté(s)';
 
         return (
           <>
@@ -28506,9 +28512,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                 setPresenceBarMousePos({ x: e.clientX, y: e.clientY });
               }}
               onMouseMove={(e) => {
-                if (otherCount >= 4) {
-                  setPresenceBarMousePos({ x: e.clientX, y: e.clientY });
-                }
+                setPresenceBarMousePos({ x: e.clientX, y: e.clientY });
               }}
               onMouseLeave={() => {
                 setHoveredPresenceIconIdx(null);
@@ -28525,6 +28529,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                 fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                 fontSize: '18px',
                 lineHeight: 1.2,
+                transition: 'padding 0.28s cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             >
               {/* Fixed "Vous" icon + label */}
@@ -28557,7 +28562,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                       key={sess.sessionId || `other-mem-${idx}`}
                       onMouseEnter={() => setHoveredPresenceIconIdx(idx)}
                       onMouseLeave={() => setHoveredPresenceIconIdx((prev) => (prev === idx ? null : prev))}
-                      className="sidebar-nav-item-bounce inline-flex items-center gap-2 shrink-0 cursor-default whitespace-nowrap"
+                      className="sidebar-nav-item-bounce inline-flex items-center shrink-0 cursor-default whitespace-nowrap"
                     >
                       <img
                         src={slot.iconUrl}
@@ -28565,36 +28570,45 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                         className="sidebar-nav-icon-bounce w-[26px] h-[26px] object-contain shrink-0 select-none"
                         referrerPolicy="no-referrer"
                       />
-                      {isHovered && (
-                        <span
-                          key={`hover-name-${sess.sessionId}-${idx}`}
-                          className="login-greeting-bump whitespace-nowrap"
-                          style={{
-                            color: slot.textColor,
-                            fontSize: '18px',
-                            fontWeight: 400,
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {sess.displayName}
-                        </span>
-                      )}
+                      <span
+                        className="overflow-hidden inline-flex items-center whitespace-nowrap"
+                        style={{
+                          color: slot.textColor,
+                          fontSize: '18px',
+                          fontWeight: 400,
+                          whiteSpace: 'nowrap',
+                          maxWidth: isHovered ? '240px' : '0px',
+                          opacity: isHovered ? 1 : 0,
+                          marginLeft: isHovered ? '8px' : '0px',
+                          transform: isHovered ? 'translateX(0px) scale(1)' : 'translateX(-4px) scale(0.95)',
+                          transition:
+                            'max-width 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease, margin-left 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                        }}
+                      >
+                        {sess.displayName}
+                      </span>
                     </div>
                   );
                 })}
               </div>
 
-              {/* +n autre(s) membre(s) connecté(s) */}
+              {/* Trailing status phrase: hidden initially, revealed smoothly on hover over the bar */}
               <span
-                className="shrink-0 whitespace-nowrap"
+                className="overflow-hidden inline-flex items-center shrink-0 whitespace-nowrap"
                 style={{
                   color: '#000000',
                   fontSize: '18px',
                   fontWeight: 400,
                   whiteSpace: 'nowrap',
+                  maxWidth: isBarHovered ? '340px' : '0px',
+                  opacity: isBarHovered ? 1 : 0,
+                  marginLeft: isBarHovered ? '0px' : '-10px',
+                  transform: isBarHovered ? 'translateX(0px) scale(1)' : 'translateX(-4px) scale(0.96)',
+                  transition:
+                    'max-width 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease, margin-left 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
                 }}
               >
-                {`+${otherCount} autre(s) membre(s) connecté(s)`}
+                {trailingHoverLabel}
               </span>
             </div>
 

@@ -766,7 +766,7 @@ export interface StockTraceability {
   lotOrSerial: string;
   expirationDate?: string;
   volume: number; // always 1
-  situation: 'Disponible' | 'Utilisé' | 'Indisponible' | 'Signalé Manquant' | 'Signalé manquant' | 'Prêté' | 'Expédié' | 'Aucune information';
+  situation: 'Disponible' | 'Utilisé' | 'Indisponible' | 'Signalé Manquant' | 'Signalé manquant' | 'Prêté' | 'Expédié' | 'Aucune information' | string;
   emplacement?: string;
   comment?: string;
   bonCommande?: string;
@@ -992,6 +992,7 @@ export interface AchatFournisseur {
   pdfFileName?: string; // alias for Spreadsheet column 'Fichier de la commande (PDF)'
   dateStr: string; // date of order
   date?: string;
+  expedition?: string; // linked expedition from EXPÉDITIONS (Spreadsheet column 'Expedition.')
 }
 
 export interface AppNotification {

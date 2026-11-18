@@ -398,6 +398,8 @@ export default function StocksTab({
 
   // New States for Selected Traceabilities Distribution Form
   const [selectedTraceIds, setSelectedTraceIds] = useState<string[]>([]);
+  const [selectedTraceRowKeys, setSelectedTraceRowKeys] = useState<string[]>([]);
+  const [showTraceExistingExpeditionDropdown, setShowTraceExistingExpeditionDropdown] = useState<boolean>(false);
   const [distribEmplacement, setDistribEmplacement] = useState<string>('');
   const [distribDate, setDistribDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [distribSuiviColis, setDistribSuiviColis] = useState<string>('');
@@ -1294,6 +1296,14 @@ export default function StocksTab({
     if (!targetLoc) return true;
     const resolved = resolveStockTraceLocation(trace, stockMouvements);
     if (resolved === targetLoc) return true;
+    if (
+      targetLoc === 'Client' &&
+      (resolved === 'Client' ||
+        resolved.startsWith('Client - ') ||
+        resolved.startsWith('Client : '))
+    ) {
+      return true;
+    }
     const customName = getLocationCustomName(targetLoc);
     if (customName && resolved.toLowerCase() === customName.trim().toLowerCase()) return true;
     const fullLabel = getEmplacementFormattedLabel(targetLoc);
@@ -1735,6 +1745,8 @@ export default function StocksTab({
 
     // Reset selection and distribution states
     setSelectedTraceIds([]);
+    setSelectedTraceRowKeys([]);
+    setShowTraceExistingExpeditionDropdown(false);
     setDistribEmplacement('');
     setDistribSuiviColis('');
     setDistribStatut('Préparation');
@@ -1782,6 +1794,8 @@ export default function StocksTab({
       
       // Reset selection and distribution states
       setSelectedTraceIds([]);
+      setSelectedTraceRowKeys([]);
+      setShowTraceExistingExpeditionDropdown(false);
       setDistribEmplacement('');
       setDistribSuiviColis('');
       setDistribStatut('Préparation');
@@ -2423,72 +2437,100 @@ export default function StocksTab({
                 </div>
 
                 {/* Achats Fournisseurs Pill Button */}
-                <button
-                  type="button"
-                  id="btn-achats-fournisseurs-stocks"
-                  onClick={() => {
-                    setClickedPill('achats-fournisseurs-stocks');
-                    setTimeout(() => setClickedPill((prev) => (prev === 'achats-fournisseurs-stocks' ? null : prev)), 480);
-                    setActiveStocksSubSidePane('achats-fournisseurs');
-                  }}
-                  className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill === 'achats-fournisseurs-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`}
-                  style={{
-                    position: 'relative',
-                    overflow: 'hidden',
-                    borderRadius: '1000px',
-                    padding: '8px 16px',
-                    fontSize: '18px',
-                    fontWeight: 100,
-                    cursor: 'pointer',
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: 'rgb(230, 197, 255)',
-                    color: 'rgb(89, 22, 144)',
-                    border: 'none',
-                    boxShadow: 'none',
-                    transition: 'all 0.15s ease',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    whiteSpace: 'nowrap',
-                  }}
-                  title={t("Achats Fournisseurs")}
-                >
-                  <span>{t("Achats Fournisseurs")}</span>
-                </button>
+                {(() => {
+                  const hasAchatsFournisseursSpreadsheet = Boolean(
+                    getTenantSpreadsheetUrl('spreadsheetAchatsFournisseurs', companyInfo)
+                  );
+                  return (
+                    <button
+                      type="button"
+                      id="btn-achats-fournisseurs-stocks"
+                      disabled={!hasAchatsFournisseursSpreadsheet}
+                      onClick={() => {
+                        if (!hasAchatsFournisseursSpreadsheet) return;
+                        setClickedPill('achats-fournisseurs-stocks');
+                        setTimeout(() => setClickedPill((prev) => (prev === 'achats-fournisseurs-stocks' ? null : prev)), 480);
+                        setActiveStocksSubSidePane('achats-fournisseurs');
+                      }}
+                      className={`relative overflow-hidden transition-all select-none ${
+                        !hasAchatsFournisseursSpreadsheet
+                          ? 'cursor-not-allowed'
+                          : `hover:opacity-80 cursor-pointer ${clickedPill === 'achats-fournisseurs-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`
+                      }`}
+                      style={{
+                        position: 'relative',
+                        overflow: 'hidden',
+                        borderRadius: '1000px',
+                        padding: '8px 16px',
+                        fontSize: '18px',
+                        fontWeight: 100,
+                        cursor: !hasAchatsFournisseursSpreadsheet ? 'not-allowed' : 'pointer',
+                        opacity: !hasAchatsFournisseursSpreadsheet ? 0.45 : 1,
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        backgroundColor: 'rgb(230, 197, 255)',
+                        color: 'rgb(89, 22, 144)',
+                        border: 'none',
+                        boxShadow: 'none',
+                        transition: 'all 0.15s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={t("Achats Fournisseurs")}
+                    >
+                      <span>{t("Achats Fournisseurs")}</span>
+                    </button>
+                  );
+                })()}
 
                 {/* Expéditions Pill Button */}
-                <button
-                  type="button"
-                  id="btn-expeditions-stocks"
-                  onClick={() => {
-                    setClickedPill('expeditions-stocks');
-                    setTimeout(() => setClickedPill((prev) => (prev === 'expeditions-stocks' ? null : prev)), 480);
-                    setActiveStocksSubSidePane('expeditions');
-                  }}
-                  className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${clickedPill === 'expeditions-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`}
-                  style={{
-                    position: 'relative',
-                    overflow: 'hidden',
-                    borderRadius: '1000px',
-                    padding: '8px 16px',
-                    fontSize: '18px',
-                    fontWeight: 100,
-                    cursor: 'pointer',
-                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                    backgroundColor: 'rgb(247, 252, 192)',
-                    color: 'rgb(105, 114, 5)',
-                    border: 'none',
-                    boxShadow: 'none',
-                    transition: 'all 0.15s ease',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    whiteSpace: 'nowrap',
-                  }}
-                  title={t("Expéditions")}
-                >
-                  <span>{t("Expéditions")}</span>
-                </button>
+                {(() => {
+                  const hasExpeditionsSpreadsheet = Boolean(
+                    getTenantSpreadsheetUrl('spreadsheetExpeditions', companyInfo)
+                  );
+                  return (
+                    <button
+                      type="button"
+                      id="btn-expeditions-stocks"
+                      disabled={!hasExpeditionsSpreadsheet}
+                      onClick={() => {
+                        if (!hasExpeditionsSpreadsheet) return;
+                        setClickedPill('expeditions-stocks');
+                        setTimeout(() => setClickedPill((prev) => (prev === 'expeditions-stocks' ? null : prev)), 480);
+                        setActiveStocksSubSidePane('expeditions');
+                      }}
+                      className={`relative overflow-hidden transition-all select-none ${
+                        !hasExpeditionsSpreadsheet
+                          ? 'cursor-not-allowed'
+                          : `hover:opacity-80 cursor-pointer ${clickedPill === 'expeditions-stocks' ? 'sidebar-nav-click-shrink-wave' : ''}`
+                      }`}
+                      style={{
+                        position: 'relative',
+                        overflow: 'hidden',
+                        borderRadius: '1000px',
+                        padding: '8px 16px',
+                        fontSize: '18px',
+                        fontWeight: 100,
+                        cursor: !hasExpeditionsSpreadsheet ? 'not-allowed' : 'pointer',
+                        opacity: !hasExpeditionsSpreadsheet ? 0.45 : 1,
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        backgroundColor: 'rgb(247, 252, 192)',
+                        color: 'rgb(105, 114, 5)',
+                        border: 'none',
+                        boxShadow: 'none',
+                        transition: 'all 0.15s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={t("Expéditions")}
+                    >
+                      <span>{t("Expéditions")}</span>
+                    </button>
+                  );
+                })()}
 
                 {/* Activité Pill Button */}
                 {(() => {
@@ -3914,11 +3956,31 @@ export default function StocksTab({
                 {traceabilityEnabled && (() => {
                   const ALL_LOCATIONS = [
                     'Centrale des stocks',
+                    'Client',
                     'Entrepôt A', 'Entrepôt B', 'Entrepôt C', 'Entrepôt D', 'Entrepôt E',
                     'Entrepôt F', 'Entrepôt G', 'Entrepôt H', 'Entrepôt I', 'Entrepôt J',
                     'Véhicule A', 'Véhicule B', 'Véhicule C', 'Véhicule D', 'Véhicule E',
                     'Véhicule F', 'Véhicule G', 'Véhicule H', 'Véhicule I', 'Véhicule J'
                   ];
+
+                  const sortedClientOptions = Array.from(
+                    new Set(
+                      (clients || [])
+                        .map((c) => String(c.denomination || (c as any).nomSite || c.id || '').trim())
+                        .filter(Boolean)
+                    )
+                  ).sort((a, b) => a.localeCompare(b, 'fr'));
+
+                  const eligibleSituationExpeditions = (expeditions || []).filter((exp) => {
+                    const st = String(exp.statut || 'Aucune information').trim().toLowerCase();
+                    return (
+                      st !== 'réceptionné' &&
+                      st !== 'receptionne' &&
+                      st !== 'réceptionné.' &&
+                      st !== 'incident' &&
+                      st !== 'incident.'
+                    );
+                  });
 
                   const sanitizePipe = (val: any) => String(val ?? '').replace(/[|;]/g, ' ').trim();
                   const serializedPlaintext = traceabilities
@@ -3953,6 +4015,238 @@ export default function StocksTab({
                     setTraceabilities([...traceabilities, newItem]);
                   };
 
+                  const activeSelectedTraceIndices = traceabilities
+                    .map((tr, i) => ({ key: tr.id || `idx_${i}`, idx: i }))
+                    .filter((entry) => selectedTraceRowKeys.includes(entry.key))
+                    .map((entry) => entry.idx);
+
+                  const toggleSelectTraceRow = (rowKey: string) => {
+                    setSelectedTraceRowKeys((prev) => {
+                      const next = prev.includes(rowKey)
+                        ? prev.filter((k) => k !== rowKey)
+                        : [...prev, rowKey];
+                      if (next.length === 0) {
+                        setShowTraceExistingExpeditionDropdown(false);
+                      }
+                      return next;
+                    });
+                  };
+
+                  const formatCleanNum = (num: number): string => {
+                    if (!Number.isFinite(num) || num <= 0) return '0';
+                    const rounded = Math.round(num * 100) / 100;
+                    return Number.isInteger(rounded)
+                      ? String(rounded)
+                      : rounded.toFixed(2).replace(/\.?0+$/, '');
+                  };
+
+                  const buildSelectedTraceColisageData = () => {
+                    const currentStockRecord = editingStockId
+                      ? stocks.find((s) => s.id === editingStockId)
+                      : undefined;
+                    const ugsVal = String(
+                      newUgs || currentStockRecord?.ugs || editingStockId || 'SANS-UGS'
+                    ).trim();
+                    const matchedVar = (variables || []).find(
+                      (v) =>
+                        v.id === newDenomStr ||
+                        String(v.nom || '').trim().toLowerCase() ===
+                          String(newDenomStr || '').trim().toLowerCase()
+                    );
+                    const pieceTitle = String(
+                      matchedVar?.nom || newDenomStr || 'Pièce sans titre'
+                    ).trim();
+                    const unitWeightKg =
+                      parseFloat(String(newPoidsNet ?? currentStockRecord?.poidsNet ?? '0').replace(',', '.')) || 0;
+                    const unitTransportCostEur =
+                      parseFloat(
+                        String(
+                          newFraisFixeCoutTransport ??
+                            currentStockRecord?.fraisFixeCoutTransport ??
+                            '0'
+                        ).replace(',', '.')
+                      ) || 0;
+
+                    let addedVolume = 0;
+                    let addedWeightKg = 0;
+                    let addedTransportCostEur = 0;
+                    const parts: string[] = [];
+
+                    for (const idx of activeSelectedTraceIndices) {
+                      const tr = traceabilities[idx];
+                      if (!tr) continue;
+                      const emp = String(tr.emplacement || 'Centrale des stocks').trim();
+                      const lot = String(
+                        tr.lotOrSerial || (tr as any).lotNumber || 'Non renseigné'
+                      ).trim();
+                      const vol =
+                        tr.volume !== undefined && Number(tr.volume) > 0
+                          ? Number(tr.volume)
+                          : 1;
+                      const title = `${ugsVal} - ${pieceTitle} - Emplacement: ${emp} - Lot/Série: ${lot}`;
+                      parts.push(`[Qté: ${vol}] ${title}`);
+                      addedVolume += vol;
+                      addedWeightKg += unitWeightKg * vol;
+                      addedTransportCostEur += unitTransportCostEur * vol;
+                    }
+
+                    return {
+                      serializedString: parts.join(' | '),
+                      parts,
+                      addedVolume,
+                      addedWeightKg,
+                      addedTransportCostEur,
+                    };
+                  };
+
+                  const markSelectedTracesAsExpedieAndPersist = (linkedExpRef?: string) => {
+                    const selectedSet = new Set(activeSelectedTraceIndices);
+                    const newSitVal = linkedExpRef ? `Expédié - ${linkedExpRef}` : 'Expédié';
+                    const updatedTraceabilities = traceabilities.map((tr, i) =>
+                      selectedSet.has(i) ? { ...tr, situation: newSitVal } : tr
+                    );
+                    setTraceabilities(updatedTraceabilities);
+
+                    if (editingStockId) {
+                      const updatedStocksList = stocks.map((st) => {
+                        if (st.id !== editingStockId) return st;
+                        const dispoQty = updatedTraceabilities
+                          .filter(
+                            (t) =>
+                              (t.situation || 'Disponible') === 'Disponible' &&
+                              (!t.emplacement || t.emplacement === 'Centrale des stocks')
+                          )
+                          .reduce(
+                            (sum, t) => sum + (t.volume !== undefined ? Number(t.volume) : 1),
+                            0
+                          );
+                        return {
+                          ...st,
+                          quantite: dispoQty,
+                          traceabilities: updatedTraceabilities,
+                        };
+                      });
+                      saveStocks(updatedStocksList);
+                    }
+                  };
+
+                  const handleCreateNewExpeditionFromTraces = () => {
+                    if (activeSelectedTraceIndices.length === 0 || !saveExpeditions) return;
+                    const colisageData = buildSelectedTraceColisageData();
+                    markSelectedTracesAsExpedieAndPersist('Expédition Brouillon');
+
+                    const nowStr = new Date().toLocaleDateString('fr-FR');
+                    const newExp: ExpeditionRecord = {
+                      id: `EXP-${Date.now()}`,
+                      reference: 'Expédition Brouillon',
+                      contexte: '',
+                      expediteur: '',
+                      destinataire: '',
+                      transporteur: '',
+                      numeroSuivi: '',
+                      codePostalDestinataire: '',
+                      commentaire: '',
+                      statut: 'Aucune information',
+                      dateCreation: nowStr,
+                      dateActualise: nowStr,
+                      preparateur: '',
+                      colisagePieces: colisageData.serializedString,
+                      poidsKgEstim: formatCleanNum(colisageData.addedWeightKg),
+                      coutTransportEstim: formatCleanNum(colisageData.addedTransportCostEur),
+                      nombrePieces: String(colisageData.addedVolume),
+                    };
+
+                    saveExpeditions([newExp, ...(expeditions || [])]);
+                    setSelectedTraceRowKeys([]);
+                    setShowTraceExistingExpeditionDropdown(false);
+                  };
+
+                  const handleAddTracesToExistingExpedition = (targetExpId: string) => {
+                    if (!targetExpId || activeSelectedTraceIndices.length === 0 || !saveExpeditions) return;
+                    const colisageData = buildSelectedTraceColisageData();
+                    const matchedTargetExp = (expeditions || []).find((e) => e.id === targetExpId);
+                    const linkedRef = matchedTargetExp
+                      ? String(matchedTargetExp.reference || matchedTargetExp.id).trim()
+                      : '';
+                    markSelectedTracesAsExpedieAndPersist(linkedRef);
+
+                    const nowStr = new Date().toLocaleDateString('fr-FR');
+                    const updatedExpeditions = (expeditions || []).map((exp) => {
+                      if (exp.id !== targetExpId) return exp;
+                      const existingColisage = String(exp.colisagePieces || '').trim();
+                      const existingSegments = existingColisage
+                        ? existingColisage
+                            .split(/\s*\|\s*|\r?\n/)
+                            .map((s) => s.trim())
+                            .filter(Boolean)
+                        : [];
+                      const mergedSegments = [...existingSegments];
+                      let newlyAddedVol = 0;
+                      let newlyAddedWeight = 0;
+                      let newlyAddedCost = 0;
+
+                      const currentStockRecord = editingStockId
+                        ? stocks.find((s) => s.id === editingStockId)
+                        : undefined;
+                      const unitWeightKg =
+                        parseFloat(String(newPoidsNet ?? currentStockRecord?.poidsNet ?? '0').replace(',', '.')) || 0;
+                      const unitTransportCostEur =
+                        parseFloat(
+                          String(
+                            newFraisFixeCoutTransport ??
+                              currentStockRecord?.fraisFixeCoutTransport ??
+                              '0'
+                          ).replace(',', '.')
+                        ) || 0;
+
+                      colisageData.parts.forEach((part) => {
+                        const alreadyExists = mergedSegments.some(
+                          (seg) => seg.toLowerCase() === part.toLowerCase()
+                        );
+                        if (!alreadyExists) {
+                          mergedSegments.push(part);
+                          const m = part.match(/^\[Qté:\s*(\d+(?:[.,]\d+)?)\]/i);
+                          const v = m ? parseFloat(m[1].replace(',', '.')) || 1 : 1;
+                          newlyAddedVol += v;
+                          newlyAddedWeight += unitWeightKg * v;
+                          newlyAddedCost += unitTransportCostEur * v;
+                        }
+                      });
+
+                      const prevPieces =
+                        parseFloat(String(exp.nombrePieces || '0').replace(',', '.')) || 0;
+                      const prevWeight =
+                        parseFloat(String(exp.poidsKgEstim || '0').replace(',', '.')) || 0;
+                      const prevCost =
+                        parseFloat(String(exp.coutTransportEstim || '0').replace(',', '.')) || 0;
+
+                      return {
+                        ...exp,
+                        colisagePieces: mergedSegments.join(' | '),
+                        nombrePieces: String(prevPieces + newlyAddedVol),
+                        poidsKgEstim: formatCleanNum(prevWeight + newlyAddedWeight),
+                        coutTransportEstim: formatCleanNum(prevCost + newlyAddedCost),
+                        dateActualise: nowStr,
+                      };
+                    });
+
+                    saveExpeditions(updatedExpeditions);
+                    setSelectedTraceRowKeys([]);
+                    setShowTraceExistingExpeditionDropdown(false);
+                  };
+
+                  const eligibleExistingExpeditions = (expeditions || []).filter((exp) => {
+                    const st = String(exp.statut || 'Aucune information').trim().toLowerCase();
+                    return (
+                      st === '' ||
+                      st === 'aucune information' ||
+                      st === 'aucune information.' ||
+                      st === 'en attente' ||
+                      st === 'préparation' ||
+                      st === 'preparation'
+                    );
+                  });
+
                   return (
                     <div className="flex flex-col gap-4 mt-2">
                       <div className="flex items-center justify-between flex-wrap gap-2 w-full">
@@ -3978,11 +4272,140 @@ export default function StocksTab({
                         </button>
                       </div>
 
+                      {/* Barre d'action Expédition affichée quand au moins 1 item de traçabilité est sélectionné */}
+                      {activeSelectedTraceIndices.length >= 1 && (
+                        <div
+                          id="traceability-selection-expedition-bar"
+                          className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-white"
+                          style={{ border: 'none' }}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '9999px',
+                                backgroundColor: '#2e54ff',
+                                color: '#ffffff',
+                                fontSize: '15px',
+                                fontWeight: 600,
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              }}
+                            >
+                              {activeSelectedTraceIndices.length}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '18px',
+                                color: '#000000',
+                                fontWeight: 100,
+                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                              }}
+                            >
+                              Sélectionné(s)
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            {/* Bouton Expédition avec dropdown system (Nouvelle Expédition / Expédition Existante) */}
+                            <div className="relative inline-flex">
+                              <button
+                                type="button"
+                                style={{
+                                  backgroundColor: '#0f172a',
+                                  color: '#ffffff',
+                                  padding: '9px 19px',
+                                  fontSize: '18px',
+                                  borderRadius: '13px',
+                                  border: 'none',
+                                  boxShadow: 'none',
+                                  cursor: 'pointer',
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                }}
+                              >
+                                Expédition
+                              </button>
+                              <select
+                                id="traceability-expedition-mode-select"
+                                aria-label="Expédition"
+                                value=""
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === 'new') {
+                                    setShowTraceExistingExpeditionDropdown(false);
+                                    handleCreateNewExpeditionFromTraces();
+                                  } else if (val === 'existing') {
+                                    setShowTraceExistingExpeditionDropdown(true);
+                                  }
+                                }}
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                                style={{
+                                  WebkitAppearance: 'menulist-button',
+                                  appearance: 'auto',
+                                  border: 'none',
+                                  outline: 'none',
+                                }}
+                              >
+                                <option value="" disabled>
+                                  —
+                                </option>
+                                <option value="new">Nouvelle Expédition</option>
+                                <option value="existing">Expédition Existante</option>
+                              </select>
+                            </div>
+
+                            {/* Dropdown system des expéditions existantes (Aucune information, En attente, Préparation) */}
+                            {showTraceExistingExpeditionDropdown && (
+                              <select
+                                id="traceability-existing-expedition-select"
+                                value=""
+                                onChange={(e) => {
+                                  const targetId = e.target.value;
+                                  if (targetId) {
+                                    handleAddTracesToExistingExpedition(targetId);
+                                  }
+                                }}
+                                style={{
+                                  padding: '9px 16px',
+                                  borderRadius: '13px',
+                                  border: '1px solid #DCE1EA',
+                                  backgroundColor: '#ffffff',
+                                  color: '#000000',
+                                  fontSize: '18px',
+                                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                <option value="">
+                                  {eligibleExistingExpeditions.length === 0
+                                    ? 'Aucune expédition éligible'
+                                    : 'Sélectionnez une expédition existante...'}
+                                </option>
+                                {eligibleExistingExpeditions.map((exp) => {
+                                  const refLabel = exp.reference || exp.id;
+                                  const statLabel = exp.statut || 'Aucune information';
+                                  const destLabel = exp.destinataire ? ` • ${exp.destinataire}` : '';
+                                  return (
+                                    <option key={exp.id} value={exp.id}>
+                                      {`${refLabel} (${statLabel})${destLabel}`}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       {traceabilities.length > 0 && (
                         <div className="flex flex-col gap-3">
                           {traceabilities.map((trace, idx) => {
                             const currentLot = (trace.lotOrSerial || '').trim();
                             const savedKey = trace.id || `idx_${idx}`;
+                            const isTraceRowSelected = selectedTraceRowKeys.includes(savedKey);
                             const savedFromState = savedTraceLots[savedKey];
                             const savedStockRecord = editingStockId
                               ? stocks.find((s) => s.id === editingStockId)
@@ -3999,45 +4422,134 @@ export default function StocksTab({
                             return (
                               <div
                                 key={trace.id || idx}
-                                className="grid grid-cols-3 gap-5 p-4 rounded-xl bg-white"
+                                className="flex items-center gap-4 p-4 rounded-xl bg-white"
                                 style={{ border: 'none' }}
                               >
-                                {/* 1. Emplacement. */}
+                                {/* Check-radio pour sélectionner l'item */}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSelectTraceRow(savedKey)}
+                                  className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                                  style={{
+                                    border: isTraceRowSelected
+                                      ? '2px solid #2e54ff'
+                                      : '1.5px solid #cbd5e1',
+                                    backgroundColor: '#ffffff',
+                                    padding: 0,
+                                  }}
+                                  title={
+                                    isTraceRowSelected
+                                      ? 'Désélectionner cette pièce'
+                                      : 'Sélectionner cette pièce'
+                                  }
+                                >
+                                  {isTraceRowSelected && (
+                                    <span
+                                      className="w-2.5 h-2.5 rounded-full block"
+                                      style={{ backgroundColor: '#2e54ff' }}
+                                    />
+                                  )}
+                                </button>
+
+                                <div className="flex-1 grid grid-cols-3 gap-5 min-w-0">
+                                  {/* 1. Emplacement. */}
                                 <div className="flex flex-col gap-1 min-w-0">
                                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
                                     Emplacement.
                                   </label>
-                                  <select
-                                    value={trace.emplacement || 'Centrale des stocks'}
-                                    onChange={(e) => {
-                                      const updated = [...traceabilities];
-                                      updated[idx] = { ...updated[idx], emplacement: e.target.value };
-                                      setTraceabilities(updated);
-                                    }}
-                                    className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
-                                  >
-                                    {ALL_LOCATIONS.map((loc) => {
-                                      if (loc === 'Centrale des stocks') {
-                                        return (
-                                          <option key={loc} value={loc}>
-                                            Centrale des stocks
-                                          </option>
-                                        );
-                                      }
-                                      const assignedTech = members.find(
-                                        (m) => m.role === 'Technicien' && m.locationLink === loc
-                                      );
-                                      const customName = getLocationCustomName(loc);
-                                      const label = assignedTech
-                                        ? `${assignedTech.name} — ${customName}`
-                                        : customName;
-                                      return (
-                                        <option key={loc} value={loc}>
-                                          {label}
-                                        </option>
-                                      );
-                                    })}
-                                  </select>
+                                  {(() => {
+                                    const rawEmp = String(trace.emplacement || 'Centrale des stocks').trim();
+                                    const isClientEmp =
+                                      rawEmp === 'Client' ||
+                                      rawEmp.startsWith('Client - ') ||
+                                      rawEmp.startsWith('Client : ');
+                                    const mainEmpValue = isClientEmp ? 'Client' : rawEmp;
+                                    const selectedClientVal = rawEmp.startsWith('Client - ')
+                                      ? rawEmp.slice('Client - '.length).trim()
+                                      : rawEmp.startsWith('Client : ')
+                                      ? rawEmp.slice('Client : '.length).trim()
+                                      : String(trace.client || '').trim();
+
+                                    return (
+                                      <>
+                                        <select
+                                          value={mainEmpValue}
+                                          onChange={(e) => {
+                                            const nextLoc = e.target.value;
+                                            const updated = [...traceabilities];
+                                            if (nextLoc === 'Client') {
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                emplacement: 'Client',
+                                                client: '',
+                                              };
+                                            } else {
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                emplacement: nextLoc,
+                                                client: '',
+                                              };
+                                            }
+                                            setTraceabilities(updated);
+                                          }}
+                                          className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                        >
+                                          {ALL_LOCATIONS.map((loc) => {
+                                            if (loc === 'Centrale des stocks' || loc === 'Client') {
+                                              return (
+                                                <option key={loc} value={loc}>
+                                                  {loc}
+                                                </option>
+                                              );
+                                            }
+                                            const assignedTech = members.find(
+                                              (m) => m.role === 'Technicien' && m.locationLink === loc
+                                            );
+                                            const customName = getLocationCustomName(loc);
+                                            const label = assignedTech
+                                              ? `${assignedTech.name} — ${customName}`
+                                              : customName;
+                                            return (
+                                              <option key={loc} value={loc}>
+                                                {label}
+                                              </option>
+                                            );
+                                          })}
+                                        </select>
+                                        {isClientEmp && (
+                                          <select
+                                            value={selectedClientVal}
+                                            onChange={(e) => {
+                                              const chosenClient = e.target.value;
+                                              const updated = [...traceabilities];
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                emplacement: chosenClient
+                                                  ? `Client - ${chosenClient}`
+                                                  : 'Client',
+                                                client: chosenClient,
+                                              };
+                                              setTraceabilities(updated);
+                                            }}
+                                            className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs mt-1"
+                                          >
+                                            <option value="">Sélectionnez un client.</option>
+                                            {selectedClientVal &&
+                                              !sortedClientOptions.includes(selectedClientVal) && (
+                                                <option value={selectedClientVal}>
+                                                  {selectedClientVal}
+                                                </option>
+                                              )}
+                                            {sortedClientOptions.map((cLabel) => (
+                                              <option key={cLabel} value={cLabel}>
+                                                {cLabel}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
 
                                 {/* 2. Numéro de lot ou série. */}
@@ -4083,30 +4595,87 @@ export default function StocksTab({
                                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider stocks-label-style">
                                     Situation.
                                   </label>
-                                  <select
-                                    value={
+                                  {(() => {
+                                    const rawSit = String(
                                       trace.situation === 'Signalé manquant'
                                         ? 'Signalé Manquant'
                                         : trace.situation || 'Disponible'
-                                    }
-                                    onChange={(e) => {
-                                      const updated = [...traceabilities];
-                                      updated[idx] = {
-                                        ...updated[idx],
-                                        situation: e.target.value as any,
-                                      };
-                                      setTraceabilities(updated);
-                                    }}
-                                    className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
-                                  >
-                                    <option value="Disponible">Disponible</option>
-                                    <option value="Utilisé">Utilisé</option>
-                                    <option value="Indisponible">Indisponible</option>
-                                    <option value="Signalé Manquant">Signalé Manquant</option>
-                                    <option value="Prêté">Prêté</option>
-                                    <option value="Expédié">Expédié</option>
-                                    <option value="Aucune information">Aucune information</option>
-                                  </select>
+                                    ).trim();
+                                    const isExpedieSit =
+                                      rawSit === 'Expédié' ||
+                                      rawSit.startsWith('Expédié - ') ||
+                                      rawSit.startsWith('Expédié : ');
+                                    const mainSitVal = isExpedieSit ? 'Expédié' : rawSit;
+                                    const selectedExpVal = rawSit.startsWith('Expédié - ')
+                                      ? rawSit.slice('Expédié - '.length).trim()
+                                      : rawSit.startsWith('Expédié : ')
+                                      ? rawSit.slice('Expédié : '.length).trim()
+                                      : '';
+
+                                    return (
+                                      <>
+                                        <select
+                                          value={mainSitVal}
+                                          onChange={(e) => {
+                                            const nextSit = e.target.value;
+                                            const updated = [...traceabilities];
+                                            updated[idx] = {
+                                              ...updated[idx],
+                                              situation: nextSit,
+                                            };
+                                            setTraceabilities(updated);
+                                          }}
+                                          className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs"
+                                        >
+                                          <option value="Disponible">Disponible</option>
+                                          <option value="Utilisé">Utilisé</option>
+                                          <option value="Indisponible">Indisponible</option>
+                                          <option value="Signalé Manquant">Signalé Manquant</option>
+                                          <option value="Prêté">Prêté</option>
+                                          <option value="Expédié">Expédié</option>
+                                          <option value="Aucune information">Aucune information</option>
+                                        </select>
+                                        {isExpedieSit && (
+                                          <select
+                                            value={selectedExpVal}
+                                            onChange={(e) => {
+                                              const chosenExp = e.target.value;
+                                              const updated = [...traceabilities];
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                situation: chosenExp
+                                                  ? `Expédié - ${chosenExp}`
+                                                  : 'Expédié',
+                                              };
+                                              setTraceabilities(updated);
+                                            }}
+                                            className="w-full bg-white text-black p-2 border border-slate-300 rounded font-sans text-xs mt-1"
+                                          >
+                                            <option value="">Sélectionnez une expédition.</option>
+                                            {selectedExpVal &&
+                                              !eligibleSituationExpeditions.some(
+                                                (exp) =>
+                                                  String(exp.reference || exp.id).trim() ===
+                                                  selectedExpVal
+                                              ) && (
+                                                <option value={selectedExpVal}>
+                                                  {selectedExpVal}
+                                                </option>
+                                              )}
+                                            {eligibleSituationExpeditions.map((exp) => {
+                                              const expKey = String(exp.reference || exp.id).trim();
+                                              return (
+                                                <option key={exp.id || expKey} value={expKey}>
+                                                  {expKey} — {exp.statut || 'Aucune information'}
+                                                  {exp.destinataire ? ` (${exp.destinataire})` : ''}
+                                                </option>
+                                              );
+                                            })}
+                                          </select>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
 
                                 {/* 5. Infos réservation. */}
@@ -4223,6 +4792,7 @@ export default function StocksTab({
                                   >
                                     Supprimer
                                   </button>
+                                </div>
                                 </div>
                               </div>
                             );
@@ -5052,12 +5622,13 @@ export default function StocksTab({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex-1 overflow-y-auto p-6 md:p-8 bg-white">
+            <div className="flex-1 overflow-y-auto p-0 bg-white">
               {activeStocksSubSidePane === 'achats-fournisseurs' && (
                 <AchatsFournisseursTab
                   achatsFournisseurs={achatsFournisseurs}
                   saveAchatsFournisseurs={saveAchatsFournisseurs || (() => {})}
                   variables={variables}
+                  expeditions={expeditions}
                   companyInfo={companyInfo}
                   onClose={() => setActiveStocksSubSidePane(null)}
                 />

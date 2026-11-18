@@ -9,8 +9,9 @@ import {
   getTenantSpreadsheetUrl,
   openTenantSpreadsheetUrl,
 } from '../types';
-import { RefreshCw, Search, X, Check } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { t } from '../utils/translate';
+import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
 
 interface ExpeditionsTabProps {
   expeditions: ExpeditionRecord[];
@@ -243,7 +244,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
           const sit = String(tr?.situation || '').trim().toLowerCase();
           if (sit === 'disponible') {
             const emp = String(tr.emplacement || 'Non renseigné').trim();
-            const lot = String(tr.lotNumber || 'Non renseigné').trim();
+            const lot = String(tr.lotOrSerial || (tr as any).lotNumber || 'Non renseigné').trim();
             const title = `${ugs} - ${pieceTitle} - Emplacement: ${emp} - Lot/Série: ${lot}`;
             const key = `B__${st.id}__${tr.id || idx}__${lot}`;
             list.push({
@@ -404,12 +405,21 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
           unitTransportCostEur: foundCatalog.unitTransportCostEur,
         };
       } else {
+        const ugsPrefix = titleText.split(' - ')[0]?.trim().toLowerCase() || '';
+        const matchedStock = ugsPrefix
+          ? (stocks || []).find(
+              (s) =>
+                s &&
+                (String(s.ugs || '').trim().toLowerCase() === ugsPrefix ||
+                  String(s.id || '').trim().toLowerCase() === ugsPrefix)
+            )
+          : undefined;
         map[`LEGACY__${idx}__${titleText}`] = {
           checked: true,
           volume: vol,
           title: titleText,
-          unitWeightKg: 0,
-          unitTransportCostEur: 0,
+          unitWeightKg: matchedStock ? parseNumericAmount(matchedStock.poidsNet) : 0,
+          unitTransportCostEur: matchedStock ? parseNumericAmount(matchedStock.fraisFixeCoutTransport) : 0,
         };
       }
     });
@@ -639,10 +649,11 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
     backgroundColor: '#0f172a',
     color: '#fff',
     boxShadow: 'none',
-    borderRadius: '12px',
+    borderRadius: '13px',
     fontSize: '18px',
     padding: '9px 19px',
     fontWeight: '100',
+    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
     transition: 'all 0s ease-in-out',
     display: 'inline-flex',
     alignItems: 'center',
@@ -652,137 +663,158 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
     border: 'none',
   };
 
-  const blueButtonStyle: React.CSSProperties = {
+  const smallBlackButtonStyle: React.CSSProperties = {
     ...customButtonStyle,
-    backgroundColor: '#2e54ff',
+    fontSize: '18px',
+    padding: '9px 19px',
+    borderRadius: '13px',
+    backgroundColor: '#0f172a',
     boxShadow: 'none',
   };
 
-  const pillButtonStyle: React.CSSProperties = {
-    background: '#f5f7fa',
-    border: 'none',
-    borderRadius: '99px',
-    padding: '3px 9px',
-    fontSize: '18px',
-    fontWeight: '100',
-    color: '#000',
-    cursor: 'pointer',
-    transition: 'background 0s',
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '4px',
+  const smallBlueButtonStyle: React.CSSProperties = {
+    ...smallBlackButtonStyle,
+    backgroundColor: 'rgb(46, 84, 255)',
+    boxShadow: 'none',
   };
 
-  const formLabelStyle: React.CSSProperties = {
-    display: 'block',
-    fontSize: '18px',
-    fontWeight: '100',
+  const smallRedButtonStyle: React.CSSProperties = {
+    ...smallBlackButtonStyle,
+    backgroundColor: 'rgb(210, 45, 11)',
+    boxShadow: 'none',
+  };
+
+  const cellStyle: React.CSSProperties = {
+    fontSize: '16px',
+    fontWeight: 100,
     color: '#000000',
-    marginBottom: '6px',
     fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-    cursor: 'default',
+  };
+
+  const thStyle: React.CSSProperties = {
+    fontSize: '16px',
+    fontWeight: 100,
+    color: 'rgb(80 97 122)',
+    backgroundColor: '#ffffff',
+    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+    letterSpacing: 'normal',
+    textTransform: 'none',
   };
 
   return (
-    <div id="expeditions-tab-container-harmonized" className="w-full">
+    <div id="expeditions-tab-container-harmonized" className="space-y-6 font-sans w-full">
       <style>{`
-        #expeditions-tab-container-harmonized,
-        #expeditions-tab-container-harmonized *:not(.lucide):not(svg):not(path) {
-          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
-          font-weight: 100 !important;
-        }
-        #expeditions-tab-container-harmonized input:not([type="checkbox"]):not([type="radio"]):not(.search-bar-expeditions):not(.colisage-vol-input),
+        #expeditions-tab-container-harmonized input:not(#search-expeditions-input),
         #expeditions-tab-container-harmonized select:not(#expeditions-more-options-dropdown),
         #expeditions-tab-container-harmonized textarea {
-          background-color: #ffffff !important;
-          border: 1px solid #dadada !important;
+          padding: 12px !important;
+          border: 1px solid #DCE1EA !important;
           border-radius: 13px !important;
           font-size: 18px !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+          background: #ffffff !important;
           color: #000000 !important;
           box-shadow: none !important;
           outline: none !important;
-          padding: 0 14px !important;
-          height: 43px !important;
-          transition: border-color 0s ease-in-out, background-color 0s ease-in-out !important;
+          transition: all 0s !important;
         }
-        #expeditions-tab-container-harmonized textarea {
-          height: auto !important;
-          min-height: 43px !important;
-          padding: 10px 14px !important;
-        }
-        #expeditions-tab-container-harmonized input:not([type="checkbox"]):not([type="radio"]):not(.search-bar-expeditions):not(.colisage-vol-input):hover:not(:disabled),
-        #expeditions-tab-container-harmonized input:not([type="checkbox"]):not([type="radio"]):not(.search-bar-expeditions):not(.colisage-vol-input):focus:not(:disabled),
-        #expeditions-tab-container-harmonized select:not(#expeditions-more-options-dropdown):hover:not(:disabled),
-        #expeditions-tab-container-harmonized select:not(#expeditions-more-options-dropdown):focus:not(:disabled),
-        #expeditions-tab-container-harmonized textarea:hover:not(:disabled),
-        #expeditions-tab-container-harmonized textarea:focus:not(:disabled) {
-          border-color: #000000 !important;
-        }
-        #expeditions-tab-container-harmonized input:disabled,
-        #expeditions-tab-container-harmonized select:disabled,
-        #expeditions-tab-container-harmonized textarea:disabled {
-          background-color: #f5f7fa !important;
-          border-color: #dadada !important;
-          color: #9e9e9e !important;
-          cursor: not-allowed !important;
+        #expeditions-tab-container-harmonized input:not(#search-expeditions-input)::placeholder,
+        #expeditions-tab-container-harmonized textarea::placeholder {
+          color: #BECADB !important;
+          font-size: 18px !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
           opacity: 1 !important;
+        }
+        #expeditions-tab-container-harmonized #search-expeditions-input::placeholder {
+          color: rgb(222, 222, 222) !important;
+          opacity: 1 !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+        }
+        #expeditions-tab-container-harmonized input:not(#search-expeditions-input):not(:disabled):hover,
+        #expeditions-tab-container-harmonized select:not(#expeditions-more-options-dropdown):not(:disabled):hover,
+        #expeditions-tab-container-harmonized textarea:not(:disabled):hover,
+        #expeditions-tab-container-harmonized .expeditions-colisage-trigger:hover {
+          border: 1px solid #DCE1EA !important;
+          outline: 2.5px solid #2e54ff !important;
+          outline-offset: 2px !important;
+          transition: all 0s !important;
+        }
+        #expeditions-tab-container-harmonized input:not(#search-expeditions-input):not(:disabled):focus,
+        #expeditions-tab-container-harmonized select:not(#expeditions-more-options-dropdown):not(:disabled):focus,
+        #expeditions-tab-container-harmonized textarea:not(:disabled):focus,
+        #expeditions-tab-container-harmonized .expeditions-colisage-trigger:focus {
+          border: 1px solid #DCE1EA !important;
+          outline: 2.5px solid #2e54ff !important;
+          outline-offset: 2px !important;
+          transition: all 0s !important;
+        }
+        #expeditions-tab-container-harmonized #search-expeditions-input:hover,
+        #expeditions-tab-container-harmonized #search-expeditions-input:focus {
+          border: 1px solid #dedede !important;
+          outline: 2.5px solid #2e54ff !important;
+          outline-offset: 2px !important;
+          transition: all 0s !important;
         }
         #expeditions-tab-container-harmonized select:not(#expeditions-more-options-dropdown) {
           appearance: none !important;
           -webkit-appearance: none !important;
           -moz-appearance: none !important;
-          background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
-          background-repeat: no-repeat !important;
-          background-position: right 14px center !important;
-          background-size: 16px !important;
-          padding-right: 40px !important;
+          background-image: none !important;
         }
-        #expeditions-tab-container-harmonized input::placeholder,
-        #expeditions-tab-container-harmonized textarea::placeholder {
-          color: #9ca3af !important;
+        #expeditions-tab-container-harmonized select option {
+          color: #000000 !important;
+          background: #ffffff !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+        }
+        #expeditions-tab-container-harmonized label,
+        #expeditions-tab-container-harmonized .expeditions-label-style {
+          letter-spacing: normal !important;
+          text-transform: none !important;
+          font-size: 16px !important;
+          color: #000000 !important;
+          font-weight: 600 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
+        }
+        #expeditions-tab-container-harmonized input:disabled,
+        #expeditions-tab-container-harmonized select:disabled,
+        #expeditions-tab-container-harmonized textarea:disabled {
+          background: #fff !important;
+          background-color: #fff !important;
+          border: 1px solid #dce1ea !important;
+          color: #555555 !important;
+          cursor: not-allowed !important;
           opacity: 1 !important;
         }
-        #expeditions-tab-container-harmonized table thead th {
+        #expeditions-tab-container-harmonized #expeditions-record-table,
+        #expeditions-tab-container-harmonized #expeditions-record-table thead,
+        #expeditions-tab-container-harmonized #expeditions-record-table tbody,
+        #expeditions-tab-container-harmonized #expeditions-record-table tr,
+        #expeditions-tab-container-harmonized #expeditions-record-table th,
+        #expeditions-tab-container-harmonized #expeditions-record-table td {
+          border: 0px solid transparent !important;
+          border-top: 0px solid transparent !important;
+          border-bottom: 0px solid transparent !important;
+          border-left: 0px solid transparent !important;
+          border-right: 0px solid transparent !important;
+        }
+        #expeditions-tab-container-harmonized #expeditions-record-table thead th {
           background-color: #ffffff !important;
-          color: #9e9e9e !important;
-          font-size: 18px !important;
-          border-bottom: 1px solid #dadada !important;
-          padding-top: 10px !important;
-          padding-bottom: 10px !important;
-          text-transform: none !important;
+          color: rgb(80 97 122) !important;
+          font-size: 16px !important;
+          font-weight: 100 !important;
+          font-family: "DefibeoMain", "Civilprom", sans-serif !important;
           letter-spacing: normal !important;
-          cursor: default !important;
-          white-space: nowrap !important;
+          text-transform: none !important;
         }
-        #expeditions-tab-container-harmonized table tbody tr {
-          background-color: #ffffff !important;
-          border-bottom: 1px solid #dadada !important;
-          transition: background-color 0s !important;
-        }
-        #expeditions-tab-container-harmonized table tbody tr:hover {
+        #expeditions-tab-container-harmonized #expeditions-record-table tbody tr:hover {
           background-color: #f5f7fa !important;
-        }
-        #expeditions-tab-container-harmonized table tbody td {
-          font-size: 18px !important;
-          color: #000000 !important;
-          padding-top: 8px !important;
-          padding-bottom: 8px !important;
-          cursor: default !important;
-          vertical-align: middle !important;
-        }
-        #expeditions-tab-container-harmonized .pill-btn-expeditions:hover:not(:disabled) {
-          background: #dadada !important;
-        }
-        #expeditions-tab-container-harmonized .pill-btn-expeditions:disabled {
-          color: #9e9e9e !important;
-          cursor: not-allowed !important;
-          opacity: 0.65 !important;
         }
       `}</style>
 
       {!showForm ? (
-        <div className="space-y-6">
+        <>
           {/* Header & Controls */}
           <div
             className="bg-white space-y-4"
@@ -804,11 +836,9 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                     onClick={onClose}
                     style={{
                       ...customButtonStyle,
-                      backgroundColor: '#f5f7fa',
-                      color: '#000000',
+                      backgroundColor: 'rgb(210, 45, 11)',
+                      color: '#ffffff',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#dadada')}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#f5f7fa')}
                   >
                     {t('Fermer')}
                   </button>
@@ -825,17 +855,17 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                     padding: '12px',
                     cursor: 'pointer',
                   }}
-                  title={t("Plus d'options")}
+                  title={t('Plus')}
                 >
                   <img
                     src="https://civilprom.s3.eu-north-1.amazonaws.com/3dotsgris.svg"
-                    alt="Options"
+                    alt={t('Plus')}
                     style={{ width: '18px', height: '18px', display: 'block', pointerEvents: 'none' }}
                     referrerPolicy="no-referrer"
                   />
                   <select
                     id="expeditions-more-options-dropdown"
-                    aria-label={t("Plus d'options")}
+                    aria-label={t('Plus')}
                     value=""
                     onChange={(e) => {
                       const val = e.target.value;
@@ -844,7 +874,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                         if (url) openTenantSpreadsheetUrl(url);
                       }
                     }}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                     style={{ WebkitAppearance: 'menulist-button', appearance: 'auto', border: 'none', outline: 'none' }}
                   >
                     <option value="" disabled hidden></option>
@@ -852,7 +882,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                       value="spreadsheet"
                       disabled={!getTenantSpreadsheetUrl('spreadsheetExpeditions', companyInfo)}
                     >
-                      {t('Ouvrir l’éditeur Spreadsheets')}
+                      {t('Ouvrir l’éditeur SpreadSheets')}
                     </option>
                   </select>
                 </div>
@@ -868,17 +898,19 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                         setClickedPill((prev) =>
                           prev === 'refresh-expeditions' ? null : prev
                         ),
-                      320
+                      480
                     );
                     handleRefreshClick();
                   }}
                   disabled={isRefreshingLocal}
-                  className={
+                  className={`relative overflow-hidden hover:opacity-80 transition-all select-none cursor-pointer ${
                     clickedPill === 'refresh-expeditions'
                       ? 'sidebar-nav-click-shrink-wave'
                       : ''
-                  }
+                  }`}
                   style={{
+                    position: 'relative',
+                    overflow: 'hidden',
                     borderRadius: '1000px',
                     padding: '8px 16px',
                     fontSize: '18px',
@@ -904,25 +936,63 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                   </span>
                 </button>
 
-                {/* Search query */}
-                <div className="relative bg-white">
+                {/* Field recherche (Search input) */}
+                <div className="relative w-full sm:w-56 bg-white">
                   <input
                     type="text"
+                    id="search-expeditions-input"
+                    name="defib_quick_search_expeditions_no_autofill"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    data-lpignore="true"
+                    data-form-type="other"
                     placeholder={t('Recherche rapide')}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="search-bar-expeditions w-48 sm:w-64 focus:outline-none"
+                    className="w-full text-black placeholder-[#747474] placeholder:font-light outline-none"
                     style={{
-                      backgroundColor: '#f5f7fa',
-                      borderRadius: '12px',
-                      border: 'none',
+                      border: '1px solid #dedede',
+                      backgroundColor: '#ffffff',
                       boxShadow: 'none',
-                      padding: '9px 19px',
+                      borderRadius: '13px',
                       fontSize: '18px',
+                      padding: '9px 19px',
+                      paddingRight: searchQuery && searchQuery.length > 0 ? '36px' : '19px',
                       fontWeight: '100',
-                      color: '#000',
+                      fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                      transition: 'all 0s ease-in-out',
+                      color: '#000000',
                     }}
                   />
+                  {searchQuery && searchQuery.length > 0 && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => setSearchQuery('')}
+                      style={{
+                        position: 'absolute',
+                        right: '10px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '2px 6px',
+                        cursor: 'pointer',
+                        color: '#64748b',
+                        fontSize: '18px',
+                        lineHeight: 1,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      title="Effacer la recherche"
+                      aria-label="Effacer la recherche"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
 
                 {(() => {
@@ -945,6 +1015,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                       style={{
                         ...customButtonStyle,
                         backgroundColor: 'rgb(46, 84, 255)',
+                        boxShadow: 'none',
                         opacity: !hasExpeditionsSpreadsheet ? 0.45 : 1,
                         cursor: !hasExpeditionsSpreadsheet ? 'not-allowed' : 'pointer',
                       }}
@@ -959,35 +1030,36 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
           </div>
 
           {/* Table View */}
-          <div className="bg-white overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+          <div
+            className="bg-white overflow-hidden"
+            style={{
+              borderRadius: '0px',
+              maxWidth: '98%',
+              margin: 'auto',
+              border: 'none',
+              backgroundColor: 'rgb(255, 255, 255)',
+            }}
+          >
+            <div className="overflow-x-auto bg-white">
+              <table className="w-full text-left border-collapse bg-white" id="expeditions-record-table">
                 <thead>
-                  <tr>
-                    <th className="py-3 pr-4">{t('Volume.')}</th>
-                    <th className="py-3 px-4">{t('Poids Estimé.')}</th>
-                    <th className="py-3 px-4">{t('Ouverture.')}</th>
-                    <th className="py-3 px-4">{t('Actualisé.')}</th>
-                    <th className="py-3 px-4">{t('Contexte.')}</th>
-                    <th className="py-3 px-4">{t('Préparateur.')}</th>
-                    <th className="py-3 px-4">{t('Destinataire.')}</th>
-                    <th className="py-3 px-4">{t('Transporteur.')}</th>
-                    <th className="py-3 px-4">{t('Numéro Suivi.')}</th>
-                    <th className="py-3 px-4">{t('Statut.')}</th>
-                    <th className="py-3 pl-4 text-right">{t('Actions.')}</th>
+                  <tr className="bg-white text-slate-600">
+                    <th className="px-4 py-3.5" style={thStyle}>{t('Volume.')}</th>
+                    <th className="px-4 py-3.5" style={thStyle}>{t('Poids Estimé.')}</th>
+                    <th className="px-4 py-3.5" style={thStyle}>{t('Ouverture.')}</th>
+                    <th className="px-4 py-3.5" style={thStyle}>{t('Actualisé.')}</th>
+                    <th className="px-4 py-3.5" style={thStyle}>{t('Contexte.')}</th>
+                    <th className="px-4 py-3.5" style={thStyle}>{t('Préparateur.')}</th>
+                    <th className="px-4 py-3.5" style={thStyle}>{t('Destinataire.')}</th>
+                    <th className="px-4 py-3.5" style={thStyle}>{t('Transporteur.')}</th>
+                    <th className="px-4 py-3.5" style={thStyle}>{t('Numéro Suivi.')}</th>
+                    <th className="px-4 py-3.5" style={thStyle}>{t('Statut.')}</th>
+                    <th className="px-4 py-3.5 text-right" style={thStyle}></th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="bg-white">
                   {filteredExpeditions.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={11}
-                        className="p-8 text-center"
-                        style={{ color: '#9e9e9e', fontSize: '18px' }}
-                      >
-                        {t('Aucune expédition enregistrée.')}
-                      </td>
-                    </tr>
+                    <EmptyTablePlaceholder />
                   ) : (
                     filteredExpeditions.map((exp) => {
                       const trackingUrl = getCarrierTrackingUrl(
@@ -995,110 +1067,65 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                         exp.numeroSuivi
                       );
                       return (
-                        <tr key={exp.id}>
-                          <td className="py-2 pr-4 whitespace-nowrap">
+                        <tr key={exp.id} className="bg-white transition-colors">
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellStyle}>
                             {exp.nombrePieces !== undefined && exp.nombrePieces !== ''
                               ? exp.nombrePieces
                               : '0'}
                           </td>
-                          <td className="py-2 px-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellStyle}>
                             {exp.poidsKgEstim !== undefined && exp.poidsKgEstim !== ''
                               ? `${exp.poidsKgEstim} kg`
                               : '0 kg'}
                           </td>
-                          <td className="py-2 px-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellStyle}>
                             {exp.dateCreation || '-'}
                           </td>
-                          <td className="py-2 px-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellStyle}>
                             {exp.dateActualise || exp.dateCreation || '-'}
                           </td>
-                          <td className="py-2 px-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellStyle}>
                             {exp.contexte || '-'}
                           </td>
-                          <td className="py-2 px-4 max-w-[200px] truncate" title={exp.preparateur}>
+                          <td className="px-4 py-4 max-w-[200px] truncate" style={cellStyle} title={exp.preparateur}>
                             {exp.preparateur || '-'}
                           </td>
-                          <td className="py-2 px-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellStyle}>
                             {exp.destinataire || '-'}
                           </td>
-                          <td className="py-2 px-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellStyle}>
                             {exp.transporteur || '-'}
                           </td>
-                          <td className="py-2 px-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellStyle}>
                             {exp.numeroSuivi || '-'}
                           </td>
-                          <td className="py-2 px-4 whitespace-nowrap">
+                          <td className="px-4 py-4 whitespace-nowrap" style={cellStyle}>
                             {exp.statut || 'Aucune information'}
                           </td>
-                          <td className="py-2 pl-4 text-right whitespace-nowrap">
+                          <td className="px-4 py-4 text-right whitespace-nowrap" style={cellStyle}>
                             <div className="flex items-center justify-end gap-2">
+                              {trackingUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => openExternalUrlInNewTab(trackingUrl)}
+                                  style={smallBlueButtonStyle}
+                                >
+                                  {t('Suivre')}
+                                </button>
+                              )}
+
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setClickedPill(`edit-${exp.id}`);
-                                  setTimeout(
-                                    () =>
-                                      setClickedPill((prev) =>
-                                        prev === `edit-${exp.id}` ? null : prev
-                                      ),
-                                    320
-                                  );
-                                  handleEdit(exp);
-                                }}
-                                style={pillButtonStyle}
-                                className={`pill-btn-expeditions ${
-                                  clickedPill === `edit-${exp.id}`
-                                    ? 'sidebar-nav-click-shrink-wave'
-                                    : ''
-                                }`}
+                                onClick={() => handleEdit(exp)}
+                                style={smallBlackButtonStyle}
                               >
                                 {t('Modifier')}
                               </button>
 
                               <button
                                 type="button"
-                                disabled={!trackingUrl}
-                                onClick={() => {
-                                  if (!trackingUrl) return;
-                                  setClickedPill(`suivi-${exp.id}`);
-                                  setTimeout(
-                                    () =>
-                                      setClickedPill((prev) =>
-                                        prev === `suivi-${exp.id}` ? null : prev
-                                      ),
-                                    320
-                                  );
-                                  openExternalUrlInNewTab(trackingUrl);
-                                }}
-                                style={pillButtonStyle}
-                                className={`pill-btn-expeditions ${
-                                  clickedPill === `suivi-${exp.id}`
-                                    ? 'sidebar-nav-click-shrink-wave'
-                                    : ''
-                                }`}
-                              >
-                                {t('Suivi')}
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setClickedPill(`delete-${exp.id}`);
-                                  setTimeout(
-                                    () =>
-                                      setClickedPill((prev) =>
-                                        prev === `delete-${exp.id}` ? null : prev
-                                      ),
-                                    320
-                                  );
-                                  setConfirmDeleteId(exp.id);
-                                }}
-                                style={pillButtonStyle}
-                                className={`pill-btn-expeditions ${
-                                  clickedPill === `delete-${exp.id}`
-                                    ? 'sidebar-nav-click-shrink-wave'
-                                    : ''
-                                }`}
+                                onClick={() => setConfirmDeleteId(exp.id)}
+                                style={smallRedButtonStyle}
                               >
                                 {t('Supprimer')}
                               </button>
@@ -1112,66 +1139,49 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
               </table>
             </div>
           </div>
-        </div>
+        </>
       ) : (
-        /* FORM VIEW (inspired by DÉFIBRILLATEURS / ACHATS FOURNISSEURS) */
+        /* FORM VIEW (matching DÉFIBRILLATEURS / STOCKS / ACHATS FOURNISSEURS) */
         <div
-          className="w-full"
-          style={{
-            background: '#ffffff',
-            borderRadius: '0px',
-            border: 'none',
-            boxShadow: 'none',
-            padding: '0px',
-          }}
+          className="w-full space-y-6 font-sans animate-fadeIn max-w-[1000px] mx-auto py-4"
+          id="expeditions-form-overlay"
         >
+          {/* Header Box styled exactly like DefibTab / StocksTab / AchatsFournisseursTab Form Header */}
           <div
-            className="sticky top-0 z-30 flex items-center justify-between gap-4 flex-wrap"
+            className="flex items-center bg-white"
             style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.96)',
-              backdropFilter: 'blur(8px)',
-              paddingTop: '14px',
-              paddingBottom: '18px',
-              marginBottom: '28px',
-              borderBottom: '1px solid #dadada',
+              borderRadius: '18px',
+              width: '100%',
+              maxWidth: '100%',
+              margin: 'auto',
+              padding: '20px',
+              border: 'none',
+              backgroundColor: 'rgb(245, 247, 250)',
             }}
+            id="expeditions-form-header-box"
           >
-            <h3
-              className="m-0 tracking-tight"
-              style={{
-                fontSize: '33px',
-                color: '#000000',
-                fontWeight: '100',
-                cursor: 'default',
-              }}
-            >
-              {editingId ? t('Modifier l’expédition') : t('Nouvelle expédition')}
-            </h3>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-full">
               <button
                 type="button"
                 onClick={resetForm}
                 style={{
-                  ...customButtonStyle,
-                  backgroundColor: '#f5f7fa',
-                  color: '#000000',
+                  ...smallRedButtonStyle,
+                  flex: 1,
+                  width: '50%',
                 }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.backgroundColor = '#dadada')
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.backgroundColor = '#f5f7fa')
-                }
               >
                 {t('Annuler')}
               </button>
               <button
                 type="submit"
                 form="expeditions-form"
-                style={blueButtonStyle}
-                className="hover:opacity-90"
+                style={{
+                  ...smallBlueButtonStyle,
+                  flex: 1,
+                  width: '50%',
+                }}
               >
-                {editingId ? t('Enregistrer') : t('Enregistrer')}
+                {t('Enregistrer')}
               </button>
             </div>
           </div>
@@ -1179,12 +1189,17 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
           <form
             id="expeditions-form"
             onSubmit={handleSave}
-            className="space-y-6 pb-12"
+            className="p-6 space-y-6"
+            style={{
+              backgroundColor: 'rgb(245, 247, 250)',
+              borderRadius: '18px',
+              border: 'none',
+            }}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Contexte. */}
               <div>
-                <label style={formLabelStyle}>{t('Contexte.')}</label>
+                <label className="block mb-1.5 expeditions-label-style">{t('Contexte.')}</label>
                 <select
                   value={contexte}
                   onChange={(e) => setContexte(e.target.value)}
@@ -1201,7 +1216,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
 
               {/* Référence. */}
               <div>
-                <label style={formLabelStyle}>{t('Référence.')}</label>
+                <label className="block mb-1.5 expeditions-label-style">{t('Référence.')}</label>
                 <input
                   type="text"
                   value={reference}
@@ -1213,7 +1228,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
 
               {/* Expéditeur. */}
               <div>
-                <label style={formLabelStyle}>{t('Expéditeur.')}</label>
+                <label className="block mb-1.5 expeditions-label-style">{t('Expéditeur.')}</label>
                 <select
                   value={expediteur}
                   onChange={(e) => {
@@ -1236,7 +1251,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
 
               {/* Destinataire. */}
               <div>
-                <label style={formLabelStyle}>{t('Destinataire.')}</label>
+                <label className="block mb-1.5 expeditions-label-style">{t('Destinataire.')}</label>
                 <select
                   value={destinataire}
                   onChange={(e) => setDestinataire(e.target.value)}
@@ -1257,35 +1272,33 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
 
               {/* Colisage Pièce(s). */}
               <div>
-                <label style={formLabelStyle}>{t('Colisage Pièce(s).')}</label>
+                <label className="block mb-1.5 expeditions-label-style">{t('Colisage Pièce(s).')}</label>
                 <button
                   type="button"
                   onClick={() => setIsColisageSidePaneOpen(true)}
-                  className="w-full text-left flex items-center justify-between"
+                  className="expeditions-colisage-trigger w-full text-left flex items-center justify-between"
                   style={{
                     backgroundColor: '#ffffff',
-                    border: '1px solid #dadada',
+                    border: '1px solid #DCE1EA',
                     borderRadius: '13px',
                     fontSize: '18px',
-                    color: colisageStats.checkedItemsCount > 0 ? '#000000' : '#9ca3af',
-                    padding: '0 14px',
-                    height: '43px',
+                    color: colisageStats.checkedItemsCount > 0 ? '#000000' : '#BECADB',
+                    padding: '12px',
                     cursor: 'pointer',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    fontWeight: 100,
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = '#000000')}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = '#dadada')}
                 >
                   <span>
                     {`Colisage de l’expédition (${colisageStats.checkedItemsCount}).`}
                   </span>
-                  <Search className="w-4 h-4 text-black shrink-0" />
                 </button>
               </div>
 
               {/* Préparateur. */}
               <div className="space-y-3">
                 <div>
-                  <label style={formLabelStyle}>{t('Préparateur.')}</label>
+                  <label className="block mb-1.5 expeditions-label-style">{t('Préparateur.')}</label>
                   <select
                     value={preparateurCategory}
                     onChange={(e) => {
@@ -1376,7 +1389,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
               {/* Transporteur. + Ouvrir le suivi */}
               <div className="space-y-3">
                 <div>
-                  <label style={formLabelStyle}>{t('Transporteur.')}</label>
+                  <label className="block mb-1.5 expeditions-label-style">{t('Transporteur.')}</label>
                   <select
                     value={transporteur}
                     onChange={(e) => setTransporteur(e.target.value)}
@@ -1400,17 +1413,10 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                   }}
                   className="w-full"
                   style={{
-                    height: '43px',
-                    borderRadius: '13px',
-                    fontSize: '18px',
-                    fontWeight: '100',
-                    border: 'none',
-                    backgroundColor: formTrackingUrl ? '#2e54ff' : '#f5f7fa',
-                    color: formTrackingUrl ? '#ffffff' : '#9e9e9e',
+                    ...smallBlueButtonStyle,
+                    width: '100%',
+                    opacity: formTrackingUrl ? 1 : 0.45,
                     cursor: formTrackingUrl ? 'pointer' : 'not-allowed',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
                   }}
                 >
                   {t('Ouvrir le suivi')}
@@ -1419,7 +1425,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
 
               {/* Numéro Suivi. */}
               <div>
-                <label style={formLabelStyle}>{t('Numéro Suivi.')}</label>
+                <label className="block mb-1.5 expeditions-label-style">{t('Numéro Suivi.')}</label>
                 <input
                   type="text"
                   value={numeroSuivi}
@@ -1433,7 +1439,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
 
               {/* Code Postal Destinataire. */}
               <div>
-                <label style={formLabelStyle}>{t('Code Postal Destinataire.')}</label>
+                <label className="block mb-1.5 expeditions-label-style">{t('Code Postal Destinataire.')}</label>
                 <input
                   type="text"
                   value={codePostalDestinataire}
@@ -1443,13 +1449,13 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                     )
                   }
                   placeholder={t('Ex: 01234.')}
-                  className="w-full sm:w-56"
+                  className="w-full"
                 />
               </div>
 
               {/* Statut. */}
               <div>
-                <label style={formLabelStyle}>{t('Statut.')}</label>
+                <label className="block mb-1.5 expeditions-label-style">{t('Statut.')}</label>
                 <select
                   value={statut}
                   onChange={(e) => setStatut(e.target.value)}
@@ -1466,7 +1472,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
 
               {/* Commentaire. */}
               <div className="md:col-span-2">
-                <label style={formLabelStyle}>{t('Commentaire.')}</label>
+                <label className="block mb-1.5 expeditions-label-style">{t('Commentaire.')}</label>
                 <textarea
                   ref={commentTextareaRef}
                   rows={1}
@@ -1482,195 +1488,226 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
       )}
 
       {/* SIDE-PANE COLISAGE PIÈCE(S) */}
-      {isColisageSidePaneOpen && (
-        <div
-          className="fixed inset-0 z-[9999] flex justify-end bg-black/40 animate-fadeIn"
-          onClick={() => setIsColisageSidePaneOpen(false)}
-        >
+      {isColisageSidePaneOpen &&
+        typeof document !== 'undefined' &&
+        createPortal(
           <div
-            className="w-full max-w-2xl bg-white h-full flex flex-col shadow-2xl overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 flex justify-end bg-black/40 backdrop-blur-xs animate-fadeIn"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              minHeight: '100dvh',
+              maxHeight: '100dvh',
+              zIndex: 99999,
+            }}
+            onClick={() => setIsColisageSidePaneOpen(false)}
           >
-            {/* Side-pane header */}
             <div
-              className="p-6 flex items-center justify-between border-b"
-              style={{ borderColor: '#dadada' }}
+              id="expeditions-colisage-side-pane"
+              className="relative w-full sm:w-[580px] shadow-2xl flex flex-col transform transition-transform duration-200 ease-in-out"
+              style={{
+                height: '100vh',
+                minHeight: '100dvh',
+                maxHeight: '100dvh',
+                borderLeft: 'none',
+                backgroundColor: 'rgb(245, 247, 250)',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+              onClick={(e) => e.stopPropagation()}
             >
-              <h4
-                className="m-0"
-                style={{ fontSize: '24px', color: '#000000', fontWeight: '100' }}
-              >
-                {`Colisage de l’expédition (${colisageStats.checkedItemsCount}).`}
-              </h4>
-              <button
-                type="button"
-                onClick={() => setIsColisageSidePaneOpen(false)}
-                className="p-2 rounded-full hover:bg-[#f5f7fa] transition-colors cursor-pointer"
-                style={{ border: 'none', background: 'transparent' }}
-              >
-                <X className="w-6 h-6 text-black" />
-              </button>
-            </div>
-
-            {/* Estimations top bar */}
-            <div
-              className="px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4 border-b"
-              style={{ backgroundColor: '#f5f7fa', borderColor: '#dadada' }}
-            >
+              {/* Estimations top bar (no title header) */}
               <div
-                className="p-3 bg-white"
-                style={{ borderRadius: '13px', border: '1px solid #dadada' }}
+                className="px-4 pt-5 pb-2 grid grid-cols-1 sm:grid-cols-2 gap-3 shrink-0"
+                style={{ backgroundColor: 'rgb(245, 247, 250)' }}
               >
-                <div style={{ fontSize: '15px', color: '#6b7280' }}>
-                  {t('Poids Net (Kilogramme) Estimé:')}
-                </div>
-                <div style={{ fontSize: '20px', color: '#000000', marginTop: '2px' }}>
-                  {`${formatNumberClean(colisageStats.totalWeightKg)} kg`}
-                </div>
-              </div>
-              <div
-                className="p-3 bg-white"
-                style={{ borderRadius: '13px', border: '1px solid #dadada' }}
-              >
-                <div style={{ fontSize: '15px', color: '#6b7280' }}>
-                  {t('Coût Transport Estimé:')}
-                </div>
-                <div style={{ fontSize: '20px', color: '#000000', marginTop: '2px' }}>
-                  {`${formatNumberClean(colisageStats.totalTransportCostEur)} €`}
-                </div>
-              </div>
-            </div>
-
-            {/* Search bar */}
-            <div className="px-6 py-4 border-b" style={{ borderColor: '#dadada' }}>
-              <input
-                type="text"
-                value={colisageSearch}
-                onChange={(e) => setColisageSearch(e.target.value)}
-                placeholder={t('Rechercher une pièce dans le stock...')}
-                className="search-bar-expeditions w-full focus:outline-none"
-                style={{
-                  backgroundColor: '#f5f7fa',
-                  borderRadius: '13px',
-                  border: '1px solid #dadada',
-                  padding: '10px 16px',
-                  fontSize: '18px',
-                  color: '#000000',
-                }}
-              />
-            </div>
-
-            {/* Listing of pieces */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-3">
-              {sidePaneDisplayItems.length === 0 ? (
                 <div
-                  className="text-center py-12"
-                  style={{ color: '#9e9e9e', fontSize: '18px' }}
+                  className="p-3 bg-white"
+                  style={{ borderRadius: '13px', border: 'none' }}
                 >
-                  {t('Aucune pièce disponible dans les stocks.')}
+                  <div style={{ fontSize: '15px', color: '#50617a' }}>
+                    {t('Poids Net (Kilogramme) Estimé:')}
+                  </div>
+                  <div style={{ fontSize: '20px', color: '#000000', marginTop: '2px', fontWeight: 600 }}>
+                    {`${formatNumberClean(colisageStats.totalWeightKg)} kg`}
+                  </div>
                 </div>
-              ) : (
-                sidePaneDisplayItems.map((item) => {
-                  const state = selectedColisageMap[item.key];
-                  const isChecked = Boolean(state?.checked);
-                  const volumeVal =
-                    state?.volume !== undefined ? state.volume : item.defaultVolume;
-
-                  return (
-                    <div
-                      key={item.key}
-                      onClick={() => toggleColisageItem(item)}
-                      className="flex items-center justify-between gap-4 p-3.5 transition-colors cursor-pointer"
-                      style={{
-                        backgroundColor: isChecked ? '#f0f4ff' : '#ffffff',
-                        border: isChecked ? '1px solid #2e54ff' : '1px solid #dadada',
-                        borderRadius: '13px',
-                      }}
-                    >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        {/* Radio-check */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleColisageItem(item);
-                          }}
-                          className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-                          style={{
-                            border: isChecked
-                              ? '2px solid #2e54ff'
-                              : '1px solid #9ca3af',
-                            backgroundColor: isChecked ? '#2e54ff' : '#ffffff',
-                          }}
-                        >
-                          {isChecked && <Check className="w-3.5 h-3.5 text-white" />}
-                        </button>
-
-                        {/* Full Title (Format A or B) */}
-                        <span
-                          className="break-words"
-                          style={{
-                            fontSize: '17px',
-                            color: '#000000',
-                            lineHeight: 1.35,
-                          }}
-                        >
-                          {item.title}
-                        </span>
-                      </div>
-
-                      {/* Short input field for volume */}
-                      <div
-                        className="shrink-0 flex items-center gap-2"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <input
-                          type="number"
-                          min={0}
-                          value={volumeVal}
-                          onChange={(e) =>
-                            updateColisageItemVolume(item, e.target.value)
-                          }
-                          className="colisage-vol-input text-center"
-                          style={{
-                            width: '72px',
-                            height: '38px',
-                            backgroundColor: '#ffffff',
-                            border: '1px solid #dadada',
-                            borderRadius: '10px',
-                            fontSize: '17px',
-                            color: '#000000',
-                            padding: '0 8px',
-                            outline: 'none',
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Side-pane footer */}
-            <div
-              className="p-5 border-t flex items-center justify-between gap-4"
-              style={{ borderColor: '#dadada', backgroundColor: '#ffffff' }}
-            >
-              <div style={{ fontSize: '17px', color: '#000000' }}>
-                {`${colisageStats.totalPiecesVolume} pièce(s) au total`}
+                <div
+                  className="p-3 bg-white"
+                  style={{ borderRadius: '13px', border: 'none' }}
+                >
+                  <div style={{ fontSize: '15px', color: '#50617a' }}>
+                    {t('Coût Transport Estimé:')}
+                  </div>
+                  <div style={{ fontSize: '20px', color: '#000000', marginTop: '2px', fontWeight: 600 }}>
+                    {`${formatNumberClean(colisageStats.totalTransportCostEur)} €`}
+                  </div>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsColisageSidePaneOpen(false)}
-                style={blueButtonStyle}
-                className="hover:opacity-90"
+
+              {/* Search bar */}
+              <div
+                className="px-4 pt-2 pb-3 shrink-0"
+                style={{ backgroundColor: 'rgb(245, 247, 250)' }}
               >
-                {t('Valider le colisage')}
-              </button>
+                <input
+                  type="text"
+                  value={colisageSearch}
+                  onChange={(e) => setColisageSearch(e.target.value)}
+                  placeholder={t('Entrez votre recherche')}
+                  style={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    padding: '13px 18px',
+                    borderRadius: '13px',
+                    border: '1px solid #DCE1EA',
+                    fontSize: '18px',
+                    color: '#000000',
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                    display: 'block',
+                  }}
+                />
+              </div>
+
+              {/* Listing of pieces */}
+              <div
+                className="flex-1 overflow-y-auto px-4 pb-24 space-y-2"
+                style={{ backgroundColor: 'rgb(245, 247, 250)' }}
+              >
+                {sidePaneDisplayItems.length === 0 ? (
+                  <div
+                    className="text-center py-12"
+                    style={{ color: '#50617a', fontSize: '18px' }}
+                  >
+                    {t('Aucune pièce disponible dans les stocks.')}
+                  </div>
+                ) : (
+                  sidePaneDisplayItems.map((item) => {
+                    const state = selectedColisageMap[item.key];
+                    const isChecked = Boolean(state?.checked);
+                    const volumeVal =
+                      state?.volume !== undefined ? state.volume : item.defaultVolume;
+
+                    return (
+                      <div
+                        key={item.key}
+                        onClick={() => toggleColisageItem(item)}
+                        className="flex items-center justify-between gap-4 p-3.5 rounded-xl transition-all cursor-pointer bg-white"
+                        style={{
+                          backgroundColor: '#ffffff',
+                          border: 'none',
+                        }}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          {/* Radio-check with center dot when checked (no check icon) */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleColisageItem(item);
+                            }}
+                            className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                            style={{
+                              border: isChecked
+                                ? '2px solid #2e54ff'
+                                : '1.5px solid #cbd5e1',
+                              backgroundColor: '#ffffff',
+                              padding: 0,
+                            }}
+                          >
+                            {isChecked && (
+                              <span
+                                className="w-2.5 h-2.5 rounded-full block"
+                                style={{ backgroundColor: '#2e54ff' }}
+                              />
+                            )}
+                          </button>
+
+                          {/* Full Title (Format A or B) */}
+                          <span
+                            className="break-words"
+                            style={{
+                              fontSize: '17px',
+                              color: '#000000',
+                              lineHeight: 1.35,
+                              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                            }}
+                          >
+                            {item.title}
+                          </span>
+                        </div>
+
+                        {/* Short input field for volume */}
+                        <div
+                          className="shrink-0 flex items-center gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="number"
+                            min={0}
+                            value={volumeVal}
+                            onChange={(e) =>
+                              updateColisageItemVolume(item, e.target.value)
+                            }
+                            className="colisage-vol-input text-center"
+                            style={{
+                              width: '72px',
+                              height: '38px',
+                              backgroundColor: '#ffffff',
+                              border: '1px solid #DCE1EA',
+                              borderRadius: '10px',
+                              fontSize: '17px',
+                              color: '#000000',
+                              padding: '0 8px',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Side-pane footer: 50% / 50% Fermer (red) & Enregistrer (blue), no total pieces count */}
+              <div
+                className="p-4 flex items-center gap-3 shrink-0"
+                style={{ backgroundColor: 'rgb(245, 247, 250)' }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsColisageSidePaneOpen(false)}
+                  style={{
+                    ...smallRedButtonStyle,
+                    flex: 1,
+                    width: '50%',
+                  }}
+                >
+                  {t('Fermer')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsColisageSidePaneOpen(false)}
+                  style={{
+                    ...smallBlueButtonStyle,
+                    flex: 1,
+                    width: '50%',
+                  }}
+                >
+                  {t('Enregistrer')}
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
 
       {/* DELETE CONFIRMATION MODAL */}
       {confirmDeleteId && (
@@ -1718,7 +1755,7 @@ export const ExpeditionsTab: React.FC<ExpeditionsTabProps> = ({
                   padding: '11px 22px',
                   color: '#ffffff',
                   fontSize: '18px',
-                  background: '#ef4444',
+                  background: 'rgb(210, 45, 11)',
                   border: 'none',
                   borderRadius: '13px',
                 }}
