@@ -4191,6 +4191,75 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         }
       }
     }
+
+    // Recover from a 1-column left shift (e.g. when a 34-column row was written before 'Commentaire visible par le technicien.' or 'Statut Facturation.' was added)
+    const rawPrioCell = String(rawByHeader['Priorité'] ?? rawByHeader['Priorité.'] ?? '').trim();
+    const rawDatePrevueCell = String(rawByHeader['Date prévue'] ?? rawByHeader['Date estimée'] ?? rawByHeader['Date estimée.'] ?? '').trim();
+    const rawCreneauCell = String(rawByHeader['Créneau horaire'] ?? rawByHeader['Créneau estimé'] ?? rawByHeader['Créneau estimé.'] ?? '').trim();
+    const rawCommentaireTechCell = String(rawByHeader['Commentaire visible par le technicien.'] ?? rawByHeader['Commentaire visible par le technicien'] ?? '').trim();
+    const isShiftedLeftByOne =
+      /^\d{4}-\d{2}-\d{2}$|^\d{2}\/\d{2}\/\d{4}$/.test(rawPrioCell) ||
+      (/^\d{1,2}[:h]\d{2}/i.test(rawDatePrevueCell) && !/^\d{4}-\d{2}-\d{2}$/.test(rawDatePrevueCell));
+    if (isShiftedLeftByOne) {
+      if (rawCommentaireTechCell === '0' || rawCommentaireTechCell === '1') {
+        merged.priority = rawCommentaireTechCell;
+        merged.commentaireInterne = '';
+      }
+      if (/^\d{4}-\d{2}-\d{2}$|^\d{2}\/\d{2}\/\d{4}$/.test(rawPrioCell)) {
+        merged.estimatedDate = normalizeDateStr(rawPrioCell);
+      }
+      if (/^\d{1,2}[:h]\d{2}/i.test(rawDatePrevueCell)) {
+        merged.estimatedSlot = rawDatePrevueCell;
+      }
+      if (/^\d+\s*min/i.test(rawCreneauCell)) {
+        merged.dureePrestation = rawCreneauCell;
+      }
+    }
+
+    // Normalize estimatedDate from any date header if still empty
+    if (!merged.estimatedDate) {
+      const candidateDate = String(
+        rawByHeader['Date prévue'] ??
+          rawByHeader['Date estimée'] ??
+          rawByHeader['Date estimée.'] ??
+          rawByHeader['Date'] ??
+          ''
+      ).trim();
+      if (candidateDate && !/^\d{1,2}[:h]\d{2}/i.test(candidateDate)) {
+        merged.estimatedDate = normalizeDateStr(candidateDate);
+      }
+    } else {
+      merged.estimatedDate = normalizeDateStr(String(merged.estimatedDate));
+    }
+
+    // Normalize estimatedSlot (e.g. '12:00' -> '12:00pm', '13:00pm' -> '13:00pm')
+    const normalizeMissionSlot = (rawSlotVal: any): string => {
+      const s = String(rawSlotVal ?? '').trim();
+      if (!s || s === '--:--' || s.toLowerCase() === '-- non défini --' || s.toLowerCase() === 'non renseigné') return '';
+      if (/^\d+\s*min/i.test(s)) return '';
+      const m = s.match(/^(\d{1,2})[:h](\d{2})\s*(am|pm)?$/i);
+      if (m) {
+        let h = parseInt(m[1], 10);
+        const mins = parseInt(m[2], 10);
+        const suf = (m[3] || '').toLowerCase();
+        if (suf === 'pm' && h < 12) h += 12;
+        const totalMins = h * 60 + (isNaN(mins) ? 0 : mins);
+        const clampedMins = Math.max(8 * 60, Math.min(19 * 60, Math.round(totalMins / 30) * 30));
+        const finalH = Math.floor(clampedMins / 60);
+        const finalM = clampedMins % 60;
+        const finalSuffix = finalH >= 12 ? 'pm' : 'am';
+        return `${finalH}:${String(finalM).padStart(2, '0')}${finalSuffix}`;
+      }
+      return s;
+    };
+    merged.estimatedSlot = normalizeMissionSlot(
+      merged.estimatedSlot ||
+        rawByHeader['Créneau horaire'] ||
+        rawByHeader['Créneau estimé'] ||
+        rawByHeader['Créneau estimé.'] ||
+        ''
+    );
+
     const rawTourId = String(merged.tourIdentifiant || merged.tourId || merged.tourCode || '').trim();
     const isNullOrATrier =
       !rawTourId ||
@@ -4215,7 +4284,47 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.id = merged.id || merged.interventionReference || merged.defibIdentifiant;
     merged.clientName = merged.clientName || merged.siteName || '';
     merged.status = merged.status || 'Brouillon';
-    merged.equipmentType = merged.equipmentType || merged.categorie || 'Défibrillateur';
+    merged.equipmentType = String(
+      merged.equipmentType ||
+        merged.categorie ||
+        rawByHeader["Type d’équipement"] ||
+        rawByHeader["Type d'équipement"] ||
+        rawByHeader["Type d’équipement."] ||
+        rawByHeader["Type d'équipement."] ||
+        'Défibrillateur'
+    ).trim();
+
+    // Sanitize formationId: clear false-positive values (like 'Aucune information' from shifted columns) or when equipmentType is explicitly non-formation
+    const rawFormationId = String(merged.formationId || '').trim();
+    const rawFormationLower = rawFormationId.toLowerCase();
+    const invalidFormationValues = [
+      'aucune information',
+      'aucune information.',
+      'non',
+      'false',
+      '0',
+      '-',
+      'null',
+      'undefined',
+      'a facturer',
+      'à facturer',
+      'facturé',
+      'facture',
+      'inclus contrat',
+      'non facturable',
+    ];
+    const eqTypeLower = String(merged.equipmentType || '').trim().toLowerCase();
+    const isExplicitlyNonFormationEq =
+      Boolean(eqTypeLower) && !eqTypeLower.includes('formation');
+    if (invalidFormationValues.includes(rawFormationLower) || isExplicitlyNonFormationEq) {
+      if (rawFormationLower === 'aucune information' && !merged.statutFacturation) {
+        merged.statutFacturation = 'Aucune information';
+      }
+      merged.formationId = '';
+    } else {
+      merged.formationId = rawFormationId;
+    }
+
     if (merged.reason && !Array.isArray(merged.reasons)) {
       merged.reasons = String(merged.reason)
         .split(',')
@@ -4262,14 +4371,16 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.expedition = String(
       merged.expedition ?? merged['Expedition.'] ?? merged['Expedition'] ?? ''
     ).trim();
-    merged.commentaireInterne = String(
-      merged.commentaireInterne ??
-        merged['Commentaire visible par le technicien.'] ??
-        merged['Commentaire visible par le technicien'] ??
-        merged['Commentaire interne.'] ??
-        merged['Commentaire interne'] ??
-        ''
-    ).trim();
+    if (!isShiftedLeftByOne) {
+      merged.commentaireInterne = String(
+        merged.commentaireInterne ??
+          merged['Commentaire visible par le technicien.'] ??
+          merged['Commentaire visible par le technicien'] ??
+          merged['Commentaire interne.'] ??
+          merged['Commentaire interne'] ??
+          ''
+      ).trim();
+    }
     const sitLower = String(merged.status || '').trim().toLowerCase();
     const isAcceptedOrAFaire =
       sitLower === 'accepté client' ||
@@ -7501,6 +7612,17 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.providedByClientParts = enriched.providedByClientParts.join(', ');
     }
     enriched.expedition = String(enriched.expedition ?? '').trim();
+    enriched._rawSheetRow = {};
+    const rawFormId = String(enriched.formationId ?? '').trim();
+    const eqLower = String(enriched.equipmentType || '').trim().toLowerCase();
+    if (
+      ['aucune information', 'aucune information.', 'non', 'false', '0', '-'].includes(rawFormId.toLowerCase()) ||
+      (eqLower && !eqLower.includes('formation'))
+    ) {
+      enriched.formationId = '';
+    } else {
+      enriched.formationId = rawFormId;
+    }
     enriched.commentaireInterne =
       enriched.commentaireInterne ??
       enriched['Commentaire visible par le technicien.'] ??
@@ -10017,7 +10139,8 @@ export async function fetchTenantSheetCollection(
     if (
       !Array.isArray(snap.headers) ||
       snap.headers.length === 0 ||
-      !snap.headers.some(h => normalizeHeaderKey(h).includes('statutfacturation'))
+      !snap.headers.some(h => normalizeHeaderKey(h).includes('statutfacturation')) ||
+      !snap.headers.some(h => normalizeHeaderKey(h).includes('expedition'))
     ) {
       return true;
     }
@@ -10026,6 +10149,16 @@ export async function fetchTenantSheetCollection(
       if (String(it.interventionReference || '').startsWith('fsm-m-')) return true;
       if (!it.defibIdentifiant && (it._rawSheetRow?.['Identifiant.'] || it._rawSheetRow?.['Identifiant'])) return true;
       if (String(it.bonCommandeId || '').trim().toLowerCase() === 'custom') return true;
+      if (String(it.formationId || '').trim().toLowerCase() === 'aucune information') return true;
+      if (
+        it.equipmentType &&
+        !String(it.equipmentType).toLowerCase().includes('formation') &&
+        Boolean(it.formationId)
+      ) {
+        return true;
+      }
+      if (!it.estimatedDate && (it._rawSheetRow?.['Date prévue'] || it._rawSheetRow?.['Date estimée'])) return true;
+      if (/^\d{1,2}:\d{2}$/.test(String(it.estimatedSlot || '').trim())) return true;
       return false;
     });
   };
@@ -11308,7 +11441,8 @@ export async function upsertRecordsToTenantSheet(
         (!headers.some(h => normalizeHeaderKey(h).includes('fournituresparleclient') || normalizeHeaderKey(h).includes('fournitureparleclient')) ||
           !headers.some(h => normalizeHeaderKey(h).includes('commentairevisibleparletechnicien')) ||
           !headers.some(h => normalizeHeaderKey(h).includes('raisonrejet')) ||
-          !headers.some(h => normalizeHeaderKey(h).includes('statutfacturation')));
+          !headers.some(h => normalizeHeaderKey(h).includes('statutfacturation')) ||
+          !headers.some(h => normalizeHeaderKey(h).includes('expedition')));
       const variablesMissingNewHeaders =
         tabType === 'variables' &&
         (!headers.some(h => normalizeHeaderKey(h).includes('typedusagedelelectrode')) ||

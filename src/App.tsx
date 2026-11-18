@@ -4810,7 +4810,23 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                 region: st.region || st.departement || '',
                 vehicule: st.vehicule || '-',
                 status: normStatus,
-                missions: Array.isArray(st.missions) ? [...st.missions] : [],
+                missions: Array.isArray(st.missions)
+                  ? st.missions.map((em: any) => {
+                      if (!em || typeof em !== 'object') return em;
+                      const emEq = String(em.equipmentType || em.categorie || '').trim();
+                      const emForm = String(em.formationId || '').trim();
+                      const cleanForm =
+                        ['aucune information', 'aucune information.', 'non', 'false', '0', '-'].includes(emForm.toLowerCase()) ||
+                        (emEq && !emEq.toLowerCase().includes('formation'))
+                          ? ''
+                          : emForm;
+                      return {
+                        ...em,
+                        equipmentType: emEq || 'Défibrillateur',
+                        formationId: cleanForm,
+                      };
+                    })
+                  : [],
               };
             }),
           ];
@@ -4822,6 +4838,25 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             const extractTourNum = (s: string) => {
               const m = String(s || '').match(/TOUR-(\d+)$/i);
               return m ? parseInt(m[1], 10) : null;
+            };
+            const normalizeSlotStr = (rawSlotVal: any): string => {
+              const s = String(rawSlotVal ?? '').trim();
+              if (!s || s === '--:--' || s.toLowerCase() === '-- non défini --' || s.toLowerCase() === 'non renseigné') return '';
+              if (/^\d+\s*min/i.test(s)) return '';
+              const m = s.match(/^(\d{1,2})[:h](\d{2})\s*(am|pm)?$/i);
+              if (m) {
+                let h = parseInt(m[1], 10);
+                const mins = parseInt(m[2], 10);
+                const suf = (m[3] || '').toLowerCase();
+                if (suf === 'pm' && h < 12) h += 12;
+                const totalMins = h * 60 + (isNaN(mins) ? 0 : mins);
+                const clampedMins = Math.max(8 * 60, Math.min(19 * 60, Math.round(totalMins / 30) * 30));
+                const finalH = Math.floor(clampedMins / 60);
+                const finalM = clampedMins % 60;
+                const finalSuffix = finalH >= 12 ? 'pm' : 'am';
+                return `${finalH}:${String(finalM).padStart(2, '0')}${finalSuffix}`;
+              }
+              return s;
             };
             for (const sm of sheetMissions) {
               if (!sm || typeof sm !== 'object') continue;
@@ -4858,11 +4893,34 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                   : (sm.bonCommandeId ?? sm.customBonCommande ?? sm['Bon de commande.'] ?? sm['Bon de commande'] ?? '')
               ).trim();
               const cleanBc = rawBc.toLowerCase() === 'custom' ? '' : rawBc;
+              const cleanEquipmentType = String(
+                sm.equipmentType ||
+                  sm.categorie ||
+                  sm["Type d’équipement"] ||
+                  sm["Type d'équipement"] ||
+                  'Défibrillateur'
+              ).trim();
+              const rawFormId = String(sm.formationId || '').trim();
+              const cleanFormationId =
+                ['aucune information', 'aucune information.', 'non', 'false', '0', '-'].includes(rawFormId.toLowerCase()) ||
+                (cleanEquipmentType && !cleanEquipmentType.toLowerCase().includes('formation'))
+                  ? ''
+                  : rawFormId;
+              const cleanEstimatedDate = String(
+                sm.estimatedDate || sm['Date prévue'] || sm['Date estimée'] || sm['Date estimée.'] || ''
+              ).trim();
+              const cleanEstimatedSlot = normalizeSlotStr(
+                sm.estimatedSlot || sm['Créneau horaire'] || sm['Créneau estimé'] || sm['Créneau estimé.'] || ''
+              );
               list.push({
                 ...sm,
                 id: sm.id || cleanRef || `fsm-m-${Date.now()}-${list.length}`,
                 interventionReference: cleanRef,
                 defibIdentifiant: cleanDefibId || sm.defibIdentifiant || '',
+                equipmentType: cleanEquipmentType,
+                formationId: cleanFormationId,
+                estimatedDate: cleanEstimatedDate,
+                estimatedSlot: cleanEstimatedSlot,
                 bonCommandeId: cleanBc ? (sm.bonCommandeId === 'custom' ? 'custom' : cleanBc) : '',
                 customBonCommande: cleanBc,
                 expedition: String(sm.expedition ?? sm['Expedition.'] ?? sm['Expedition'] ?? '').trim(),
@@ -4881,9 +4939,9 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                     rawPrio === '1' ||
                     rawPrio.toLowerCase() === 'true' ||
                     sm.isForced === true ||
-                    sm.equipmentType === 'Formation' ||
-                    String(sm.equipmentType || '').toLowerCase().includes('formation') ||
-                    Boolean(sm.formationId);
+                    cleanEquipmentType === 'Formation' ||
+                    cleanEquipmentType.toLowerCase().includes('formation') ||
+                    Boolean(cleanFormationId);
                   if (isAcceptedOrAFaire) {
                     return {
                       priority: '1',
@@ -5881,16 +5939,24 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
             sitLower === 'à faire' ||
             sitLower === 'a faire';
           const rawPrio = String(m.priority ?? '').trim();
+          const eqLower = String(m.equipmentType || '').trim().toLowerCase();
+          const rawFormId = String(m.formationId || '').trim();
+          const cleanFormId =
+            ['aucune information', 'aucune information.', 'non', 'false', '0', '-'].includes(rawFormId.toLowerCase()) ||
+            (eqLower && !eqLower.includes('formation'))
+              ? ''
+              : rawFormId;
           const isLockedMission =
             isAcceptedOrAFaire ||
             m.isForced === true ||
             rawPrio === '1' ||
             (m.isForced !== false && rawPrio !== '0' && Boolean(m.isManualDate && m.isManualSlot)) ||
             m.equipmentType === 'Formation' ||
-            String(m.equipmentType || '').toLowerCase().includes('formation') ||
-            Boolean(m.formationId);
+            eqLower.includes('formation') ||
+            Boolean(cleanFormId);
           return {
             ...m,
+            formationId: cleanFormId,
             status: m.status || 'Brouillon',
             priority: isLockedMission ? '1' : '0',
             isForced: isLockedMission,
@@ -6036,14 +6102,21 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                   sitLower === 'à faire' ||
                   sitLower === 'a faire';
                 const rawPrio = String(m.priority ?? '').trim();
+                const eqLower = String(m.equipmentType || '').trim().toLowerCase();
+                const rawFormId = String(m.formationId || '').trim();
+                const cleanFormId =
+                  ['aucune information', 'aucune information.', 'non', 'false', '0', '-'].includes(rawFormId.toLowerCase()) ||
+                  (eqLower && !eqLower.includes('formation'))
+                    ? ''
+                    : rawFormId;
                 const isLockedMission =
                   isAcceptedOrAFaire ||
                   m.isForced === true ||
                   rawPrio === '1' ||
                   (m.isForced !== false && rawPrio !== '0' && Boolean(m.isManualDate && m.isManualSlot)) ||
                   m.equipmentType === 'Formation' ||
-                  String(m.equipmentType || '').toLowerCase().includes('formation') ||
-                  Boolean(m.formationId);
+                  eqLower.includes('formation') ||
+                  Boolean(cleanFormId);
                 if (isAcceptedOrAFaire) {
                   return {
                     priority: '1',
@@ -6168,10 +6241,14 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
 
     const isFormationMission = (m: any) => {
       if (!m) return false;
+      const eq = String(m.equipmentType || '').trim().toLowerCase();
+      if (eq && !eq.includes('formation')) return false;
+      const fId = String(m.formationId || '').trim().toLowerCase();
+      const validFId = fId && !['aucune information', 'aucune information.', 'non', 'false', '0', '-'].includes(fId);
       return (
         m.equipmentType === 'Formation' ||
-        m.equipmentType?.toLowerCase()?.includes('formation') ||
-        !!m.formationId ||
+        eq.includes('formation') ||
+        Boolean(validFId) ||
         m.reason?.toLowerCase()?.includes('formation') ||
         m.defibIdentifiant === 'Formation'
       );
@@ -8329,7 +8406,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
     const isFormationMission =
       m.equipmentType === 'Formation' ||
       m.equipmentType?.toLowerCase()?.includes('formation') ||
-      !!m.formationId;
+      (!m.equipmentType && Boolean(m.formationId && String(m.formationId).toLowerCase() !== 'aucune information'));
     const fmt = isFormationMission
       ? formations?.find((f: any) => f.id === m.formationId || f.id === m.defibIdentifiant)
       : null;
@@ -18240,11 +18317,11 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                               cursor: 'default'
                                             }}
                                           >
-                                            {(m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) ? 'Formation' : (m.equipmentType || 'Défibrillateur')}
+                                            {(m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || (!m.equipmentType && !!m.formationId && String(m.formationId).toLowerCase() !== 'aucune information')) ? 'Formation' : (m.equipmentType || 'Défibrillateur')}
                                           </span>
 
                                           {(() => {
-                                            const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
+                                            const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || (!m.equipmentType && !!m.formationId && String(m.formationId).toLowerCase() !== 'aucune information');
                                             if (isFormationMission) return null;
 
                                             const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
@@ -18371,7 +18448,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
 
                                         {/* Row 2: Client & Site & Identifiant & Localisation & Ref Int & Date Estimée & Créneau Estimé & Transférer (Montré si déroulé) */}
                                         {isExpanded && (() => {
-                                          const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
+                                          const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || (!m.equipmentType && !!m.formationId && String(m.formationId).toLowerCase() !== 'aucune information');
                                           const sitLowerATrier = String(m.status || 'Brouillon').trim().toLowerCase();
                                           const isStatusLockedATrier =
                                             sitLowerATrier === 'accepté client' ||
@@ -19045,7 +19122,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
 
                                           {/* Lookup field for required components with stock items selector */}
                                           {(() => {
-                                            if (m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) return null;
+                                            if (m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || (!m.equipmentType && !!m.formationId && String(m.formationId).toLowerCase() !== 'aucune information')) return null;
                                             const currentMissionDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
 
                                             const tourTechName = t.techName || '';
@@ -21084,7 +21161,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                               cursor: 'default'
                                             }}
                                           >
-                                            {(m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) ? 'Formation' : (m.equipmentType || (() => {
+                                            {(m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || (!m.equipmentType && !!m.formationId && String(m.formationId).toLowerCase() !== 'aucune information')) ? 'Formation' : (m.equipmentType || (() => {
                                               const isDefib = defibrillateurs.some((d: any) => d.identifiant === m.defibIdentifiant);
                                               if (isDefib) return 'Défibrillateur';
                                               const other = otherEquipments.find((o: any) => o.identifiant === m.defibIdentifiant);
@@ -21094,7 +21171,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                           </span>
 
                                         {(() => {
-                                          const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
+                                          const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || (!m.equipmentType && !!m.formationId && String(m.formationId).toLowerCase() !== 'aucune information');
                                           if (isFormationMission) return null;
 
                                           const matchedDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
@@ -21221,7 +21298,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
 
                                       {/* Contenu déroulant (Montré uniquement si déroulé) */}
                                       {isExpanded && (() => {
-                                        const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId;
+                                        const isFormationMission = m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || (!m.equipmentType && !!m.formationId && String(m.formationId).toLowerCase() !== 'aucune information');
                                         return (
                                         <div className="space-y-4 pt-2">
                                           {/* Ligne 1 (4 cols en grid égales) : Client. / Site. / Téléphone principal. / Email principal. */}
@@ -21941,7 +22018,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
 
                                   {/* Lookup field for required components with stock items selector */}
                                   {(() => {
-                                    if (m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || !!m.formationId) return null;
+                                    if (m.equipmentType === 'Formation' || m.equipmentType?.toLowerCase().includes('formation') || (!m.equipmentType && !!m.formationId && String(m.formationId).toLowerCase() !== 'aucune information')) return null;
                                     const currentMissionDefib = defibrillateurs.find((d: any) => d.identifiant === m.defibIdentifiant);
 
                                     // Selected technician on tour t
