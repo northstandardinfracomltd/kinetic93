@@ -1811,6 +1811,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Commentaire', field: 'commentaire', aliases: ['commentaire', 'commentaires', 'notes', 'observation', 'remarques', 'refusalcomment', 'motifrefus', 'clientrefusalcomment'] },
     { header: 'Identifiant formation', field: 'formationId', aliases: ['identifiantformation', 'formationid', 'idformation'] },
     { header: 'Statut Facturation.', field: 'statutFacturation', aliases: ['statutfacturation', 'statutdefacturation', 'facturation', 'etatfacturation', 'situationfacturation'] },
+    { header: 'Expedition.', field: 'expedition', aliases: ['expedition', 'expeditions', 'refexpedition', 'referenceexpedition'] },
   ],
   gestionApresIntervention: [
     { header: 'Référence Intervention.', field: 'interventionReference', aliases: ['referenceintervention', 'referencedelintervention', 'refintervention', 'reference', 'id'] },
@@ -4258,6 +4259,9 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.requiredParts = parseMissionPartsArray(merged.requiredParts);
     merged.sentToClientParts = parseMissionPartsArray(merged.sentToClientParts);
     merged.providedByClientParts = parseMissionPartsArray(merged.providedByClientParts);
+    merged.expedition = String(
+      merged.expedition ?? merged['Expedition.'] ?? merged['Expedition'] ?? ''
+    ).trim();
     merged.commentaireInterne = String(
       merged.commentaireInterne ??
         merged['Commentaire visible par le technicien.'] ??
@@ -7496,6 +7500,7 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     if (Array.isArray(enriched.providedByClientParts)) {
       enriched.providedByClientParts = enriched.providedByClientParts.join(', ');
     }
+    enriched.expedition = String(enriched.expedition ?? '').trim();
     enriched.commentaireInterne =
       enriched.commentaireInterne ??
       enriched['Commentaire visible par le technicien.'] ??

@@ -4865,6 +4865,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                 defibIdentifiant: cleanDefibId || sm.defibIdentifiant || '',
                 bonCommandeId: cleanBc ? (sm.bonCommandeId === 'custom' ? 'custom' : cleanBc) : '',
                 customBonCommande: cleanBc,
+                expedition: String(sm.expedition ?? sm['Expedition.'] ?? sm['Expedition'] ?? '').trim(),
                 ...(() => {
                   const sitLower = String(sm.status || '').trim().toLowerCase();
                   const isAcceptedOrAFaire =
@@ -6025,6 +6026,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
               })(),
               sentToClientParts: Array.isArray(m.sentToClientParts) ? m.sentToClientParts : [],
               providedByClientParts: Array.isArray(m.providedByClientParts) ? m.providedByClientParts : [],
+              expedition: m.expedition ?? '',
               commentaireInterne: m.commentaireInterne ?? '',
               ...(() => {
                 const sitLower = String(m.status || 'Brouillon').trim().toLowerCase();
@@ -8224,7 +8226,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
       saveStocks(updatedStocks);
     }
 
-    updateFsmMission(tourId, missionId, { sentToClientParts: newSentParts });
+    updateFsmMission(tourId, missionId, {
+      sentToClientParts: newSentParts,
+      ...(newSentParts.length === 0 ? { expedition: '' } : {}),
+    });
   };
 
   const togglePartProvidedByClient = (tourId: string, missionId: string, partName: string) => {
@@ -19207,6 +19212,55 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                             </div>
                                                           </button>
 
+                                                          {isSent && (
+                                                            <select
+                                                              value={m.expedition || ''}
+                                                              onChange={(e) => {
+                                                                updateFsmMission(t.id, m.id, { expedition: e.target.value });
+                                                              }}
+                                                              className="font-sans cursor-pointer focus:outline-none shrink-0"
+                                                              style={{
+                                                                border: '1px solid #DCE1EA',
+                                                                borderRadius: '13px',
+                                                                padding: '6px 12px',
+                                                                fontSize: '14px',
+                                                                fontWeight: 100,
+                                                                color: m.expedition ? '#000000' : '#BECADB',
+                                                                backgroundColor: '#ffffff',
+                                                                width: '230px',
+                                                                maxWidth: '250px',
+                                                                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                                              }}
+                                                            >
+                                                              <option value="" style={{ color: '#BECADB' }}>
+                                                                Sélectionnez une expédition.
+                                                              </option>
+                                                              {m.expedition &&
+                                                                !(expeditions || []).some(
+                                                                  (exp: any) =>
+                                                                    String(exp.reference || exp.id).trim() === m.expedition
+                                                                ) && (
+                                                                  <option value={m.expedition} style={{ color: '#000000' }}>
+                                                                    {m.expedition}
+                                                                  </option>
+                                                                )}
+                                                              {(expeditions || []).map((exp: any) => {
+                                                                const expKey = String(exp.reference || exp.id).trim();
+                                                                return (
+                                                                  <option
+                                                                    key={exp.id || expKey}
+                                                                    value={expKey}
+                                                                    style={{ color: '#000000' }}
+                                                                  >
+                                                                    {expKey}
+                                                                    {exp.statut ? ` — ${exp.statut}` : ''}
+                                                                    {exp.destinataire ? ` (${exp.destinataire})` : ''}
+                                                                  </option>
+                                                                );
+                                                              })}
+                                                            </select>
+                                                          )}
+
                                                           {/* Toggle ON/OFF Fourniture par le client */}
                                                           <button
                                                             type="button"
@@ -19252,6 +19306,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                               changeFsmMissionParts(t.id, m.id, m.requiredParts || [], updatedParts, {
                                                                 sentToClientParts: updatedSentParts,
                                                                 providedByClientParts: updatedProvidedParts,
+                                                                ...(updatedSentParts.length === 0 ? { expedition: '' } : {}),
                                                               });
                                                             }}
                                                             style={{
@@ -22071,6 +22126,55 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                     </div>
                                                   </button>
 
+                                                  {isSent && (
+                                                    <select
+                                                      value={m.expedition || ''}
+                                                      onChange={(e) => {
+                                                        updateFsmMission(t.id, m.id, { expedition: e.target.value });
+                                                      }}
+                                                      className="font-sans cursor-pointer focus:outline-none shrink-0"
+                                                      style={{
+                                                        border: '1px solid #DCE1EA',
+                                                        borderRadius: '13px',
+                                                        padding: '6px 12px',
+                                                        fontSize: '14px',
+                                                        fontWeight: 100,
+                                                        color: m.expedition ? '#000000' : '#BECADB',
+                                                        backgroundColor: '#ffffff',
+                                                        width: '230px',
+                                                        maxWidth: '250px',
+                                                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                                                      }}
+                                                    >
+                                                      <option value="" style={{ color: '#BECADB' }}>
+                                                        Sélectionnez une expédition.
+                                                      </option>
+                                                      {m.expedition &&
+                                                        !(expeditions || []).some(
+                                                          (exp: any) =>
+                                                            String(exp.reference || exp.id).trim() === m.expedition
+                                                        ) && (
+                                                          <option value={m.expedition} style={{ color: '#000000' }}>
+                                                            {m.expedition}
+                                                          </option>
+                                                        )}
+                                                      {(expeditions || []).map((exp: any) => {
+                                                        const expKey = String(exp.reference || exp.id).trim();
+                                                        return (
+                                                          <option
+                                                            key={exp.id || expKey}
+                                                            value={expKey}
+                                                            style={{ color: '#000000' }}
+                                                          >
+                                                            {expKey}
+                                                            {exp.statut ? ` — ${exp.statut}` : ''}
+                                                            {exp.destinataire ? ` (${exp.destinataire})` : ''}
+                                                          </option>
+                                                        );
+                                                      })}
+                                                    </select>
+                                                  )}
+
                                                   {/* Toggle ON/OFF Fourniture par le client */}
                                                   <button
                                                     type="button"
@@ -22116,6 +22220,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                                       changeFsmMissionParts(t.id, m.id, m.requiredParts, updatedParts, {
                                                         sentToClientParts: updatedSentParts,
                                                         providedByClientParts: updatedProvidedParts,
+                                                        ...(updatedSentParts.length === 0 ? { expedition: '' } : {}),
                                                       });
                                                     }}
                                                     style={{
