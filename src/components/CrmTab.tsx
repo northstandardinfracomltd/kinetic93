@@ -5461,7 +5461,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
                 {/* Réinitialiser si au moins un filtre est actif */}
                 {(draftDateStart !== '' || draftDateEnd !== '' || draftFilterStatut !== 'Tous' || draftFilterCollaborateur !== 'Tous' || draftFilterCriticite !== 'Tous' || draftFilterSemaine !== 'Tous' || draftFilterSituationDevis !== 'Tous') && (
-                  <div className="pt-2 text-center">
+                  <div className="pt-2">
                     <button
                       type="button"
                       onClick={() => {
@@ -5473,7 +5473,20 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         setDraftFilterSemaine('Tous');
                         setDraftFilterSituationDevis('Tous');
                       }}
-                      className="text-sm text-neutral-500 hover:text-black cursor-pointer font-sans underline"
+                      style={{
+                        width: '100%',
+                        backgroundColor: 'rgb(210, 45, 11)',
+                        color: '#ffffff',
+                        borderRadius: '13px',
+                        padding: '14px',
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        boxShadow: 'none',
+                      }}
+                      className="w-full hover:opacity-90 transition-opacity"
                     >
                       Réinitialiser les filtres
                     </button>
@@ -6370,7 +6383,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         fontSize: '18px',
                         fontWeight: 600,
                         padding: '9px 16px',
-                        borderRadius: '10px',
+                        borderRadius: '13px',
                         border: 'none',
                         cursor: 'pointer',
                         backgroundColor: isActive ? 'rgb(46, 84, 255)' : '#f1f5f9',

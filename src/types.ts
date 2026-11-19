@@ -1312,3 +1312,83 @@ export function openTenantSpreadsheetUrl(url: string, options?: { direct?: boole
   backdrop.appendChild(card);
   document.body.appendChild(backdrop);
 }
+
+export const PASTILLE_BADGE_URLS = [
+  'https://civilprom.s3.eu-north-1.amazonaws.com/pastilleviolette.svg',
+  'https://civilprom.s3.eu-north-1.amazonaws.com/pastillebleue.svg',
+  'https://civilprom.s3.eu-north-1.amazonaws.com/pastilleorange.svg',
+] as const;
+
+const pastilleMemoryImageElements = new Map<string, HTMLImageElement>();
+const pastilleDataUrlCache = new Map<string, string>();
+
+export function preloadPastilleBadgeImages(): void {
+  if (typeof window === 'undefined') return;
+  for (const url of PASTILLE_BADGE_URLS) {
+    // 1. Restore from localStorage if already cached
+    if (!pastilleDataUrlCache.has(url)) {
+      try {
+        const stored = localStorage.getItem(`defib_pastille_cache_v1_${url}`);
+        if (stored && stored.startsWith('data:image/')) {
+          pastilleDataUrlCache.set(url, stored);
+        }
+      } catch (_) {}
+    }
+
+    // 2. Pin decoded HTMLImageElement in memory so browser never evicts the texture
+    if (!pastilleMemoryImageElements.has(url)) {
+      try {
+        const img = new Image();
+        img.decoding = 'sync';
+        img.referrerPolicy = 'no-referrer';
+        img.src = pastilleDataUrlCache.get(url) || url;
+        if (typeof img.decode === 'function') {
+          img.decode().catch(() => {});
+        }
+        pastilleMemoryImageElements.set(url, img);
+      } catch (_) {}
+    }
+
+    // 3. Background fetch & persist as Data URL in localStorage if not yet cached
+    if (!pastilleDataUrlCache.has(url)) {
+      fetch(url, { mode: 'cors', cache: 'force-cache', referrerPolicy: 'no-referrer' })
+        .then((res) => (res.ok ? res.blob() : null))
+        .then((blob) => {
+          if (!blob) return;
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = typeof reader.result === 'string' ? reader.result : '';
+            if (result && result.startsWith('data:image/')) {
+              pastilleDataUrlCache.set(url, result);
+              try {
+                localStorage.setItem(`defib_pastille_cache_v1_${url}`, result);
+              } catch (_) {}
+            }
+          };
+          reader.readAsDataURL(blob);
+        })
+        .catch(() => {});
+    }
+  }
+}
+
+export function getCachedPastilleSrc(url: string): string {
+  if (!pastilleMemoryImageElements.has(url)) {
+    preloadPastilleBadgeImages();
+  }
+  const cached = pastilleDataUrlCache.get(url);
+  if (cached) return cached;
+  try {
+    const stored = localStorage.getItem(`defib_pastille_cache_v1_${url}`);
+    if (stored && stored.startsWith('data:image/')) {
+      pastilleDataUrlCache.set(url, stored);
+      return stored;
+    }
+  } catch (_) {}
+  return url;
+}
+
+if (typeof window !== 'undefined') {
+  preloadPastilleBadgeImages();
+}
+

@@ -512,9 +512,10 @@ export default function SatisfactionTab({
     transition: 'all 0s',
   };
 
-  // Searching and month filtering logic - calculates exactly the rows displayed on screen
+  // Searching and month filtering logic - calculates exactly the rows displayed on screen (sorted newest first)
   const filteredReviews = useMemo(() => {
-    return customerReviews.filter((rev) => {
+    const indexed = customerReviews.map((rev, originalIndex) => ({ rev, originalIndex }));
+    const filtered = indexed.filter(({ rev }) => {
       // 1. Date range filter (Début et Fin)
       if (satStartDate || satEndDate) {
         const revDate = parseReviewTimestamp(rev);
@@ -558,6 +559,16 @@ export default function SatisfactionTab({
         (rev.defibId && rev.defibId.toLowerCase().includes(q))
       );
     });
+
+    // Sort from most recent to oldest
+    filtered.sort((a, b) => {
+      const dateA = parseReviewTimestamp(a.rev)?.getTime() ?? 0;
+      const dateB = parseReviewTimestamp(b.rev)?.getTime() ?? 0;
+      if (dateB !== dateA) return dateB - dateA;
+      return b.originalIndex - a.originalIndex;
+    });
+
+    return filtered.map((item) => item.rev);
   }, [customerReviews, selectedMonth, search, satStartDate, satEndDate]);
 
   // Selection handlers
@@ -831,7 +842,7 @@ export default function SatisfactionTab({
                       openTenantSpreadsheetUrl(resolvedSpreadsheetUrl);
                     }
                   } else if (val === 'form-template') {
-                    openTenantSpreadsheetUrl('https://consoledefibeo.deroesch.com/satisfaction');
+                    openTenantSpreadsheetUrl('https://consoledefibeo.deroesch.com/satisfaction#try');
                   }
                 }}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -858,10 +869,11 @@ export default function SatisfactionTab({
 
             {/* Filter Month Button ("Tous les mois") styled like "Indicatif postal" on Défibrillateurs */}
             <div
-              className={`relative inline-flex items-center overflow-hidden rounded-full ${clickedPill === 'month-satisfaction' ? 'sidebar-nav-click-shrink-wave' : ''}`}
+              className="relative inline-flex items-center overflow-hidden rounded-full"
             >
               <button
                 type="button"
+                tabIndex={-1}
                 style={{
                   borderRadius: '1000px',
                   padding: '8px 16px',
@@ -876,6 +888,7 @@ export default function SatisfactionTab({
                   outline: 'none',
                   whiteSpace: 'nowrap',
                   transition: 'all 0.15s ease',
+                  pointerEvents: 'none',
                 }}
                 className="cursor-pointer font-sans transition-all select-none"
               >
@@ -884,12 +897,9 @@ export default function SatisfactionTab({
               <select
                 id="filter-month-satisfaction"
                 value={selectedMonth}
-                onMouseDown={() => {
-                  setClickedPill('month-satisfaction');
-                  setTimeout(() => setClickedPill((prev) => (prev === 'month-satisfaction' ? null : prev)), 320);
-                }}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                style={{ WebkitAppearance: 'menulist-button', appearance: 'auto', border: 'none', outline: 'none' }}
                 title={t("Filtrer par mois")}
               >
                 <option value="all" className="bg-white text-black font-normal">
@@ -1292,9 +1302,9 @@ export default function SatisfactionTab({
                               cursor: ((rev.interventionReference || rev.interventionRef || rev.intervention || '').trim()) ? 'pointer' : 'not-allowed',
                             }}
                             className="font-sans bg-transparent hover:opacity-80 transition-all"
-                            title={((rev.interventionReference || rev.interventionRef || rev.intervention || '').trim()) ? t("Détails intervention") : t("Aucune référence intervention")}
+                            title={((rev.interventionReference || rev.interventionRef || rev.intervention || '').trim()) ? t("Intervention") : t("Aucune référence intervention")}
                           >
-                            <span>{t("Détails intervention")}</span>
+                            <span>{t("Intervention")}</span>
                           </button>
                           <button
                             type="button"
@@ -1425,7 +1435,7 @@ export default function SatisfactionTab({
                 </div>
 
                 {(draftSatStartDate !== '' || draftSatEndDate !== '') && (
-                  <div className="pt-2 text-center">
+                  <div className="pt-2">
                     <button
                       type="button"
                       id="btn-reset-sat-dates"
@@ -1433,7 +1443,20 @@ export default function SatisfactionTab({
                         setDraftSatStartDate('');
                         setDraftSatEndDate('');
                       }}
-                      className="text-sm text-neutral-500 hover:text-black cursor-pointer font-sans underline"
+                      style={{
+                        width: '100%',
+                        backgroundColor: 'rgb(210, 45, 11)',
+                        color: '#ffffff',
+                        borderRadius: '13px',
+                        padding: '14px',
+                        fontSize: '18px',
+                        fontWeight: 'bold',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                        boxShadow: 'none',
+                      }}
+                      className="w-full hover:opacity-90 transition-opacity"
                     >
                       Réinitialiser les filtres
                     </button>

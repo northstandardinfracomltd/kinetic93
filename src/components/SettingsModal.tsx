@@ -6246,6 +6246,24 @@ export default function SettingsModal({
               </div>
             </div>
 
+            {/* 1.c BLOC BOUTIQUE */}
+            <div
+              className="p-5 rounded-2xl flex flex-col items-center justify-center gap-4 text-center my-4 animate-fadeIn"
+              style={{
+                border: 'none',
+                backgroundColor: 'rgb(245 247 250)',
+                boxShadow: 'none',
+              }}
+              id="settings-section-boutique-unavailable"
+            >
+              <p
+                className="font-bold text-black text-center select-none"
+                style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+              >
+                {t("La boutique n’est pas disponible actuellement")}
+              </p>
+            </div>
+
             {/* 2. ASSISTANCE DEFIBEO */}
             <div className="space-y-4 text-left mt-4 animate-fadeIn" style={{ backgroundColor: 'transparent', padding: 0, border: 'none' }} id="settings-section-assistance-group">
               <div className="grid grid-cols-1 gap-4">

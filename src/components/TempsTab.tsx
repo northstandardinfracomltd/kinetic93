@@ -1760,7 +1760,8 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           background-color: #f5f7fa !important;
         }
         #temps-settings-pane input:not([type="radio"]):not([type="checkbox"]),
-        #temps-settings-pane select {
+        #temps-settings-pane select,
+        #temps-settings-pane textarea {
           padding: 10px 14px !important;
           border: 1px solid #DCE1EA !important;
           border-radius: 13px !important;
@@ -1774,14 +1775,16 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
           transition: all 0s !important;
           width: 100% !important;
         }
-        #temps-settings-pane input:not([type="radio"]):not([type="checkbox"])::placeholder {
+        #temps-settings-pane input:not([type="radio"]):not([type="checkbox"])::placeholder,
+        #temps-settings-pane textarea::placeholder {
           color: #BECADB !important;
           font-size: 18px !important;
           opacity: 1 !important;
         }
         #temps-settings-pane input.short-input-field {
-          width: 140px !important;
-          max-width: 160px !important;
+          width: 70px !important;
+          max-width: 80px !important;
+          text-align: center !important;
         }
         #temps-settings-pane select {
           appearance: none !important;
@@ -1792,7 +1795,9 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
         #temps-settings-pane input:not([type="radio"]):not([type="checkbox"]):hover:not(:disabled),
         #temps-settings-pane input:not([type="radio"]):not([type="checkbox"]):focus:not(:disabled),
         #temps-settings-pane select:hover:not(:disabled),
-        #temps-settings-pane select:focus:not(:disabled) {
+        #temps-settings-pane select:focus:not(:disabled),
+        #temps-settings-pane textarea:hover:not(:disabled),
+        #temps-settings-pane textarea:focus:not(:disabled) {
           outline: 2.5px solid #2e54ff !important;
           outline-offset: 2px !important;
         }
@@ -2121,7 +2126,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   style={{
                     border: 'none',
                     borderRadius: '13px',
-                    backgroundColor: '#e9edf1',
+                    backgroundColor: '#ffffff',
                   }}
                   id="lot-max-daily-amplitude"
                 >
@@ -2187,7 +2192,8 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                           setDraftGlobalRules(prev => ({ ...prev, maxDailyAmplitudeHours: 10 }));
                         }
                       }}
-                      placeholder={t("Nombre entre 1 et 24 (ex: 10)")}
+                      placeholder="10"
+                      style={{ width: '70px', textAlign: 'center' }}
                       className={`short-input-field ${!draftGlobalRules.maxDailyAmplitudeEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                     />
                   </div>
@@ -2199,7 +2205,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   style={{
                     border: 'none',
                     borderRadius: '13px',
-                    backgroundColor: '#e9edf1',
+                    backgroundColor: '#ffffff',
                   }}
                   id="lot-min-consecutive-rest"
                 >
@@ -2265,7 +2271,8 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                           setDraftGlobalRules(prev => ({ ...prev, minConsecutiveRestHours: 11 }));
                         }
                       }}
-                      placeholder={t("Nombre entre 1 et 24 (ex: 11)")}
+                      placeholder="11"
+                      style={{ width: '70px', textAlign: 'center' }}
                       className={`short-input-field ${!draftGlobalRules.minConsecutiveRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                     />
                   </div>
@@ -2277,7 +2284,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                   style={{
                     border: 'none',
                     borderRadius: '13px',
-                    backgroundColor: '#e9edf1',
+                    backgroundColor: '#ffffff',
                   }}
                   id="lot-min-break-rest"
                 >
@@ -2343,7 +2350,8 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                           setDraftGlobalRules(prev => ({ ...prev, minBreakRestMinutes: 45 }));
                         }
                       }}
-                      placeholder={t("Nombre entre 1 et 60 (ex: 45)")}
+                      placeholder="45"
+                      style={{ width: '70px', textAlign: 'center' }}
                       className={`short-input-field ${!draftGlobalRules.minBreakRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                     />
                   </div>
@@ -2356,15 +2364,25 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                     >
                       {t("Texte message d’erreur pour technicien.")} {draftGlobalRules.minBreakRestEnabled && <span className="text-red-500">*</span>}
                     </label>
-                    <input
-                      type="text"
+                    <textarea
                       id="input-min-break-rest-tech-error-text"
+                      rows={1}
+                      ref={(el) => {
+                        if (el) {
+                          el.style.height = 'auto';
+                          el.style.height = `${el.scrollHeight}px`;
+                        }
+                      }}
                       value={draftGlobalRules.minBreakRestTechErrorText}
                       disabled={!draftGlobalRules.minBreakRestEnabled}
                       onChange={(e) => {
-                        setDraftGlobalRules(prev => ({ ...prev, minBreakRestTechErrorText: e.target.value }));
+                        const target = e.target;
+                        target.style.height = 'auto';
+                        target.style.height = `${target.scrollHeight}px`;
+                        setDraftGlobalRules(prev => ({ ...prev, minBreakRestTechErrorText: target.value }));
                       }}
                       placeholder={t("Texte du message d'erreur pour le technicien...")}
+                      style={{ resize: 'none', overflow: 'hidden', display: 'block' }}
                       className={!draftGlobalRules.minBreakRestEnabled ? 'opacity-40 cursor-not-allowed' : ''}
                     />
                   </div>
@@ -2381,42 +2399,9 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                       style={{
                         border: 'none',
                         borderRadius: '13px',
-                        backgroundColor: '#e9edf1',
+                        backgroundColor: '#ffffff',
                       }}
                     >
-                      {/* Parameter Header */}
-                      <div className="flex items-center justify-between">
-                        <span
-                          className="font-bold"
-                          style={{
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                            fontSize: '22px',
-                            color: '#000000',
-                          }}
-                        >
-                          {`Paramètre ${idx + 1}`}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteParam(idx)}
-                          style={{
-                            borderRadius: '13px',
-                            fontSize: '18px',
-                            backgroundColor: 'rgb(210, 45, 11)',
-                            boxShadow: 'none',
-                            color: 'rgb(255, 255, 255)',
-                            padding: '6px 16px',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontWeight: 'bold',
-                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                          }}
-                          className="hover:opacity-90 active:scale-95 transition-all shrink-0"
-                        >
-                          {t("Supprimer")}
-                        </button>
-                      </div>
-
                       {/* Conflict Alert Banner if any */}
                       {ruleConflicts.length > 0 && (
                         <div className="space-y-1">
@@ -2425,7 +2410,13 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                             return (
                               <div
                                 key={cIdx}
-                                className="px-3 py-2 text-xs font-semibold rounded-lg bg-red-50 text-red-700 border border-red-200 font-sans"
+                                className="px-3 py-2 font-semibold rounded-lg font-sans"
+                                style={{
+                                  backgroundColor: 'rgb(210, 45, 11)',
+                                  color: '#ffffff',
+                                  fontSize: '18px',
+                                  border: 'none',
+                                }}
                               >
                                 ⚠️ {t("Conflit avec Paramètre")} {otherIdx} : {c.days.join(', ')} ({c.column} — {c.operation})
                               </div>
@@ -2493,11 +2484,11 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                         </div>
                       </div>
 
-                      {/* SETTING2 & SETTING3: Toggles (Retirer / Ajouter) */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      {/* SETTING2 & SETTING3: Toggles (Retirer / Ajouter) stacked vertically */}
+                      <div className="flex flex-col gap-3 pt-1">
                         {/* SETTING2: Retirer du temps effectif */}
                         <div
-                          className="flex items-center justify-between"
+                          className="flex items-center justify-between w-full"
                           style={{
                             padding: '0px',
                             borderRadius: '13px',
@@ -2535,7 +2526,7 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
 
                         {/* SETTING3: Ajouter au temps effectif */}
                         <div
-                          className="flex items-center justify-between"
+                          className="flex items-center justify-between w-full"
                           style={{
                             padding: '0px',
                             borderRadius: '13px',
@@ -2621,8 +2612,34 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
                               handleUpdateParam(idx, { setting5: 1 });
                             }
                           }}
-                          placeholder="1 à 500"
+                          placeholder="45"
+                          style={{ width: '70px', textAlign: 'center' }}
+                          className="short-input-field"
                         />
+                      </div>
+
+                      {/* Bouton Supprimer en bas full-width */}
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteParam(idx)}
+                          style={{
+                            width: '100%',
+                            borderRadius: '13px',
+                            fontSize: '18px',
+                            backgroundColor: 'rgb(210, 45, 11)',
+                            boxShadow: 'none',
+                            color: 'rgb(255, 255, 255)',
+                            padding: '12px 16px',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontWeight: 'bold',
+                            fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                          }}
+                          className="w-full hover:opacity-90 transition-opacity"
+                        >
+                          {t("Supprimer")}
+                        </button>
                       </div>
                     </div>
                   );
@@ -2632,14 +2649,22 @@ export default function TempsTab({ pointages = [], members = [], companyInfo }: 
               {/* Bottom Actions: Ajouter un paramètre, Enregistrer & Fermer */}
               <div className="pt-4 space-y-2 mt-auto shrink-0" style={{ borderTop: 'none' }}>
                 {draftConflicts.length > 0 && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 font-sans space-y-1">
-                    <div className="font-bold">⚠️ {t("Conflit de règles détecté :")}</div>
+                  <div
+                    className="p-3 rounded-xl font-sans space-y-1"
+                    style={{
+                      backgroundColor: 'rgb(210, 45, 11)',
+                      color: '#ffffff',
+                      fontSize: '18px',
+                      border: 'none',
+                    }}
+                  >
+                    <div className="font-bold" style={{ color: '#ffffff', fontSize: '18px' }}>⚠️ {t("Conflit de règles détecté :")}</div>
                     {draftConflicts.map((c, i) => (
-                      <div key={i}>
+                      <div key={i} style={{ color: '#ffffff', fontSize: '18px' }}>
                         • {t("Paramètre")} {c.ruleIndexA + 1} &amp; {t("Paramètre")} {c.ruleIndexB + 1} : {c.days.join(', ')} ({c.column} — {c.operation})
                       </div>
                     ))}
-                    <div className="text-[11px] text-red-600">
+                    <div style={{ color: '#ffffff', fontSize: '18px' }}>
                       {t("Deux règles ne peuvent pas cibler la même colonne pour le même jour avec la même action.")}
                     </div>
                   </div>

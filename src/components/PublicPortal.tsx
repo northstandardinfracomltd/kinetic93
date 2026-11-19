@@ -4653,6 +4653,34 @@ export default function PublicPortal({
       });
     }
 
+    const scrollToTargetElement = (el: HTMLElement) => {
+      const contentArea = document.getElementById("tab-content-area");
+      if (contentArea && contentArea.scrollHeight > contentArea.clientHeight) {
+        const areaRect = contentArea.getBoundingClientRect();
+        const elRect = el.getBoundingClientRect();
+        const targetTop = elRect.top - areaRect.top + contentArea.scrollTop - 20;
+        contentArea.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+      }
+      let parent: HTMLElement | null = el.parentElement;
+      while (parent && parent !== document.body && parent !== document.documentElement) {
+        const style = window.getComputedStyle(parent);
+        if (
+          (style.overflowY === "auto" || style.overflowY === "scroll") &&
+          parent.scrollHeight > parent.clientHeight
+        ) {
+          const parentRect = parent.getBoundingClientRect();
+          const elRect = el.getBoundingClientRect();
+          const targetTop = elRect.top - parentRect.top + parent.scrollTop - 20;
+          parent.scrollTo({ top: Math.max(0, targetTop), behavior: "smooth" });
+        }
+        parent = parent.parentElement;
+      }
+      const winTargetTop =
+        el.getBoundingClientRect().top + (window.scrollY || window.pageYOffset || 0) - 90;
+      window.scrollTo({ top: Math.max(0, winTargetTop), behavior: "smooth" });
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+
     const tryScroll = (attemptsLeft: number) => {
       let el: HTMLElement | null = null;
       if (targetMissionId) {
@@ -4669,7 +4697,9 @@ export default function PublicPortal({
       }
 
       if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        scrollToTargetElement(el);
+        setTimeout(() => scrollToTargetElement(el!), 160);
+        setTimeout(() => scrollToTargetElement(el!), 360);
         const originalTransition = el.style.transition;
         const originalBorder = el.style.border;
         const originalBoxShadow = el.style.boxShadow;
@@ -4677,16 +4707,16 @@ export default function PublicPortal({
         el.style.border = "2.5px solid rgb(210, 45, 11)";
         el.style.boxShadow = "none";
         setTimeout(() => {
-          el.style.transition = originalTransition;
-          el.style.border = originalBorder;
-          el.style.boxShadow = originalBoxShadow;
+          el!.style.transition = originalTransition;
+          el!.style.border = originalBorder;
+          el!.style.boxShadow = originalBoxShadow;
         }, 3000);
       } else if (attemptsLeft > 0) {
         setTimeout(() => tryScroll(attemptsLeft - 1), 150);
       }
     };
 
-    setTimeout(() => tryScroll(6), 120);
+    setTimeout(() => tryScroll(10), 120);
   };
 
   const handleRefreshCalendarFromPlanning = async () => {
@@ -12085,14 +12115,16 @@ export default function PublicPortal({
                   playTechTapSound();
                   setActiveTab("temps");
                 }}
-                className="text-white text-center font-semibold select-none shadow-xs font-sans shrink-0 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+                className="text-white text-center font-semibold select-none font-sans shrink-0 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
                 style={{
-                  background: "rgb(210 45 12)",
+                  background: "#0000b9",
+                  backgroundColor: "#0000b9",
                   color: "#ffffff",
                   fontSize: "14px",
                   padding: "12px 0px",
                   cursor: "pointer",
-                  borderTop: "1px solid white",
+                  border: "none",
+                  margin: 0,
                 }}
                 role="button"
                 tabIndex={0}
@@ -12104,15 +12136,6 @@ export default function PublicPortal({
 
             {/* Recovery banner when an unsubmitted report draft is cached and the report overlay is not currently open */}
             {!isReportOverlayOpen && recoverableReportDraft && (() => {
-              const identifiantMateriel =
-                String(
-                  recoverableReportDraft.identifiantMateriel ||
-                    recoverableReportDraft.reportData?.defibSnapshot?.identifiant ||
-                    recoverableReportDraft.reportData?.defibIdentifiant ||
-                    recoverableReportDraft.otherEquipmentData?.identifiant ||
-                    defibrillateurs.find((d) => d.id === recoverableReportDraft.selectedDefibId)?.identifiant ||
-                    "sans identifiant"
-                ).trim() || "sans identifiant";
               const formattedDate = formatDraftDateDdMmYyyy(
                 recoverableReportDraft.dateStr || recoverableReportDraft.reportData?.date,
                 recoverableReportDraft.updatedAt
@@ -12120,20 +12143,22 @@ export default function PublicPortal({
               return (
                 <div
                   onClick={handleResumeRecoverableReportDraft}
-                  className="text-white text-center font-semibold select-none shadow-xs font-sans shrink-0 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+                  className="text-center font-semibold select-none font-sans shrink-0 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
                   style={{
-                    background: "rgb(210 45 12)",
-                    color: "#ffffff",
+                    background: "#f63a08",
+                    backgroundColor: "#f63a08",
+                    color: "#ffd461",
                     fontSize: "14px",
                     padding: "12px 0px",
                     cursor: "pointer",
-                    borderTop: "1px solid white",
+                    border: "none",
+                    margin: 0,
                   }}
                   role="button"
                   tabIndex={0}
                   title={t("Reprendre le rapport en cours d’édition")}
                 >
-                  {`Reprendre le rapport ${identifiantMateriel} ${formattedDate}.`}
+                  {`Reprendre le rapport du ${formattedDate}.`}
                 </div>
               );
             })()}
@@ -17217,9 +17242,10 @@ export default function PublicPortal({
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2.5 min-w-0 max-w-full w-full">
-                                  <div className="relative inline-flex shrink-0">
+                                  <div className="relative inline-flex w-full">
                                     <button
                                       type="button"
+                                      className="w-full text-center"
                                       style={{
                                         backgroundColor: "#0f172a",
                                         color: "#ffffff",
@@ -17229,6 +17255,7 @@ export default function PublicPortal({
                                         border: "none",
                                         boxShadow: "none",
                                         cursor: "pointer",
+                                        width: "100%",
                                         fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                       }}
                                     >
@@ -18480,9 +18507,10 @@ export default function PublicPortal({
                                   </div>
 
                                   <div className="flex flex-wrap items-center gap-2.5 min-w-0 max-w-full w-full">
-                                    <div className="relative inline-flex shrink-0">
+                                    <div className="relative inline-flex w-full">
                                       <button
                                         type="button"
+                                        className="w-full text-center"
                                         style={{
                                           backgroundColor: "#0f172a",
                                           color: "#ffffff",
@@ -18492,6 +18520,7 @@ export default function PublicPortal({
                                           border: "none",
                                           boxShadow: "none",
                                           cursor: "pointer",
+                                          width: "100%",
                                           fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
                                         }}
                                       >

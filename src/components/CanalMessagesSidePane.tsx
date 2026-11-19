@@ -1249,11 +1249,14 @@ export const CanalMessagesSidePane: React.FC<CanalMessagesSidePaneProps> = ({
             zIndex: 99999,
           }}
         >
-          {MESSAGE_CHANNELS.map((canal) => (
-            <option key={canal} value={canal}>
-              {canal}
-            </option>
-          ))}
+          {MESSAGE_CHANNELS.map((canal) => {
+            const unreadCount = unreadCountByChannel[canal] || 0;
+            return (
+              <option key={canal} value={canal}>
+                {`${canal} (${unreadCount})`}
+              </option>
+            );
+          })}
         </select>
       )}
 

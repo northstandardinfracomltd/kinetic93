@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { jsPDF } from 'jspdf';
 import { t } from '../utils/translate';
-import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, ExpeditionRecord, Client, StockTraceability, Member, LogisticsNotification, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl } from '../types';
+import { Variable, StockRecord, Defibrillateur, StockMovement, DistributedStockLocation, CommercialDoc, AchatFournisseur, ExpeditionRecord, Client, StockTraceability, Member, LogisticsNotification, CompanyInfo, getTenantSpreadsheetUrl, openTenantSpreadsheetUrl, getCachedPastilleSrc, preloadPastilleBadgeImages } from '../types';
 import { getLocationCustomName, generateRandomShortCode, formatDateToFR } from '../utils';
 import HelpBubble from './HelpBubble';
 import { EmptyTablePlaceholder } from './EmptyTablePlaceholder';
@@ -2516,8 +2516,11 @@ export default function StocksTab({
                         }}
                       >
                         <img
-                          src={svgUrl}
+                          src={getCachedPastilleSrc(svgUrl)}
                           alt=""
+                          loading="eager"
+                          decoding="sync"
+                          fetchPriority="high"
                           style={{
                             width: '100%',
                             height: '100%',

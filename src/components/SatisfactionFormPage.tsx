@@ -127,6 +127,31 @@ export default function SatisfactionFormPage() {
     fsmTours?: any[];
   }>({});
   const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+  const [isTryMode, setIsTryMode] = useState<boolean>(() => {
+    try {
+      const hash = (window.location.hash || '').toLowerCase();
+      const search = (window.location.search || '').toLowerCase();
+      return hash.includes('try') || search.includes('try');
+    } catch (_) {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const checkTryMode = () => {
+      try {
+        const hash = (window.location.hash || '').toLowerCase();
+        const search = (window.location.search || '').toLowerCase();
+        setIsTryMode(hash.includes('try') || search.includes('try'));
+      } catch (_) {}
+    };
+    window.addEventListener('hashchange', checkTryMode);
+    window.addEventListener('popstate', checkTryMode);
+    return () => {
+      window.removeEventListener('hashchange', checkTryMode);
+      window.removeEventListener('popstate', checkTryMode);
+    };
+  }, []);
 
   // Check if a satisfaction response has already been received for this intervention reference & fetch report + tenant context
   useEffect(() => {
@@ -252,7 +277,7 @@ export default function SatisfactionFormPage() {
   }, [interventionRef, urlTenantId]);
 
   const handleDirectDownloadPdf = async () => {
-    if (isDownloadingPdf) return;
+    if (isDownloadingPdf || isTryMode) return;
     setIsDownloadingPdf(true);
     try {
       const cleanRef = interventionRef.trim();
@@ -370,7 +395,7 @@ export default function SatisfactionFormPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid || alreadyResponded) return;
+    if (!isFormValid || alreadyResponded || isTryMode) return;
 
     setIsSubmitting(true);
     setErrorMessage('');
@@ -536,8 +561,8 @@ export default function SatisfactionFormPage() {
           transition: 0s !important;
         }
 
-        #satisfaction-card input:focus, #satisfaction-card select:focus, #satisfaction-card textarea:focus, #satisfaction-card button[type="submit"]:focus,
-        #satisfaction-card input:hover, #satisfaction-card select:hover, #satisfaction-card textarea:hover, #satisfaction-card button[type="submit"]:hover {
+        #satisfaction-card input:focus, #satisfaction-card select:focus, #satisfaction-card textarea:focus, #satisfaction-card button[type="submit"]:not(:disabled):focus,
+        #satisfaction-card input:hover, #satisfaction-card select:hover, #satisfaction-card textarea:hover, #satisfaction-card button[type="submit"]:not(:disabled):hover {
           outline: 2.5px solid rgb(46, 84, 255) !important;
           outline-offset: 3px !important;
         }
@@ -560,7 +585,7 @@ export default function SatisfactionFormPage() {
                 type="button"
                 id="btn-download-satisfaction-report-pdf"
                 onClick={handleDirectDownloadPdf}
-                disabled={isDownloadingPdf}
+                disabled={isDownloadingPdf || isTryMode}
                 style={{
                   backgroundColor: 'rgb(46, 84, 255)',
                   color: '#ffffff',
@@ -575,8 +600,8 @@ export default function SatisfactionFormPage() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '0.5rem',
-                  cursor: isDownloadingPdf ? 'wait' : 'pointer',
-                  opacity: isDownloadingPdf ? 0.75 : 1,
+                  cursor: isTryMode ? 'not-allowed' : (isDownloadingPdf ? 'wait' : 'pointer'),
+                  opacity: isTryMode ? 0.65 : (isDownloadingPdf ? 0.75 : 1),
                   border: 'none',
                   width: '100%',
                 }}
@@ -795,7 +820,7 @@ export default function SatisfactionFormPage() {
                 {/* SUBMIT BUTTON */}
                 <button
                   type="submit"
-                  disabled={!isFormValid || isSubmitting}
+                  disabled={!isFormValid || isSubmitting || isTryMode}
                   style={{
                     backgroundColor: 'rgb(46, 84, 255)',
                     color: '#ffffff',
@@ -810,8 +835,8 @@ export default function SatisfactionFormPage() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '0.5rem',
-                    cursor: isFormValid && !isSubmitting ? 'pointer' : 'not-allowed',
-                    opacity: isFormValid && !isSubmitting ? 1 : 0.65,
+                    cursor: isFormValid && !isSubmitting && !isTryMode ? 'pointer' : 'not-allowed',
+                    opacity: isFormValid && !isSubmitting && !isTryMode ? 1 : 0.65,
                     border: 'none',
                     width: '100%',
                   }}

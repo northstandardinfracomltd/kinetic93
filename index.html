@@ -12,6 +12,9 @@
     <link rel="prefetch" href="https://civilprom.s3.eu-north-1.amazonaws.com/defibeocrmblackv2.svg" />
     <link rel="prefetch" href="https://civilprom.s3.eu-north-1.amazonaws.com/crmgris.svg" />
     <link rel="prefetch" href="https://civilprom.s3.eu-north-1.amazonaws.com/crmnoir.svg" />
+    <link rel="preload" as="image" href="https://civilprom.s3.eu-north-1.amazonaws.com/pastilleviolette.svg" />
+    <link rel="preload" as="image" href="https://civilprom.s3.eu-north-1.amazonaws.com/pastillebleue.svg" />
+    <link rel="preload" as="image" href="https://civilprom.s3.eu-north-1.amazonaws.com/pastilleorange.svg" />
     <title>Defibeo</title>
     <!-- Open Graph / SEO Banner -->
     <!-- Auto-recovery and SW cleanup for Firebase Hosting updates -->
@@ -19,6 +22,20 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <script>
+      // Preload & pin count pastille SVGs in memory cache
+      try {
+        window.__DEFIBEO_PASTILLE_CACHE__ = [
+          'https://civilprom.s3.eu-north-1.amazonaws.com/pastilleviolette.svg',
+          'https://civilprom.s3.eu-north-1.amazonaws.com/pastillebleue.svg',
+          'https://civilprom.s3.eu-north-1.amazonaws.com/pastilleorange.svg'
+        ].map(function(u) {
+          var img = new Image();
+          img.decoding = 'sync';
+          img.referrerPolicy = 'no-referrer';
+          img.src = u;
+          return img;
+        });
+      } catch(e) {}
       // Browser detection for Edge vs Chrome
       try {
         var ua = navigator.userAgent || '';
