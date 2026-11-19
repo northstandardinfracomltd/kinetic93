@@ -4588,8 +4588,8 @@ export default function StocksTab({
                                   className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 transition-colors cursor-pointer"
                                   style={{
                                     border: isTraceRowSelected
-                                      ? '2px solid #2e54ff'
-                                      : '1.5px solid #cbd5e1',
+                                      ? '1px solid #2e54ff'
+                                      : '1px solid #cbd5e1',
                                     backgroundColor: '#ffffff',
                                     padding: 0,
                                   }}

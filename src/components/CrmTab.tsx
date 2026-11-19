@@ -4266,8 +4266,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                               <div
                                 key={sit}
                                 onClick={() => setFormSituationInterlocuteur(sit)}
-                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white transition-colors"
-                                style={{ border: 'none' }}
+                                className="flex items-center justify-start gap-2 rounded-xl cursor-pointer select-none bg-white transition-colors"
+                                style={{ border: 'none', padding: 0 }}
                               >
                                 <span 
                                   className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
@@ -4308,8 +4308,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                     setFormMarchePublic('Oui');
                                   }
                                 }}
-                                className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white transition-colors"
-                                style={{ border: 'none' }}
+                                className="flex items-center justify-start gap-2 rounded-xl cursor-pointer select-none bg-white transition-colors"
+                                style={{ border: 'none', padding: 0 }}
                               >
                                 <span 
                                   className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
@@ -4451,8 +4451,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 <div
                                   key={opt}
                                   onClick={() => setFormMarchePublic(opt)}
-                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white transition-colors"
-                                  style={{ border: 'none' }}
+                                  className="flex items-center justify-start gap-2 rounded-xl cursor-pointer select-none bg-white transition-colors"
+                                  style={{ border: 'none', padding: 0 }}
                                 >
                                   <span 
                                     className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"
@@ -4488,8 +4488,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                                 <div
                                   key={sitDevis}
                                   onClick={() => setFormSituationDevis(sitDevis)}
-                                  className="flex items-center justify-start gap-2 p-2.5 sm:p-3 rounded-xl cursor-pointer select-none bg-white transition-colors"
-                                  style={{ border: 'none' }}
+                                  className="flex items-center justify-start gap-2 rounded-xl cursor-pointer select-none bg-white transition-colors"
+                                  style={{ border: 'none', padding: 0 }}
                                 >
                                   <span 
                                     className="rounded-full flex items-center justify-center transition-all bg-white shrink-0"

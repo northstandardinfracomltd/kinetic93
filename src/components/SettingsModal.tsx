@@ -6260,7 +6260,7 @@ export default function SettingsModal({
                 className="font-bold text-black text-center select-none"
                 style={{ fontSize: '18px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
               >
-                {t("La boutique n’est pas disponible actuellement")}
+                {t("La boutique n’est pas disponible actuellement.")}
               </p>
             </div>
 
