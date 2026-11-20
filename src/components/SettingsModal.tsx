@@ -1186,6 +1186,9 @@ export default function SettingsModal({
           expressionAlerte2: cleanPatch.expressionAlerte2 !== undefined ? String(cleanPatch.expressionAlerte2).slice(0, 30) : '',
           expressionAlerte3: cleanPatch.expressionAlerte3 !== undefined ? String(cleanPatch.expressionAlerte3).slice(0, 30) : '',
           expressionAlerte4: cleanPatch.expressionAlerte4 !== undefined ? String(cleanPatch.expressionAlerte4).slice(0, 30) : '',
+          emailFooterImgUrl: cleanPatch.emailFooterImgUrl !== undefined ? String(cleanPatch.emailFooterImgUrl) : '',
+          emailFooterTitle: cleanPatch.emailFooterTitle !== undefined ? String(cleanPatch.emailFooterTitle).slice(0, 30) : '',
+          emailFooterParagraph: cleanPatch.emailFooterParagraph !== undefined ? String(cleanPatch.emailFooterParagraph) : '',
           hiddenTabs: Array.isArray(cleanPatch.hiddenTabs) ? cleanPatch.hiddenTabs : (prev.hiddenTabs || []),
         };
         lastPropsCompanyRef.current = nextComp;
@@ -3257,6 +3260,9 @@ export default function SettingsModal({
         { key: 'codePostalSiege', label: 'Code postal du siège' },
         { key: 'villeSiege', label: 'Ville du siège' },
         { key: 'paysSiege', label: 'Pays du siège' },
+        { key: 'emailFooterImgUrl', label: 'URL source de l’image du pied d’email' },
+        { key: 'emailFooterTitle', label: 'Titre du pied d’email' },
+        { key: 'emailFooterParagraph', label: 'Paragraphe du pied d’email' },
         { key: 'pdfHideElectrodeSecoursA', label: 'Rapports PDF : Masquer Électrode A Secours' },
         { key: 'pdfHideElectrodeSecoursP', label: 'Rapports PDF : Masquer Électrode P Secours' },
         { key: 'pdfHideKitSecours', label: 'Rapports PDF : Masquer inventaire Kit Secours' },
@@ -4299,6 +4305,67 @@ export default function SettingsModal({
                 className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
                 style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
                 placeholder={t("Expression d’alerte 4")}
+              />
+            </div>
+          </div>
+
+          {/* EMAIL FOOTER FIELDS */}
+          <div className="space-y-4 mt-4">
+            <div className="space-y-1">
+              <label className="block text-[16px] font-bold text-black font-sans">
+                {t("URL source de l’image du pied d’email.")}
+              </label>
+              <input
+                type="text"
+                disabled={!isCurrentUserSuperAdmin}
+                value={localCompany.emailFooterImgUrl ?? ''}
+                onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('emailFooterImgUrl', e.target.value)}
+                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
+                placeholder={t("Collez le lien vers votre image.")}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[16px] font-bold text-black font-sans">
+                {t("Titre du pied d’email.")}
+              </label>
+              <input
+                type="text"
+                maxLength={30}
+                disabled={!isCurrentUserSuperAdmin}
+                value={localCompany.emailFooterTitle ?? ''}
+                onChange={(e) => isCurrentUserSuperAdmin && handleCompanyChange('emailFooterTitle', e.target.value.slice(0, 30))}
+                className="w-full text-black placeholder-[#747474] font-sans text-sm bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
+                style={{ backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
+                placeholder={t("Entrez un entête pour les emails automatiques.")}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[16px] font-bold text-black font-sans">
+                {t("Paragraphe du pied d’email.")}
+              </label>
+              <textarea
+                disabled={!isCurrentUserSuperAdmin}
+                value={localCompany.emailFooterParagraph ?? ''}
+                onChange={(e) => {
+                  if (isCurrentUserSuperAdmin) {
+                    handleCompanyChange('emailFooterParagraph', e.target.value);
+                  }
+                  e.currentTarget.style.height = 'auto';
+                  e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`;
+                }}
+                ref={(el) => {
+                  if (el) {
+                    el.style.height = 'auto';
+                    el.style.height = `${el.scrollHeight}px`;
+                  }
+                }}
+                placeholder={t("Entrez un texte pour les emails automatiques.")}
+                rows={1}
+                style={{ overflow: 'hidden', resize: 'none', backgroundColor: !isCurrentUserSuperAdmin ? undefined : '#ffffff' }}
+                className="w-full p-3 border border-slate-200 rounded-lg text-sm bg-white text-black placeholder-[#747474] focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2 font-sans disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
               />
             </div>
           </div>

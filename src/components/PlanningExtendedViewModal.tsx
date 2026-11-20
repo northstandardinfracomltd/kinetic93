@@ -2041,12 +2041,27 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                       const missionWidthPx = getMissionCardWidthPx(durationMinutes);
                                       const isLockedMission = isMissionDateSlotLocked(m);
 
+                                      const missionKey = `${tItem.tourId}-${m.id || mIdx}-${d.isoDate}`;
+
                                       return (
                                         <div
                                           key={`mission-bar-${m.id || mIdx}`}
                                           data-interactive="true"
                                           draggable={!isLockedMission}
+                                          onMouseDown={(e) => {
+                                            if (e.button !== 0) return;
+                                            (e.currentTarget as any).__clickStart = {
+                                              time: Date.now(),
+                                              x: e.clientX,
+                                              y: e.clientY,
+                                              dragged: false,
+                                            };
+                                          }}
                                           onDragStart={(e) => {
+                                            (e.currentTarget as any).__clickStart = {
+                                              ...((e.currentTarget as any).__clickStart || {}),
+                                              dragged: true,
+                                            };
                                             if (isLockedMission) {
                                               e.preventDefault();
                                               e.stopPropagation();
@@ -2066,12 +2081,13 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                               e.dataTransfer.setData('text/plain', String(m.id));
                                             } catch (_) {}
                                           }}
-                                          onDragEnd={() => {
+                                          onDragEnd={(e) => {
+                                            (e.currentTarget as any).__clickStart = null;
                                             setDraggedItem(null);
                                             setDragOverTarget(null);
                                           }}
                                           className={`relative space-y-1 select-none ${
-                                            isLockedMission ? 'cursor-default' : 'cursor-grab active:cursor-grabbing'
+                                            isLockedMission ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
                                           }`}
                                           style={{
                                             marginLeft: `${marginLeftPx}px`,
@@ -2113,9 +2129,37 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                               {mStatus}
                                             </span>
                                           </div>
-                                          <div className="relative">
+                                          <div
+                                            className="relative"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const parentEl = e.currentTarget.parentElement as any;
+                                              const info = parentEl?.__clickStart;
+                                              if (info) {
+                                                const elapsed = Date.now() - info.time;
+                                                const dist = Math.hypot(e.clientX - info.x, e.clientY - info.y);
+                                                if (info.dragged || dist > 6 || elapsed > 300) {
+                                                  return;
+                                                }
+                                              }
+                                              const sel = e.currentTarget.querySelector('select') as HTMLSelectElement | null;
+                                              if (sel) {
+                                                try {
+                                                  if (typeof (sel as any).showPicker === 'function') {
+                                                    (sel as any).showPicker();
+                                                  } else {
+                                                    sel.focus();
+                                                    sel.click();
+                                                  }
+                                                } catch (_) {
+                                                  sel.focus();
+                                                  sel.click();
+                                                }
+                                              }
+                                            }}
+                                          >
                                             <div
-                                              className="w-full transition-all shadow-xs hover:brightness-95 whitespace-normal break-words select-none pointer-events-none"
+                                              className="w-full transition-all shadow-xs hover:brightness-95 whitespace-normal break-words select-none"
                                               style={{
                                                 backgroundColor: 'rgb(230, 197, 255)',
                                                 color: 'rgb(89, 22, 144)',
@@ -2130,6 +2174,7 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                               {fullMissionText}
                                             </div>
                                             <select
+                                              id={`mission-system-select-${missionKey}`}
                                               aria-label={`Mission ${details.identifiant || 'NC'}`}
                                               value=""
                                               onChange={(e) => {
@@ -2148,17 +2193,18 @@ export const PlanningExtendedViewModal: React.FC<PlanningExtendedViewModalProps>
                                               }}
                                               style={{
                                                 position: 'absolute',
-                                                inset: 0,
-                                                width: '100%',
-                                                height: '100%',
+                                                bottom: 0,
+                                                left: 0,
+                                                width: '1px',
+                                                height: '1px',
                                                 opacity: 0,
-                                                cursor: 'pointer',
+                                                pointerEvents: 'none',
                                                 border: 'none',
                                                 outline: 'none',
                                                 padding: 0,
                                                 margin: 0,
                                                 background: 'transparent',
-                                                zIndex: 20,
+                                                zIndex: -1,
                                               }}
                                             >
                                               <option value="" disabled>

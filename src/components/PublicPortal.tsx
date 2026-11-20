@@ -4433,6 +4433,7 @@ export default function PublicPortal({
             startDate: tryFormatDateToFrench(mt.startDate),
             status: mt.status || "À faire",
             techName: mt.techName || "",
+            commentaire: mt.commentaire || mt.Commentaire || mt["Commentaire."] || "",
             calculated: isTourCalculated,
             passages: (mt.missions || []).map((m: any, idx: number) => {
               const defib = defibrillateurs.find(
@@ -5014,7 +5015,10 @@ export default function PublicPortal({
     };
   }, [authenticatedUser?.email, authenticatedUser?.name, propTenantId]);
 
+  const latestActiveReportDraftRef = useRef<any | null>(null);
+
   const saveReportDraftToCache = (draftPayload: any) => {
+    latestActiveReportDraftRef.current = draftPayload;
     setRecoverableReportDraft(draftPayload);
     const specificKey = getReportDraftCacheKey();
     idbSet(specificKey, draftPayload).catch(() => {});
@@ -5046,6 +5050,7 @@ export default function PublicPortal({
   };
 
   const clearReportDraftFromCache = () => {
+    latestActiveReportDraftRef.current = null;
     setRecoverableReportDraft(null);
     const specificKey = getReportDraftCacheKey();
     idbDelete(specificKey).catch(() => {});
@@ -5054,6 +5059,61 @@ export default function PublicPortal({
       localStorage.removeItem(specificKey);
       localStorage.removeItem(GENERIC_REPORT_DRAFT_KEY);
     } catch (_) {}
+  };
+
+  const handleSaveReportAsLocalDraftAndClose = () => {
+    playTechTapSound();
+    const matchedDefib = defibrillateurs.find((d) => d.id === selectedDefibId);
+    const fallbackDraftPayload = selectedOtherEquipmentUnique
+      ? {
+          isOtherEquipment: true,
+          otherEquipmentData: selectedOtherEquipmentUnique,
+          reportData: reportToEdit,
+          selectedDefibId: "",
+          isEditingFromRapportsPdf,
+          reportActiveTourId,
+          reportActivePassageNum,
+          identifiantMateriel: String(selectedOtherEquipmentUnique?.identifiant || "").trim(),
+          dateStr:
+            selectedOtherEquipmentUnique?.derniereMaintenance ||
+            new Date().toLocaleDateString("fr-FR"),
+          updatedAt: Date.now(),
+        }
+      : {
+          isOtherEquipment: false,
+          otherEquipmentData: null,
+          reportData: reportToEdit || {},
+          selectedDefibId: selectedDefibId || reportToEdit?.defibId || "",
+          isEditingFromRapportsPdf,
+          reportActiveTourId,
+          reportActivePassageNum,
+          identifiantMateriel: String(
+            reportToEdit?.defibSnapshot?.identifiant ||
+              reportToEdit?.defibIdentifiant ||
+              matchedDefib?.identifiant ||
+              ""
+          ).trim(),
+          dateStr:
+            reportToEdit?.date ||
+            new Date().toLocaleDateString("fr-FR"),
+          updatedAt: Date.now(),
+        };
+
+    const payloadToSave = {
+      ...(latestActiveReportDraftRef.current || fallbackDraftPayload),
+      updatedAt: Date.now(),
+    };
+    saveReportDraftToCache(payloadToSave);
+
+    setIsReportOverlayOpen(false);
+    setIsReportOverlayMinimized(false);
+    setIsEditingFromRapportsPdf(false);
+    setSelectedOtherEquipmentUnique(null);
+    setReportToEdit(null);
+    setSelectedDefibId("");
+    setSelectedDefibData(null);
+    setReportActiveTourId("");
+    setReportActivePassageNum(null);
   };
 
   const formatDraftDateDdMmYyyy = (rawDate?: string, fallbackTs?: number): string => {
@@ -9657,14 +9717,14 @@ export default function PublicPortal({
             {/* Top Bar Progress Animation for Tab Switching */}
             <TopBarProgress triggerKey={activeTab} duration={3000} height={3.5} zIndex={99999} />
 
-            {/* FLOATING CAPSULE « Rapport d’intervention en cours. » WHEN REPORT IS REDUCED */}
+            {/* FLOATING CAPSULE « Enregistrer en brouillon local » WHEN REPORT IS REDUCED */}
             {isReportOverlayOpen && isReportOverlayMinimized && (
               <div 
                 className="fixed inset-x-0 bottom-[68px] z-[110] flex items-center justify-center pointer-events-none px-4"
               >
                 <div
-                  onClick={() => setIsReportOverlayMinimized(false)}
-                  title="Cliquer pour agrandir le rapport d’intervention"
+                  onClick={handleSaveReportAsLocalDraftAndClose}
+                  title={t("Enregistrer en brouillon local")}
                   style={{
                     backgroundColor: "#d22d0b",
                     padding: "10px 20px",
@@ -9685,7 +9745,7 @@ export default function PublicPortal({
                     }}
                     className="font-medium tracking-normal whitespace-nowrap"
                   >
-                    Rapport d’intervention en cours.
+                    {t("Enregistrer en brouillon local")}
                   </span>
                 </div>
               </div>
@@ -12584,45 +12644,73 @@ export default function PublicPortal({
                           const isVoirParcoursDisabled =
                             activeMissionsCount < 2 || !hasTechStartPoint;
 
+                          const matchedRawFsmTour = (fsmTours || []).find(
+                            (ft: any) => ft && ft.id === activeSelectedTour.id
+                          );
+                          const tourCommentaire = String(
+                            (activeSelectedTour as any).commentaire ||
+                              (activeSelectedTour as any).Commentaire ||
+                              (activeSelectedTour as any)["Commentaire."] ||
+                              matchedRawFsmTour?.commentaire ||
+                              matchedRawFsmTour?.Commentaire ||
+                              matchedRawFsmTour?.["Commentaire."] ||
+                              ""
+                          ).trim();
+
                           return (
-                            <button
-                              type="button"
-                              id="btn-webapp-voir-parcours"
-                              disabled={isVoirParcoursDisabled}
-                              onClick={() => {
-                                if (isVoirParcoursDisabled) return;
-                                playTechTapSound();
-                                setIsWebappRouteMapOpen(true);
-                              }}
-                              title={
-                                !activeSelectedTour
-                                  ? "Veuillez sélectionner une tournée."
-                                  : activeMissionsCount < 2
-                                  ? "Au moins 2 missions dans la tournée sont requises pour afficher le parcours."
-                                  : !hasTechStartPoint
-                                  ? "Veuillez renseigner votre adresse de départ dans vos paramètres."
-                                  : undefined
-                              }
-                              className={`w-full mt-3 transition-all duration-150 focus:outline-none text-center ${
-                                isVoirParcoursDisabled
-                                  ? "cursor-not-allowed opacity-50"
-                                  : "cursor-pointer hover:opacity-90 active:scale-[0.99]"
-                              }`}
-                              style={{
-                                backgroundColor: "rgb(46, 84, 255)",
-                                color: "#ffffff",
-                                border: "none",
-                                borderRadius: "14px",
-                                padding: "14px 20px",
-                                fontSize: "18px",
-                                fontWeight: "bold",
-                                boxShadow: "none",
-                                outline: "none",
-                                textAlign: "center",
-                              }}
-                            >
-                              {t("Parcours Map")}
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                id="btn-webapp-voir-parcours"
+                                disabled={isVoirParcoursDisabled}
+                                onClick={() => {
+                                  if (isVoirParcoursDisabled) return;
+                                  playTechTapSound();
+                                  setIsWebappRouteMapOpen(true);
+                                }}
+                                title={
+                                  !activeSelectedTour
+                                    ? "Veuillez sélectionner une tournée."
+                                    : activeMissionsCount < 2
+                                    ? "Au moins 2 missions dans la tournée sont requises pour afficher le parcours."
+                                    : !hasTechStartPoint
+                                    ? "Veuillez renseigner votre adresse de départ dans vos paramètres."
+                                    : undefined
+                                }
+                                className={`w-full mt-3 transition-all duration-150 focus:outline-none text-center ${
+                                  isVoirParcoursDisabled
+                                    ? "cursor-not-allowed opacity-50"
+                                    : "cursor-pointer hover:opacity-90 active:scale-[0.99]"
+                                }`}
+                                style={{
+                                  backgroundColor: "rgb(46, 84, 255)",
+                                  color: "#ffffff",
+                                  border: "none",
+                                  borderRadius: "14px",
+                                  padding: "14px 20px",
+                                  fontSize: "18px",
+                                  fontWeight: "bold",
+                                  boxShadow: "none",
+                                  outline: "none",
+                                  textAlign: "center",
+                                }}
+                              >
+                                {t("Parcours Map")}
+                              </button>
+                              {tourCommentaire && (
+                                <p
+                                  className="mt-3 text-left whitespace-pre-wrap break-words font-sans"
+                                  style={{
+                                    fontSize: "18px",
+                                    color: "#000000",
+                                    textAlign: "left",
+                                    margin: "12px 0 0 0",
+                                  }}
+                                >
+                                  {tourCommentaire}
+                                </p>
+                              )}
+                            </>
                           );
                         })()}
                       </div>

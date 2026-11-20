@@ -87,6 +87,7 @@ import TopBarProgress from './components/TopBarProgress';
 import { updateLoginSessionSlug } from './utils/sessionSlug';
 import { setAudioMutedInMainSoftware } from './utils/technicianAudio';
 import { collectLocalInterventionReferences, computeNextInterventionReference } from './utils/interventionReference';
+import { generateTourLogisticsPdf } from './utils/logisticsPdfExport';
 import {
   SuspiciousActivityLog,
   logUserLogin,
@@ -5011,6 +5012,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                 plannerName: st.plannerName || st.planificateur || '',
                 region: st.region || st.departement || '',
                 vehicule: st.vehicule || '-',
+                commentaire: st.commentaire !== undefined ? String(st.commentaire) : '',
                 status: normStatus,
                 missions: Array.isArray(st.missions)
                   ? st.missions.map((em: any) => {
@@ -20221,6 +20223,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                       const tourVehicule = draft.vehicule !== undefined ? draft.vehicule : (t.vehicule || 'Aucun');
                       const tourRegion = draft.region !== undefined ? draft.region : (t.region || '');
                       const tourPlannerName = draft.plannerName !== undefined ? draft.plannerName : (t.plannerName || '');
+                      const tourCommentaire = draft.commentaire !== undefined ? draft.commentaire : (t.commentaire || '');
 
                       const tourMissionsForStats = t.missions || [];
                       const totalTourMissions = tourMissionsForStats.length;
@@ -20381,81 +20384,6 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                 {isTourAlertsOpen ? 'Masquer Alerte(s)' : 'Voir Alerte(s)'}
                               </button>
 
-                              {/* Supprimer button */}
-                              {(() => {
-                                const isTourUnsaved = !!dirtyFsmTourIds[t.id];
-                                const missions = t.missions || [];
-                                const normTourSit = String(tourStatus || t.status || 'Brouillon')
-                                  .trim()
-                                  .normalize('NFD')
-                                  .replace(/[\u0300-\u036f]/g, '')
-                                  .toLowerCase();
-                                const isTourStatusBlockingDelete =
-                                  normTourSit === 'a faire' ||
-                                  normTourSit === 'afaire' ||
-                                  normTourSit === 'en cours' ||
-                                  normTourSit === 'encours';
-                                const isDeleteEnabled =
-                                  !isTourUnsaved &&
-                                  !isTourStatusBlockingDelete &&
-                                  (missions.length === 0 ||
-                                    missions.every((m: any) => {
-                                      const sit = String(m.status || 'Brouillon').trim().toLowerCase();
-                                      return (
-                                        sit === 'brouillon' ||
-                                        sit.includes('effectu') ||
-                                        sit.includes('termin') ||
-                                        sit.includes('rejet')
-                                      );
-                                    }));
-
-                                return (
-                                  <button
-                                    type="button"
-                                    disabled={!isDeleteEnabled}
-                                    onClick={() => {
-                                      if (!isDeleteEnabled) return;
-                                      triggerFsmPillWave(`del-tour-${t.id}`);
-                                      setDirtyFsmTourIds(prev => {
-                                        const copy = { ...prev };
-                                        delete copy[t.id];
-                                        return copy;
-                                      });
-                                      deleteFsmTour(t.id);
-                                    }}
-                                    style={{
-                                      ...rowActionButtonStyle,
-                                      backgroundColor: 'rgb(210, 45, 11)',
-                                      background: 'rgb(210, 45, 11)',
-                                      position: 'relative',
-                                      overflow: 'hidden',
-                                      padding: '12px 20px',
-                                      maxHeight: '45px',
-                                      borderRadius: '13px',
-                                      fontSize: '18px',
-                                      fontWeight: '100',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      width: 'auto',
-                                      whiteSpace: 'nowrap',
-                                      opacity: isDeleteEnabled ? 1 : 0.4,
-                                      cursor: isDeleteEnabled ? 'pointer' : 'not-allowed'
-                                    }}
-                                    className={`relative overflow-hidden ${isDeleteEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} shrink-0 ${isDeleteEnabled && fsmClickedPill?.id === `del-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
-                                    title={
-                                      isTourUnsaved
-                                        ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »."
-                                        : !isDeleteEnabled
-                                        ? "Le bouton Supprimer est désactivé (une ou plusieurs missions ne sont pas en situation Brouillon, Effectué ou Rejet mission)"
-                                        : undefined
-                                    }
-                                  >
-                                    Supprimer
-                                  </button>
-                                );
-                              })()}
-
                               {/* Calculer button */}
                               {(() => {
                                 const isTourUnsaved = !!dirtyFsmTourIds[t.id];
@@ -20476,6 +20404,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                       const finalVehicule = draftVal.vehicule !== undefined ? draftVal.vehicule : (t.vehicule || 'Aucun');
                                       const finalRegion = draftVal.region !== undefined ? draftVal.region : (t.region || '');
                                       const finalPlannerName = draftVal.plannerName !== undefined ? draftVal.plannerName : (t.plannerName || '');
+                                      const finalCommentaire = draftVal.commentaire !== undefined ? draftVal.commentaire : (t.commentaire || '');
 
                                       if (!finalTech || finalTech.trim() === '') {
                                         showFsmSystemInfoMessage("Veuillez sélectionner un technicien avec une adresse de départ renseignée pour pouvoir calculer l'itinéraire.");
@@ -20499,7 +20428,8 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                         status: finalStatus,
                                         vehicule: finalVehicule,
                                         region: finalRegion,
-                                        plannerName: finalPlannerName
+                                        plannerName: finalPlannerName,
+                                        commentaire: finalCommentaire
                                       };
 
                                       const updatedToursList = fsmTours.map(tourItem => tourItem.id === t.id ? mergedTour : tourItem);
@@ -20645,6 +20575,119 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                     className={`relative overflow-hidden ${isAvisageEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} shrink-0 ${isAvisageEnabled && fsmClickedPill?.id === `avisage-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
                                   >
                                     Avisage
+                                  </button>
+                                );
+                              })()}
+
+                              {/* Export Logistique button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  triggerFsmPillWave(`export-logistique-tour-${t.id}`);
+                                  generateTourLogisticsPdf({
+                                    tour: t,
+                                    tourDraft: fsmTourDrafts[t.id] || {},
+                                    defibrillateurs,
+                                    otherEquipments,
+                                    formations,
+                                    clients,
+                                    commercialDocs,
+                                    variables,
+                                    generatedReports,
+                                  });
+                                }}
+                                style={{
+                                  ...rowActionButtonStyle,
+                                  position: 'relative',
+                                  overflow: 'hidden',
+                                  padding: '12px 20px',
+                                  maxHeight: '45px',
+                                  borderRadius: '13px',
+                                  fontSize: '18px',
+                                  fontWeight: '100',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: 'auto',
+                                  whiteSpace: 'nowrap',
+                                  cursor: 'pointer',
+                                }}
+                                className={`relative overflow-hidden cursor-pointer shrink-0 ${fsmClickedPill?.id === `export-logistique-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                              >
+                                Export Logistique
+                              </button>
+
+                              {/* Supprimer button */}
+                              {(() => {
+                                const isTourUnsaved = !!dirtyFsmTourIds[t.id];
+                                const missions = t.missions || [];
+                                const normTourSit = String(tourStatus || t.status || 'Brouillon')
+                                  .trim()
+                                  .normalize('NFD')
+                                  .replace(/[\u0300-\u036f]/g, '')
+                                  .toLowerCase();
+                                const isTourStatusBlockingDelete =
+                                  normTourSit === 'a faire' ||
+                                  normTourSit === 'afaire' ||
+                                  normTourSit === 'en cours' ||
+                                  normTourSit === 'encours';
+                                const isDeleteEnabled =
+                                  !isTourUnsaved &&
+                                  !isTourStatusBlockingDelete &&
+                                  (missions.length === 0 ||
+                                    missions.every((m: any) => {
+                                      const sit = String(m.status || 'Brouillon').trim().toLowerCase();
+                                      return (
+                                        sit === 'brouillon' ||
+                                        sit.includes('effectu') ||
+                                        sit.includes('termin') ||
+                                        sit.includes('rejet')
+                                      );
+                                    }));
+
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled={!isDeleteEnabled}
+                                    onClick={() => {
+                                      if (!isDeleteEnabled) return;
+                                      triggerFsmPillWave(`del-tour-${t.id}`);
+                                      setDirtyFsmTourIds(prev => {
+                                        const copy = { ...prev };
+                                        delete copy[t.id];
+                                        return copy;
+                                      });
+                                      deleteFsmTour(t.id);
+                                    }}
+                                    style={{
+                                      ...rowActionButtonStyle,
+                                      backgroundColor: 'rgb(210, 45, 11)',
+                                      background: 'rgb(210, 45, 11)',
+                                      position: 'relative',
+                                      overflow: 'hidden',
+                                      padding: '12px 20px',
+                                      maxHeight: '45px',
+                                      borderRadius: '13px',
+                                      fontSize: '18px',
+                                      fontWeight: '100',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      width: 'auto',
+                                      whiteSpace: 'nowrap',
+                                      opacity: isDeleteEnabled ? 1 : 0.4,
+                                      cursor: isDeleteEnabled ? 'pointer' : 'not-allowed'
+                                    }}
+                                    className={`relative overflow-hidden ${isDeleteEnabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-40'} shrink-0 ${isDeleteEnabled && fsmClickedPill?.id === `del-tour-${t.id}` ? 'sidebar-nav-click-shrink-wave' : ''}`}
+                                    title={
+                                      isTourUnsaved
+                                        ? "Veuillez d'abord enregistrer vos modifications via le bouton « Enregistrer »."
+                                        : !isDeleteEnabled
+                                        ? "Le bouton Supprimer est désactivé (une ou plusieurs missions ne sont pas en situation Brouillon, Effectué ou Rejet mission)"
+                                        : undefined
+                                    }
+                                  >
+                                    Supprimer
                                   </button>
                                 );
                               })()}
@@ -21115,6 +21158,59 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                                   })()}
                                 </select>
                               </div>
+                            </div>
+
+                            {/* Row 4: Commentaire. (full-width below Technicien row, initial 1-line appearance with auto-height) */}
+                            <div className="w-full">
+                              <label className="block mb-1.5 fsm-label-style" style={{ fontSize: '15px', color: '#000000', fontWeight: 600 }}>Commentaire.</label>
+                              <textarea
+                                id={`input-fsm-tour-commentaire-${t.id}`}
+                                rows={1}
+                                value={tourCommentaire}
+                                placeholder="Entrez une observation ou remarque concernant la tournée."
+                                ref={(el) => {
+                                  if (el) {
+                                    el.style.height = 'auto';
+                                    el.style.height = `${Math.max(46, el.scrollHeight)}px`;
+                                  }
+                                }}
+                                onInput={(e) => {
+                                  const el = e.currentTarget;
+                                  el.style.height = 'auto';
+                                  el.style.height = `${Math.max(46, el.scrollHeight)}px`;
+                                }}
+                                onChange={(e) => {
+                                  const el = e.currentTarget;
+                                  el.style.height = 'auto';
+                                  el.style.height = `${Math.max(46, el.scrollHeight)}px`;
+                                  const nextComment = e.target.value;
+                                  setDirtyFsmTourIds(prev => ({ ...prev, [t.id]: true }));
+                                  setFsmTourDrafts(prev => ({
+                                    ...prev,
+                                    [t.id]: {
+                                      ...(prev[t.id] || {}),
+                                      commentaire: nextComment
+                                    }
+                                  }));
+                                }}
+                                style={{
+                                  border: '1px solid #dedede',
+                                  borderRadius: '13px',
+                                  padding: '12px',
+                                  fontSize: '16px',
+                                  fontWeight: '100',
+                                  color: '#000000',
+                                  backgroundColor: '#ffffff',
+                                  width: '100%',
+                                  minHeight: '46px',
+                                  lineHeight: '1.35',
+                                  resize: 'none',
+                                  overflow: 'hidden',
+                                  display: 'block',
+                                  boxSizing: 'border-box',
+                                }}
+                                className="font-sans focus:outline-none"
+                              />
                             </div>
 
                             {/* Technician skills line */}
@@ -28795,6 +28891,10 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
               companyInfo={companyInfo}
               pendingOpenExpeditionRef={pendingOpenExpeditionRef}
               onClearPendingOpenExpeditionRef={() => setPendingOpenExpeditionRef(null)}
+              fsmTours={fsmTours}
+              otherEquipments={otherEquipments}
+              formations={formations}
+              generatedReports={generatedReports}
             />
           )}
 

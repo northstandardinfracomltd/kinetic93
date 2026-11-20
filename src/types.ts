@@ -498,6 +498,9 @@ export interface CompanyInfo {
   expressionAlerte4?: string;
   disableHelpsAndTutorials?: 'Oui' | 'Non';
   enableOtherEquipments?: 'Oui' | 'Non';
+  emailFooterImgUrl?: string;
+  emailFooterTitle?: string;
+  emailFooterParagraph?: string;
   hiddenTabs?: string[];
   communicationPortailClient?: string;
   pdfHeaderImg?: string;

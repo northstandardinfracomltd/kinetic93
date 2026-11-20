@@ -406,6 +406,84 @@ export async function triggerEmail4Signalement(
   });
 }
 
+function escapeEmailHtml(val: string): string {
+  return String(val || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getActiveTenantEmailFooter(): { htmlFooter: string; textFooter: string } {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return { htmlFooter: '', textFooter: '' };
+    }
+    const tenantId = (localStorage.getItem('defib_tenant_id') || 'demo').trim();
+    const candidateKeys = [
+      `defib_${tenantId}_company_info`,
+      `defib_${tenantId}_companyInfo`,
+      `defib_${tenantId.toUpperCase()}_company_info`,
+      `defib_${tenantId.toLowerCase()}_company_info`,
+      `fs_cache_${tenantId}_companyInfo`,
+      `fs_cache_${tenantId}_company_info`,
+      ...(tenantId.toLowerCase() === 'demo' ? ['defib_company_info', 'companyInfo'] : []),
+    ];
+    let imgUrl = '';
+    let title = '';
+    let paragraph = '';
+
+    for (const key of candidateKeys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          const candidateImg = String(parsed.emailFooterImgUrl ?? '').trim();
+          const candidateTitle = String(parsed.emailFooterTitle ?? '').trim().slice(0, 30);
+          const candidateParagraph = String(parsed.emailFooterParagraph ?? '').trim();
+          if (candidateImg || candidateTitle || candidateParagraph) {
+            imgUrl = candidateImg;
+            title = candidateTitle;
+            paragraph = candidateParagraph;
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!imgUrl && !title && !paragraph) {
+      return { htmlFooter: '', textFooter: '' };
+    }
+
+    const htmlParts: string[] = [];
+    if (imgUrl) {
+      htmlParts.push(
+        `<div style="margin-bottom: 10px;"><img src="${escapeEmailHtml(imgUrl)}" alt="" style="width: 100%; max-width: 200px; height: auto; display: block;" /></div>`
+      );
+    }
+    if (title) {
+      htmlParts.push(
+        `<div style="font-size: 22px; font-weight: bold; color: #000000; line-height: 1.3; margin-bottom: 6px;">${escapeEmailHtml(title)}</div>`
+      );
+    }
+    if (paragraph) {
+      htmlParts.push(
+        `<div style="font-size: 18px; color: #000000; line-height: 1.5; white-space: pre-wrap;">${escapeEmailHtml(paragraph).replace(/\r?\n/g, '<br/>')}</div>`
+      );
+    }
+
+    const htmlFooter = `<div style="margin-top: 24px; padding-top: 16px;">${htmlParts.join('')}</div>`;
+    const textParts = [title, paragraph].filter(Boolean);
+    const textFooter = textParts.length > 0 ? `\n\n${textParts.join('\n')}` : '';
+
+    return { htmlFooter, textFooter };
+  } catch (_) {
+    return { htmlFooter: '', textFooter: '' };
+  }
+}
+
 /**
  * EMAIL 5: AVISAGE FSM DESTINÉ AUX CLIENTS
  * Triggered immediately for each defibrillator/mission in the tour when tour status becomes "À faire".
@@ -438,7 +516,8 @@ export async function triggerEmail5AvisageFSM(
   const pinText = pinCode ? `\n\nVoici le code pin à fournir au technicien pour signer la visite sur site : ${pinCode}\n` : '';
   const slotStr = estimatedSlot || '09:00am';
   const infoLines = missionDetails ? `\nClient: ${missionDetails.clientName || ''}.\nSite: ${missionDetails.siteName || ''}.\nLocalisation: ${missionDetails.localisation || ''}.\nClient ID: ${missionDetails.clientIdField || ''}.\nPayeur ID: ${missionDetails.payeurId || ''}.\nBon de commande: ${missionDetails.bonCommande || ''}.\n` : '';
-  const body = `${companyName} a prévu une visite sur votre matériel ${defibIdentifiant} le ${periodDate} (estimé) à ${slotStr} (estimé).${infoLines}${pinText}\nSi vous souhaitez en savoir plus ou vous opposer à l’intervention, répondez simplement au présent email.\n\n${senderName}`;
+  const { htmlFooter, textFooter } = getActiveTenantEmailFooter();
+  const body = `${companyName} a prévu une visite sur votre matériel ${defibIdentifiant} le ${periodDate} (estimé) à ${slotStr} (estimé).${infoLines}${pinText}\nSi vous souhaitez en savoir plus ou vous opposer à l’intervention, répondez simplement au présent email.\n\n${senderName}${textFooter}`;
   const htmlBody = `<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
     <p>${companyName} a prévu une visite sur votre matériel <strong>${defibIdentifiant}</strong> le <strong>${periodDate}</strong> (estimé) à <strong>${slotStr}</strong> (estimé).</p>
     ${missionDetails ? `<p style="margin: 12px 0;">
@@ -452,6 +531,7 @@ export async function triggerEmail5AvisageFSM(
     ${pinCode ? `<p>Voici le code pin à fournir au technicien pour signer la visite sur site : <strong>${pinCode}</strong></p>` : ''}
     <p>Si vous souhaitez en savoir plus ou vous opposer à l’intervention, répondez simplement au présent email.</p>
     <p style="margin-top: 16px; font-weight: bold;">${senderName}</p>
+    ${htmlFooter}
   </div>`;
   
   return sendScriptEmail({
@@ -564,10 +644,12 @@ export async function triggerEmail6RapportIntervention(
     : 'https://consoledefibeo.deroesch.com';
   const satisfactionUrl = `${origin}/satisfaction${queryString}`;
 
-  const body = `Un document est disponible pour l’intervention effectuée sur votre matériel ${cleanIdent} le ${dateStr}${cleanRef ? ` (Réference : ${cleanRef})` : ''}. Connectez-vous sur votre compte en tant que client : https://defibeo.com/ pour le consulter ou ouvrez la page de l’enquête de satisfaction. Participez à l’enquête de satisfaction : ${satisfactionUrl}`;
+  const { htmlFooter, textFooter } = getActiveTenantEmailFooter();
+  const body = `Un document est disponible pour l’intervention effectuée sur votre matériel ${cleanIdent} le ${dateStr}${cleanRef ? ` (Réference : ${cleanRef})` : ''}. Connectez-vous sur votre compte en tant que client : https://defibeo.com/ pour le consulter ou ouvrez la page de l’enquête de satisfaction. Participez à l’enquête de satisfaction : ${satisfactionUrl}${textFooter}`;
 
   const htmlBody = `<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
     <p>Un document est disponible pour l’intervention effectuée sur votre matériel <strong>${cleanIdent}</strong> le <strong>${dateStr}</strong>${cleanRef ? ` (Réference : <strong>${cleanRef}</strong>)` : ''}. Connectez-vous sur votre compte en tant que client : <a href="https://defibeo.com/" style="color: rgb(46, 84, 255); text-decoration: underline;">https://defibeo.com/</a> pour le consulter ou ouvrez la page de l’enquête de satisfaction. Participez à l’enquête de satisfaction : <a href="${satisfactionUrl}" style="color: rgb(46, 84, 255); text-decoration: underline;">${satisfactionUrl}</a></p>
+    ${htmlFooter}
   </div>`;
   
   return sendScriptEmail({
@@ -603,12 +685,18 @@ export async function triggerEmail7CrmReply(
 ): Promise<boolean> {
   const senderName = getActiveTenantCommercialName(companyName);
   const subject = `${senderName} : Vous avez reçu une réponse.`;
-  const body = replyText;
+  const { htmlFooter, textFooter } = getActiveTenantEmailFooter();
+  const body = `${replyText}${textFooter}`;
+  const htmlBody = `<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
+    <div>${escapeEmailHtml(replyText).replace(/\r?\n/g, '<br/>')}</div>
+    ${htmlFooter}
+  </div>`;
   
   return sendScriptEmail({
     to: `defibeo@gmail.com, ${crmSenderEmail}`,
     subject,
     body,
+    htmlBody,
     replyTo: companyEmail || "defibeo@gmail.com",
     name: senderName,
     senderName

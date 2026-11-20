@@ -44,6 +44,7 @@ import {
   getCachedMasterTenantsSync,
   syncTenantMembersToMasterSpreadsheet,
   fetchTutorialVideosFromSpreadsheet,
+  fetchPartnerAccommodationsFromSpreadsheet,
   getServiceAccountAccessToken,
 } from "./src/server/googleSheetsEngine";
 dotenv.config();
@@ -5093,6 +5094,18 @@ async function warmupDefibrillateursStore() {
     console.warn('[Warmup] Defibrillateurs prewarm warning:', err);
   }
 }
+
+  // Partner accommodations shared spreadsheet endpoint
+  app.get("/api/partner-accommodations", async (req, res) => {
+    try {
+      const force = req.query.force === '1' || req.query.force === 'true';
+      const accommodations = await fetchPartnerAccommodationsFromSpreadsheet(force);
+      return res.json({ status: "success", accommodations });
+    } catch (err: any) {
+      console.warn("Error in /api/partner-accommodations:", err);
+      return res.json({ status: "success", accommodations: [] });
+    }
+  });
 
   // Real-time single defibrillator synchronization endpoint from browser client to server
   app.post("/api/sync-single-defib", async (req, res) => {

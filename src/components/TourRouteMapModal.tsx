@@ -252,6 +252,40 @@ function createMissionPassageIcon(bgColor: string, label: string | number): L.Di
   });
 }
 
+function createPartnerAccommodationIcon(): L.DivIcon {
+  return L.divIcon({
+    className: 'defibeo-tour-route-marker-icon',
+    html: `
+      <div style="
+        width: 43px;
+        height: 43px;
+        min-width: 43px;
+        min-height: 43px;
+        border-radius: 9999px;
+        background: #3edd85;
+        background-color: #3edd85;
+        color: #156337;
+        font-family: 'DefibeoMain', 'Civilprom', sans-serif;
+        font-weight: 700;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        box-shadow: none;
+        cursor: pointer;
+        user-select: none;
+        box-sizing: border-box;
+      ">
+        Héb
+      </div>
+    `,
+    iconSize: [43, 43],
+    iconAnchor: [21.5, 21.5],
+    popupAnchor: [0, -22],
+  });
+}
+
 function createCheckerboardDepartureIcon(): L.DivIcon {
   return L.divIcon({
     className: 'defibeo-tour-route-marker-icon',
@@ -840,8 +874,76 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
   const [showLiveTechPosition, setShowLiveTechPosition] = useState<boolean>(false);
   // Toggle to hide point-to-point leg pills ("Masquer les indicatifs point à point.")
   const [hideLegPills, setHideLegPills] = useState<boolean>(false);
+  // Toggle to display partner or technician-recommended accommodations ("Afficher les hébergements partenaires ou recommandés par les techniciens.")
+  const [showPartnerAccommodations, setShowPartnerAccommodations] = useState<boolean>(false);
+  const [partnerAccommodations, setPartnerAccommodations] = useState<
+    Array<{
+      id: string;
+      titre: string;
+      adresse: string;
+      commentaire: string;
+      coord: Coordinate;
+    }>
+  >([]);
   const [liveTechLocation, setLiveTechLocation] = useState<TechLiveLocation | null>(null);
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    if (!isOpen || !showPartnerAccommodations) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/partner-accommodations');
+        if (!res.ok) return;
+        const data = await res.json();
+        const rawList = Array.isArray(data?.accommodations) ? data.accommodations : [];
+        const resolved: Array<{
+          id: string;
+          titre: string;
+          adresse: string;
+          commentaire: string;
+          coord: Coordinate;
+        }> = [];
+
+        for (let i = 0; i < rawList.length; i++) {
+          if (cancelled) return;
+          const item = rawList[i];
+          if (!item) continue;
+          const titre = String(item.titre || '').trim();
+          const adresse = String(item.adresse || '').trim();
+          const commentaire = String(item.commentaire || '').trim();
+          const lat = typeof item.latitude === 'number' && Number.isFinite(item.latitude) ? item.latitude : null;
+          const lng = typeof item.longitude === 'number' && Number.isFinite(item.longitude) ? item.longitude : null;
+
+          let coord: Coordinate | null = null;
+          if (lat !== null && lng !== null) {
+            coord = { lat, lng };
+          } else if (adresse) {
+            coord = await geocodeAddress(adresse);
+          }
+
+          if (coord && Number.isFinite(coord.lat) && Number.isFinite(coord.lng)) {
+            resolved.push({
+              id: item.id || `heb-${i}`,
+              titre,
+              adresse,
+              commentaire,
+              coord,
+            });
+          }
+        }
+
+        if (!cancelled) {
+          setPartnerAccommodations(resolved);
+        }
+      } catch (err) {
+        console.warn('[TourRouteMapModal] Failed to load partner accommodations:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, showPartnerAccommodations]);
 
   const effectiveTenantId = useMemo(() => {
     if (tenantId) return tenantId;
@@ -1695,6 +1797,67 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
                 />
               </button>
             </div>
+
+            {/* Toggle ON/OFF: Afficher les hébergements partenaires ou recommandés par les techniciens. */}
+            <div
+              onClick={() => setShowPartnerAccommodations(prev => !prev)}
+              style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '16px',
+                padding: '14px 18px',
+                boxShadow: 'none',
+                border: 'none',
+                fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                cursor: 'pointer',
+              }}
+              className="flex items-center justify-between gap-3"
+            >
+              <span
+                style={{
+                  fontSize: '18px',
+                  fontWeight: 600,
+                  color: '#000000',
+                  lineHeight: 1.25,
+                }}
+              >
+                Afficher les hébergements partenaires ou recommandés par les techniciens.
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={showPartnerAccommodations}
+                onClick={e => {
+                  e.stopPropagation();
+                  setShowPartnerAccommodations(prev => !prev);
+                }}
+                style={{
+                  width: '44px',
+                  height: '24px',
+                  borderRadius: '9999px',
+                  backgroundColor: showPartnerAccommodations ? '#2e54ff' : '#cbd5e1',
+                  position: 'relative',
+                  transition: 'background-color 0.2s ease',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <span
+                  style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    backgroundColor: '#ffffff',
+                    position: 'absolute',
+                    top: '2px',
+                    left: showPartnerAccommodations ? '22px' : '2px',
+                    transition: 'left 0.2s ease',
+                    boxShadow: 'none',
+                  }}
+                />
+              </button>
+            </div>
           </div>
         )}
 
@@ -2038,6 +2201,114 @@ export const TourRouteMapModal: React.FC<TourRouteMapModalProps> = ({
               </Marker>
             );
           })}
+
+          {/* Partner or technician-recommended accommodations ("Héb" markers) */}
+          {showPartnerAccommodations &&
+            partnerAccommodations.map(acc => {
+              const accIcon = createPartnerAccommodationIcon();
+              const navHref = buildNavigationHref(
+                acc.adresse,
+                acc.coord,
+                isWebapp,
+                preferredNavApp
+              );
+
+              return (
+                <Marker
+                  key={acc.id}
+                  position={[acc.coord.lat, acc.coord.lng]}
+                  icon={accIcon}
+                  zIndexOffset={3900}
+                  eventHandlers={{
+                    mouseover: e => {
+                      e.target.openPopup();
+                    },
+                    click: e => {
+                      e.target.openPopup();
+                    },
+                  }}
+                >
+                  <Popup closeButton={false} className="defibeo-route-hover-popup">
+                    <div
+                      style={{
+                        fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                        color: '#000000',
+                        fontSize: '18px',
+                        lineHeight: '1.45',
+                        textAlign: 'left',
+                        whiteSpace: 'nowrap',
+                        height: 'auto',
+                        maxHeight: 'none',
+                      }}
+                    >
+                      {acc.titre && (
+                        <div
+                          style={{
+                            fontWeight: 700,
+                            fontSize: '18px',
+                            color: '#000000',
+                            marginBottom: '6px',
+                          }}
+                        >
+                          {acc.titre}
+                        </div>
+                      )}
+                      {acc.adresse && (
+                        <div
+                          style={{
+                            fontSize: '18px',
+                            fontWeight: 400,
+                            color: '#000000',
+                            marginBottom: acc.commentaire ? '4px' : '12px',
+                          }}
+                        >
+                          {acc.adresse}
+                        </div>
+                      )}
+                      {acc.commentaire && (
+                        <div
+                          style={{
+                            fontSize: '18px',
+                            fontWeight: 400,
+                            color: '#000000',
+                            marginBottom: '12px',
+                          }}
+                        >
+                          {acc.commentaire}
+                        </div>
+                      )}
+                      <div>
+                        <a
+                          href={navHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '100%',
+                            backgroundColor: '#2e54ff',
+                            color: '#ffffff',
+                            fontFamily: "'DefibeoMain', 'Civilprom', sans-serif",
+                            fontSize: '18px',
+                            fontWeight: 700,
+                            padding: '10px 18px',
+                            borderRadius: '12px',
+                            textDecoration: 'none',
+                            border: 'none',
+                            boxShadow: 'none',
+                            cursor: 'pointer',
+                          }}
+                          className="hover:opacity-90 transition-opacity"
+                        >
+                          Y aller
+                        </a>
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
         </MapContainer>
       </div>
     </div>

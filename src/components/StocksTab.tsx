@@ -15,6 +15,7 @@ import {
   openTechStockInventoryPdf,
   buildTechInventoryItemsFromStocks,
 } from '../utils/techStockInventoryPdf';
+import { generateTourLogisticsPdf } from '../utils/logisticsPdfExport';
 
 const CODE39_MAP: Record<string, string> = {
   '0': '101001101101',
@@ -140,6 +141,10 @@ interface StocksTabProps {
   companyInfo?: Partial<CompanyInfo> | null;
   pendingOpenExpeditionRef?: string | null;
   onClearPendingOpenExpeditionRef?: () => void;
+  fsmTours?: any[];
+  otherEquipments?: any[];
+  formations?: any[];
+  generatedReports?: any[];
 }
 
 export default function StocksTab({
@@ -171,11 +176,29 @@ export default function StocksTab({
   companyInfo,
   pendingOpenExpeditionRef,
   onClearPendingOpenExpeditionRef,
+  fsmTours = [],
+  otherEquipments = [],
+  formations = [],
+  generatedReports = [],
 }: StocksTabProps) {
   const [isNotifDrawerOpen, setIsNotifDrawerOpen] = useState<boolean>(false);
   const [activeStocksSubSidePane, setActiveStocksSubSidePane] = useState<'achats-fournisseurs' | 'expeditions' | null>(null);
   const [expeditionsInitialSearch, setExpeditionsInitialSearch] = useState<string>('');
   const [isFilterSidePaneOpen, setIsFilterSidePaneOpen] = useState<boolean>(false);
+  const [isTourLogisticsModalOpen, setIsTourLogisticsModalOpen] = useState<boolean>(false);
+  const [selectedLogisticsTourId, setSelectedLogisticsTourId] = useState<string>('');
+
+  const eligibleLogisticsTours = useMemo(() => {
+    return (fsmTours || []).filter((tr: any) => {
+      if (!tr || tr.id === 'a-trier' || tr.id === 'A trier') return false;
+      const normSit = String(tr.status || 'Brouillon')
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+      return normSit === 'brouillon' || normSit === 'a faire' || normSit === 'afaire';
+    });
+  }, [fsmTours]);
 
   useEffect(() => {
     if (pendingOpenExpeditionRef && String(pendingOpenExpeditionRef).trim() !== '') {
@@ -2422,6 +2445,9 @@ export default function StocksTab({
                         setShowStockValue((prev) => !prev);
                       } else if (val === 'download-inventory-pdf') {
                         handleDownloadInventoryPDF();
+                      } else if (val === 'tour-logistics-needs') {
+                        setSelectedLogisticsTourId('');
+                        setIsTourLogisticsModalOpen(true);
                       } else if (val === 'spreadsheet-editor') {
                         if (resolvedSpreadsheetUrl) {
                           openTenantSpreadsheetUrl(resolvedSpreadsheetUrl);
@@ -2440,6 +2466,9 @@ export default function StocksTab({
                     </option>
                     <option value="toggle-stock-value">
                       {showStockValue ? t("Masquer la valeur des stocks") : t("Afficher la valeur des stocks")}
+                    </option>
+                    <option value="tour-logistics-needs">
+                      {t("Besoins d'approvisionnement pour les tournées")}
                     </option>
                     {stockEmplacementFilter && (
                       <option value="download-inventory-pdf">
@@ -5931,6 +5960,134 @@ export default function StocksTab({
                   initialSearchQuery={expeditionsInitialSearch}
                 />
               )}
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Popup: Besoins d'approvisionnement pour les tournées */}
+      {isTourLogisticsModalOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn"
+          onClick={() => setIsTourLogisticsModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="p-6 w-full flex flex-col gap-4 text-left"
+            style={{
+              background: '#f5f7fa',
+              backgroundColor: '#f5f7fa',
+              borderRadius: '13px',
+              boxShadow: 'none',
+              textAlign: 'left',
+              maxWidth: '420px',
+              fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+            }}
+          >
+            <p
+              className="leading-relaxed m-0"
+              style={{
+                color: '#000000',
+                fontSize: '18px',
+                cursor: 'default',
+                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+              }}
+            >
+              {t("Sélectionnez une tournée pour exporter la liste des besoins logistiques en pièces correspondante.")}
+            </p>
+
+            <div>
+              <select
+                value={selectedLogisticsTourId}
+                onChange={(e) => setSelectedLogisticsTourId(e.target.value)}
+                className="w-full font-sans focus:outline-none cursor-pointer"
+                style={{
+                  border: '1px solid #dedede',
+                  borderRadius: '13px',
+                  padding: '12px',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  color: selectedLogisticsTourId ? '#000000' : '#BECADB',
+                  backgroundColor: '#ffffff',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+              >
+                <option value="" disabled style={{ color: '#BECADB' }}>
+                  {eligibleLogisticsTours.length === 0
+                    ? t("Aucune tournée brouillon ou à faire disponible")
+                    : t("Sélectionnez une tournée.")}
+                </option>
+                {eligibleLogisticsTours.map((tr: any) => {
+                  const title = String(tr.title || tr.name || tr.tourIdentifiant || tr.id || 'Tournée').trim();
+                  const ident = String(tr.tourIdentifiant || tr.id || '').trim();
+                  const sit = String(tr.status || 'Brouillon').trim();
+                  const label = ident && ident !== title ? `${title} (${ident}) — ${sit}` : `${title} — ${sit}`;
+                  return (
+                    <option key={tr.id} value={tr.id} style={{ color: '#000000' }}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            <div className="flex items-center justify-between gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsTourLogisticsModalOpen(false)}
+                className="flex-1 font-semibold cursor-pointer outline-none transition-none text-center"
+                style={{
+                  padding: '11px 18px',
+                  color: '#ffffff',
+                  boxShadow: 'none',
+                  fontSize: '18px',
+                  background: 'rgb(210, 45, 11)',
+                  backgroundColor: 'rgb(210, 45, 11)',
+                  border: 'none',
+                  borderRadius: '13px',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+              >
+                {t("Fermer")}
+              </button>
+              <button
+                type="button"
+                disabled={!selectedLogisticsTourId}
+                onClick={() => {
+                  const targetTour = eligibleLogisticsTours.find((tr: any) => tr.id === selectedLogisticsTourId);
+                  if (!targetTour) return;
+                  generateTourLogisticsPdf({
+                    tour: targetTour,
+                    tourDraft: {},
+                    defibrillateurs,
+                    otherEquipments,
+                    formations,
+                    clients,
+                    commercialDocs,
+                    variables,
+                    generatedReports,
+                  });
+                  setIsTourLogisticsModalOpen(false);
+                }}
+                className={`flex-1 font-semibold outline-none transition-none text-center ${
+                  selectedLogisticsTourId ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
+                }`}
+                style={{
+                  padding: '11px 18px',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  boxShadow: 'none',
+                  background: '#2e54ff',
+                  backgroundColor: '#2e54ff',
+                  border: 'none',
+                  borderRadius: '13px',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  opacity: selectedLogisticsTourId ? 1 : 0.5,
+                }}
+              >
+                {t("Télécharger PDF")}
+              </button>
             </div>
           </div>
         </div>,

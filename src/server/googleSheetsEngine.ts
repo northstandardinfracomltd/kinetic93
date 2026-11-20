@@ -2284,6 +2284,9 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Utiliser Commandes sur Defibeo', field: 'enableDevisFactures', aliases: ['utilisercommandessurdefibeo', 'utilisercommandes', 'enabledevisfactures', 'commandesdefibeo', 'devisetfactures'], type: 'yesno' },
     { header: 'Désactiver les aides et tutoriels', field: 'disableHelpsAndTutorials', aliases: ['desactiverlesaidesettutoriels', 'desactiveraidestutoriels', 'disablehelpsandtutorials', 'aidestutoriels'], type: 'yesno' },
     { header: 'Personnaliser la visibilité des onglets', field: 'hiddenTabs', aliases: ['personnaliserlavisibilitedesonglets', 'visibilitedesonglets', 'visibiliteonglets', 'ongletsmasques', 'hiddentabs', 'onglets'], type: 'array' },
+    { header: 'URL Source IMG Email', field: 'emailFooterImgUrl', aliases: ['urlsourceimgemail', 'urlsourcedelimageemail', 'urlsourcedelimagedupieddemail', 'urlsourceimagedupieddemail', 'emailfooterimgurl'] },
+    { header: 'Titre Email', field: 'emailFooterTitle', aliases: ['titreemail', 'titredupieddemail', 'emailfootertitle'] },
+    { header: 'Paragraphe Email', field: 'emailFooterParagraph', aliases: ['paragrapheemail', 'paragraphedupieddemail', 'emailfooterparagraph'] },
   ],
   reglagesCrm: [
     { header: 'Texte de l’email de relance. 1', field: 'relanceEmailBody', aliases: ['textedelemailderelance1', 'texteemailrelance1', 'textederelance1', 'relanceemailbody', 'relanceemailbody1', 'textedelemailderelance'] },
@@ -4157,6 +4160,7 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.techName = merged.techName || merged.technicien || 'Non assigné';
     merged.plannerName = String(merged.plannerName || merged.planificateur || '').trim();
     merged.region = String(merged.region || merged.departement || '').trim();
+    merged.commentaire = String(merged.commentaire ?? rawByHeader['Commentaire'] ?? rawByHeader['Commentaire.'] ?? '').trim();
     merged.startDate = normalizeDateStr(merged.startDate || merged.date || '');
     merged.date = merged.date || merged.startDate || '';
     const rawTourStatus = String(merged.status || merged.statut || merged.situation || '').trim();
@@ -6632,6 +6636,9 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
     merged.expressionAlerte2 = String(merged.expressionAlerte2 ?? '').trim().slice(0, 30);
     merged.expressionAlerte3 = String(merged.expressionAlerte3 ?? '').trim().slice(0, 30);
     merged.expressionAlerte4 = String(merged.expressionAlerte4 ?? '').trim().slice(0, 30);
+    merged.emailFooterImgUrl = String(merged.emailFooterImgUrl ?? '').trim();
+    merged.emailFooterTitle = String(merged.emailFooterTitle ?? '').trim().slice(0, 30);
+    merged.emailFooterParagraph = String(merged.emailFooterParagraph ?? '').trim();
     if (typeof merged.hiddenTabs === 'string') {
       merged.hiddenTabs = merged.hiddenTabs
         .split(/[,;|]/)
@@ -7605,6 +7612,8 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.plannerName = enriched.plannerName || enriched.planificateur || '';
     enriched.startDate = enriched.startDate || enriched.date || '';
     enriched.status = enriched.status || 'Brouillon';
+    enriched.commentaire = String(enriched.commentaire ?? '').trim();
+    enriched._rawSheetRow = {};
   } else if (tabType === 'missionsTournees') {
     const rawTid = String(enriched.tourIdentifiant ?? enriched.tourId ?? '').trim();
     enriched.tourIdentifiant = rawTid === 'a-trier' ? '' : rawTid;
@@ -8880,6 +8889,9 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
     enriched.expressionAlerte2 = String(enriched.expressionAlerte2 ?? '').trim().slice(0, 30);
     enriched.expressionAlerte3 = String(enriched.expressionAlerte3 ?? '').trim().slice(0, 30);
     enriched.expressionAlerte4 = String(enriched.expressionAlerte4 ?? '').trim().slice(0, 30);
+    enriched.emailFooterImgUrl = String(enriched.emailFooterImgUrl ?? '').trim();
+    enriched.emailFooterTitle = String(enriched.emailFooterTitle ?? '').trim().slice(0, 30);
+    enriched.emailFooterParagraph = String(enriched.emailFooterParagraph ?? '').trim();
     if (Array.isArray(enriched.hiddenTabs)) {
       enriched.hiddenTabs = enriched.hiddenTabs.join(', ');
     }
@@ -10198,7 +10210,11 @@ export async function fetchTenantSheetCollection(
   };
   const isStaleReglagesSnap = (snap: CachedSheetResult | null | undefined): boolean => {
     if (!snap || tabType !== 'reglages' || !Array.isArray(snap.items)) return false;
-    if (!Array.isArray(snap.headers) || snap.headers.length === 0) {
+    if (
+      !Array.isArray(snap.headers) ||
+      snap.headers.length === 0 ||
+      !snap.headers.some(h => normalizeHeaderKey(h).includes('urlsourceimgemail') || normalizeHeaderKey(h).includes('titreemail'))
+    ) {
       return true;
     }
     return false;
@@ -11480,7 +11496,8 @@ export async function upsertRecordsToTenantSheet(
           !headers.some(h => normalizeHeaderKey(h).includes('secondaire')));
       const reglagesMissingNewHeaders =
         tabType === 'reglages' &&
-        !headers.some(h => normalizeHeaderKey(h).includes('expressiondalerte1') || normalizeHeaderKey(h).includes('expressionalerte1'));
+        (!headers.some(h => normalizeHeaderKey(h).includes('expressiondalerte1') || normalizeHeaderKey(h).includes('expressionalerte1')) ||
+          !headers.some(h => normalizeHeaderKey(h).includes('urlsourceimgemail') || normalizeHeaderKey(h).includes('titreemail')));
       const rapportsPdfMissingNewHeaders =
         tabType === 'rapportsPdf' &&
         !headers.some(h => normalizeHeaderKey(h).includes('section11commentaireinterne'));
@@ -13055,4 +13072,115 @@ export async function fetchTutorialVideosFromSpreadsheet(forceRefresh: boolean =
   return cachedTutorialVideos;
 }
 
+export const PARTNER_ACCOMMODATIONS_SPREADSHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1hmYMVmRXiogk8_lXg7wKSpfhriDfLoKq76g6ovm-DTg/edit?usp=sharing';
 
+export interface PartnerAccommodationRecord {
+  id: string;
+  titre: string;
+  adresse: string;
+  latitude: number | null;
+  longitude: number | null;
+  commentaire: string;
+}
+
+let cachedPartnerAccommodations: PartnerAccommodationRecord[] = [];
+let lastPartnerAccommodationsFetchAt = 0;
+
+function parseAccommodationCoord(raw: any): number | null {
+  if (raw === undefined || raw === null) return null;
+  const cleaned = String(raw).trim().replace(',', '.');
+  if (!cleaned) return null;
+  const num = parseFloat(cleaned);
+  return Number.isFinite(num) ? num : null;
+}
+
+export async function fetchPartnerAccommodationsFromSpreadsheet(
+  forceRefresh: boolean = false
+): Promise<PartnerAccommodationRecord[]> {
+  const now = Date.now();
+  if (!forceRefresh && lastPartnerAccommodationsFetchAt > 0 && now - lastPartnerAccommodationsFetchAt < 10000) {
+    return cachedPartnerAccommodations;
+  }
+  try {
+    const matrix = await fetchRawSheetMatrix(PARTNER_ACCOMMODATIONS_SPREADSHEET_URL);
+    if (matrix) {
+      const headers = Array.isArray(matrix.headers) ? matrix.headers : [];
+      const rows = Array.isArray(matrix.rows) ? matrix.rows : [];
+      const headersNorm = headers.map(h =>
+        String(h || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]/g, '')
+      );
+
+      const titreIdx = headersNorm.findIndex(h => h.includes('titre') || h.includes('nom'));
+      const adresseIdx = headersNorm.findIndex(h => h.includes('adresse'));
+      const latIdx = headersNorm.findIndex(h => h.includes('latitude') || h === 'lat');
+      const lngIdx = headersNorm.findIndex(h => h.includes('longitude') || h === 'lng' || h === 'lon');
+      const commentIdx = headersNorm.findIndex(h => h.includes('commentaire') || h.includes('observation') || h.includes('remarque'));
+
+      const colTitre = titreIdx >= 0 ? titreIdx : 0;
+      const colAdresse = adresseIdx >= 0 ? adresseIdx : 1;
+      const colLat = latIdx >= 0 ? latIdx : 2;
+      const colLng = lngIdx >= 0 ? lngIdx : 3;
+      const colComment = commentIdx >= 0 ? commentIdx : 4;
+
+      const items: PartnerAccommodationRecord[] = [];
+
+      // If row 1 (headers) was actually data rather than column headers
+      if (headers.length >= 2 && titreIdx < 0 && adresseIdx < 0 && latIdx < 0 && lngIdx < 0) {
+        const hTitre = String(headers[0] ?? '').trim();
+        const hAdresse = String(headers[1] ?? '').trim();
+        const hLat = parseAccommodationCoord(headers[2]);
+        const hLng = parseAccommodationCoord(headers[3]);
+        const hComment = String(headers[4] ?? '').trim();
+        if (hTitre || hAdresse) {
+          items.push({
+            id: `heb-0`,
+            titre: hTitre,
+            adresse: hAdresse,
+            latitude: hLat,
+            longitude: hLng,
+            commentaire: hComment,
+          });
+        }
+      }
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!Array.isArray(row)) continue;
+        const rawTitre = String(row[colTitre] ?? '').trim();
+        const rawAdresse = String(row[colAdresse] ?? '').trim();
+        const rawLat = parseAccommodationCoord(row[colLat]);
+        const rawLng = parseAccommodationCoord(row[colLng]);
+        const rawComment = String(row[colComment] ?? '').trim();
+
+        if (!rawTitre && !rawAdresse && rawLat === null && rawLng === null) continue;
+
+        const normTitre = rawTitre.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+        const normAdresse = rawAdresse.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+        if (normTitre === 'titrehebergement' || normAdresse === 'adressecompletehebergement') {
+          continue;
+        }
+
+        items.push({
+          id: `heb-${i + 1}`,
+          titre: rawTitre,
+          adresse: rawAdresse,
+          latitude: rawLat,
+          longitude: rawLng,
+          commentaire: rawComment,
+        });
+      }
+
+      cachedPartnerAccommodations = items;
+      lastPartnerAccommodationsFetchAt = Date.now();
+      return cachedPartnerAccommodations;
+    }
+  } catch (err) {
+    console.warn('[PartnerAccommodationsSheet] Failed to fetch partner accommodations spreadsheet:', err);
+  }
+  return cachedPartnerAccommodations;
+}
