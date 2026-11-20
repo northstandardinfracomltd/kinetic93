@@ -1985,13 +1985,21 @@ export default function ClientPortal({
         `;
       };
 
+      const rawVer1 = (report as any)?.versionActuelle;
+      const parsedVer1 =
+        rawVer1 !== undefined && rawVer1 !== null && String(rawVer1).trim() !== ''
+          ? parseInt(String(rawVer1).trim(), 10)
+          : NaN;
+      const pdfVersion1 = Number.isFinite(parsedVer1) && parsedVer1 >= 0 ? (parsedVer1 === 0 ? 1 : parsedVer1) : 1;
+
       const renderFooter = (pageIndex: number, pagesTotal: number) => `
         <div class="pdf-footer" style="position: absolute; bottom: 15mm; left: 15mm; right: 15mm; display: flex; flex-direction: row; justify-content: space-between; align-items: flex-end; font-size: 13px; color: #000000; padding-top: 8px; font-family: 'Civilprom', 'Inter', sans-serif !important; box-sizing: border-box; width: calc(100% - 30mm); border-top: none;">
           <div style="flex: 1; text-align: left; padding-right: 20px; color: #000000; font-size: 13px;">
             <p style="margin: 0; color: #000000; font-size: 13px; text-align: left; font-weight: normal !important; line-height: 1.4;">${pdfPageFooterText || ''}</p>
           </div>
-          <div style="font-weight: bold !important; white-space: nowrap; color: #000000; font-size: 13px;">
-            Page ${pageIndex} / ${pagesTotal}
+          <div style="font-weight: bold !important; white-space: nowrap; color: #000000; font-size: 13px; display: flex; align-items: center; gap: 12px;">
+            <span>Version PDF : ${pdfVersion1}</span>
+            <span>Page ${pageIndex} / ${pagesTotal}</span>
           </div>
         </div>
       `;
@@ -2499,13 +2507,21 @@ export default function ClientPortal({
         `;
       };
 
+      const rawVer2 = (report as any)?.versionActuelle;
+      const parsedVer2 =
+        rawVer2 !== undefined && rawVer2 !== null && String(rawVer2).trim() !== ''
+          ? parseInt(String(rawVer2).trim(), 10)
+          : NaN;
+      const pdfVersion2 = Number.isFinite(parsedVer2) && parsedVer2 >= 0 ? (parsedVer2 === 0 ? 1 : parsedVer2) : 1;
+
       const renderFooter = (pageIndex: number, pagesTotal: number) => `
         <div class="pdf-footer" style="position: absolute; bottom: 15mm; left: 15mm; right: 15mm; display: flex; flex-direction: row; justify-content: space-between; align-items: flex-end; font-size: 13px; color: #000000; padding-top: 8px; font-family: 'Civilprom', 'Inter', sans-serif !important; box-sizing: border-box; width: calc(100% - 30mm); border-top: none;">
           <div style="flex: 1; text-align: left; padding-right: 20px; color: #000000; font-size: 13px;">
             <p style="margin: 0; color: #000000; font-size: 13px; text-align: left; font-weight: normal !important; line-height: 1.4;">${pdfPageFooterText || ''}</p>
           </div>
-          <div style="font-weight: bold !important; white-space: nowrap; color: #000000; font-size: 13px;">
-            Page ${pageIndex} / ${pagesTotal}
+          <div style="font-weight: bold !important; white-space: nowrap; color: #000000; font-size: 13px; display: flex; align-items: center; gap: 12px;">
+            <span>Version PDF : ${pdfVersion2}</span>
+            <span>Page ${pageIndex} / ${pagesTotal}</span>
           </div>
         </div>
       `;

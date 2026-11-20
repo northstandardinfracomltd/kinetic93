@@ -19,6 +19,7 @@ import {
   computeNextInterventionReference,
   fetchAndComputeNextInterventionReference,
 } from '../utils/interventionReference';
+import { diffReportFormFields } from '../utils/reportChangeTracker';
 
 interface GmaoCorrectionFormProps {
   key?: React.Key;
@@ -1342,6 +1343,9 @@ export default function GmaoCorrectionForm({
   const [newMaterialType, setNewMaterialType] = useState<string>(() => report?.newMaterialType || '');
   const [isAiDetectionModalOpen, setIsAiDetectionModalOpen] = useState(false);
   const [aiDetectedModel, setAiDetectedModel] = useState<{ id: string; nom: string; marque: string } | null>(null);
+  const [customAiDetectedModels, setCustomAiDetectedModels] = useState<
+    Record<string, { id: string; nom: string; marque: string }>
+  >({});
   const [aiDetectionTarget, setAiDetectionTarget] = useState<{
     fieldKey: 'modeleCoffretId' | 'modeleElectrodeAId' | 'modeleElectrodeASecoursId' | 'modeleElectrodePId' | 'modeleElectrodePSecoursId' | 'modeleBatterieId';
     category: 'Modèle Coffret' | 'Modèle Électrode' | 'Modèle Batterie';
@@ -1362,7 +1366,22 @@ export default function GmaoCorrectionForm({
   const [photoResultatTestUrl, setPhotoResultatTestUrl] = useState(report?.photoResultatTestUrl || '');
 
   // Google Drive Credentials state
-  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(() => getCachedGoogleDriveActiveSync());
+  const effectiveFormTenantId = useMemo(
+    () =>
+      resolveEffectiveTenantId(
+        tenantId ||
+          (report as any)?.tenantId ||
+          (report as any)?.envId ||
+          (effectiveCompanyInfo as any)?.tenantId ||
+          (effectiveCompanyInfo as any)?.envId ||
+          (effectiveCompanyInfo as any)?.id,
+        effectiveCompanyInfo
+      ),
+    [tenantId, report, effectiveCompanyInfo]
+  );
+  const [googleDriveActive, setGoogleDriveActive] = useState<boolean>(() =>
+    getCachedGoogleDriveActiveSync(effectiveFormTenantId, effectiveCompanyInfo)
+  );
   const [googleDriveEmail, setGoogleDriveEmail] = useState('');
   const [googleDriveAccessToken, setGoogleDriveAccessToken] = useState('');
 
@@ -1936,6 +1955,15 @@ export default function GmaoCorrectionForm({
     };
   };
 
+  const initialFormPayloadRef = useRef<any>(null);
+  if (!initialFormPayloadRef.current) {
+    try {
+      initialFormPayloadRef.current = JSON.parse(JSON.stringify(buildDraftPayloadRef.current()));
+    } catch (_) {
+      initialFormPayloadRef.current = buildDraftPayloadRef.current();
+    }
+  }
+
   useEffect(() => {
     if (!isWebapp || !onDraftChange) return;
     const payload = buildDraftPayloadRef.current();
@@ -2188,6 +2216,9 @@ export default function GmaoCorrectionForm({
               );
               if (matched?.autreReference) {
                 setAutreReference(matched.autreReference);
+                if (initialFormPayloadRef.current && !initialFormPayloadRef.current.autreReference) {
+                  initialFormPayloadRef.current.autreReference = matched.autreReference;
+                }
                 break;
               }
             }
@@ -2201,8 +2232,11 @@ export default function GmaoCorrectionForm({
 
   useEffect(() => {
     const refreshDrive = () => {
-      const activeTenant = resolveEffectiveTenantId();
-      fetchGoogleDriveStatus(activeTenant)
+      const activeTenant = resolveEffectiveTenantId(effectiveFormTenantId, effectiveCompanyInfo);
+      if (getCachedGoogleDriveActiveSync(activeTenant, effectiveCompanyInfo)) {
+        setGoogleDriveActive(true);
+      }
+      fetchGoogleDriveStatus(activeTenant, effectiveCompanyInfo)
         .then(status => {
           setGoogleDriveActive(status.active);
           setGoogleDriveEmail(status.email);
@@ -2213,7 +2247,7 @@ export default function GmaoCorrectionForm({
     refreshDrive();
     window.addEventListener('google-drive-status-changed', refreshDrive);
     return () => window.removeEventListener('google-drive-status-changed', refreshDrive);
-  }, []);
+  }, [effectiveFormTenantId, effectiveCompanyInfo]);
 
   useEffect(() => {
     if (electrodeARemplacee === 'Oui') {
@@ -2807,14 +2841,14 @@ export default function GmaoCorrectionForm({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const activeTenant = resolveEffectiveTenantId();
-    let isActive = googleDriveActive;
+    const activeTenant = resolveEffectiveTenantId(effectiveFormTenantId, effectiveCompanyInfo);
+    let isActive = googleDriveActive || getCachedGoogleDriveActiveSync(activeTenant, effectiveCompanyInfo);
     let token = googleDriveAccessToken;
     if (!isActive || !token) {
       try {
-        const fresh = await fetchGoogleDriveStatus(activeTenant);
-        isActive = fresh.active;
-        token = fresh.accessToken;
+        const fresh = await fetchGoogleDriveStatus(activeTenant, effectiveCompanyInfo);
+        isActive = fresh.active || isActive;
+        token = fresh.accessToken || token;
         setGoogleDriveActive(isActive);
         setGoogleDriveEmail(fresh.email);
         setGoogleDriveAccessToken(token);
@@ -3885,6 +3919,14 @@ export default function GmaoCorrectionForm({
       Object.assign(savedReportPayload, buildFlatAlertFields(mergedAlerts));
     }
 
+    const currentDraftForDiff = buildDraftPayloadRef.current();
+    const computedChanges = diffReportFormFields(
+      initialFormPayloadRef.current || report,
+      currentDraftForDiff || savedReportPayload,
+      { variables, clients }
+    );
+    (savedReportPayload as any)._computedChangeDescriptions = computedChanges;
+
     playTechSuccessSound();
     setIsSaving(true);
     setTimeout(() => {
@@ -4682,16 +4724,32 @@ export default function GmaoCorrectionForm({
                 {variables.filter(v => v.category === 'Modèle Défibrillateur').map(v => (
                   <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                 ))}
+                {snapshot.modeleId &&
+                  !variables.some(v => v.category === 'Modèle Défibrillateur' && v.id === snapshot.modeleId) && (
+                    <option value={snapshot.modeleId}>
+                      {customAiDetectedModels.modeleId?.id === snapshot.modeleId
+                        ? `${customAiDetectedModels.modeleId.nom}${
+                            customAiDetectedModels.modeleId.marque &&
+                            customAiDetectedModels.modeleId.marque !== 'Standard' &&
+                            !customAiDetectedModels.modeleId.nom.toLowerCase().includes(customAiDetectedModels.modeleId.marque.toLowerCase())
+                              ? ` (${customAiDetectedModels.modeleId.marque})`
+                              : ''
+                          }`
+                        : snapshot.modeleId}
+                    </option>
+                  )}
               </select>
 
               {isAiDetectionModalOpen && (
                 <AiModelDetectionModal
                   isOpen={isAiDetectionModalOpen}
                   onClose={() => setIsAiDetectionModalOpen(false)}
+                  category="Modèle Défibrillateur"
                   availableModels={variables.filter(v => v.category === 'Modèle Défibrillateur')}
                   onDetected={(model) => {
                     handleSnapshotChange('modeleId', model.id);
                     setAiDetectedModel(model);
+                    setCustomAiDetectedModels(prev => ({ ...prev, modeleId: model }));
                   }}
                 />
               )}
@@ -5270,14 +5328,30 @@ export default function GmaoCorrectionForm({
                   {variables.filter(v => v.category === 'Modèle Coffret').map(v => (
                     <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                   ))}
+                  {snapshot.modeleCoffretId &&
+                    !variables.some(v => v.category === 'Modèle Coffret' && v.id === snapshot.modeleCoffretId) && (
+                      <option value={snapshot.modeleCoffretId}>
+                        {customAiDetectedModels.modeleCoffretId?.id === snapshot.modeleCoffretId
+                          ? `${customAiDetectedModels.modeleCoffretId.nom}${
+                              customAiDetectedModels.modeleCoffretId.marque &&
+                              customAiDetectedModels.modeleCoffretId.marque !== 'Standard' &&
+                              !customAiDetectedModels.modeleCoffretId.nom.toLowerCase().includes(customAiDetectedModels.modeleCoffretId.marque.toLowerCase())
+                                ? ` (${customAiDetectedModels.modeleCoffretId.marque})`
+                                : ''
+                            }`
+                          : snapshot.modeleCoffretId}
+                      </option>
+                    )}
                 </select>
                 {aiDetectionTarget?.fieldKey === 'modeleCoffretId' && (
                   <AiModelDetectionModal
                     isOpen={true}
                     onClose={() => setAiDetectionTarget(null)}
+                    category="Modèle Coffret"
                     availableModels={variables.filter(v => v.category === 'Modèle Coffret')}
                     onDetected={(model) => {
                       handleSnapshotChange('modeleCoffretId', model.id);
+                      setCustomAiDetectedModels(prev => ({ ...prev, modeleCoffretId: model }));
                     }}
                   />
                 )}
@@ -5984,14 +6058,30 @@ export default function GmaoCorrectionForm({
                 {variables.filter(v => v.category === 'Modèle Électrode').map(v => (
                   <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                 ))}
+                {snapshot.modeleElectrodeAId &&
+                  !variables.some(v => v.category === 'Modèle Électrode' && v.id === snapshot.modeleElectrodeAId) && (
+                    <option value={snapshot.modeleElectrodeAId}>
+                      {customAiDetectedModels.modeleElectrodeAId?.id === snapshot.modeleElectrodeAId
+                        ? `${customAiDetectedModels.modeleElectrodeAId.nom}${
+                            customAiDetectedModels.modeleElectrodeAId.marque &&
+                            customAiDetectedModels.modeleElectrodeAId.marque !== 'Standard' &&
+                            !customAiDetectedModels.modeleElectrodeAId.nom.toLowerCase().includes(customAiDetectedModels.modeleElectrodeAId.marque.toLowerCase())
+                              ? ` (${customAiDetectedModels.modeleElectrodeAId.marque})`
+                              : ''
+                          }`
+                        : snapshot.modeleElectrodeAId}
+                    </option>
+                  )}
               </select>
               {aiDetectionTarget?.fieldKey === 'modeleElectrodeAId' && (
                 <AiModelDetectionModal
                   isOpen={true}
                   onClose={() => setAiDetectionTarget(null)}
+                  category="Modèle Électrode"
                   availableModels={variables.filter(v => v.category === 'Modèle Électrode')}
                   onDetected={(model) => {
                     handleSnapshotChange('modeleElectrodeAId', model.id);
+                    setCustomAiDetectedModels(prev => ({ ...prev, modeleElectrodeAId: model }));
                   }}
                 />
               )}
@@ -6185,14 +6275,30 @@ export default function GmaoCorrectionForm({
                     {variables.filter(v => v.category === 'Modèle Électrode').map(v => (
                       <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                     ))}
+                    {snapshot.modeleElectrodeASecoursId &&
+                      !variables.some(v => v.category === 'Modèle Électrode' && v.id === snapshot.modeleElectrodeASecoursId) && (
+                        <option value={snapshot.modeleElectrodeASecoursId}>
+                          {customAiDetectedModels.modeleElectrodeASecoursId?.id === snapshot.modeleElectrodeASecoursId
+                            ? `${customAiDetectedModels.modeleElectrodeASecoursId.nom}${
+                                customAiDetectedModels.modeleElectrodeASecoursId.marque &&
+                                customAiDetectedModels.modeleElectrodeASecoursId.marque !== 'Standard' &&
+                                !customAiDetectedModels.modeleElectrodeASecoursId.nom.toLowerCase().includes(customAiDetectedModels.modeleElectrodeASecoursId.marque.toLowerCase())
+                                  ? ` (${customAiDetectedModels.modeleElectrodeASecoursId.marque})`
+                                  : ''
+                              }`
+                            : snapshot.modeleElectrodeASecoursId}
+                        </option>
+                      )}
                   </select>
                   {aiDetectionTarget?.fieldKey === 'modeleElectrodeASecoursId' && (
                     <AiModelDetectionModal
                       isOpen={true}
                       onClose={() => setAiDetectionTarget(null)}
+                      category="Modèle Électrode"
                       availableModels={variables.filter(v => v.category === 'Modèle Électrode')}
                       onDetected={(model) => {
                         handleSnapshotChange('modeleElectrodeASecoursId', model.id);
+                        setCustomAiDetectedModels(prev => ({ ...prev, modeleElectrodeASecoursId: model }));
                       }}
                     />
                   )}
@@ -6616,14 +6722,30 @@ export default function GmaoCorrectionForm({
                 {variables.filter(v => v.category === 'Modèle Électrode').map(v => (
                   <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                 ))}
+                {snapshot.modeleElectrodePId &&
+                  !variables.some(v => v.category === 'Modèle Électrode' && v.id === snapshot.modeleElectrodePId) && (
+                    <option value={snapshot.modeleElectrodePId}>
+                      {customAiDetectedModels.modeleElectrodePId?.id === snapshot.modeleElectrodePId
+                        ? `${customAiDetectedModels.modeleElectrodePId.nom}${
+                            customAiDetectedModels.modeleElectrodePId.marque &&
+                            customAiDetectedModels.modeleElectrodePId.marque !== 'Standard' &&
+                            !customAiDetectedModels.modeleElectrodePId.nom.toLowerCase().includes(customAiDetectedModels.modeleElectrodePId.marque.toLowerCase())
+                              ? ` (${customAiDetectedModels.modeleElectrodePId.marque})`
+                              : ''
+                          }`
+                        : snapshot.modeleElectrodePId}
+                    </option>
+                  )}
               </select>
               {aiDetectionTarget?.fieldKey === 'modeleElectrodePId' && (
                 <AiModelDetectionModal
                   isOpen={true}
                   onClose={() => setAiDetectionTarget(null)}
+                  category="Modèle Électrode"
                   availableModels={variables.filter(v => v.category === 'Modèle Électrode')}
                   onDetected={(model) => {
                     handleSnapshotChange('modeleElectrodePId', model.id);
+                    setCustomAiDetectedModels(prev => ({ ...prev, modeleElectrodePId: model }));
                   }}
                 />
               )}
@@ -6816,14 +6938,30 @@ export default function GmaoCorrectionForm({
                     {variables.filter(v => v.category === 'Modèle Électrode').map(v => (
                       <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                     ))}
+                    {snapshot.modeleElectrodePSecoursId &&
+                      !variables.some(v => v.category === 'Modèle Électrode' && v.id === snapshot.modeleElectrodePSecoursId) && (
+                        <option value={snapshot.modeleElectrodePSecoursId}>
+                          {customAiDetectedModels.modeleElectrodePSecoursId?.id === snapshot.modeleElectrodePSecoursId
+                            ? `${customAiDetectedModels.modeleElectrodePSecoursId.nom}${
+                                customAiDetectedModels.modeleElectrodePSecoursId.marque &&
+                                customAiDetectedModels.modeleElectrodePSecoursId.marque !== 'Standard' &&
+                                !customAiDetectedModels.modeleElectrodePSecoursId.nom.toLowerCase().includes(customAiDetectedModels.modeleElectrodePSecoursId.marque.toLowerCase())
+                                  ? ` (${customAiDetectedModels.modeleElectrodePSecoursId.marque})`
+                                  : ''
+                              }`
+                            : snapshot.modeleElectrodePSecoursId}
+                        </option>
+                      )}
                   </select>
                   {aiDetectionTarget?.fieldKey === 'modeleElectrodePSecoursId' && (
                     <AiModelDetectionModal
                       isOpen={true}
                       onClose={() => setAiDetectionTarget(null)}
+                      category="Modèle Électrode"
                       availableModels={variables.filter(v => v.category === 'Modèle Électrode')}
                       onDetected={(model) => {
                         handleSnapshotChange('modeleElectrodePSecoursId', model.id);
+                        setCustomAiDetectedModels(prev => ({ ...prev, modeleElectrodePSecoursId: model }));
                       }}
                     />
                   )}
@@ -7247,14 +7385,30 @@ export default function GmaoCorrectionForm({
                 {variables.filter(v => v.category === 'Modèle Batterie').map(v => (
                   <option key={v.id} value={v.id}>{v.nom}{v.marque && v.marque !== 'Standard' ? ` (${v.marque})` : ''}</option>
                 ))}
+                {snapshot.modeleBatterieId &&
+                  !variables.some(v => v.category === 'Modèle Batterie' && v.id === snapshot.modeleBatterieId) && (
+                    <option value={snapshot.modeleBatterieId}>
+                      {customAiDetectedModels.modeleBatterieId?.id === snapshot.modeleBatterieId
+                        ? `${customAiDetectedModels.modeleBatterieId.nom}${
+                            customAiDetectedModels.modeleBatterieId.marque &&
+                            customAiDetectedModels.modeleBatterieId.marque !== 'Standard' &&
+                            !customAiDetectedModels.modeleBatterieId.nom.toLowerCase().includes(customAiDetectedModels.modeleBatterieId.marque.toLowerCase())
+                              ? ` (${customAiDetectedModels.modeleBatterieId.marque})`
+                              : ''
+                          }`
+                        : snapshot.modeleBatterieId}
+                    </option>
+                  )}
               </select>
               {aiDetectionTarget?.fieldKey === 'modeleBatterieId' && (
                 <AiModelDetectionModal
                   isOpen={true}
                   onClose={() => setAiDetectionTarget(null)}
+                  category="Modèle Batterie"
                   availableModels={variables.filter(v => v.category === 'Modèle Batterie')}
                   onDetected={(model) => {
                     handleSnapshotChange('modeleBatterieId', model.id);
+                    setCustomAiDetectedModels(prev => ({ ...prev, modeleBatterieId: model }));
                   }}
                 />
               )}

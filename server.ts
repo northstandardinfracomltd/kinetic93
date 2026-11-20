@@ -1245,6 +1245,7 @@ async function startServer() {
       subPath === '/firebase-media' ||
       subPath.startsWith('/firebase-media/') ||
       subPath === '/google-drive/upload' ||
+      subPath === '/gemini/detect-model' ||
       (subPath === '/sync-collection' && req.method === 'GET' && req.query.collectionName === 'api_connectors')
     ) {
       return next();
@@ -1937,10 +1938,10 @@ async function startServer() {
     }
   });
 
-  // Endpoint for identifying a defibrillator model using Gemini API
+  // Endpoint for identifying a defibrillator, cabinet, electrode, or battery model using Gemini API + variables comparison
   app.post("/api/gemini/detect-model", async (req, res) => {
     try {
-      const { image, mimeType, availableModels } = req.body;
+      const { image, mimeType, availableModels, category, localBestCandidate } = req.body;
       if (!image) {
         return res.status(400).json({ error: "L'image est requise pour la détection." });
       }
@@ -1959,53 +1960,91 @@ async function startServer() {
         }
       });
 
+      const cleanBase64 = String(image).replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
       const imagePart = {
         inlineData: {
           mimeType: mimeType || "image/jpeg",
-          data: image,
+          data: cleanBase64,
         }
       };
 
-      const promptText = `Tu es un expert en matériel médical, en particulier les défibrillateurs automatisés externes (DAE).
-Analyse l'image de la caméra ci-jointe pour identifier la marque/fabricant et le modèle exact du défibrillateur visible.
+      const targetCategory = String(category || "Modèle Défibrillateur").trim();
+      const categoryDescriptionMap: Record<string, string> = {
+        "Modèle Défibrillateur": "un défibrillateur automatisé externe (DAE / DEA / DSA, ex. Zoll AED Plus, Zoll AED 3, Philips HeartStart HS1 / FRx, Cardiac Science Powerheart G5 / G3, Mindray BeneHeart C1A / C2 / D1, Stryker / Physio-Control Lifepak CR2 / CR Plus, HeartSine Samaritan PAD 350P / 360P / 500P, Schiller FRED PA-1 / Easyport, Defibtech Lifeline, Nihon Kohden Cardiolife, Corpuls, Primedic HeartSave)",
+        "Modèle Coffret": "un boîtier, coffret ou armoire murale pour défibrillateur (ex. AIVIA 100, AIVIA 200, AIVIA 210, AIVIA IN, AIVIA S, Rotaid Solid Plus, Rotaid 24/7, DefibSafe, Coffret métal intérieur/extérieur, Armoire murale DAE)",
+        "Modèle Électrode": "une paire ou cartouche d'électrodes de défibrillation (adulte, pédiatrique ou mixte, ex. Zoll CPR-D-padz, Stat-padz II, Pedi-padz II, Uni-padz, Cardiac Science Intellisense XELAED001B / XELAED002B / XELAED003A, Philips SMART Pads II / HS1 Adult/Infant Cartridge M5071A / M5072A, HeartSine Pad-Pak Adulte / Pédiatrique, Physio-Control QUIK-STEP / QUIK-COMBO, Mindray MR60 / MR61, Schiller FRED PA-1 electrodes, Defibtech DDP-100 / DDP-200P)",
+        "Modèle Batterie": "une batterie ou pile lithium médicale pour défibrillateur (ex. Cardiac Science Intellisense XBTAED001A, Philips M5070A, Zoll Lithium 123 / SurePower / AED 3 Battery Pack, Physio-Control Lifepak CR2 / CHARGE-PAK, HeartSine Pad-Pak, Mindray LM34S002A, Schiller FRED PA-1 battery, Defibtech DBP-1400 / DBP-2800)"
+      };
+      const itemFocusDesc = categoryDescriptionMap[targetCategory] || `un équipement ou consommable de catégorie "${targetCategory}"`;
 
-Voici les modèles pré-définis de notre base de données :
-${JSON.stringify(availableModels || [], null, 2)}
+      const sanitizedModels = Array.isArray(availableModels)
+        ? availableModels.map((m: any) => ({
+            id: String(m?.id || ""),
+            nom: String(m?.nom || ""),
+            marque: String(m?.marque || ""),
+            identifiant: String(m?.identifiant || ""),
+          }))
+        : [];
 
-Identifie quel modèle de la liste correspond le mieux au défibrillateur présent sur l'image.
-Si l'image ne correspond à aucun modèle pré-défini mais que tu reconnais clairement le modèle (ex. Zoll AED Plus, Philips HeartStart HS1, Physio-Control Lifepak CR2, Defibtech Lifeline), renvoie la marque et le modèle réels de l'appareil. Dans ce cas, essaie de faire correspondre l'id à l'un des modèles de notre liste si possible, sinon renvoie une chaîne vide ou l'id le plus approchant.
+      const localHintText = localBestCandidate && localBestCandidate.nom
+        ? `\nIndice de pré-comparaison visuelle locale (miniature) : "${localBestCandidate.nom}" (${localBestCandidate.marque || "Standard"}, id="${localBestCandidate.id || ""}", similarité=${Math.round((Number(localBestCandidate.similarity) || 0) * 100)}%). Vérifie si l'image correspond réellement à cet indice ou s'il s'agit d'un autre modèle.`
+        : "";
 
-Renvoie obligatoirement un objet JSON contenant :
-- id : l'identifiant (id) du modèle pré-défini de notre liste (ou une chaîne vide s'il n'y a pas de correspondance acceptable).
-- nom : le nom complet du modèle identifié (ex. "Cardiac Science Powerheart G5").
-- marque : la marque de l'appareil (ex. "Cardiac Science").`;
+      const promptText = `Tu es un expert en matériel médical d'urgence et GMAO de défibrillateurs.
+Analyse attentivement l'image issue de la caméra pour identifier ${itemFocusDesc}.
+Lis tous les textes, références (REF, LOT, SN), logos, formes, couleurs et étiquettes visibles sur l'objet.
 
-      const response = await aiClient.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: [
-          imagePart,
-          { text: promptText }
-        ],
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING, description: "Identifiant du modèle pré-défini ou chaîne vide." },
-              nom: { type: Type.STRING, description: "Nom complet du modèle identifié." },
-              marque: { type: Type.STRING, description: "Marque ou fabricant identifié." }
-            },
-            required: ["id", "nom", "marque"]
-          }
+1. Voici les variables (modèles pré-définis) enregistrées dans la base de données du client pour la catégorie "${targetCategory}" :
+${JSON.stringify(sanitizedModels, null, 2)}
+${localHintText}
+
+2. Règles d'identification combinée (Variables + Détection universelle hors variables) :
+- Étape A (Correspondance avec les variables) : Si l'objet visible sur l'image correspond à l'un des modèles pré-définis de la liste ci-dessus (même si l'orthographe diffère légèrement ou qu'une référence constructeur correspond), renvoie exactement son "id", son "nom" et sa "marque" tels que présents dans la liste, avec "matchedFromVariables": true et "detected": true.
+- Étape B (Détection hors variables) : Si l'objet visible sur l'image est bien reconnaissable mais NE figure PAS dans la liste des variables pré-définies ci-dessus, identifie tout de même précisément son modèle réel complet ("nom") et son fabricant ("marque"), renvoie "id": "" et "matchedFromVariables": false, avec "detected": true.
+- Étape C (Image floue ou aucun matériel visible) : Si aucun équipement, boîtier, électrode, batterie ou étiquette identifiable n'est visible sur l'image (ex: fond vide, flou total, plafond, mur vide), renvoie "detected": false, "confidence": 0, "id": "", "nom": "", "marque": "".
+
+Renvoie obligatoirement un objet JSON respectant le schéma.`;
+
+      const responseSchema = {
+        type: Type.OBJECT,
+        properties: {
+          detected: { type: Type.BOOLEAN, description: "True si un modèle ou une référence a pu être identifié sur l'image." },
+          confidence: { type: Type.NUMBER, description: "Score de confiance entre 0 et 1." },
+          matchedFromVariables: { type: Type.BOOLEAN, description: "True si le modèle correspond à une entrée de availableModels." },
+          id: { type: Type.STRING, description: "Identifiant (id) exact du modèle dans availableModels, ou chaîne vide si hors variables." },
+          nom: { type: Type.STRING, description: "Nom précis du modèle identifié." },
+          marque: { type: Type.STRING, description: "Marque ou fabricant identifié." }
+        },
+        required: ["detected", "confidence", "matchedFromVariables", "id", "nom", "marque"]
+      };
+
+      let response: any = null;
+      const candidateGeminiModels = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"];
+      let lastErr: any = null;
+      for (const modelName of candidateGeminiModels) {
+        try {
+          response = await aiClient.models.generateContent({
+            model: modelName,
+            contents: [
+              imagePart,
+              { text: promptText }
+            ],
+            config: {
+              responseMimeType: "application/json",
+              responseSchema
+            }
+          });
+          if (response && response.text) break;
+        } catch (err: any) {
+          lastErr = err;
         }
-      });
-
-      const resultText = response.text;
-      if (!resultText) {
-        throw new Error("Aucune réponse n'a été générée par le modèle d'IA.");
       }
 
-      const parsedResult = JSON.parse(resultText.trim());
+      if (!response || !response.text) {
+        throw lastErr || new Error("Aucune réponse n'a été générée par le modèle d'IA.");
+      }
+
+      const parsedResult = JSON.parse(response.text.trim());
       res.json(parsedResult);
     } catch (error: any) {
       console.error("Gemini Detection Route Error:", error);
@@ -6109,8 +6148,14 @@ async function warmupDefibrillateursStore() {
         }
 
         // Cross-seed Google Drive connector state between companyInfo and api_connectors if present in either
-        if (mergedConnectorsProps.googleDriveActive === undefined && mergedCompanyProps.googleDriveActive !== undefined) {
-          mergedConnectorsProps.googleDriveActive = Boolean(mergedCompanyProps.googleDriveActive);
+        if (
+          (mergedConnectorsProps.googleDriveActive === undefined ||
+            (mergedConnectorsProps.googleDriveActive === false && !mergedConnectorsProps.explicitGoogleDriveToggle)) &&
+          (mergedCompanyProps.googleDriveActive === true ||
+            mergedCompanyProps.googleDriveActive === 'Oui' ||
+            Boolean(mergedCompanyProps.googleDriveEmail || mergedCompanyProps.googleDriveFolderId))
+        ) {
+          mergedConnectorsProps.googleDriveActive = true;
         }
         if (!mergedConnectorsProps.googleDriveEmail && mergedCompanyProps.googleDriveEmail) {
           mergedConnectorsProps.googleDriveEmail = mergedCompanyProps.googleDriveEmail;
@@ -6121,13 +6166,20 @@ async function warmupDefibrillateursStore() {
         if (!mergedConnectorsProps.googleDriveFolderId && mergedCompanyProps.googleDriveFolderId) {
           mergedConnectorsProps.googleDriveFolderId = mergedCompanyProps.googleDriveFolderId;
         }
-        if (mergedConnectorsProps.googleDriveEmail && mergedConnectorsProps.googleDriveActive === undefined) {
+        if (
+          (mergedConnectorsProps.googleDriveEmail || mergedConnectorsProps.googleDriveFolderId) &&
+          !(mergedConnectorsProps.explicitGoogleDriveToggle && mergedConnectorsProps.googleDriveActive === false)
+        ) {
           mergedConnectorsProps.googleDriveActive = true;
         }
-        if (mergedConnectorsProps.googleDriveActive !== undefined) {
+        if (
+          mergedConnectorsProps.googleDriveActive === true ||
+          (mergedConnectorsProps.explicitGoogleDriveToggle && mergedConnectorsProps.googleDriveActive === false)
+        ) {
           mergedCompanyProps.googleDriveActive = Boolean(mergedConnectorsProps.googleDriveActive);
           if (mergedConnectorsProps.googleDriveEmail) mergedCompanyProps.googleDriveEmail = mergedConnectorsProps.googleDriveEmail;
           if (mergedConnectorsProps.googleDriveFolderId) mergedCompanyProps.googleDriveFolderId = mergedConnectorsProps.googleDriveFolderId;
+          if (mergedConnectorsProps.explicitGoogleDriveToggle) mergedCompanyProps.explicitGoogleDriveToggle = true;
         }
 
         // 3. Apply Master Spreadsheet URLs in complement (fills in any URL configured in MEGA ADMIN without erasing Firestore URLs)
@@ -9744,7 +9796,7 @@ async function warmupDefibrillateursStore() {
             updatedAt: new Date().toISOString(),
           };
 
-          // Also mirror Google Drive connector state into companyInfo across all tenant aliases so it is backed up
+          // Mirror api_connectors and Google Drive connector state across all tenant aliases (e.g. D27 and D58) so technician and admin always read identical state
           const tenantTargets = Array.from(
             new Set([
               rawTenant,
@@ -9755,6 +9807,18 @@ async function warmupDefibrillateursStore() {
             ])
           );
           for (const tTarget of tenantTargets) {
+            const aliasConnKey = tTarget === 'demo' ? 'api_connectors' : `${tTarget}_api_connectors`;
+            const aliasConnVal = { ...finalValueToStore, tenantId: tTarget, envId: tTarget };
+            serverMemoryStore.set(aliasConnKey, aliasConnVal);
+            serverStoreTimestamps.set(aliasConnKey, Date.now());
+            firestoreDocCheckCacheMs.set(aliasConnKey, Date.now());
+            try {
+              persistSingleCollectionToDisk(aliasConnKey, aliasConnVal);
+              if (tTarget !== 'demo') {
+                persistSingleCollectionToDisk(`defib_${tTarget}_api_connectors`, aliasConnVal);
+              }
+            } catch (_) {}
+
             const compKey = tTarget === 'demo' ? 'companyInfo' : `${tTarget}_companyInfo`;
             const existingComp = serverMemoryStore.get(compKey);
             if (existingComp && typeof existingComp === 'object' && !Array.isArray(existingComp)) {
@@ -9763,6 +9827,7 @@ async function warmupDefibrillateursStore() {
                 googleDriveActive: Boolean(finalValueToStore.googleDriveActive),
                 googleDriveEmail: finalValueToStore.googleDriveEmail || '',
                 googleDriveFolderId: finalValueToStore.googleDriveFolderId || existingComp.googleDriveFolderId || '',
+                ...(finalValueToStore.explicitGoogleDriveToggle ? { explicitGoogleDriveToggle: true } : {}),
               };
               serverMemoryStore.set(compKey, updatedComp);
               try {
@@ -9770,6 +9835,9 @@ async function warmupDefibrillateursStore() {
               } catch (_) {}
             }
           }
+          try {
+            saveServerStore();
+          } catch (_) {}
         }
 
         serverMemoryStore.set(collectionKey, finalValueToStore);

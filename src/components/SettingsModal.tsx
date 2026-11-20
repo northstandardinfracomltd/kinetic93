@@ -2086,12 +2086,21 @@ export default function SettingsModal({
         updatedConnectors.googleDriveFolderId = folderId;
       }
       await saveCollectionToFirestore('api_connectors', updatedConnectors, activeTid);
-      setLocalCompany(prev => ({
-        ...prev,
-        googleDriveActive: active,
-        googleDriveEmail: email,
-        ...(folderId !== undefined ? { googleDriveFolderId: folderId } : {}),
-      } as CompanyInfo));
+      setLocalCompany(prev => {
+        const nextComp = {
+          ...prev,
+          googleDriveActive: active,
+          googleDriveEmail: email,
+          explicitGoogleDriveToggle: true,
+          ...(folderId !== undefined ? { googleDriveFolderId: folderId } : {}),
+        } as CompanyInfo;
+        try {
+          if (onUpdateCompanyInfo) {
+            onUpdateCompanyInfo(nextComp);
+          }
+        } catch (_) {}
+        return nextComp;
+      });
       if (onConnectorsUpdated) {
         onConnectorsUpdated();
       }
@@ -2467,7 +2476,12 @@ export default function SettingsModal({
         atlasanteUrlAuth,
         googleDriveActive,
         googleDriveEmail,
-        googleDriveAccessToken
+        googleDriveAccessToken,
+        googleDriveFolderId:
+          localStorage.getItem(`defib_${activeTenant}_google_drive_folder_id`) ||
+          (localCompany as any)?.googleDriveFolderId ||
+          '',
+        explicitGoogleDriveToggle: true,
       };
       localStorage.setItem(`defib_${activeTenant}_atlasante_active`, String(atlasanteActive));
       localStorage.setItem('defib_atlasante_active', String(atlasanteActive));

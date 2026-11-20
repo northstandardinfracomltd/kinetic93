@@ -1896,11 +1896,18 @@ export async function fetchCollectionFromFirestore<T>(
                 try {
                   const connObj = finalObjVal as any;
                   const tAliases = Array.from(new Set([activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase(), ...Array.from(getTenantAliases(activeTenantId)).flatMap(a => [a, a.toUpperCase(), a.toLowerCase()])])).filter(Boolean);
-                  if (connObj.googleDriveActive !== undefined) {
+                  const isDriveActive = Boolean(
+                    connObj.googleDriveActive === true ||
+                    connObj.googleDriveActive === 'Oui' ||
+                    ((connObj.googleDriveEmail || connObj.googleDriveFolderId) &&
+                      !(connObj.explicitGoogleDriveToggle && connObj.googleDriveActive === false))
+                  );
+                  const isExplicitlyDisabled = Boolean(connObj.explicitGoogleDriveToggle && connObj.googleDriveActive === false);
+                  if (isDriveActive || isExplicitlyDisabled) {
                     for (const ta of tAliases) {
-                      localStorage.setItem(`defib_${ta}_google_drive_active`, String(Boolean(connObj.googleDriveActive)));
+                      localStorage.setItem(`defib_${ta}_google_drive_active`, String(isDriveActive));
                     }
-                    localStorage.setItem('defib_google_drive_active', String(Boolean(connObj.googleDriveActive)));
+                    localStorage.setItem('defib_google_drive_active', String(isDriveActive));
                   }
                   if (connObj.googleDriveEmail) {
                     for (const ta of tAliases) {
@@ -1949,11 +1956,18 @@ export async function fetchCollectionFromFirestore<T>(
     } else if (collectionName === 'api_connectors' && typeof window !== 'undefined' && window.localStorage) {
       try {
         const tAliases = Array.from(new Set([activeTenantId, activeTenantId.toUpperCase(), activeTenantId.toLowerCase(), ...Array.from(getTenantAliases(activeTenantId)).flatMap(a => [a, a.toUpperCase(), a.toLowerCase()])])).filter(Boolean);
-        if (mergedDirect.googleDriveActive !== undefined) {
+        const isDriveActive = Boolean(
+          mergedDirect.googleDriveActive === true ||
+          mergedDirect.googleDriveActive === 'Oui' ||
+          ((mergedDirect.googleDriveEmail || mergedDirect.googleDriveFolderId) &&
+            !(mergedDirect.explicitGoogleDriveToggle && mergedDirect.googleDriveActive === false))
+        );
+        const isExplicitlyDisabled = Boolean(mergedDirect.explicitGoogleDriveToggle && mergedDirect.googleDriveActive === false);
+        if (isDriveActive || isExplicitlyDisabled) {
           for (const ta of tAliases) {
-            localStorage.setItem(`defib_${ta}_google_drive_active`, String(Boolean(mergedDirect.googleDriveActive)));
+            localStorage.setItem(`defib_${ta}_google_drive_active`, String(isDriveActive));
           }
-          localStorage.setItem('defib_google_drive_active', String(Boolean(mergedDirect.googleDriveActive)));
+          localStorage.setItem('defib_google_drive_active', String(isDriveActive));
         }
         if (mergedDirect.googleDriveEmail) {
           for (const ta of tAliases) {

@@ -292,13 +292,34 @@ export function buildOfficialReportHtml(params: OfficialReportBuildParams): stri
     `;
   };
 
+  const isUpcomingRep = Boolean(
+    report?.isUpcoming === true ||
+      report?.upcoming === true ||
+      report?.isFuture === true ||
+      report?.status === 'À venir' ||
+      report?.status === 'upcoming' ||
+      report?.statut === 'À venir' ||
+      report?.date === 'À venir' ||
+      (typeof report?.id === 'string' && report.id.startsWith('REP-UPCOMING-'))
+  );
+  const rawVerAct = report?.versionActuelle;
+  const parsedVerAct =
+    rawVerAct !== undefined && rawVerAct !== null && String(rawVerAct).trim() !== ''
+      ? parseInt(String(rawVerAct).trim(), 10)
+      : NaN;
+  const pdfVersionActuelle =
+    Number.isFinite(parsedVerAct) && parsedVerAct >= 0
+      ? (parsedVerAct === 0 && !isUpcomingRep ? 1 : parsedVerAct)
+      : (isUpcomingRep ? 0 : 1);
+
   const renderFooter = (pageIndex: number, pagesTotal: number) => `
     <div class="pdf-footer" style="position: absolute; bottom: 15mm; left: 15mm; right: 15mm; display: flex; flex-direction: row; justify-content: space-between; align-items: flex-end; font-size: 8px; color: #000000; padding-top: 8px; font-family: 'Civilprom', 'Inter', sans-serif !important; box-sizing: border-box; width: calc(100% - 30mm); border-top: none;">
       <div style="flex: 1; text-align: left; padding-right: 20px; color: #000000; font-size: 8px;">
         <p style="margin: 0; color: #000000; font-size: 8px; text-align: left; font-weight: normal !important; line-height: 1.4;">${pdfPageFooterText || ''}</p>
       </div>
-      <div style="font-weight: bold !important; white-space: nowrap; color: #000000; font-size: 8px;">
-        Page ${pageIndex} / ${pagesTotal}
+      <div style="font-weight: bold !important; white-space: nowrap; color: #000000; font-size: 8px; display: flex; align-items: center; gap: 12px;">
+        <span>Version PDF : ${pdfVersionActuelle}</span>
+        <span>Page ${pageIndex} / ${pagesTotal}</span>
       </div>
     </div>
   `;

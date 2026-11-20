@@ -14,7 +14,8 @@ interface AiModelDetectionModalProps {
   isOpen: boolean;
   onClose: () => void;
   availableModels: DetectableModelVariable[];
-  onDetected: (model: { id: string; nom: string; marque: string }) => void;
+  category?: string;
+  onDetected: (model: { id: string; nom: string; marque: string; isCustomDetected?: boolean }) => void;
 }
 
 interface ModelVisualDescriptor {
@@ -303,6 +304,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
   isOpen,
   onClose,
   availableModels,
+  category,
   onDetected,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -316,7 +318,12 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
   const descriptorsRef = useRef<ModelVisualDescriptor[]>([]);
   const descriptorsLoadedRef = useRef<boolean>(false);
 
-  // Preload and compute visual descriptors for all Modèle Défibrillateur thumbnails from the tenant's spreadsheet
+  const effectiveCategory =
+    category ||
+    (availableModels && availableModels.length > 0 && availableModels[0]?.category) ||
+    'Modèle Défibrillateur';
+
+  // Preload and compute visual descriptors for all variable thumbnails from the tenant's spreadsheet
   useEffect(() => {
     if (!isOpen) return;
     let isMounted = true;
@@ -448,7 +455,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
     }
   }, [isOpen, isCameraActive, scanStatus, scanCycle]);
 
-  // Continuous live embedded visual comparison loop (without taking a photo)
+  // Hybrid Detection Loop: combines local visual comparison against variable thumbnails + Gemini AI vision detection (including models outside variables)
   useEffect(() => {
     if (!isOpen || !isCameraActive || scanStatus !== 'scanning') return;
 
@@ -458,12 +465,167 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
     canvas.height = SAMPLE_SIZE;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
+    const geminiCanvas = document.createElement('canvas');
+    const geminiCtx = geminiCanvas.getContext('2d');
+
     const voteScores = new Map<string, { count: number; totalSim: number; maxSim: number; model: DetectableModelVariable }>();
     let validFramesProcessed = 0;
     const startTime = Date.now();
-    const MAX_SCAN_DURATION_MS = 7500;
-    const MIN_FRAMES_BEFORE_DECISION = 5;
+    const MAX_SCAN_DURATION_MS = 10000;
     const SIMILARITY_THRESHOLD = 0.54;
+    const HIGH_CONFIDENCE_LOCAL_THRESHOLD = 0.72;
+
+    let geminiInFlight = false;
+    let geminiAttempts = 0;
+    const MAX_GEMINI_ATTEMPTS = 2;
+    let lastGeminiAttemptTime = 0;
+
+    const normalizeStr = (s: string) =>
+      String(s || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+
+    const matchAgainstVariables = (rawId: string, rawNom: string, rawMarque: string): DetectableModelVariable | null => {
+      const list = availableModels || [];
+      if (rawId) {
+        const exactById = list.find((m) => String(m.id) === String(rawId));
+        if (exactById) return exactById;
+      }
+      const normNom = normalizeStr(rawNom);
+      const normMarque = normalizeStr(rawMarque);
+      if (!normNom) return null;
+
+      // 1. Exact normalized name match
+      const exactByName = list.find((m) => normalizeStr(m.nom) === normNom);
+      if (exactByName) return exactByName;
+
+      // 2. Substring or token overlap match
+      let bestVar: DetectableModelVariable | null = null;
+      let bestScore = 0;
+      const targetTokens = normNom.split(' ').filter((t) => t.length >= 2);
+
+      for (const m of list) {
+        const mNom = normalizeStr(m.nom);
+        const mMarque = normalizeStr(m.marque);
+        if (!mNom) continue;
+        if (mNom.includes(normNom) || normNom.includes(mNom)) {
+          const score = 0.85 + (mMarque && normMarque && (mMarque.includes(normMarque) || normMarque.includes(mMarque)) ? 0.1 : 0);
+          if (score > bestScore) {
+            bestScore = score;
+            bestVar = m;
+          }
+          continue;
+        }
+        const mTokens = mNom.split(' ').filter((t) => t.length >= 2);
+        if (targetTokens.length > 0 && mTokens.length > 0) {
+          const shared = targetTokens.filter((t) => mTokens.includes(t)).length;
+          const ratio = shared / Math.max(targetTokens.length, mTokens.length);
+          if (ratio >= 0.6 && ratio > bestScore) {
+            bestScore = ratio;
+            bestVar = m;
+          }
+        }
+      }
+      return bestScore >= 0.6 ? bestVar : null;
+    };
+
+    const getTopLocalCandidate = () => {
+      let bestCandidate: { count: number; totalSim: number; maxSim: number; model: DetectableModelVariable } | null = null;
+      for (const entry of voteScores.values()) {
+        if (!bestCandidate || entry.totalSim > bestCandidate.totalSim) {
+          bestCandidate = entry;
+        }
+      }
+      return bestCandidate;
+    };
+
+    const triggerGeminiDetection = async (video: HTMLVideoElement) => {
+      if (!isMounted || geminiInFlight || geminiAttempts >= MAX_GEMINI_ATTEMPTS || !geminiCtx) return;
+      geminiInFlight = true;
+      geminiAttempts += 1;
+      lastGeminiAttemptTime = Date.now();
+
+      try {
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        const maxDim = 768;
+        const scale = Math.min(1, maxDim / Math.max(vw, vh));
+        const targetW = Math.max(1, Math.round(vw * scale));
+        const targetH = Math.max(1, Math.round(vh * scale));
+
+        geminiCanvas.width = targetW;
+        geminiCanvas.height = targetH;
+        geminiCtx.drawImage(video, 0, 0, vw, vh, 0, 0, targetW, targetH);
+
+        const dataUrl = geminiCanvas.toDataURL('image/jpeg', 0.82);
+        const base64Image = dataUrl.replace(/^data:image\/jpeg;base64,/, '');
+
+        const topLocal = getTopLocalCandidate();
+        const localBestCandidate = topLocal
+          ? {
+              id: topLocal.model.id,
+              nom: topLocal.model.nom,
+              marque: topLocal.model.marque,
+              similarity: topLocal.maxSim,
+            }
+          : null;
+
+        const response = await fetch('/api/gemini/detect-model', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image: base64Image,
+            mimeType: 'image/jpeg',
+            category: effectiveCategory,
+            availableModels: (availableModels || []).map((m) => ({
+              id: m.id,
+              nom: m.nom,
+              marque: m.marque,
+              identifiant: m.identifiant || '',
+            })),
+            localBestCandidate,
+          }),
+        });
+
+        if (!isMounted) return;
+
+        if (response.ok) {
+          const result = await response.json();
+          const detectedFlag = result?.detected !== false;
+          const rawNom = String(result?.nom || '').trim();
+          const rawMarque = String(result?.marque || '').trim();
+          const rawId = String(result?.id || '').trim();
+
+          if (detectedFlag && rawNom) {
+            const matchedVar = matchAgainstVariables(rawId, rawNom, rawMarque);
+            if (matchedVar) {
+              setDetectedModel(matchedVar);
+              setScanStatus('success');
+              return;
+            }
+            // Out-of-variables model recognized by Gemini AI
+            const cleanMarque = rawMarque || 'Standard';
+            const customId = `${rawNom}${cleanMarque && cleanMarque !== 'Standard' && !rawNom.toLowerCase().includes(cleanMarque.toLowerCase()) ? ` (${cleanMarque})` : ''}`;
+            setDetectedModel({
+              id: customId,
+              nom: rawNom,
+              marque: cleanMarque,
+              category: effectiveCategory,
+              isCustomDetected: true,
+            });
+            setScanStatus('success');
+            return;
+          }
+        }
+      } catch (_) {
+        // Fallback to next attempt or local visual descriptor match
+      } finally {
+        geminiInFlight = false;
+      }
+    };
 
     const intervalId = setInterval(() => {
       if (!isMounted) return;
@@ -471,24 +633,12 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
       const elapsed = Date.now() - startTime;
       const descriptors = descriptorsRef.current;
 
-      // If thumbnails finished loading and there are 0 model thumbnails available in the tenant's spreadsheet
-      if (descriptorsLoadedRef.current && descriptors.length === 0 && elapsed > 2200) {
-        setScanStatus('error');
-        return;
-      }
-
       if (elapsed > MAX_SCAN_DURATION_MS) {
-        // Check if we accumulated a reasonable match before timing out
-        let bestCandidate: { count: number; totalSim: number; maxSim: number; model: DetectableModelVariable } | null = null;
-        for (const entry of voteScores.values()) {
-          if (!bestCandidate || entry.totalSim > bestCandidate.totalSim) {
-            bestCandidate = entry;
-          }
-        }
+        const bestCandidate = getTopLocalCandidate();
         if (bestCandidate && bestCandidate.count >= 3 && bestCandidate.maxSim >= SIMILARITY_THRESHOLD) {
           setDetectedModel(bestCandidate.model);
           setScanStatus('success');
-        } else {
+        } else if (!geminiInFlight) {
           setScanStatus('error');
         }
         return;
@@ -496,10 +646,6 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
 
       const video = videoRef.current;
       if (!video || video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0 || !ctx) {
-        return;
-      }
-
-      if (!descriptorsLoadedRef.current || descriptors.length === 0) {
         return;
       }
 
@@ -530,20 +676,22 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
 
         frameValid = true;
 
-        for (const modelDesc of descriptors) {
-          const sim = compareDescriptors(frameDesc, modelDesc);
-          if (sim > bestFrameSim) {
-            bestFrameSim = sim;
-            bestFrameModel = modelDesc.model;
+        if (descriptorsLoadedRef.current && descriptors.length > 0) {
+          for (const modelDesc of descriptors) {
+            const sim = compareDescriptors(frameDesc, modelDesc);
+            if (sim > bestFrameSim) {
+              bestFrameSim = sim;
+              bestFrameModel = modelDesc.model;
+            }
           }
         }
       }
 
-      if (!frameValid || !bestFrameModel) return;
+      if (!frameValid) return;
 
       validFramesProcessed++;
 
-      if (bestFrameSim >= SIMILARITY_THRESHOLD) {
+      if (bestFrameModel && bestFrameSim >= SIMILARITY_THRESHOLD) {
         const prev = voteScores.get(bestFrameModel.id) || {
           count: 0,
           totalSim: 0,
@@ -555,11 +703,25 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
         prev.maxSim = Math.max(prev.maxSim, bestFrameSim);
         voteScores.set(bestFrameModel.id, prev);
 
-        // Once we have enough consistent frames confirming the same model, trigger success
-        if (validFramesProcessed >= MIN_FRAMES_BEFORE_DECISION && prev.count >= 4) {
+        // If local visual thumbnail match is very high confidence across multiple frames, or Gemini already finished without detection
+        if (
+          (validFramesProcessed >= 5 && prev.count >= 4 && prev.maxSim >= HIGH_CONFIDENCE_LOCAL_THRESHOLD) ||
+          (geminiAttempts >= MAX_GEMINI_ATTEMPTS && !geminiInFlight && validFramesProcessed >= 5 && prev.count >= 4)
+        ) {
           setDetectedModel(bestFrameModel);
           setScanStatus('success');
+          return;
         }
+      }
+
+      // Trigger Gemini AI vision analysis as soon as we have a stable valid frame (~800ms), and retry once at ~3800ms if needed
+      if (
+        !geminiInFlight &&
+        geminiAttempts < MAX_GEMINI_ATTEMPTS &&
+        elapsed >= 800 &&
+        Date.now() - lastGeminiAttemptTime >= 2800
+      ) {
+        triggerGeminiDetection(video);
       }
     }, 350);
 
@@ -567,7 +729,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
       isMounted = false;
       clearInterval(intervalId);
     };
-  }, [isOpen, isCameraActive, scanStatus, scanCycle]);
+  }, [isOpen, isCameraActive, scanStatus, scanCycle, availableModels, effectiveCategory]);
 
   const handleConfirmSelection = () => {
     if (detectedModel) {
@@ -575,6 +737,7 @@ export const AiModelDetectionModal: React.FC<AiModelDetectionModalProps> = ({
         id: detectedModel.id,
         nom: detectedModel.nom,
         marque: detectedModel.marque || 'Standard',
+        isCustomDetected: Boolean(detectedModel.isCustomDetected),
       });
     }
     onClose();

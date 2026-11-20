@@ -79,6 +79,11 @@ import GmaoCorrectionForm from "./GmaoCorrectionForm";
 import GmaoOtherEquipmentCorrectionForm from "./GmaoOtherEquipmentCorrectionForm";
 import { mergeReportModerationComment, mergeReportPostInterventionAlerts, buildFlatAlertFields } from "../utils/moderationComment";
 import { collectLocalInterventionReferences, computeNextInterventionReference } from "../utils/interventionReference";
+import {
+  computeReportVersionAndChangeLog,
+  resolveReportLogsChangements,
+  resolveReportVersionActuelle,
+} from "../utils/reportChangeTracker";
 import { getTenantSpreadsheetUrl } from "../types";
 import {
   triggerEmail6RapportIntervention,
@@ -90,7 +95,7 @@ import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from "../utils/fsmOptimizer";
 import { loadCttGlobalRules } from "../utils/cttRules";
 import TourRouteMapModal from "./TourRouteMapModal";
-import { generateTourLogisticsPdf } from "../utils/logisticsPdfExport";
+import { createTourLogisticsPdfDocument, TourLogisticsPdfResult } from "../utils/logisticsPdfExport";
 import { PlanningTab } from "./PlanningTab";
 import { getMonthlyWorkingDaysData, generateMonthlyPDFHTML } from "./TempsTab";
 import HelpBubble from "./HelpBubble";
@@ -310,6 +315,10 @@ interface GeneratedReport {
   photoUrl?: string;
   defibSnapshot?: Defibrillateur;
   validated?: boolean;
+  demandeRevision?: boolean | string;
+  commentaireRevision?: string;
+  logsChangements?: string;
+  versionActuelle?: number | string;
 }
 
 export default function PublicPortal({
@@ -1081,6 +1090,7 @@ export default function PublicPortal({
   }, [techTenantId]);
 
   // Google Calendar Integration states
+  const [logisticsPdfPreview, setLogisticsPdfPreview] = useState<TourLogisticsPdfResult | null>(null);
   const [googleAccessToken, setGoogleAccessToken] = useState<string | null>(
     null,
   );
@@ -4793,7 +4803,10 @@ export default function PublicPortal({
           fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(tid)}&type=rapportsPdf&refresh=true&_=${Date.now()}`)
             .then(async (resp) => (resp.ok ? resp.json() : null))
             .catch(() => null),
-        ]).then(([fsRes, sheetRes]) => {
+          fetch(`/api/sheets/collection?tenantId=${encodeURIComponent(tid)}&type=gestionApresIntervention&refresh=true&_=${Date.now()}`)
+            .then(async (resp) => (resp.ok ? resp.json() : null))
+            .catch(() => null),
+        ]).then(([fsRes, sheetRes, gestionRes]) => {
           const fsReports: GeneratedReport[] =
             fsRes.status === "fulfilled" && Array.isArray(fsRes.value) ? fsRes.value : [];
           const sheetPayload = sheetRes.status === "fulfilled" ? sheetRes.value : null;
@@ -4802,6 +4815,18 @@ export default function PublicPortal({
             : Array.isArray(sheetPayload)
               ? sheetPayload
               : [];
+          const gestionPayload = gestionRes.status === "fulfilled" ? gestionRes.value : null;
+          const gestionRows: any[] = Array.isArray(gestionPayload?.items)
+            ? gestionPayload.items
+            : Array.isArray(gestionPayload)
+              ? gestionPayload
+              : [];
+          const gestionByRef = new Map<string, any>();
+          gestionRows.forEach((g: any) => {
+            if (!g) return;
+            const ref = String(g.interventionReference || g.id || "").trim();
+            if (ref) gestionByRef.set(ref, g);
+          });
           if (fsReports.length > 0 || sheetReports.length > 0) {
             const byKey = new Map<string, GeneratedReport>();
             [...fsReports, ...sheetReports].forEach((rep: any) => {
@@ -4809,7 +4834,29 @@ export default function PublicPortal({
               const key = String(rep.interventionReference || rep.reportNumber || rep.id || "").trim();
               if (!key) return;
               const prev = byKey.get(key);
-              byKey.set(key, prev ? { ...prev, ...rep } : rep);
+              const gestionMatch =
+                gestionByRef.get(key) ||
+                gestionByRef.get(String(rep.interventionReference || "").trim()) ||
+                gestionByRef.get(String(rep.id || "").trim());
+              const mergedItem = prev ? { ...prev, ...rep } : { ...rep };
+              if (gestionMatch) {
+                if (gestionMatch.demandeRevision !== undefined) {
+                  mergedItem.demandeRevision =
+                    gestionMatch.demandeRevision === true ||
+                    String(gestionMatch.demandeRevision ?? "").trim().toLowerCase() === "oui" ||
+                    String(gestionMatch.demandeRevision ?? "").trim().toLowerCase() === "true";
+                }
+                if (gestionMatch.commentaireRevision !== undefined) {
+                  mergedItem.commentaireRevision = String(gestionMatch.commentaireRevision ?? "").trim();
+                }
+                if (gestionMatch.logsChangements !== undefined) {
+                  mergedItem.logsChangements = String(gestionMatch.logsChangements ?? "").trim();
+                }
+                if (gestionMatch.versionActuelle !== undefined) {
+                  mergedItem.versionActuelle = resolveReportVersionActuelle(mergedItem, gestionMatch);
+                }
+              }
+              byKey.set(key, mergedItem);
             });
             const mergedReports = Array.from(byKey.values());
             setGeneratedReports(mergedReports);
@@ -5229,16 +5276,41 @@ export default function PublicPortal({
       type: "rapportsPdf",
     });
     if (sheetUrl) qs.set("spreadsheetUrl", sheetUrl);
-    fetch(`/api/sheets/collection?${qs.toString()}`)
-      .then(async (resp) => (resp.ok ? resp.json() : null))
-      .then((data) => {
-        if (cancelled || !data) return;
+
+    const gestionUrl = getTenantSpreadsheetUrl("spreadsheetGestionApresIntervention", companyInfo);
+    const qsGestion = new URLSearchParams({
+      tenantId: tid,
+      type: "gestionApresIntervention",
+    });
+    if (gestionUrl) qsGestion.set("spreadsheetUrl", gestionUrl);
+
+    Promise.all([
+      fetch(`/api/sheets/collection?${qs.toString()}`)
+        .then(async (resp) => (resp.ok ? resp.json() : null))
+        .catch(() => null),
+      fetch(`/api/sheets/collection?${qsGestion.toString()}`)
+        .then(async (resp) => (resp.ok ? resp.json() : null))
+        .catch(() => null),
+    ])
+      .then(([data, gestionData]) => {
+        if (cancelled) return;
         const sheetItems: GeneratedReport[] = Array.isArray(data?.items)
           ? data.items
           : Array.isArray(data)
             ? data
             : [];
-        if (sheetItems.length === 0) return;
+        const gestionItems: any[] = Array.isArray(gestionData?.items)
+          ? gestionData.items
+          : Array.isArray(gestionData)
+            ? gestionData
+            : [];
+        if (sheetItems.length === 0 && gestionItems.length === 0) return;
+        const gestionByRef = new Map<string, any>();
+        gestionItems.forEach((g: any) => {
+          if (!g) return;
+          const ref = String(g.interventionReference || g.id || "").trim();
+          if (ref) gestionByRef.set(ref, g);
+        });
         setGeneratedReports((prev) => {
           const byKey = new Map<string, GeneratedReport>();
           [...prev, ...sheetItems].forEach((rep: any) => {
@@ -5246,7 +5318,29 @@ export default function PublicPortal({
             const key = String(rep.interventionReference || rep.reportNumber || rep.id || "").trim();
             if (!key) return;
             const existing = byKey.get(key);
-            byKey.set(key, existing ? { ...existing, ...rep } : rep);
+            const mergedItem = existing ? { ...existing, ...rep } : { ...rep };
+            const gestionMatch =
+              gestionByRef.get(key) ||
+              gestionByRef.get(String(mergedItem.interventionReference || "").trim()) ||
+              gestionByRef.get(String(mergedItem.id || "").trim());
+            if (gestionMatch) {
+              if (gestionMatch.demandeRevision !== undefined) {
+                mergedItem.demandeRevision =
+                  gestionMatch.demandeRevision === true ||
+                  String(gestionMatch.demandeRevision ?? "").trim().toLowerCase() === "oui" ||
+                  String(gestionMatch.demandeRevision ?? "").trim().toLowerCase() === "true";
+              }
+              if (gestionMatch.commentaireRevision !== undefined) {
+                mergedItem.commentaireRevision = String(gestionMatch.commentaireRevision ?? "").trim();
+              }
+              if (gestionMatch.logsChangements !== undefined) {
+                mergedItem.logsChangements = String(gestionMatch.logsChangements ?? "").trim();
+              }
+              if (gestionMatch.versionActuelle !== undefined) {
+                mergedItem.versionActuelle = resolveReportVersionActuelle(mergedItem, gestionMatch);
+              }
+            }
+            byKey.set(key, mergedItem);
           });
           return Array.from(byKey.values());
         });
@@ -5255,7 +5349,7 @@ export default function PublicPortal({
     return () => {
       cancelled = true;
     };
-  }, [techTenantId, authenticatedUser?.envId, companyInfo?.spreadsheetRapportsPdf]);
+  }, [techTenantId, authenticatedUser?.envId, companyInfo?.spreadsheetRapportsPdf, companyInfo?.spreadsheetGestionApresIntervention]);
 
   const saveReports = (updated: GeneratedReport[]) => {
     setGeneratedReports(updated);
@@ -5347,8 +5441,12 @@ export default function PublicPortal({
   const sortedAndLimitedReports = useMemo(() => {
     return [...generatedReports]
       .filter((rep) => {
-        // 1. Exclure les rapports validés (seuls les rapports À MODÉRER doivent apparaître)
-        if (rep.validated === true) return false;
+        // 1. Exclure les rapports validés sauf si Demande Révision est ON (seuls les rapports À MODÉRER ou en révision doivent apparaître)
+        const isDemandeRevisionOn =
+          (rep as any).demandeRevision === true ||
+          String((rep as any).demandeRevision ?? "").trim().toLowerCase() === "oui" ||
+          String((rep as any).demandeRevision ?? "").trim().toLowerCase() === "true";
+        if (rep.validated === true && !isDemandeRevisionOn) return false;
 
         // 2. Exclure les rapports À VENIR
         const isUpcoming = Boolean(
@@ -5780,13 +5878,16 @@ export default function PublicPortal({
         `;
       };
 
+      const pdfVersion1 = resolveReportVersionActuelle(report);
+
       const renderFooter = (pageIndex: number, pagesTotal: number) => `
         <div class="pdf-footer" style="position: absolute; bottom: 15mm; left: 15mm; right: 15mm; display: flex; flex-direction: row; justify-content: space-between; align-items: flex-end; font-size: 13px; color: #000000; padding-top: 8px; font-family: 'Civilprom', 'Inter', sans-serif !important; box-sizing: border-box; width: calc(100% - 30mm); border-top: none;">
           <div style="flex: 1; text-align: left; padding-right: 20px; color: #000000; font-size: 13px;">
             <p style="margin: 0; color: #000000; font-size: 13px; text-align: left; font-weight: normal !important; line-height: 1.4;">${pdfPageFooterText || ''}</p>
           </div>
-          <div style="font-weight: bold !important; white-space: nowrap; color: #000000; font-size: 13px;">
-            Page ${pageIndex} / ${pagesTotal}
+          <div style="font-weight: bold !important; white-space: nowrap; color: #000000; font-size: 13px; display: flex; align-items: center; gap: 12px;">
+            <span>Version PDF : ${pdfVersion1}</span>
+            <span>Page ${pageIndex} / ${pagesTotal}</span>
           </div>
         </div>
       `;
@@ -6219,6 +6320,8 @@ export default function PublicPortal({
       `;
     };
 
+    const pdfVersion2 = resolveReportVersionActuelle(report);
+
     const renderFooter = (pageIndex: number, pagesTotal: number) => {
       const footerText = effectiveCompanyInfo.pdfPageFooterText || "Rapport d’intervention original - Document certifié conforme";
       return `
@@ -6226,8 +6329,9 @@ export default function PublicPortal({
           <div style="flex: 1; text-align: left; padding-right: 20px; color: #000000; font-size: 13px;">
             <p style="margin: 0; color: #000000; font-size: 13px; text-align: left; font-weight: normal !important; line-height: 1.4;">${footerText}</p>
           </div>
-          <div style="font-weight: bold !important; white-space: nowrap; color: #000000; font-size: 13px;">
-            Page ${pageIndex} / ${pagesTotal}
+          <div style="font-weight: bold !important; white-space: nowrap; color: #000000; font-size: 13px; display: flex; align-items: center; gap: 12px;">
+            <span>Version PDF : ${pdfVersion2}</span>
+            <span>Page ${pageIndex} / ${pagesTotal}</span>
           </div>
         </div>
       `;
@@ -9148,6 +9252,137 @@ export default function PublicPortal({
   };
 
   // Google Calendar integration helpers
+  const finalizeGoogleCalendarTokenSync = async (token: string, email: string) => {
+    setGoogleAccessToken(token);
+    setSyncedGoogleEmail(email);
+
+    // Persist the email locally
+    const techName = authenticatedUser?.name || "common";
+    localStorage.setItem(`defib_google_cal_email_${techName}`, email);
+
+    // Perform synchronization!
+    const syncResult = await performGoogleCalendarSync(token);
+    const calendarId = syncResult.calendarId || "";
+
+    // Persist Google account settings to the centralized Firestore database
+    if (authenticatedUser) {
+      const updatedMembers = members.map((m) => {
+        if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
+          return {
+            ...m,
+            googleCalEmail: email,
+            googleCalId: calendarId,
+          };
+        }
+        return m;
+      });
+      onUpdateMembers(updatedMembers);
+
+      // Also update authenticatedUser and stored active session
+      const updatedUser = {
+        ...authenticatedUser,
+        googleCalEmail: email,
+        googleCalId: calendarId,
+      };
+      setAuthenticatedUser(updatedUser);
+      localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
+    }
+
+    setSyncStatusMsg({
+      type: "success",
+      text: `Agenda Google synchronisé avec succès ! ${syncResult.count} mission(s) synchronisée(s) sur le calendrier 'Défibeo'.`,
+    });
+  };
+
+  const requestGoogleCalendarOAuthFallback = (): Promise<{ token: string; email: string }> => {
+    return new Promise((resolve, reject) => {
+      try {
+        const client_id = "627487981610-1srkug4lp1qeih26pd2thd1241andaq4.apps.googleusercontent.com";
+        const redirect_uri = window.location.origin;
+        const scopes = [
+          "https://www.googleapis.com/auth/calendar",
+          "https://www.googleapis.com/auth/userinfo.email",
+        ].join(" ");
+
+        const oauthUrl =
+          `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${client_id}` +
+          `&redirect_uri=${encodeURIComponent(redirect_uri)}` +
+          `&response_type=token` +
+          `&scope=${encodeURIComponent(scopes)}` +
+          `&prompt=select_account`;
+
+        const popup = window.open(oauthUrl, "google-calendar-oauth", "width=500,height=600");
+        if (!popup) {
+          reject(
+            new Error(
+              "Le bloqueur de fenêtres pop-up a empêché l'ouverture de la fenêtre de connexion Google."
+            )
+          );
+          return;
+        }
+
+        const pollTimer = setInterval(async () => {
+          try {
+            if (!popup || popup.closed) {
+              clearInterval(pollTimer);
+              reject(new Error("Fenêtre de connexion Google fermée."));
+              return;
+            }
+
+            let currentHref = "";
+            try {
+              currentHref = popup.location.href;
+            } catch (_) {
+              return;
+            }
+
+            if (currentHref && currentHref.startsWith(redirect_uri)) {
+              clearInterval(pollTimer);
+              const hash = popup.location.hash;
+              const search = popup.location.search;
+              popup.close();
+
+              const params = new URLSearchParams(
+                hash && hash.length > 1 ? hash.substring(1) : search.substring(1)
+              );
+              const token = params.get("access_token");
+              const error = params.get("error");
+
+              if (error) {
+                reject(new Error(`Erreur OAuth Google : ${error}`));
+                return;
+              }
+
+              if (!token) {
+                reject(new Error("Impossible d'obtenir le jeton d'accès OAuth Google Calendar."));
+                return;
+              }
+
+              let email = authenticatedUser?.email || "";
+              try {
+                const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                if (userinfoRes.ok) {
+                  const userinfo = await userinfoRes.json();
+                  if (userinfo?.email) email = userinfo.email;
+                }
+              } catch (_) {}
+
+              resolve({ token, email });
+            }
+          } catch (e) {
+            clearInterval(pollTimer);
+            reject(e);
+          }
+        }, 400);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  };
+
   const handleGoogleCalendarSync = async () => {
     setIsSyncingGoogleCal(true);
     setSyncStatusMsg(null);
@@ -9155,59 +9390,44 @@ export default function PublicPortal({
     setShowOperationHelp(false);
     setShowCalendarApiHelp(false);
     try {
-      const provider = new GoogleAuthProvider();
-      provider.addScope("https://www.googleapis.com/auth/calendar");
+      let token = "";
+      let email = "";
 
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      const token = credential?.accessToken;
-      const email = result?.user?.email || "";
+      try {
+        const provider = new GoogleAuthProvider();
+        provider.addScope("https://www.googleapis.com/auth/calendar");
+
+        const result = await signInWithPopup(auth, provider);
+        const credential = GoogleAuthProvider.credentialFromResult(result);
+        token = credential?.accessToken || "";
+        email = result?.user?.email || "";
+      } catch (popupErr: any) {
+        if (popupErr?.code === "auth/popup-closed-by-user") {
+          throw popupErr;
+        }
+        console.warn(
+          "Firebase signInWithPopup failed for Google Calendar, falling back to direct Google OAuth2 client (defibeo):",
+          popupErr
+        );
+        const fallbackAuth = await requestGoogleCalendarOAuthFallback();
+        token = fallbackAuth.token;
+        email = fallbackAuth.email;
+      }
 
       if (!token) {
         throw new Error("Impossible d'obtenir le jeton d'accès OAuth.");
       }
 
-      setGoogleAccessToken(token);
-      setSyncedGoogleEmail(email);
-
-      // Persist the email locally
-      const techName = authenticatedUser?.name || "common";
-      localStorage.setItem(`defib_google_cal_email_${techName}`, email);
-
-      // Perform synchronization!
-      const syncResult = await performGoogleCalendarSync(token);
-      const calendarId = syncResult.calendarId || "";
-
-      // Persist Google account settings to the centralized Firestore database
-      if (authenticatedUser) {
-        const updatedMembers = members.map((m) => {
-          if (m.name.trim().toLowerCase() === authenticatedUser.name.trim().toLowerCase()) {
-            return {
-              ...m,
-              googleCalEmail: email,
-              googleCalId: calendarId,
-            };
-          }
-          return m;
-        });
-        onUpdateMembers(updatedMembers);
-
-        // Also update authenticatedUser and stored active session
-        const updatedUser = {
-          ...authenticatedUser,
-          googleCalEmail: email,
-          googleCalId: calendarId,
-        };
-        setAuthenticatedUser(updatedUser);
-        localStorage.setItem("defib_active_tech_session", JSON.stringify(updatedUser));
-      }
-
-      setSyncStatusMsg({
-        type: "success",
-        text: `Agenda Google synchronisé avec succès ! ${syncResult.count} mission(s) synchronisée(s) sur le calendrier 'Défibeo'.`,
-      });
+      await finalizeGoogleCalendarTokenSync(token, email);
     } catch (error: any) {
       console.error("Error in Google Calendar sync:", error);
+
+      if (
+        error?.code === "auth/popup-closed-by-user" ||
+        String(error?.message || "").includes("Fenêtre de connexion Google fermée")
+      ) {
+        return;
+      }
 
       const errorMsgStr = error?.message || "";
       const isAuthError =
@@ -9234,7 +9454,7 @@ export default function PublicPortal({
         setShowDomainHelp(true);
         setSyncStatusMsg({
           type: "error",
-          text: `Erreur d'autorisation : Ce domaine n'est pas autorisé dans la configuration de votre projet Firebase. Veuillez suivre les instructions ci-dessous pour l'ajouter.`,
+          text: `Erreur d'autorisation : Ce domaine n'est pas autorisé dans la configuration de votre projet Firebase (gen-lang-client-0413990730).`,
         });
       } else if (isOperationNotAllowed) {
         setShowOperationHelp(true);
@@ -9899,6 +10119,13 @@ export default function PublicPortal({
                           : new Date().toLocaleString("fr-FR"),
                         validated: false, // Explicitly false so it requires validation from GMAO
                       };
+                      const otherEqVersionAndLog = computeReportVersionAndChangeLog(
+                        existingMatch || reportToEdit,
+                        submission,
+                        (updatedReport as any)._computedChangeDescriptions
+                      );
+                      (submission as any).versionActuelle = otherEqVersionAndLog.versionActuelle;
+                      (submission as any).logsChangements = otherEqVersionAndLog.logsChangements;
 
                       const filteredExisting = generatedReports.filter((r: any) => {
                         if (!r) return false;
@@ -10177,8 +10404,15 @@ export default function PublicPortal({
                           variables,
                           tours,
                         );
+                        const verAndLogExisting = computeReportVersionAndChangeLog(
+                          existingRep,
+                          baseSub,
+                          (updatedReport as any)._computedChangeDescriptions
+                        );
                         submission = {
                           ...baseSub,
+                          versionActuelle: verAndLogExisting.versionActuelle,
+                          logsChangements: verAndLogExisting.logsChangements,
                           commentaire: mergeReportModerationComment(
                             existingRep.commentaire || reportToEdit?.commentaire,
                             baseSub,
@@ -10245,8 +10479,15 @@ export default function PublicPortal({
                           variables,
                           tours,
                         );
+                        const verAndLogNew = computeReportVersionAndChangeLog(
+                          reportToEdit,
+                          baseSub,
+                          (updatedReport as any)._computedChangeDescriptions
+                        );
                         submission = {
                           ...baseSub,
+                          versionActuelle: verAndLogNew.versionActuelle,
+                          logsChangements: verAndLogNew.logsChangements,
                           commentaire: mergeReportModerationComment(
                             reportToEdit?.commentaire,
                             baseSub,
@@ -14141,7 +14382,12 @@ export default function PublicPortal({
                                             defibIdentifiant: p.identifiant || p.defibIdentifiant || "",
                                           })),
                                         };
-                                    generateTourLogisticsPdf({
+                                    if (logisticsPdfPreview?.blobUrl) {
+                                      try {
+                                        URL.revokeObjectURL(logisticsPdfPreview.blobUrl);
+                                      } catch (_) {}
+                                    }
+                                    const pdfResult = createTourLogisticsPdfDocument({
                                       tour: resolvedTour,
                                       defibrillateurs: defibrillateurs || [],
                                       otherEquipments: otherEquipments || [],
@@ -14151,6 +14397,7 @@ export default function PublicPortal({
                                       variables: variables || [],
                                       generatedReports: generatedReports || [],
                                     });
+                                    setLogisticsPdfPreview(pdfResult);
                                   }}
                                   style={{
                                     backgroundColor: "rgb(46, 84, 255)",
@@ -14421,56 +14668,101 @@ export default function PublicPortal({
                           })()}
 
                           {/* Gelule Date en premier */}
-                          <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
-                            <span
-                              style={{
-                                color: "#000",
-                                backgroundColor: "rgb(233, 235, 239)",
-                                padding: "8px 16px",
-                                borderRadius: "9999px",
-                                fontWeight: "bold",
-                                fontSize: "18px",
-                                display: "inline-block",
-                              }}
-                            >
-                              {rep.date}
-                            </span>
-                            {rep.validated ? (
-                              <span
-                                style={{
-                                  color: "#ffffff",
-                                  backgroundColor: "rgb(210, 45, 11)",
-                                  padding: "6px 14px",
-                                  borderRadius: "9999px",
-                                  fontWeight: "bold",
-                                  fontSize: "18px",
-                                  border: "none",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                }}
-                              >
-                                <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#ffffff" }}></span>
-                                Validé par GMAO
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  color: "rgb(255 255 255)",
-                                  backgroundColor: "rgb(210, 45, 11)",
-                                  padding: "6px 14px",
-                                  borderRadius: "9999px",
-                                  fontWeight: "bold",
-                                  fontSize: "18px",
-                                  border: "none",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                }}
-                              >
-                                Modération
-                              </span>
-                            )}
-                          </div>
+                          {(() => {
+                            const isDemandeRevisionOn =
+                              (rep as any).demandeRevision === true ||
+                              String((rep as any).demandeRevision ?? "").trim().toLowerCase() === "oui" ||
+                              String((rep as any).demandeRevision ?? "").trim().toLowerCase() === "true";
+                            const commentaireRevText = String((rep as any).commentaireRevision ?? "").trim();
+                            return (
+                              <>
+                                <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+                                  <span
+                                    style={{
+                                      color: "#000",
+                                      backgroundColor: "rgb(233, 235, 239)",
+                                      padding: "8px 16px",
+                                      borderRadius: "9999px",
+                                      fontWeight: "bold",
+                                      fontSize: "18px",
+                                      display: "inline-block",
+                                    }}
+                                  >
+                                    {rep.date}
+                                  </span>
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {isDemandeRevisionOn && (
+                                      <span
+                                        style={{
+                                          color: "rgb(255, 212, 97)",
+                                          backgroundColor: "rgb(246, 58, 8)",
+                                          padding: "6px 14px",
+                                          borderRadius: "9999px",
+                                          fontWeight: "bold",
+                                          fontSize: "18px",
+                                          border: "none",
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                        }}
+                                      >
+                                        Infos. Suppl. Requises
+                                      </span>
+                                    )}
+                                    {rep.validated ? (
+                                      <span
+                                        style={{
+                                          color: "#ffffff",
+                                          backgroundColor: "rgb(210, 45, 11)",
+                                          padding: "6px 14px",
+                                          borderRadius: "9999px",
+                                          fontWeight: "bold",
+                                          fontSize: "18px",
+                                          border: "none",
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "4px",
+                                        }}
+                                      >
+                                        <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#ffffff" }}></span>
+                                        Validé par GMAO
+                                      </span>
+                                    ) : (
+                                      <span
+                                        style={{
+                                          color: "rgb(255 255 255)",
+                                          backgroundColor: "rgb(210, 45, 11)",
+                                          padding: "6px 14px",
+                                          borderRadius: "9999px",
+                                          fontWeight: "bold",
+                                          fontSize: "18px",
+                                          border: "none",
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                        }}
+                                      >
+                                        Modération
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                {isDemandeRevisionOn && commentaireRevText && (
+                                  <div
+                                    style={{
+                                      color: "rgb(246, 58, 8)",
+                                      fontSize: "18px",
+                                      fontWeight: 500,
+                                      lineHeight: "1.4",
+                                      paddingTop: "4px",
+                                      paddingBottom: "4px",
+                                      whiteSpace: "pre-wrap",
+                                    }}
+                                  >
+                                    {commentaireRevText}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
 
                           <div
                             className="space-y-1.5"
@@ -23685,6 +23977,89 @@ export default function PublicPortal({
             return l.includes(q) || idStr.includes(q) || dest.includes(q) || stat.includes(q);
           }}
         />
+        {logisticsPdfPreview && (
+          <div
+            id="modal-webapp-export-logistique-preview"
+            className="fixed inset-0 z-[10000] flex items-center justify-center p-4"
+            style={{ backgroundColor: "rgba(15, 23, 42, 0.72)" }}
+            onClick={() => {
+              const urlToRevoke = logisticsPdfPreview.blobUrl;
+              setLogisticsPdfPreview(null);
+              try {
+                if (urlToRevoke) URL.revokeObjectURL(urlToRevoke);
+              } catch (_) {}
+            }}
+          >
+            <div
+              className="bg-white w-full max-w-5xl rounded-2xl flex flex-col overflow-hidden"
+              style={{
+                height: "88vh",
+                maxHeight: "900px",
+                boxShadow: "none",
+                border: "none",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex-1 w-full bg-[#f5f7fa] p-3 overflow-hidden flex flex-col">
+                <iframe
+                  src={logisticsPdfPreview.blobUrl}
+                  title="Export Logistique PDF"
+                  className="w-full flex-1 rounded-xl bg-white border-0"
+                />
+              </div>
+              <div className="p-4 bg-white flex flex-col sm:flex-row items-center justify-end gap-3">
+                <button
+                  type="button"
+                  id="btn-close-export-logistique-popup"
+                  onClick={() => {
+                    playTechTapSound();
+                    const urlToRevoke = logisticsPdfPreview.blobUrl;
+                    setLogisticsPdfPreview(null);
+                    try {
+                      if (urlToRevoke) URL.revokeObjectURL(urlToRevoke);
+                    } catch (_) {}
+                  }}
+                  style={{
+                    backgroundColor: "#0f172a",
+                    color: "#ffffff",
+                    fontSize: "18px",
+                    fontWeight: "bold",
+                    borderRadius: "12px",
+                    padding: "14px 20px",
+                    border: "none",
+                    boxShadow: "none",
+                    cursor: "pointer",
+                  }}
+                  className="w-full sm:w-auto hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center"
+                >
+                  Fermer
+                </button>
+                <button
+                  type="button"
+                  id="btn-download-export-logistique-pdf"
+                  onClick={() => {
+                    playTechTapSound();
+                    logisticsPdfPreview.doc.save(logisticsPdfPreview.fileName);
+                  }}
+                  style={{
+                    backgroundColor: "rgb(46, 84, 255)",
+                    color: "#ffffff",
+                    fontSize: "18px",
+                    fontWeight: "bold",
+                    borderRadius: "12px",
+                    padding: "14px 20px",
+                    border: "none",
+                    boxShadow: "none",
+                    cursor: "pointer",
+                  }}
+                  className="w-full sm:w-auto hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center"
+                >
+                  Télécharger PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -10,9 +10,18 @@ export interface GoogleDriveStatus {
 const SERVICE_ACCOUNT_EMAIL = 'sheets-service-account@gen-lang-client-0441699702.iam.gserviceaccount.com';
 const sharedFoldersInSession = new Set<string>();
 
-export function resolveEffectiveTenantId(explicitTenantId?: string): string {
+export function resolveEffectiveTenantId(explicitTenantId?: string, companyInfo?: any): string {
   if (explicitTenantId && explicitTenantId.trim() && explicitTenantId.trim() !== 'demo') {
     return explicitTenantId.trim();
+  }
+  const compTid =
+    companyInfo?.tenantId ||
+    companyInfo?.envId ||
+    companyInfo?.id ||
+    companyInfo?.shortEnvId ||
+    companyInfo?.code;
+  if (compTid && String(compTid).trim() && String(compTid).trim() !== 'demo') {
+    return String(compTid).trim();
   }
   if (typeof window !== 'undefined') {
     const direct = localStorage.getItem('defib_tenant_id') || localStorage.getItem('tenant_id');
@@ -30,7 +39,7 @@ export function resolveEffectiveTenantId(explicitTenantId?: string): string {
       }
     } catch (_) {}
     try {
-      const userRaw = localStorage.getItem('defib_logged_user');
+      const userRaw = localStorage.getItem('defib_logged_user') || localStorage.getItem('defib_admin_logged_user');
       if (userRaw) {
         const parsed = JSON.parse(userRaw);
         const tid = parsed?.tenantId || parsed?.envId;
@@ -39,14 +48,33 @@ export function resolveEffectiveTenantId(explicitTenantId?: string): string {
         }
       }
     } catch (_) {}
+    const shortEnv = localStorage.getItem('defib_short_env_id');
+    if (shortEnv && shortEnv.trim() && shortEnv.trim() !== 'demo') {
+      return shortEnv.trim();
+    }
     if (direct && direct.trim()) return direct.trim();
   }
-  return explicitTenantId?.trim() || 'demo';
+  return explicitTenantId?.trim() || (compTid ? String(compTid).trim() : '') || 'demo';
 }
 
-function getTenantCandidateIds(tid: string): string[] {
+function getTenantCandidateIds(tid: string, companyInfo?: any): string[] {
   const base = (tid || 'demo').trim();
   const aliases = Array.from(getTenantAliases(base));
+  const extraFromComp = [
+    companyInfo?.tenantId,
+    companyInfo?.envId,
+    companyInfo?.id,
+    companyInfo?.shortEnvId,
+    companyInfo?.code,
+  ]
+    .map(v => String(v || '').trim())
+    .filter(Boolean);
+  for (const ext of extraFromComp) {
+    for (const a of Array.from(getTenantAliases(ext))) {
+      aliases.push(a);
+    }
+    aliases.push(ext);
+  }
   return Array.from(
     new Set([
       base,
@@ -57,45 +85,72 @@ function getTenantCandidateIds(tid: string): string[] {
   ).filter(Boolean);
 }
 
-export function getCachedGoogleDriveActiveSync(explicitTenantId?: string): boolean {
+export function getCachedGoogleDriveActiveSync(explicitTenantId?: string, companyInfo?: any): boolean {
+  if (companyInfo && typeof companyInfo === 'object') {
+    if (
+      companyInfo.googleDriveActive === true ||
+      companyInfo.googleDriveActive === 'Oui' ||
+      Boolean(companyInfo.googleDriveEmail || companyInfo.googleDriveFolderId)
+    ) {
+      if (!(companyInfo.explicitGoogleDriveToggle && companyInfo.googleDriveActive === false)) {
+        return true;
+      }
+    }
+  }
   if (typeof window === 'undefined') return false;
   try {
-    const tid = resolveEffectiveTenantId(explicitTenantId);
-    const candidates = getTenantCandidateIds(tid);
+    const tid = resolveEffectiveTenantId(explicitTenantId, companyInfo);
+    const candidates = getTenantCandidateIds(tid, companyInfo);
     for (const c of candidates) {
       const tenantActive = localStorage.getItem(`defib_${c}_google_drive_active`);
       if (tenantActive === 'true') return true;
       const tenantEmail = localStorage.getItem(`defib_${c}_google_drive_email`);
-      if (tenantEmail && tenantEmail.includes('@') && tenantActive !== 'false') return true;
+      const tenantFolder = localStorage.getItem(`defib_${c}_google_drive_folder_id`);
+      if ((tenantEmail && tenantEmail.includes('@')) || tenantFolder) {
+        return true;
+      }
+    }
+    for (const c of candidates) {
+      const cacheKeys = [
+        `fs_cache_${c}_api_connectors`,
+        `fs_cache_defib_${c}_api_connectors`,
+        `defib_${c}_company_info`,
+        `fs_cache_${c}_companyInfo`,
+        `fs_cache_defib_${c}_companyInfo`,
+      ];
+      for (const ck of cacheKeys) {
+        try {
+          const rawConn = localStorage.getItem(ck);
+          if (rawConn) {
+            const unwrap = JSON.parse(rawConn);
+            const parsed = unwrap?.data !== undefined ? unwrap.data : unwrap;
+            if (
+              parsed?.googleDriveActive === true ||
+              parsed?.googleDriveActive === 'Oui' ||
+              ((parsed?.googleDriveEmail || parsed?.googleDriveFolderId) &&
+                !(parsed?.explicitGoogleDriveToggle && parsed?.googleDriveActive === false))
+            ) {
+              return true;
+            }
+          }
+        } catch (_) {}
+      }
     }
     for (const c of candidates) {
       const tenantActive = localStorage.getItem(`defib_${c}_google_drive_active`);
       if (tenantActive === 'false') return false;
     }
-    for (const c of candidates) {
-      try {
-        const rawConn =
-          localStorage.getItem(`fs_cache_${c}_api_connectors`) ||
-          localStorage.getItem(`fs_cache_defib_${c}_api_connectors`) ||
-          localStorage.getItem(`defib_${c}_company_info`) ||
-          localStorage.getItem(`fs_cache_${c}_companyInfo`);
-        if (rawConn) {
-          const parsed = JSON.parse(rawConn);
-          if (parsed?.googleDriveActive === true || (parsed?.googleDriveEmail && parsed?.googleDriveActive !== false)) {
-            return true;
-          }
-        }
-      } catch (_) {}
-    }
     const globalActive = localStorage.getItem('defib_google_drive_active');
     if (globalActive === 'true') return true;
+    const globalEmail = localStorage.getItem('defib_google_drive_email');
+    if (globalEmail && globalEmail.includes('@') && globalActive !== 'false') return true;
   } catch (_) {}
   return false;
 }
 
-export async function fetchGoogleDriveStatus(tenantId?: string): Promise<GoogleDriveStatus> {
-  const activeTenant = resolveEffectiveTenantId(tenantId);
-  const candidates = getTenantCandidateIds(activeTenant);
+export async function fetchGoogleDriveStatus(tenantId?: string, companyInfo?: any): Promise<GoogleDriveStatus> {
+  const activeTenant = resolveEffectiveTenantId(tenantId, companyInfo);
+  const candidates = getTenantCandidateIds(activeTenant, companyInfo);
 
   const getLocalField = (suffix: string, globalKey?: string): string => {
     if (typeof window === 'undefined') return '';
@@ -114,7 +169,7 @@ export async function fetchGoogleDriveStatus(tenantId?: string): Promise<GoogleD
   const cacheLocally = (tid: string, active: boolean, email: string, accessToken: string, folderId?: string) => {
     if (typeof window === 'undefined') return;
     try {
-      const targets = getTenantCandidateIds(tid);
+      const targets = getTenantCandidateIds(tid, companyInfo);
       for (const t of targets) {
         localStorage.setItem(`defib_${t}_google_drive_active`, active ? 'true' : 'false');
         if (email) localStorage.setItem(`defib_${t}_google_drive_email`, email);
@@ -129,23 +184,36 @@ export async function fetchGoogleDriveStatus(tenantId?: string): Promise<GoogleD
 
   const extractStatusFromData = (data: any): GoogleDriveStatus | null => {
     if (!data || typeof data !== 'object') return null;
-    const hasExplicitActive = data.googleDriveActive !== undefined;
-    const hasLinkedAccount = Boolean(data.googleDriveEmail || data.googleDriveAccessToken);
-    if (!hasExplicitActive && !hasLinkedAccount) return null;
+    const isExplicitlyDisabled = Boolean(data.explicitGoogleDriveToggle && (data.googleDriveActive === false || data.googleDriveActive === 'Non'));
+    const isActiveFlag = data.googleDriveActive === true || data.googleDriveActive === 'Oui';
+    const hasLinkedInData = Boolean(data.googleDriveEmail || data.googleDriveAccessToken || data.googleDriveFolderId);
 
-    // Once linked, keep active unless explicitly toggled off
-    const active = hasLinkedAccount
-      ? data.explicitGoogleDriveToggle && data.googleDriveActive === false
-        ? false
-        : true
-      : Boolean(data.googleDriveActive);
+    // Ignore default/un-toggled false records that have no linked Google Drive data so they never poison active state
+    if (!isActiveFlag && !hasLinkedInData && !isExplicitlyDisabled) {
+      return null;
+    }
+
+    const active = isExplicitlyDisabled ? false : (isActiveFlag || hasLinkedInData);
     const email = data.googleDriveEmail || getLocalField('google_drive_email', 'defib_google_drive_email') || '';
     const accessToken = data.googleDriveAccessToken || getLocalField('google_drive_token', 'defib_google_drive_token') || '';
     const folderId = data.googleDriveFolderId || getLocalField('google_drive_folder_id') || '';
 
-    cacheLocally(activeTenant, active, email, accessToken, folderId);
+    if (active || isExplicitlyDisabled) {
+      cacheLocally(activeTenant, active, email, accessToken, folderId);
+    }
     return { active, email, accessToken, folderId };
   };
+
+  // 0. Check passed companyInfo prop first if it explicitly carries active Google Drive metadata
+  if (companyInfo && typeof companyInfo === 'object') {
+    const extractedFromProp = extractStatusFromData(companyInfo);
+    if (extractedFromProp && extractedFromProp.active) {
+      // Still query server for latest accessToken/folderId if missing in companyInfo
+      if (extractedFromProp.accessToken && extractedFromProp.folderId) {
+        return extractedFromProp;
+      }
+    }
+  }
 
   // 1. Query authoritative server endpoint first so all users of the tenant share the exact same connector state
   if (typeof fetch !== 'undefined') {
@@ -159,7 +227,7 @@ export async function fetchGoogleDriveStatus(tenantId?: string): Promise<GoogleD
         const rawData = json?.value;
         const data = Array.isArray(rawData) ? rawData[0] : rawData;
         const extracted = extractStatusFromData(data);
-        if (extracted && (extracted.active || extracted.email || data?.explicitGoogleDriveToggle)) {
+        if (extracted) {
           return extracted;
         }
       }
@@ -171,49 +239,38 @@ export async function fetchGoogleDriveStatus(tenantId?: string): Promise<GoogleD
     const rawData = await fetchCollectionFromFirestore<any>('api_connectors', activeTenant);
     const data = Array.isArray(rawData) ? rawData[0] : rawData;
     const extracted = extractStatusFromData(data);
-    if (extracted && (extracted.active || extracted.email || data?.explicitGoogleDriveToggle)) {
+    if (extracted) {
       return extracted;
     }
   } catch (e) {
     console.error('Error fetching Google Drive status from Firestore for tenant:', activeTenant, e);
   }
 
-  // 2b. Check companyInfo backup in case Google Drive state was mirrored into companyInfo
+  // 2b. Check companyInfo backup (both prop and server/Firestore) in case Google Drive state was mirrored into companyInfo
+  if (companyInfo && typeof companyInfo === 'object') {
+    const extractedFromProp = extractStatusFromData(companyInfo);
+    if (extractedFromProp) {
+      return extractedFromProp;
+    }
+  }
   try {
     const compData = await fetchCollectionFromFirestore<any>('companyInfo', activeTenant);
     const extractedComp = extractStatusFromData(compData);
-    if (extractedComp && (extractedComp.active || extractedComp.email)) {
+    if (extractedComp) {
       return extractedComp;
     }
   } catch (_) {}
 
   // 3. Fallback to localStorage across all tenant aliases
-  let tenantSpecificActive: string | null = null;
-  if (typeof window !== 'undefined') {
-    for (const c of candidates) {
-      const v = localStorage.getItem(`defib_${c}_google_drive_active`);
-      if (v === 'true') {
-        tenantSpecificActive = 'true';
-        break;
-      }
-      if (v === 'false' && tenantSpecificActive === null) {
-        tenantSpecificActive = 'false';
-      }
-    }
-  }
-  const globalActive = typeof window !== 'undefined' ? localStorage.getItem('defib_google_drive_active') : null;
   const email = getLocalField('google_drive_email', 'defib_google_drive_email');
   const accessToken = getLocalField('google_drive_token', 'defib_google_drive_token');
   const folderId = getLocalField('google_drive_folder_id');
+  const cachedSyncActive = getCachedGoogleDriveActiveSync(activeTenant, companyInfo);
 
-  const active =
-    tenantSpecificActive === 'true' || Boolean(email)
-      ? true
-      : tenantSpecificActive === 'false'
-      ? false
-      : globalActive !== null
-      ? globalActive === 'true'
-      : Boolean(email || accessToken);
+  const active = cachedSyncActive || Boolean(email || accessToken || folderId);
+  if (active) {
+    cacheLocally(activeTenant, true, email, accessToken, folderId);
+  }
 
   return { active, email, accessToken, folderId };
 }

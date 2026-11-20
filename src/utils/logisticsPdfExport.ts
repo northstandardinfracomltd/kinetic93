@@ -44,7 +44,13 @@ interface PdfTableColumn {
   align?: 'left' | 'center' | 'right';
 }
 
-export function generateTourLogisticsPdf(ctx: TourLogisticsExportContext): void {
+export interface TourLogisticsPdfResult {
+  doc: jsPDF;
+  fileName: string;
+  blobUrl: string;
+}
+
+export function createTourLogisticsPdfDocument(ctx: TourLogisticsExportContext): TourLogisticsPdfResult {
   const {
     tour: t,
     tourDraft = {},
@@ -524,5 +530,16 @@ export function generateTourLogisticsPdf(ctx: TourLogisticsExportContext): void 
   const safeTourSlug = (tourIdentifiant || tourTitle || 'Tournee')
     .replace(/[^a-zA-Z0-9_-]/g, '_')
     .replace(/_+/g, '_');
-  doc.save(`Export_Logistique_${safeTourSlug}.pdf`);
+  const fileName = `Export_Logistique_${safeTourSlug}.pdf`;
+  const pdfBlob = doc.output('blob');
+  const blobUrl = URL.createObjectURL(pdfBlob);
+  return { doc, fileName, blobUrl };
+}
+
+export function generateTourLogisticsPdf(ctx: TourLogisticsExportContext): void {
+  const { doc, fileName, blobUrl } = createTourLogisticsPdfDocument(ctx);
+  doc.save(fileName);
+  try {
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+  } catch (_) {}
 }

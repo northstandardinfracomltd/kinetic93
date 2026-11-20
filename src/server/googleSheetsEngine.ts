@@ -1819,6 +1819,8 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Drapeau ou indicateur.', field: 'drapeaux', aliases: ['drapeauouindicateur', 'drapeauxouindicateurs', 'drapeaux', 'drapeau', 'indicateur'] },
     { header: 'Commentaire interne.', field: 'commentaireInterne', aliases: ['commentaireinterne', 'commentaire', 'internalcomment'] },
     { header: "Désactiver l'email au client.", field: 'disableClientEmail', aliases: ['desactiverlemailauclient', 'desactiveremailauclient', 'disableclientemail'] },
+    { header: 'Demande Révision.', field: 'demandeRevision', aliases: ['demanderevision', 'solliciterunerevisionparletechnicienauteur', 'solliciterrevision'] },
+    { header: 'Commentaire révision.', field: 'commentaireRevision', aliases: ['commentairerevision', 'commentairepourlarevision'] },
     { header: 'Traité. Alerte 1', field: 'alerteTraite1', aliases: ['traitealerte1', 'alerte1traite', 'traite1'] },
     { header: "Informations sur l'alerte. 1", field: 'alerteInfo1', aliases: ['informationssurlalerte1', 'informationsurlalerte1', 'alerteinfo1', 'alerte1'] },
     { header: 'Traité. Alerte 2', field: 'alerteTraite2', aliases: ['traitealerte2', 'alerte2traite', 'traite2'] },
@@ -1849,6 +1851,8 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: "Informations sur l'alerte. 14", field: 'alerteInfo14', aliases: ['informationssurlalerte14', 'informationsurlalerte14', 'alerteinfo14', 'alerte14'] },
     { header: 'Traité. Alerte 15', field: 'alerteTraite15', aliases: ['traitealerte15', 'alerte15traite', 'traite15'] },
     { header: "Informations sur l'alerte. 15", field: 'alerteInfo15', aliases: ['informationssurlalerte15', 'informationsurlalerte15', 'alerteinfo15', 'alerte15'] },
+    { header: 'Logs Changements', field: 'logsChangements', aliases: ['logschangements', 'logchangements', 'tracechangements', 'tracedeschangements'] },
+    { header: 'Version actuelle', field: 'versionActuelle', aliases: ['versionactuelle', 'version', 'versionpdf'] },
   ],
   crm: [
     { header: 'Type.', field: 'type', aliases: ['type', 'typeligne', 'recordtype'] },
@@ -2288,6 +2292,9 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'URL Source IMG Email', field: 'emailFooterImgUrl', aliases: ['urlsourceimgemail', 'urlsourcedelimageemail', 'urlsourcedelimagedupieddemail', 'urlsourceimagedupieddemail', 'emailfooterimgurl'] },
     { header: 'Titre Email', field: 'emailFooterTitle', aliases: ['titreemail', 'titredupieddemail', 'emailfootertitle'] },
     { header: 'Paragraphe Email', field: 'emailFooterParagraph', aliases: ['paragrapheemail', 'paragraphedupieddemail', 'emailfooterparagraph'] },
+    { header: 'Connecteur Google Drive Actif', field: 'googleDriveActive', aliases: ['connecteurgoogledriveactif', 'googledriveactive', 'googledriveactif'], type: 'yesno' },
+    { header: 'Email Google Drive', field: 'googleDriveEmail', aliases: ['emailgoogledrive', 'googledriveemail', 'comptegoogledrive'] },
+    { header: 'Dossier Google Drive ID', field: 'googleDriveFolderId', aliases: ['dossiergoogledriveid', 'googledrivefolderid'] },
   ],
   reglagesCrm: [
     { header: 'Texte de l’email de relance. 1', field: 'relanceEmailBody', aliases: ['textedelemailderelance1', 'texteemailrelance1', 'textederelance1', 'relanceemailbody', 'relanceemailbody1', 'textedelemailderelance'] },
@@ -5157,6 +5164,21 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
       rawDis === 'true' ||
       rawDis === '1' ||
       rawDis === 'yes';
+
+    const rawDemRev = String(merged.demandeRevision ?? '').trim().toLowerCase();
+    merged.demandeRevision =
+      merged.demandeRevision === true ||
+      rawDemRev === 'oui' ||
+      rawDemRev === 'true' ||
+      rawDemRev === '1' ||
+      rawDemRev === 'yes';
+    merged.commentaireRevision = String(merged.commentaireRevision ?? '').trim();
+    merged.logsChangements = String(merged.logsChangements ?? '').trim();
+    const rawVerAct = merged.versionActuelle;
+    if (rawVerAct !== undefined && rawVerAct !== null && String(rawVerAct).trim() !== '') {
+      const parsedVer = parseInt(String(rawVerAct).trim(), 10);
+      merged.versionActuelle = Number.isFinite(parsedVer) && parsedVer >= 0 ? parsedVer : 1;
+    }
 
     const alertsList: { traite: boolean; info: string }[] = [];
     let maxAlertIndex = 0;
@@ -8197,6 +8219,31 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       String(enriched.disableClientEmail ?? '').trim().toLowerCase() === 'oui' ||
       String(enriched.disableClientEmail ?? '').trim().toLowerCase() === 'true';
     enriched.disableClientEmail = isDis ? 'Oui' : 'Non';
+
+    const isDemRev =
+      enriched.demandeRevision === true ||
+      String(enriched.demandeRevision ?? '').trim().toLowerCase() === 'oui' ||
+      String(enriched.demandeRevision ?? '').trim().toLowerCase() === 'true';
+    enriched.demandeRevision = isDemRev ? 'Oui' : 'Non';
+    enriched.commentaireRevision = String(enriched.commentaireRevision ?? '').trim();
+    enriched.logsChangements = String(enriched.logsChangements ?? '').trim();
+    const isUpc = Boolean(
+      enriched.isUpcoming === true ||
+        enriched.upcoming === true ||
+        enriched.isFuture === true ||
+        enriched.status === 'À venir' ||
+        enriched.status === 'upcoming' ||
+        enriched.statut === 'À venir' ||
+        enriched.date === 'À venir' ||
+        (typeof enriched.id === 'string' && enriched.id.startsWith('REP-UPCOMING-'))
+    );
+    const rawVerEnriched = enriched.versionActuelle;
+    if (rawVerEnriched !== undefined && rawVerEnriched !== null && String(rawVerEnriched).trim() !== '') {
+      const parsedV = parseInt(String(rawVerEnriched).trim(), 10);
+      enriched.versionActuelle = Number.isFinite(parsedV) && parsedV >= 0 ? String(parsedV) : (isUpc ? '0' : '1');
+    } else {
+      enriched.versionActuelle = isUpc ? '0' : '1';
+    }
 
     const alertsArr = Array.isArray(enriched.postInterventionAlerts) ? enriched.postInterventionAlerts : null;
     for (let i = 1; i <= 15; i++) {
