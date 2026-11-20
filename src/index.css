@@ -518,7 +518,8 @@ select[style*="rgb(15, 23, 42)"],
 #fsm-help-faq-select,
 #gmao-help-faq-select,
 #crm-help-faq-select,
-#stocks-help-faq-select {
+#stocks-help-faq-select,
+#stocks-tour-logistics-select {
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
   appearance: none !important;
@@ -531,7 +532,8 @@ select[style*="rgb(15, 23, 42)"],
 #fsm-help-faq-select::-ms-expand,
 #gmao-help-faq-select::-ms-expand,
 #crm-help-faq-select::-ms-expand,
-#stocks-help-faq-select::-ms-expand {
+#stocks-help-faq-select::-ms-expand,
+#stocks-tour-logistics-select::-ms-expand {
   display: none !important;
 }
 

@@ -38,6 +38,12 @@ interface ParsedRequiredPartRow {
   commentaireTech: string;
 }
 
+interface PdfTableColumn {
+  header: string;
+  width: number;
+  align?: 'left' | 'center' | 'right';
+}
+
 export function generateTourLogisticsPdf(ctx: TourLogisticsExportContext): void {
   const {
     tour: t,
@@ -277,144 +283,197 @@ export function generateTourLogisticsPdf(ctx: TourLogisticsExportContext): void 
   }
 
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: 'landscape',
     unit: 'mm',
     format: 'a4',
   });
 
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const marginX = 12;
-  const contentWidth = pageWidth - marginX * 2;
-  let y = 14;
+  const pageWidth = doc.internal.pageSize.getWidth(); // 297mm
+  const pageHeight = doc.internal.pageSize.getHeight(); // 210mm
+  const marginX = 10;
+  const marginY = 12;
+  const contentWidth = pageWidth - marginX * 2; // 277mm
+  let y = marginY;
 
   const ensureSpace = (neededMm: number) => {
-    if (y + neededMm > pageHeight - 14) {
+    if (y + neededMm > pageHeight - marginY) {
       doc.addPage();
-      y = 14;
+      y = marginY;
     }
   };
 
-  const writeWrappedLine = (text: string, fontSize = 9, isBold = false, indentMm = 0) => {
+  const writeWrappedLine = (text: string, fontSize = 9, isBold = false) => {
     doc.setFont('helvetica', isBold ? 'bold' : 'normal');
     doc.setFontSize(fontSize);
-    const maxW = contentWidth - indentMm;
-    const lines: string[] = doc.splitTextToSize(String(text || ''), maxW);
+    const lines: string[] = doc.splitTextToSize(String(text || ''), contentWidth);
     const lineHeight = fontSize * 0.42;
     for (const line of lines) {
       ensureSpace(lineHeight + 1);
-      doc.text(line, marginX + indentMm, y);
+      doc.text(line, marginX, y);
       y += lineHeight;
     }
   };
 
-  const drawDivider = (spacingBefore = 2, spacingAfter = 3) => {
-    y += spacingBefore;
-    ensureSpace(spacingAfter + 2);
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(0.25);
-    doc.line(marginX, y, pageWidth - marginX, y);
-    y += spacingAfter;
+  const drawTable = (columns: PdfTableColumn[], tableRows: string[][]) => {
+    const fontSize = 7.5;
+    const lineHeight = 3.3;
+    const padX = 1.6;
+    const padY = 1.8;
+
+    const renderRow = (cells: string[], isHeader: boolean) => {
+      doc.setFont('helvetica', isHeader ? 'bold' : 'normal');
+      doc.setFontSize(fontSize);
+
+      const wrappedCells: string[][] = columns.map((col, colIdx) => {
+        const rawText = String(cells[colIdx] ?? '');
+        const maxTextW = Math.max(4, col.width - padX * 2);
+        return doc.splitTextToSize(rawText, maxTextW);
+      });
+
+      const maxLines = Math.max(1, ...wrappedCells.map(lines => lines.length));
+      const rowHeight = maxLines * lineHeight + padY * 2;
+
+      if (!isHeader && y + rowHeight > pageHeight - marginY) {
+        doc.addPage();
+        y = marginY;
+        renderRow(columns.map(c => c.header), true);
+      }
+
+      let curX = marginX;
+      for (let i = 0; i < columns.length; i++) {
+        const col = columns[i];
+        const lines = wrappedCells[i];
+
+        if (isHeader) {
+          doc.setFillColor(235, 238, 242);
+          doc.setDrawColor(0, 0, 0);
+          doc.setLineWidth(0.25);
+          doc.rect(curX, y, col.width, rowHeight, 'FD');
+        } else {
+          doc.setDrawColor(0, 0, 0);
+          doc.setLineWidth(0.2);
+          doc.rect(curX, y, col.width, rowHeight, 'S');
+        }
+
+        doc.setFont('helvetica', isHeader ? 'bold' : 'normal');
+        doc.setFontSize(fontSize);
+        doc.setTextColor(0, 0, 0);
+
+        for (let lIdx = 0; lIdx < lines.length; lIdx++) {
+          const lineStr = lines[lIdx];
+          const textY = y + padY + (lIdx + 0.82) * lineHeight;
+          if (col.align === 'center') {
+            doc.text(lineStr, curX + col.width / 2, textY, { align: 'center' });
+          } else if (col.align === 'right') {
+            doc.text(lineStr, curX + col.width - padX, textY, { align: 'right' });
+          } else {
+            doc.text(lineStr, curX + padX, textY);
+          }
+        }
+
+        curX += col.width;
+      }
+
+      y += rowHeight;
+    };
+
+    // Ensure enough room for header + at least 1 row
+    if (y + 16 > pageHeight - marginY) {
+      doc.addPage();
+      y = marginY;
+    }
+
+    renderRow(columns.map(c => c.header), true);
+    for (const r of tableRows) {
+      renderRow(r, false);
+    }
   };
 
-  // Document Header (Raw / Brut)
+  // Document Header
   doc.setTextColor(0, 0, 0);
-  writeWrappedLine(`EXPORT LOGISTIQUE - LISTING DES PIÈCES REQUISES`, 13, true);
+  writeWrappedLine(`EXPORT LOGISTIQUE - LISTING DES PIÈCES REQUISES`, 12, true);
   y += 1;
-  writeWrappedLine(`Tournée : ${tourTitle}  |  Identifiant : ${tourIdentifiant}  |  Situation : ${tourStatus}`, 10, true);
   writeWrappedLine(
-    `Technicien : ${tourTech}  |  Date début : ${tourStartDate}  |  Véhicule : ${tourVehicule}  |  Région : ${tourRegion}`,
-    9,
+    `Tournée : ${tourTitle}  |  ID : ${tourIdentifiant}  |  Situation : ${tourStatus}  |  Technicien : ${tourTech}  |  Date début : ${tourStartDate}  |  Véhicule : ${tourVehicule}  |  Région : ${tourRegion}`,
+    8.5,
     false
   );
   if (tourCommentaire) {
-    writeWrappedLine(`Commentaire tournée : ${tourCommentaire}`, 9, false);
+    writeWrappedLine(`Commentaire tournée : ${tourCommentaire}`, 8.5, false);
   }
   const totalVolumeAll = rows.reduce((acc, r) => acc + r.volume, 0);
   writeWrappedLine(
-    `Date d'export : ${new Date().toLocaleString('fr-FR')}  |  Nombre de lignes de pièces : ${rows.length}  |  Volume total : ${totalVolumeAll}`,
-    9,
+    `Date d'export : ${new Date().toLocaleString('fr-FR')}  |  Lignes de pièces : ${rows.length}  |  Volume total : ${totalVolumeAll}`,
+    8.5,
     false
   );
-  drawDivider(2, 4);
+  y += 3;
 
   if (rows.length === 0) {
     writeWrappedLine(`Aucune pièce requise n'est renseignée dans les missions de cette tournée.`, 10, false);
   } else {
-    // 1. Detailed listing of all required parts per mission
-    writeWrappedLine(`1. DÉTAIL DES PIÈCES REQUISES PAR MISSION`, 11, true);
-    y += 2;
+    // 1. Main table of all required parts per mission (total width = 277mm)
+    const detailColumns: PdfTableColumn[] = [
+      { header: '#', width: 8, align: 'center' },
+      { header: 'Pièce requise', width: 48, align: 'left' },
+      { header: 'Volume', width: 13, align: 'center' },
+      { header: 'Envoyé au client', width: 23, align: 'center' },
+      { header: 'Fourniture client', width: 22, align: 'center' },
+      { header: 'Client / Site', width: 44, align: 'left' },
+      { header: 'Identifiant matériel', width: 35, align: 'left' },
+      { header: 'Réf. Bon de commande', width: 28, align: 'left' },
+      { header: 'Réf. Autre référence', width: 28, align: 'left' },
+      { header: 'Réf. Interv. / Facturation', width: 28, align: 'left' },
+    ];
 
-    for (const row of rows) {
-      ensureSpace(34);
-
-      writeWrappedLine(
-        `#${row.index} - PIÈCE : ${row.partLabel}   |   VOLUME : ${row.volume}`,
-        10,
-        true
-      );
-
+    const detailTableRows: string[][] = rows.map(row => {
       const sentText = row.isSentToClient
-        ? `OUI${row.expeditionRef ? ` (Réf. Expédition : ${row.expeditionRef})` : ''}`
-        : 'NON';
-      const providedText = row.isProvidedByClient ? 'OUI' : 'NON';
+        ? `Oui${row.expeditionRef ? `\n(${row.expeditionRef})` : ''}`
+        : 'Non';
+      const providedText = row.isProvidedByClient ? 'Oui' : 'Non';
+      const clientCell = [
+        row.clientName,
+        row.siteName ? `Site : ${row.siteName}` : '',
+        row.localisation && row.localisation !== '-' ? row.localisation : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      const equipmentCell = [
+        row.equipmentIdentifiant,
+        row.equipmentType && row.equipmentType !== '-' ? row.equipmentType : '',
+        row.equipmentModel && row.equipmentModel !== '-' ? row.equipmentModel : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      const intervFactCell = [
+        row.interventionRef && row.interventionRef !== '-' ? row.interventionRef : '-',
+        row.statutFacturation && row.statutFacturation !== 'Aucune information' ? row.statutFacturation : '',
+        row.estimatedDate && row.estimatedDate !== '-' ? row.estimatedDate : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
 
-      writeWrappedLine(
-        `Envoyée au client : ${sentText}   |   Fourniture par le client : ${providedText}`,
-        9,
-        true,
-        2
-      );
+      return [
+        String(row.index),
+        row.partLabel,
+        String(row.volume),
+        sentText,
+        providedText,
+        clientCell || '-',
+        equipmentCell || '-',
+        row.bonCommandeRef || '-',
+        row.autreReference || '-',
+        intervFactCell || '-',
+      ];
+    });
 
-      writeWrappedLine(
-        `Client : ${row.clientName}${row.siteName ? `   |   Site : ${row.siteName}` : ''}`,
-        9,
-        false,
-        2
-      );
+    drawTable(detailColumns, detailTableRows);
 
-      writeWrappedLine(
-        `Identifiant matériel : ${row.equipmentIdentifiant}   |   Type : ${row.equipmentType}${
-          row.equipmentModel && row.equipmentModel !== '-' ? `   |   Modèle : ${row.equipmentModel}` : ''
-        }`,
-        9,
-        false,
-        2
-      );
-
-      writeWrappedLine(
-        `Réf. Bon de commande : ${row.bonCommandeRef}   |   Réf. Autre référence : ${row.autreReference}   |   Statut facturation : ${row.statutFacturation}`,
-        9,
-        false,
-        2
-      );
-
-      writeWrappedLine(
-        `Réf. Intervention : ${row.interventionRef}   |   Situation mission : ${row.missionStatus}   |   Date / Créneau : ${row.estimatedDate} (${row.estimatedSlot})`,
-        9,
-        false,
-        2
-      );
-
-      writeWrappedLine(
-        `Localisation : ${row.localisation}   |   Raison / Prestation : ${row.reasonsLabel}`,
-        9,
-        false,
-        2
-      );
-
-      if (row.commentaireTech) {
-        writeWrappedLine(`Commentaire technicien : ${row.commentaireTech}`, 9, false, 2);
-      }
-
-      drawDivider(1.5, 2.5);
-    }
-
-    // 2. Aggregated summary by piece name
-    ensureSpace(25);
-    y += 2;
-    writeWrappedLine(`2. RÉCAPITULATIF CUMULÉ DES VOLUMES PAR PIÈCE`, 11, true);
-    y += 2;
+    // 2. Aggregated summary table by piece name
+    y += 6;
+    ensureSpace(22);
+    writeWrappedLine(`RÉCAPITULATIF CUMULÉ DES VOLUMES PAR PIÈCE`, 10, true);
+    y += 1.5;
 
     const summaryMap = new Map<
       string,
@@ -443,16 +502,23 @@ export function generateTourLogisticsPdf(ctx: TourLogisticsExportContext): void 
       summaryMap.set(key, existing);
     }
 
-    for (const item of Array.from(summaryMap.values())) {
-      ensureSpace(12);
-      writeWrappedLine(
-        `- ${item.partLabel} : Volume total = ${item.totalVolume}  (À embarquer = ${item.toCarryVolume} | Envoyé au client = ${item.sentVolume} | Fourniture client = ${item.providedVolume})`,
-        9,
-        false,
-        2
-      );
-      y += 1;
-    }
+    const summaryColumns: PdfTableColumn[] = [
+      { header: 'Pièce requise', width: 117, align: 'left' },
+      { header: 'Volume total', width: 40, align: 'center' },
+      { header: 'À embarquer', width: 40, align: 'center' },
+      { header: 'Envoyé au client', width: 40, align: 'center' },
+      { header: 'Fourniture par le client', width: 40, align: 'center' },
+    ];
+
+    const summaryTableRows: string[][] = Array.from(summaryMap.values()).map(item => [
+      item.partLabel,
+      String(item.totalVolume),
+      String(item.toCarryVolume),
+      String(item.sentVolume),
+      String(item.providedVolume),
+    ]);
+
+    drawTable(summaryColumns, summaryTableRows);
   }
 
   const safeTourSlug = (tourIdentifiant || tourTitle || 'Tournee')

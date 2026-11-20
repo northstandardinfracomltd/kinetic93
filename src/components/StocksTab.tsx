@@ -5999,9 +5999,10 @@ export default function StocksTab({
 
             <div>
               <select
+                id="stocks-tour-logistics-select"
                 value={selectedLogisticsTourId}
                 onChange={(e) => setSelectedLogisticsTourId(e.target.value)}
-                className="w-full font-sans focus:outline-none cursor-pointer"
+                className="w-full font-sans focus:outline-none cursor-pointer appearance-none"
                 style={{
                   border: '1px solid #dedede',
                   borderRadius: '13px',
@@ -6011,6 +6012,10 @@ export default function StocksTab({
                   color: selectedLogisticsTourId ? '#000000' : '#BECADB',
                   backgroundColor: '#ffffff',
                   fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  backgroundImage: 'none',
                 }}
               >
                 <option value="" disabled style={{ color: '#BECADB' }}>
