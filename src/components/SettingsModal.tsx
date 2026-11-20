@@ -2471,6 +2471,10 @@ export default function SettingsModal({
       };
       localStorage.setItem(`defib_${activeTenant}_atlasante_active`, String(atlasanteActive));
       localStorage.setItem('defib_atlasante_active', String(atlasanteActive));
+      localStorage.setItem(`defib_${activeTenant}_atlasante_declarant_id`, String(atlasanteDeclarantId || ''));
+      localStorage.setItem('defib_atlasante_declarant_id', String(atlasanteDeclarantId || ''));
+      localStorage.setItem(`defib_${activeTenant}_atlasante_url_auth`, String(atlasanteUrlAuth || ''));
+      localStorage.setItem('defib_atlasante_url_auth', String(atlasanteUrlAuth || ''));
       window.dispatchEvent(new Event('atlasante-status-changed'));
       localStorage.setItem(`defib_${activeTenant}_google_drive_active`, String(googleDriveActive));
       localStorage.setItem('defib_google_drive_active', String(googleDriveActive));

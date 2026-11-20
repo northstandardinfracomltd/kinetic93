@@ -11,6 +11,14 @@ import { createServer as createViteServer } from "vite";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, setDoc, setLogLevel } from "firebase/firestore";
 import dotenv from "dotenv";
+import {
+  GeoDaeClient,
+  GeoDaeMapper,
+  sync_dae,
+  GeoDaePasswordExpiredError,
+  GeoDaeApiError,
+  DEFAULT_GEODAE_UUID,
+} from "./src/server/geoDaeService";
 
 try {
   dns.setDefaultResultOrder('ipv4first');
@@ -10077,134 +10085,129 @@ async function warmupDefibrillateursStore() {
     }
   });
 
-  // GÉODAE Atlasanté API upload endpoint
-  app.post("/api/atlasante/upload", async (req, res) => {
+  // GÉODAE Atlasanté v2.0 API synchronization endpoint (POST /api/atlasante/sync & /api/atlasante/upload)
+  const handleGeoDaeSyncRequest = async (req: express.Request, res: express.Response) => {
     try {
-      const { atlasanteUrlAuth, atlasanteDeclarantId, items } = req.body;
+      const {
+        login: bodyLogin,
+        password: bodyPassword,
+        atlasanteDeclarantId,
+        atlasanteUrlAuth,
+        items,
+        uuid,
+      } = req.body || {};
 
-      if (!atlasanteUrlAuth || !atlasanteDeclarantId) {
-        return res.status(400).json({ error: "Missing GÉODAE configuration fields (URL Auth or Identifiant)" });
-      }
+      // Dans Paramètres > Connecteurs > Atlasanté GEODAE :
+      // - "Identifiant de login." est stocké dans `atlasanteDeclarantId` (ou `login`)
+      // - "Mot de passe." est stocké dans `atlasanteUrlAuth` (ou `password`)
+      const resolvedLogin = String(bodyLogin || atlasanteDeclarantId || '').trim();
+      const resolvedPassword = String(bodyPassword || atlasanteUrlAuth || '').trim();
 
-      if (!items || !Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ error: "No defibrillators to upload" });
-      }
-
-      // Step 1: Authenticate with GÉODAE
-      const authUrl = atlasanteUrlAuth || 'https://catalogue.atlasante.fr/api/login';
-      const authHeaderValue = atlasanteDeclarantId.startsWith('Basic ') ? atlasanteDeclarantId : `Basic ${atlasanteDeclarantId}`;
-
-      console.log(`[GÉODAE] Authenticating with ${authUrl}...`);
-      const authResponse = await fetch(authUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': authHeaderValue,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!authResponse.ok) {
-        const errText = await authResponse.text();
-        return res.status(401).json({ 
-          error: `Authentication failed on GÉODAE server. Status: ${authResponse.status}`,
-          details: errText
+      if (!resolvedLogin || !resolvedPassword) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Identifiants Géo'DAE manquants. Veuillez renseigner votre « Identifiant de login. » et votre « Mot de passe. » dans Paramètres > Connecteurs > Atlasanté GEODAE.",
         });
       }
 
-      // Extract Set-Cookie header
-      const setCookieHeader = authResponse.headers.get('set-cookie');
-      let phpSessId = '';
-      if (setCookieHeader) {
-        const match = setCookieHeader.match(/PHPSESSID=([^;]+)/);
-        if (match) {
-          phpSessId = match[1];
-        }
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Aucun défibrillateur sélectionné pour la synchronisation.',
+        });
       }
 
-      // As backup, check if there's any other way or try to look inside headers
-      if (!phpSessId && (authResponse.headers as any).getSetCookie) {
-        const cookiesList = (authResponse.headers as any).getSetCookie();
-        for (const cookie of cookiesList) {
-          const match = cookie.match(/PHPSESSID=([^;]+)/);
-          if (match) {
-            phpSessId = match[1];
-            break;
-          }
-        }
+      if (items.length > 50) {
+        return res.status(400).json({
+          success: false,
+          error: 'La synchronisation Géo\'DAE est limitée à 50 défibrillateurs maximum par lot.',
+        });
       }
 
-      if (!phpSessId) {
-        console.warn("[GÉODAE] Warning: Authenticated but PHPSESSID was not found in headers.");
-      }
+      const client = new GeoDaeClient({
+        login: resolvedLogin,
+        password: resolvedPassword,
+        uuid: uuid || DEFAULT_GEODAE_UUID,
+      });
 
-      // Determine upload url
-      let uploadUrl = 'https://catalogue.atlasante.fr/api/data/8777a504-6c3e-4abe-8100-60bb58767faa';
+      // Détection optionnelle du type booléen via /api/structure/{uuid}
+      let useBooleanTypes = false;
       try {
-        const parsed = new URL(authUrl);
-        uploadUrl = `${parsed.origin}/api/data/8777a504-6c3e-4abe-8100-60bb58767faa`;
-      } catch (e) {}
+        await client.authenticate();
+      } catch (authErr: any) {
+        if (authErr instanceof GeoDaePasswordExpiredError) {
+          return res.status(401).json({
+            success: false,
+            code: authErr.code,
+            passwordExpired: true,
+            error: authErr.message,
+          });
+        }
+        const status = authErr instanceof GeoDaeApiError ? authErr.statusCode : 401;
+        return res.status(status).json({
+          success: false,
+          error: authErr.message || "Échec de l'authentification sur Géo'DAE Atlasanté.",
+          details: authErr instanceof GeoDaeApiError ? authErr.details : '',
+        });
+      }
 
       const results = [];
-
-      // Step 2: Upload each DAE one by one
       for (const item of items) {
-        const { id, identifiant, numeroSerie, geojson } = item;
         try {
-          console.log(`[GÉODAE] Uploading DAE ${identifiant} (${numeroSerie}) to ${uploadUrl}...`);
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json'
-          };
-          if (phpSessId) {
-            headers['Cookie'] = `PHPSESSID=${phpSessId}`;
-          }
-
-          const uploadResponse = await fetch(uploadUrl, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(geojson)
-          });
-
-          const responseText = await uploadResponse.text();
-          if (uploadResponse.ok) {
-            let parsedRes = null;
-            try {
-              parsedRes = JSON.parse(responseText);
-            } catch (e) {}
-
-            results.push({
-              id,
-              identifiant,
-              numeroSerie,
-              success: true,
-              data: parsedRes || responseText
-            });
-          } else {
-            results.push({
-              id,
-              identifiant,
-              numeroSerie,
-              success: false,
-              error: `Status ${uploadResponse.status}`,
-              details: responseText
-            });
-          }
+          const syncRes = await sync_dae(client, item, { useBooleanTypes });
+          results.push(syncRes);
         } catch (itemErr: any) {
+          if (itemErr instanceof GeoDaePasswordExpiredError) {
+            return res.status(401).json({
+              success: false,
+              code: itemErr.code,
+              passwordExpired: true,
+              error: itemErr.message,
+            });
+          }
           results.push({
-            id,
-            identifiant,
-            numeroSerie,
+            id: item?.defib?.id || item?.id || '',
+            identifiant: item?.defib?.identifiant || item?.identifiant || 'Sans ID',
+            numeroSerie: item?.defib?.numeroSerie || item?.numeroSerie || 'N/A',
+            nom: item?.defib?.nomSite || item?.nom || '',
+            operation: 'API_ERROR',
             success: false,
-            error: itemErr.message || "Network Error"
+            message: itemErr?.message || 'Erreur lors de la synchronisation',
+            error: itemErr?.message || 'Erreur lors de la synchronisation',
           });
         }
       }
 
-      res.json({ success: true, results });
+      const successCount = results.filter(r => r.success).length;
+      const failureCount = results.length - successCount;
+
+      return res.json({
+        success: true,
+        total: results.length,
+        successCount,
+        failureCount,
+        results,
+      });
     } catch (err: any) {
-      console.error("[GÉODAE] Proxy Upload Error:", err);
-      res.status(500).json({ error: err.message || "Internal Server Error in GÉODAE upload" });
+      console.error("[GÉODAE] Erreur serveur synchronisation:", err);
+      if (err instanceof GeoDaePasswordExpiredError) {
+        return res.status(401).json({
+          success: false,
+          code: err.code,
+          passwordExpired: true,
+          error: err.message,
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        error: err.message || "Erreur interne du serveur lors de la synchronisation Géo'DAE.",
+      });
     }
-  });
+  };
+
+  app.post("/api/atlasante/sync", handleGeoDaeSyncRequest);
+  app.post("/api/atlasante/upload", handleGeoDaeSyncRequest);
 
   app.options("/api/crm/embed-lead", (_req, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");

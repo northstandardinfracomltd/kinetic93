@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Defibrillateur, Client, Variable, CompanyInfo, OtherEquipment, getTenantSpreadsheetUrl } from '../types';
 import { t } from '../utils/translate';
@@ -1384,23 +1384,49 @@ export default function DefibTab({
   // GÉODAE Atlasanté State
   const [atlasanteActive, setAtlasanteActive] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('defib_atlasante_active');
+      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      const saved =
+        localStorage.getItem(`defib_${activeTenant}_atlasante_active`) ??
+        localStorage.getItem('defib_atlasante_active');
       return saved === 'true';
     } catch {
       return false;
     }
   });
-  const [atlasanteUrlAuth, setAtlasanteUrlAuth] = useState('');
-  const [atlasanteDeclarantId, setAtlasanteDeclarantId] = useState('');
+  const [atlasanteUrlAuth, setAtlasanteUrlAuth] = useState<string>(() => {
+    try {
+      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      const val =
+        localStorage.getItem(`defib_${activeTenant}_atlasante_url_auth`) ??
+        localStorage.getItem('defib_atlasante_url_auth') ??
+        '';
+      return val === 'https://catalogue.atlasante.fr/api/login' ? '' : val;
+    } catch {
+      return '';
+    }
+  });
+  const [atlasanteDeclarantId, setAtlasanteDeclarantId] = useState<string>(() => {
+    try {
+      const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+      return (
+        localStorage.getItem(`defib_${activeTenant}_atlasante_declarant_id`) ??
+        localStorage.getItem('defib_atlasante_declarant_id') ??
+        ''
+      );
+    } catch {
+      return '';
+    }
+  });
   const [isAtlasantePaneOpen, setIsAtlasantePaneOpen] = useState(false);
   const [isAtlasanteUploading, setIsAtlasanteUploading] = useState(false);
   const [atlasanteUploadResults, setAtlasanteUploadResults] = useState<any[]>([]);
 
-  // GÉODAE Dummy Sync Side Pane State
+  // GÉODAE Sync Popup State
   const [isGeoDaeSyncPaneOpen, setIsGeoDaeSyncPaneOpen] = useState(false);
   const [isGeoDaeSyncing, setIsGeoDaeSyncing] = useState(false);
   const [isGeoDaeSyncSuccess, setIsGeoDaeSyncSuccess] = useState(false);
   const [geoDaeSyncCount, setGeoDaeSyncCount] = useState(0);
+  const [geoDaeSyncGlobalError, setGeoDaeSyncGlobalError] = useState<string | null>(null);
   const geoDaeTimerRef = useRef<any>(null);
 
   useEffect(() => {
@@ -1411,20 +1437,178 @@ export default function DefibTab({
     };
   }, []);
 
-  const handleStartGeoDaeSync = () => {
+  const loadAtlasanteCredentialsFromFirestore = useCallback(() => {
+    const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+    fetchCollectionFromFirestore<any>('api_connectors', activeTenant)
+      .then(data => {
+        if (data) {
+          if (data.atlasanteActive !== undefined) {
+            const isAct = Boolean(data.atlasanteActive);
+            setAtlasanteActive(isAct);
+            try {
+              localStorage.setItem(`defib_${activeTenant}_atlasante_active`, String(isAct));
+              localStorage.setItem('defib_atlasante_active', String(isAct));
+            } catch (_) {}
+          }
+          if (data.atlasanteUrlAuth !== undefined) {
+            const cleanPwd =
+              data.atlasanteUrlAuth === 'https://catalogue.atlasante.fr/api/login'
+                ? ''
+                : String(data.atlasanteUrlAuth || '');
+            setAtlasanteUrlAuth(cleanPwd);
+            try {
+              localStorage.setItem(`defib_${activeTenant}_atlasante_url_auth`, cleanPwd);
+              localStorage.setItem('defib_atlasante_url_auth', cleanPwd);
+            } catch (_) {}
+          }
+          if (data.atlasanteDeclarantId !== undefined) {
+            const cleanLogin = String(data.atlasanteDeclarantId || '');
+            setAtlasanteDeclarantId(cleanLogin);
+            try {
+              localStorage.setItem(`defib_${activeTenant}_atlasante_declarant_id`, cleanLogin);
+              localStorage.setItem('defib_atlasante_declarant_id', cleanLogin);
+            } catch (_) {}
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching api_connectors inside DefibTab:', err);
+      });
+  }, []);
+
+  const handleStartGeoDaeSync = async () => {
+    if (selectedIds.length === 0 || selectedIds.length > 50) return;
+
     const count = selectedIds.length;
     setGeoDaeSyncCount(count);
     setIsGeoDaeSyncing(true);
     setIsGeoDaeSyncSuccess(false);
+    setGeoDaeSyncGlobalError(null);
+    setAtlasanteUploadResults([]);
     setIsGeoDaeSyncPaneOpen(true);
 
-    if (geoDaeTimerRef.current) {
-      clearTimeout(geoDaeTimerRef.current);
-    }
-    geoDaeTimerRef.current = setTimeout(() => {
+    const selectedDefibs = mergedDefibrillateurs.filter(d => selectedIdsSet.has(d.id));
+    const variableMap = new Map<string, Variable>(variables.map((v: Variable) => [v.id, v]));
+
+    // Récupération du cache local des gid Géo'DAE déjà connus
+    let localGidMap: Record<string, number> = {};
+    try {
+      const rawMap = localStorage.getItem(`defib_${activeTenantId}_geodae_gids`);
+      if (rawMap) localGidMap = JSON.parse(rawMap) || {};
+    } catch (_) {}
+
+    const items = selectedDefibs.map(df => {
+      const cl = getLinkedClientForDefib(df);
+      const modDef = variableMap.get(df.modeleId);
+      const cachedGid = localGidMap[df.id] || localGidMap[df.identifiant];
+      return {
+        id: df.id,
+        identifiant: df.identifiant,
+        numeroSerie: df.numeroSerie || 'N/A',
+        gid: cachedGid,
+        defib: df,
+        client: cl || {},
+        modeleVar: modDef || {},
+        companyInfo: companyInfo || {},
+      };
+    });
+
+    try {
+      const response = await fetch('/api/atlasante/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          login: atlasanteDeclarantId.trim(),
+          password: atlasanteUrlAuth.trim(),
+          atlasanteDeclarantId: atlasanteDeclarantId.trim(),
+          atlasanteUrlAuth: atlasanteUrlAuth.trim(),
+          items,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && Array.isArray(data.results)) {
+        const results = data.results;
+        setAtlasanteUploadResults(results);
+
+        // Sauvegarder silencieusement les gid retournés dans localStorage + numeroAtlasante si vide
+        const updatedGidMap = { ...localGidMap };
+        let hasGidUpdates = false;
+        const defibsToPersistGid: Defibrillateur[] = [];
+
+        results.forEach((resItem: any) => {
+          if (resItem.success && resItem.gid) {
+            const numericGid = Number(resItem.gid);
+            if (!isNaN(numericGid) && numericGid > 0) {
+              if (resItem.id) updatedGidMap[resItem.id] = numericGid;
+              if (resItem.identifiant) updatedGidMap[resItem.identifiant] = numericGid;
+              hasGidUpdates = true;
+
+              const matchedDf = selectedDefibs.find(
+                d => d.id === resItem.id || d.identifiant === resItem.identifiant
+              );
+              if (matchedDf && String(matchedDf.numeroAtlasante || '').trim() !== String(numericGid)) {
+                defibsToPersistGid.push({
+                  ...matchedDf,
+                  numeroAtlasante: String(numericGid),
+                });
+              }
+            }
+          }
+        });
+
+        if (hasGidUpdates) {
+          try {
+            localStorage.setItem(`defib_${activeTenantId}_geodae_gids`, JSON.stringify(updatedGidMap));
+          } catch (_) {}
+        }
+
+        if (defibsToPersistGid.length > 0 && onUpdateDefib) {
+          for (const updatedDf of defibsToPersistGid) {
+            try {
+              await onUpdateDefib(updatedDf);
+            } catch (_) {}
+          }
+        }
+      } else {
+        const errMsg =
+          data?.error ||
+          `Échec de la synchronisation avec Atlasanté Géo'DAE (HTTP ${response.status}).`;
+        setGeoDaeSyncGlobalError(errMsg);
+        setAtlasanteUploadResults(
+          items.map(it => ({
+            id: it.id,
+            identifiant: it.identifiant,
+            numeroSerie: it.numeroSerie,
+            nom: it.defib?.nomSite || it.identifiant,
+            operation: 'API_ERROR',
+            success: false,
+            message: errMsg,
+            details: data?.details || '',
+          }))
+        );
+      }
+    } catch (err: any) {
+      const errMsg = err?.message || 'Erreur réseau lors de la connexion au serveur Géo\'DAE.';
+      setGeoDaeSyncGlobalError(errMsg);
+      setAtlasanteUploadResults(
+        items.map(it => ({
+          id: it.id,
+          identifiant: it.identifiant,
+          numeroSerie: it.numeroSerie,
+          nom: it.defib?.nomSite || it.identifiant,
+          operation: 'API_ERROR',
+          success: false,
+          message: errMsg,
+        }))
+      );
+    } finally {
       setIsGeoDaeSyncing(false);
       setIsGeoDaeSyncSuccess(true);
-    }, 10000);
+    }
   };
 
   const handleCancelOrCloseGeoDaeSync = () => {
@@ -1434,35 +1618,36 @@ export default function DefibTab({
     }
     setIsGeoDaeSyncing(false);
     setIsGeoDaeSyncSuccess(false);
+    setGeoDaeSyncGlobalError(null);
     setIsGeoDaeSyncPaneOpen(false);
   };
 
   useEffect(() => {
-    const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
-    fetchCollectionFromFirestore<any>('api_connectors', activeTenant).then(data => {
-      if (data) {
-        if (data.atlasanteActive !== undefined) {
-          setAtlasanteActive(data.atlasanteActive);
-          try {
-            localStorage.setItem('defib_atlasante_active', String(data.atlasanteActive));
-          } catch (e) {
-            console.error(e);
-          }
-        }
-        if (data.atlasanteUrlAuth !== undefined) setAtlasanteUrlAuth(data.atlasanteUrlAuth);
-        if (data.atlasanteDeclarantId !== undefined) setAtlasanteDeclarantId(data.atlasanteDeclarantId);
-      }
-    }).catch(err => {
-      console.error("Error fetching api_connectors inside DefibTab:", err);
-    });
+    loadAtlasanteCredentialsFromFirestore();
 
     const handleAtlasanteStatusChange = () => {
       try {
-        const saved = localStorage.getItem('defib_atlasante_active');
+        const activeTenant = localStorage.getItem('defib_tenant_id') || 'demo';
+        const saved =
+          localStorage.getItem(`defib_${activeTenant}_atlasante_active`) ??
+          localStorage.getItem('defib_atlasante_active');
         setAtlasanteActive(saved === 'true');
+        const savedLogin =
+          localStorage.getItem(`defib_${activeTenant}_atlasante_declarant_id`) ??
+          localStorage.getItem('defib_atlasante_declarant_id');
+        if (savedLogin !== null) setAtlasanteDeclarantId(savedLogin);
+        const savedPwd =
+          localStorage.getItem(`defib_${activeTenant}_atlasante_url_auth`) ??
+          localStorage.getItem('defib_atlasante_url_auth');
+        if (savedPwd !== null) {
+          setAtlasanteUrlAuth(
+            savedPwd === 'https://catalogue.atlasante.fr/api/login' ? '' : savedPwd
+          );
+        }
       } catch (e) {
         console.error(e);
       }
+      loadAtlasanteCredentialsFromFirestore();
     };
     window.addEventListener('atlasante-status-changed', handleAtlasanteStatusChange);
     window.addEventListener('storage', handleAtlasanteStatusChange);
@@ -1470,7 +1655,7 @@ export default function DefibTab({
       window.removeEventListener('atlasante-status-changed', handleAtlasanteStatusChange);
       window.removeEventListener('storage', handleAtlasanteStatusChange);
     };
-  }, []);
+  }, [loadAtlasanteCredentialsFromFirestore]);
 
   // Modals state
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -3347,44 +3532,51 @@ export default function DefibTab({
   // Validation state for Atlasanté GeoDAE bulk synchronization
   const isSyncAtlasanteDisabled = useMemo(() => {
     if (!atlasanteActive) return true;
-    if (selectedIds.length === 0) return true;
+    const hasLogin = Boolean(atlasanteDeclarantId && atlasanteDeclarantId.trim());
+    const hasPassword = Boolean(
+      atlasanteUrlAuth &&
+        atlasanteUrlAuth.trim() &&
+        atlasanteUrlAuth.trim() !== 'https://catalogue.atlasante.fr/api/login'
+    );
+    if (!hasLogin || !hasPassword) return true;
+    if (selectedIds.length === 0 || selectedIds.length > 50) return true;
+    if (isGeoDaeSyncing) return true;
 
     const selectedDefibs = mergedDefibrillateurs.filter(d => selectedIdsSet.has(d.id));
-    if (selectedDefibs.length === 0) return true;
+    if (selectedDefibs.length === 0 || selectedDefibs.length > 50) return true;
 
-    return selectedDefibs.some(df => {
-      const cl = getLinkedClientForDefib(df);
-      const lat = (df.latitude || '').trim();
-      const lng = (df.longitude || '').trim();
-      const tel = (df.telephoneSite || cl?.telephoneSite || cl?.phone || '').trim();
-      const email = (df.emailSite || cl?.emailSite || cl?.email || '').trim();
-      const modele = (df.modeleId || '').trim();
-      const serie = (df.numeroSerie || '').trim();
-
-      return !lat || !lng || !tel || !email || !modele || modele === 'Tous' || !serie;
-    });
-  }, [atlasanteActive, selectedIds, selectedIdsSet, mergedDefibrillateurs, clientMap]);
+    return false;
+  }, [
+    atlasanteActive,
+    atlasanteDeclarantId,
+    atlasanteUrlAuth,
+    selectedIds,
+    selectedIdsSet,
+    mergedDefibrillateurs,
+    isGeoDaeSyncing,
+  ]);
 
   const syncAtlasanteDisabledReason = useMemo(() => {
     if (!atlasanteActive) {
       return "Action impossible : 'Atlasanté GEODAE' est désactivé dans les paramètres du tenant.";
     }
-    const selectedDefibs = mergedDefibrillateurs.filter(d => selectedIdsSet.has(d.id));
-    const hasMissingFields = selectedDefibs.some(df => {
-      const cl = getLinkedClientForDefib(df);
-      const lat = (df.latitude || '').trim();
-      const lng = (df.longitude || '').trim();
-      const tel = (df.telephoneSite || cl?.telephoneSite || cl?.phone || '').trim();
-      const email = (df.emailSite || cl?.emailSite || cl?.email || '').trim();
-      const modele = (df.modeleId || '').trim();
-      const serie = (df.numeroSerie || '').trim();
-      return !lat || !lng || !tel || !email || !modele || modele === 'Tous' || !serie;
-    });
-    if (hasMissingFields) {
-      return "Action impossible : au moins 1 défibrillateur sélectionné a un ou plusieurs champs manquants (Latitude, Longitude, Téléphone, Email, Modèle, Numéro Série).";
+    const hasLogin = Boolean(atlasanteDeclarantId && atlasanteDeclarantId.trim());
+    const hasPassword = Boolean(
+      atlasanteUrlAuth &&
+        atlasanteUrlAuth.trim() &&
+        atlasanteUrlAuth.trim() !== 'https://catalogue.atlasante.fr/api/login'
+    );
+    if (!hasLogin || !hasPassword) {
+      return "Action impossible : veuillez renseigner l'identifiant de login et le mot de passe dans Paramètres > Connecteurs > Atlasanté GEODAE.";
     }
-    return "";
-  }, [atlasanteActive, selectedIds, selectedIdsSet, mergedDefibrillateurs, clientMap]);
+    if (selectedIds.length === 0) {
+      return 'Veuillez sélectionner au moins 1 défibrillateur (maximum 50).';
+    }
+    if (selectedIds.length > 50) {
+      return `Action impossible : la synchronisation Atlasanté Géo'DAE est limitée à 50 lignes maximum (${selectedIds.length} sélectionnées).`;
+    }
+    return '';
+  }, [atlasanteActive, atlasanteDeclarantId, atlasanteUrlAuth, selectedIds]);
 
   // Autopopulate site / contract fields on Client lookup change
   const handleClientChange = (selectedClientId: string) => {
@@ -11569,111 +11761,218 @@ export default function DefibTab({
       )}
 
       {/* ============================================== */}
-      {/* 📡 GÉODAE ATLASANTÉ SYNC SIDE PANE (DUMMY)   📡 */}
+      {/* 📡 POPUP RÉSULTAT SYNCHRONISATION ATLASANTÉ GÉO'DAE 📡 */}
       {/* ============================================== */}
-      {isGeoDaeSyncPaneOpen && (
-        <div 
-          className="fixed inset-y-0 right-0 w-80 sm:w-96 md:w-[420px] bg-white shadow-2xl z-[90] flex flex-col border-l border-slate-200" 
-          id="geodae-sync-side-pane"
-          style={{ height: '100%' }}
+      {isGeoDaeSyncPaneOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          id="geodae-sync-popup-backdrop"
+          onClick={() => {
+            if (!isGeoDaeSyncing) handleCancelOrCloseGeoDaeSync();
+          }}
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 p-4 font-sans animate-fadeIn"
         >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 shrink-0 border-b border-slate-100">
-            <h3 
-              className="text-lg font-bold font-sans text-black"
-              style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-            >
-              Atlasanté GeoDAE
-            </h3>
-            <button 
-              type="button"
-              onClick={handleCancelOrCloseGeoDaeSync}
-              className="text-slate-400 hover:text-black transition-colors p-1.5 rounded-lg cursor-pointer"
-              title={isGeoDaeSyncSuccess ? "Fermer" : "Annuler"}
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Center Body */}
-          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
-            {isGeoDaeSyncing && !isGeoDaeSyncSuccess && (
-              <div className="flex flex-col items-center justify-center animate-fadeIn">
-                {/* Circle Preloader */}
-                <div className="relative w-16 h-16 flex items-center justify-center">
-                  <div 
-                    className="w-16 h-16 rounded-full border-4 border-slate-200 border-t-[#2e54ff] animate-spin"
-                    style={{ borderTopColor: '#2e54ff' }}
-                  />
-                </div>
-                <div 
-                  className="mt-6 text-black font-sans text-[18px] font-semibold tracking-normal"
-                  style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                >
-                  Ajouter et actualisation dans GeoDAE...
-                </div>
-              </div>
-            )}
-
-            {isGeoDaeSyncSuccess && (
-              <div className="flex flex-col items-center justify-center animate-fadeIn">
-                <div 
-                  className="w-16 h-16 rounded-full flex items-center justify-center mb-6 shadow-sm"
-                  style={{ backgroundColor: '#eef2ff', color: '#2e54ff' }}
-                >
-                  <Check className="w-9 h-9 stroke-[3]" />
-                </div>
-                <div 
-                  className="text-black font-sans text-[18px] font-semibold max-w-xs leading-relaxed"
-                  style={{ fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
-                >
-                  Les {geoDaeSyncCount} défibrillateur(s) ont été ajoutés ou actualisés dans GeoDAE.
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Floating Bottom Action */}
-          <div 
-            className="p-6 border-t border-slate-100 bg-white shrink-0"
+          <div
+            id="geodae-sync-popup-card"
+            onClick={(e) => e.stopPropagation()}
+            className="p-6 w-full flex flex-col gap-5 text-left max-h-[90vh] overflow-hidden"
             style={{
-              boxShadow: 'none'
+              background: '#f5f7fa',
+              backgroundColor: '#f5f7fa',
+              borderRadius: '13px',
+              boxShadow: 'none',
+              textAlign: 'left',
+              maxWidth: '680px',
             }}
           >
-            <button
-              type="button"
-              onClick={handleCancelOrCloseGeoDaeSync}
-              style={{
-                backgroundColor: '#0f172a',
-                color: '#ffffff',
-                boxShadow: 'none',
-                borderRadius: '13px',
-                fontSize: '18px',
-                padding: '10px 20px',
-                fontWeight: '600',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                border: 'none',
-                fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
-                width: '100%'
-              }}
-              className="hover:opacity-95 active:scale-95 transition-all cursor-pointer"
-              id={isGeoDaeSyncSuccess ? "btn-close-geodae-sync" : "btn-cancel-geodae-sync"}
-            >
-              {isGeoDaeSyncSuccess ? 'Fermer' : 'Annuler la synchronisation'}
-            </button>
-          </div>
-        </div>
-      )}
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <h3
+                className="m-0 text-black font-bold"
+                style={{
+                  fontSize: '20px',
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                }}
+              >
+                Synchronisation Atlasanté — Géo&apos;DAE
+              </h3>
+            </div>
 
-      {/* GÉODAE Sync Backdrop */}
-      {isGeoDaeSyncPaneOpen && (
-        <div 
-          onClick={handleCancelOrCloseGeoDaeSync}
-          className="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-[85]"
-        />
+            {/* Body */}
+            {isGeoDaeSyncing ? (
+              <div className="py-10 flex flex-col items-center justify-center text-center gap-4">
+                <div
+                  className="w-14 h-14 rounded-full border-4 border-slate-200 border-t-[#2e54ff] animate-spin"
+                  style={{ borderTopColor: '#2e54ff' }}
+                />
+                <div
+                  className="text-black font-semibold"
+                  style={{
+                    fontSize: '18px',
+                    fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  }}
+                >
+                  Synchronisation de {geoDaeSyncCount} défibrillateur(s) avec Géo&apos;DAE en cours...
+                </div>
+              </div>
+            ) : (
+              <>
+                {(() => {
+                  const successList = atlasanteUploadResults.filter(r => r.success);
+                  const failureList = atlasanteUploadResults.filter(r => !r.success);
+                  return (
+                    <div className="flex flex-col gap-4 overflow-hidden">
+                      {/* Compteurs Succès / Échecs */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div
+                          className="p-3.5 rounded-[13px] bg-white flex items-center justify-between"
+                          style={{ border: '1px solid #dce1ea' }}
+                        >
+                          <span
+                            className="font-semibold text-black"
+                            style={{ fontSize: '16px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                          >
+                            Succès
+                          </span>
+                          <span
+                            className="px-3 py-1 rounded-full font-bold text-white"
+                            style={{ backgroundColor: '#16a34a', fontSize: '16px' }}
+                          >
+                            {successList.length}
+                          </span>
+                        </div>
+                        <div
+                          className="p-3.5 rounded-[13px] bg-white flex items-center justify-between"
+                          style={{ border: '1px solid #dce1ea' }}
+                        >
+                          <span
+                            className="font-semibold text-black"
+                            style={{ fontSize: '16px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                          >
+                            Échecs
+                          </span>
+                          <span
+                            className="px-3 py-1 rounded-full font-bold text-white"
+                            style={{
+                              backgroundColor: failureList.length > 0 ? '#dc2626' : '#64748b',
+                              fontSize: '16px',
+                            }}
+                          >
+                            {failureList.length}
+                          </span>
+                        </div>
+                      </div>
+
+                      {geoDaeSyncGlobalError && (
+                        <div
+                          className="p-3.5 rounded-[13px] text-white font-medium"
+                          style={{ backgroundColor: '#dc2626', fontSize: '15px' }}
+                        >
+                          {geoDaeSyncGlobalError}
+                        </div>
+                      )}
+
+                      {/* Liste détaillée des succès et échecs */}
+                      <div
+                        className="overflow-y-auto pr-1 flex flex-col gap-2.5"
+                        style={{ maxHeight: '52vh' }}
+                      >
+                        {atlasanteUploadResults.map((res, idx) => (
+                          <div
+                            key={res.id || idx}
+                            className="p-3.5 rounded-[13px] bg-white flex flex-col gap-1.5"
+                            style={{ border: '1px solid #dce1ea' }}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex flex-col">
+                                <span
+                                  className="font-bold text-black"
+                                  style={{ fontSize: '16px', fontFamily: '"DefibeoMain", "Civilprom", sans-serif' }}
+                                >
+                                  {res.identifiant || 'Sans ID'} — {res.nom || res.numeroSerie || 'N/A'}
+                                </span>
+                                <span className="text-xs text-slate-500">
+                                  N° Série : {res.numeroSerie || 'N/A'}
+                                  {res.gid ? ` • GID Géo'DAE : ${res.gid}` : ''}
+                                </span>
+                              </div>
+                              <span
+                                className="px-3 py-1 rounded-full font-semibold text-white shrink-0"
+                                style={{
+                                  backgroundColor: res.success ? '#16a34a' : '#dc2626',
+                                  fontSize: '13px',
+                                }}
+                              >
+                                {res.success
+                                  ? res.operation === 'UPDATE'
+                                    ? 'Mis à jour (PATCH)'
+                                    : 'Créé (POST)'
+                                  : 'Échec'}
+                              </span>
+                            </div>
+
+                            {res.message && (
+                              <div
+                                style={{
+                                  fontSize: '14px',
+                                  color: res.success ? '#15803d' : '#dc2626',
+                                }}
+                                className="font-medium"
+                              >
+                                {res.message}
+                              </div>
+                            )}
+
+                            {!res.success && Array.isArray(res.errors) && res.errors.length > 0 && (
+                              <ul className="list-disc pl-5 m-0 space-y-0.5 text-[13px] text-red-600">
+                                {res.errors.map((errItem: string, eIdx: number) => (
+                                  <li key={eIdx}>{errItem}</li>
+                                ))}
+                              </ul>
+                            )}
+
+                            {!res.success && !Array.isArray(res.errors) && res.details && (
+                              <div className="text-xs text-red-600 font-mono break-all">
+                                {res.details}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
+            )}
+
+            {/* Footer avec bouton Fermer */}
+            <div className="flex items-center justify-end pt-1">
+              <button
+                type="button"
+                id="btn-close-geodae-sync"
+                disabled={isGeoDaeSyncing}
+                onClick={handleCancelOrCloseGeoDaeSync}
+                className="w-full sm:w-auto text-center cursor-pointer outline-none hover:opacity-90 active:scale-[0.99] transition-all"
+                style={{
+                  padding: '11px 26px',
+                  color: '#ffffff',
+                  fontSize: '18px',
+                  fontWeight: 100,
+                  fontFamily: '"DefibeoMain", "Civilprom", sans-serif',
+                  boxShadow: 'none',
+                  background: '#0f172a',
+                  backgroundColor: '#0f172a',
+                  border: 'none',
+                  borderRadius: '13px',
+                  opacity: isGeoDaeSyncing ? 0.5 : 1,
+                  cursor: isGeoDaeSyncing ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ============================================== */}
