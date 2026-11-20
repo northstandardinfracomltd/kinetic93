@@ -201,6 +201,7 @@ export async function sendScriptEmail(payload: {
   fromName?: string;
   displayName?: string;
   isSystemAuthEmail?: boolean;
+  skipTenantFooter?: boolean;
   pdfBase64?: string;
   pdfFileName?: string;
   pdfUrl?: string;
@@ -221,10 +222,46 @@ export async function sendScriptEmail(payload: {
       resolvedSenderName = getActiveTenantCommercialName(resolvedSenderName);
     }
 
+    let finalBody = payload.body || '';
+    let finalHtmlBody = payload.htmlBody;
+
+    // Automatically append tenant email footer (Image, 22px Title, 18px Paragraph from Paramètres > Réglages)
+    // to all transactional emails sent by the tenant unless explicitly skipped or system auth email.
+    if (!payload.isSystemAuthEmail && !payload.skipTenantFooter) {
+      const { htmlFooter, textFooter } = await resolveActiveTenantEmailFooterAsync();
+      if (textFooter && !finalBody.includes('<!--defib-email-footer-->')) {
+        // Avoid duplicating textFooter if already appended
+        const cleanTextFooter = textFooter.trim();
+        if (cleanTextFooter && !finalBody.endsWith(cleanTextFooter)) {
+          finalBody = `${finalBody}${textFooter}`;
+        }
+      }
+      if (htmlFooter) {
+        if (finalHtmlBody) {
+          if (!finalHtmlBody.includes('data-defib-email-footer="true"')) {
+            finalHtmlBody = `${finalHtmlBody}${htmlFooter}`;
+          }
+        } else {
+          finalHtmlBody = `<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
+  <div>${escapeEmailHtml(payload.body || '').replace(/\r?\n/g, '<br/>')}</div>
+  ${htmlFooter}
+</div>`;
+        }
+      }
+    }
+
     console.log(`[Email Service] Dispatching email "${payload.subject}" to: ${payload.to} (sender: "${resolvedSenderName}")`);
+
+    const activeTenantId =
+      typeof window !== 'undefined' && window.localStorage
+        ? (localStorage.getItem('defib_tenant_id') || 'demo').trim()
+        : 'demo';
 
     const finalPayload = {
       ...payload,
+      tenantId: activeTenantId,
+      body: finalBody,
+      ...(finalHtmlBody ? { htmlBody: finalHtmlBody } : {}),
       name: resolvedSenderName,
       senderName: resolvedSenderName,
       fromName: resolvedSenderName,
@@ -235,6 +272,7 @@ export async function sendScriptEmail(payload: {
       options: {
         name: resolvedSenderName,
         replyTo: payload.replyTo || 'defibeo@gmail.com',
+        ...(finalHtmlBody ? { htmlBody: finalHtmlBody } : {}),
       },
       scriptUrl
     };
@@ -415,7 +453,66 @@ function escapeEmailHtml(val: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function getActiveTenantEmailFooter(): { htmlFooter: string; textFooter: string } {
+function extractFooterFieldsFromObject(parsed: any): { imgUrl: string; title: string; paragraph: string } {
+  if (!parsed || typeof parsed !== 'object') {
+    return { imgUrl: '', title: '', paragraph: '' };
+  }
+  const imgUrl = String(
+    parsed.emailFooterImgUrl ??
+      parsed['URL Source IMG Email'] ??
+      parsed['URL source de l’image du pied d’email.'] ??
+      parsed['URL source de l’image du pied d’email'] ??
+      ''
+  ).trim();
+  const title = String(
+    parsed.emailFooterTitle ??
+      parsed['Titre Email'] ??
+      parsed['Titre du pied d’email.'] ??
+      parsed['Titre du pied d’email'] ??
+      ''
+  )
+    .trim()
+    .slice(0, 30);
+  const paragraph = String(
+    parsed.emailFooterParagraph ??
+      parsed['Paragraphe Email'] ??
+      parsed['Paragraphe du pied d’email.'] ??
+      parsed['Paragraphe du pied d’email'] ??
+      ''
+  ).trim();
+  return { imgUrl, title, paragraph };
+}
+
+function buildEmailFooterOutput(imgUrl: string, title: string, paragraph: string): { htmlFooter: string; textFooter: string } {
+  if (!imgUrl && !title && !paragraph) {
+    return { htmlFooter: '', textFooter: '' };
+  }
+
+  const htmlParts: string[] = [];
+  if (imgUrl) {
+    htmlParts.push(
+      `<div style="margin-bottom: 10px;"><img src="${escapeEmailHtml(imgUrl)}" alt="" style="width: 100%; max-width: 200px; height: auto; display: block;" /></div>`
+    );
+  }
+  if (title) {
+    htmlParts.push(
+      `<div style="font-size: 22px; font-weight: bold; color: #000000; line-height: 1.3; margin-bottom: 6px;">${escapeEmailHtml(title)}</div>`
+    );
+  }
+  if (paragraph) {
+    htmlParts.push(
+      `<div style="font-size: 18px; color: #000000; line-height: 1.5; white-space: pre-wrap;">${escapeEmailHtml(paragraph).replace(/\r?\n/g, '<br/>')}</div>`
+    );
+  }
+
+  const htmlFooter = `<div data-defib-email-footer="true" style="margin-top: 24px; padding-top: 16px;">${htmlParts.join('')}</div>`;
+  const textParts = [title, paragraph].filter(Boolean);
+  const textFooter = textParts.length > 0 ? `\n\n${textParts.join('\n')}` : '';
+
+  return { htmlFooter, textFooter };
+}
+
+export function getActiveTenantEmailFooter(): { htmlFooter: string; textFooter: string } {
   try {
     if (typeof window === 'undefined' || !window.localStorage) {
       return { htmlFooter: '', textFooter: '' };
@@ -428,60 +525,79 @@ function getActiveTenantEmailFooter(): { htmlFooter: string; textFooter: string 
       `defib_${tenantId.toLowerCase()}_company_info`,
       `fs_cache_${tenantId}_companyInfo`,
       `fs_cache_${tenantId}_company_info`,
-      ...(tenantId.toLowerCase() === 'demo' ? ['defib_company_info', 'companyInfo'] : []),
+      `fs_cache_${tenantId.toUpperCase()}_companyInfo`,
+      `fs_cache_${tenantId.toUpperCase()}_company_info`,
+      `fs_cache_${tenantId.toLowerCase()}_companyInfo`,
+      `fs_cache_${tenantId.toLowerCase()}_company_info`,
+      'defib_company_info',
+      'companyInfo',
     ];
-    let imgUrl = '';
-    let title = '';
-    let paragraph = '';
 
     for (const key of candidateKeys) {
       const raw = localStorage.getItem(key);
       if (!raw) continue;
       try {
         const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === 'object') {
-          const candidateImg = String(parsed.emailFooterImgUrl ?? '').trim();
-          const candidateTitle = String(parsed.emailFooterTitle ?? '').trim().slice(0, 30);
-          const candidateParagraph = String(parsed.emailFooterParagraph ?? '').trim();
-          if (candidateImg || candidateTitle || candidateParagraph) {
-            imgUrl = candidateImg;
-            title = candidateTitle;
-            paragraph = candidateParagraph;
-            break;
-          }
+        const { imgUrl, title, paragraph } = extractFooterFieldsFromObject(parsed);
+        if (imgUrl || title || paragraph) {
+          return buildEmailFooterOutput(imgUrl, title, paragraph);
         }
       } catch (_) {}
     }
 
-    if (!imgUrl && !title && !paragraph) {
-      return { htmlFooter: '', textFooter: '' };
-    }
-
-    const htmlParts: string[] = [];
-    if (imgUrl) {
-      htmlParts.push(
-        `<div style="margin-bottom: 10px;"><img src="${escapeEmailHtml(imgUrl)}" alt="" style="width: 100%; max-width: 200px; height: auto; display: block;" /></div>`
-      );
-    }
-    if (title) {
-      htmlParts.push(
-        `<div style="font-size: 22px; font-weight: bold; color: #000000; line-height: 1.3; margin-bottom: 6px;">${escapeEmailHtml(title)}</div>`
-      );
-    }
-    if (paragraph) {
-      htmlParts.push(
-        `<div style="font-size: 18px; color: #000000; line-height: 1.5; white-space: pre-wrap;">${escapeEmailHtml(paragraph).replace(/\r?\n/g, '<br/>')}</div>`
-      );
-    }
-
-    const htmlFooter = `<div style="margin-top: 24px; padding-top: 16px;">${htmlParts.join('')}</div>`;
-    const textParts = [title, paragraph].filter(Boolean);
-    const textFooter = textParts.length > 0 ? `\n\n${textParts.join('\n')}` : '';
-
-    return { htmlFooter, textFooter };
+    return { htmlFooter: '', textFooter: '' };
   } catch (_) {
     return { htmlFooter: '', textFooter: '' };
   }
+}
+
+async function resolveActiveTenantEmailFooterAsync(): Promise<{ htmlFooter: string; textFooter: string }> {
+  const syncResult = getActiveTenantEmailFooter();
+  if (syncResult.htmlFooter) {
+    return syncResult;
+  }
+
+  // Fallback: query the backend /api/sheets/collection or /api/sheets/sync for tabType=reglages
+  // so that even if the user hasn't opened SettingsModal in this session (e.g., Technician Webapp or fresh reload),
+  // the tenant's Spreadsheet Réglages email footer fields are fetched and cached.
+  try {
+    if (typeof window === 'undefined') return syncResult;
+    const tenantId = (localStorage.getItem('defib_tenant_id') || 'demo').trim();
+    const sheetReglagesUrl =
+      localStorage.getItem(`defib_${tenantId}_spreadsheet_reglages`) ||
+      localStorage.getItem(`defib_${tenantId.toUpperCase()}_spreadsheet_reglages`) ||
+      localStorage.getItem(`defib_${tenantId.toLowerCase()}_spreadsheet_reglages`) ||
+      '';
+
+    const endpoint = sheetReglagesUrl.trim()
+      ? `/api/sheets/sync?tenantId=${encodeURIComponent(tenantId)}&tabType=reglages&spreadsheetUrl=${encodeURIComponent(sheetReglagesUrl.trim())}`
+      : `/api/sheets/collection?tenantId=${encodeURIComponent(tenantId)}&type=reglages`;
+
+    const resp = await fetch(endpoint, { signal: AbortSignal.timeout(3000) });
+    if (resp.ok) {
+      const data = await resp.json();
+      const firstRow = Array.isArray(data?.items) ? data.items[0] : (Array.isArray(data) ? data[0] : null);
+      if (firstRow && typeof firstRow === 'object') {
+        const { imgUrl, title, paragraph } = extractFooterFieldsFromObject(firstRow);
+        if (imgUrl || title || paragraph) {
+          try {
+            const existingRaw = localStorage.getItem(`defib_${tenantId}_company_info`);
+            const existingObj = existingRaw ? JSON.parse(existingRaw) : {};
+            const mergedObj = {
+              ...existingObj,
+              emailFooterImgUrl: imgUrl,
+              emailFooterTitle: title,
+              emailFooterParagraph: paragraph,
+            };
+            localStorage.setItem(`defib_${tenantId}_company_info`, JSON.stringify(mergedObj));
+          } catch (_) {}
+          return buildEmailFooterOutput(imgUrl, title, paragraph);
+        }
+      }
+    }
+  } catch (_) {}
+
+  return syncResult;
 }
 
 /**
@@ -825,6 +941,8 @@ export async function triggerEmailSoumettreAuClient(
   const slotText = missionDetails?.estimatedSlot ? `Créneau estimé proposé : ${missionDetails.estimatedSlot}\n` : '';
   const urlLink = missionDetails?.actionUrl || 'https://consoledefibeo.deroesch.com';
 
+  const { htmlFooter, textFooter } = await resolveActiveTenantEmailFooterAsync();
+
   const body = `Bonjour,
 
 Une date et un créneau sont proposés pour une intervention sur votre site.
@@ -834,7 +952,7 @@ ${urlLink}
 
 Vous remerciant pour votre retour.
 
-${senderName}`;
+${senderName}${textFooter}`;
 
   const htmlBody = `
 <div style="font-family: Arial, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; line-height: 1.6; padding: 20px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;">
@@ -874,6 +992,7 @@ ${senderName}`;
     Vous remerciant pour votre retour.<br/><br/>
     <strong>${senderName}</strong>
   </p>
+  ${htmlFooter}
 </div>
 `;
 
@@ -937,14 +1056,21 @@ export async function triggerEmailClientSignaturePin(
   const recipientList = Array.from(new Set(['defibeo@gmail.com', ...cleanEmails])).join(', ');
   const tenantCommercialName = getActiveTenantCommercialName(companyName);
   const cleanPin = (pinCode || '').trim();
+  const { htmlFooter, textFooter } = await resolveActiveTenantEmailFooterAsync();
 
   const subject = `${tenantCommercialName} : ${cleanPin} est votre PIN de signature à communiquer au technicien.`;
-  const body = `Bonjour, Afin de valider l’intervention de notre technicien, merci de lui transmettre le code PIN suivant : ${cleanPin}. Il s’agit d’une signature électronique. Vous pouvez en savoir plus depuis votre espace client.`;
+  const baseText = `Bonjour, Afin de valider l’intervention de notre technicien, merci de lui transmettre le code PIN suivant : ${cleanPin}. Il s’agit d’une signature électronique. Vous pouvez en savoir plus depuis votre espace client.`;
+  const body = `${baseText}${textFooter}`;
+  const htmlBody = `<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
+    <p>${escapeEmailHtml(baseText)}</p>
+    ${htmlFooter}
+  </div>`;
 
   return sendScriptEmail({
     to: recipientList,
     subject,
     body,
+    htmlBody,
     replyTo: companyEmail || "defibeo@gmail.com",
     name: tenantCommercialName,
     senderName: tenantCommercialName,

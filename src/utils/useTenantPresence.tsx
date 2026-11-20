@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 const PRESENCE_SESSION_KEY = 'defibeo_presence_session_id';
 const PRESENCE_CHANNEL_NAME = 'defibeo_tenant_presence_channel';
-const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 const HEARTBEAT_INTERVAL_MS = 2500;
 const PEER_TTL_MS = 10000;
 
@@ -72,53 +72,62 @@ export function useTenantPresence({
 
   const peersRef = useRef<Map<string, PeerState>>(new Map());
 
-  // 3-hour mask for table-view banner
+  // 24-hour mask for table-view banner in localStorage / cache
   const tabMaskStorageKey = `defib_hide_tab_conflict_${normTenantId}_${normTab}`;
-  const [isTabMasked, setIsTabMasked] = useState<boolean>(() => {
+  const globalTabMaskStorageKey = `defib_hide_tab_conflict_${normTenantId}`;
+
+  const checkIsTabCurrentlyMasked = useCallback((): boolean => {
     if (typeof window === 'undefined' || !normTab) return false;
     try {
-      const raw = localStorage.getItem(`defib_hide_tab_conflict_${normTenantId}_${normTab}`);
-      if (raw) {
-        const until = Number(raw);
-        if (!isNaN(until) && Date.now() < until) {
-          return true;
+      const candidates = [
+        localStorage.getItem(tabMaskStorageKey),
+        localStorage.getItem(globalTabMaskStorageKey),
+        sessionStorage.getItem(tabMaskStorageKey),
+        sessionStorage.getItem(globalTabMaskStorageKey),
+      ];
+      const now = Date.now();
+      for (const raw of candidates) {
+        if (raw) {
+          const until = Number(raw);
+          if (!isNaN(until) && now < until) {
+            return true;
+          }
         }
       }
     } catch {}
     return false;
-  });
+  }, [tabMaskStorageKey, globalTabMaskStorageKey, normTab]);
 
-  // Re-evaluate 3h mask when tab or tenant changes or expires
+  const [isTabMasked, setIsTabMasked] = useState<boolean>(() => checkIsTabCurrentlyMasked());
+
+  // Re-evaluate 24h mask when tab or tenant changes or expires
   useEffect(() => {
     if (typeof window === 'undefined' || !normTab) {
       setIsTabMasked(false);
       return;
     }
     const checkMask = () => {
-      try {
-        const raw = localStorage.getItem(tabMaskStorageKey);
-        if (raw) {
-          const until = Number(raw);
-          if (!isNaN(until) && Date.now() < until) {
-            setIsTabMasked(true);
-            return;
-          }
-        }
-      } catch {}
-      setIsTabMasked(false);
+      setIsTabMasked(checkIsTabCurrentlyMasked());
     };
     checkMask();
     const timer = setInterval(checkMask, 15000);
-    return () => clearInterval(timer);
-  }, [tabMaskStorageKey, normTab]);
+    window.addEventListener('storage', checkMask);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('storage', checkMask);
+    };
+  }, [checkIsTabCurrentlyMasked, normTab]);
 
   const hideTabBannerFor3Hours = useCallback(() => {
-    const until = Date.now() + THREE_HOURS_MS;
+    const until = Date.now() + TWENTY_FOUR_HOURS_MS;
     setIsTabMasked(true);
     try {
       localStorage.setItem(tabMaskStorageKey, String(until));
+      localStorage.setItem(globalTabMaskStorageKey, String(until));
+      sessionStorage.setItem(tabMaskStorageKey, String(until));
+      sessionStorage.setItem(globalTabMaskStorageKey, String(until));
     } catch {}
-  }, [tabMaskStorageKey]);
+  }, [tabMaskStorageKey, globalTabMaskStorageKey]);
 
   // While-open mask for form / side pane banner (resets when form closes or switches record)
   const [maskedFormKey, setMaskedFormKey] = useState<string | null>(null);

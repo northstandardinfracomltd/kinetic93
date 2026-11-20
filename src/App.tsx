@@ -9439,7 +9439,22 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                   email: regRow.email || effectiveCompanyInfo.email,
                   phone: regRow.phone || effectiveCompanyInfo.phone,
                   website: regRow.website || effectiveCompanyInfo.website,
+                  emailFooterImgUrl:
+                    regRow.emailFooterImgUrl !== undefined
+                      ? regRow.emailFooterImgUrl
+                      : effectiveCompanyInfo.emailFooterImgUrl,
+                  emailFooterTitle:
+                    regRow.emailFooterTitle !== undefined
+                      ? regRow.emailFooterTitle
+                      : effectiveCompanyInfo.emailFooterTitle,
+                  emailFooterParagraph:
+                    regRow.emailFooterParagraph !== undefined
+                      ? regRow.emailFooterParagraph
+                      : effectiveCompanyInfo.emailFooterParagraph,
                 };
+                try {
+                  localStorage.setItem(`defib_${activeTenant}_company_info`, JSON.stringify(effectiveCompanyInfo));
+                } catch (_) {}
               }
             })
             .catch(() => {})

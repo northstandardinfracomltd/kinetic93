@@ -13321,10 +13321,7 @@ export default function PublicPortal({
                                                       type="button"
                                                       onClick={() =>
                                                         setUnrolledMissions(
-                                                          (prev) =>
-                                                            new Set(prev).add(
-                                                              missionKey,
-                                                            ),
+                                                          new Set([missionKey]),
                                                         )
                                                       }
                                                       className="font-bold text-[18px] hover:underline cursor-pointer transition-transform active:scale-95"

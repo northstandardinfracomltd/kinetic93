@@ -10429,7 +10429,7 @@ async function warmupDefibrillateursStore() {
   // Dedicated email dispatch proxy via Google Apps Script (handles redirections, logs, avoids browser CORS/extensions)
   app.post("/api/send-email", async (req, res) => {
     try {
-      const { to, subject, body, htmlBody, replyTo, scriptUrl, name, senderName, pdfBase64, pdfFileName, pdfUrl, attachments } = req.body || {};
+      const { to, subject, body, htmlBody, replyTo, scriptUrl, name, senderName, pdfBase64, pdfFileName, pdfUrl, attachments, tenantId } = req.body || {};
       if (!to || !subject) {
         return res.status(400).json({ status: "error", message: "Missing recipient (to) or subject" });
       }
@@ -10438,14 +10438,97 @@ async function warmupDefibrillateursStore() {
         process.env.VITE_APPS_SCRIPT_URL ||
         'https://script.google.com/macros/s/AKfycbzx6ElCSC7A5dWvE5fdBJMAQOmYbsnjVs1ttQ0g9ktrJtln7ei9Pl3Em3ine99CrI0/exec';
 
+      const isSystemAuth = req.body.isSystemAuthEmail === true;
+      const skipFooter = req.body.skipTenantFooter === true;
+
+      let resolvedBody = String(body || '');
+      let resolvedHtmlBody = htmlBody ? String(htmlBody) : '';
+
+      // Server-side guarantee: if the email is a tenant transactional email and doesn't yet have the tenant's email footer,
+      // look up the tenant's 'reglages' sheet / companyInfo on the server and append the footer.
+      if (!isSystemAuth && !skipFooter && !resolvedHtmlBody.includes('data-defib-email-footer="true"')) {
+        try {
+          const effTenantId = String(tenantId || req.query?.tenantId || 'demo').trim();
+          const reglagesRows = await fetchTenantSheetCollection(effTenantId, 'reglages' as SheetTabType).catch(() => []);
+          const regRow: any = Array.isArray(reglagesRows) && reglagesRows.length > 0 ? reglagesRows[0] : null;
+          if (regRow && typeof regRow === 'object') {
+            const imgUrl = String(
+              regRow.emailFooterImgUrl ??
+                regRow['URL Source IMG Email'] ??
+                regRow['URL source de l’image du pied d’email.'] ??
+                regRow['URL source de l’image du pied d’email'] ??
+                ''
+            ).trim();
+            const title = String(
+              regRow.emailFooterTitle ??
+                regRow['Titre Email'] ??
+                regRow['Titre du pied d’email.'] ??
+                regRow['Titre du pied d’email'] ??
+                ''
+            )
+              .trim()
+              .slice(0, 30);
+            const paragraph = String(
+              regRow.emailFooterParagraph ??
+                regRow['Paragraphe Email'] ??
+                regRow['Paragraphe du pied d’email.'] ??
+                regRow['Paragraphe du pied d’email'] ??
+                ''
+            ).trim();
+
+            if (imgUrl || title || paragraph) {
+              const escHtml = (s: string) =>
+                String(s || '')
+                  .replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#39;');
+              const htmlParts: string[] = [];
+              if (imgUrl) {
+                htmlParts.push(
+                  `<div style="margin-bottom: 10px;"><img src="${escHtml(imgUrl)}" alt="" style="width: 100%; max-width: 200px; height: auto; display: block;" /></div>`
+                );
+              }
+              if (title) {
+                htmlParts.push(
+                  `<div style="font-size: 22px; font-weight: bold; color: #000000; line-height: 1.3; margin-bottom: 6px;">${escHtml(title)}</div>`
+                );
+              }
+              if (paragraph) {
+                htmlParts.push(
+                  `<div style="font-size: 18px; color: #000000; line-height: 1.5; white-space: pre-wrap;">${escHtml(paragraph).replace(/\r?\n/g, '<br/>')}</div>`
+                );
+              }
+              const serverHtmlFooter = `<div data-defib-email-footer="true" style="margin-top: 24px; padding-top: 16px;">${htmlParts.join('')}</div>`;
+              const textParts = [title, paragraph].filter(Boolean);
+              if (textParts.length > 0) {
+                const cleanTextFooter = textParts.join('\n');
+                if (!resolvedBody.endsWith(cleanTextFooter)) {
+                  resolvedBody = `${resolvedBody}\n\n${cleanTextFooter}`;
+                }
+              }
+              if (resolvedHtmlBody) {
+                resolvedHtmlBody = `${resolvedHtmlBody}${serverHtmlFooter}`;
+              } else {
+                resolvedHtmlBody = `<div style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6;">
+  <div>${escHtml(String(body || '')).replace(/\r?\n/g, '<br/>')}</div>
+  ${serverHtmlFooter}
+</div>`;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       const payload: any = {
         to: String(to).trim(),
         subject: String(subject).trim(),
-        body: body || '',
+        body: resolvedBody,
         replyTo: replyTo || 'defibeo@gmail.com'
       };
-      if (htmlBody) {
-        payload.htmlBody = htmlBody;
+      if (resolvedHtmlBody) {
+        payload.htmlBody = resolvedHtmlBody;
       }
       if (pdfBase64) {
         payload.pdfBase64 = pdfBase64;
@@ -10458,7 +10541,6 @@ async function warmupDefibrillateursStore() {
         payload.attachments = attachments;
       }
       let resolvedSenderName = (name || senderName || req.body.fromName || req.body.displayName || req.body.nomCommercial || req.body.companyName || '').trim();
-      const isSystemAuth = req.body.isSystemAuthEmail === true;
       if (!resolvedSenderName || resolvedSenderName.includes('@') || resolvedSenderName.toLowerCase() === 'defibeo' || resolvedSenderName.toLowerCase() === 'défibeo') {
         resolvedSenderName = isSystemAuth ? 'Défibeo' : 'Défibeo Solutions';
       }
@@ -10472,6 +10554,7 @@ async function warmupDefibrillateursStore() {
       payload.options = {
         name: resolvedSenderName,
         replyTo: payload.replyTo,
+        ...(resolvedHtmlBody ? { htmlBody: resolvedHtmlBody } : {}),
       };
 
       console.log(`[API /api/send-email] Dispatching email to "${payload.to}" with subject "${payload.subject}" (sender: "${payload.name || 'default'}") via Apps Script: ${targetUrl}`);
