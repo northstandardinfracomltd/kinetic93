@@ -82,7 +82,7 @@ const AutoResizeEventTextarea: React.FC<{
   const resize = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.max(textareaRef.current.scrollHeight, 38)}px`;
+      textareaRef.current.style.height = `${Math.max(textareaRef.current.scrollHeight, 49)}px`;
     }
   };
 
@@ -173,6 +173,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
   t
 }) => {
   const [isHelpFaqOpen, setIsHelpFaqOpen] = useState(false);
+  const [isSavingTicketForm, setIsSavingTicketForm] = useState(false);
   const [selectedHelpFaqIndex, setSelectedHelpFaqIndex] = useState<number | null>(null);
   const [helpIntroTyped, setHelpIntroTyped] = useState('');
   const [helpAnswerTyped, setHelpAnswerTyped] = useState('');
@@ -1289,24 +1290,67 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
   // Helper to extract Référence Devis / Facture & Total Affaire HT from uploaded file
   const extractDocumentRefAndTotalHT = async (file: File): Promise<{ ref?: string; totalHt?: string }> => {
-    let combinedText = `${file.name}\n`;
+    let combinedText = '';
     try {
       const arrayBuffer = await file.arrayBuffer();
       const uint8 = new Uint8Array(arrayBuffer);
       const latin1 = new TextDecoder('latin1').decode(uint8.slice(0, 5000000));
 
-      const decodePdfLiteral = (s: string): string => {
-        return s
-          .replace(/\\(\d{1,3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
-          .replace(/\\n/g, '\n')
-          .replace(/\\r/g, '\r')
-          .replace(/\\t/g, ' ')
-          .replace(/\\\(/g, '(')
-          .replace(/\\\)/g, ')')
-          .replace(/\\\\/g, '\\');
+      const cmap = new Map<number, string>();
+
+      const decodePdfLiteralToBytes = (s: string): number[] => {
+        const bytes: number[] = [];
+        for (let i = 0; i < s.length; i++) {
+          if (s.charCodeAt(i) === 92) {
+            i++;
+            if (i >= s.length) break;
+            const c = s[i];
+            if (c >= '0' && c <= '7') {
+              let oct = c;
+              if (i + 1 < s.length && s[i + 1] >= '0' && s[i + 1] <= '7') oct += s[++i];
+              if (i + 1 < s.length && s[i + 1] >= '0' && s[i + 1] <= '7') oct += s[++i];
+              bytes.push(parseInt(oct, 8) & 0xff);
+            } else if (c === 'n') bytes.push(10);
+            else if (c === 'r') bytes.push(13);
+            else if (c === 't') bytes.push(9);
+            else if (c === 'b') bytes.push(8);
+            else if (c === 'f') bytes.push(12);
+            else bytes.push(c.charCodeAt(0) & 0xff);
+          } else {
+            bytes.push(s.charCodeAt(i) & 0xff);
+          }
+        }
+        return bytes;
       };
 
-      const cmap = new Map<number, string>();
+      const decodePdfLiteral = (s: string): string => {
+        const bytes = decodePdfLiteralToBytes(s);
+        if (bytes.length >= 2 && bytes.length % 2 === 0) {
+          let cmapHits = 0;
+          let zeroHighCount = 0;
+          const numPairs = bytes.length / 2;
+          let out = '';
+          for (let i = 0; i < bytes.length; i += 2) {
+            const code = (bytes[i] << 8) | bytes[i + 1];
+            if (bytes[i] === 0) zeroHighCount++;
+            if (cmap.has(code)) {
+              cmapHits++;
+              out += cmap.get(code)!;
+            } else if (bytes[i] === 0 && bytes[i + 1] >= 0x20) {
+              out += String.fromCharCode(bytes[i + 1]);
+            } else if (code === 0x20ac) {
+              out += '€';
+            } else if (code === 0x2116) {
+              out += '№';
+            }
+          }
+          if ((cmapHits > 0 && cmapHits >= numPairs * 0.5) || zeroHighCount >= numPairs * 0.8) {
+            return out;
+          }
+        }
+        return bytes.map(b => (b >= 0x20 || b === 10 || b === 13 || b === 9 ? String.fromCharCode(b) : ' ')).join('');
+      };
+
       const decodeHexToUnicode = (hexStr: string): string => {
         const cleanHex = hexStr.replace(/\s+/g, '');
         if (!cleanHex) return '';
@@ -1330,9 +1374,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 out += String.fromCharCode(code);
               } else if (code === 0x20ac) {
                 out += '€';
+              } else if (code === 0x2116) {
+                out += '№';
               }
             }
-            if (out.trim()) return out;
+            if (out) return out;
           }
         }
         let out = '';
@@ -1416,46 +1462,120 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         }
       }
 
-      // Second pass: reconstruct text from PDF content streams (handling TJ kerning arrays, Tj strings, and hex strings)
-      const extractStreamText = (streamStr: string): string => {
-        const chunks: string[] = [];
-        const opRegex = /\[([\s\S]*?)\]\s*TJ|\((?:\\.|[^\\()])*\)\s*(?:Tj|'|")|<([0-9A-Fa-f\s]+)>\s*Tj/g;
-        let m: RegExpExecArray | null;
-        while ((m = opRegex.exec(streamStr)) !== null) {
-          if (m[1] !== undefined) {
-            // TJ array: concatenate inner strings without artificial spaces unless kerning offset < -120
-            let tjText = '';
-            const itemRe = /\(((?:\\.|[^\\()])*)\)|<([0-9A-Fa-f\s]+)>|(-?\d+(?:\.\d+)?)/g;
-            let im: RegExpExecArray | null;
-            while ((im = itemRe.exec(m[1])) !== null) {
-              if (im[1] !== undefined) {
-                tjText += decodePdfLiteral(im[1]);
-              } else if (im[2] !== undefined) {
-                tjText += decodeHexToUnicode(im[2]);
-              } else if (im[3] !== undefined) {
-                const kern = parseFloat(im[3]);
-                if (kern < -120) tjText += ' ';
+      // Second pass: linear scanner reconstructing text from PDF content streams (handling nested parens, 2-byte CID literals containing 0x0A/0x0D, TJ arrays, and hex strings)
+      const extractStreamText = (ds: string): string => {
+        if (ds.includes('begincmap') || (!ds.includes('Tj') && !ds.includes('TJ'))) return '';
+        let out = '';
+        let i = 0;
+        const n = ds.length;
+        while (i < n) {
+          const ch = ds.charCodeAt(i);
+          if (ch === 40) { // '('
+            i++;
+            let s = '';
+            let depth = 1;
+            while (i < n && depth > 0) {
+              const c = ds.charCodeAt(i);
+              if (c === 92) { // '\\'
+                s += ds[i++];
+                if (i < n) s += ds[i++];
+              } else if (c === 40) {
+                depth++;
+                s += ds[i++];
+              } else if (c === 41) {
+                depth--;
+                if (depth > 0) s += ds[i];
+                i++;
+              } else {
+                s += ds[i++];
               }
             }
-            if (tjText) chunks.push(tjText);
-          } else if (m[2] !== undefined) {
-            const hexDecoded = decodeHexToUnicode(m[2]);
-            if (hexDecoded) chunks.push(hexDecoded);
-          } else {
-            const litMatch = m[0].match(/^\(((?:\\.|[^\\()])*)\)/);
-            if (litMatch) {
-              chunks.push(decodePdfLiteral(litMatch[1]));
+            let j = i;
+            while (j < n && (ds.charCodeAt(j) === 32 || ds.charCodeAt(j) === 10 || ds.charCodeAt(j) === 13 || ds.charCodeAt(j) === 9)) j++;
+            if ((ds[j] === 'T' && ds[j + 1] === 'j') || ds[j] === "'" || ds[j] === '"') {
+              out += decodePdfLiteral(s);
             }
+          } else if (ch === 60 && ds.charCodeAt(i + 1) !== 60) { // '<' but not '<<'
+            let j = i + 1;
+            let hex = '';
+            while (j < n && ds.charCodeAt(j) !== 62) {
+              hex += ds[j++];
+            }
+            if (j < n && ds.charCodeAt(j) === 62) {
+              let k = j + 1;
+              while (k < n && (ds.charCodeAt(k) === 32 || ds.charCodeAt(k) === 10 || ds.charCodeAt(k) === 13 || ds.charCodeAt(k) === 9)) k++;
+              if (ds[k] === 'T' && ds[k + 1] === 'j') {
+                out += decodeHexToUnicode(hex);
+                i = k + 2;
+                continue;
+              }
+            }
+            i++;
+          } else if (ch === 91) { // '['
+            i++;
+            let arrOut = '';
+            let validTj = false;
+            while (i < n) {
+              const c = ds.charCodeAt(i);
+              if (c === 93) { // ']'
+                i++;
+                let k = i;
+                while (k < n && (ds.charCodeAt(k) === 32 || ds.charCodeAt(k) === 10 || ds.charCodeAt(k) === 13 || ds.charCodeAt(k) === 9)) k++;
+                if (ds[k] === 'T' && ds[k + 1] === 'J') {
+                  validTj = true;
+                  i = k + 2;
+                }
+                break;
+              } else if (c === 40) {
+                i++;
+                let s = '';
+                let depth = 1;
+                while (i < n && depth > 0) {
+                  const cc = ds.charCodeAt(i);
+                  if (cc === 92) {
+                    s += ds[i++];
+                    if (i < n) s += ds[i++];
+                  } else if (cc === 40) {
+                    depth++;
+                    s += ds[i++];
+                  } else if (cc === 41) {
+                    depth--;
+                    if (depth > 0) s += ds[i];
+                    i++;
+                  } else {
+                    s += ds[i++];
+                  }
+                }
+                arrOut += decodePdfLiteral(s);
+              } else if (c === 60 && ds.charCodeAt(i + 1) !== 60) {
+                i++;
+                let hex = '';
+                while (i < n && ds.charCodeAt(i) !== 62) hex += ds[i++];
+                if (i < n) i++;
+                arrOut += decodeHexToUnicode(hex);
+              } else if (c === 45 || (c >= 48 && c <= 57)) {
+                let numStr = ds[i++];
+                while (i < n && ((ds.charCodeAt(i) >= 48 && ds.charCodeAt(i) <= 57) || ds.charCodeAt(i) === 46)) {
+                  numStr += ds[i++];
+                }
+                if (parseFloat(numStr) < -120) arrOut += ' ';
+              } else {
+                i++;
+              }
+            }
+            if (validTj) out += arrOut;
+          } else if (ch === 69 && ds.charCodeAt(i + 1) === 84) { // 'ET'
+            const prev = i > 0 ? ds.charCodeAt(i - 1) : 32;
+            const next = i + 2 < n ? ds.charCodeAt(i + 2) : 32;
+            if ((prev <= 32 || prev === 62 || prev === 41) && (next <= 32 || next === 81 || next === 113 || next === 47 || next === 69)) {
+              out += ' ';
+            }
+            i += 2;
+          } else {
+            i++;
           }
         }
-        if (chunks.length > 0) {
-          return chunks.join(' ');
-        }
-        const fallbackParens = streamStr.match(/\(((?:\\.|[^\\()])+)\)/g);
-        if (fallbackParens) {
-          return fallbackParens.map(t => decodePdfLiteral(t.slice(1, -1))).join('');
-        }
-        return '';
+        return out;
       };
 
       for (const ds of decompressedStreams) {
@@ -1464,9 +1584,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           combinedText += '\n' + extracted;
         }
       }
-      const rawExtracted = extractStreamText(latin1);
-      if (rawExtracted) {
-        combinedText += '\n' + rawExtracted;
+      if (!combinedText.trim()) {
+        const rawExtracted = extractStreamText(latin1);
+        if (rawExtracted) {
+          combinedText += '\n' + rawExtracted;
+        }
       }
     } catch {
       // Fallback to filename only
@@ -1474,12 +1596,13 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
     const cleanText = combinedText
       .replace(/[\u00A0\u202F\u2007\u2009]/g, ' ')
-      .replace(/\s+/g, ' ');
+      .replace(/\s+/g, ' ')
+      .trim();
 
     let detectedRef: string | undefined;
     const refPatterns = [
-      /(?:devis|facture|offre|proposition|ref|réf|n°|no|numéro)\s*(?:devis|facture|n°|no|:|-|#)?\s*([A-Z]{0,5}[\-_\/]?\d{2,4}[\-_\/]?\d{2,8}[A-Z0-9\-_]*)/i,
-      /\b((?:DEV|FAC|FACT|DEVIS|OFFRE|PROP|CMD|BC)[\-_\/]?[0-9]{2,10}[A-Z0-9\-_]*)\b/i,
+      /(?:sequence|devis|facture|invoice|offre|proposition|ref|réf|n°|no|№|numéro)\s*(?:devis|facture|n°|no|№|:|-|#)?\s*([A-Z]{0,6}[\-_\/]?\d{2,10}[A-Z0-9\-_]*)/i,
+      /\b((?:SEQ|DEV|FAC|FACT|DEVIS|OFFRE|PROP|CMD|BC|INV)[A-Z0-9\-_\/]{3,18})\b/i,
       /\b([A-Z]{1,4}-\d{2,6}(?:-\d{1,6})?)\b/,
     ];
     for (const pat of refPatterns) {
@@ -1491,7 +1614,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     }
     if (!detectedRef) {
       const baseName = file.name.replace(/\.[^/.]+$/, '').trim();
-      const nameMatch = baseName.match(/\b([A-Z0-9]{2,6}[\-_][A-Z0-9\-_]{2,15})\b/i);
+      const nameMatch = baseName.match(/\b([A-Z0-9]{2,8}[\-_][A-Z0-9\-_]{2,18})\b/i);
       if (nameMatch && /\d/.test(nameMatch[1])) {
         detectedRef = nameMatch[1];
       }
@@ -1500,7 +1623,14 @@ export const CrmTab: React.FC<CrmTabProps> = ({
     let detectedHt: string | undefined;
     const parseAmountCandidate = (rawVal: string): string | undefined => {
       if (!rawVal) return undefined;
-      const cleaned = rawVal.replace(/[\s\u00A0\u202F]/g, '').replace(',', '.');
+      let cleaned = rawVal.replace(/[\s\u00A0\u202F€$£]/g, '');
+      if (/^\d{1,3}(?:,\d{3})+\.\d{2}$/.test(cleaned)) {
+        cleaned = cleaned.replace(/,/g, '');
+      } else if (/^\d{1,3}(?:\.\d{3})+,\d{2}$/.test(cleaned)) {
+        cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+      } else {
+        cleaned = cleaned.replace(',', '.');
+      }
       const parsed = parseFloat(cleaned);
       if (!isNaN(parsed) && parsed > 0 && parsed < 100000000) {
         return parsed.toFixed(2).replace(/\.00$/, '');
@@ -1508,10 +1638,16 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       return undefined;
     };
 
+    const numToken = '(?:€|eur|\\$|£)?\\s*(\\d{1,3}(?:[\\s.,]\\d{3})*(?:[.,]\\d{2})|\\d+(?:[.,]\\d{2}))\\s*(?:€|eur|\\$|£)?';
+
     const htPatterns = [
-      /(?:total\s*(?:général\s*|net\s*|de\s*la\s*facture\s*|du\s*devis\s*)?h\.?\s*t\.?(?:va)?|montant\s*(?:total\s*|net\s*)?h\.?\s*t\.?|net\s*h\.?\s*t\.?|sous[\-\s]*total\s*h\.?\s*t\.?|base\s*h\.?\s*t\.?)\s*(?:en\s*€|eur|€|:|\-|\.)*\s*(\d{1,3}(?:[\s.]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))/gi,
-      /(?:total\s*(?:général\s*|net\s*)?h\.?\s*t\.?|montant\s*(?:total\s*|net\s*)?h\.?\s*t\.?|net\s*h\.?\s*t\.?|sous[\-\s]*total\s*h\.?\s*t\.?)\s*[:\-€]?\s*(\d{1,6}(?:[.,]\d{1,2})?)/gi,
-      /(\d{1,3}(?:[\s.]\d{3})*(?:[.,]\d{2})|\d+(?:[.,]\d{2}))\s*(?:€|eur)?\s*h\.?\s*t\.?\b/gi,
+      new RegExp(
+        '(?:total\\s*(?:général\\s*|net\\s*|de\\s*la\\s*facture\\s*|du\\s*devis\\s*)?h\\.?\\s*t\\.?(?:va)?|montant\\s*(?:total\\s*|net\\s*)?h\\.?\\s*t\\.?|net\\s*h\\.?\\s*t\\.?|sous[\\-\\s]*total(?:\\s*h\\.?\\s*t\\.?)?|sub[\\-\\s]*total(?:\\s*h\\.?\\s*t\\.?)?|base\\s*h\\.?\\s*t\\.?|total\\s*hors\\s*taxes?)\\s*(?:en\\s*€|eur|€|:|\\-|\\.)*\\s*' +
+          numToken,
+        'gi'
+      ),
+      new RegExp('\\btotal\\s*[:\\-]\\s*' + numToken + '(?=[\\s\\S]{0,80}\\b(?:tva|vat|t\\.v\\.a)\\b)', 'gi'),
+      new RegExp(numToken + '\\s*h\\.?\\s*t\\.?\\b', 'gi'),
     ];
 
     for (const pat of htPatterns) {
@@ -1529,15 +1665,33 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       }
     }
 
-    // Fallback for multi-column summary tables where labels ("Total HT", "TVA", "Total TTC") precede the numbers
+    // Fallback for multi-column summary tables where labels ("Discount", "Sub Total", "Total VAT", "Total Due" or "Total HT", "TVA", "Total TTC") precede the numbers
     if (!detectedHt) {
-      const tableSummaryMatch = cleanText.match(/total\s*(?:général\s*|net\s*)?h\.?\s*t\.?[\s\S]{0,160}/i);
+      const tableSummaryMatch = cleanText.match(
+        /(?:(discount)\s+)?(sub[\-\s]*total|sous[\-\s]*total|total\s*(?:général\s*|net\s*)?h\.?\s*t\.?|total(?!\s*(?:ttc|vat|due|tva|item|page)))[\s\S]{0,180}/i
+      );
       if (tableSummaryMatch) {
+        const hasLeadingDiscount = Boolean(tableSummaryMatch[1]);
         const snippet = tableSummaryMatch[0];
-        const decimalNums = Array.from(snippet.matchAll(/(\d{1,3}(?:[\s.]\d{3})*[.,]\d{2}|\d+[.,]\d{2})(?!\s*%)/g))
-          .map(m => m[1]);
+        const decimalNums = Array.from(
+          snippet.matchAll(/(?:€|\$|£)?\s*(\d{1,3}(?:[\s.,]\d{3})*[.,]\d{2}|\d+[.,]\d{2})(?!\s*%)/g)
+        ).map(m => m[1]);
         if (decimalNums.length > 0) {
-          detectedHt = parseAmountCandidate(decimalNums[0]);
+          if (
+            hasLeadingDiscount &&
+            decimalNums.length >= 2 &&
+            parseFloat(decimalNums[0].replace(',', '.')) === 0
+          ) {
+            detectedHt = parseAmountCandidate(decimalNums[1]);
+          } else {
+            for (const num of decimalNums) {
+              const candidate = parseAmountCandidate(num);
+              if (candidate) {
+                detectedHt = candidate;
+                break;
+              }
+            }
+          }
         }
       }
     }
@@ -1783,6 +1937,8 @@ export const CrmTab: React.FC<CrmTabProps> = ({
 
   const handleSaveForm = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingTicketForm) return;
+    setIsSavingTicketForm(true);
     const today = getTodayFormatted();
     const resolvedClientName = formClientSelect === 'Autre' 
       ? (formCustomClientName.trim() || 'Client Autre')
@@ -1893,7 +2049,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
       onSaveTickets([newTicket, ...tickets]);
     }
 
-    setIsPaneOpen(false);
+    setTimeout(() => {
+      setIsSavingTicketForm(false);
+      setIsPaneOpen(false);
+    }, 1500);
   };
 
   const handleQuickTerminate = (ticketId: string) => {
@@ -2923,23 +3082,26 @@ export const CrmTab: React.FC<CrmTabProps> = ({
         }
         #crm-tab-container input.crm-event-date-input {
           width: 100% !important;
-          padding: 8px 10px !important;
+          padding: 10px 12px !important;
           border: 1px solid #DCE1EA !important;
-          border-radius: 10px !important;
-          font-size: 15px !important;
+          border-radius: 13px !important;
+          font-size: 18px !important;
+          font-weight: 400 !important;
           background: #ffffff !important;
           color: #000000 !important;
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
           box-sizing: border-box !important;
           outline: none !important;
           cursor: pointer !important;
+          min-height: 49px !important;
         }
         #crm-tab-container textarea.crm-event-textarea {
           width: 100% !important;
-          padding: 8px 10px !important;
+          padding: 10px 12px !important;
           border: 1px solid #DCE1EA !important;
-          border-radius: 10px !important;
-          font-size: 15px !important;
+          border-radius: 13px !important;
+          font-size: 18px !important;
+          font-weight: 400 !important;
           background: #ffffff !important;
           color: #000000 !important;
           font-family: "DefibeoMain", "Civilprom", sans-serif !important;
@@ -2947,8 +3109,18 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           outline: none !important;
           resize: none !important;
           overflow: hidden !important;
-          min-height: 38px !important;
-          line-height: 1.4 !important;
+          min-height: 49px !important;
+          line-height: 1.5 !important;
+        }
+        #crm-tab-container textarea.crm-event-textarea::placeholder {
+          font-size: 18px !important;
+          color: #BECADB !important;
+          opacity: 1 !important;
+        }
+        #crm-tab-container textarea.crm-event-textarea:hover:not(:disabled),
+        #crm-tab-container textarea.crm-event-textarea:focus:not(:disabled) {
+          outline: 2.5px solid #2e54ff !important;
+          outline-offset: 2px !important;
         }
         #crm-tab-container select:not(#crm-more-options-dropdown):not(.crm-file-type-select) {
           appearance: none !important;
@@ -3928,7 +4100,9 @@ export const CrmTab: React.FC<CrmTabProps> = ({
           {/* Overlay backdrop */}
           <div 
             className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity cursor-pointer"
-            onClick={() => setIsPaneOpen(false)}
+            onClick={() => {
+              if (!isSavingTicketForm) setIsPaneOpen(false);
+            }}
           />
 
           {/* Drawer container: enlarged (max-w-3xl / max-w-4xl) to provide ample visual space */}
@@ -4259,7 +4433,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       {/* Situation Interlocuteur (Prospect / Client) */}
                       <div>
                         <label>Situation Interlocuteur.</label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="flex items-center gap-4 flex-wrap">
                           {(['Prospect', 'Client'] as const).map((sit) => {
                             const isSelected = formSituationInterlocuteur === sit;
                             return (
@@ -4296,7 +4470,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       {/* Type Structure (Collectivité / Entreprise) */}
                       <div>
                         <label>Type Structure.</label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="flex items-center gap-4 flex-wrap">
                           {(['Collectivité', 'Entreprise'] as const).map((typ) => {
                             const isSelected = formTypeStructure === typ;
                             return (
@@ -4444,7 +4618,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         {/* Marché Public (2 cols = 40%) */}
                         <div className="col-span-2">
                           <label>Marché Public.</label>
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="flex items-center gap-4 flex-wrap">
                             {(['Oui', 'Non'] as const).map((opt) => {
                               const isSelected = formMarchePublic === opt;
                               return (
@@ -4481,7 +4655,7 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                         {/* Situation Devis (3 cols = 60%) */}
                         <div className="col-span-3">
                           <label>Situation Devis.</label>
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="flex items-center gap-4 flex-wrap">
                             {(['Gagné', 'Perdu', 'Non renseigné'] as const).map((sitDevis) => {
                               const isSelected = formSituationDevis === sitDevis;
                               return (
@@ -5234,7 +5408,10 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                 >
                   <button
                     type="button"
-                    onClick={() => setIsPaneOpen(false)}
+                    disabled={isSavingTicketForm}
+                    onClick={() => {
+                      if (!isSavingTicketForm) setIsPaneOpen(false);
+                    }}
                     style={{
                       backgroundColor: 'rgb(210, 45, 11)',
                       color: '#ffffff',
@@ -5244,16 +5421,18 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       fontWeight: 'bold',
                       border: 'none',
                       boxShadow: 'none',
-                      cursor: 'pointer',
+                      cursor: isSavingTicketForm ? 'not-allowed' : 'pointer',
+                      opacity: isSavingTicketForm ? 0.55 : 1,
                       flex: 1,
                     }}
-                    className="hover:opacity-90 transition-opacity"
+                    className={isSavingTicketForm ? 'transition-opacity' : 'hover:opacity-90 transition-opacity'}
                   >
                     Fermer
                   </button>
 
                   <button
                     type="submit"
+                    disabled={isSavingTicketForm}
                     style={{
                       backgroundColor: '#2e54ff',
                       color: '#ffffff',
@@ -5263,10 +5442,11 @@ export const CrmTab: React.FC<CrmTabProps> = ({
                       fontWeight: 'bold',
                       border: 'none',
                       boxShadow: 'none',
-                      cursor: 'pointer',
+                      cursor: isSavingTicketForm ? 'not-allowed' : 'pointer',
+                      opacity: isSavingTicketForm ? 0.55 : 1,
                       flex: 1,
                     }}
-                    className="hover:bg-[#2b48cc] transition-colors"
+                    className={isSavingTicketForm ? 'transition-colors' : 'hover:bg-[#2b48cc] transition-colors'}
                   >
                     Enregistrer
                   </button>

@@ -1899,7 +1899,7 @@ export default function SettingsModal({
   const [civilpromAssetsFileUrl, setCivilpromAssetsFileUrl] = React.useState('');
 
   const [atlasanteActive, setAtlasanteActive] = React.useState(false);
-  const [atlasanteUrlAuth, setAtlasanteUrlAuth] = React.useState('https://catalogue.atlasante.fr/api/login');
+  const [atlasanteUrlAuth, setAtlasanteUrlAuth] = React.useState('');
   const [atlasanteDeclarantId, setAtlasanteDeclarantId] = React.useState('');
 
   const [googleDriveActive, setGoogleDriveActive] = React.useState(false);
@@ -2289,7 +2289,7 @@ export default function SettingsModal({
       setCivilpromAssetsFileUrl('');
       setAtlasanteActive(localStorage.getItem(`defib_${activeTenant}_atlasante_active`) === 'true');
       setAtlasanteDeclarantId('');
-      setAtlasanteUrlAuth('https://catalogue.atlasante.fr/api/login');
+      setAtlasanteUrlAuth('');
       const tAliases = Array.from(
         new Set([
           activeTenant,
@@ -2362,10 +2362,10 @@ export default function SettingsModal({
 
           if (data.atlasanteActive !== undefined) setAtlasanteActive(Boolean(data.atlasanteActive));
           if (data.atlasanteDeclarantId !== undefined) setAtlasanteDeclarantId(data.atlasanteDeclarantId || '');
-          if (data.atlasanteUrlAuth !== undefined && data.atlasanteUrlAuth) {
+          if (data.atlasanteUrlAuth !== undefined && data.atlasanteUrlAuth && data.atlasanteUrlAuth !== 'https://catalogue.atlasante.fr/api/login') {
             setAtlasanteUrlAuth(data.atlasanteUrlAuth);
           } else {
-            setAtlasanteUrlAuth('https://catalogue.atlasante.fr/api/login');
+            setAtlasanteUrlAuth('');
           }
 
           const hasLinkedDriveInData = Boolean(data.googleDriveEmail || data.googleDriveAccessToken);
@@ -5847,7 +5847,7 @@ export default function SettingsModal({
                   {selectedLang === 'Français, France' && atlasanteActive && (
                     <div className="mt-4 space-y-3 animate-slideUp">
                       <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("URL Auth.")}</label>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Mot de passe.")}</label>
                         <input
                           type="text"
                           id="input-atlasante-url-auth"
@@ -5856,11 +5856,11 @@ export default function SettingsModal({
                             setAtlasanteUrlAuth(e.target.value);
                           }}
                           className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("https://catalogue.atlasante.fr/api/login")}
+                          placeholder={t("Entrez votre mot de passe.")}
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Identifiant du déclarant.")}</label>
+                        <label className="block text-[11px] font-bold text-slate-500 uppercase">{t("Identifiant de login.")}</label>
                         <input
                           type="text"
                           id="input-atlasante-declarant-id"
@@ -5869,7 +5869,7 @@ export default function SettingsModal({
                             setAtlasanteDeclarantId(e.target.value);
                           }}
                           className="w-full text-black placeholder-[#a8a8a8] font-sans text-xs bg-white"
-                          placeholder={t("Entrez votre identifiant de déclarant.")}
+                          placeholder={t("Entrez votre identifiant.")}
                         />
                       </div>
                     </div>

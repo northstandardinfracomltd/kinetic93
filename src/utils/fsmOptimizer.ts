@@ -193,14 +193,6 @@ export function normalizeSlotString(rawSlot: any): string {
 
 export function isMissionForcedSlotOrDate(m: any): boolean {
   if (!m) return false;
-  const sitNorm = String(m.status || m.situation || '').trim().toLowerCase();
-  const isLockedByStatus =
-    sitNorm === 'accepté client' ||
-    sitNorm === 'accepte client' ||
-    sitNorm === 'à faire' ||
-    sitNorm === 'a faire';
-  if (isLockedByStatus) return true;
-
   const isFormation = Boolean(
     m.equipmentType === 'Formation' ||
     m.equipmentType?.toLowerCase().includes('formation') ||
@@ -210,9 +202,9 @@ export function isMissionForcedSlotOrDate(m: any): boolean {
   if (isFormation) return true;
 
   const rawPrio = String(m.priority ?? '').trim();
-  if (rawPrio === '1') return true;
+  if (m.isForced === false || rawPrio === '0' || rawPrio.toLowerCase() === 'false') return false;
+  if (rawPrio === '1' || rawPrio.toLowerCase() === 'true') return true;
   if (m.isForced === true) return true;
-  if (m.isForced === false || rawPrio === '0') return false;
 
   return Boolean(m.isManualDate && m.isManualSlot);
 }

@@ -1793,7 +1793,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Pièces requises', field: 'requiredParts', aliases: ['piecesrequises', 'pieces', 'consommables', 'equipementsrequis', 'requiredparts', 'materielrequis', 'stocksrequis'] },
     { header: 'Fournitures par le client', field: 'providedByClientParts', aliases: ['fournituresparleclient', 'fournitureparleclient', 'piecesfourniesparleclient', 'providedbyclientparts', 'fournitureclient', 'fournituresclient'] },
     { header: 'Pièces envoyées au client', field: 'sentToClientParts', aliases: ['piecesenvoyeesauclient', 'piecesenvoyees', 'senttoclientparts', 'envoipieces', 'envoyeeauclient'] },
-    { header: 'Commentaire visible par le technicien.', field: 'commentaireInterne', aliases: ['commentairevisibleparletechnicien', 'commentaireinterne', 'commentaireprive', 'internalcomment', 'noteinterne', 'commentairetechnicien'] },
+    { header: 'Commentaire visible par le technicien.', field: 'commentaireInterne', aliases: ['commentairevisibleparletechnicien', 'commentaireprivepourletechnicien', 'commentaireinterne', 'commentaireprive', 'internalcomment', 'noteinterne', 'commentairetechnicien'] },
     { header: 'Priorité', field: 'priority', aliases: ['priorite', 'priority', 'urgence', 'criticite'] },
     { header: 'Date prévue', field: 'estimatedDate', aliases: ['dateprevue', 'dateestimee', 'dateintervention', 'datemission', 'estimateddate', 'scheduleddate', 'date', 'echeance'], type: 'date' },
     { header: 'Créneau horaire', field: 'estimatedSlot', aliases: ['creneauhoraire', 'creneau', 'creneauestime', 'heure', 'horaire', 'estimatedslot', 'time', 'plagehoraire'] },
@@ -1812,6 +1812,7 @@ export const GENERIC_CANONICAL_HEADERS: Partial<Record<SheetTabType, GenericColu
     { header: 'Identifiant formation', field: 'formationId', aliases: ['identifiantformation', 'formationid', 'idformation'] },
     { header: 'Statut Facturation.', field: 'statutFacturation', aliases: ['statutfacturation', 'statutdefacturation', 'facturation', 'etatfacturation', 'situationfacturation'] },
     { header: 'Expedition.', field: 'expedition', aliases: ['expedition', 'expeditions', 'refexpedition', 'referenceexpedition'] },
+    { header: 'Commentaire Logistique', field: 'commentaireLogistique', aliases: ['commentairelogistique', 'commentaireprivepourlalogistique', 'observationlogistique', 'notelogistique'] },
   ],
   gestionApresIntervention: [
     { header: 'Référence Intervention.', field: 'interventionReference', aliases: ['referenceintervention', 'referencedelintervention', 'refintervention', 'reference', 'id'] },
@@ -4380,11 +4381,21 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         merged.commentaireInterne ??
           merged['Commentaire visible par le technicien.'] ??
           merged['Commentaire visible par le technicien'] ??
+          merged['Commentaire privé pour le technicien.'] ??
+          merged['Commentaire privé pour le technicien'] ??
           merged['Commentaire interne.'] ??
           merged['Commentaire interne'] ??
           ''
       ).trim();
     }
+    merged.commentaireLogistique = String(
+      merged.commentaireLogistique ??
+        merged['Commentaire Logistique'] ??
+        merged['Commentaire Logistique.'] ??
+        merged['Commentaire privé pour la logistique.'] ??
+        merged['Commentaire privé pour la logistique'] ??
+        ''
+    ).trim();
     const sitLower = String(merged.status || '').trim().toLowerCase();
     const isAcceptedOrAFaire =
       sitLower === 'accepté client' ||
@@ -4398,14 +4409,16 @@ function mapRowToGenericRecord(headers: string[], row: string[], rowIndexZeroBas
         merged.priorite ??
         ''
     ).trim();
+    const isExplicitlyUnlocked =
+      merged.isForced === false || rawPrio === '0' || rawPrio.toLowerCase() === 'false';
     const isLockedMission =
-      isAcceptedOrAFaire ||
-      rawPrio === '1' ||
-      rawPrio.toLowerCase() === 'true' ||
-      merged.isForced === true ||
-      merged.equipmentType === 'Formation' ||
-      String(merged.equipmentType || '').toLowerCase().includes('formation') ||
-      Boolean(merged.formationId);
+      !isExplicitlyUnlocked &&
+      (rawPrio === '1' ||
+        rawPrio.toLowerCase() === 'true' ||
+        merged.isForced === true ||
+        merged.equipmentType === 'Formation' ||
+        String(merged.equipmentType || '').toLowerCase().includes('formation') ||
+        Boolean(merged.formationId));
     merged.priority = isLockedMission ? '1' : '0';
     merged.isForced = isLockedMission;
     merged.isManualDate = isLockedMission;
@@ -7661,7 +7674,16 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
       enriched.commentaireInterne ??
       enriched['Commentaire visible par le technicien.'] ??
       enriched['Commentaire visible par le technicien'] ??
+      enriched['Commentaire privé pour le technicien.'] ??
+      enriched['Commentaire privé pour le technicien'] ??
       enriched.internalComment ??
+      '';
+    enriched.commentaireLogistique =
+      enriched.commentaireLogistique ??
+      enriched['Commentaire Logistique'] ??
+      enriched['Commentaire Logistique.'] ??
+      enriched['Commentaire privé pour la logistique.'] ??
+      enriched['Commentaire privé pour la logistique'] ??
       '';
     const sitLower = String(enriched.status || enriched.situation || '').trim().toLowerCase();
     const isAcceptedOrAFaire =
@@ -7676,15 +7698,17 @@ function mapGenericRecordToRow(headers: string[], record: any, tabType?: SheetTa
         enriched.priorite ??
         ''
     ).trim();
+    const isExplicitlyUnlocked =
+      enriched.isForced === false || rawPrio === '0' || rawPrio.toLowerCase() === 'false';
     const isLockedMission =
-      isAcceptedOrAFaire ||
-      enriched.isForced === true ||
-      rawPrio === '1' ||
-      rawPrio.toLowerCase() === 'true' ||
-      (enriched.isForced !== false && rawPrio !== '0' && Boolean(enriched.isManualDate && enriched.isManualSlot)) ||
-      enriched.equipmentType === 'Formation' ||
-      String(enriched.equipmentType || '').toLowerCase().includes('formation') ||
-      Boolean(enriched.formationId);
+      !isExplicitlyUnlocked &&
+      (enriched.isForced === true ||
+        rawPrio === '1' ||
+        rawPrio.toLowerCase() === 'true' ||
+        Boolean(enriched.isManualDate && enriched.isManualSlot) ||
+        enriched.equipmentType === 'Formation' ||
+        String(enriched.equipmentType || '').toLowerCase().includes('formation') ||
+        Boolean(enriched.formationId));
     enriched.priority = isLockedMission ? '1' : '0';
     enriched['Priorité'] = enriched.priority;
     enriched['Priorité.'] = enriched.priority;
@@ -10177,7 +10201,8 @@ export async function fetchTenantSheetCollection(
       !Array.isArray(snap.headers) ||
       snap.headers.length === 0 ||
       !snap.headers.some(h => normalizeHeaderKey(h).includes('statutfacturation')) ||
-      !snap.headers.some(h => normalizeHeaderKey(h).includes('expedition'))
+      !snap.headers.some(h => normalizeHeaderKey(h).includes('expedition')) ||
+      !snap.headers.some(h => normalizeHeaderKey(h).includes('commentairelogistique'))
     ) {
       return true;
     }
@@ -11481,10 +11506,11 @@ export async function upsertRecordsToTenantSheet(
       const missionsMissingNewHeaders =
         tabType === 'missionsTournees' &&
         (!headers.some(h => normalizeHeaderKey(h).includes('fournituresparleclient') || normalizeHeaderKey(h).includes('fournitureparleclient')) ||
-          !headers.some(h => normalizeHeaderKey(h).includes('commentairevisibleparletechnicien')) ||
+          !headers.some(h => normalizeHeaderKey(h).includes('commentairevisibleparletechnicien') || normalizeHeaderKey(h).includes('commentaireprivepourletechnicien')) ||
           !headers.some(h => normalizeHeaderKey(h).includes('raisonrejet')) ||
           !headers.some(h => normalizeHeaderKey(h).includes('statutfacturation')) ||
-          !headers.some(h => normalizeHeaderKey(h).includes('expedition')));
+          !headers.some(h => normalizeHeaderKey(h).includes('expedition')) ||
+          !headers.some(h => normalizeHeaderKey(h).includes('commentairelogistique')));
       const variablesMissingNewHeaders =
         tabType === 'variables' &&
         (!headers.some(h => normalizeHeaderKey(h).includes('typedusagedelelectrode')) ||

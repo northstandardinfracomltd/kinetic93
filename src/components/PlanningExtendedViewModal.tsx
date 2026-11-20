@@ -143,24 +143,18 @@ const isDraftTour = (tour: any): boolean => {
 
 const isMissionDateSlotLocked = (m: any): boolean => {
   if (!m) return false;
-  const sitLower = String(m.status || m.statut || m.situation || '').trim().toLowerCase();
-  const isStatusLocked =
-    sitLower === 'accepté client' ||
-    sitLower === 'accepte client' ||
-    sitLower === 'à faire' ||
-    sitLower === 'a faire';
   const rawPrio = String(m.priority ?? m['Priorité'] ?? m['Priorité.'] ?? m.priorite ?? '').trim();
   const isFormation =
     m.equipmentType === 'Formation' ||
     String(m.equipmentType || '').toLowerCase().includes('formation') ||
     Boolean(m.formationId);
+  if (isFormation) return true;
+  if (m.isForced === false || rawPrio === '0' || rawPrio.toLowerCase() === 'false') return false;
   return (
-    isStatusLocked ||
     m.isForced === true ||
     rawPrio === '1' ||
     rawPrio.toLowerCase() === 'true' ||
-    (m.isForced !== false && rawPrio !== '0' && Boolean(m.isManualDate && m.isManualSlot)) ||
-    isFormation
+    Boolean(m.isManualDate && m.isManualSlot)
   );
 };
 

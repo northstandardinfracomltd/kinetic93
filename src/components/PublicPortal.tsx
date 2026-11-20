@@ -90,6 +90,7 @@ import { signInWithPopup, GoogleAuthProvider } from "firebase/auth";
 import { geocodeAddress, sortMissionsByProximity, scheduleMissions, calculateFirstMissionTravelHours } from "../utils/fsmOptimizer";
 import { loadCttGlobalRules } from "../utils/cttRules";
 import TourRouteMapModal from "./TourRouteMapModal";
+import { generateTourLogisticsPdf } from "../utils/logisticsPdfExport";
 import { PlanningTab } from "./PlanningTab";
 import { getMonthlyWorkingDaysData, generateMonthlyPDFHTML } from "./TempsTab";
 import HelpBubble from "./HelpBubble";
@@ -14100,6 +14101,75 @@ export default function PublicPortal({
                                   className={`${t.status === "Terminé" ? "" : "hover:opacity-90 active:scale-[0.99]"} transition-all flex items-center justify-center gap-2`}
                                 >
                                   Terminer la tournée
+                                </button>
+                                <button
+                                  type="button"
+                                  id="btn-webapp-export-logistique"
+                                  onClick={() => {
+                                    playTechTapSound();
+                                    const matchedFsmTour = (fsmTours || []).find(
+                                      (ft: any) => ft && (String(ft.id) === String(t.id) || String(ft.title) === String(t.title))
+                                    );
+                                    const resolvedTour = matchedFsmTour
+                                      ? {
+                                          ...matchedFsmTour,
+                                          status: t.status || matchedFsmTour.status,
+                                          missions: (matchedFsmTour.missions || []).map((m: any, idx: number) => {
+                                            const matchedPassage = (t.passages || []).find(
+                                              (p: any) =>
+                                                (p.id && m.id && String(p.id) === String(m.id)) ||
+                                                (p.interventionReference &&
+                                                  m.interventionReference &&
+                                                  String(p.interventionReference).trim() ===
+                                                    String(m.interventionReference).trim()) ||
+                                                p.num === idx + 1 ||
+                                                (p.identifiant && m.defibIdentifiant && p.identifiant === m.defibIdentifiant)
+                                            );
+                                            return matchedPassage
+                                              ? {
+                                                  ...m,
+                                                  status: matchedPassage.status || m.status,
+                                                  rejectionReason:
+                                                    matchedPassage.rejectionReason !== undefined
+                                                      ? matchedPassage.rejectionReason
+                                                      : m.rejectionReason,
+                                                }
+                                              : m;
+                                          }),
+                                        }
+                                      : {
+                                          ...t,
+                                          missions: (t.passages || []).map((p: any) => ({
+                                            ...p,
+                                            defibIdentifiant: p.identifiant || p.defibIdentifiant || "",
+                                          })),
+                                        };
+                                    generateTourLogisticsPdf({
+                                      tour: resolvedTour,
+                                      defibrillateurs: defibrillateurs || [],
+                                      otherEquipments: otherEquipments || [],
+                                      formations: formations || [],
+                                      clients: clients || [],
+                                      commercialDocs: commercialDocs || [],
+                                      variables: variables || [],
+                                      generatedReports: generatedReports || [],
+                                    });
+                                  }}
+                                  style={{
+                                    backgroundColor: "rgb(46, 84, 255)",
+                                    color: "#ffffff",
+                                    fontSize: "18px",
+                                    fontWeight: "bold",
+                                    borderRadius: "12px",
+                                    padding: "14px 20px",
+                                    border: "none",
+                                    boxShadow: "none",
+                                    cursor: "pointer",
+                                    width: "100%",
+                                  }}
+                                  className="hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2"
+                                >
+                                  Export Logistique
                                 </button>
                               </div>
                             </div>
