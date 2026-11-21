@@ -22285,7 +22285,7 @@ export default function PublicPortal({
                             color:
                               syncStatusMsg.type === "error"
                                 ? "rgb(210, 45, 11)"
-                                : "rgb(254, 78, 187)",
+                                : "#000000",
                             textAlign: "center",
                           }}
                         >
@@ -22620,7 +22620,7 @@ export default function PublicPortal({
                           <p
                             style={{
                               fontSize: "18px",
-                              color: "rgb(254, 78, 187)",
+                              color: "#000000",
                               textAlign: "center",
                             }}
                           >

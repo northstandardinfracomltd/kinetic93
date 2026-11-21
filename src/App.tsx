@@ -17151,6 +17151,7 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                           t={translate}
                           initialTech=""
                           enableExtendedView={true}
+                          onCloseSidePane={() => setFsmPlanningSidePaneOpen(false)}
                           onUpdateTours={(updatedTours) => saveFsmTours(updatedTours)}
                           onConsultMission={(tour, mission) => {
                             setFsmPlanningSidePaneOpen(false);
@@ -17186,32 +17187,6 @@ Sur le créneau de la mi-journée (entre 11h et 15h), le planning ne laisse pas 
                           }}
                         />
                       </div>
-
-                      {/* Bouton floating full width Fermer */}
-                      <button
-                        onClick={() => setFsmPlanningSidePaneOpen(false)}
-                        style={{
-                          position: 'absolute',
-                          bottom: '16px',
-                          left: '16px',
-                          right: '16px',
-                          width: 'calc(100% - 32px)',
-                          backgroundColor: 'rgb(210, 45, 11)',
-                          background: 'rgb(210, 45, 11)',
-                          color: '#ffffff',
-                          fontSize: '18px',
-                          fontWeight: '600',
-                          padding: '14px 20px',
-                          borderRadius: '12px',
-                          cursor: 'pointer',
-                          zIndex: 50,
-                          boxShadow: 'none',
-                          border: 'none',
-                        }}
-                        className="hover:opacity-90 transition-opacity"
-                      >
-                        Fermer
-                      </button>
                     </div>
                   </div>
                 )}

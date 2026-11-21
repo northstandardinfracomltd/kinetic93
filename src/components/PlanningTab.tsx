@@ -1,5 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 import { CompanyInfo, Member, MemberSchedule, MemberAbsence } from '../types';
 import { saveCollectionToFirestore, fetchCollectionFromFirestore } from '../firebase';
 import { getActiveTenantCountry, getHolidaysForYear, SupportedCountry } from '../utils/holidays';
@@ -49,6 +50,7 @@ interface PlanningTabProps {
   onConsultMission?: (tour: any, mission: any) => void;
   onRefresh?: () => void | Promise<void>;
   onUpdateTours?: (tours: any[]) => void;
+  onCloseSidePane?: () => void;
 }
 
 const MONTH_NAMES_FR = [
@@ -195,6 +197,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
   onConsultMission,
   onRefresh,
   onUpdateTours,
+  onCloseSidePane,
 }) => {
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
@@ -1237,6 +1240,350 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
     }).catch(() => {});
   };
 
+  const handleDownloadPlanningPdf = useCallback(() => {
+    if (!selectedTech || !selectedTech.trim()) return;
+
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const marginX = 8;
+    const marginTop = 10;
+    const marginBottom = 10;
+    const contentWidth = pageWidth - marginX * 2; // 194mm
+
+    const monthName = MONTH_NAMES_FR[selectedMonth] || '';
+    const periodLabel = `${monthName} ${selectedYear}`;
+    const generatedAt = new Date().toLocaleString('fr-FR');
+
+    let y = marginTop;
+
+    const checkPageBreak = (neededHeight: number) => {
+      if (y + neededHeight > pageHeight - marginBottom) {
+        doc.addPage();
+        y = marginTop;
+      }
+    };
+
+    // Raw, compact header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`PLANNING MENSUEL - ${selectedTech.toUpperCase()} - ${periodLabel.toUpperCase()}`, marginX, y);
+    y += 4.5;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(60, 60, 60);
+    doc.text(`Genere le ${generatedAt}`, marginX, y);
+    y += 2.5;
+
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 4;
+
+    const techsToCheck = activeMember ? [activeMember] : [];
+
+    for (const week of weeksList) {
+      checkPageBreak(8);
+      // Week header bar
+      doc.setFillColor(235, 238, 242);
+      doc.rect(marginX, y - 3, contentWidth, 4.8, 'F');
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`SEMAINE S${week.weekNum}`, marginX + 1.5, y + 0.3);
+      y += 4;
+
+      for (const dayItem of week.days) {
+        const { dayNum, isoDate, dayName } = dayItem;
+        const dateFr = `${String(dayNum).padStart(2, '0')}/${String(selectedMonth + 1).padStart(2, '0')}/${selectedYear}`;
+        const holidayName = holidaysMap[isoDate] || '';
+
+        // Absences
+        const dayAbsences: MemberAbsence[] = [];
+        techsToCheck.forEach((m) => {
+          if (m && Array.isArray(m.absences)) {
+            m.absences.forEach((abs) => {
+              if (abs && abs.startDate && abs.endDate && isoDate >= abs.startDate && isoDate <= abs.endDate) {
+                dayAbsences.push(abs);
+              }
+            });
+          }
+        });
+
+        // Typical schedule
+        const daySchedules: MemberSchedule[] = [];
+        techsToCheck.forEach((m) => {
+          if (m && Array.isArray(m.semaineTypique)) {
+            const sch = m.semaineTypique.find((s) => s && Array.isArray(s.days) && s.days.includes(dayName));
+            if (sch) daySchedules.push(sch);
+          }
+        });
+
+        // Active tours & their missions on this day
+        const dayActiveTours = activeToursByDate[isoDate] || [];
+        const missionLines: {
+          tourTitle: string;
+          creneau: string;
+          status: string;
+          clientName: string;
+          villePostcode: string;
+          reasons: string;
+          identifiant: string;
+        }[] = [];
+
+        dayActiveTours.forEach((tItem) => {
+          const rawTourMissions = Array.isArray(tItem.tour?.missions)
+            ? tItem.tour.missions
+            : Array.isArray(tItem.tour?.passages)
+            ? tItem.tour.passages
+            : [];
+          const nonDraftTourMissions = rawTourMissions.filter((m: any) => {
+            if (!m) return false;
+            const st = String(m.status || '').trim().toLowerCase();
+            return st !== 'brouillon' && st !== 'draft';
+          });
+          const tourStartIso = toIsoDateStr(tItem.tour?.startDate);
+          const missionsForThisTourDay = nonDraftTourMissions.filter((m: any) => {
+            const mIso = getMissionIsoDate(m);
+            if (mIso) return mIso === isoDate;
+            return tourStartIso === isoDate;
+          });
+
+          if (missionsForThisTourDay.length === 0) {
+            missionLines.push({
+              tourTitle: tItem.title,
+              creneau: '--:--',
+              status: String(tItem.tour?.status || 'En cours'),
+              clientName: '-',
+              villePostcode: '-',
+              reasons: 'Tournee active (aucune mission datee ce jour)',
+              identifiant: '-',
+            });
+          } else {
+            missionsForThisTourDay.forEach((m: any) => {
+              const defib = defibrillateurs.find(
+                (d: any) =>
+                  d &&
+                  (d.identifiant === m.defibIdentifiant ||
+                    d.id === m.defibIdentifiant ||
+                    (m.identifiant && d.identifiant === m.identifiant) ||
+                    (m.defibId && d.id === m.defibId))
+              );
+              const other = otherEquipments.find(
+                (o: any) =>
+                  o &&
+                  (o.identifiant === m.defibIdentifiant ||
+                    o.id === m.defibIdentifiant ||
+                    (m.identifiant && o.identifiant === m.identifiant) ||
+                    (m.defibId && o.id === m.defibId))
+              );
+              const clientObj = clients.find(
+                (c: any) =>
+                  c &&
+                  (c.id === m.clientId ||
+                    c.id === defib?.clientId ||
+                    c.id === other?.clientId ||
+                    (c.denomination &&
+                      (m.clientDenomination || m.clientName || m.client) &&
+                      String(c.denomination).toLowerCase() ===
+                        String(m.clientDenomination || m.clientName || m.client).toLowerCase()))
+              );
+
+              const mClientName =
+                m.clientDenomination ||
+                m.clientName ||
+                m.client ||
+                clientObj?.denomination ||
+                defib?.client ||
+                defib?.exploitant ||
+                defib?.nomPrenomSite ||
+                other?.client ||
+                'NC';
+
+              const mCity = m.ville || defib?.ville || other?.ville || clientObj?.ville || '';
+              const mPostcode =
+                m.cp ||
+                m.codePostal ||
+                defib?.cp ||
+                defib?.codePostal ||
+                other?.codePostal ||
+                other?.cp ||
+                clientObj?.codePostal ||
+                clientObj?.cp ||
+                '';
+              const mVillePostcode = [mCity, mPostcode].filter(Boolean).join(' ') || 'NC';
+
+              const mReasons =
+                Array.isArray(m.reasons) && m.reasons.length > 0
+                  ? m.reasons.join(', ')
+                  : m.reason || m.motif || m.typePrestation || m.equipmentType || 'Maintenance';
+
+              const mCreneau =
+                m.estimatedSlot ||
+                m.creneau ||
+                m.slot ||
+                m.creneauHoraire ||
+                m.estimatedTime ||
+                m.time ||
+                '--:--';
+              const mCreneauFormatted = formatSlotToAmPm(mCreneau);
+              const mStatus = String(m.status || m.statut || m.situation || 'À faire').trim() || 'À faire';
+
+              const mIdentifiant =
+                m.defibIdentifiant ||
+                m.identifiant ||
+                defib?.identifiant ||
+                other?.identifiant ||
+                m.defibId ||
+                'NC';
+
+              missionLines.push({
+                tourTitle: tItem.title,
+                creneau: mCreneauFormatted,
+                status: mStatus,
+                clientName: String(mClientName),
+                villePostcode: String(mVillePostcode),
+                reasons: String(mReasons),
+                identifiant: String(mIdentifiant),
+              });
+            });
+          }
+        });
+
+        // Spontaneous events on this day
+        const daySpontaneousEvents = spontaneousEvents.filter((evt) => {
+          if (!evt) return false;
+          const evtIso = toIsoDateStr(evt.date);
+          if (!evtIso || evtIso !== isoDate) return false;
+          const evtTech = normalizeName(evt.techName);
+          const selTech = normalizeName(selectedTech);
+          if (evtTech && evtTech === selTech) return true;
+          const activeEmail = String(activeMember?.email || '').trim().toLowerCase();
+          const evtEmail = String(evt.techEmail || (evt.techName?.includes('@') ? evt.techName : '') || '').trim().toLowerCase();
+          if (activeEmail && evtEmail && activeEmail === evtEmail) return true;
+          return false;
+        });
+
+        // Day header line (compact single row with meta summary)
+        checkPageBreak(5);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8);
+        doc.setTextColor(0, 0, 0);
+
+        const metaTags: string[] = [];
+        if (holidayName) metaTags.push(`[FERIE : ${holidayName}]`);
+        dayAbsences.forEach((abs) => {
+          metaTags.push(`[INDISPONIBLE${abs.commentaire ? ` : ${abs.commentaire}` : ''}]`);
+        });
+        daySchedules.forEach((sch) => {
+          const slotText = sch.fermetureMidi
+            ? `${sch.openMorning || '09:00'}-${sch.closeMorning || '12:00'} / ${sch.openAfternoon || '14:00'}-${sch.closeAfternoon || '18:00'}`
+            : `${sch.openContinuous || '09:00'}-${sch.closeContinuous || '17:00'}`;
+          metaTags.push(`[Dispo : ${slotText}${sch.commentaire ? ` (${sch.commentaire})` : ''}]`);
+        });
+
+        const dayHeaderStr = `${dayName} ${dateFr}${metaTags.length > 0 ? '  ' + metaTags.join(' ') : ''}`;
+        const wrappedHeader = doc.splitTextToSize(dayHeaderStr, contentWidth);
+        for (const hLine of wrappedHeader) {
+          checkPageBreak(3.5);
+          doc.text(hLine, marginX, y);
+          y += 3.3;
+        }
+
+        // Render dense rows for missions (supports dozens of missions per day)
+        if (missionLines.length > 0) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.2);
+          doc.setTextColor(15, 15, 15);
+
+          for (let i = 0; i < missionLines.length; i++) {
+            const ml = missionLines[i];
+            const rawLine = `  #${i + 1} | [${ml.creneau}] [${ml.status}] Tournee: ${ml.tourTitle} | Client: ${ml.clientName} | Ville: ${ml.villePostcode} | Materiel: ${ml.identifiant} | Raison(s): ${ml.reasons}`;
+            const wrappedLines = doc.splitTextToSize(rawLine, contentWidth - 2);
+            checkPageBreak(wrappedLines.length * 3 + 0.5);
+            for (const wl of wrappedLines) {
+              doc.text(wl, marginX + 1, y);
+              y += 2.9;
+            }
+          }
+        }
+
+        // Render dense rows for spontaneous events
+        if (daySpontaneousEvents.length > 0) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(7.2);
+          doc.setTextColor(30, 30, 30);
+
+          for (const evt of daySpontaneousEvents) {
+            const loc = String(evt.voie ?? (evt as any)['Voie'] ?? (evt as any)['Voie.'] ?? '').trim();
+            const rawEvtLine = `  * [EVENT SPONTANE - ${evt.creneau || '--:--'}] Intitule: ${evt.intitule || '-'}${evt.commentaire ? ` | Commentaire: ${evt.commentaire}` : ''}${loc ? ` | Lieu: ${loc}` : ''}${evt.tournee ? ` | Tournee: ${evt.tournee}` : ''}`;
+            const wrappedEvt = doc.splitTextToSize(rawEvtLine, contentWidth - 2);
+            checkPageBreak(wrappedEvt.length * 3 + 0.5);
+            for (const wl of wrappedEvt) {
+              doc.text(wl, marginX + 1, y);
+              y += 2.9;
+            }
+          }
+        }
+
+        if (missionLines.length === 0 && daySpontaneousEvents.length === 0 && dayAbsences.length === 0 && !holidayName) {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(6.8);
+          doc.setTextColor(130, 130, 130);
+          checkPageBreak(3);
+          doc.text('  Aucune mission planifiee.', marginX + 1, y);
+          y += 2.8;
+        }
+
+        // Thin separator between days
+        doc.setDrawColor(215, 220, 225);
+        doc.setLineWidth(0.12);
+        doc.line(marginX, y - 1, pageWidth - marginX, y - 1);
+        y += 1.8;
+      }
+
+      y += 1.5;
+    }
+
+    // Add page numbers at the bottom
+    const totalPages = doc.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(100, 100, 100);
+      doc.text(
+        `Planning ${selectedTech} - ${periodLabel} - Page ${p} / ${totalPages}`,
+        pageWidth / 2,
+        pageHeight - 4,
+        { align: 'center' }
+      );
+    }
+
+    const safeTech = selectedTech.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeMonth = (MONTH_NAMES_FR[selectedMonth] || String(selectedMonth + 1)).replace(/[^a-zA-Z0-9_-]/g, '_');
+    doc.save(`Planning_${safeTech}_${safeMonth}_${selectedYear}.pdf`);
+  }, [
+    selectedTech,
+    selectedMonth,
+    selectedYear,
+    activeMember,
+    weeksList,
+    holidaysMap,
+    activeToursByDate,
+    defibrillateurs,
+    otherEquipments,
+    clients,
+    spontaneousEvents,
+  ]);
+
   return (
     <div className="space-y-4 font-sans pb-12" id="planning-tab-wrapper">
       {/* Bouton Planning vue étendue (Uniquement sur le logiciel principal) */}
@@ -2236,7 +2583,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           className={
             !enableExtendedView
               ? "fixed bottom-2 left-3 right-3 sm:left-4 sm:right-4 max-w-4xl mx-auto z-40 animate-fade-in flex items-center"
-              : "fixed bottom-4 right-4 sm:bottom-4 sm:right-6 z-40 animate-fade-in flex items-center gap-2.5 sm:gap-3"
+              : "fixed bottom-20 right-4 sm:bottom-20 sm:right-6 z-40 animate-fade-in flex items-center gap-2.5 sm:gap-3"
           }
         >
           <button
@@ -2255,6 +2602,65 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({
           >
             {t("Remonter")}
           </button>
+        </div>
+      )}
+
+      {/* Side-pane footer buttons: Fermer (ou Fermer + Télécharger PDF côte à côte lorsqu'un technicien est sélectionné) */}
+      {onCloseSidePane && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '16px',
+            left: '16px',
+            right: '16px',
+            width: 'calc(100% - 32px)',
+            zIndex: 50,
+            display: 'flex',
+            gap: '12px',
+          }}
+        >
+          <button
+            type="button"
+            onClick={onCloseSidePane}
+            style={{
+              flex: 1,
+              backgroundColor: 'rgb(210, 45, 11)',
+              background: 'rgb(210, 45, 11)',
+              color: '#ffffff',
+              fontSize: '18px',
+              fontWeight: '600',
+              padding: '14px 20px',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              boxShadow: 'none',
+              border: 'none',
+            }}
+            className="hover:opacity-90 transition-opacity text-center"
+          >
+            Fermer
+          </button>
+          {isTechSelected && (
+            <button
+              type="button"
+              onClick={handleDownloadPlanningPdf}
+              style={{
+                flex: 1,
+                backgroundColor: 'rgb(46, 84, 255)',
+                background: 'rgb(46, 84, 255)',
+                color: '#ffffff',
+                fontSize: '18px',
+                fontWeight: '600',
+                padding: '14px 20px',
+                borderRadius: '12px',
+                cursor: 'pointer',
+                boxShadow: 'none',
+                border: 'none',
+              }}
+              className="hover:opacity-90 transition-opacity text-center"
+            >
+              Télécharger PDF
+            </button>
+          )}
         </div>
       )}
 
